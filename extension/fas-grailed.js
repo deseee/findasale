@@ -313,15 +313,35 @@
   function trustedClick(el) {
     return new Promise((resolve) => {
       try {
-        const r = el.getBoundingClientRect();
-        const x = r.left + r.width / 2;
-        const y = r.top + r.height / 2;
-        if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) { resolve(false); return; }
-        chrome.runtime.sendMessage({ type: 'fasTrustedClick', x, y }, (resp) => {
-          if (chrome.runtime.lastError) { resolve(false); return; }
-          resolve(!!(resp && resp.ok));
-        });
-      } catch (e) { resolve(false); }
+        // BUG FIX 2026-08-25 round 15 (Patrick: "figure out exactly how to click that button...
+        // stop assuming"). Two real problems fixed here, neither previously addressed: (1) this
+        // function never scrolled `el` into view before reading its rect -- chrome.debugger's CDP
+        // Input.dispatchMouseEvent clicks at raw VIEWPORT coordinates (real hit-testing, unlike
+        // syntheticClick's dispatchEvent which targets the element directly regardless of where it
+        // is on screen), so a Publish button that isn't fully in view when this runs would get a
+        // click dispatched at the WRONG on-screen position -- possibly hitting nothing, or a
+        // different element entirely, and reporting "success" from the debugger's point of view
+        // (the mouse event dispatched fine) while never actually reaching the intended button. (2)
+        // any attach/dispatch/detach failure was silently swallowed (resolve(false) with no reason
+        // logged anywhere) -- meaning every prior round's "trustedClick failed" was a total black
+        // box. Now scrolls into view, re-reads the rect fresh AFTER scrolling (never trusts a rect
+        // computed before a scroll), and logs the actual background.js-reported error reason on any
+        // failure so the next real run's console shows WHY, not just that it didn't work.
+        el.scrollIntoView({ block: 'center' });
+        setTimeout(() => {
+          try {
+            const r = el.getBoundingClientRect();
+            const x = r.left + r.width / 2;
+            const y = r.top + r.height / 2;
+            if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) { console.warn('[FAS Grailed] trustedClick: chrome.runtime.sendMessage unavailable (stale/unreloaded extension context) -- falling back to synthetic click.'); resolve(false); return; }
+            chrome.runtime.sendMessage({ type: 'fasTrustedClick', x, y }, (resp) => {
+              if (chrome.runtime.lastError) { console.warn('[FAS Grailed] trustedClick: sendMessage failed -- ' + chrome.runtime.lastError.message + ' -- falling back to synthetic click.'); resolve(false); return; }
+              if (!resp || !resp.ok) { console.warn('[FAS Grailed] trustedClick: background reported failure -- ' + (resp && resp.error || 'no response') + ' -- falling back to synthetic click.'); resolve(false); return; }
+              resolve(true);
+            });
+          } catch (e) { console.warn('[FAS Grailed] trustedClick: threw -- ' + (e && e.message || e) + ' -- falling back to synthetic click.'); resolve(false); }
+        }, 250); // let the scroll settle before reading the real post-scroll rect
+      } catch (e) { console.warn('[FAS Grailed] trustedClick: threw before scroll -- ' + (e && e.message || e) + ' -- falling back to synthetic click.'); resolve(false); }
     });
   }
   // Shared with fas-vinted.js's identical helper -- scores candidates by exact match first, then by
@@ -1288,7 +1308,7 @@
   }
 
   async function doGrailedAutoPublish(item, index, total, photosOk, intlShipping, countryOriginStatus) {
-    const publishBtn = findGrailedPublishButton();
+    let publishBtn = findGrailedPublishButton();
     if (!publishBtn) {
       // BUG FIX 2026-08-24 round 9: this fallback used to be completely silent -- no console
       // output at all -- which is exactly why the "Publish" vs "List item" text mismatch went
@@ -1301,24 +1321,32 @@
     }
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
-    // BUG FIX 2026-08-24 round 10 (Patrick: "no publish" after the selector fix -- button now
-    // resolves correctly, per live evidence, but the click didn't produce a confirmed publish
-    // within the wait window, and a full page check afterward showed no visible validation errors
-    // anywhere on the form). Given this exact same session already found Grailed's Designer
-    // combobox silently ignores untrusted (isTrusted:false) synthetic clicks, and the "Publish"
-    // button is the single highest-stakes control on this entire form, it's a well-motivated
-    // (not blind) hypothesis that Grailed also requires a genuinely trusted click here. Tries
-    // trustedClick() (the same chrome.debugger/CDP bridge that fixed Designer) FIRST, falling back
-    // to syntheticClick() only if trustedClick() itself reports failure. NOT yet live-confirmed
-    // this actually fixes publish specifically -- flagged to Patrick, needs his explicit go-ahead
-    // before a real test, since a successful click here creates a real live Grailed listing.
-    if (!(await trustedClick(publishBtn))) syntheticClick(publishBtn);
-    // BUG FIX 2026-08-25 round 11 (Patrick-confirmed live via screenshot): check for the
-    // phone-verification modal BEFORE the generic confirmation wait -- it appears almost
-    // immediately after the click, and the old generic "couldn't confirm" message was actively
-    // confusing here (it reads like an extension bug when it's really a one-time Grailed account
-    // gate). See looksLikePhoneVerification()'s comment for the full root-cause writeup.
-    await sleep(700);
+    // BUG FIX 2026-08-25 round 15 (Patrick: "figure out exactly how to click that button... stop
+    // assuming"). Round 10's single trustedClick()-then-syntheticClick() attempt, with no retry and
+    // no per-attempt verification, is the same shape of bug already found and fixed on Designer and
+    // Category (both needed a bounded retry loop that actually checks for a real effect before
+    // declaring success) -- Publish never got the same treatment. Retries up to 3 times, checking
+    // for an observable state change (phone-verification modal appears, OR the listing form itself
+    // disappears -- either one proves the click genuinely reached Grailed) before falling through to
+    // the next attempt. trustedClick() itself (see its own comment above) now also scrolls the
+    // button into view and logs its real failure reason, so if every attempt still fails, the
+    // console will show exactly why instead of a silent dead end.
+    let publishRegistered = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (!(await trustedClick(publishBtn))) syntheticClick(publishBtn);
+      await sleep(900);
+      if (looksLikePhoneVerification() || !looksLikeListingForm()) { publishRegistered = true; break; }
+      console.warn('[FAS Grailed] Publish click attempt ' + attempt + '/3 produced no observable change (no phone-verification modal, form still present) -- retrying.');
+      // Re-find the button fresh each retry -- if Grailed re-rendered anything after the failed
+      // attempt, a stale `publishBtn` reference could be pointing at a detached element.
+      const freshBtn = findGrailedPublishButton();
+      if (freshBtn) publishBtn = freshBtn;
+    }
+    if (!publishRegistered) {
+      overlayWarn('Clicked <b>Publish</b> 3 times but never saw a change on the page (UNVERIFIED -- no phone-verification prompt, no form change) -- please check this listing on Grailed yourself before assuming it posted, and check the browser console for the exact reason each click attempt failed.' + button('fas-gr-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
     if (looksLikePhoneVerification()) {
       overlayWarn('Grailed needs you to verify your phone number before it will accept this listing -- this is a one-time Grailed account requirement, not something FindA.Sale can or should do for you. Verify your phone on Grailed, then click <b>Publish</b> yourself for this listing (and future ones should auto-publish normally once this is done).' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
