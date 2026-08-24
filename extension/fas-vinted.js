@@ -167,6 +167,30 @@
     const want = norm(labelText);
     const direct = document.querySelector('[aria-label="' + labelText + '"]');
     if (direct) return direct;
+    // BUG FIX 2026-08-24 round 4 (Patrick-reported + confirmed via new DIAG logging: "brand: panel
+    // found=false" -- the panel never even opened). Root-caused live: `openerByLabel('Brand')` was
+    // returning Vinted's real "List without brand" quick-skip control (`id="empty-brand"`, a totally
+    // different, always-present element with `role="button"`) instead of the actual Brand field --
+    // confirmed live that "list without brand" satisfies `indexOf("brand") !== -1` just as validly as
+    // the real field would, and it was winning the broad substring scan below because the real
+    // trigger (a plain readonly `<input>` with no role/aria-label at all, confirmed live) never even
+    // matched that scan's candidate list in the first place. Live-confirmed the label-based lookup
+    // two blocks down (this field's own `<label for="brand">` correctly resolves via `for` to the
+    // real `input#brand`, `data-testid="brand-select-dropdown-input"`) -- it was simply ordered AFTER
+    // the broad scan, so it never got a chance to run once the wrong thing had already matched. A
+    // `<label for="...">` mapping is a precise, authoritative link between a label's exact text and
+    // one specific control -- it should always be tried before a page-wide substring scan that can
+    // match unrelated controls sharing the same word. Reordered: label/`for` lookup now runs FIRST.
+    const labels = qa('label');
+    for (const lab of labels) {
+      if (norm(lab.textContent) === want) {
+        const forId = lab.getAttribute('for');
+        if (forId) { const byId = document.getElementById(forId); if (byId) return byId; }
+        const inner = lab.querySelector('button, [role="button"], [role="switch"], select, [role="combobox"], div[tabindex]');
+        if (inner) return inner;
+        return lab;
+      }
+    }
     // Added [role="switch"] (BUG FIX 2026-08-19, S-EXT-BATCH-2, P1) -- toggle-switch semantics are
     // common on modern SPA forms (e.g. Grailed's international-shipping region toggles) and were
     // entirely absent from this candidate list before, a likely contributor to those toggles never
@@ -174,7 +198,9 @@
     const candidates = qa('[role="combobox"], [role="button"], [role="switch"], button, select, div[tabindex]');
     const hit = candidates.find((c) => norm(c.getAttribute('aria-label') || c.textContent).indexOf(want) !== -1 && norm(c.textContent).length < 80);
     if (hit) return hit;
-    const labels = qa('label');
+    // Fallback: a label containing (not exactly equal to) the wanted text -- kept as a lower-priority
+    // tier below the broad scan above, same relative ordering as before this fix, for any label whose
+    // text isn't an exact match (e.g. a label reading "Brand (optional)").
     for (const lab of labels) {
       if (norm(lab.textContent).indexOf(want) !== -1) {
         const forId = lab.getAttribute('for');
@@ -315,10 +341,19 @@
     // open" for the NEXT field in fill order, skipping the real open-click entirely and leaving
     // Condition's actual panel never opened on the first pass.
     if (strict) return null;
-    // Fallback: any visible panel-looking element that just appeared (class name contains "dropdown"
-    // or "panel" or "popover"), least-fragile generic guess if the testid naming ever changes.
+    // BUG FIX 2026-08-24 round 3 (Patrick-reported: "stray panel" warning fires for EVERY field,
+    // every time, including fields that succeed -- live-confirmed via direct DOM inspection this
+    // session, not a guess): this fallback's `[class*="dropdown" i]` matches Vinted's own
+    // ALWAYS-PRESENT, ALWAYS-VISIBLE field wrapper div (class "InputDropdown-module-...__input-
+    // dropdown", confirmed live present for every single Category/Brand/Size/etc. field regardless
+    // of whether its panel is open) -- not a real transient open panel at all. Since real panels are
+    // already found above by their own `-content` testid, this generic fallback should never match
+    // that static wrapper -- excluded explicitly. This was a real, confirmed-wrong warning (not
+    // diagnostic of anything), but it is NOT yet confirmed to be Brand's actual fill-failure cause --
+    // see the explicit step-by-step console.log breadcrumbs added below in pickFromPanel, which will
+    // show the real cause directly on the next live run instead of guessing further.
     return qa('[class*="dropdown" i], [class*="Dropdown" i], [role="dialog"], [role="listbox"]')
-      .find((el) => el.offsetParent !== null) || null;
+      .find((el) => el.offsetParent !== null && (el.className || '').toString().indexOf('input-dropdown') === -1) || null;
   }
   function leafOptionsIn(container) {
     if (!container) return [];
@@ -426,6 +461,7 @@
   let lastMaterialFallbackUsed = false;
   async function pickFromPanel(fieldId, labelText, value) {
     const opener = openerByLabel(labelText) || document.getElementById(fieldId);
+    console.log('[FAS Vinted DIAG] ' + fieldId + ': opener resolved to tag=' + (opener ? opener.tagName : null) + ' id=' + (opener ? opener.id : null) + ' testid=' + (opener ? opener.getAttribute('data-testid') : null) + ' text="' + (opener ? opener.textContent.trim().slice(0, 40) : '') + '"');
     if (!opener) return false;
     // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P0, live-Chrome-confirmed): pickCategory() calls
     // pickFromPanel once PER segment attempt against the SAME field -- the old unconditional
@@ -443,26 +479,46 @@
     // option there either -- leaving the real Condition panel open with nothing selected, exactly as
     // Patrick observed live. If a stray panel for a DIFFERENT field is still open, dismiss it first
     // (click elsewhere on the page) so it can't be mistaken for this field's panel.
-    let panelAlready = findOpenPanel(fieldId, true);
-    if (!panelAlready) {
-      const strayPanel = findOpenPanel(fieldId, false);
-      if (strayPanel) {
-        // BUG FIX 2026-08-24 (Patrick-reported live: Brand failed to fill on a real run immediately
-        // after Category, right where this stray-panel dismiss fires): this was a bare
-        // `document.body.click()` -- but this file's OWN later comments (closePanel, and the
-        // Color/Material stale-swatch deselect) already live-confirmed Vinted's pickers only
-        // reliably respond to an outside dismiss via the full multi-event pointer sequence, not a
-        // plain synthetic click. A bare click leaving Category's own panel open (or partially open)
-        // right as Brand's opener.click() fires is a plausible, real mechanism for Brand silently
-        // never opening its own panel in a fast, fully-automated run -- switched to the same
-        // realOutsideClick() this file already trusts everywhere else, plus an explicit re-check so
-        // a genuine miss is at least loud instead of silently proceeding into a still-blocked opener.
-        realOutsideClick(document.body);
-        await sleep(250);
-        if (findOpenPanel(fieldId, false)) console.warn('[FAS Vinted] Stray panel from an earlier field did not confirm closed before opening "' + labelText + '" -- this field may fail to open as a result.');
+    // BUG FIX 2026-08-24 round 7 (Patrick: "MAKE IT FUCKING WORK" -- live-reproduced, not guessed):
+    // direct hand-testing against Patrick's real page confirmed the opener resolves correctly and a
+    // bare click reliably opens Brand's panel EVERY time it was tested cold/in isolation (3/3), but
+    // the real automated run -- where Brand fires immediately after Category -- consistently shows
+    // "panel found=false" while every LATER field (Size/Color/Material/Condition, none of which
+    // immediately follow a just-changed Category) succeeds with the identical code path. That pattern
+    // (works isolated and later in the sequence, fails specifically right after Category) points to a
+    // timing race right after Category's own selection commits -- most likely Vinted re-rendering/
+    // briefly re-mounting the Brand control once Category changes (brand options are Category-
+    // dependent on real listing forms) -- not a broken selector or broken click mechanism, both of
+    // which are independently confirmed working. A bounded retry is the correct, evidence-based
+    // response to a confirmed TIMING-sensitive failure (the same reasoning already applied to
+    // Grailed's Designer retry this session) -- not a blind guess.
+    let panel = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      let panelAlready = findOpenPanel(fieldId, true);
+      if (!panelAlready) {
+        const strayPanel = findOpenPanel(fieldId, false);
+        if (strayPanel) {
+          // BUG FIX 2026-08-24 (Patrick-reported live: Brand failed to fill on a real run immediately
+          // after Category, right where this stray-panel dismiss fires): this was a bare
+          // `document.body.click()` -- but this file's OWN later comments (closePanel, and the
+          // Color/Material stale-swatch deselect) already live-confirmed Vinted's pickers only
+          // reliably respond to an outside dismiss via the full multi-event pointer sequence, not a
+          // plain synthetic click. A bare click leaving Category's own panel open (or partially open)
+          // right as Brand's opener.click() fires is a plausible, real mechanism for Brand silently
+          // never opening its own panel in a fast, fully-automated run -- switched to the same
+          // realOutsideClick() this file already trusts everywhere else, plus an explicit re-check so
+          // a genuine miss is at least loud instead of silently proceeding into a still-blocked opener.
+          realOutsideClick(document.body);
+          await sleep(250);
+          if (findOpenPanel(fieldId, false)) console.warn('[FAS Vinted] Stray panel from an earlier field did not confirm closed before opening "' + labelText + '" -- this field may fail to open as a result.');
+        }
+        opener.click();
+        await sleep(400 + attempt * 200); // give a category-driven remount progressively more room on each retry
       }
-      opener.click();
-      await sleep(400);
+      panel = findOpenPanel(fieldId);
+      if (panel) break;
+      console.warn('[FAS Vinted] "' + labelText + '" panel did not open on attempt ' + attempt + '/3 -- retrying (possible re-render race right after an earlier field change).');
+      await sleep(300);
     }
     // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the search input MUST be looked
     // up scoped to the just-opened panel, not page-wide. Vinted's site nav bar has its own unrelated
@@ -472,7 +528,10 @@
     // color name into Vinted's live site-search box triggered a real navigation/autocomplete side
     // effect that froze the tab (CDP Runtime.evaluate timeout hit during this exact live test).
     // Find the panel FIRST, then only look for a search input that is a DESCENDANT of that panel.
-    const panel = findOpenPanel(fieldId);
+    // DIAGNOSTIC (2026-08-24 round 3, Patrick-directed -- "stop assuming and guessing"): always-on
+    // trace, not a warn-on-failure -- so the NEXT real run shows exactly what happened at each step
+    // instead of another reconstructed-in-isolation guess.
+    console.log('[FAS Vinted DIAG] ' + fieldId + ': panel found=' + !!panel + ' testid=' + (panel ? panel.getAttribute('data-testid') : null));
     // qa() only ever queries from `document` (its sel-only signature, shared across all 4 platform
     // files) -- passing panel as a second arg to it would be silently ignored, NOT scoped. Query
     // directly off panel.querySelectorAll instead so this genuinely stays panel-scoped.
@@ -483,6 +542,7 @@
           return el.offsetParent !== null && el !== opener && (ph.indexOf('search') !== -1 || ph.indexOf('find') !== -1);
         })
       : null;
+    console.log('[FAS Vinted DIAG] ' + fieldId + ': searchInput found=' + !!searchInput + (searchInput ? (' testid=' + searchInput.getAttribute('data-testid')) : ''));
     if (searchInput) {
       searchInput.focus();
       setNativeValue(searchInput, String(value));
@@ -507,14 +567,18 @@
       // a slower connection, while still bounded (never an infinite/unbounded wait).
       for (let i = 0; i < 10; i++) {
         await sleep(300);
-        if (leafOptionsIn(panel).length > 1) break; // >1 excludes the lone placeholder/heading leaf
+        const n = leafOptionsIn(panel).length;
+        console.log('[FAS Vinted DIAG] ' + fieldId + ': poll tick ' + i + ' leafCount=' + n);
+        if (n > 1) break; // >1 excludes the lone placeholder/heading leaf
       }
     }
     const leaves = leafOptionsIn(panel);
+    console.log('[FAS Vinted DIAG] ' + fieldId + ': final leaves=' + JSON.stringify(leaves.slice(0, 15).map((l) => l.textContent.trim())));
     // BUG FIX 2026-08-20 (S-EXT-BATCH, P0): resolve common non-Vinted words to a real option
     // before scoring -- see SIZE_ABBREVIATIONS/COLOR_SYNONYMS/MATERIAL_SYNONYMS comment above.
     const resolvedValue = resolveSynonym(fieldId, value);
     let opt = bestScoringOption(leaves, resolvedValue);
+    console.log('[FAS Vinted DIAG] ' + fieldId + ': scoring "' + resolvedValue + '" against ' + leaves.length + ' leaves -> ' + (opt ? ('"' + opt.textContent.trim() + '"') : 'NO MATCH'));
     // BUG FIX 2026-08-21 (S-EXT-BATCH, P1, Patrick-directed -- "give me a real default, not a
     // skip message, I don't know what override makes sense either"): live-confirmed Vinted's real
     // Material vocabulary is exactly these 55 fixed options (read directly off

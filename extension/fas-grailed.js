@@ -280,6 +280,33 @@
     el.dispatchEvent(new MouseEvent('mouseup', common));
     el.dispatchEvent(new MouseEvent('click', common));
   }
+  // ADDED 2026-08-24 (S-EXT-ROUND6) -- see background.js's 'fasTrustedClick' handler for the full
+  // rationale: live isTrusted instrumentation confirmed Grailed's Designer autocomplete requires a
+  // genuinely browser-trusted click to open/select, which syntheticClick() above (dispatchEvent,
+  // isTrusted:false) can never produce. This asks the background service worker to fire a REAL
+  // click via chrome.debugger + CDP Input.dispatchMouseEvent at the element's current viewport
+  // coordinates -- isTrusted:true, confirmed by the same mechanism Puppeteer/Playwright use.
+  // Returns true/false for whether the background worker reports the click was actually dispatched
+  // (NOT a guarantee the UI reacted the way we want -- callers must still verify the outcome
+  // structurally, same as they now do for syntheticClick). Fails closed (returns false) if the
+  // "debugger" permission isn't granted yet (stale/unreloaded extension), another debugger client
+  // is already attached to this tab (e.g. real DevTools open), or extension messaging itself
+  // fails for any reason -- callers should fall back to syntheticClick() in that case rather than
+  // treat a false here as fatal.
+  function trustedClick(el) {
+    return new Promise((resolve) => {
+      try {
+        const r = el.getBoundingClientRect();
+        const x = r.left + r.width / 2;
+        const y = r.top + r.height / 2;
+        if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) { resolve(false); return; }
+        chrome.runtime.sendMessage({ type: 'fasTrustedClick', x, y }, (resp) => {
+          if (chrome.runtime.lastError) { resolve(false); return; }
+          resolve(!!(resp && resp.ok));
+        });
+      } catch (e) { resolve(false); }
+    });
+  }
   // Shared with fas-vinted.js's identical helper -- scores candidates by exact match first, then by
   // shared-word overlap (more shared words wins, shorter label breaks ties), instead of the old
   // first-substring-match which was prone to grabbing an unrelated option that merely contained one
@@ -311,8 +338,19 @@
   // longer, unrelated word.
   function scoreMatch(text, want) {
     if (text === want) return 100000;
-    const wantWords = want.split(' ').filter(Boolean);
-    const textWords = text.split(' ').filter(Boolean);
+    // BUG FIX 2026-08-24 round 3 (live-Chrome-confirmed via the new department-fallback code above --
+    // that fallback speculatively scores EVERY remaining segment against a much wider option set than
+    // this function was originally exercised against, and that surfaced a real pre-existing bug here):
+    // `.split(' ').filter(Boolean)` keeps a bare "&" as its own "word" -- so ANY two option/segment
+    // strings that both happen to contain a standalone ampersand (e.g. FindA.Sale's own "Tracksuits &
+    // Sets" against Grailed's real "Bags & Luggage") shared that one "word" and scored a false
+    // whole-word match. Live-confirmed: scoring "Tracksuits & Sets" (categoryText, always added to the
+    // candidate pool) against Womenswear's real leaves picked "Bags & Luggage" -- a tracksuit -- purely
+    // because both strings contain "&". Filtered out here: a token with no alphanumeric character is
+    // punctuation, never a real matchable word.
+    const hasAlnum = (w) => /[a-z0-9]/.test(w);
+    const wantWords = want.split(' ').filter(Boolean).filter(hasAlnum);
+    const textWords = text.split(' ').filter(Boolean).filter(hasAlnum);
     let weighted = 0;
     for (let i = 0; i < wantWords.length; i++) {
       if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
@@ -404,43 +442,136 @@
       console.warn('[FAS Grailed] Designer field is disabled -- Category must be set first. This should not happen if run() ordering is correct; skipping Designer.');
       return 'field_missing';
     }
-    el.focus();
-    el.value = '';
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    await sleep(150);
-    el.value = String(value);
-    el.dispatchEvent(new Event('input', { bubbles: true })); // NEVER dispatch 'change' here -- see comment above.
-    await sleep(700); // suggestion list settle time, live-confirmed necessary
-    const r = el.getBoundingClientRect();
-    const lis = qa('li').filter((li) => {
-      if (!li.offsetParent && li.getBoundingClientRect().width === 0) return false;
-      const rr = li.getBoundingClientRect();
-      return rr.width > 0 && rr.height > 0 && rr.top >= r.bottom - 5 && rr.top < r.bottom + 300 && Math.abs(rr.left - r.left) < 40;
-    });
-    // BUG FIX 2026-08-19 (S-EXT-BATCH-7 follow-up, live-Chrome-confirmed): the suggestion <li>
-    // list reliably appeared on a page's FIRST interaction with this field, but repeat attempts
-    // in the same focus session (clear + retype, or blur + refocus + retype) did NOT reliably
-    // reproduce it again -- confirmed twice, including with a blur/refocus cycle in between.
-    // Root cause not fully isolated (possibly gated on a genuinely-trusted focus/keydown event
-    // this content script cannot produce). Given Patrick's report was "Designer blocks EVERYTHING
-    // else on the page", treating "no suggestion list found" as a hard 'no_match' (which aborts
-    // the whole listing, see run()) is worse than the alternative: the typed text IS correctly
-    // sitting in the real field either way (confirmed reliably, unlike the old bug where it never
-    // even reached the right element). So: a list found and clicked returns 'matched'; a list
-    // NOT found still returns 'typed_unconfirmed' rather than 'no_match' -- the organizer sees
-    // the typed designer name pre-filled and can click Grailed's own suggestion themselves if it
-    // didn't auto-select, instead of getting a fully-blocked, unfilled listing.
+    // BUG FIX 2026-08-24 round 5 (Patrick-directed -- "why isn't it defaulting to Not Listed?" --
+    // and live-confirmed root cause via direct A/B test in Chrome DevTools against Patrick's real,
+    // still-open draft): the old `el.focus()` here never actually opened Grailed's suggestion panel
+    // at all -- confirmed live with a direct comparison: a synthetic `el.focus()`/`el.click()`
+    // produced ZERO <li> options every time (matching every prior "typed_unconfirmed" result), but
+    // this file's OWN existing `syntheticClick()` helper (the full pointerdown/mousedown/pointerup/
+    // mouseup/click sequence, already used successfully elsewhere in this file for Radix menus)
+    // opened the exact same panel reliably, live-confirmed twice, showing "Designer not listed / Not
+    // sure" plus a Popular-designers list (Chrome Hearts/Prada/Carhartt/Dior/Raf Simons/Louis
+    // Vuitton/Supreme/Rick Owens). Separately confirmed live that typing into the field via a
+    // synthetic `input` event does NOT filter that list down to a real search match (the list stayed
+    // on the same unfiltered Popular defaults after setting the value to "Adidas") -- Grailed's
+    // search-as-you-type filtering itself appears to need a genuinely-trusted keyboard event, which a
+    // content script cannot produce, matching this same file's already-documented Vinted-brand-search
+    // class of limitation. Given a real filtered match can never be reliably confirmed this way, the
+    // right behavior -- per Patrick's own direction -- is to open the panel for real (so it can be
+    // scored at all) and, when no real scored match exists, click Grailed's own always-present
+    // "Designer not listed / Not sure" option rather than leaving "Adidas" sitting typed and
+    // unconfirmed. That option is real, always there, and committable -- confirmed live it's exactly
+    // what a human organizer would click for a non-fashion brand like Adidas.
+    // BUG FIX 2026-08-24 round 6 (Patrick-directed retest) -- ROOT CAUSE NOW CONFIRMED, and it is
+    // NOT something a retry loop can reliably fix. Live-instrumented test (added temporary
+    // capture-phase listeners on pointerdown/mousedown/pointerup/mouseup/click/focus and read
+    // event.isTrusted directly): a real OS-level click on this input fires ALL SIX events with
+    // isTrusted:true (including a 'focus' event) and opens the panel (6 <li> results) -- 2/2
+    // real clicks succeeded. The exact same syntheticClick() pointer-event sequence used below
+    // fires pointerdown/mousedown/pointerup/mouseup/click with isTrusted:false, fires NO 'focus'
+    // event at all, and opens the panel 0/4 times across two separate controlled test runs
+    // (3 of 4 in a bounded-retry loop, then 0/1 more in an isolated single-shot re-test
+    // immediately after). This means: Grailed's Designer panel-open behavior requires a
+    // genuinely browser-trusted user-input event (most likely gated on a trusted focus/pointerdown
+    // per Grailed's own combobox implementation) -- a content script's dispatchEvent() calls, and
+    // even a plain el.focus() (which the DOM spec itself defines as producing an untrusted
+    // FocusEvent when called from script), can NEVER satisfy that gate, no matter how many times
+    // or in what order they're retried. This is a real, confirmed browser-security-model boundary,
+    // not a code bug -- the same reason a content script cannot fill a same-origin <input
+    // type=file> or auto-solve a CAPTCHA. The retry loop below is kept as a harmless, low-cost
+    // safety net for the rare case timing alone was the blocker, but it is NOT a reliable fix and
+    // must not be reported as one -- this field will continue to fall through to
+    // 'typed_unconfirmed' (or, when the panel does happen to open, to the 'not_listed' fallback)
+    // on most real runs. Flagged to Patrick as a genuine platform limitation, not deferred as
+    // unexplored.
+    // BUG FIX 2026-08-24 round 6 follow-up (Patrick: "make it work, stop being shallow") -- now
+    // tries a REAL trusted click (via background.js's chrome.debugger bridge, see trustedClick()
+    // above) FIRST on every attempt, only falling back to the known-unreliable syntheticClick()
+    // if trustedClick() itself reports failure (e.g. the "debugger" permission isn't active yet
+    // because the unpacked extension hasn't been reloaded since this round shipped, or another
+    // debugger client -- like real DevTools -- is already attached to this tab).
+    let lis = [];
+    let r = el.getBoundingClientRect();
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const usedTrusted = await trustedClick(el);
+      if (!usedTrusted) syntheticClick(el);
+      await sleep(500);
+      el.value = String(value);
+      el.dispatchEvent(new Event('input', { bubbles: true })); // NEVER dispatch 'change' here -- see comment above.
+      await sleep(700); // suggestion list settle time, live-confirmed necessary
+      r = el.getBoundingClientRect();
+      lis = qa('li').filter((li) => {
+        if (!li.offsetParent && li.getBoundingClientRect().width === 0) return false;
+        const rr = li.getBoundingClientRect();
+        return rr.width > 0 && rr.height > 0 && rr.top >= r.bottom - 5 && rr.top < r.bottom + 300 && Math.abs(rr.left - r.left) < 40;
+      });
+      if (lis.length) break;
+      console.warn('[FAS Grailed] Designer suggestion panel did not open on attempt ' + attempt + '/4 (' + (usedTrusted ? 'trusted' : 'synthetic') + ' click) -- retrying.');
+      el.blur();
+      document.body.click();
+      await sleep(400);
+    }
     if (!lis.length) return 'typed_unconfirmed';
+    // BUG FIX 2026-08-24 round 6 (Patrick-directed retest) -- CRITICAL correction: the round-5
+    // comments below claiming syntheticClick() "confirmed live via screenshot" that a selection
+    // committed were themselves not reliable -- a clean re-test this round (real isTrusted click
+    // immediately followed by a syntheticClick on the SAME "Designer not listed" option, with the
+    // panel confirmed open both times) showed the synthetic click did NOT commit: the field stayed
+    // on its empty placeholder and the panel remained open, identical to a no-op. Grailed's real
+    // committed state is unambiguous and checkable -- the input's value becomes the designer name
+    // (or literally "Other" for the not-listed option) AND a
+    // `button[aria-label="Clear selected designer"]` sibling appears (confirmed via a real click,
+    // live DOM read of the parent container). So this function no longer trusts "the click fired"
+    // as proof of success -- it now checks that structural signal afterward and only returns
+    // 'matched'/'not_listed' when it's actually present. Given the round-6 isTrusted findings
+    // above, expect this to resolve to 'typed_unconfirmed' on most real (non-manual) runs -- that
+    // is the honest, correct outcome, not a regression.
+    function designerCommitted() {
+      return !!document.querySelector('button[aria-label="Clear selected designer" i]');
+    }
     const opt = bestScoringOption(lis, value);
-    if (!opt) return 'typed_unconfirmed';
-    opt.click();
-    await sleep(300);
-    // Blur to encourage the widget to commit/close on an exact typed match, in case the click
-    // alone doesn't register a formal selection (UNVERIFIED whether Grailed's own submit
-    // validation needs more than matching text in the field -- flagged in the review overlay).
-    el.blur();
-    await sleep(150);
-    return 'matched';
+    if (opt) {
+      if (!(await trustedClick(opt))) syntheticClick(opt);
+      await sleep(300);
+      el.blur();
+      await sleep(150);
+      if (designerCommitted()) return 'matched';
+      // One more try with the other click mechanism before giving up -- if trustedClick()
+      // reported success but the commit still didn't stick (timing), or if it silently no-op'd,
+      // a plain syntheticClick() as a second attempt is free and occasionally still helps once the
+      // panel is already open (unlike opening it, since opening was the harder trust-gated step).
+      syntheticClick(opt);
+      await sleep(300);
+      el.blur();
+      await sleep(150);
+      if (designerCommitted()) return 'matched';
+      console.warn('[FAS Grailed] Designer "' + value + '" suggestion click did not actually commit (no "Clear selected designer" control appeared afterward) -- leaving as unconfirmed for manual selection.');
+      return 'typed_unconfirmed';
+    }
+    // No real scored match among the (unfiltered, since search-filter needs a trusted keystroke)
+    // suggestion list -- try Grailed's own "Designer not listed / Not sure" rather than leaving the
+    // typed text unconfirmed. norm() lowercases/collapses whitespace, so this matches regardless of
+    // the nested "Don't worry, you can describe below" sub-line being concatenated in.
+    const notListed = lis.find((li) => norm(li.textContent).indexOf('designer not listed') !== -1 || norm(li.textContent).indexOf('not sure') !== -1);
+    if (notListed) {
+      if (!(await trustedClick(notListed))) syntheticClick(notListed);
+      await sleep(300);
+      el.blur();
+      await sleep(150);
+      if (!designerCommitted()) {
+        syntheticClick(notListed);
+        await sleep(300);
+        el.blur();
+        await sleep(150);
+      }
+      if (designerCommitted()) {
+        console.warn('[FAS Grailed] Designer "' + value + '" has no confirmable match in Grailed\'s suggestion list -- selected Grailed\'s own "Designer not listed / Not sure" instead. Describe the brand in the listing if you want it more specific.');
+        return 'not_listed';
+      }
+      console.warn('[FAS Grailed] Designer "' + value + '" -- attempted to select "Designer not listed / Not sure" but the click did not commit (browser-trust limitation, see comment above). Leaving as unconfirmed for manual selection.');
+      return 'typed_unconfirmed';
+    }
+    return 'typed_unconfirmed';
   }
 
   // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): live-confirmed against Patrick's real Grailed test --
@@ -668,14 +799,34 @@
         // list with no other observed side effect. Speculatively try each department in turn, keep
         // whichever one actually resolves a real remaining segment, and back out to try the next one
         // if it doesn't -- instead of guessing blind or abandoning the field entirely.
+        // BUG FIX 2026-08-24 round 2 (Patrick-reported live console log AFTER the fix above shipped:
+        // "defaulted to 'menswear'... full Department/Category combo never committed" -- the default
+        // never actually took). Root-caused live via Chrome DevTools against the real picker: Grailed
+        // tears down and RECREATES the department menuitem elements every time the panel navigates
+        // (Menswear -> its categories -> Back to departments) -- confirmed live: a `items[0]` reference
+        // captured before that round-trip has `isConnected === false` afterward, so a later
+        // syntheticClick(items[0]) on it dispatches events into thin air and does nothing (panel stayed
+        // open, opener text never changed). The ORIGINAL `items` array (captured once, above, before
+        // this level-0 branch ever navigates anywhere) goes stale the moment ANY department is tried and
+        // backed out of -- it can never safely be reused for a second click, whether that's the next
+        // department in the loop or the final default. Fixed by re-querying the department list fresh
+        // from the live DOM (by the same stable contentId) immediately before every single click in this
+        // block, never reusing a captured element across a navigation boundary.
+        function queryDeptItems() {
+          const c = contentId ? document.getElementById(contentId) : null;
+          return c ? Array.from(c.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]')) : [];
+        }
+        console.log('[FAS Grailed DIAG] level0: no direct match; departments seen=' + JSON.stringify(items.map((i) => i.textContent.trim())) + ' remaining segments=' + JSON.stringify(remaining.map((r) => r.seg)));
         let resolvedDept = false;
-        for (const deptItem of items) {
+        for (let d = 0; d < items.length; d++) {
+          const freshDeptItems = queryDeptItems();
+          const deptItem = freshDeptItems[d];
+          if (!deptItem) { console.log('[FAS Grailed DIAG] level0: no fresh deptItem at index ' + d + ' -- bailing'); break; }
+          const deptLabel = norm(deptItem.textContent);
           syntheticClick(deptItem);
           await sleep(350);
-          const deptContent = contentId ? document.getElementById(contentId) : null;
-          const deptItems = deptContent
-            ? Array.from(deptContent.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'))
-            : [];
+          const deptItems = queryDeptItems();
+          console.log('[FAS Grailed DIAG] level0: tried "' + deptLabel + '" -> categories seen=' + JSON.stringify(deptItems.map((i) => i.textContent.trim())));
           let deptBest = null, deptBestScore = -1, deptBestIdx = -1;
           for (let r = 0; r < remaining.length; r++) {
             const candidate = bestScoringOption(deptItems, remaining[r].seg);
@@ -684,7 +835,8 @@
             if (score !== null && score > deptBestScore) { deptBestScore = score; deptBest = candidate; deptBestIdx = r; }
           }
           if (deptBest) {
-            console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department/gender signal in the source data; tried "' + norm(deptItem.textContent) + '" and it resolved a real match for "' + remaining[deptBestIdx].seg + '" -- kept this department (UNVERIFIED gender guess -- please confirm this is correct before publishing).');
+            console.log('[FAS Grailed DIAG] level0: "' + deptLabel + '" MATCHED "' + norm(deptBest.textContent) + '" for segment "' + remaining[deptBestIdx].seg + '"');
+            console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department/gender signal in the source data; tried "' + deptLabel + '" and it resolved a real match for "' + remaining[deptBestIdx].seg + '" -- kept this department (UNVERIFIED gender guess -- please confirm this is correct before publishing).');
             syntheticClick(deptBest);
             pickedAny = true;
             remaining.splice(deptBestIdx, 1);
@@ -697,13 +849,19 @@
         }
         if (resolvedDept) continue; // aria-expanded check at the top of the next iteration will end the loop once Grailed auto-closes the combo
         // Neither department resolved a real match -- default to the first so Designer/Size can still
-        // unlock, but say so loudly rather than silently leaving everything blank. Re-select it since
-        // the last "Back to departments" click above left the panel on the department list.
-        if (items.length) {
-          syntheticClick(items[0]);
+        // unlock, but say so loudly rather than silently leaving everything blank. Re-query fresh (see
+        // comment above -- the last "Back to departments" click left the panel on the department list,
+        // but the ORIGINAL `items` references are stale/detached by now).
+        const finalDeptItems = queryDeptItems();
+        if (finalDeptItems.length) {
+          const finalLabel = norm(finalDeptItems[0].textContent);
+          syntheticClick(finalDeptItems[0]);
           pickedAny = true;
           await sleep(350);
-          console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department signal in the source data and neither department resolved a real category match -- defaulted to "' + norm(items[0].textContent) + '" as a guess (UNVERIFIED) -- please confirm Category/Designer/Size before publishing.');
+          console.log('[FAS Grailed DIAG] level0: defaulted to "' + finalLabel + '" -- opener text now="' + norm(opener.textContent) + '" ariaExpanded=' + opener.getAttribute('aria-expanded'));
+          console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department signal in the source data and neither department resolved a real category match -- defaulted to "' + finalLabel + '" as a guess (UNVERIFIED) -- please confirm Category/Designer/Size before publishing.');
+        } else {
+          console.log('[FAS Grailed DIAG] level0: no fresh department items at all for the final default -- picker likely closed/changed unexpectedly.');
         }
         break;
       }
@@ -743,20 +901,25 @@
       return null;
     }
     let overrideSubCategory = null;
+    console.log('[FAS Grailed DIAG] override-check: pickedAny=' + pickedAny + ' openerText="' + norm(opener.textContent) + '" placeholderText="' + placeholderText + '"');
     if (pickedAny && norm(opener.textContent) === placeholderText) {
       const override = findCategoryOverride(categoryText, breadcrumbText);
+      console.log('[FAS Grailed DIAG] override lookup for "' + categoryText + '" -> ' + JSON.stringify(override));
       if (override) {
         const contentId = opener.getAttribute && opener.getAttribute('aria-controls');
         const content = contentId ? document.getElementById(contentId) : null;
         const items = content
           ? Array.from(content.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'))
           : qa('[role="menuitem"], [role="menuitemradio"], [role="option"]').filter((el) => el.offsetParent !== null);
+        console.log('[FAS Grailed DIAG] override-panel items=' + JSON.stringify(items.map((i) => i.textContent.trim())));
         const opt = items.find((el) => norm(el.textContent) === norm(override.category));
         if (opt) {
           syntheticClick(opt);
           await sleep(350);
           overrideSubCategory = override.subCategory || null;
           console.warn('[FAS Grailed] Category "' + categoryText + '" -- no text match at the Category level; used the confirmed mapping to "' + override.category + '" instead (see GRAILED_CATEGORY_OVERRIDES).');
+        } else {
+          console.log('[FAS Grailed DIAG] override target "' + override.category + '" not found among current panel items -- override could not apply.');
         }
       }
     }

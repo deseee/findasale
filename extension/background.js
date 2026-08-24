@@ -1436,6 +1436,55 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // immediate poll the way removalModeChanged does above.
         await ensureRenewAlarm();
         sendResponse({ ok: true });
+      } else if (msg.type === 'fasTrustedClick') {
+        // FEATURE 2026-08-24 (S-EXT-ROUND6, Patrick-directed -- "make it work", after live
+        // isTrusted instrumentation confirmed Grailed's Designer autocomplete panel-open/select
+        // behavior genuinely requires a browser-trusted input event, which a content script's
+        // dispatchEvent() calls can never produce). chrome.debugger's CDP Input domain is the one
+        // legitimate way an extension can get a real, isTrusted:true click -- it's the same
+        // mechanism Puppeteer/Playwright use for browser automation. Requires the sender's own tab
+        // (never an arbitrary tabId from the message -- see security note below) and the
+        // "debugger" permission (added to manifest.json this round). Chrome shows a persistent
+        // "FindA.Sale -- Marketplace Autofill started debugging this browser" infobar on the tab
+        // for the duration of the attach -- unavoidable, part of Chrome's own security model, and
+        // it also means the tab's real DevTools can't be open at the same time (only one debugger
+        // client per tab). Attach -> dispatch mouseMoved/mousePressed/mouseReleased at the given
+        // viewport coordinates -> detach immediately, so the infobar is visible only for the
+        // fraction of a second the click takes, not for the whole fill run.
+        if (!sender.tab || sender.tab.id == null) {
+          sendResponse({ ok: false, error: 'no_sender_tab' });
+        } else {
+          const tabId = sender.tab.id;
+          const x = Number(msg.x), y = Number(msg.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            sendResponse({ ok: false, error: 'invalid_coordinates' });
+          } else {
+            try {
+              await new Promise((resolve, reject) => {
+                chrome.debugger.attach({ tabId }, '1.3', () => {
+                  if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+                  resolve();
+                });
+              });
+              const dispatch = (params) => new Promise((resolve, reject) => {
+                chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', params, () => {
+                  if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+                  resolve();
+                });
+              });
+              try {
+                await dispatch({ type: 'mouseMoved', x, y, buttons: 0 });
+                await dispatch({ type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+                await dispatch({ type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+                sendResponse({ ok: true });
+              } finally {
+                await new Promise((resolve) => chrome.debugger.detach({ tabId }, () => resolve()));
+              }
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e && e.message || e) });
+            }
+          }
+        }
       } else {
         sendResponse({ ok: false, error: 'unknown_message' });
       }

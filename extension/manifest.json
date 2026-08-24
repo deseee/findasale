@@ -10,7 +10,8 @@
     "cookies",
     "scripting",
     "alarms",
-    "notifications"
+    "notifications",
+    "debugger"
   ],
   "host_permissions": [
     "https://www.facebook.com/*",
