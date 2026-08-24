@@ -37,12 +37,17 @@ import { resetFailureCounter, recordAdapterFailure, checkQuota, recordApiUsage }
 import { prisma } from '../../../lib/prisma';
 import axios from 'axios';
 
-// Etsy's marketplace skews toward vintage/handmade/craft/collectible inventory — these are
-// FindA.Sale's own category vocabulary strings, taken directly from the CategoryDepreciation
-// seed (packages/database/prisma/migrations/20260425_add_pricing_engine/migration.sql) rather
-// than invented, so this lines up with what getDepreciationCurve(request.category) actually
-// looks up. 'Clothing' included because vintage clothing is a major Etsy category.
-const ETSY_CATEGORIES = ['Collectibles', 'Art', 'Jewelry', 'Glassware', 'Cast Iron', 'Clothing'];
+// Real eBay L1 category names (see packages/backend/src/config/ebayCategories.ts's
+// EBAY_L1_CATEGORIES -- the single source of truth for item.category). CORRECTED
+// 2026-08-25: this array previously cited the CategoryDepreciation seed's category
+// vocabulary as its rationale, but that seed vocabulary is itself deprecated/stale
+// (predates the eBay L1 category migration) -- 'Glassware' and 'Cast Iron' had zero
+// real L1 category to substring-match against (dead), and 'Jewelry'/'Clothing' only
+// worked by lucky substring coincidence against the real 'Jewelry & Watches' /
+// 'Clothing, Shoes & Accessories' names. Now using real L1 names directly, with
+// broader genuinely-Etsy-relevant coverage the old vocabulary had no equivalent for
+// at all (Crafts, Antiques, Dolls & Bears).
+const ETSY_CATEGORIES = ['Collectibles', 'Art', 'Jewelry & Watches', 'Pottery & Glass', 'Crafts', 'Antiques', 'Clothing, Shoes & Accessories', 'Dolls & Bears'];
 
 interface EtsyListingPrice {
   amount?: number;

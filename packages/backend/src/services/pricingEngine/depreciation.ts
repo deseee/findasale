@@ -5,6 +5,7 @@
 
 import { SourceResult } from './types';
 import { prisma } from '../../lib/prisma';
+import { extractL1 } from '../../config/ebayCategories';
 
 export interface DepreciationCurve {
   category: string;
@@ -20,8 +21,14 @@ export interface DepreciationCurve {
 export async function getDepreciationCurve(
   category: string
 ): Promise<DepreciationCurve | null> {
+  // Normalize before lookup -- category may be a bare L1 name, a deep eBay taxonomy
+  // path, or (on old rows) pre-L1-migration free text. See extractL1's doc comment
+  // for the full story (2026-08-25 category-vocabulary-drift fix).
+  const normalized = extractL1(category);
+  if (!normalized) return null;
+
   const curve = await prisma.categoryDepreciation.findUnique({
-    where: { category },
+    where: { category: normalized },
   });
 
   if (!curve) return null;

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireOrganizer } from '../middleware/auth';
+import { extractL1 } from '../config/ebayCategories';
 
 /**
  * GET /api/items/:id/pricing-signals
@@ -31,10 +32,16 @@ export const getPricingSignals = [
       }
 
       // Check for sleeper pattern match
+      // Normalize category before lookup -- item.category may be a bare L1 name, a deep
+      // eBay taxonomy path, or (on old rows) pre-L1-migration free text. See
+      // extractL1's doc comment in config/ebayCategories.ts (2026-08-25
+      // category-vocabulary-drift fix -- this endpoint was found missing the fix during
+      // the knock-on-effects grep and patched in the same P0 pass).
       let sleeperAlert: { patternName: string; displayLabel: string; currentPrice: number; estimatedLow: number; estimatedHigh: number; confidence: number } | null = null;
-      if (item.title && item.category) {
+      const normalizedCategory = extractL1(item.category);
+      if (item.title && normalizedCategory) {
         const sleeperPatterns = await prisma.sleeperPattern.findMany({
-          where: { category: item.category },
+          where: { category: normalizedCategory },
         });
 
         for (const pattern of sleeperPatterns) {
@@ -67,11 +74,11 @@ export const getPricingSignals = [
 
       // Check for brand exception match
       let brandPremiumAlert: { brand: string; multiplier: number; sampleSize: number; appreciationMode: string } | null = null;
-      if (item.brand && item.category) {
+      if (item.brand && normalizedCategory) {
         const brandException = await prisma.brandException.findFirst({
           where: {
             brand: { contains: item.brand, mode: 'insensitive' },
-            category: item.category,
+            category: normalizedCategory,
           },
         });
 

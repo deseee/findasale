@@ -7,6 +7,7 @@
 import { PricingRequest, SignalResult } from './types';
 import { prisma } from '../../lib/prisma';
 import googleTrends from 'google-trends-api';
+import { extractL1 } from '../../config/ebayCategories';
 
 /**
  * Fetch trend data for a keyword via google-trends-api
@@ -53,12 +54,18 @@ export async function analyzeItem(request: PricingRequest): Promise<SignalResult
 
   // 1. Check for brand exception
   if (request.brand) {
-    const brandException = await prisma.brandException.findFirst({
-      where: {
-        brand: request.brand,
-        category: request.category,
-      },
-    });
+    // Normalize before lookup -- see extractL1's doc comment (2026-08-25
+    // category-vocabulary-drift fix). A null normalized category means no
+    // exception row could ever match, so skip the query entirely.
+    const normalizedCategory = extractL1(request.category);
+    const brandException = normalizedCategory
+      ? await prisma.brandException.findFirst({
+          where: {
+            brand: request.brand,
+            category: normalizedCategory,
+          },
+        })
+      : null;
 
     if (brandException) {
       result.isBrandPremium = true;
@@ -110,11 +117,15 @@ export async function detectSleeperPattern(
 > {
   if (!visionTags || visionTags.length === 0) return null;
 
-  const patterns = await prisma.sleeperPattern.findMany({
-    where: {
-      category: category,
-    },
-  });
+  // Normalize before lookup (2026-08-25 category-vocabulary-drift fix).
+  const normalizedCategory = extractL1(category);
+  const patterns = normalizedCategory
+    ? await prisma.sleeperPattern.findMany({
+        where: {
+          category: normalizedCategory,
+        },
+      })
+    : [];
 
   for (const pattern of patterns) {
     // Check if any of the vision tags match the pattern's indicators
@@ -143,10 +154,16 @@ export async function getTrendMultiplier(
   category: string,
   searchTerm?: string
 ): Promise<number> {
+  // Normalize before lookup/write so cache reads and writes always agree on the
+  // same key (2026-08-25 category-vocabulary-drift fix). Fall back to the raw
+  // category string only if it can't be normalized at all -- better to still try
+  // a Google Trends lookup on the raw text than to silently no-op.
+  const normalizedCategory = extractL1(category) ?? category;
+
   // Check cache first (24h TTL)
   const trendSignal = await prisma.trendSignal.findFirst({
     where: {
-      category: category,
+      category: normalizedCategory,
       expireAt: {
         gt: new Date(),
       },
@@ -176,11 +193,12 @@ export async function getTrendMultiplier(
   try {
     const multiplier = await fetchGoogleTrend(keyword);
 
-    // Write result to cache for next time
+    // Write result to cache for next time -- write the NORMALIZED category so a
+    // later read (which also normalizes) actually finds this row.
     const trendType = multiplier > 1.1 ? 'UP' : multiplier < 0.9 ? 'DOWN' : 'FLAT';
     await prisma.trendSignal.create({
       data: {
-        category,
+        category: normalizedCategory,
         searchTerm: category,
         signal: 'GOOGLE_TRENDS',
         trendType,
@@ -210,10 +228,14 @@ export async function applyBrandException(
   depreciationRate?: number;
   appreciationMode?: string;
 } | null> {
+  // Normalize before lookup (2026-08-25 category-vocabulary-drift fix).
+  const normalizedCategory = extractL1(category);
+  if (!normalizedCategory) return null;
+
   const exception = await prisma.brandException.findFirst({
     where: {
       brand: brand,
-      category: category,
+      category: normalizedCategory,
     },
   });
 

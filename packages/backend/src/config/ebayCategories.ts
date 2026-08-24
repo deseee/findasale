@@ -108,3 +108,37 @@ export function domainToL1(text: string | null | undefined): string[] {
   // c. No match.
   return [];
 }
+
+/**
+ * Normalize any raw category value down to its canonical L1 name. Handles three
+ * shapes: (a) a bare L1 name already, (b) a colon-separated deep eBay taxonomy path
+ * like "Collectibles:Comic Books & Memorabilia:Comics:Comics & Graphic Novels" (the
+ * L1 name is always the first segment), (c) legacy free text predating the eBay L1
+ * migration (e.g. an old 'Furniture'/'Tools' value that might still exist on an old
+ * row) -- falls back to the existing domainToL1 keyword resolver for that case.
+ * Returns null if nothing resolves.
+ *
+ * This is the ONE place category-keyed lookups (CategoryDepreciation,
+ * BrandException, SleeperPattern, TrendSignal) should normalize through --
+ * added 2026-08-25 after confirming live in production that those three seed
+ * tables' `category` values had drifted onto a deprecated vocabulary (Furniture,
+ * Tools, Electronics, Cast Iron, Glassware, etc. -- none of which are real L1
+ * names except Collectibles/Art) and that exact-equality lookups also silently
+ * failed against the ~33% of items whose category is a full deep-path string
+ * rather than a bare L1 name. Do not duplicate this logic elsewhere.
+ */
+export function extractL1(category: string | null | undefined): string | null {
+  if (!category) return null;
+
+  // a. Bare exact L1 name already.
+  if ((EBAY_L1_CATEGORIES as readonly string[]).includes(category)) return category;
+
+  // b. Colon-separated deep path -- first segment is the L1 name.
+  const firstSegment = category.split(':')[0].trim();
+  if ((EBAY_L1_CATEGORIES as readonly string[]).includes(firstSegment)) return firstSegment;
+
+  // c. Legacy free text (pre-L1-migration vocabulary) -- fall back to the existing
+  //    keyword resolver.
+  const resolved = domainToL1(category);
+  return resolved[0] ?? null;
+}

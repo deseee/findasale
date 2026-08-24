@@ -31,7 +31,16 @@ import { resetFailureCounter, recordAdapterFailure, checkQuota, recordApiUsage }
 import { prisma } from '../../../lib/prisma';
 import axios from 'axios';
 
-const GSA_CATEGORIES = ['Tools', 'Equipment', 'Furniture', 'Office'];
+// Real eBay L1 category names (see packages/backend/src/config/ebayCategories.ts's
+// EBAY_L1_CATEGORIES -- the single source of truth for item.category). CORRECTED
+// 2026-08-25: this array previously held ['Tools','Equipment','Furniture','Office'],
+// a deprecated pre-eBay-L1 vocabulary -- NONE of those four strings are (or are a
+// substring match against) any real L1 category, so this adapter's category gate
+// was 100% unreachable against real inventory even after today's field-name fix and
+// a live key. 'Tools' -> real L1 is 'Business & Industrial'; 'Furniture'/'Office' ->
+// real L1 is 'Home & Garden'. Never hardcode a category vocabulary that isn't
+// EBAY_L1_CATEGORIES itself -- that's exactly how this drifted.
+const GSA_CATEGORIES = ['Business & Industrial', 'Home & Garden'];
 
 interface GsaAuctionRecord {
   itemName?: string;
