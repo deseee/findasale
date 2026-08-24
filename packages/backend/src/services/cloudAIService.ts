@@ -65,7 +65,7 @@ async function finalizePricing(parsed: AITagResult): Promise<void> {
 
   const DISCOGS_LOOKUP_TIMEOUT_MS = 3000;
 
-  if (isAudioFormatMatch({ title: parsed.title, category: parsed.category })) {
+  if (isAudioFormatMatch({ title: parsed.title, category: parsed.category || '' })) {
     try {
       const discogsAdapter = adapterRegistry.getAdapter('discogs');
       if (discogsAdapter) {
