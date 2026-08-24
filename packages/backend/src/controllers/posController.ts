@@ -1364,8 +1364,8 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
             mode: 'payment',
             customer_email: shopper.email,
             line_items,
-            success_url: `${baseUrl}/items?paymentStatus=success`,
-            cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
+            success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,
+            cancel_url: `${baseUrl}/shopper/holds?paymentStatus=cancelled`,
             expires_at: checkoutExpiry.expiresAtUnix, // clamped into Stripe's 30min..24h window (P0-B)
             payment_intent_data: {
               metadata: {

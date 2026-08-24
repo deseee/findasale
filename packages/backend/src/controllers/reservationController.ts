@@ -1801,8 +1801,8 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           mode: 'payment',
           customer_email: reservation.user.email,
           line_items,
-          success_url: `${baseUrl}/items?paymentStatus=success`,
-          cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
+          success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,
+          cancel_url: `${baseUrl}/shopper/holds?paymentStatus=cancelled`,
           expires_at: checkoutExpiry.expiresAtUnix, // clamped into Stripe's 30min..24h window (P0-B)
           // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount
           // (+ transfer_data on the non-Direct path only -- see useDirect above).
