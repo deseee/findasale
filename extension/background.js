@@ -548,6 +548,106 @@ async function checkPendingRemovals() {
   });
   return 'notified:' + items.length + '_soldchecks:' + soldCheckCount;
 }
+
+// ---- Independent reverse sold-detection trigger (S-EXT-REVERSE-SOLD-DETECTION-INDEPENDENT,
+// 2026-08-23) ----
+// CONFIRMED BUG (P1): runSoldDetectionScan (fas-remove.js) only ever runs once a tab actually
+// lands on FAS_YOU_SELLING_SOLD_FILTER_URL, and until now that tab was opened ONLY as a side
+// effect of the forward-removal flow above: openSilentRemovalTab() fires from
+// checkPendingRemovals() solely when (a) items.length>0 (something already confirmed sold on
+// FindA.Sale -- unrelated to a NATIVE Facebook sale), or (b) soldCheckCount>0 AND
+// fasAutoRemoveMode==='silent'. In 'notify' mode -- the DEFAULT -- a soldCheckCount>0 only ever
+// produces a Chrome notification; the tab (and therefore the scan) never opens unless the
+// organizer manually clicks it. A real item ("Silent Service NES game") sold natively on
+// Facebook and its FindA.Sale Item.status never flipped from AVAILABLE to SOLD because nothing
+// ever opened this page for that organizer. This function closes that gap: it runs the
+// detection scan on its own account, decoupled from both forward-removal need and from mode
+// (only 'off' is excluded, since that means the organizer explicitly disabled cross-channel FB
+// sync entirely) -- called from the SAME FAS_REMOVAL_ALARM tick as checkPendingRemovals/
+// checkPendingUpdates below (no new chrome.alarms entry needed).
+//
+// HIDDEN, not foregrounded like openSilentRemovalTab(): this path never clicks anything on
+// Facebook -- runSoldDetectionScan is a pure DOM read (see fas-remove.js's 2026-08-09 comment on
+// SOLD_STATUS_FILTER_URL: "sold-detection scan (pure DOM read, no rAF dependency) was separately
+// confirmed to work fine hidden"). openSilentRemovalTab() stays foregrounded (UNCHANGED by this
+// fix) because its shared tab also carries the removal-survey-modal click and the renewal click,
+// both of which depend on requestAnimationFrame/animation timing that Chrome throttles in hidden
+// tabs. This new path only ever runs the read-only scan, so it can safely stay hidden and never
+// interrupts the organizer's browsing.
+//
+// Reuses the EXISTING fasRemovalTabId/fasRemovalPrevTabId/fasRemovalStartedAt storage keys and
+// the EXISTING silentRemovalInProgress()/finishSilentRemoval() functions completely unchanged --
+// fas-remove.js's start() already sends 'removalQueueDone' unconditionally whenever nothing ends
+// up queued for removal or renewal, and finishSilentRemoval() already no-ops safely whenever
+// fasRemovalTabId isn't set. Tracking this tab under the same keys means it gets closed (and the
+// organizer's previous tab focus restored) via that exact same, already-proven path -- zero
+// changes needed to fas-remove.js or to openSilentRemovalTab/finishSilentRemoval themselves.
+//
+// CADENCE DECISION (flagged for Patrick -- may want a different number, easy to retune below):
+// chosen 60 minutes, independent of the 20-min FAS_REMOVAL_ALARM tick itself. Reasoning: (1) a
+// hidden tab causes no visible disruption, so the strongest argument for a LONG interval (don't
+// hijack the organizer's screen) mostly doesn't apply here -- an item that sold natively on
+// Facebook stays falsely AVAILABLE on FindA.Sale until this scan catches it, which is a real
+// double-sell risk (it could be sold to a second buyer on FindA.Sale in the meantime), so leaning
+// toward SHORTER is safer for that reason. (2) Against that, every run is still a real Facebook
+// page load against the organizer's own logged-in session, and running it on the exact same
+// 20-min cadence as the forward-removal alarm (which handles the more time-sensitive "already
+// confirmed sold on FindA.Sale, still live on Facebook" direction) felt excessive for a native-FB
+// sale, which has no equivalent freshness signal telling us it just happened. 60 minutes is a
+// middle ground: at most ~24 extra hidden tab loads/day per organizer, and a native Facebook sale
+// is now caught within an hour instead of "whenever the organizer happens to click a
+// notification, or never" (the confirmed bug). Also gated behind a cheap pending-sold-checks
+// existence check below so it never opens a tab when there is nothing to check at all.
+const FAS_INDEPENDENT_SOLD_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
+async function checkReverseSoldDetectionIndependently() {
+  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  if (fasAutoRemoveMode === 'off') return 'off'; // organizer explicitly disabled cross-channel FB sync entirely
+
+  // Don't open a second tab while the shared removal/renewal tab lifecycle is already mid-run --
+  // same guard checkPendingRemovals() itself uses above. Running this AFTER checkPendingRemovals
+  // in the alarm handler (sequentially, not via Promise.all) guarantees this check always sees
+  // whatever checkPendingRemovals just did this same tick, so the two can never race and open two
+  // tabs at once.
+  if (await silentRemovalInProgress()) return 'skipped_in_progress';
+
+  const { fasLastIndependentSoldCheckAt = 0 } = await chrome.storage.local.get(['fasLastIndependentSoldCheckAt']);
+  if (Date.now() - fasLastIndependentSoldCheckAt < FAS_INDEPENDENT_SOLD_CHECK_INTERVAL_MS) {
+    return 'skipped_throttled';
+  }
+
+  // Cheap existence check before opening a tab at all -- mirrors checkPendingRemovals' own
+  // soldCheckCount gate above. If the organizer has nothing currently AVAILABLE-and-live-on-
+  // Facebook to check, opening a tab here would be pure waste. Deliberately NOT reusing
+  // checkPendingRemovals' own soldCheckCount value (that function returns only a summary string,
+  // not the count) -- a second call to this endpoint is cheap and keeps this function fully
+  // self-contained and safe to reason about in isolation.
+  let soldCheckCount = 0;
+  try {
+    const resp = await apiFetch('/extension/pending-sold-checks');
+    if (!resp.ok) return 'error:' + (resp.error || resp.status);
+    soldCheckCount = ((resp.data && resp.data.items) || []).length;
+  } catch (e) { return 'error:' + String((e && e.message) || e); }
+  if (!soldCheckCount) return 'no_candidates';
+
+  // Stamp the throttle only when actually opening -- the cheap existence check above is not
+  // throttled (it's just a lightweight read), only the actual tab-open is rate-limited.
+  await chrome.storage.local.set({ fasLastIndependentSoldCheckAt: Date.now() });
+  await openIndependentSoldCheckTab();
+  return 'opened:' + soldCheckCount;
+}
+
+// Mirrors openSilentRemovalTab() above exactly, except active:false (see the HIDDEN-vs-
+// foregrounded reasoning in the comment block above) -- tracked under the SAME storage keys so
+// the existing finishSilentRemoval()/silentRemovalInProgress() machinery handles cleanup with no
+// changes needed there or in fas-remove.js.
+async function openIndependentSoldCheckTab() {
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
+  const tab = await chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: false });
+  await chrome.storage.local.set({ fasRemovalTabId: tab.id, fasRemovalPrevTabId: prevTabId, fasRemovalStartedAt: Date.now() });
+}
+
 // Shared 30s throttle for on-demand checks (popup open, startup/install, mode change) so
 // rapid reloads can't spawn duplicate removal tabs. The recurring 20-min alarm path below stays
 // unguarded so the steady-state poll always runs.
@@ -849,7 +949,7 @@ async function checkRenewals() {
   return await autoRenewDueItems(dueItems);
 }
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === FAS_SAVED_SEARCH_ALARM) {
     return checkSavedSearchAlerts()
       .catch((e) => 'error:' + String((e && e.message) || e))
@@ -867,15 +967,24 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       }));
   }
   if (alarm.name !== FAS_REMOVAL_ALARM) return;
-  // return the combined promise so MV3 keeps the SW alive until BOTH polls complete
-  return Promise.all([
-    checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e)),
-    checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e))
-  ]).then(([removalOutcome, updateOutcome]) => chrome.storage.local.set({
+  // (2026-08-23, S-EXT-REVERSE-SOLD-DETECTION-INDEPENDENT) checkReverseSoldDetectionIndependently
+  // runs SEQUENTIALLY after checkPendingRemovals (not inside the Promise.all below) -- both can
+  // open the SAME shared removal tab (fasRemovalTabId), and running them concurrently would race
+  // two chrome.tabs.create calls against the same not-yet-written guard state, potentially
+  // opening two tabs and orphaning one. Sequencing them means checkReverseSoldDetectionIndependently's
+  // own silentRemovalInProgress() check always sees whatever checkPendingRemovals just did this
+  // same tick. checkPendingUpdates has no tab-opening side effect (unchanged, still just a
+  // notification), so it stays exactly as it was -- the listener is now `async` only so these can
+  // be awaited in order; the original forward-removal and price-sync behavior is untouched.
+  const removalOutcome = await checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e));
+  const independentSoldCheckOutcome = await checkReverseSoldDetectionIndependently().catch((e) => 'error:' + String((e && e.message) || e));
+  const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
+  return chrome.storage.local.set({
     fasLastAlarmFiredAt: Date.now(),
     fasLastAlarmRemovalOutcome: removalOutcome,
-    fasLastAlarmUpdateOutcome: updateOutcome
-  }));
+    fasLastAlarmUpdateOutcome: updateOutcome,
+    fasLastAlarmIndependentSoldCheckOutcome: independentSoldCheckOutcome
+  });
 });
 
 // (2026-07-21) Opportunistic secondary trigger -- backstops the 20-min alarm, doesn't replace it.

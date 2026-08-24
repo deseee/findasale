@@ -143,7 +143,15 @@ export async function publishDuePosts(now: Date = new Date()): Promise<{
       // (f) Lock the row BEFORE the network call (double-send guard).
       const locked = await lockForPublish(post.id);
       if (!locked) {
-        // Another run grabbed it — skip silently.
+        // Another run grabbed the lock between the `due` fetch and here. This used to
+        // `continue` with zero attribution — a row lost to this race vanished from the
+        // summary AND the logs, producing exactly the symptom that made the stuck-Pinterest
+        // investigation hard: considered=1 published=0 failed=0 skipped=0 with no per-post
+        // trace of what happened. Log + count it so every considered row is accounted for.
+        console.log(
+          `[socialPublisher] post=${post.id} platform=${post.platform} account=${account.id} outcome=LOCK_LOST (another run already claimed this row)`
+        );
+        summary.skipped++;
         continue;
       }
 
@@ -167,6 +175,9 @@ export async function publishDuePosts(now: Date = new Date()): Promise<{
         },
       });
       summary.published++;
+      console.log(
+        `[socialPublisher] post=${post.id} platform=${post.platform} account=${account.id} outcome=PUBLISHED remoteId=${result.remotePostId}`
+      );
     } catch (err) {
       summary.failed += await handlePublishError(post, account, err);
     }
@@ -192,17 +203,21 @@ async function lockForPublish(postId: string): Promise<boolean> {
 }
 
 async function markFailed(postId: string, message: string): Promise<void> {
+  const scrubbed = scrubTokens(message).slice(0, 1000);
   await prisma.socialPost.update({
     where: { id: postId },
-    data: { status: 'FAILED', lastErrorMessage: scrubTokens(message).slice(0, 1000), lastAttemptAt: new Date() },
+    data: { status: 'FAILED', lastErrorMessage: scrubbed, lastAttemptAt: new Date() },
   });
+  console.log(`[socialPublisher] post=${postId} outcome=FAILED reason=${scrubbed.slice(0, 300)}`);
 }
 
 async function markSkipped(postId: string, message: string): Promise<void> {
+  const scrubbed = scrubTokens(message).slice(0, 1000);
   await prisma.socialPost.update({
     where: { id: postId },
-    data: { status: 'SKIPPED', lastErrorMessage: scrubTokens(message).slice(0, 1000), lastAttemptAt: new Date() },
+    data: { status: 'SKIPPED', lastErrorMessage: scrubbed, lastAttemptAt: new Date() },
   });
+  console.log(`[socialPublisher] post=${postId} outcome=SKIPPED reason=${scrubbed.slice(0, 300)}`);
 }
 
 /**
@@ -248,6 +263,9 @@ async function handlePublishError(
       where: { id: post.id },
       data: { status: 'SKIPPED', lastErrorMessage: message, lastAttemptAt: new Date() },
     });
+    console.log(
+      `[socialPublisher] post=${post.id} platform=${post.platform} account=${account.id} outcome=SKIPPED_RATE_LIMIT attempts=${attempts} error=${message.slice(0, 300)}`
+    );
     return 0;
   }
 
@@ -256,6 +274,9 @@ async function handlePublishError(
       where: { id: post.id },
       data: { status: 'FAILED', lastErrorMessage: message, lastAttemptAt: new Date() },
     });
+    console.log(
+      `[socialPublisher] post=${post.id} platform=${post.platform} account=${account.id} outcome=FAILED attempts=${attempts}/${MAX_ATTEMPTS} error=${message.slice(0, 300)}`
+    );
     return 1;
   }
 
@@ -264,6 +285,9 @@ async function handlePublishError(
     where: { id: post.id },
     data: { status: 'SCHEDULED', lastErrorMessage: message, lastAttemptAt: new Date() },
   });
+  console.log(
+    `[socialPublisher] post=${post.id} platform=${post.platform} account=${account.id} outcome=RETRY_SCHEDULED attempts=${attempts}/${MAX_ATTEMPTS} error=${message.slice(0, 300)}`
+  );
 
   // Best-effort: surface an auth-shaped failure onto the account too.
   if (/token|unauthor|401|403/i.test(raw)) {
