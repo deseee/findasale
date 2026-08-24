@@ -118,6 +118,23 @@
     return false;
   }
 
+  // BUG FIX 2026-08-25 round 11 (Patrick-confirmed live, screenshot): root cause of "Clicked List
+  // item but couldn't confirm it went through" firing on every real auto-publish attempt, across
+  // multiple sessions of otherwise-correct fills -- Grailed shows a "Verify Your Phone Number" modal
+  // ("To use Grailed, we need to verify your phone number...") the FIRST time an account attempts to
+  // publish a listing, blocking the real submission entirely. This explains everything the earlier
+  // investigation found: no listing-creation network request ever fired (Grailed never got past this
+  // gate), no visible field-validation error existed (this is an account-level requirement, not a
+  // form problem), and it's independent of trusted vs synthetic clicks (Grailed's own button handler
+  // opens this modal either way -- the click WAS registering, it just led here instead of publishing).
+  // This is a one-time, account-level identity gate Patrick must complete himself with his real
+  // phone -- exactly the class of interstitial this file's own header already commits to never
+  // attempting to solve (HARD-STOP on any CAPTCHA/identity-verification/unrecognized interstitial).
+  function looksLikePhoneVerification() {
+    const lower = bodyText().toLowerCase();
+    return lower.indexOf('verify your phone') !== -1 || lower.indexOf('verify your phone number') !== -1;
+  }
+
   let bar;
   function ensureBar() {
     if (!bar) {
@@ -723,8 +740,29 @@
     // the picker opens and its displayed text changes, so the committed-check has the real
     // before-value to compare against.
     const placeholderText = norm(opener.textContent);
-    syntheticClick(opener);
-    await sleep(450);
+    // BUG FIX 2026-08-25 round 13 (live-confirmed, not a guess -- direct DOM query against Patrick's
+    // real tab after a failed run): console showed "override-check: pickedAny=false" and "no level
+    // matched in the picker" even for "Tracksuits & Sets", which HAS a real GRAILED_CATEGORY_OVERRIDES
+    // entry that should have applied. Root cause: the level-0 loop below (`if (aria-expanded ===
+    // 'false') break`) was breaking on its VERY FIRST iteration, before ever building an `items` list
+    // or trying a single match, because the plain `syntheticClick(opener)` below never actually opened
+    // this Radix menu -- aria-expanded stayed 'false'. This is the exact same class of bug already
+    // found and fixed for the Designer field earlier this session (direct event.isTrusted
+    // instrumentation proved synthetic clicks can't reliably open Grailed's Radix panels) -- Category's
+    // own Department/Category trigger needed the identical trustedClick()-first + bounded-retry
+    // treatment, which it never got. Mirrors fillDesigner's retry loop below.
+    let opened = false;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const usedTrusted = await trustedClick(opener);
+      if (!usedTrusted) syntheticClick(opener);
+      await sleep(450);
+      if (opener.getAttribute && opener.getAttribute('aria-expanded') === 'true') { opened = true; break; }
+      console.warn('[FAS Grailed] Category/Department picker did not open on attempt ' + attempt + '/4 (' + (usedTrusted ? 'trusted' : 'synthetic') + ' click) -- retrying.');
+    }
+    if (!opened) {
+      console.warn('[FAS Grailed] Category "' + categoryText + '" -- the Department/Category picker never opened after 4 attempts (UNVERIFIED interaction) -- left for the organizer to choose.');
+      return false;
+    }
     let pickedAny = false;
     // BUG FIX 2026-08-20 (S-EXT-BATCH-8, P0, live-Chrome-confirmed via Patrick's real re-test): TWO
     // stacked problems, both confirmed live against the real failing item ("Clothing, Shoes &
@@ -1172,7 +1210,7 @@
     if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed, countryOriginStatus) {
+  function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed, countryOriginStatus, publishBlocked) {
     const more = (index + 1) < total;
     scrollToGrailedPublishButton();
     // International shipping status line (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- see
@@ -1201,6 +1239,7 @@
       countryLine +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       (designerUnconfirmed ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Designer was typed in but not confirmed -- click the correct suggestion in that field before publishing.</div>' : '') +
+      (publishBlocked && !designerUnconfirmed ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category, Designer, and/or Size could not be set automatically on this item -- Grailed will block submission until you fill these in yourself. Check for red-bordered required fields before publishing.</div>' : '') +
       button('fas-gr-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-gr-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -1262,9 +1301,36 @@
     }
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
-    syntheticClick(publishBtn);
+    // BUG FIX 2026-08-24 round 10 (Patrick: "no publish" after the selector fix -- button now
+    // resolves correctly, per live evidence, but the click didn't produce a confirmed publish
+    // within the wait window, and a full page check afterward showed no visible validation errors
+    // anywhere on the form). Given this exact same session already found Grailed's Designer
+    // combobox silently ignores untrusted (isTrusted:false) synthetic clicks, and the "Publish"
+    // button is the single highest-stakes control on this entire form, it's a well-motivated
+    // (not blind) hypothesis that Grailed also requires a genuinely trusted click here. Tries
+    // trustedClick() (the same chrome.debugger/CDP bridge that fixed Designer) FIRST, falling back
+    // to syntheticClick() only if trustedClick() itself reports failure. NOT yet live-confirmed
+    // this actually fixes publish specifically -- flagged to Patrick, needs his explicit go-ahead
+    // before a real test, since a successful click here creates a real live Grailed listing.
+    if (!(await trustedClick(publishBtn))) syntheticClick(publishBtn);
+    // BUG FIX 2026-08-25 round 11 (Patrick-confirmed live via screenshot): check for the
+    // phone-verification modal BEFORE the generic confirmation wait -- it appears almost
+    // immediately after the click, and the old generic "couldn't confirm" message was actively
+    // confusing here (it reads like an extension bug when it's really a one-time Grailed account
+    // gate). See looksLikePhoneVerification()'s comment for the full root-cause writeup.
+    await sleep(700);
+    if (looksLikePhoneVerification()) {
+      overlayWarn('Grailed needs you to verify your phone number before it will accept this listing -- this is a one-time Grailed account requirement, not something FindA.Sale can or should do for you. Verify your phone on Grailed, then click <b>Publish</b> yourself for this listing (and future ones should auto-publish normally once this is done).' + button('fas-gr-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
     const published = await waitForGrailedPublishConfirmation(6000);
     if (!published) {
+      if (looksLikePhoneVerification()) {
+        overlayWarn('Grailed needs you to verify your phone number before it will accept this listing -- this is a one-time Grailed account requirement, not something FindA.Sale can or should do for you. Verify your phone on Grailed, then click <b>Publish</b> yourself for this listing.' + button('fas-gr-close', 'Close', false));
+        closeBtnHandler();
+        return;
+      }
       overlayWarn('Clicked <b>List item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Grailed yourself before assuming it posted.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
@@ -1524,14 +1590,32 @@
     // Category resolves (live-confirmed: disabled=true pre-Category, disabled=false with
     // placeholder changing to "Search and add a Designer" immediately after Category is set).
     // Previously Designer ran first every time, guaranteeing it always hit a disabled field.
+    // BUG FIX 2026-08-25 round 12 (Patrick-confirmed live, screenshot showing red required-field
+    // borders on Category/Sub-category/Designer/Size all still blank): direct evidence that
+    // auto-publish was firing even when Category never matched at all (this run's department
+    // fallback tried "Womenswear" and found zero category match there -- confirmed via
+    // "override-check: pickedAny=false" in the console), which left Designer disabled and Size
+    // unfillable too -- yet the OLD gate below only ever checked designerUnconfirmed (set solely by
+    // the 'typed_unconfirmed' Designer outcome), never noticing Category/Designer/Size were
+    // completely empty. That's a real, separate bug from the phone-verification finding earlier --
+    // Grailed's own client-side required-field validation (the red borders) was blocking the actual
+    // click's submission, and the extension had no idea, so it reported the same generic "couldn't
+    // confirm" message either way. `publishBlocked` now tracks EVERY known reason auto-publish would
+    // be unsafe (Category no-match, Designer field_missing, Designer typed-unconfirmed, no brand
+    // data at all) so run() can gate on the real picture instead of Designer's one specific outcome.
+    let publishBlocked = false;
     if (item.category) {
       // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- Grailed is the
       // only one of the four platforms with its own gender-level Department field, and that
       // signal ("men"/"women") only survives in the original breadcrumb, not in the clean leaf
       // name alone (see pickCategory's own comment above for the full explanation).
       const categoryOk = await pickCategory(item.category, item.categoryBreadcrumb);
-      if (!categoryOk) console.warn('[FAS Grailed] Category "' + item.category + '" -- no match found in the picker; Designer field may remain disabled as a result.');
+      if (!categoryOk) {
+        publishBlocked = true;
+        console.warn('[FAS Grailed] Category "' + item.category + '" -- no match found in the picker; Designer field may remain disabled as a result.');
+      }
     } else {
+      publishBlocked = true;
       console.warn('[FAS Grailed] No category on this item -- Category picker skipped, which will likely leave the Designer field disabled too.');
     }
     // Designer is a hard gate for this platform: a genuine no-match means Grailed's own form
@@ -1546,14 +1630,20 @@
       // below, not a hard stop that blocks the rest of the form.
       if (designerResult === 'typed_unconfirmed') {
         designerUnconfirmed = true;
+        publishBlocked = true;
         console.warn('[FAS Grailed] Designer "' + item.brand + '" was typed into the field but the suggestion list could not be confirmed -- click the correct suggestion yourself before publishing.');
       }
-      if (designerResult === 'field_missing') console.warn('[FAS Grailed] Designer field not found (UNVERIFIED selector) -- continuing to fill the rest of the form, but Grailed will likely block submission without a Designer set.');
+      if (designerResult === 'field_missing') {
+        publishBlocked = true;
+        console.warn('[FAS Grailed] Designer field not found (UNVERIFIED selector) -- continuing to fill the rest of the form, but Grailed will likely block submission without a Designer set.');
+      }
     } else {
       // brand now exists on Item (2026-08-18) but is still commonly unset -- this branch
-      // fires for any genuinely brand-less item, not just a structural gap. Not a hard stop by
-      // itself (a genuinely brand-less vintage/unbranded item is a real Grailed use case), but
-      // flagged loudly since Designer is normally required there.
+      // fires for any genuinely brand-less item, not just a structural gap. Blocks auto-publish
+      // now (previously did not) -- Grailed generally requires a Designer, so auto-clicking
+      // Publish on a brand-less item is exactly the same unsafe bet as the Category-miss case
+      // above, not a safe default.
+      publishBlocked = true;
       console.warn('[FAS Grailed] No brand/designer data on this item -- Grailed generally requires a Designer to be set; the organizer will need to pick one manually.');
     }
     const fillResult = await fillListing(item);
@@ -1562,11 +1652,17 @@
       closeBtnHandler();
       return;
     }
-    if (autoPublish && !designerUnconfirmed) {
+    // BUG FIX 2026-08-25 round 12: gate now checks publishBlocked (Category no-match, Designer
+    // field_missing, Designer typed-unconfirmed, or no brand data at all) instead of only
+    // designerUnconfirmed -- see the block above for the full incident writeup. Live-confirmed
+    // this was firing auto-publish on a completely blank Category/Designer/Size form before this
+    // fix (Grailed's own required-field validation then blocked the real click's submission with
+    // no diagnostic signal to the organizer).
+    if (autoPublish && !publishBlocked) {
       await doGrailedAutoPublish(item, index, total, fillResult.photosOk, fillResult.intlShipping, fillResult.countryOriginStatus);
       return;
     }
-    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed, fillResult.countryOriginStatus);
+    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed, fillResult.countryOriginStatus, publishBlocked);
   }
 
   async function start() {
