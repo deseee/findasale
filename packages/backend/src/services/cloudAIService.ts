@@ -19,6 +19,9 @@ import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, track
   recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, CatalogMatch } from './imageMatchService';
 import { getEbayImageMatch, buildEbayMatchContext, EbayImageMatch } from './ebayImageSearchService';
+import { adapterRegistry } from './pricingEngine/adapters/registry';
+import { isAudioFormatMatch } from './pricingEngine/adapters/discogs';
+import { applyCharmPricing } from '../utils/charmPricing';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -44,6 +47,44 @@ export interface AITagResult {
   estimatedPackageType?: string; // eBay packageType enum (MAILING_BOX | PACKAGE_THICK_ENVELOPE | LARGE_PACKAGE | etc.)
   packageConfidence?: number; // 0.0-1.0 confidence in the package estimate
   ocrIsbn?: string; // ADR-089: checksum-valid ISBN extracted from the full Vision OCR block (books)
+}
+
+/**
+ * Finalize the price on a freshly-parsed AI tag result: for records/vinyl/CD/
+ * cassette (detected via the shared Discogs isAudioFormatMatch check), try a
+ * fast, scoped Discogs comp lookup first and use its price if found; then
+ * always round to a charm price (.49/.99 ending) before the result reaches
+ * the organizer. Never throws -- a Discogs miss/timeout/error silently falls
+ * back to the AI's own guess, charm-rounded.
+ * See claude_docs/feature-notes/ADR-charm-pricing-discogs-comp-wiring-2026-08-24.md
+ */
+async function finalizePricing(parsed: AITagResult): Promise<void> {
+  if (typeof parsed.suggestedPrice !== 'number' || !isFinite(parsed.suggestedPrice)) {
+    return;
+  }
+
+  const DISCOGS_LOOKUP_TIMEOUT_MS = 3000;
+
+  if (isAudioFormatMatch({ title: parsed.title, category: parsed.category })) {
+    try {
+      const discogsAdapter = adapterRegistry.getAdapter('discogs');
+      if (discogsAdapter) {
+        const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), DISCOGS_LOOKUP_TIMEOUT_MS));
+        const lookup = discogsAdapter.fetch({ title: parsed.title, category: parsed.category || '' });
+        const results = await Promise.race([lookup, timeout]);
+        if (results && results.length > 0) {
+          const best = [...results].sort((a, b) => b.confidence - a.confidence)[0];
+          if (best.price > 0) {
+            parsed.suggestedPrice = best.price / 100; // adapter returns cents
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[finalizePricing] Discogs lookup failed, keeping AI guess:', err);
+    }
+  }
+
+  parsed.suggestedPrice = applyCharmPricing(parsed.suggestedPrice);
 }
 
 /** Photo with its computed quality score for best-photo-first sorting */
@@ -440,6 +481,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       parsed.estimatedDimensionsIn = undefined;
       parsed.estimatedPackageType = undefined;
     }
+    await finalizePricing(parsed);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
@@ -1138,6 +1180,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
       parsed.upc = undefined;
     }
 
+    await finalizePricing(parsed);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller

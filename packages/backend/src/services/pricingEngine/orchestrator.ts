@@ -14,6 +14,7 @@ import { applyWeighting, calculateWeightedMedian, calculateConfidence } from './
 import { getDepreciationCurve, applyDepreciation } from './depreciation';
 import { adapterRegistry } from './adapters/registry';
 import { prisma } from '../../lib/prisma';
+import { applyCharmPricingCents } from '../../utils/charmPricing';
 
 /**
  * Main entry point: Estimate price for an item
@@ -138,7 +139,7 @@ async function finalizeResult(
   if (results.length === 0) {
     // Return FLOOR confidence with minimum price
     return {
-      estimatedPrice: 50, // $0.50 floor
+      estimatedPrice: applyCharmPricingCents(50), // charm-priced floor (~$0.49)
       priceRange: { low: 50, high: 50 },
       confidence: 'FLOOR',
       tier: 3,
@@ -182,6 +183,9 @@ async function finalizeResult(
 
   // 12. Calculate confidence
   const confidence = calculateConfidence(weighted, tier, signals);
+
+  // Charm-price the final estimate so every pricing path ends in .49/.99
+  estimatedPrice = applyCharmPricingCents(estimatedPrice);
 
   // 13. Build result
   const result: PricingResult = {

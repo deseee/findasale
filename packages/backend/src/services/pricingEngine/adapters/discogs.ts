@@ -8,26 +8,36 @@ import { resetFailureCounter, recordAdapterFailure, checkQuota, recordApiUsage }
 import { prisma } from '../../../lib/prisma';
 import axios from 'axios';
 
+/**
+ * Standalone audio-format detector (records/vinyl/CD/cassette), exported so
+ * other callers (e.g. cloudAIService.ts's photo-scan pricing finalize step)
+ * can check "is this a record?" without needing a full DiscogsAdapter
+ * instance. DiscogsAdapter.isAudioFormat below delegates to this function.
+ */
+export function isAudioFormatMatch(request: Pick<PricingRequest, 'title' | 'category'>): boolean {
+  const categoryLower = request.category?.toLowerCase() || '';
+  const titleLower = request.title?.toLowerCase() || '';
+
+  // Check category for audio-related keywords
+  const categoryMatch = /vinyl|cd|compact disc|cassette|tape|album|record|music/.test(
+    categoryLower
+  );
+
+  // Check title for audio-related keywords
+  const titleMatch = /vinyl|cd|compact disc|cassette|tape|album|record|music/.test(
+    titleLower
+  );
+
+  return categoryMatch || titleMatch;
+}
+
 export class DiscogsAdapter implements PricingAdapter {
   sourceId = 'discogs';
   tier: 1 | 2 | 3 = 1;
   isAskingPrice = false;
 
   private isAudioFormat(request: PricingRequest): boolean {
-    const categoryLower = request.category?.toLowerCase() || '';
-    const titleLower = request.title?.toLowerCase() || '';
-
-    // Check category for audio-related keywords
-    const categoryMatch = /vinyl|cd|compact disc|cassette|tape|album|record|music/.test(
-      categoryLower
-    );
-
-    // Check title for audio-related keywords
-    const titleMatch = /vinyl|cd|compact disc|cassette|tape|album|record|music/.test(
-      titleLower
-    );
-
-    return categoryMatch || titleMatch;
+    return isAudioFormatMatch(request);
   }
 
   async fetch(request: PricingRequest): Promise<SourceResult[]> {

@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { applyCharmPricing } from '../utils/charmPricing';
 
 /**
  * Generate valuation for an item based on comparable sold items
@@ -141,6 +142,7 @@ export async function generateValuation(itemId: string) {
     }
 
     // Upsert valuation record
+    priceMedian = applyCharmPricing(priceMedian);
     const valuation = await prisma.itemValuation.upsert({
       where: { itemId },
       create: {
