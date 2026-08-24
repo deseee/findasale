@@ -1220,8 +1220,20 @@
   }
 
   // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
+  // BUG FIX 2026-08-24 round 9 (Patrick: "stop guessing period!!!" -- root-caused with direct live
+  // evidence, not another guess): live-confirmed via `Array.from(document.querySelectorAll('button'))`
+  // against Patrick's real page that Grailed's actual publish button text is "Publish", not "List
+  // item" -- the old selector never matched ANYTHING, so publishBtn was always null and
+  // doGrailedAutoPublish() silently fell back to the manual-review overlay on every single run,
+  // regardless of whether autoPublish was on or Designer was confirmed. Both of those gates were
+  // working correctly the whole time; this was the actual, sole blocker. Matches on exact text
+  // "publish" OR "list item" (kept as a fallback in case Grailed's copy differs by category/account
+  // state -- never confirmed on more than one real listing this session).
   function findGrailedPublishButton() {
-    return qa('button').find((b) => norm(b.textContent) === 'list item');
+    return qa('button').find((b) => {
+      const t = norm(b.textContent);
+      return t === 'publish' || t === 'list item';
+    });
   }
 
   // Confirms a real publish by polling for the listing form to disappear -- no live-confirmed
@@ -1239,8 +1251,12 @@
   async function doGrailedAutoPublish(item, index, total, photosOk, intlShipping, countryOriginStatus) {
     const publishBtn = findGrailedPublishButton();
     if (!publishBtn) {
-      // Auto-publish is on but the button couldn't be found (UNVERIFIED selector, file header) --
-      // never guess past this; fall back to the exact same manual-review path as autoPublish=false.
+      // BUG FIX 2026-08-24 round 9: this fallback used to be completely silent -- no console
+      // output at all -- which is exactly why the "Publish" vs "List item" text mismatch went
+      // undiagnosed through several rounds of investigating Designer/autoPublish instead. Now
+      // loud, so a future selector drift shows up immediately instead of masquerading as a
+      // Designer/autoPublish-gate problem again.
+      console.warn('[FAS Grailed] Auto-publish is on but the "Publish"/"List item" button could not be found on this page (UNVERIFIED selector) -- falling back to manual review. If Grailed has changed this button\'s label, that selector needs updating.');
       showReviewOverlay(item, index, total, photosOk, intlShipping, false, countryOriginStatus);
       return;
     }
