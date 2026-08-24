@@ -1341,6 +1341,22 @@ const EditItemPage = () => {
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
 
+              {/* Smart Price Suggestion (multi-source pricing engine, 2026-08-24): manual
+                  re-trigger since descriptions/photos can change after the initial scan.
+                  Refresh-only — never auto-writes price, organizer must click Use $X. */}
+              <div className="mt-3 mb-1">
+                <PriceSuggestion
+                  itemId={id as string}
+                  title={formData.title}
+                  category={formData.category}
+                  condition={formData.condition}
+                  conditionGrade={formData.conditionGrade}
+                  photoUrls={item?.photoUrls}
+                  currentPrice={formData.price ? parseFloat(formData.price) : undefined}
+                  onApplyPrice={(price) => setFormData({ ...formData, price: String(price) })}
+                />
+              </div>
+
               {/* Encyclopedia Inline Tip: price guidance from Encyclopedia */}
               <EncyclopediaInlineTip
                 category={formData.category}

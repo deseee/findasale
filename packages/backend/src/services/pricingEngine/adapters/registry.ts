@@ -13,6 +13,7 @@ import { KeepaAdapter } from './keepa';
 import { DiscogsAdapter } from './discogs';
 import { GsaAdapter } from './gsa';
 import { SalvationArmyAdapter } from './salvationArmy';
+import { FindaSaleInternalAdapter } from './findasaleInternal';
 
 // Stub adapters for disabled sources
 import { StubAdapter } from './stub';
@@ -36,6 +37,9 @@ class AdapterRegistry {
     this.register('keepa', new KeepaAdapter());
     this.register('discogs', new DiscogsAdapter());
     this.register('gsa', new GsaAdapter());
+
+    // Tier 2: FindA.Sale's own confirmed sold comps
+    this.register('findasaleInternal', new FindaSaleInternalAdapter());
 
     // Tier 3: Baseline
     this.register('salvationArmy', new SalvationArmyAdapter());
@@ -100,6 +104,7 @@ class AdapterRegistry {
       keepa: 'Keepa Amazon API',
       discogs: 'Discogs',
       gsa: 'GSA Auctions',
+      findasaleInternal: 'FindA.Sale Sold Comps',
       salvationArmy: 'Salvation Army FMV',
       maxsold: 'MaxSold Estate Sales',
       hibid: 'HiBid Auctions',

@@ -221,6 +221,11 @@ async function finalizeResult(
   };
 
   // 14. Cache result
+  // 2026-08-24: the manual re-trigger (PriceSuggestion.tsx -> POST /pricing/estimate) makes
+  // this a second live writer to ItemCompLookup alongside jobs/fetchEbayComps.ts's bespoke
+  // blend. `source` previously was only ever set by fetchEbayComps.ts ("ebay"|"pricecharting"
+  // |"blended") — set it here too so the field never goes stale relative to estimatedPrice/
+  // priceConfidence when the orchestrator is the one that last wrote the row.
   if (request.itemId) {
     await prisma.itemCompLookup.upsert({
       where: { itemId: request.itemId },
@@ -230,6 +235,7 @@ async function finalizeResult(
         priceConfidence: result.confidence,
         tierUsed: result.tier,
         sourcesConsulted: result.sourcesConsulted.map(s => s.sourceId),
+        source: 'multiSource',
         isTrending: result.flags.isTrending,
         trendMultiplier: result.flags.trendMultiplierApplied,
         isBrandPremium: result.flags.isBrandPremium,
@@ -247,6 +253,7 @@ async function finalizeResult(
         priceConfidence: result.confidence,
         tierUsed: result.tier,
         sourcesConsulted: result.sourcesConsulted.map(s => s.sourceId),
+        source: 'multiSource',
         isTrending: result.flags.isTrending,
         trendMultiplier: result.flags.trendMultiplierApplied,
         isBrandPremium: result.flags.isBrandPremium,

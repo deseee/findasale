@@ -67,13 +67,6 @@ const bulkPhotosSchema = z.object({
   dryRun: z.boolean().optional(),
 });
 
-const pricesuggestionSchema = z.object({
-  title: z.string().min(1, 'title is required'),
-  category: z.string().min(1, 'category is required'),
-  condition: z.string().min(1, 'condition is required'),
-  currentPrice: z.number().positive().optional(),
-});
-
 const highValueSchema = z.object({
   isHighValue: z.boolean().optional(),
   threshold: z.number().optional(),
@@ -859,50 +852,13 @@ router.post('/:saleId/import-items', authenticate, bulkItemsLimiter, uploadCsv.s
 // POST /api/items/:saleId/bulk-import?confirm=true → actual import (createMany, draftStatus=DRAFT, max 200)
 router.post('/:saleId/bulk-import', authenticate, bulkItemsLimiter, uploadCsv.single('file'), bulkImportCSV);
 
-// CD2 Phase 3: AI Price suggestions
-router.post('/ai/price-suggest', authenticate, async (req, res) => {
-  try {
-    const validatedData = pricesuggestionSchema.parse(req.body);
-    const { title, category, condition, currentPrice } = validatedData;
-
-    // Fetch up to 5 recently sold items in the same category for comparable pricing
-    const { prisma } = await import('../index');
-    const recentComps = await prisma.item.findMany({
-      where: {
-        category: { equals: category, mode: 'insensitive' },
-        status: 'SOLD',
-        price: { not: null, gt: 0 },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 5,
-      select: { title: true, price: true, updatedAt: true },
-    });
-
-    const compData = recentComps.map(c => ({
-      title: c.title,
-      price: c.price!,
-      soldAt: c.updatedAt.toISOString().split('T')[0],
-    }));
-
-    // Import here to avoid circular dependencies
-    const { suggestPrice } = await import('../services/cloudAIService');
-    const suggestion = await suggestPrice(title, category, condition, compData, currentPrice);
-
-    res.json(suggestion);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: 'Validation error', errors: error.errors });
-    }
-    console.error('Price suggestion error:', error);
-    res.status(500).json({
-      error: 'Failed to generate price suggestion',
-      low: 1,
-      high: 50,
-      suggested: 10,
-      reasoning: 'Manual pricing recommended',
-    });
-  }
-});
+// CD2 Phase 3 route retired 2026-08-24 -- superseded by POST /api/pricing/estimate
+// (packages/backend/src/routes/pricing.ts), which both frontend call sites now use.
+// The category-only/SOLD/take-5 comp query that lived here moved into
+// services/pricingEngine/adapters/findasaleInternal.ts as a proper weighted tier-2
+// pricing source instead of being duplicated. suggestPrice() in cloudAIService.ts is
+// UNCHANGED and still used directly by jobs/processRapidDraft.ts's synchronous photo-scan
+// refinement step -- do not remove that function or its import there.
 
 // Feature #30: AI Item Valuation endpoints
 // GET /api/items/:itemId/valuation — Get valuation for an item (PRO gated)

@@ -126,6 +126,7 @@ export class DiscogsAdapter implements PricingAdapter {
                 saleDate: new Date(), // Discogs provides live marketplace data, treated as current
                 confidence: 0.85, // Discogs marketplace is reliable
                 comparabilityScore: 0.8, // Direct format match
+                sampleSize: release.num_for_sale, // # of copies currently for sale (2026-08-24 weighting fix)
               });
             }
           } catch (itemErr) {

@@ -39,7 +39,16 @@ export function applyWeighting(
     result.recencyDecayFactor = recencyDecay;
 
     // 4. Sample size boost: log(sampleSize + 1) / log(10 + 1)
-    const sampleBoost = Math.log((result as any).sampleSize + 1) / Math.log(11);
+    // Bug fix 2026-08-24: `sampleSize` didn't exist on SourceResult at all (accessed via
+    // `as any`), so this was always `undefined + 1` = NaN, poisoning `weight` and every
+    // downstream `finalWeight` to NaN for every source, every time. `types.ts` now declares
+    // `sampleSize?: number` for real; adapters that populate it get a real sample-size boost,
+    // adapters that don't yet (ebth/keepa/salvationArmy — not in this dispatch's scope) fall
+    // back to a neutral sampleSize of 1 (a real, small, non-poisoning boost) instead of NaN.
+    const effectiveSampleSize = typeof result.sampleSize === 'number' && result.sampleSize > 0
+      ? result.sampleSize
+      : 1;
+    const sampleBoost = Math.log(effectiveSampleSize + 1) / Math.log(11);
     weight *= sampleBoost;
     result.sampleSizeBoost = sampleBoost;
 

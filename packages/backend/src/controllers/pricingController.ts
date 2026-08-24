@@ -27,7 +27,22 @@ export async function estimatePriceController(req: Request, res: Response): Prom
 
     const result: PricingResult = await estimatePrice(request);
 
-    res.json(result);
+    // Deterministic (non-LLM, no §0·SPEND concern) reasoning string for PriceSuggestion.tsx's
+    // existing reasoning line. PricingResult has no prose field of its own. FLOOR results omit
+    // reasoning entirely — the frontend suppresses the whole card at FLOOR confidence (never
+    // shows a bare $0.49 as if it were a real comp-based number).
+    let reasoning = '';
+    if (result.confidence !== 'FLOOR') {
+      if (result.tier === 1) {
+        reasoning = `Based on ${result.compsFound} comparable listing${result.compsFound === 1 ? '' : 's'} from live market sources.`;
+      } else if (result.tier === 2) {
+        reasoning = 'Based on limited market data — treat as a rough estimate.';
+      } else {
+        reasoning = 'Based on very limited data — treat as a rough estimate.';
+      }
+    }
+
+    res.json({ ...result, reasoning });
   } catch (error) {
     console.error('[Pricing] Estimate error:', error);
     res.status(500).json({

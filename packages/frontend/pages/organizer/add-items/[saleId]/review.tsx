@@ -1040,13 +1040,19 @@ const ReviewPage = () => {
       // Map grade to human-readable condition for the prompt context
       const gradeLabels: Record<string, string> = { S: 'like new', A: 'excellent', B: 'good', C: 'fair', D: 'poor' };
       const gradeCondition = gradeLabels[grade] || condition;
-      const response = await api.post('/items/ai/price-suggest', {
+      // 2026-08-24: repointed from the retired /items/ai/price-suggest route to the
+      // multi-source pricing engine. Amounts come back in cents; skip the silent auto-apply
+      // entirely on FLOOR confidence (no real comps) rather than writing a bare $0.49.
+      const response = await api.post('/pricing/estimate', {
+        itemId: item.id,
         title,
         category,
         condition: gradeCondition,
+        conditionGrade: grade,
+        photoUrls: item.photoUrls,
       });
-      if (response.data?.suggested) {
-        handleEditChange(item.id, 'price', response.data.suggested);
+      if (response.data?.confidence !== 'FLOOR' && response.data?.estimatedPrice) {
+        handleEditChange(item.id, 'price', response.data.estimatedPrice / 100);
       }
     } catch {
       // Best-effort: silent failure, keep existing price
@@ -1831,9 +1837,12 @@ const ReviewPage = () => {
                             {/* PriceSuggestion shows the Smart reference price (read-only) */}
                             <div className="mb-1.5">
                               <PriceSuggestion
+                                itemId={item.id}
                                 title={getEditState(item).title}
                                 category={getEditState(item).category}
                                 condition={getEditState(item).condition}
+                                conditionGrade={getEditState(item).conditionGrade}
+                                photoUrls={item.photoUrls}
                                 onApplyPrice={(price) => setPriceInput(item.id, String(price))}
                               />
                             </div>

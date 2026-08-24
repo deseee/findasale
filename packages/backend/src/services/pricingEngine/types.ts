@@ -61,9 +61,12 @@ export interface SourceResult {
   saleDate: Date;
   confidence: number; // 0.0-1.0
   comparabilityScore: number; // 0.0-1.0
+  sampleSize?: number; // raw comp count this result is based on (e.g. Discogs num_for_sale,
+  // eBay listing count). Optional — adapters that don't set it fall back to a safe default
+  // in weighting.ts rather than poisoning the weight with NaN (2026-08-24 bug fix).
   askingPriceAdjustment?: number; // 0.6 multiplier if asking price
   recencyDecayFactor?: number; // e^(-λt)
-  sampleSizeBoost?: number; // log(n+1)
+  sampleSizeBoost?: number; // log(n+1) — derived from sampleSize, computed in weighting.ts
   finalWeight?: number; // after all adjustments
 }
 
@@ -86,6 +89,7 @@ export interface RawComp {
   confidence: number; // 0-1
   comparabilityScore: number; // 0-1
   isSoldPrice?: boolean;
+  sampleSize?: number;
   externalListingId?: string;
   externalUrl?: string;
 }
