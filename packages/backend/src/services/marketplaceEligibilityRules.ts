@@ -122,6 +122,14 @@ const RULES: EligibilityRule[] = [
       'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessor', 'jewelry', 'jewellery', 'watch',
       'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'glove', 'sock', 'underwear', 'swimwear',
       'romper', 'jumpsuit',
+      // BUG FIX 2026-08-23 (Patrick-reported live: "Bored Ape Yacht Club Adidas Tracksuit" incorrectly
+      // flagged "may not fit this marketplace" for Grailed). Root-caused via direct code read: this is
+      // a substring allowlist against item.category, and the item's real category is "Tracksuits &
+      // Sets" (confirmed against fas-grailed.js's own GRAILED_CATEGORY_OVERRIDES entry for the same
+      // category string) -- 'tracksuit' was simply missing from the list, a genuine fashion item with
+      // no other keyword match. Added the missing term plus its common sibling, both obviously
+      // fashion/apparel and equally likely to be missed the same way.
+      'tracksuit', 'sweatpant',
     ],
     reason: 'Grailed is a fashion/streetwear-only marketplace -- this item’s category doesn’t look like apparel, footwear, or accessories.',
   },

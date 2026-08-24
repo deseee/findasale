@@ -963,20 +963,61 @@
   }
 
   // Given real dimensions (inches) and Mercari's own stated shoebox size (14 x 10 x 5, from the
-  // modal's own helper text), answers whether the item fits. Falls back to "No" (the safer, more
-  // conservative choice -- the modal's own copy warns "If your package exceeds the label weight/
-  // size, you'll be charged the difference") whenever real dimensions aren't known, rather than
-  // guessing "Yes" and risking an under-sized label.
+  // modal's own helper text), answers whether the item fits. Returns `null` (not `false`) when real
+  // dimensions aren't known -- see the BUG FIX comment at this function's call site for why "unknown"
+  // now needs to be distinguished from a confirmed "no", not silently treated the same way.
+  //
+  // TOLERANCE UPDATE 2026-08-23 (S-EXT-MERCARI-BATCH-11, Patrick-directed, live-DB-confirmed): the
+  // original version required every sorted dimension to independently be <= the shoebox's, which is
+  // too strict for soft/foldable goods. Patrick's own live test item (Bored Ape tracksuit,
+  // cmo3etpx2005hjqsuvzlkt8qz) measures 15 x 13 x 2in (confirmed via direct DB query this round) --
+  // fails the strict per-axis check on two axes (15>14, 13>10) yet Patrick confirmed live it "could
+  // easily be in a shoebox," reasoning that a flat, compressible item (clothing) doesn't need its
+  // flat-laid-out footprint to fit inside a rigid box the way a hard-sided item would -- it folds.
+  // The item's bounding-box VOLUME (15*13*2=390in3) is actually well under the shoebox's volume
+  // (14*10*5=700in3) precisely because it's so thin (2in vs the box's 5in) -- volume is the
+  // physically honest measure for a foldable item's "same dimensional tier" (Patrick's own phrase),
+  // where strict per-axis comparison isn't. New rule: fits if (a) bounding-box volume is within a
+  // 15% tolerance of the shoebox's volume, AND (b) no single dimension blows past a sanity ceiling
+  // (1.5x the shoebox's same-rank dimension) -- (b) exists so a long thin item (e.g. a 40x1x1in rod)
+  // can't pass on volume alone despite obviously not fitting a shoebox.
   function itemFitsInShoebox(item) {
     const l = item.packageLengthIn != null ? Number(item.packageLengthIn) : null;
     const w = item.packageWidthIn != null ? Number(item.packageWidthIn) : null;
     const h = item.packageHeightIn != null ? Number(item.packageHeightIn) : null;
-    if (l == null || w == null || h == null || !isFinite(l) || !isFinite(w) || !isFinite(h)) return false;
-    // Sort both the item's dims and the shoebox's dims descending, compare position-by-position --
-    // the standard, conservative way to check if a box fits inside another regardless of orientation.
+    if (l == null || w == null || h == null || !isFinite(l) || !isFinite(w) || !isFinite(h)) return null;
     const itemDims = [l, w, h].sort((a, b) => b - a);
     const boxDims = [14, 10, 5].sort((a, b) => b - a);
-    return itemDims[0] <= boxDims[0] && itemDims[1] <= boxDims[1] && itemDims[2] <= boxDims[2];
+    const itemVolume = itemDims[0] * itemDims[1] * itemDims[2];
+    const boxVolume = boxDims[0] * boxDims[1] * boxDims[2];
+    const volumeOk = itemVolume <= boxVolume * 1.15;
+    const axisCapOk = itemDims[0] <= boxDims[0] * 1.5 && itemDims[1] <= boxDims[1] * 1.5 && itemDims[2] <= boxDims[2] * 1.5;
+    return volumeOk && axisCapOk;
+  }
+
+  // Category-based signal for when real dimensions are MISSING (itemFitsInShoebox returned null).
+  // Patrick's directive 2026-08-23: don't treat every unmeasured item the same blind guess -- items
+  // in categories that are reliably small/flat/soft (jewelry, cards, folded clothing accessories,
+  // etc.) should read as a CONFIDENT Yes even without a measurement on file. Patrick named records
+  // and comic books as examples of items with their OWN well-known standard package sizes (a record
+  // ships in a ~12.5x12.5x1in mailer, a comic in a standard comic mailer/box) -- both are safely
+  // "Yes" by category alone, same idea as the rest of this list. NOT exhaustive -- built from
+  // Patrick's examples plus clearly analogous small/flat categories; expand as real category strings
+  // are seen that should match but don't.
+  var SHOEBOX_LIKELY_CATEGORY_KEYWORDS = [
+    'record', 'vinyl', 'comic', 'graphic novel', 'trading card', 'card game', 'jewelry', 'watch',
+    'sunglasses', 'wallet', 'phone case', 'coin', 'stamp', 'earbuds', 'headphone', 'cosmetic',
+    'makeup', 'fragrance', 'perfume', 'sock', 'underwear', 'lingerie', 'hat', 'cap', 'scarf', 'belt',
+    'keychain', 'patch', 'pin', 'sticker', 'earring', 'necklace', 'bracelet', 'ring', 'book',
+    'magazine', 'dvd', 'cd', 'video game', 'small electronics', 'charger', 'cable'
+  ];
+  function categoryLikelyShoeboxFit(item) {
+    var text = norm((item.category || '') + ' ' + (item.categoryBreadcrumb || '')).toLowerCase();
+    if (!text) return false;
+    for (var i = 0; i < SHOEBOX_LIKELY_CATEGORY_KEYWORDS.length; i++) {
+      if (text.indexOf(SHOEBOX_LIKELY_CATEGORY_KEYWORDS[i]) !== -1) return true;
+    }
+    return false;
   }
 
   // Parses the first "$X.XX" dollar amount out of a block of text -- used to find each carrier
@@ -988,14 +1029,43 @@
     return m ? parseFloat(m[1]) : null;
   }
 
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-9, P0, Patrick-confirmed live): returns `true` on
+  // success or a specific reason STRING on failure (never a bare `false`) -- Round 8's version
+  // called overlayWarn() internally at each failure point and returned a boolean, but overlay()/
+  // overlayWarn() REPLACE the black notification box's content rather than appending, so that
+  // specific diagnostic message was always getting silently overwritten by whatever ran next
+  // (Price/Floor/the List click's own message). Patrick confirmed live: the final overlay he saw
+  // was the generic "Clicked List but couldn't confirm" message, not any shipping-specific one,
+  // even though the real cause (confirmed via his own screenshot) was this step failing several
+  // fields earlier. No overlayWarn() calls inside this function anymore -- the caller (run(), see
+  // its own comment) is now the SINGLE place that shows the final message, using the exact reason
+  // string returned here, so nothing gets silently clobbered again.
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-10, P0, live-DOM-confirmed -- not guessed this time):
+  // got a genuinely hydrated Chrome tab this round and read the real element directly. The reason
+  // NOTHING in Rounds 8-9 ever found this field: it's a plain, readonly `<input data-testid=
+  // "SelectShipping">`, not a button/div/role="button" the way every other opener in this file is
+  // (Size, Category, Brand). Its placeholder text ("Add title and category to enable shipping")
+  // lives in the input's `.value` property, NOT `.textContent`/`.innerText` -- inputs never expose
+  // their text that way, which is exactly why openerByLabel() (a textContent-based scan, and its
+  // candidate list doesn't even include plain `<input>` elements) could never find it, no matter how
+  // long Title/Category had already been set. This wasn't a timing problem at all. Real, stable
+  // selector confirmed live: `input[data-testid="SelectShipping"]`.
+  function mercariShippingOpener() {
+    return document.querySelector('input[data-testid="SelectShipping"]') || openerByLabel('Shipping label');
+  }
+  function mercariShippingOpenerText(el) {
+    // .value for the real <input>; .textContent as a fallback for the old (wrong) button/div guess,
+    // kept only in case Mercari ever changes this back to a non-input element.
+    return norm(el.value != null && el.value !== '' ? el.value : el.textContent);
+  }
   async function fillMercariShippingLabel(item) {
-    const opener = await waitForSelector(() => openerByLabel('Shipping label') || qa('button, [role="button"]').find((b) => norm(b.textContent).indexOf('enable shipping') !== -1), 5000);
+    const opener = await waitForSelector(mercariShippingOpener, 5000);
     if (!opener) {
-      overlayWarn('Mercari requires a shipping label to be selected before publishing -- FindA.Sale couldn\'t find that field automatically (UNVERIFIED selector). Please set it yourself before publishing.');
-      return false;
+      return 'FindA.Sale couldn\'t find the Shipping label field automatically (UNVERIFIED selector).';
     }
     // Already configured (re-run on a draft that already has a label chosen) -- nothing to do.
-    if (norm(opener.textContent).indexOf('enable shipping') === -1 && norm(opener.textContent).indexOf('add title') === -1) return true;
+    const openerText = mercariShippingOpenerText(opener);
+    if (openerText.indexOf('enable shipping') === -1 && openerText.indexOf('add title') === -1) return true;
     await realClick(opener);
     await sleep(500);
 
@@ -1008,60 +1078,148 @@
     // Step 2: weight/shoebox-fit modal -- weight fields are left alone (Mercari appears to carry
     // over the value already set on the main form; no evidence this modal's own fields are wrong).
     // Answers "Will your item fit in a shoebox?" from real dimensions when known, else "No".
-    const shoeboxRadio = await waitForSelector(() => radioByNearbyText(itemFitsInShoebox(item) ? 'yes' : 'no'), 4000);
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, P0, live-DOM-confirmed): live-tested Round 10's
+    // radioByNearbyText() approach directly against this real modal and it silently matched the
+    // WRONG radio -- a Condition radio (id="1", "New") elsewhere on the underlying page, not either
+    // shoebox option, because its fuzzy nearby-text scan isn't scoped to the open modal and happened
+    // to contain "no" as a substring somewhere in that radio's surrounding text. This is exactly
+    // Patrick's report: something got silently clicked, but never the actual shoebox question. Real,
+    // stable, live-confirmed selectors used directly instead: `FitsInShoeboxYes`/`FitsInShoeboxNo`.
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-12, P0, Patrick-confirmed live + live-DOM-confirmed):
+    // Round 11 defaulted to "No" whenever real dimensions weren't known, reasoning that was the
+    // more conservative/honest answer. Live-tested one step further this round and found a real
+    // consequence neither confirmed nor anticipated before: answering "No" reveals a SECOND required
+    // section ("How big will the package be?" -- real Length/Width/Height inputs, testids
+    // `InputLength`/`InputWidth`/`InputHeight`) that Next also won't enable without. Live-confirmed
+    // "Yes" does NOT reveal this section at all -- Next enables immediately. So when real dimensions
+    // aren't known, "No" doesn't just fail to help, it actively BLOCKS the listing on a second
+    // requirement we have no data to satisfy either. Reversed the default: unknown dimensions now
+    // default to "Yes" (assume a standard-size shoebox) rather than "No", so the listing can still
+    // complete. This carries a real, if bounded, trade-off Patrick should know about: "Yes" without
+    // real dimensions means Mercari's own weight/size class is based on an assumption, and the
+    // modal's own copy warns that an oversized package gets charged the difference after the fact --
+    // a small financial risk, not a correctness guarantee, but the alternative (blocking the whole
+    // listing whenever dimensions are unknown) is worse given this project's standing "don't leave
+    // things manual" direction. When real dimensions ARE known, the honest answer is still used, and
+    // if that answer is "No", the real Length/Width/Height values are filled in below rather than
+    // left at Mercari's own "0" placeholders.
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11): when real dims are unknown (fits === null), still
+    // default to Yes -- answering "No" without real dims just re-opens the Length/Width/Height fields
+    // this function has no data to fill (Round 12's finding: that traps the run, doesn't help it).
+    // fitsBasis records WHY, for future refinement, without changing today's outcome: a category
+    // match (records, comics, jewelry, etc. -- see categoryLikelyShoeboxFit) is a confident Yes;
+    // anything else unmeasured is still the same bounded-risk default Yes as before.
+    var fits = itemFitsInShoebox(item); // true / false / null (unknown)
+    var fitsBasis = 'measured';
+    if (fits === null) {
+      fits = true;
+      fitsBasis = categoryLikelyShoeboxFit(item) ? 'category-likely-small' : 'unmeasured-default';
+    }
+    const shoeboxTestid = fits === false ? 'FitsInShoeboxNo' : 'FitsInShoeboxYes';
+    const shoeboxRadio = await waitForSelector(() => document.querySelector('input[data-testid="' + shoeboxTestid + '"]'), 4000);
     if (!shoeboxRadio) {
-      overlayWarn('Mercari\'s shipping-label setup asked a question FindA.Sale couldn\'t confidently answer (UNVERIFIED selector on the "fits in a shoebox" step) -- please finish selecting a shipping label yourself before publishing.');
-      return false;
+      return 'Clicked the Shipping label field, but Mercari\'s "fits in a shoebox?" question never appeared (UNVERIFIED selector) -- either the opener click didn\'t register, or Mercari\'s own gating (it says "Add title and category to enable shipping") wasn\'t actually satisfied yet at the time this ran.';
+    }
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11): also sets the real weight fields defensively.
+    // Live-tested this modal's weight-oz field (`ItemWeightInOunces`) and found it can sit EMPTY
+    // (not "0" as it visually appears) even though the pounds field shows a real number -- this
+    // file's fillWeight() only ever touches the MAIN form's weight field, never this modal's own
+    // separate lb/oz pair, so an empty oz value here was never anyone's assumption to begin with.
+    // Sets both from the same item.packageWeightOz/aiPackageWeightOz already used by fillWeight(),
+    // same setNativeValue pattern already proven for Price -- UNVERIFIED whether this alone is
+    // sufficient to enable Next (this session's repeated testing against the same live draft left
+    // some open questions about that button's exact gating that a single clean run should settle),
+    // but setting real weight data here is a correct, no-downside improvement regardless.
+    const ounces = item.packageWeightOz != null ? item.packageWeightOz : item.aiPackageWeightOz;
+    if (ounces != null && isFinite(Number(ounces))) {
+      const lbs = Math.floor(Number(ounces) / 16);
+      const remOz = Math.round(Number(ounces) % 16);
+      const lbEl = document.querySelector('input[data-testid="ItemWeightInPounds"]');
+      const ozEl = document.querySelector('input[data-testid="ItemWeightInOunces"]');
+      if (lbEl) setNativeValue(lbEl, String(lbs));
+      // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, live-confirmed): live-tested setting this field
+      // to literal "0" directly and it does NOT stick (value reverts to empty) even though a
+      // non-zero value like "5" sets fine via the identical setNativeValue call -- some kind of
+      // zero-specific rejection on Mercari's own side, not a bug in the setter itself. Skips setting
+      // it when the real remainder is 0 -- Mercari's own default already shows "0" here on its own
+      // (confirmed in Patrick's own screenshot before this function ever touched the field), so
+      // leaving it alone in that case matches the field's own working default rather than fighting
+      // a quirk that only breaks things when triggered synthetically.
+      if (ozEl && remOz > 0) setNativeValue(ozEl, String(remOz));
+      await sleep(200);
     }
     await realClick(shoeboxRadio);
     await sleep(250);
-    const nextBtn = await waitForSelector(() => qa('button').find((b) => norm(b.textContent) === 'next' && !b.disabled), 3000);
+    // "No" (a confirmed, real non-fit, not the unknown-defaults-to-Yes case) reveals a real
+    // Length/Width/Height section -- fill it from the same real dimensions that produced this
+    // answer in the first place. Live-confirmed real selectors.
+    if (fits === false) {
+      const lEl = document.querySelector('input[data-testid="InputLength"]');
+      const wEl = document.querySelector('input[data-testid="InputWidth"]');
+      const hEl = document.querySelector('input[data-testid="InputHeight"]');
+      if (lEl) setNativeValue(lEl, String(Math.round(Number(item.packageLengthIn))));
+      if (wEl) setNativeValue(wEl, String(Math.round(Number(item.packageWidthIn))));
+      if (hEl) setNativeValue(hEl, String(Math.round(Number(item.packageHeightIn))));
+      await sleep(200);
+    }
+    const nextBtn = await waitForSelector(() => document.querySelector('[data-testid="SelectCarrierButton"]:not([disabled])') || qa('button').find((b) => norm(b.textContent) === 'next' && !b.disabled), 4000);
     if (!nextBtn) {
-      overlayWarn('Mercari\'s shipping-label setup didn\'t enable its "Next" button after answering the shoebox question (UNVERIFIED state) -- please finish selecting a shipping label yourself before publishing.');
-      return false;
+      return 'Mercari\'s shipping-label setup didn\'t enable its "Next" button after answering the shoebox question (UNVERIFIED state) -- both the shoebox question and the weight fields were set, but Mercari\'s own form still didn\'t accept it as complete.';
     }
     await realClick(nextBtn);
     await sleep(500);
 
-    // Step 3: carrier-selection modal -- picks the cheapest listed option (see firstDollarAmount's
-    // comment for why cheapest is a safe default here).
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, P0, live-DOM-confirmed): live-tested the
+    // label[for]/closest('label')/parentElement approach directly against this real screen and ALL
+    // THREE came back empty for every carrier radio -- the radio and its carrier name/price text are
+    // real siblings-of-an-ancestor, not directly wrapped or `label for`-associated the way Size's or
+    // Condition's radios are. Confirmed the real structure live: walking up 3 parent levels from each
+    // radio reaches a container whose text is exactly the visible row ("UPS Ground Saver$7.97 $9.99 |
+    // 2 - 8 days"), matching Patrick's own screenshot carrier-for-carrier. `nearestPricedAncestor()`
+    // below does that walk (capped at 8 levels, bails if the matched container's text is
+    // implausibly long, to avoid accidentally grabbing the whole modal). Picks the cheapest listed
+    // option (see firstDollarAmount's comment for why cheapest is a safe default here).
+    function nearestPricedAncestor(el) {
+      let cur = el;
+      for (let i = 0; i < 8 && cur; i++) {
+        cur = cur.parentElement;
+        if (!cur) break;
+        const t = cur.textContent || '';
+        if (firstDollarAmount(t) != null && t.length < 400) return t;
+      }
+      return null;
+    }
     const carrierRadios = await waitForSelector(() => {
-      const radios = qa('input[type="radio"], [role="radio"]').filter((r) => {
-        const label = (r.id && q('label[for="' + r.id + '"]')) || r.closest('label') || r.parentElement;
-        return label && firstDollarAmount(label.textContent) != null;
-      });
+      const radios = qa('input[type="radio"]').filter((r) => nearestPricedAncestor(r) != null);
       return radios.length ? radios : null;
     }, 4000);
     if (!carrierRadios) {
-      overlayWarn('Mercari\'s shipping-label setup showed a carrier list FindA.Sale couldn\'t read (UNVERIFIED selector) -- please finish selecting a shipping label yourself before publishing.');
-      return false;
+      return 'Mercari\'s shipping-label setup showed a carrier-selection screen FindA.Sale couldn\'t read (UNVERIFIED selector).';
     }
     let cheapest = null;
     let cheapestPrice = Infinity;
     for (const r of carrierRadios) {
-      const label = (r.id && q('label[for="' + r.id + '"]')) || r.closest('label') || r.parentElement;
-      const price = firstDollarAmount(label.textContent);
+      const price = firstDollarAmount(nearestPricedAncestor(r));
       if (price != null && price < cheapestPrice) { cheapestPrice = price; cheapest = r; }
     }
     if (!cheapest) {
-      overlayWarn('Mercari\'s shipping-label setup showed a carrier list but FindA.Sale couldn\'t parse any prices (UNVERIFIED) -- please finish selecting a shipping label yourself before publishing.');
-      return false;
+      return 'Mercari\'s shipping-label setup showed a carrier list but FindA.Sale couldn\'t parse any prices from it (UNVERIFIED).';
     }
     await realClick(cheapest);
     await sleep(250);
-    const saveBtn = await waitForSelector(() => qa('button').find((b) => norm(b.textContent) === 'save' && !b.disabled), 3000);
+    const saveBtn = await waitForSelector(() => document.querySelector('[data-testid="SelectCarrierSaveButton"]:not([disabled])') || qa('button').find((b) => norm(b.textContent) === 'save' && !b.disabled), 4000);
     if (!saveBtn) {
-      overlayWarn('Mercari\'s shipping-label setup didn\'t enable its "Save" button after picking a carrier (UNVERIFIED state) -- please finish selecting a shipping label yourself before publishing.');
-      return false;
+      return 'Mercari\'s shipping-label setup didn\'t enable its "Save" button after picking a carrier (UNVERIFIED state).';
     }
     await realClick(saveBtn);
     await sleep(500);
 
     // Verify: the opener's placeholder text should no longer say "enable shipping" / "add title".
-    const openerAfter = openerByLabel('Shipping label');
-    const stuck = !openerAfter || (norm(openerAfter.textContent).indexOf('enable shipping') === -1 && norm(openerAfter.textContent).indexOf('add title') === -1);
-    if (!stuck) console.warn('[FAS Mercari] Shipping label -- went through the whole wizard but the field still shows its placeholder text afterward (UNVERIFIED confirmation) -- please double-check before publishing.');
-    return stuck;
+    const openerAfter = mercariShippingOpener();
+    const openerAfterText = openerAfter ? mercariShippingOpenerText(openerAfter) : '';
+    const stuck = !openerAfter || (openerAfterText.indexOf('enable shipping') === -1 && openerAfterText.indexOf('add title') === -1);
+    if (stuck) return true;
+    return 'Went through Mercari\'s whole shipping-label wizard, but the field still shows its placeholder text afterward (UNVERIFIED confirmation).';
   }
 
   function photoInput() {
@@ -1284,9 +1442,28 @@
     // S-EXT-MERCARI-BATCH-8: shipping label wizard must be completed BEFORE List is ever clicked --
     // see fillMercariShippingLabel()'s comment for why (Mercari's own validation blocks submission
     // otherwise, which is what was actually happening in Round 7, not a click-registration problem).
-    if (!interstitialAt && stillOnSellPage()) await fillMercariShippingLabel(item);
-    if (!interstitialAt) await fillMercariSmartPricingFloor(item);
-    return { photosOk, interstitialAt, navigatedAwayFrom };
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-9, P0, Patrick-confirmed live): the return value here
+    // was never captured -- if fillMercariShippingLabel() failed partway through (its own specific
+    // overlayWarn message explaining exactly where), the run just kept going into Price/Floor and
+    // eventually the List click, and every one of those later steps calls overlay()/overlayWarn()
+    // itself, which REPLACES the black notification box's content rather than appending to it. So
+    // the specific, diagnostic shipping-label failure message was always being silently overwritten
+    // by the time Patrick actually looked at the box -- all he could ever see was the LAST message,
+    // which was the generic "Clicked List but couldn't confirm" one, even though the real, already-
+    // known reason was the shipping step failing several fields earlier. Confirmed exactly this way:
+    // Patrick's screenshot showed the Shipping section still incomplete, but the overlay he reported
+    // was the generic List-click one, not any shipping-specific message -- consistent with the
+    // shipping fill failing silently-from-the-user's-view and the run barreling ahead anyway to a
+    // List click that could never succeed. Now stops the run right here (same pattern as
+    // interstitialAt/navigatedAwayFrom) instead of continuing to a doomed List click, so the real,
+    // specific diagnostic message stays on screen instead of being clobbered.
+    let shippingLabelFailedReason = null;
+    if (!interstitialAt && stillOnSellPage()) {
+      const shippingResult = await fillMercariShippingLabel(item);
+      if (shippingResult !== true) shippingLabelFailedReason = shippingResult;
+    }
+    if (!interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
+    return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
   }
 
   // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
@@ -1456,6 +1633,16 @@
     }
     if (fillResult.interstitialAt) {
       overlayWarn('Mercari is showing a verification/security screen -- filling stopped before <b>' + escapeHtml(fillResult.interstitialAt) + '</b>. Please complete the verification yourself, then finish the remaining fields on this draft manually (fields before ' + escapeHtml(fillResult.interstitialAt) + ' were already filled -- do not start a new listing).' + button('fas-merc-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-9, P0, Patrick-confirmed live): stops here, with this
+    // specific message left on screen, instead of continuing to a List click that Mercari's own
+    // validation will always block anyway while Shipping is incomplete -- see fillListing()'s
+    // comment for the full incident (the real diagnostic message was being silently overwritten by
+    // later steps, leaving only a generic "couldn't confirm" message for Patrick to see).
+    if (fillResult.shippingLabelFailedReason) {
+      overlayWarn(escapeHtml(fillResult.shippingLabelFailedReason) + ' Please finish the Shipping section on this draft yourself, then use Mercari\'s own List button.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
     }

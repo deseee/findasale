@@ -770,12 +770,24 @@
     const resolved = GRAILED_SIZE_ABBREVIATIONS[norm(value)] || value;
     return fillSizeInner(resolved);
   }
+  // BUG FIX 2026-08-23 (main-session live-Chrome investigation against a real logged-in Grailed
+  // sell form, artifactmi@gmail.com): live-confirmed the fallback this replaced was actively
+  // dangerous, not just a weaker path. When fillSelectLike('Size', value) fails (its real-world
+  // trigger case: Size's own dropdown trigger is still `disabled` because Category never fully
+  // committed -- a documented, non-rare failure mode elsewhere in this file), the old fallback
+  // called fieldByLabel('Size') and wrote whatever it found via setNativeValue. Live-confirmed
+  // fieldByLabel/nearestControlAfter's ancestor-walk, given the label text "Size" against
+  // Grailed's real disabled "Select Size (Select category first)" placeholder span, does NOT stay
+  // within that field's own row -- it walks up 3 ancestor levels and across sibling elements and
+  // lands on a COMPLETELY UNRELATED control: the Item Name/title `<input>` several sections down
+  // the page. The old fallback would have silently overwritten the organizer's Item Name with the
+  // size value (e.g. "US M / EU 48-50 / 2") and reported SUCCESS (tryFill's own warning never
+  // fires), corrupting a different, already-filled field instead of just failing this one honestly.
+  // Removed rather than patched narrower -- per this file's own report-don't-guess standard, a
+  // genuine miss should surface as "selector not found, skipped" (tryFill's existing warning),
+  // not silently corrupt whatever nearestControlAfter happens to wander into.
   async function fillSizeInner(value) {
-    const ok = await fillSelectLike('Size', value);
-    if (ok) return true;
-    const native = fieldByLabel('Size');
-    if (native) { setNativeValue(native, String(value)); return true; }
-    return false;
+    return fillSelectLike('Size', value);
   }
 
   // BUG FIX 2026-08-21 (S-EXT-BATCH, P1, live-Chrome-confirmed field exists + real option list
