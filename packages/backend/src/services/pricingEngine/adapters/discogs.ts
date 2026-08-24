@@ -34,7 +34,10 @@ export function isAudioFormatMatch(request: Pick<PricingRequest, 'title' | 'cate
 export class DiscogsAdapter implements PricingAdapter {
   sourceId = 'discogs';
   tier: 1 | 2 | 3 = 1;
-  isAskingPrice = false;
+  // Fixed 2026-08-24: lowest_price is a live marketplace asking price (current for-sale
+  // listings), not a confirmed sold transaction -- see the fetch() fix below. Flagging this
+  // true keeps this class self-consistent with ebay.ts/keepa.ts, which also carry asking data.
+  isAskingPrice = true;
 
   private isAudioFormat(request: PricingRequest): boolean {
     return isAudioFormatMatch(request);
@@ -84,35 +87,43 @@ export class DiscogsAdapter implements PricingAdapter {
           if (!item.id || !item.title) continue;
 
           try {
-            // Fetch marketplace stats for this release
-            const statsUrl = `https://api.discogs.com/releases/${item.id}/stats`;
-            const statsResponse = await axios.get(statsUrl, {
+            // BUGFIX 2026-08-24 (found during live QA of the charm-pricing/Discogs-comp-wiring
+            // fix): the release ${id}/stats endpoint does NOT return a `marketplace` object at
+            // all -- confirmed live, it returns only `{"is_offensive":false}`. The real
+            // marketplace pricing fields (`num_for_sale`, `lowest_price`) live on the base
+            // release detail endpoint instead -- confirmed live against release 12294520
+            // (Loggins & Messina "Full Sail"): num_for_sale=9, lowest_price=8.11. This is why
+            // PricingSourceConfig.apiUsedToday for 'discogs' stayed at 0 all day even though the
+            // adapter was enabled, had quota, and threw no errors -- every lookup silently found
+            // zero usable results. `lowest_price` is a live asking price across current listings,
+            // not a confirmed sold price, so isSoldPrice is false below (weighting.ts applies the
+            // standard 0.6x asking-to-sold discount for that).
+            const releaseUrl = `https://api.discogs.com/releases/${item.id}`;
+            const releaseResponse = await axios.get(releaseUrl, {
               timeout: 10000,
               headers: {
                 'User-Agent': 'FindA.Sale/1.0 +https://finda.sale',
               },
             });
 
-            const stats = statsResponse.data;
-            const marketplace = stats.marketplace || {};
+            const release = releaseResponse.data;
 
-            // Extract price from last sale or average price
+            // Extract lowest current asking price, only if copies are actually for sale.
             let price: number | null = null;
-            if (marketplace.last_sold_price !== undefined && marketplace.last_sold_price !== null) {
-              price = Math.round(parseFloat(marketplace.last_sold_price) * 100); // convert to cents
-            } else if (
-              marketplace.avg_price !== undefined &&
-              marketplace.avg_price !== null
+            if (
+              release.num_for_sale > 0 &&
+              release.lowest_price !== undefined &&
+              release.lowest_price !== null
             ) {
-              price = Math.round(parseFloat(marketplace.avg_price) * 100);
+              price = Math.round(parseFloat(release.lowest_price) * 100); // convert to cents
             }
 
             if (price && price > 0) {
               results.push({
                 sourceId: 'discogs',
                 price,
-                isSoldPrice: true,
-                saleDate: new Date(), // Discogs provides marketplace data, treated as current
+                isSoldPrice: false, // lowest_price is an asking price, not a confirmed sale
+                saleDate: new Date(), // Discogs provides live marketplace data, treated as current
                 confidence: 0.85, // Discogs marketplace is reliable
                 comparabilityScore: 0.8, // Direct format match
               });
