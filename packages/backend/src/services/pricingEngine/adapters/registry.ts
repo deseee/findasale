@@ -12,6 +12,7 @@ import { EbthAdapter } from './ebth';
 import { KeepaAdapter } from './keepa';
 import { DiscogsAdapter } from './discogs';
 import { GsaAdapter } from './gsa';
+import { EtsyAdapter } from './etsy';
 import { SalvationArmyAdapter } from './salvationArmy';
 import { FindaSaleInternalAdapter } from './findasaleInternal';
 
@@ -37,6 +38,7 @@ class AdapterRegistry {
     this.register('keepa', new KeepaAdapter());
     this.register('discogs', new DiscogsAdapter());
     this.register('gsa', new GsaAdapter());
+    this.register('etsy', new EtsyAdapter());
 
     // Tier 2: FindA.Sale's own confirmed sold comps
     this.register('findasaleInternal', new FindaSaleInternalAdapter());
@@ -104,6 +106,7 @@ class AdapterRegistry {
       keepa: 'Keepa Amazon API',
       discogs: 'Discogs',
       gsa: 'GSA Auctions',
+      etsy: 'Etsy Marketplace',
       findasaleInternal: 'FindA.Sale Sold Comps',
       salvationArmy: 'Salvation Army FMV',
       maxsold: 'MaxSold Estate Sales',
