@@ -940,8 +940,20 @@
   }
 
 
+  // BUG FIX 2026-08-24 (Patrick-directed, live-screenshot-reported on fas-vinted.js -- applied here
+  // too for consistency, same underlying UX gap on this platform's manual-review path): scrolls
+  // Grailed's real "List item" button into view the moment the review overlay appears, so the one
+  // action the organizer must take by hand (when auto-publish is off, or the Designer field wasn't
+  // confirmed) is actually visible instead of buried below the fold. Reuses the same button finder
+  // findGrailedPublishButton() already used by the auto-publish path -- one definition, two callers.
+  function scrollToGrailedPublishButton() {
+    const btn = findGrailedPublishButton();
+    if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed, countryOriginStatus) {
     const more = (index + 1) < total;
+    scrollToGrailedPublishButton();
     // International shipping status line (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- see
     // disableInternationalShipping()'s comment. Three cases: regions found and turned off (safe,
     // still worth a one-line confirmation), regions found but none were on to begin with (safe,

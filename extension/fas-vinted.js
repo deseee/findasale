@@ -447,8 +447,19 @@
     if (!panelAlready) {
       const strayPanel = findOpenPanel(fieldId, false);
       if (strayPanel) {
-        document.body.click();
+        // BUG FIX 2026-08-24 (Patrick-reported live: Brand failed to fill on a real run immediately
+        // after Category, right where this stray-panel dismiss fires): this was a bare
+        // `document.body.click()` -- but this file's OWN later comments (closePanel, and the
+        // Color/Material stale-swatch deselect) already live-confirmed Vinted's pickers only
+        // reliably respond to an outside dismiss via the full multi-event pointer sequence, not a
+        // plain synthetic click. A bare click leaving Category's own panel open (or partially open)
+        // right as Brand's opener.click() fires is a plausible, real mechanism for Brand silently
+        // never opening its own panel in a fast, fully-automated run -- switched to the same
+        // realOutsideClick() this file already trusts everywhere else, plus an explicit re-check so
+        // a genuine miss is at least loud instead of silently proceeding into a still-blocked opener.
+        realOutsideClick(document.body);
         await sleep(250);
+        if (findOpenPanel(fieldId, false)) console.warn('[FAS Vinted] Stray panel from an earlier field did not confirm closed before opening "' + labelText + '" -- this field may fail to open as a result.');
       }
       opener.click();
       await sleep(400);
@@ -913,8 +924,21 @@
   }
 
 
+  // BUG FIX 2026-08-24 (Patrick-directed, live-screenshot-reported): the review overlay tells the
+  // organizer to "click Vinted's own Upload yourself", but the real Upload button sits at the very
+  // bottom of a long form -- on a fresh listing the organizer would land on this message with the
+  // button several screens below the fold, unclear where to look. Scrolls the real button into view
+  // (centered) the moment the review overlay appears, so the one action the organizer MUST take by
+  // hand is actually visible, not just described. Finds by exact visible text, same "no obfuscated
+  // class" discipline as the rest of this file; a miss is silent (never blocks the overlay itself).
+  function scrollToVintedUploadButton() {
+    const btn = qa('button').find((b) => norm(b.textContent) === 'upload');
+    if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   function showReviewOverlay(item, index, total, photosOk, warnings) {
     const more = (index + 1) < total;
+    scrollToVintedUploadButton();
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): render every collected fillListing() warning
     // (Category miss chief among them) persistently on this screen -- see tryFill's comment above
     // for why a mid-flow overlayWarn() call alone doesn't work (this function replaces it).

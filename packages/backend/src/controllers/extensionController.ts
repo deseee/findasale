@@ -331,11 +331,24 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // platform's tab BY DEFAULT, with a "Show all items" override toggle -- this is UI guidance,
     // same defense-in-depth posture as facebookRestricted: markItemListed below is the real,
     // authoritative reject.
+    // BUG FIX 2026-08-24 (Patrick-reported live: a real tracksuit -- brand Adidas, ebayCategoryName
+    // "Tracksuits & Sets" -- was flagged "may not fit this marketplace" for Grailed). Root-caused via
+    // direct DB query (packages/database/.env, Railway prod): this item's raw `category` column is a
+    // stale generic value ("Everything Else"), while `ebayCategoryName` (the organizer-confirmed,
+    // specific leaf name) is the correct "Tracksuits & Sets" -- and the `category` field built above
+    // (see its own S-EXT-BATCH-12 comment) ALREADY prefers `ebayCategoryName` for what the extension
+    // actually displays/fills, but this eligibility block was reading the raw `it.category` directly,
+    // a genuine field-consistency bug, not a keyword-list gap (that part was already fixed separately
+    // this session). Confirmed NOT a one-off: a live COUNT query found 203 items in production where
+    // `ebayCategoryName` differs from `category`, so this affected real eligibility decisions at
+    // scale, not just this one item. Fixed by using the exact same `ebayCategoryName || category`
+    // fallback the extension-facing `category` field above already uses, so the eligibility check
+    // reasons about the SAME resolved category value the organizer will actually see filled in.
     eligibility: {
-      GRAILED: checkEligibility('GRAILED', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
-      POSHMARK: checkEligibility('POSHMARK', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
-      MERCARI: checkEligibility('MERCARI', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
-      VINTED: checkEligibility('VINTED', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
+      GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
+      POSHMARK: checkEligibility('POSHMARK', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
+      MERCARI: checkEligibility('MERCARI', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
+      VINTED: checkEligibility('VINTED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
