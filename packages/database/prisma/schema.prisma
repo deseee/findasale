@@ -1614,6 +1614,23 @@ model Purchase {
   // Connected account this charge lives on — DIRECT charges only. Pinned at charge-creation time.
   stripeAccountId        String?
 
+  // ── SHIPPING DESTINATION (ADR-110, added 2026-08-24) — buyer's real ship-to ZIP/
+  // address, captured at native (non-eBay) checkout time for physical-shipment purchases
+  // only. NULLABLE, NO BACKFILL, DELIBERATELY (same posture as the FEE SNAPSHOT block
+  // above): every existing row and every non-shipping purchase (POS, vendor booth, auction
+  // pickup, Hold-to-Pay) leaves these null forever. Populated going forward only by the
+  // native checkout flow once it collects a real buyer ZIP (see ADR-110).
+  shippingAddressLine1      String?
+  shippingAddressLine2      String?
+  shippingCity              String?
+  shippingState             String?
+  shippingZip               String?
+  shippingCountry           String?  @default("US")
+  /// Snapshot of which FEDEX_DESTINATION_SURCHARGE_TIERS bucket ('clean'|'A'|'B'|'C') was
+  /// actually applied at charge time, for audit/debugging — mirrors the fee-snapshot
+  /// precedent ("what was ACTUALLY charged, pinned at charge time") applied to shipping.
+  shippingFedexSurchargeTier String?
+
   // Compound partial UNIQUE index on (stripePaymentIntentId, itemId) (WHERE
   // stripePaymentIntentId IS NOT NULL), created via raw SQL migration
   // 20260723000000_purchase_pi_itemid_compound_unique. Blocks a duplicate Purchase row for

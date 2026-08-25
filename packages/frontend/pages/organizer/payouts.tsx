@@ -66,6 +66,13 @@ const OrganizerPayoutsPage = () => {
     platformFee: number;
     stripeFee: number;
     netPayout: number;
+    // ADR-110 Decision Flag 3: buyer's ship-to address for a native-checkout physical
+    // shipment. Undefined/absent when this purchase didn't request shipping.
+    shippingAddressLine1?: string | null;
+    shippingAddressLine2?: string | null;
+    shippingCity?: string | null;
+    shippingState?: string | null;
+    shippingZip?: string | null;
   }
   interface EarningsTotals {
     grossRevenue: number;
@@ -534,34 +541,47 @@ const OrganizerPayoutsPage = () => {
                     </thead>
                     <tbody>
                       {earnings.items.map((item) => (
-                        <tr key={item.purchaseId} className="group border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                          <td className="py-2 pr-3 text-gray-800 dark:text-gray-200 max-w-[140px] truncate">{item.itemTitle}</td>
-                          <td className="py-2 pr-3 text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-[120px] truncate">{item.saleTitle}</td>
-                          <td className="py-2 pr-3 text-gray-400 dark:text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
-                            {new Date(item.purchaseDate).toLocaleDateString()}
-                          </td>
-                          <td className="py-2 pr-3 text-right text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">
-                            ${item.salePrice.toFixed(2)}
-                          </td>
-                          <td className="py-2 pr-3 text-right text-red-500 dark:text-red-400 text-xs hidden sm:table-cell whitespace-nowrap">
-                            −${item.platformFee.toFixed(2)}
-                          </td>
-                          <td className="py-2 pr-3 text-right text-orange-400 dark:text-orange-300 text-xs hidden md:table-cell whitespace-nowrap">
-                            ~−${item.stripeFee.toFixed(2)}
-                          </td>
-                          <td className="py-2 pr-3 text-right text-green-600 dark:text-green-400 font-semibold whitespace-nowrap">
-                            ${item.netPayout.toFixed(2)}
-                          </td>
-                          <td className="py-2 pl-3 text-right whitespace-nowrap sticky right-0 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700">
-                            <button
-                              type="button"
-                              onClick={() => { setRefundModalItem(item); setRefundError(''); }}
-                              className="px-2.5 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                            >
-                              Refund
-                            </button>
-                          </td>
-                        </tr>
+                        <React.Fragment key={item.purchaseId}>
+                          <tr className="group border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                            <td className="py-2 pr-3 text-gray-800 dark:text-gray-200 max-w-[140px] truncate">{item.itemTitle}</td>
+                            <td className="py-2 pr-3 text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-[120px] truncate">{item.saleTitle}</td>
+                            <td className="py-2 pr-3 text-gray-400 dark:text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
+                              {new Date(item.purchaseDate).toLocaleDateString()}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-gray-800 dark:text-gray-200 font-medium whitespace-nowrap">
+                              ${item.salePrice.toFixed(2)}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-red-500 dark:text-red-400 text-xs hidden sm:table-cell whitespace-nowrap">
+                              −${item.platformFee.toFixed(2)}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-orange-400 dark:text-orange-300 text-xs hidden md:table-cell whitespace-nowrap">
+                              ~−${item.stripeFee.toFixed(2)}
+                            </td>
+                            <td className="py-2 pr-3 text-right text-green-600 dark:text-green-400 font-semibold whitespace-nowrap">
+                              ${item.netPayout.toFixed(2)}
+                            </td>
+                            <td className="py-2 pl-3 text-right whitespace-nowrap sticky right-0 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700">
+                              <button
+                                type="button"
+                                onClick={() => { setRefundModalItem(item); setRefundError(''); }}
+                                className="px-2.5 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                              >
+                                Refund
+                              </button>
+                            </td>
+                          </tr>
+                          {/* ADR-110 Decision Flag 3: read-only ship-to address, shown only for
+                              purchases that requested native-checkout shipping. */}
+                          {item.shippingZip && (
+                            <tr className="border-b border-gray-50 dark:border-gray-700">
+                              <td colSpan={8} className="pb-2 pr-3 pt-0">
+                                <p className="text-xs text-gray-400 dark:text-gray-500">
+                                  📦 Ship to: {[item.shippingAddressLine1, item.shippingAddressLine2, item.shippingCity, item.shippingState].filter(Boolean).join(', ')} {item.shippingZip}
+                                </p>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>

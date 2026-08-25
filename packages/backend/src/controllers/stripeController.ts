@@ -48,6 +48,7 @@ import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; /
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): shared HoldInvoice-PAID recorder, webhook + reconcile
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
+import { repriceNativeShippingForDestination, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-110 Track 1: real destination-ZIP shipping repricing at checkout time
 import { notifyVendorBoothSaleRefunded } from '../services/vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): charge.failed left the shopper's Checkout Session OPEN and payable
 
@@ -529,7 +530,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     // Guest checkout (single-item Buy It Now, 2026-07-18): req.user is optional now that
     // this route uses optionalAuthenticate. createCartCheckoutSession (multi-item cart) is
     // UNCHANGED and still requires auth — guest cart checkout is out of scope this pass.
-    const { itemId, affiliateLinkId, shippingRequested, couponCode, guestEmail, guestName, deviceFingerprint, clientToken } = req.body;
+    const { itemId, affiliateLinkId, shippingRequested, couponCode, guestEmail, guestName, deviceFingerprint, clientToken, shippingZip, shippingAddressLine1, shippingAddressLine2, shippingCity, shippingState } = req.body;
 
     if (!itemId) {
       return res.status(400).json({ message: 'Item ID is required' });
@@ -568,6 +569,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             address: true,
             city: true,
             state: true,
+            zip: true, // ADR-110 Track 1: shipping origin ZIP for real destination-ZIP repricing
             startDate: true,
             endDate: true,
             organizerId: true,
@@ -575,7 +577,16 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             // utils/feeCalculator.ts: the organizer's own commission is unchanged by this flag).
             coversFee: true,
             organizer: {
-              select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true, subscriptionTier: true }
+              select: {
+                stripeConnectId: true,
+                userId: true,
+                referralDiscountExpiry: true,
+                subscriptionTier: true,
+                // ADR-110 Track 1: same origin lat/lng getSuggestedShippingPriceHandler already
+                // reads (itemController.ts) -- mirrors that precedent exactly.
+                lat: true,
+                lng: true,
+              }
             }
           }
         }
@@ -687,9 +698,61 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     // platform's own income. `calculateApplicationFee` reads AUCTION_BUYER_PREMIUM_RATE itself
     // and takes no rate parameter, so this call site cannot supply a different number.
 
+    // ADR-110 Track 1: server-computed shipping is the ONLY shipping total that reaches
+    // Stripe -- item.shippingPrice (a listing-time, buyer-blind number) is used ONLY as the
+    // ShippingHardBlockError fallback below, never trusted verbatim, and no client-supplied
+    // shipping amount is ever read anywhere in this function.
     let shippingCost = 0;
-    if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
-      shippingCost = item.shippingPrice;
+    let shippingTier: string | null = null;
+    const shippingApplicable = !!shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null;
+    if (shippingApplicable) {
+      const zipCandidate = typeof shippingZip === 'string' ? shippingZip.trim() : '';
+      if (!/^\d{5}(-\d{4})?$/.test(zipCandidate)) {
+        return res.status(400).json({ message: 'Enter your shipping ZIP code to see the shipping total.' });
+      }
+      if (item.packageWeightOz == null) {
+        // No package weight on file (e.g. shipping price was set manually with no package
+        // details ever entered) -- there is nothing real to reprice from, so fail safe to
+        // the listing-time price rather than quoting off a fabricated 0oz package. Same
+        // "never block checkout, never guess" posture as the ShippingHardBlockError catch
+        // below.
+        shippingCost = item.shippingPrice!;
+      } else {
+        try {
+          const reprice = await repriceNativeShippingForDestination(
+            {
+              weightOz: item.packageWeightOz,
+              dims: {
+                length: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+                width: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+                height: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+              },
+              packageType: item.packageType ?? null,
+              origin: {
+                zip: item.sale!.zip,
+                lat: item.sale!.organizer.lat,
+                lng: item.sale!.organizer.lng,
+              },
+              subscriptionTier: item.sale!.organizer.subscriptionTier as any,
+              categoryId: item.ebayCategoryId ?? null,
+              priceUsd: item.price ?? null,
+            },
+            zipCandidate
+          );
+          shippingCost = reprice.shippingCost;
+          shippingTier = reprice.tier;
+        } catch (repriceErr) {
+          // ADR-110 Section 4 contract: fall back to item.shippingPrice on this specific
+          // exception only -- never block checkout on a package the rate engine can't
+          // price for every carrier. Any OTHER error type is a real bug and must surface.
+          if (repriceErr instanceof ShippingHardBlockError) {
+            shippingCost = item.shippingPrice!;
+            shippingTier = null;
+          } else {
+            throw repriceErr;
+          }
+        }
+      }
     }
 
     // Tier-derived rate wins over a wildcard FeeStructure row (fee-precedence fix, 2026-08-22).
@@ -919,6 +982,30 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
           ...(affiliateLinkId ? { affiliateLinkId } : {}),
           ...(normalizedGuestEmail ? { buyerEmail: normalizedGuestEmail, guestName: normalizedGuestName } : {}),
+          // ADR-110 Track 1: buyer's real ship-to address, gated on shippingApplicable (the
+          // same gate that computed shippingCost above) -- never written for POS, vendor
+          // booth, auction pickup, Hold-to-Pay, or any purchase that didn't actually request
+          // shipping. shippingZip is always present when shippingApplicable (validated above);
+          // the rest are organizer/buyer-optional convenience fields.
+          ...(shippingApplicable
+            ? {
+                shippingZip: (typeof shippingZip === 'string' ? shippingZip.trim() : ''),
+                shippingCountry: 'US',
+                ...(typeof shippingAddressLine1 === 'string' && shippingAddressLine1.trim()
+                  ? { shippingAddressLine1: shippingAddressLine1.trim().slice(0, 200) }
+                  : {}),
+                ...(typeof shippingAddressLine2 === 'string' && shippingAddressLine2.trim()
+                  ? { shippingAddressLine2: shippingAddressLine2.trim().slice(0, 200) }
+                  : {}),
+                ...(typeof shippingCity === 'string' && shippingCity.trim()
+                  ? { shippingCity: shippingCity.trim().slice(0, 100) }
+                  : {}),
+                ...(typeof shippingState === 'string' && shippingState.trim()
+                  ? { shippingState: shippingState.trim().slice(0, 50) }
+                  : {}),
+                ...(shippingTier ? { shippingFedexSurchargeTier: shippingTier } : {}),
+              }
+            : {}),
         }
       });
 
@@ -974,6 +1061,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     res.json({
       clientSecret: paymentIntent.client_secret,
       purchaseId: purchase.id,
+      // ADR-110 Track 1: the real, server-computed shipping total (0 when shipping wasn't
+      // requested/applicable). The frontend renders this directly -- it must never compute
+      // or estimate a shipping total of its own.
+      shippingCost,
       // Platform Safety #96: Buyer Premium Disclosure (4-Point Visibility)
       subtotal: price,
       // Report the premium the BUYER actually pays: zero under Sale.coversFee, where the

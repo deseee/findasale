@@ -65,6 +65,8 @@ interface Item {
   reverseStartDate?: string; // CD2 Phase 4
   isAiTagged?: boolean; // B2: AI tagging disclosure
   rarity?: string; // Feature #57: Item rarity badge (COMMON | UNCOMMON | RARE | LEGENDARY)
+  shippingAvailable?: boolean; // ADR-110 Track 1: gates the "ship this to me" checkout toggle
+  shippingPrice?: number | null; // ADR-110 Track 1: listing-time price; server recomputes the real charge from the buyer's ZIP at checkout
   sale: {
     id: string;
     title: string;
@@ -1250,6 +1252,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
           listingType={item.listingType}
           organizerName={item.sale.organizer?.businessName ?? item.sale.organizer?.name}
           saleId={item.sale.id}
+          shippingAvailable={item.shippingAvailable}
+          shippingPrice={item.shippingPrice}
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={() => {
             setShowCheckoutModal(false);

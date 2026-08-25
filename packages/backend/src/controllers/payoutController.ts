@@ -252,6 +252,15 @@ export interface EarningsBreakdownItem {
   platformFee: number;
   stripeFee: number;
   netPayout: number;
+  // ADR-110 Decision Flag 3: buyer's ship-to address for a native-checkout physical
+  // shipment (only ever present on the requesting organizer's OWN sale -- whereClause
+  // above already scopes every row in `purchases` to `sale.organizerId === organizer.id`).
+  // Absent (undefined) for every purchase that didn't request shipping.
+  shippingAddressLine1?: string | null;
+  shippingAddressLine2?: string | null;
+  shippingCity?: string | null;
+  shippingState?: string | null;
+  shippingZip?: string | null;
 }
 
 /**
@@ -338,6 +347,19 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         platformFee,
         stripeFee,
         netPayout,
+        // ADR-110 Decision Flag 3: `p` is a full Purchase row (no `select` on the base
+        // model above, same "comes along for free" pattern the fee-snapshot columns
+        // already rely on in the comment above) -- only present when this purchase
+        // actually requested native-checkout shipping.
+        ...(p.shippingZip
+          ? {
+              shippingAddressLine1: p.shippingAddressLine1,
+              shippingAddressLine2: p.shippingAddressLine2,
+              shippingCity: p.shippingCity,
+              shippingState: p.shippingState,
+              shippingZip: p.shippingZip,
+            }
+          : {}),
       };
     });
 

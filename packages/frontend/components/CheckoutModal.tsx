@@ -33,6 +33,7 @@ interface PaymentFormProps {
   saleAddress?: string;
   saleDates?: string;
   buyerPremium?: number;  // buyer premium amount in dollars
+  shippingCost?: number;  // ADR-110 Track 1: server-computed real shipping total (dollars), 0 when not requested/applicable
   buyerPremiumRate?: number; // buyer premium rate as decimal (e.g., 0.05 for 5%)
   isAuction?: boolean;    // true if item is an auction
   purchaseId?: string;    // purchase ID for redirect after success
@@ -42,7 +43,7 @@ interface PaymentFormProps {
   onSuccess: () => void;
 }
 
-const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, isAuction = false, purchaseId, saleName, saleAddress, saleDates, organizerName, saleId, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, shippingCost = 0, isAuction = false, purchaseId, saleName, saleAddress, saleDates, organizerName, saleId, onClose, onSuccess }: PaymentFormProps) => {
   const router = useRouter();
   const { user } = useAuth();
   const stripe = useStripe();
@@ -62,7 +63,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
   // so the two can never disagree: the server decides whether a premium applies, and it sends
   // 0 when it doesn't — including on a Sale.coversFee auction, where the organizer absorbs it.
   // itemPrice remains post-discount, so the coupon display path is unchanged.
-  const total = itemPrice + buyerPremium;
+  const total = itemPrice + buyerPremium + shippingCost;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,6 +232,12 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             <span>−${discountApplied.toFixed(2)}</span>
           </div>
         )}
+        {shippingCost > 0 && (
+          <div className="flex justify-between text-warm-600">
+            <span>Shipping</span>
+            <span>${shippingCost.toFixed(2)}</span>
+          </div>
+        )}
         {buyerPremium > 0 && (
           <div className="flex justify-between text-warm-600">
             {/* The premium is the platform rate (5%). The label still renders the rate the
@@ -362,11 +369,16 @@ interface CheckoutModalProps {
   listingType?: string;   // AUCTION, FIXED, etc. (for buyer premium disclosure)
   organizerName?: string; // ADR-025 checkout disclosure: organizer's display name (businessName), passed by parent page
   saleId?: string;        // ADR-025 checkout disclosure: sale id, used for storefront link in the inline success screen
+  // ADR-110 Track 1: gates whether the "ship this to me" toggle is offered at all.
+  // Mirrors stripeController.createPaymentIntent's own gate exactly (shippingRequested is
+  // only ever honored there when !isAuctionItem && item.shippingAvailable && item.shippingPrice != null).
+  shippingAvailable?: boolean;
+  shippingPrice?: number | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, organizerName, saleId, onClose, onSuccess }: CheckoutModalProps) => {
+const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, organizerName, saleId, shippingAvailable = false, shippingPrice = null, onClose, onSuccess }: CheckoutModalProps) => {
   const { user } = useAuth();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [itemPrice, setItemPrice] = useState(0);
@@ -381,6 +393,16 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   const [saleAddress, setSaleAddress] = useState<string>('');
   const [saleDates, setSaleDates] = useState<string>('');
   const [purchaseId, setPurchaseId] = useState<string | undefined>(initialPurchaseId);
+
+  // ADR-110 Track 1: "ship this to me" intent + ZIP, collected before the PaymentElement
+  // mounts. The backend recomputes the real shipping total server-side from this ZIP --
+  // shippingCost below is ALWAYS what the server returned, never computed client-side.
+  const isAuction = listingType === 'AUCTION'; // matches stripeController's !isAuctionItem gate
+  const canOfferShipping = shippingAvailable && shippingPrice != null && !isAuction;
+  const [shipToMe, setShipToMe] = useState(false);
+  const [shippingZipInput, setShippingZipInput] = useState('');
+  const [shippingZipError, setShippingZipError] = useState<string | null>(null);
+  const [shippingCost, setShippingCost] = useState(0);
 
   // Guest checkout idempotency fix (2026-08-04): a stable per-mount token so that any
   // retry of create-payment-intent within this same mounted CheckoutModal reuses the
@@ -472,6 +494,9 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             ...(affiliateLinkId ? { affiliateLinkId } : {}),
             ...(trimmedCoupon && !isGuest ? { couponCode: trimmedCoupon } : {}),
             ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint, clientToken: clientTokenRef.current } : {}),
+            // ADR-110 Track 1: real destination-ZIP shipping. shippingCost is never sent --
+            // the backend recomputes it server-side from shippingZip and returns it below.
+            ...(shipToMe ? { shippingRequested: true, shippingZip: shippingZipInput.trim() } : {}),
           });
           data = response.data;
           if (data.discountApplied > 0) {
@@ -487,11 +512,14 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           return;
         }
         setClientSecret(data.clientSecret);
-        // Strip the buyer premium back out so the "Item price" row shows the hammer/list price
-        // and the "Buyer Premium" row adds it back once — see the total-display fix in
-        // PaymentForm. data.totalAmount stays authoritative for what Stripe charges.
+        // Strip the buyer premium AND shipping back out so the "Item price" row shows the
+        // hammer/list price alone -- "Buyer Premium" and "Shipping" each add their own line
+        // back once, in PaymentForm. data.totalAmount stays authoritative for what Stripe
+        // charges; data.shippingCost is the server-computed real total, never estimated here.
         const premiumDue = data.buyerPremium ?? 0;
-        setItemPrice(parseFloat(((data.totalAmount ?? 0) - premiumDue).toFixed(2)));
+        const shippingDue = data.shippingCost ?? 0;
+        setShippingCost(shippingDue);
+        setItemPrice(parseFloat(((data.totalAmount ?? 0) - premiumDue - shippingDue).toFixed(2)));
         setPlatformFee(data.platformFee);
         if (data.buyerPremium) setBuyerPremium(data.buyerPremium);
         if (data.buyerPremiumRate) setBuyerPremiumRate(data.buyerPremiumRate);
@@ -536,6 +564,46 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           never sees that field; a logged-in buyer never sees the guest fields. */}
       {!started && !purchaseId && (
         <div>
+          {/* ADR-110 Track 1: "ship this to me" + ZIP, collected before the PaymentElement
+              mounts. Shown only when the item actually supports native-checkout shipping
+              (mirrors stripeController's own gate) and is never offered on auction items. */}
+          {canOfferShipping && (
+            <div className="mb-5 p-3 bg-warm-50 rounded-lg">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shipToMe}
+                  onChange={(e) => { setShipToMe(e.target.checked); setShippingZipError(null); }}
+                  className="h-4 w-4 rounded border-warm-300 accent-amber-600"
+                />
+                <span className="text-sm font-medium text-warm-700">Ship this to me</span>
+              </label>
+              {shipToMe && (
+                <div className="mt-2">
+                  <label className="block text-sm font-medium text-warm-700 mb-1">
+                    Shipping ZIP code <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={shippingZipInput}
+                    onChange={(e) => { setShippingZipInput(e.target.value); setShippingZipError(null); }}
+                    placeholder="49503"
+                    maxLength={10}
+                    className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    aria-label="Shipping ZIP code"
+                    autoComplete="postal-code"
+                  />
+                  {shippingZipError && (
+                    <p className="text-xs text-red-600 mt-1" role="alert">{shippingZipError}</p>
+                  )}
+                  <p className="text-xs text-warm-400 mt-1">
+                    We'll show your exact shipping cost before you pay.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           {isGuest ? (
             <div className="mb-5 space-y-3">
               <p className="text-xs text-warm-500">
@@ -617,6 +685,13 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                     return;
                   }
                 }
+                if (shipToMe) {
+                  const zipTrimmed = shippingZipInput.trim();
+                  if (!/^\d{5}(-\d{4})?$/.test(zipTrimmed)) {
+                    setShippingZipError('Enter a valid ZIP code to see your shipping total.');
+                    return;
+                  }
+                }
                 setStarted(true);
               }}
               className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
@@ -667,7 +742,8 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 discountApplied={discountApplied}
                 buyerPremium={buyerPremium}
                 buyerPremiumRate={buyerPremiumRate}
-                isAuction={listingType === 'AUCTION'}
+                shippingCost={shippingCost}
+                isAuction={isAuction}
                 purchaseId={purchaseId}
                 saleName={saleName}
                 saleAddress={saleAddress}
