@@ -19,7 +19,7 @@ import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, track
   recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, CatalogMatch } from './imageMatchService';
 import { getEbayImageMatch, buildEbayMatchContext, EbayImageMatch } from './ebayImageSearchService';
-import { adapterRegistry } from './pricingEngine/adapters/registry';
+import { estimatePrice } from './pricingEngine';
 import { isAudioFormatMatch } from './pricingEngine/adapters/discogs';
 import { applyCharmPricing } from '../utils/charmPricing';
 
@@ -51,11 +51,24 @@ export interface AITagResult {
 
 /**
  * Finalize the price on a freshly-parsed AI tag result: for records/vinyl/CD/
- * cassette (detected via the shared Discogs isAudioFormatMatch check), try a
- * fast, scoped Discogs comp lookup first and use its price if found; then
- * always round to a charm price (.49/.99 ending) before the result reaches
- * the organizer. Never throws -- a Discogs miss/timeout/error silently falls
- * back to the AI's own guess, charm-rounded.
+ * cassette (detected via the shared Discogs isAudioFormatMatch check), run the
+ * item through the same blended multi-source pricing engine used everywhere
+ * else in the app (estimatePrice() -- eBay, Discogs, Etsy, EBTH, Keepa,
+ * PriceCharting, GSA, weighted + depreciated + confidence-scored), and use its
+ * result if found; then always round to a charm price (.49/.99 ending) before
+ * the result reaches the organizer. Never throws -- a pricing-engine miss/
+ * timeout/error, or a FLOOR-confidence result (no real comps found anywhere --
+ * see pricingController.ts's own FLOOR handling), silently falls back to the
+ * AI's own guess, charm-rounded.
+ *
+ * Fixed 2026-08-25: originally called the Discogs adapter directly and picked
+ * its single top "confidence" match -- but every Discogs result carries the
+ * same hardcoded confidence (0.85), so the pick was effectively arbitrary
+ * among up to 5 matching releases/pressings, and landed on the bottom-dollar
+ * outlier for Bruce Hornsby's "The Way It Is" LP ($0.49 of 5 releases priced
+ * $0.49-$5.99). Routing through the full blended engine instead means the
+ * price reflects eBay/Etsy/EBTH/etc. comps too, not just whichever Discogs
+ * pressing happened to come back first.
  * See claude_docs/feature-notes/ADR-charm-pricing-discogs-comp-wiring-2026-08-24.md
  */
 async function finalizePricing(parsed: AITagResult): Promise<void> {
@@ -63,24 +76,27 @@ async function finalizePricing(parsed: AITagResult): Promise<void> {
     return;
   }
 
-  const DISCOGS_LOOKUP_TIMEOUT_MS = 3000;
+  const PRICING_ENGINE_TIMEOUT_MS = 6000;
 
   if (isAudioFormatMatch({ title: parsed.title, category: parsed.category || '' })) {
     try {
-      const discogsAdapter = adapterRegistry.getAdapter('discogs');
-      if (discogsAdapter) {
-        const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), DISCOGS_LOOKUP_TIMEOUT_MS));
-        const lookup = discogsAdapter.fetch({ title: parsed.title, category: parsed.category || '' });
-        const results = await Promise.race([lookup, timeout]);
-        if (results && results.length > 0) {
-          const best = [...results].sort((a, b) => b.confidence - a.confidence)[0];
-          if (best.price > 0) {
-            parsed.suggestedPrice = best.price / 100; // adapter returns cents
-          }
-        }
+      const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), PRICING_ENGINE_TIMEOUT_MS));
+      const lookup = estimatePrice({
+        title: parsed.title,
+        category: parsed.category || '',
+        condition: parsed.condition,
+        conditionGrade: parsed.suggestedConditionGrade,
+        brand: parsed.brand,
+      });
+      const result = await Promise.race([lookup, timeout]);
+      // FLOOR confidence means no real comps were found by any source -- keep the
+      // AI's own guess rather than showing a bare $0.49 as if it were comp-based
+      // (same treatment pricingController.ts already gives FLOOR results).
+      if (result && result.confidence !== 'FLOOR' && result.estimatedPrice > 0) {
+        parsed.suggestedPrice = result.estimatedPrice / 100; // orchestrator returns cents
       }
     } catch (err) {
-      console.error('[finalizePricing] Discogs lookup failed, keeping AI guess:', err);
+      console.error('[finalizePricing] Pricing engine lookup failed, keeping AI guess:', err);
     }
   }
 
