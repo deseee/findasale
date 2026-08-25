@@ -41,13 +41,21 @@ function resolveFrom(from?: string): string {
 
 export const transactionalEmailService = {
   emails: {
+    // P0 fix (2026-08-25, Charge C investigation -- STATE.md S-PAYMENT-INVOICE-GAPS-2026-08-25):
+    // this used to return Promise<void> unconditionally, including on a silent
+    // suppression-block skip -- the exact failure mode that let a stale EmailSuppression
+    // row block Patrick's own invoice email with zero signal to the caller (posController's
+    // sendHoldInvoice just console.warn'ed on a genuine throw, and a suppression skip isn't
+    // even a throw). Callers that don't care can still ignore the return value (this change
+    // is backward-compatible with every existing call site) -- sendHoldInvoice is the first
+    // caller to actually check it. Genuine Resend API errors still throw, unchanged.
     async send(options: {
       from?: string;
       to: string | string[];
       subject: string;
       html: string;
       text?: string;
-    }): Promise<void> {
+    }): Promise<{ sent: boolean; reason?: string }> {
       if (!process.env.RESEND_API_KEY) {
         // Soft failure in dev/test environments where Resend isn't configured.
         // In production Railway RESEND_API_KEY must be set — log as error so it
@@ -58,7 +66,7 @@ export const transactionalEmailService = {
           '→',
           Array.isArray(options.to) ? options.to.join(', ') : options.to,
         );
-        return;
+        return { sent: false, reason: 'not_configured' };
       }
 
       // Rail-level hard-suppression + domain-block check — applies before every
@@ -74,7 +82,7 @@ export const transactionalEmailService = {
           blockedRecipients.join(', '),
           '| subject:', options.subject,
         );
-        return;
+        return { sent: false, reason: 'suppressed' };
       }
 
       const resend = new Resend(process.env.RESEND_API_KEY);
@@ -95,6 +103,8 @@ export const transactionalEmailService = {
         });
         throw new Error(`Resend send failed: ${error.message}`);
       }
+
+      return { sent: true };
     },
   },
 };

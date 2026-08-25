@@ -2111,12 +2111,19 @@ export default function POSPage() {
 
   const handleSendInvoice = async (reservationId: string, shopperEmail: string, miscItems?: CartItem[]) => {
     try {
-      await api.post(`/pos/holds/${reservationId}/invoice`, { deliverVia: 'EMAIL', miscItems });
+      const response = await api.post(`/pos/holds/${reservationId}/invoice`, { deliverVia: 'EMAIL', miscItems });
       setHolds(prev => prev.filter(h => h.reservationId !== reservationId));
       setLoadedHold(null);
       setCart([]);
       setBuyerEmail('');
-      showToast(`Invoice sent to ${shopperEmail}`, 'success');
+      // P1 fix (2026-08-25, Charge C investigation): surface a real email-delivery failure
+      // (e.g. a suppressed recipient) instead of always claiming success -- see the matching
+      // fix in PosInvoiceModal.tsx for the full incident note.
+      if (response?.data?.emailWarning) {
+        showToast(response.data.emailWarning, 'warning');
+      } else {
+        showToast(`Invoice sent to ${shopperEmail}`, 'success');
+      }
     } catch (err) {
       console.error('[pos] Send invoice error:', err);
       setErrorMessage('Failed to send invoice');

@@ -597,8 +597,21 @@ export const getActiveHolds = async (req: AuthRequest, res: Response) => {
  * Response: { invoiceId: string, status: 'SENT' }
  */
 export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
+  // Orphaned-payable-session guard (mirrors createCombinedInvoice / markSoldAndCreateInvoice):
+  // the Stripe Checkout Session below is created BEFORE the HoldInvoice row exists. If
+  // anything after that throws before the HoldInvoice is committed, a Session would be left
+  // open and payable against nothing. Declared at function scope so the outer catch can see
+  // it. (No revert is attempted here beyond this note -- see the Blocked/Flagged item in this
+  // dispatch's handoff: this exact gap already exists unaddressed in createCombinedInvoice
+  // today, so this mirrors established behavior rather than inventing new scope.)
+  let createdStripeSessionId: string | null = null;
+  let createdStripeSessionAccount: string | null = null;
+
   try {
-    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
+    // P0 fix (2026-08-25, Charge C investigation): this endpoint now creates a real Stripe
+    // Checkout Session (see below), so it can no longer opt out of the Stripe-connected
+    // requirement the way it did when it was Stripe-free.
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: true });
     if (!organizer) return;
 
     const { reservationId } = req.params as { reservationId?: string };
@@ -617,7 +630,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const reservation = await prisma.itemReservation.findUnique({
       where: { id: reservationId },
       include: {
-        item: { select: { id: true, title: true, price: true, sale: { select: { id: true, organizerId: true } } } },
+        item: { select: { id: true, title: true, price: true, photoUrls: true, sale: { select: { id: true, organizerId: true } } } },
         user: { select: { id: true, email: true, name: true } },
       },
     });
@@ -668,7 +681,113 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // left behind before that shipped. See services/holdInvoiceClaim.ts.
     await releaseDeadInvoiceAnchors(prisma, [reservationId]);
 
-    // Create HoldInvoice record (simplified for MVP — no actual Stripe Checkout)
+    // Same Math.min() clamp reservationController.ts's markSoldAndCreateInvoice already
+    // applies -- an organizer-supplied expiryHours must never outlive the hold's own
+    // expiresAt (ADR-098 follow-up). Hoisted above the Stripe call (previously inline in
+    // the HoldInvoice.create below) so the SAME value can clamp the Stripe session's
+    // expires_at too.
+    const expiresAt = expiryHours
+      ? new Date(Math.min(Date.now() + expiryHours * 60 * 60 * 1000, reservation.expiresAt.getTime()))
+      : reservation.expiresAt;
+
+    // P0 fix (2026-08-25, Charge C investigation -- STATE.md S-PAYMENT-INVOICE-GAPS-2026-08-25):
+    // this used to create a HoldInvoice with NO Stripe Checkout Session at all ("simplified
+    // for MVP" -- the removed comment that used to sit here). It was fundamentally unpayable:
+    // the email CTA and the in-app notification both linked to a /my-invoices/[id] page that
+    // has never existed anywhere in packages/frontend/pages, the item page's "Complete
+    // Payment" button silently no-opped (itemController.buildHoldFieldsForViewer only returns
+    // a real invoiceCheckoutUrl when stripeSessionId is set), and the "in-app payment popup"
+    // the HOLD_INVOICE socket emit below claims to open has no listener anywhere in the
+    // frontend (grepped every socket.on(...) call site -- confirmed, not assumed). Wired below
+    // to mirror createCombinedInvoice's Stripe Checkout Session creation: same
+    // idempotency-key-per-attempt pattern, same useDirect routing, same expires_at clamp, same
+    // invoiceId metadata backfill once the HoldInvoice row exists so the payment webhook
+    // (stripeController.ts, keyed on paymentIntent.metadata.invoiceId) can find it.
+    const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+    const checkoutExpiry = stripeCheckoutExpiry(expiresAt);
+    if (checkoutExpiry.clampedTo) {
+      console.warn(
+        `[pos] sendHoldInvoice: Stripe expires_at clamped to ${checkoutExpiry.clampedTo} for reservation ${reservationId}: ` +
+        `invoice deadline ${expiresAt.toISOString()} -> Stripe session expiry ${checkoutExpiry.effectiveExpiresAt.toISOString()}. ` +
+        `The Checkout Session and HoldInvoice.expiresAt intentionally disagree; invoiceExpiryJob still governs the real deadline.`
+      );
+    }
+
+    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: reservation.item.title,
+            description: reservation.item.title || 'Secondhand item',
+            images: reservation.item.photoUrls && reservation.item.photoUrls.length > 0 ? [reservation.item.photoUrls[0]] : [],
+          },
+          unit_amount_decimal: String(heldItemTotal),
+        },
+        quantity: 1,
+      },
+    ];
+    if (miscItems && miscItems.length > 0) {
+      for (const miscItem of miscItems) {
+        line_items.push({
+          price_data: {
+            currency: 'usd',
+            product_data: { name: miscItem.title, description: 'Additional item' },
+            unit_amount_decimal: String(Math.round(miscItem.amount * 100)),
+          },
+          quantity: 1,
+        });
+      }
+    }
+
+    // Direct-charges migration (2026-08-08): staged-rollout routing decision, same pattern
+    // as every other invoice-creation path in this file.
+    const useDirect = organizer.stripeConnectId
+      ? await shouldUseDirectCharge(organizer.id, organizer.stripeConnectId)
+      : false;
+    // Fresh per-attempt key, not pinned to reservationId alone -- avoids the exact 24h-poisoned-
+    // key trap reservationController.markSoldAndCreateInvoice's own comment documents (a stable
+    // key tied only to the reservation would freeze every retry for a day after one failure).
+    const idempotencyKey = `send-hold-invoice-${reservationId}-${crypto.randomUUID()}`;
+
+    let stripeSession: Stripe.Checkout.Session;
+    try {
+      stripeSession = await stripe().checkout.sessions.create(
+        {
+          payment_method_types: ['card'],
+          mode: 'payment',
+          customer_email: reservation.user.email,
+          line_items,
+          success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,
+          cancel_url: `${baseUrl}/shopper/holds?paymentStatus=cancelled`,
+          expires_at: checkoutExpiry.expiresAtUnix,
+          payment_intent_data: {
+            metadata: {
+              invoiceId: null, // backfilled below once the HoldInvoice row exists
+              itemIds: reservation.itemId,
+              shopperId: reservation.userId,
+              organizerId: organizer.id,
+              saleId: reservation.item.sale!.id,
+            },
+            application_fee_amount: platformFeeAmount,
+            ...(useDirect ? {} : { transfer_data: { destination: organizer.stripeConnectId! } }),
+          },
+          metadata: { organizerId: organizer.id },
+        },
+        { idempotencyKey, ...(useDirect ? { stripeAccount: organizer.stripeConnectId! } : {}) }
+      );
+      createdStripeSessionId = stripeSession.id;
+      createdStripeSessionAccount = useDirect ? organizer.stripeConnectId ?? null : null;
+    } catch (stripeError: any) {
+      console.error('[pos] sendHoldInvoice: Stripe session creation failed:', stripeError);
+      return res.status(400).json({ message: 'Failed to create Stripe checkout session', error: stripeError.message });
+    }
+
+    const stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
+      ? stripeSession.payment_intent
+      : (stripeSession.payment_intent as any)?.id ?? null;
+
+    // Create HoldInvoice record
     const holdInvoice = await prisma.holdInvoice.create({
       data: {
         reservationId,
@@ -686,23 +805,22 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         totalAmount: grandTotal,
         platformFeeAmount,
         status: 'PENDING',
-        // ADR-098 follow-up (findasale-hacker adversarial pass, 2026-07-29): clamp the
-        // custom expiryHours so this invoice can never outlive the underlying hold's own
-        // expiresAt. Item.status was just atomically set to INVOICE_ISSUED above (via
-        // commitItemSale) -- the ONLY thing that currently reclaims an INVOICE_ISSUED item
-        // back to AVAILABLE if the shopper never pays is reservationExpiryJob.ts, which acts
-        // purely on ItemReservation.expiresAt (it blindly resets Item.status regardless of
-        // its current value) and does not know about HoldInvoice.expiresAt at all. If an
-        // organizer-supplied expiryHours pushed this invoice's expiry PAST the hold's own
-        // expiresAt, that cron would release the item back to AVAILABLE (and it could be sold
-        // again) while this invoice was still technically live and payable -- reopening the
-        // exact double-sell class ADR-098 exists to close. Mirrors the same Math.min() clamp
-        // reservationController.ts's markSoldAndCreateInvoice already applies for this reason.
-        expiresAt: expiryHours
-          ? new Date(Math.min(Date.now() + expiryHours * 60 * 60 * 1000, reservation.expiresAt.getTime()))
-          : reservation.expiresAt,
+        expiresAt,
+        stripeSessionId: stripeSession.id,
+        stripePaymentIntentId,
+        // Stripe account + charge-shape snapshot -- same fields createCombinedInvoice /
+        // markSoldAndCreateInvoice already populate for this exact reason (invoiceExpiryJob,
+        // holdInvoicePaymentRecorder.ts, and stripeController.ts's webhook all read these
+        // instead of re-deriving the account from the organizer's CURRENT stripeConnectId,
+        // which can drift after re-onboarding).
+        chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+        stripeAccountId: createdStripeSessionAccount,
       },
     });
+
+    // The Session now belongs to a real, live HoldInvoice.
+    createdStripeSessionId = null;
+    createdStripeSessionAccount = null;
 
     // Update reservation with invoice reference
     await prisma.itemReservation.update({
@@ -710,7 +828,36 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       data: { invoiceId: holdInvoice.id },
     });
 
+    // Backfill invoiceId onto the PaymentIntent's metadata now that the HoldInvoice row (and
+    // its id) exists -- mirrors createCombinedInvoice / markSoldAndCreateInvoice. Non-fatal:
+    // invoiceExpiryJob's STRANDED-PAID reconcile branch is the backstop if this fails.
+    if (stripePaymentIntentId) {
+      try {
+        await stripe().paymentIntents.update(stripePaymentIntentId, {
+          metadata: {
+            itemIds: reservation.itemId,
+            shopperId: reservation.userId,
+            organizerId: organizer.id,
+            saleId: reservation.item.sale!.id,
+            invoiceId: holdInvoice.id,
+          },
+        });
+      } catch (metaErr: any) {
+        const metaErrMsg = `[pos] sendHoldInvoice: Non-fatal: failed to backfill invoiceId metadata onto PaymentIntent ${stripePaymentIntentId} for invoice ${holdInvoice.id}: ${metaErr?.message ?? metaErr}`;
+        console.error(metaErrMsg);
+        try {
+          Sentry.captureException(metaErr instanceof Error ? metaErr : new Error(metaErrMsg), {
+            tags: { area: 'hold-invoice-metadata-backfill' },
+            extra: { invoiceId: holdInvoice.id, stripePaymentIntentId },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+      }
+    }
+
     // Send email (Resend integration — basic version)
+    let emailWarning: string | null = null;
     if (true) {
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
@@ -729,20 +876,40 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         const html = buildEmail({
           preheader: `Invoice for your hold`,
           headline: `Invoice: ${reservation.item.title}${miscItems && miscItems.length > 0 ? ' + more' : ''}`,
-          body: `<p>Hi ${reservation.user.name},</p><p>Your hold is ready for payment:</p><p>${itemsList}</p><p><strong>Total: $${(grandTotal / 100).toFixed(2)}</strong></p><p>Payment link in dashboard.</p>`,
-          ctaText: 'View Invoice',
-          ctaUrl: `${process.env.FRONTEND_URL || 'https://finda.sale'}/my-invoices/${holdInvoice.id}`,
+          body: `<p>Hi ${reservation.user.name},</p><p>Your hold is ready for payment:</p><p>${itemsList}</p><p><strong>Total: $${(grandTotal / 100).toFixed(2)}</strong></p>`,
+          // P0 fix (2026-08-25): was a dead /my-invoices/[id] link -- that page has never
+          // existed anywhere in packages/frontend/pages. This is now the real, live Stripe
+          // Checkout URL, same pattern as markSoldAndCreateInvoice's "Review and Pay" email
+          // (the one invoice path that already worked end-to-end -- confirmed live-paid,
+          // Charge A, 2026-08-25).
+          ctaText: 'Complete Payment',
+          ctaUrl: stripeSession.url ?? `${baseUrl}/shopper/holds`,
           accentColor: '#10b981',
         });
 
-        await transactionalEmailService.emails.send({
+        const emailResult = await transactionalEmailService.emails.send({
           from: fromEmail,
           to: reservation.user.email,
           subject: `Invoice: ${reservation.item.title}`,
           html,
         });
-      } catch (emailErr) {
-        console.warn('[pos] Failed to send invoice email:', emailErr);
+
+        // P1 fix (2026-08-25, Charge C investigation): this used to be a bare console.warn
+        // on a THROWN error only -- invisible to the organizer either way, and a silent
+        // suppression-block skip (transactionalEmailService.emails.send returning normally
+        // without sending) never even reached this catch at all. That silent-skip is exactly
+        // how Charge C's stale EmailSuppression row on deseee@yahoo.com went unnoticed: the
+        // endpoint returned "SENT" and the POS UI showed "Invoice Sent" while nothing was
+        // actually delivered. transactionalEmailService.emails.send now reports
+        // { sent, reason } instead of a bare Promise<void> (see lib/transactionalEmailService.ts)
+        // specifically so this can be surfaced in the response instead of only logged.
+        if (!emailResult.sent) {
+          emailWarning = `Invoice created, but the email could not be delivered (${emailResult.reason ?? 'unknown reason'}). Share the payment link with the shopper directly.`;
+          console.warn(`[pos] sendHoldInvoice: email not sent (reason=${emailResult.reason}) to ${reservation.user.email}`);
+        }
+      } catch (emailErr: any) {
+        emailWarning = 'Invoice created, but the email failed to send. Share the payment link with the shopper directly.';
+        console.warn('[pos] sendHoldInvoice: Failed to send invoice email:', emailErr);
       }
     }
 
@@ -755,6 +922,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         total: grandTotal / 100,
         expiresAt: holdInvoice.expiresAt,
         itemTitle: reservation.item.title,
+        checkoutUrl: stripeSession.url,
       });
     } catch (socketErr) {
       console.warn('[pos] Failed to emit HOLD_INVOICE socket event:', socketErr);
@@ -767,13 +935,23 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         type: 'hold_invoice',
         title: 'Invoice Ready',
         body: `Your invoice for ${reservation.item.title} is ready. Total: $${(grandTotal / 100).toFixed(2)}`,
-        link: `/my-invoices/${holdInvoice.id}`,
+        // P0 fix (2026-08-25): was the same dead /my-invoices/[id] link as the email CTA
+        // above. NotificationBell.tsx / pages/notifications.tsx both already handle an
+        // external https:// link correctly (open in new tab / window.location.href), so the
+        // real Stripe URL works here without any frontend change.
+        link: stripeSession.url ?? `${baseUrl}/shopper/holds`,
       });
     } catch (notifErr) {
       console.warn('[pos] Failed to create hold invoice notification:', notifErr);
     }
 
-    res.json({ invoiceId: holdInvoice.id, status: 'SENT' });
+    res.json({
+      invoiceId: holdInvoice.id,
+      status: 'SENT',
+      stripeSessionId: stripeSession.id,
+      checkoutUrl: stripeSession.url,
+      ...(emailWarning ? { emailWarning } : {}),
+    });
   } catch (error) {
     console.error('[pos] sendHoldInvoice error:', error);
     res.status(500).json({ message: 'Failed to send invoice' });
@@ -1279,6 +1457,13 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     }
 
     let stripeSessionId: string | null = null;
+    // P0 fix (2026-08-25, Charge C investigation): the email CTA below used to hardcode a
+    // /my-invoices/[id] link that has never existed anywhere in packages/frontend/pages --
+    // dead for every recipient even on this path, which DOES create a real Stripe session.
+    // Captured alongside stripeSessionId so the email closure (a setImmediate callback
+    // further down) can use the real, live, payable Checkout Session URL directly instead --
+    // same pattern reservationController.markSoldAndCreateInvoice's email already uses.
+    let stripeCheckoutUrl: string | null = null;
     // Payments fix (2026-08-03): captured here (broad scope) so it survives past the
     // try block below -- needed for the post-transaction metadata backfill call.
     let stripePaymentIntentId: string | null = null;
@@ -1392,6 +1577,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
         );
 
         stripeSessionId = stripeSession.id;
+        stripeCheckoutUrl = stripeSession.url;
         // Record what we just created so the outer catch can close it if the HoldInvoice
         // transaction below never commits (see the orphan guard at the top of this
         // function). `useDirect` is the same routing decision used for the create call.
@@ -1540,19 +1726,44 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
             ${finalCashAmountCents > 0 ? `<p><strong>Cash Collected:</strong> $${(finalCashAmountCents / 100).toFixed(2)}</p>` : ''}
             ${cardAmountCents > 0 ? `<p><strong>Remaining to Charge:</strong> $${(cardAmountCents / 100).toFixed(2)}</p>` : ''}
             <p><strong>Expires at:</strong> ${expiryTime}</p>
-            ${cardAmountCents > 0 ? `<p><a href="${stripeSessionId ? `${process.env.FRONTEND_URL || 'https://finda.sale'}/my-invoices/${holdInvoice.id}` : ''}">Complete Payment</a></p>` : '<p style="color: #10b981;"><strong>Full payment collected at POS.</strong></p>'}
+            ${cardAmountCents > 0 ? `<p><a href="${stripeCheckoutUrl ?? ''}">Complete Payment</a></p>` : '<p style="color: #10b981;"><strong>Full payment collected at POS.</strong></p>'}
             ${cautionCopy}
           `;
 
-          await transactionalEmailService.emails.send({
+          const emailResult = await transactionalEmailService.emails.send({
             from: fromEmail,
             to: shopper.email,
             subject: `Invoice for your purchase`,
             html,
           });
+
+          // P1 fix (2026-08-25, Charge C investigation): this response already went out via
+          // res.json() above (this whole block is a fire-and-forget setImmediate) -- there is
+          // no HTTP response left to attach a failure to, unlike sendHoldInvoice's email
+          // block below (which runs before its res.json()). Sentry is the correct, honest
+          // surface for a fire-and-forget failure; a bare console.warn (the old behavior) is
+          // invisible in production the same way the stale EmailSuppression block on
+          // deseee@yahoo.com went unnoticed during Charge C.
+          if (!emailResult.sent) {
+            const warnMsg = `[pos] createCombinedInvoice: invoice email not sent (reason=${emailResult.reason}) to ${shopper.email}`;
+            console.warn(warnMsg);
+            try {
+              Sentry.captureMessage(warnMsg, 'warning');
+            } catch {
+              // Sentry may not be initialized -- silently continue
+            }
+          }
         }
       } catch (emailErr) {
-        console.warn('[pos] Failed to send invoice email:', emailErr);
+        const errMsg = `[pos] createCombinedInvoice: Failed to send invoice email: ${emailErr instanceof Error ? emailErr.message : emailErr}`;
+        console.warn(errMsg);
+        try {
+          Sentry.captureException(emailErr instanceof Error ? emailErr : new Error(errMsg), {
+            tags: { area: 'pos-invoice-email' },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
       }
     });
 

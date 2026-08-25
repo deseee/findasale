@@ -61,7 +61,7 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashA
         ? `/pos/sessions/${sessionId}/create-invoice`
         : `/pos/holds/${hold.reservationId}/invoice`;
 
-      await api.post(endpoint, {
+      const response = await api.post(endpoint, {
         shopperId: hold.shopperId,
         invoiceMode,
         expiresAt: expiresAt.toISOString(),
@@ -71,7 +71,16 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashA
       });
 
       setSent(true);
-      showToast(`Invoice sent to ${hold.shopperEmail}`, 'success');
+      // P1 fix (2026-08-25, Charge C investigation): sendHoldInvoice now surfaces a real
+      // email-delivery failure (e.g. a suppressed recipient -- the exact stale-suppression
+      // bug found on Charge C) via response.data.emailWarning instead of only a backend
+      // console.warn nobody would ever see. Show it instead of the blanket success toast so
+      // the organizer knows to share the payment link another way.
+      if (response?.data?.emailWarning) {
+        showToast(response.data.emailWarning, 'warning');
+      } else {
+        showToast(`Invoice sent to ${hold.shopperEmail}`, 'success');
+      }
     } catch (err: any) {
       const errorMsg = err?.response?.data?.message || 'Failed to send invoice';
       setError(errorMsg);
