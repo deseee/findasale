@@ -418,7 +418,17 @@
     return t.indexOf('order') !== -1;
   }
   function allSoldListingCards() {
-    const allRoleButtons = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'));
+    // (2026-08-24, dead-marker fix) Widened to also include a[role="link"] -- confirmed via
+    // live QA against 2 real Facebook-Checkout-sold orders that the real "View Order" control
+    // is a bare <span> nested inside <a role="link" href=".../shipping_orders/...">, not any
+    // role="button" element. The selector above never matched it, so CHECKOUT_ORDER_MARKERS
+    // could never fire against real Facebook DOM (detection still succeeded via the older
+    // "relist this item" marker on both orders checked, so this was not a live break -- but a
+    // listing state showing ONLY "View Order" with no other marker would have silently failed
+    // detection). Additive only: the two already-trusted exact markers ('mark as available',
+    // 'relist this item') and all matching/dedupe logic below are unchanged -- this just adds
+    // a[role="link"] elements to the pool of candidates inspected.
+    const allRoleButtons = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"], a[role="link"]'));
     // (2026-08-07 fix) Same element-reference dedup bug as alreadySoldCardByTitle above --
     // fixed the same way (dedupe by normalized text, not element reference). Without this, a
     // single real Sold card with two markers could show up TWICE in the returned list, causing

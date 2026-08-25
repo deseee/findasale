@@ -164,6 +164,10 @@ describe('POS combined-invoice commission -- tier-aware rate on the card leg', (
         title: `Combined Invoice Fee Item ${key}`,
         price: 100, // dollars -- $100.00
         photoUrls: [],
+        embedding: [], // NOT NULL, no DB default -- Prisma omits unspecified scalar lists,
+                        // Postgres then rejects the INSERT (see cashSaleFee.test.ts /
+                        // bountyPurchaseFee.test.ts for the same established pattern).
+                        // CI-confirmed root cause of this file's initial red run (2026-08-25).
         status: 'RESERVED', // commitItemSale's allowed fromStatuses cover RESERVED
         saleId: sale.id,
       },

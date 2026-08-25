@@ -988,12 +988,23 @@ export const FEDEX_DESTINATION_SURCHARGE_ZIP_TIER: Readonly<Record<string, Fedex
  * and accept a $7.13 tail at the 10 measured tier-C ZIPs. See the header block for the
  * measured cost of each.
  */
-// SET TO 'B' 2026-08-16 by Patrick's explicit decision. Cover through tier B (+$7.90);
-// accept the residual ~$7.13 exposure at the 10 measured tier-C ZIPs (Nantucket, Yellowstone,
-// Somes Bar, Beaver Island and similar). Measured effect vs the prior flat $5.92: worst rise
-// +$1.98, mean +$0.47. Chosen over 'C' because 'C' would have made the live GUITAR GIG BAG
-// preset ($47.49) read as under-covered by the below-cost guard. See ADR-103 SS14.
-export const FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER: FedexDestinationSurchargeTier = 'B';
+// SET TO 'C' 2026-08-24 by Patrick's explicit decision (ADR-110 Section 6, Decision Flag 1,
+// option (b) -- "bias the blend to tier-C for FLAT_TIERS"), superseding the 2026-08-16 'B'
+// setting below. Rationale from the ADR: this eliminates organizer under-recovery entirely
+// (the engine is never short at any measured destination) at the cost of a buyer overcharge
+// at a clean/tier-A/tier-B destination becoming the norm instead of the exception. Scope:
+// this token governs the flat-rate (FLAT_TIERS-style) blended default across the whole
+// engine -- there is no separate FLAT_TIERS-only constant, and no destination-aware path
+// exists yet for any caller (see the header block above), so every unmapped/no-ZIP quote
+// on any surface gets this value, exactly as it did when the token was 'B'. Prior setting
+// history, kept for record: SET TO 'B' 2026-08-16 by Patrick's explicit decision. Cover
+// through tier B (+$7.90); accept the residual ~$7.13 exposure at the 10 measured tier-C
+// ZIPs (Nantucket, Yellowstone, Somes Bar, Beaver Island and similar). Measured effect vs
+// the prior flat $5.92: worst rise +$1.98, mean +$0.47. Chosen over 'C' at the time because
+// 'C' would have made the live GUITAR GIG BAG preset ($47.49) read as under-covered by the
+// below-cost guard -- that consequence is now accepted per the 2026-08-24 decision above.
+// See ADR-103 SS14 (original 'B' decision) and ADR-110 (2026-08-24, this change).
+export const FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER: FedexDestinationSurchargeTier = 'C';
 
 /** The amount the destination-blind flat-rate path actually adds to every FedEx quote. */
 export const FEDEX_DESTINATION_SURCHARGE_FLAT_RATE_DEFAULT =

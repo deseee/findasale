@@ -53,29 +53,34 @@ import {
 const UNMAPPED_DEFAULT = FEDEX_DESTINATION_SURCHARGE_TIERS[FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER];
 
 // One real measured ZIP per tier, taken verbatim from FEDEX_DESTINATION_SURCHARGE_ZIP_TIER.
+// NOTE (2026-08-24): FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER flipped 'B' -> 'C' per
+// ADR-110 Decision Flag 1 option (b) -- tier C is now the unmapped default, so TIER_C_ZIP
+// is the one that coincides with UNMAPPED_DEFAULT below, not TIER_B_ZIP as before.
 const CLEAN_ZIP = '90210'; // tier 'clean' -> $0.00
 const TIER_A_ZIP = '10001'; // tier 'A' -> $5.92
-const TIER_B_ZIP = '98357'; // tier 'B' -> $7.90 (same dollar amount as the unmapped default, different reason)
-const TIER_C_ZIP = '02554'; // tier 'C' -> $15.03 (Nantucket)
+const TIER_B_ZIP = '98357'; // tier 'B' -> $7.90
+const TIER_C_ZIP = '02554'; // tier 'C' -> $15.03 (Nantucket) -- same dollar amount as the unmapped default now, by design
 
 describe('fedexDestinationSurchargeForZip -- pure tier lookup', () => {
-  it('a known tier-C ZIP returns the tier-C amount, not the unmapped default', () => {
+  it('a known tier-C ZIP returns the tier-C amount, which now equals the unmapped default by design (ADR-110 Decision Flag 1 option b, 2026-08-24)', () => {
     expect(fedexDestinationSurchargeForZip(TIER_C_ZIP)).toBe(FEDEX_DESTINATION_SURCHARGE_TIERS.C);
     expect(FEDEX_DESTINATION_SURCHARGE_TIERS.C).toBe(15.03);
-    expect(fedexDestinationSurchargeForZip(TIER_C_ZIP)).not.toBe(UNMAPPED_DEFAULT);
+    // No longer ".not.toBe" -- tier C IS the unmapped default now, on purpose.
+    expect(fedexDestinationSurchargeForZip(TIER_C_ZIP)).toBe(UNMAPPED_DEFAULT);
   });
 
   it('a known clean ZIP returns $0, not the unmapped default', () => {
     expect(fedexDestinationSurchargeForZip(CLEAN_ZIP)).toBe(0);
   });
 
-  it('a known tier-A ZIP returns the tier-A amount', () => {
+  it('a known tier-A ZIP returns the tier-A amount, distinct from the unmapped default', () => {
     expect(fedexDestinationSurchargeForZip(TIER_A_ZIP)).toBe(FEDEX_DESTINATION_SURCHARGE_TIERS.A);
+    expect(fedexDestinationSurchargeForZip(TIER_A_ZIP)).not.toBe(UNMAPPED_DEFAULT);
   });
 
-  it('a known tier-B ZIP returns the same dollar amount as the unmapped default (coincidence, not the fallback firing)', () => {
+  it('a known tier-B ZIP returns the real tier-B amount, distinct from the unmapped default (was a coincidental match when unmapped=B; no longer, now that unmapped=C)', () => {
     expect(fedexDestinationSurchargeForZip(TIER_B_ZIP)).toBe(FEDEX_DESTINATION_SURCHARGE_TIERS.B);
-    expect(FEDEX_DESTINATION_SURCHARGE_TIERS.B).toBe(UNMAPPED_DEFAULT);
+    expect(FEDEX_DESTINATION_SURCHARGE_TIERS.B).not.toBe(UNMAPPED_DEFAULT);
   });
 
   it('tolerates ZIP+4 -- only the leading 5 digits are used', () => {
@@ -108,15 +113,24 @@ describe('estimateCheapestRate -- destinationZip end-to-end through the winning 
     expect(result.carrier).toBe('FEDEX');
   });
 
-  it('(a) a known tier-C destination ZIP produces the tier-C surcharge, not the tier-B/unmapped default', () => {
+  it('(a) a known tier-C destination ZIP produces the tier-C surcharge, which now equals the unmapped default by design', () => {
     const withTierC = estimateCheapestRate({ ...SCENARIO, destinationZip: TIER_C_ZIP });
     expect(withTierC.carrier).toBe('FEDEX');
     expect(withTierC.surchargeType).toBe('DESTINATION');
     expect(withTierC.surcharge).toBe(15.03);
     expect(withTierC.rate).toBe(Math.round((FEDEX_BASE_Z8_50LB + 15.03) * 100) / 100);
-    // Must differ from what the unmapped default would have produced -- proves the
-    // ZIP was actually consulted, not silently ignored.
-    expect(withTierC.surcharge).not.toBe(UNMAPPED_DEFAULT);
+    // Now EQUALS the unmapped default on purpose (ADR-110 Decision Flag 1 option b) --
+    // see the next test for the real proof that the ZIP is actually consulted (a tier-B
+    // ZIP, which now differs from the unmapped default).
+    expect(withTierC.surcharge).toBe(UNMAPPED_DEFAULT);
+  });
+
+  it('(a2) a known tier-B destination ZIP produces the real tier-B surcharge, distinct from the unmapped default -- proves the ZIP is actually consulted, not silently defaulted to tier C', () => {
+    const withTierB = estimateCheapestRate({ ...SCENARIO, destinationZip: TIER_B_ZIP });
+    expect(withTierB.carrier).toBe('FEDEX');
+    expect(withTierB.surchargeType).toBe('DESTINATION');
+    expect(withTierB.surcharge).toBe(FEDEX_DESTINATION_SURCHARGE_TIERS.B);
+    expect(withTierB.surcharge).not.toBe(UNMAPPED_DEFAULT);
   });
 
   it('a known clean destination ZIP produces $0 destination surcharge (no misleading DESTINATION type on a $0 add)', () => {
@@ -127,7 +141,7 @@ describe('estimateCheapestRate -- destinationZip end-to-end through the winning 
     expect(withClean.rate).toBe(FEDEX_BASE_Z8_50LB);
   });
 
-  it('(b) omitting destinationZip entirely safely falls back to the tier-B/unmapped default without erroring', () => {
+  it('(b) omitting destinationZip entirely safely falls back to the tier-C/unmapped default without erroring', () => {
     expect(() => estimateCheapestRate(SCENARIO)).not.toThrow();
     const noZip = estimateCheapestRate(SCENARIO);
     expect(noZip.carrier).toBe('FEDEX');

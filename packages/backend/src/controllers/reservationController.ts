@@ -536,6 +536,18 @@ export const cancelHold = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Terminal-state gate (2026-08-24, P3 live-QA finding): cancelling a hold that is
+    // already CANCELLED or EXPIRED used to fall through to the same success path below
+    // and re-write it to CANCELLED again, returning 200 "Hold cancelled" a second time.
+    // No harmful side effect today -- the item.updateMany guard below only reverts an
+    // item that is still RESERVED, so a stale double-cancel never drags an
+    // already-AVAILABLE item backwards -- but a terminal reservation being "cancelled"
+    // twice is dishonest API behavior. Narrow early-return only; every other status
+    // transition below is unchanged.
+    if (reservation.status === 'CANCELLED' || reservation.status === 'EXPIRED') {
+      return res.status(409).json({ message: 'This hold has already been cancelled.' });
+    }
+
     // Resource-state gate (2026-08-17): an item at INVOICE_ISSUED has a live payment
     // request against it -- a Stripe Checkout Session in flight, or a POS cash invoice
     // awaiting collection. Cancelling the hold here used to drag it straight back to
