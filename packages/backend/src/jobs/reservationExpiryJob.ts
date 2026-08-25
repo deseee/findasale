@@ -21,7 +21,6 @@ export const expireStaleHolds = async (): Promise<void> => {
 
     if (expired.length === 0) return;
 
-    const ids = expired.map((r) => r.id);
     const itemIds = expired.map((r) => r.itemId);
 
     // Notification-gap fix (S1195, 2026-08-08): determine up front which of these items
@@ -39,9 +38,26 @@ export const expireStaleHolds = async (): Promise<void> => {
     const stillReservedItemIds = new Set(stillReservedItems.map((i) => i.id));
     const itemTitleById = new Map(stillReservedItems.map((i) => [i.id, i.title]));
 
+    // P0 fix (S-PAYMENT-INVOICE-GAPS-2026-08-25): the item-side guard below (status:
+    // 'RESERVED') already protects the Item row from being reverted out from under a
+    // paid/in-flight invoice, but the reservation-side update had NO equivalent guard --
+    // it unconditionally flipped ANY PENDING/CONFIRMED reservation past its expiresAt to
+    // EXPIRED, including one a payment reconcile had JUST correctly flipped to CONFIRMED.
+    // Confirmed live: a reservation was correctly set CONFIRMED by markHoldInvoicePaid's
+    // STRANDED-PAID reconcile, then flipped back to EXPIRED by this job's very next 10-min
+    // run, 8 minutes later. Fix: only expire reservations whose item is still actually
+    // RESERVED (stillReservedItemIds, computed above from the same query the item-side
+    // guard uses) -- the same "hasn't been touched by any invoice/payment/POS-cart flow
+    // since the hold was placed" condition, applied to both sides of this transaction.
+    const idsToExpire = expired
+      .filter((r) => stillReservedItemIds.has(r.itemId))
+      .map((r) => r.id);
+
+    if (idsToExpire.length === 0) return;
+
     await prisma.$transaction([
       prisma.itemReservation.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: idsToExpire } },
         data: { status: 'EXPIRED' },
       }),
       // Reclaim-gap fix (2026-08-04): guard added so this unconditional revert can't

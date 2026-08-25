@@ -618,7 +618,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const { deliverVia, expiryHours, miscItems } = req.body as {
       deliverVia?: string;
       expiryHours?: number;
-      miscItems?: Array<{ id: string; title: string; amount: number }>;
+      miscItems?: Array<{ id: string; itemId?: string; title: string; amount: number }>;
     };
 
     if (!reservationId) return res.status(400).json({ message: 'reservationId required' });
@@ -727,8 +727,21 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         quantity: 1,
       },
     ];
+    // P0 fix (S-PAYMENT-INVOICE-GAPS-2026-08-25): a merged real hold (handleLoadHold's
+    // same-shopper-same-sale merge in pos.tsx) arrives here as a miscItem that DOES carry a
+    // real itemId (pos.tsx / PosInvoiceModal.tsx CartItem both have itemId?: string) -- only
+    // a genuinely ad-hoc, non-inventory charge would ever lack one. Previously this itemId was
+    // silently discarded: the Stripe charge was correct (line item added below either way) but
+    // the item was never bundled into HoldInvoice.itemIds, so it never got a Purchase row, was
+    // never marked SOLD, and its payment was unrecoverable after the fact -- confirmed live via
+    // a real $1.25 charge whose second item's $0.75 share had no Purchase row. See ADR:
+    // claude_docs/feature-notes/hold-invoice-merged-item-bundling-adr-2026-08-25.md
+    const mergedRealItemIds: string[] = [];
     if (miscItems && miscItems.length > 0) {
       for (const miscItem of miscItems) {
+        if (miscItem.itemId) {
+          mergedRealItemIds.push(miscItem.itemId);
+        }
         line_items.push({
           price_data: {
             currency: 'usd',
@@ -764,7 +777,10 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           payment_intent_data: {
             metadata: {
               invoiceId: null, // backfilled below once the HoldInvoice row exists
-              itemIds: reservation.itemId,
+              // P0 fix (S-PAYMENT-INVOICE-GAPS-2026-08-25): joined string including any merged
+              // real items, mirroring createCombinedInvoice's working itemIds.join(',') pattern
+              // elsewhere in this file -- was bare reservation.itemId (anchor only) before.
+              itemIds: [reservation.itemId, ...mergedRealItemIds].join(','),
               shopperId: reservation.userId,
               organizerId: organizer.id,
               saleId: reservation.item.sale!.id,
@@ -801,7 +817,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         // different person standing at the register).
         organizerUserId: organizer.ownerUserId,
         saleId: reservation.item.sale!.id,
-        itemIds: [reservation.itemId],
+        itemIds: [reservation.itemId, ...mergedRealItemIds],
         totalAmount: grandTotal,
         platformFeeAmount,
         status: 'PENDING',
@@ -833,15 +849,28 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // invoiceExpiryJob's STRANDED-PAID reconcile branch is the backstop if this fails.
     if (stripePaymentIntentId) {
       try {
-        await stripe().paymentIntents.update(stripePaymentIntentId, {
-          metadata: {
-            itemIds: reservation.itemId,
-            shopperId: reservation.userId,
-            organizerId: organizer.id,
-            saleId: reservation.item.sale!.id,
-            invoiceId: holdInvoice.id,
+        await stripe().paymentIntents.update(
+          stripePaymentIntentId,
+          {
+            metadata: {
+              // P0 fix (S-PAYMENT-INVOICE-GAPS-2026-08-25): joined string including any merged
+              // real items -- was bare reservation.itemId (anchor only) before.
+              itemIds: [reservation.itemId, ...mergedRealItemIds].join(','),
+              shopperId: reservation.userId,
+              organizerId: organizer.id,
+              saleId: reservation.item.sale!.id,
+              invoiceId: holdInvoice.id,
+            },
           },
-        });
+          // P0 fix (S-PAYMENT-INVOICE-GAPS-2026-08-25): this was missing the stripeAccount
+          // option the session-creation call above already has. For a DIRECT-charge invoice
+          // the PaymentIntent lives on the connected account -- without this option the update
+          // silently 404s ("No such payment_intent") against the platform account and is
+          // swallowed by the catch below, so invoiceId metadata never actually backfills.
+          // Confirmed live: re-querying the PaymentIntent hours after creation still showed
+          // metadata.invoiceId === '' before this fix.
+          useDirect ? { stripeAccount: organizer.stripeConnectId! } : {}
+        );
       } catch (metaErr: any) {
         const metaErrMsg = `[pos] sendHoldInvoice: Non-fatal: failed to backfill invoiceId metadata onto PaymentIntent ${stripePaymentIntentId} for invoice ${holdInvoice.id}: ${metaErr?.message ?? metaErr}`;
         console.error(metaErrMsg);
