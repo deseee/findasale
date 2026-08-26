@@ -51,6 +51,17 @@ const CAP = Number(process.env.SCRAPER_HOST_CAP_PER_HOUR ?? 300);
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const FETCH_TIMEOUT_MS = 15_000;
 
+// Architect decision 2026-08-26: cap enforcement below stays exactly as-is for every host
+// (it's a real ban-avoidance protection) — only alert severity changes, and only for hosts
+// confirmed harmless here. Confirmed via direct DB volume check (Sale.sourceName=
+// 'GarageSaleFinder', last 10 days): healthy variable daily throughput with no downward
+// trend, and the highest-volume day of the window was the same day the cap fired — the
+// SKIPPED_CAP path is a self-healing soft-throttle on this source, not real data loss, so
+// paging it as a daily 'warning' (Sentry issue 7619979445, firing ~daily since 2026-07-19)
+// was false-incident noise. Add a host here ONLY after confirming the same way — do not
+// preemptively add hosts that haven't been checked.
+const KNOWN_SELF_HEALING_CAP_HOSTS = new Set<string>(['garagesalefinder.com']);
+
 /** Module-level monitoring counter: host -> { count, windowStart }. */
 const hostCounters: Map<string, { count: number; windowStart: number }> = new Map();
 
@@ -113,10 +124,17 @@ export async function safeFetch(
         err instanceof Error ? err.message : String(err)
       );
     }
-    Sentry.captureMessage(
-      `[egress] host ${host} exceeded ${CAP} req/hr`,
-      'warning'
-    );
+    if (KNOWN_SELF_HEALING_CAP_HOSTS.has(host)) {
+      Sentry.captureMessage(
+        `[egress-expected] host ${host} exceeded ${CAP} req/hr (confirmed self-healing — see 2026-08-26 architect decision above)`,
+        'info'
+      );
+    } else {
+      Sentry.captureMessage(
+        `[egress] host ${host} exceeded ${CAP} req/hr`,
+        'warning'
+      );
+    }
     return { status: 'SKIPPED_CAP' };
   }
 
