@@ -117,11 +117,21 @@ export async function createPaymentLinkInternal(opts: {
     stripeRequestOptions
   );
 
+  // 2026-08-26 fix (Patrick): a real live $0.50 POS payment link left the shopper
+  // stranded on Stripe's own generic "Payment successful" hosted page instead of
+  // returning to finda.sale. Switched to a redirect -- targeting the PUBLIC sale
+  // page (/sales/{saleId}), NOT /shopper/checkout-success, because that page hard-
+  // requires an authenticated session (redirects to /login if !user -- confirmed by
+  // reading packages/frontend/pages/shopper/checkout-success.tsx) and this is
+  // explicitly a "shopper self-checkout via QR" flow (see file header) with no
+  // guarantee the payer is logged into FindA.Sale at all. /sales/[id].tsx is public.
+  const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
   const paymentLink = await stripe().paymentLinks.create(
     {
       line_items: [{ price: adHocPrice.id, quantity: 1 }],
       after_completion: {
-        type: 'hosted_confirmation' as const,
+        type: 'redirect',
+        redirect: { url: `${baseUrl}/sales/${saleId}?paymentStatus=success` },
       },
       // Direct-charges migration (2026-08-08): a Direct charge lives on the connected
       // account itself -- drop transfer_data (there is no platform-side Transfer) and keep
