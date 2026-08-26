@@ -296,8 +296,28 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       // item legitimately returns to AVAILABLE — without this the settled row would keep
       // occupying the one-hold-per-item slot and every subsequent placeHold would fail
       // with P2002 "Item already has an active hold".
+      //
+      // CONFIRMED + a linked invoice that is PAID is ALSO stale/terminal (P0 fix,
+      // S-PAYMENT-INVOICE-GAPS-2026-08-26 QA re-test finding: user5@example.com blocked
+      // by deseee@yahoo.com's paid-but-still-CONFIRMED row). Going forward,
+      // markHoldInvoicePaid (holdInvoicePaymentRecorder.ts, commit bfe909592) always
+      // writes 'COMPLETED' on payment -- never 'CONFIRMED' -- and every legitimate
+      // "reverted to a still-active, unpaid hold" writer of 'CONFIRMED' (stripeController.ts
+      // invoice-release revert, invoiceExpiryJob.ts stranded-invoice revert,
+      // posStrandedSaleReconcileCron.ts stranded-sale revert) clears invoiceId to null in
+      // the SAME write. So a CONFIRMED row whose invoiceRel.status is 'PAID' can only be
+      // data that predates bfe909592 -- it is never a live, still-blocking hold. Clearing
+      // it here (in addition to the fix at the write site) means any pre-existing stale
+      // row self-heals the next time anyone attempts a new hold on that item -- no
+      // separate backfill/cleanup script needed.
       await tx.itemReservation.deleteMany({
-        where: { itemId, status: { in: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
+        where: {
+          itemId,
+          OR: [
+            { status: { in: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
+            { status: 'CONFIRMED', invoiceRel: { status: 'PAID' } },
+          ],
+        },
       });
       const r = await tx.itemReservation.create({
         data: {

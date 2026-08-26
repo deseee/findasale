@@ -104,6 +104,65 @@ interface ScraperEntry {
   fn: ScraperFn;
 }
 
+/**
+ * Per-scraper hard timeout ceiling (roadmap #558 follow-up, 2026-08-26, Texas
+ * investigation, tool-cited).
+ *
+ * ROOT CAUSE ESTABLISHED THIS SESSION: texasPhase2Scraper.ts's own fetch/filter/upsert
+ * logic was live-tested directly against data.texas.gov this session and is CORRECT --
+ * the case-insensitive $where clause returns exactly 1,970 matching rows on a SINGLE
+ * page in ~4.3s (well under any per-request timeout). Texas is NOT the problem. The
+ * actual reason Texas (position 43 of 51 below, alphabetically after New York at 32)
+ * still shows no fresh writes: GitHub Actions run #10 (id 32694066528, 2026-08-24 05:35
+ * scheduled -- the most recent run of this workflow as of 2026-08-26, confirmed via the
+ * Actions run history) was CANCELLED -- its own annotations read "The job has exceeded
+ * the maximum execution time of 1h0m0s" + "The operation was canceled". That is the OLD
+ * 60-minute timeout-minutes ceiling; the 180-minute bump (this file's workflow, commit
+ * 2b1760669) landed AFTER run #10 had already started and been killed. No run since #10
+ * exists. So the 2026-08-23 Texas fix has simply never been exercised by a run that
+ * reached position 43 -- not a second Texas-specific defect.
+ *
+ * That said, this IS a real structural gap independent of that one incident: nothing in
+ * this runner previously bounded how long any ONE scraper could run. Even with the
+ * job-level ceiling now at 180 minutes, a single stuck/slow scraper anywhere in the
+ * first 42 entries can still silently consume the whole remaining budget and starve
+ * every scraper listed after it -- Texas and the 8 states after it are structurally the
+ * most exposed to exactly this because they run last. Wrapping each scraper call in its
+ * own hard ceiling means one hang now costs at most this many minutes, never the entire
+ * remaining run, so late-alphabet scrapers reliably get their turn.
+ *
+ * Note: this cannot force-cancel the underlying scraper's in-flight network call (Node
+ * has no generic promise-cancellation) -- a truly hung scraper keeps running in the
+ * background after we move on. What this DOES guarantee is forward progress: the batch
+ * loop itself is never blocked past this ceiling, so every scraper after the stuck one
+ * still gets attempted within the job's overall time budget.
+ */
+const PER_SCRAPER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `Scraper "${label}" exceeded the ${Math.round(ms / 60000)}-minute per-scraper ` +
+          "ceiling -- likely stuck/hung. Aborting so the batch can continue to the " +
+          "remaining scrapers."
+        )
+      );
+    }, ms);
+    promise.then(
+      (val) => {
+        clearTimeout(timer);
+        resolve(val);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 interface ScraperResult {
   name: string;
   status: "ok" | "fail";
@@ -238,7 +297,7 @@ async function main(): Promise<void> {
     resetScrapedOrganizerWriteCount();
     try {
       console.log(`[batch] > ${entry.name} - starting`);
-      await entry.fn();
+      await withTimeout(entry.fn(), PER_SCRAPER_TIMEOUT_MS, entry.name);
       const ms = Date.now() - start;
       const items = getScrapedOrganizerWriteCount();
       results.push({ name: entry.name, status: "ok", items, ms });
