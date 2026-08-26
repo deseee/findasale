@@ -1798,8 +1798,31 @@ export default function POSPage() {
             setLinkedShopperData(res.data);
             setLinkedShopperId(res.data.id || null);
             if (res.data.email) setBuyerEmail(res.data.email);
-            setQrScanStatus('scanning');
-            setQrScanMessage('');
+            // 2026-08-26 fix (Patrick): "make it so the qr auto loads holds and we
+            // don't need the button at all" -- reuses handleLoadHold, the SAME proven
+            // function behind the "Pull" button and the Holds panel, rather than
+            // re-deriving cart-loading logic here. handleLoadHold already merges every
+            // OTHER hold for this shopper (via the `holds` state array) and pulls any
+            // shared cart, so calling it once with the first hold is enough -- looping
+            // over every hold and calling it per-hold would double-add items.
+            const firstHold = res.data.holds?.[0];
+            if (firstHold) {
+              handleLoadHold({
+                reservationId: firstHold.id,
+                itemId: firstHold.itemId,
+                itemTitle: firstHold.itemTitle,
+                itemPrice: firstHold.price,
+                shopperId: res.data.id,
+                shopperName: res.data.name,
+                shopperEmail: res.data.email,
+                expiresAt: firstHold.expiresAt,
+              });
+              setQrScanStatus('found');
+              setQrScanMessage('');
+            } else {
+              setQrScanStatus('scanning');
+              setQrScanMessage('');
+            }
           })
           .catch(err => {
             setQrScanStatus('error');

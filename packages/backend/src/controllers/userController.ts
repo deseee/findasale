@@ -651,6 +651,9 @@ export const getUserQRData = async (req: Request, res: Response) => {
     });
 
     // Format holds response
+    // 2026-08-26 fix: added expiresAt -- the frontend's HoldItem type requires it
+    // (needed once the QR-scan auto-load-hold feature started constructing a real
+    // HoldItem from this response instead of only displaying the hold count).
     const formattedHolds = holds.map((hold) => ({
       id: hold.id,
       itemId: hold.item.id,
@@ -658,6 +661,7 @@ export const getUserQRData = async (req: Request, res: Response) => {
       price: hold.item.price,
       saleId: hold.item.saleId ?? '',
       status: hold.status,
+      expiresAt: hold.expiresAt.toISOString(),
     }));
 
     // Generate QR code data URL for the shopper's profile
