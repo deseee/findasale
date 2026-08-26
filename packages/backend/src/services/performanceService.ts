@@ -472,7 +472,12 @@ async function computeHoldMetrics(saleId: string, from: Date, to: Date) {
   const holdsCreated = holds.length;
   const holdsExpired = holds.filter(h => h.status === 'EXPIRED').length;
   const holdsCancelled = holds.filter(h => h.status === 'CANCELLED').length;
-  const holdsConverted = holds.filter(h => h.status === 'CONFIRMED').length;
+  // 'COMPLETED' included alongside 'CONFIRMED' (2026-08-26): both the POS markSold path
+  // (reservationController.ts) and the Hold-to-Pay paid path (holdInvoicePaymentRecorder.ts)
+  // write the reservation's terminal/paid status -- 'CONFIRMED' is also reused elsewhere to
+  // mean "reverted to an active, not-yet-paid hold", so this metric was previously undercounting
+  // real conversions from both paid paths.
+  const holdsConverted = holds.filter(h => h.status === 'CONFIRMED' || h.status === 'COMPLETED').length;
 
   const noShowRate = holdsCreated > 0 ? (holdsExpired + holdsCancelled) / holdsCreated : 0;
 

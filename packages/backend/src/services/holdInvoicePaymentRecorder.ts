@@ -301,10 +301,20 @@ export async function markHoldInvoicePaid(
     }
     didRecord = true;
 
-    // Update ALL bundled ItemReservations to CONFIRMED
+    // Update ALL bundled ItemReservations to COMPLETED (terminal, paid -- see
+    // ADR-multi-stock-partial-sale-status-revert-2026-08-25.md addendum, 2026-08-26).
+    // 'CONFIRMED' is deliberately NOT used here: 3 other writers (stripeController.ts
+    // invoice-release revert, invoiceExpiryJob.ts stranded-invoice revert,
+    // posStrandedSaleReconcileCron.ts stranded-sale revert) correctly use 'CONFIRMED' to
+    // mean "reverted to an active, not-yet-paid hold" -- placeHold's stale-cleanup
+    // deleteMany (reservationController.ts) does NOT clear 'CONFIRMED' rows for exactly
+    // that reason, which is what let a genuinely paid reservation permanently occupy the
+    // one-hold-per-item @unique slot and block every future hold on the same item.
+    // 'COMPLETED' is the pre-existing terminal value (reservationController.ts markSold,
+    // ~line 1133) that IS cleared by that same deleteMany.
     await tx.itemReservation.updateMany({
       where: { itemId: { in: holdInvoice.itemIds } },
-      data: { status: 'CONFIRMED' },
+      data: { status: 'COMPLETED' },
     });
 
     // Update ALL bundled items to SOLD (LOCKED DECISION #6) -- ADR-085 Track B

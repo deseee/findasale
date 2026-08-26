@@ -54,7 +54,10 @@ export async function computeReputationScore(organizerId: string): Promise<Reput
       item: {
         sale: { organizerId },
       },
-      status: { in: ['CONFIRMED', 'CANCELLED', 'EXPIRED'] },
+      // 'COMPLETED' included alongside 'CONFIRMED' (2026-08-26): a genuinely paid/settled
+      // hold is a resolved hold and belongs in this response-time sample -- see
+      // ADR-multi-stock-partial-sale-status-revert-2026-08-25.md addendum.
+      status: { in: ['CONFIRMED', 'COMPLETED', 'CANCELLED', 'EXPIRED'] },
     },
     select: {
       createdAt: true,
