@@ -3032,7 +3032,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // abort the POS / cart recording that follows.
       if (session.payment_intent) {
         try {
-          const paymentIntent = await stripe().paymentIntents.retrieve(session.payment_intent as string);
+          // P0 fix (2026-08-26): this retrieve had no stripeAccount option -- for a
+          // DIRECT-charge invoice the PaymentIntent lives only on the connected account,
+          // so this call 404'd ("No such payment_intent") and was silently swallowed by
+          // the catch below every time, same bug class as the charge.succeeded retrieve
+          // fixed elsewhere in this file on 2026-08-17. Low-severity here specifically --
+          // this branch is log-only ("wait for charge.succeeded for actual payment"), the
+          // real recording happens in the charge.succeeded case -- but worth closing so
+          // this log line is actually useful for future debugging instead of always
+          // silently erroring.
+          const paymentIntent = await stripe().paymentIntents.retrieve(
+            session.payment_intent as string,
+            (event as any).account ? { stripeAccount: (event as any).account as string } : undefined
+          );
           if (paymentIntent.metadata?.invoiceId) {
             // This is a hold-to-pay invoice -- wait for charge.succeeded for actual payment
             console.log(`[hold-to-pay] Checkout session completed for invoice ${paymentIntent.metadata.invoiceId}`);

@@ -769,6 +769,17 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         {
           payment_method_types: ['card'],
           mode: 'payment',
+          // P0 fix (2026-08-26): explicit expand so payment_intent reliably comes back
+          // as a full object (with .id) on this synchronous response -- confirmed live
+          // this session that without it, stripeSession.payment_intent came back falsy
+          // for a real DIRECT-charge invoice (HoldInvoice cmta1rnh1001uq3rt1z5cocs8),
+          // which skipped BOTH the stripePaymentIntentId DB write below AND the
+          // metadata-backfill call further down (same variable, same `if` guard) --
+          // so paymentIntent.metadata.invoiceId was never set on the real PaymentIntent,
+          // and the charge.succeeded webhook silently no-op'd on a real captured charge.
+          // Money was fine (Stripe had it); our DB just never learned about it until the
+          // slow invoiceExpiryJob STRANDED-PAID backstop caught it ~1hr later.
+          expand: ['payment_intent'],
           customer_email: reservation.user.email,
           line_items,
           success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,
@@ -1578,6 +1589,9 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
           {
             payment_method_types: ['card'],
             mode: 'payment',
+            // P0 fix (2026-08-26): see identical note on sendHoldInvoice above --
+            // same silent metadata-backfill-skip risk, same fix.
+            expand: ['payment_intent'],
             customer_email: shopper.email,
             line_items,
             success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,

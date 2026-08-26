@@ -1862,6 +1862,10 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         {
           payment_method_types: ['card'],
           mode: 'payment',
+          // P0 fix (2026-08-26): see posController.ts sendHoldInvoice's identical note --
+          // same silent metadata-backfill-skip risk (this call site uses the exact same
+          // typeof-string-else-.id derivation pattern), same fix.
+          expand: ['payment_intent'],
           customer_email: reservation.user.email,
           line_items,
           success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,
