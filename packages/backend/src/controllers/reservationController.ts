@@ -1156,19 +1156,14 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             throw stockErr;
           }
         }
-        // The hold that reserved these items is now terminal (COMPLETED, above). For a
-        // multi-unit item with stock remaining, sellItemUnits deliberately leaves
-        // Item.status untouched — which previously stranded the item at RESERVED with no
-        // live hold behind it: not buyable, not holdable, until the expiry cron happened
-        // to sweep it. Release the remaining stock back to AVAILABLE. Guarded on
-        // status:'RESERVED' so an INVOICE_ISSUED or already-SOLD item is never walked
-        // backwards.
-        if (partialSaleUpdates.length > 0) {
-          await tx.item.updateMany({
-            where: { id: { in: partialSaleUpdates.map((p) => p.itemId) }, status: 'RESERVED' },
-            data: { status: 'AVAILABLE' },
-          });
-        }
+        // NOTE (2026-08-25, ADR-multi-stock-partial-sale-status-revert): the revert-to-
+        // AVAILABLE-on-partial-sale logic that used to live only here (guarded on
+        // status:'RESERVED') is now centralized inside sellItemUnits() itself, covering
+        // BOTH 'RESERVED' and 'INVOICE_ISSUED' for every call site, not just this one --
+        // see itemStockService.ts. partialSaleUpdates is intentionally left populated
+        // above (still consumed further down, ADR-087 Phase 4, to revise eBay listing
+        // quantities for partially-sold items) but no longer needs its own item.status
+        // write here; sellItemUnits already did it in the same transaction.
         // Record the cash transaction for each sold item (RECORD mode).
         //
         // REVENUE-LEAK FIX (2026-08-17). This block used to write `platformFeeAmount: 0` and

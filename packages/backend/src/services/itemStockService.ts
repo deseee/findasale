@@ -120,6 +120,17 @@ export async function sellItemUnits(
       where: { id: itemId },
       data: { status: 'SOLD' },
     });
+  } else if (!fullySoldOut && (updated.status === 'RESERVED' || updated.status === 'INVOICE_ISSUED')) {
+    // Partial sale on a multi-stock item: the unit that just sold is settled, but stock
+    // remains, so the item must not be left stranded at a hold/invoice-blocking status --
+    // every other unit becomes permanently un-holdable otherwise (confirmed live production
+    // incident, S-PAYMENT-INVOICE-GAPS-2026-08-25). Guarded on the status we just read (not a
+    // bare update) so a genuinely later transition -- SOLD, AUCTION_ENDED, DONATED -- made by
+    // a concurrent caller between our read and this write is never walked backwards.
+    await client.item.updateMany({
+      where: { id: itemId, status: updated.status },
+      data: { status: 'AVAILABLE' },
+    });
   }
 
   return {
