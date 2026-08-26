@@ -55,8 +55,28 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
       // DB is the single source of truth for authorization.
       req.user.roles = user.roles || [];
     }
-  } catch {
-    // Invalid/expired token — proceed as unauthenticated, do not block
+  } catch (err) {
+    // S-HOLD-INVOICE-CARD fix (2026-08-26): an EXPIRED access token is not the same case as
+    // NO token at all. Previously both were folded into "proceed as unauthenticated," which
+    // silently downgraded a still-logged-in shopper (valid refresh-token cookie, expired
+    // short-lived access-token cookie) to anonymous for this single request -- with no error
+    // for the frontend to detect or recover from. That is exactly what starved
+    // GET /items/:id of req.user on a hard reload: buildHoldFieldsForViewer() only returns
+    // reservedBy/invoiceCheckoutUrl/invoiceExpiresAt when it can see who the viewer is, so an
+    // INVOICE_ISSUED item silently rendered without its HoldInvoiceStatusCard even though the
+    // shopper was, from their own perspective, still logged in.
+    // `authenticate` (below) already treats TokenExpiredError as a 401 specifically so that
+    // packages/frontend/lib/api.ts's response interceptor can transparently refresh the access
+    // token and retry the original request. Mirroring that here for the one error case that
+    // means "a session exists but needs refreshing" restores that same self-heal for every
+    // optionalAuthenticate route without changing behavior for a genuinely anonymous visitor
+    // (no token at all never reaches this catch) or for a malformed/invalid token (falls
+    // through to the unchanged silent-anonymous fallback below, unauthenticated but not
+    // blocked -- this route must still work with no session).
+    if ((err as any)?.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Token expired' });
+    }
+    // Invalid token (bad signature, malformed, etc.) — proceed as unauthenticated, do not block
   }
   next();
 };

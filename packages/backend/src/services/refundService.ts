@@ -353,6 +353,42 @@ export async function executeVerifiedRefund(
     }
   });
 
+  // Release the associated hold, if any (P0 fix 2026-08-26 -- same failure class as the
+  // multi-stock partial-sale status revert, see ADR-multi-stock-partial-sale-status-revert
+  // -2026-08-25.md's "ADR ADDENDUM"). ItemReservation.itemId is @unique -- "one active hold
+  // per item" -- and placeHold's stale-cleanup deleteMany (reservationController.ts) only
+  // ever clears CANCELLED/EXPIRED/COMPLETED rows. Before this fix, a refunded Hold-to-Pay
+  // purchase left its ItemReservation stuck at CONFIRMED forever, so the item's own unique
+  // hold slot was permanently occupied and no future placeHold on that item could ever
+  // succeed again, even though Item.status was correctly reset to AVAILABLE above (by each
+  // caller, right after this function returns).
+  //
+  // Deliberately 'CANCELLED', never 'COMPLETED': this was a refund, not a completed sale --
+  // performanceService.ts's computeHoldMetrics and reputationService.ts's hold-response-time
+  // query both read a 'COMPLETED' ItemReservation as a genuine paid conversion, so marking a
+  // refunded hold 'COMPLETED' would silently inflate those metrics.
+  //
+  // Fixed HERE (in the shared executeVerifiedRefund) rather than duplicated into both
+  // callers' own Item.status = 'AVAILABLE' blocks (stripeController.ts's createRefund,
+  // disputeController.ts's updateDisputeStatus) -- this function exists specifically so
+  // those two callers share one hardened refund path instead of drifting copies (see the
+  // file-level comment above), and any future refund caller gets this fix for free.
+  // updateMany + a NOT-terminal filter (not a plain update to a hardcoded id) makes this a
+  // safe no-op for the common case where the refunded purchase was a direct Buy-It-Now sale
+  // with no ItemReservation row at all, and never clobbers a row that's already terminal.
+  // Non-fatal: the buyer's refund has already succeeded on Stripe and Purchase.status is
+  // already REFUNDED by this point, so a failure here must never surface as a failed refund.
+  if (purchase.itemId) {
+    try {
+      await prisma.itemReservation.updateMany({
+        where: { itemId: purchase.itemId, status: { notIn: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
+        data: { status: 'CANCELLED' },
+      });
+    } catch (err) {
+      console.error(`[executeVerifiedRefund] Failed to reset ItemReservation for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal):`, err);
+    }
+  }
+
   // Tell the VENDOR their booth sale was refunded. No-ops on non-booth-cart purchases.
   // Fire-and-forget and never-throwing: the buyer's refund has already succeeded on Stripe
   // and must not be disturbed by a notification. Exactly-once without a new column: the
