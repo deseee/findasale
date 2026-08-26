@@ -102,7 +102,12 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
           .slice(0, 6)
       : undefined;
 
-    const result = await reanalyzeItem(id, { apply: !dryRun, bakeoff, resolveOnly, testImageUrls });
+    // 2026-08-26 fix: 'Identify precisely' (review queue + edit-item page) opts into a
+    // forced fresh grounded-identity lookup, bypassing the normal skip-if-already-grounded
+    // short-circuit. 'Re-analyze' omits this and keeps the original behavior unchanged.
+    const forceGrounding = req.body?.forceGrounding === true;
+
+    const result = await reanalyzeItem(id, { apply: !dryRun, bakeoff, resolveOnly, testImageUrls, forceGrounding });
 
     // Defensive guard (Sentry FINDASALE-NODEJS-4H): the global/route timeout may have
     // already responded (503) while this awaited above. Never write headers twice.

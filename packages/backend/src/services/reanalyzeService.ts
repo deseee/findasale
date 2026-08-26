@@ -100,7 +100,7 @@ export interface ReanalyzeResult {
  */
 export async function reanalyzeItem(
   itemId: string,
-  opts: { apply: boolean; syncEbay?: boolean; bakeoff?: boolean; resolveOnly?: boolean; testImageUrls?: string[] } = { apply: false },
+  opts: { apply: boolean; syncEbay?: boolean; bakeoff?: boolean; resolveOnly?: boolean; testImageUrls?: string[]; forceGrounding?: boolean } = { apply: false },
 ): Promise<ReanalyzeResult | ReanalyzeError> {
   // Test-image override: analyze arbitrary external image URLs instead of the item's
   // stored photos (stress-testing identification on hard examples). When supplied, we
@@ -396,7 +396,14 @@ export async function reanalyzeItem(
         category: result.category ?? item.category ?? undefined,
       },
       persist: apply,
-      skipIfAlreadyGrounded: true,
+      // 2026-08-26 fix (Patrick): 'Identify precisely' and 'Re-analyze' called the exact
+      // same code path with no way to actually force a fresh grounded-identity lookup --
+      // the button's own doc comment (Feature #565, review.tsx) said it should "target
+      // grounded-identity lookup specifically" but nothing distinguished it. When the
+      // caller opts in (organizer clicked 'Identify precisely'), bypass the skip-if-
+      // already-grounded short-circuit so a real re-lookup runs even on an item that
+      // already has a grounded winner from a prior pass.
+      skipIfAlreadyGrounded: !opts.forceGrounding,
     });
     if (groundingOutcome && groundingOutcome.winner) {
       groundedIdentity = groundingOutcome.winner.identity ?? null;

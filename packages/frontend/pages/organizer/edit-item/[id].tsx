@@ -163,6 +163,17 @@ const EditItemPage = () => {
   const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
 
+  // 2026-08-26 fix (Patrick: "why isn't there at least one on the full edit item page"):
+  // Re-analyze/Identify precisely existed only on the review-queue card, never here, even
+  // though POST /items/:id/reanalyze is generic (ownership + photos-exist gated, no
+  // review-queue-specific check) -- this page just never wired a button to it.
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const [reanalyzeConfirm, setReanalyzeConfirm] = useState<{ open: boolean; forceGrounding: boolean }>({ open: false, forceGrounding: false });
+  // Bumped on a successful re-analyze so PriceSuggestion (autoRefreshToken prop below)
+  // fetches a fresh suggestion instead of leaving a stale/absent one on screen -- same
+  // fix as the review queue, see PriceSuggestion.tsx.
+  const [priceRefreshToken, setPriceRefreshToken] = useState<number | undefined>(undefined);
+
   // Local pickup smart detection nudge
   const [showLocalPickupNudge, setShowLocalPickupNudge] = useState(false);
   // eBay fulfillment policies for the per-item shipping-policy override select.
@@ -274,6 +285,71 @@ const EditItemPage = () => {
     } finally {
       setPackageEstimateLoading(false);
     }
+  };
+
+  /**
+   * Re-analyze: re-run the Smart tagging pipeline on this item's already-stored photos
+   * (no re-upload) and refresh title/description/category/condition/tags in place. Price
+   * is never touched by this pipeline -- organizer pricing always wins (D-006). Mirrors
+   * the review-queue card's handleReanalyze (review.tsx) so behavior is identical on both
+   * pages; forceGrounding=true (Identify precisely) bypasses the skip-if-already-grounded
+   * short-circuit server-side so a real re-lookup runs even on an already-grounded item.
+   */
+  const handleReanalyzeItem = async (forceGrounding: boolean) => {
+    if (!id || reanalyzing) return;
+    setReanalyzing(true);
+    try {
+      const res = await api.post(`/items/${id}/reanalyze`, { forceGrounding });
+      const updated = res.data?.item;
+      if (updated) {
+        const normalizeCondition = (c: string | null | undefined): string => {
+          if (!c) return formData.condition;
+          const up = c.toUpperCase().trim().replace(/\s+/g, '_');
+          const valid = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
+          if (valid.includes(up)) return up;
+          const legacy: Record<string, string> = { LIKE_NEW: 'NEW', EXCELLENT: 'NEW', GOOD: 'USED', FAIR: 'USED', POOR: 'PARTS_OR_REPAIR' };
+          return legacy[up] || formData.condition;
+        };
+        setFormData((prev) => ({
+          ...prev,
+          title: updated.title ?? prev.title,
+          description: updated.description ?? prev.description,
+          category: updated.category ?? prev.category,
+          condition: normalizeCondition(updated.condition),
+          conditionGrade: updated.conditionGrade ?? prev.conditionGrade,
+          tags: Array.isArray(updated.tags) ? updated.tags : prev.tags,
+          ebayCategoryId: updated.ebayCategoryId ?? prev.ebayCategoryId,
+          ebayCategoryName: updated.ebayCategoryName ?? prev.ebayCategoryName,
+          // price intentionally NOT changed here -- organizer pricing always wins.
+        }));
+      }
+      // Keep the cached item in sync too (mirrors the description-save pattern above,
+      // S724 Branch B) so a stray refetch doesn't clobber what we just applied.
+      queryClient.setQueryData(['item', id], (old: any) => (old && updated ? { ...old, ...updated } : old));
+      setPriceRefreshToken((prev) => (prev ?? 0) + 1);
+      showToast('Suggestions refreshed from your photos.', 'success');
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      let message = err?.response?.data?.message || 'Re-analyze failed. Try again.';
+      if (code === 'AI_QUOTA_EXCEEDED') {
+        message = err?.response?.data?.message || 'Monthly re-analyze limit reached.';
+      } else if (code === 'NO_PHOTOS') {
+        message = 'Add a photo before re-analyzing.';
+      } else if (code === 'AI_UNAVAILABLE') {
+        message = 'Smart tagging is temporarily unavailable. Try again shortly.';
+      } else if (code === 'PHOTO_DOWNLOAD_FAILED') {
+        message = "We couldn't load this item's photos. Try again in a moment.";
+      }
+      showToast(message, 'error');
+    } finally {
+      setReanalyzing(false);
+    }
+  };
+
+  /** Gate re-analyze behind a confirm -- current suggested fields get replaced; price is kept. */
+  const requestReanalyzeItem = (forceGrounding: boolean) => {
+    if (reanalyzing) return;
+    setReanalyzeConfirm({ open: true, forceGrounding });
   };
 
   // ADR-104 Sec3: native-checkout suggested shipping price. Debounced fetch, fires only
@@ -1010,8 +1086,9 @@ const EditItemPage = () => {
             updateMutation.mutate();
           }} className="space-y-6">
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">Title</label>
+                <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setBarcodeScannerOpen(true)}
@@ -1036,6 +1113,29 @@ const EditItemPage = () => {
                   )}
                   {barcodeLoading ? 'Looking up…' : 'Scan barcode'}
                 </button>
+                {(item?.photoUrls?.length ?? 0) > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => requestReanalyzeItem(false)}
+                      disabled={reanalyzing}
+                      title="Re-run Smart tagging on this item's photos"
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {reanalyzing ? 'Working…' : 'Re-analyze'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => requestReanalyzeItem(true)}
+                      disabled={reanalyzing}
+                      title="Look up this item's exact identity from its photos and markings"
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#C8552B] dark:text-[#E08A5F] border border-[#C8552B]/30 dark:border-[#C8552B]/40 rounded-md hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Identify precisely
+                    </button>
+                  </div>
+                )}
+                </div>
               </div>
               <input
                 type="text"
@@ -1353,6 +1453,7 @@ const EditItemPage = () => {
                   conditionGrade={formData.conditionGrade}
                   photoUrls={item?.photoUrls}
                   currentPrice={formData.price ? parseFloat(formData.price) : undefined}
+                  autoRefreshToken={priceRefreshToken}
                   onApplyPrice={(price) => setFormData({ ...formData, price: String(price) })}
                 />
               </div>
@@ -2355,6 +2456,23 @@ const EditItemPage = () => {
             }}
             onCancel={() => setDeleteConfirmOpen(false)}
             variant="danger"
+          />
+
+          <ConfirmDialog
+            isOpen={reanalyzeConfirm.open}
+            title={reanalyzeConfirm.forceGrounding ? "Look up this item's exact identity?" : 'Re-run Smart tagging?'}
+            message={
+              reanalyzeConfirm.forceGrounding
+                ? "This re-runs identity lookup from this item's photos even if it was already identified, and refreshes the suggested title, description, category, condition, and tags. Any edits you made to those fields will be replaced. Your price is kept -- we'll check for an updated price suggestion below, but it's never applied automatically."
+                : "This refreshes the suggested title, description, category, condition, and tags from this item's photos. Any edits you made to those fields will be replaced. Your price is kept -- we'll check for an updated price suggestion below, but it's never applied automatically."
+            }
+            confirmLabel={reanalyzeConfirm.forceGrounding ? 'Identify precisely' : 'Re-analyze'}
+            onConfirm={() => {
+              const forceGrounding = reanalyzeConfirm.forceGrounding;
+              setReanalyzeConfirm({ open: false, forceGrounding: false });
+              handleReanalyzeItem(forceGrounding);
+            }}
+            onCancel={() => setReanalyzeConfirm({ open: false, forceGrounding: false })}
           />
         </div>
       </div>

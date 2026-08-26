@@ -22,7 +22,7 @@
  * confirmation step before applying — prevents catastrophic price replacement.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 
@@ -35,6 +35,14 @@ interface PriceSuggestionProps {
   photoUrls?: string[];
   currentPrice?: number;
   onApplyPrice: (price: number) => void;
+  /**
+   * 2026-08-26 fix (Patrick): 'Re-analyze'/'Identify precisely' on the review queue
+   * and edit-item page can change title/category/condition, but this component never
+   * reacted to that -- it only fetches on an explicit 'Suggest Price' click, so a stale
+   * suggestion (or none at all) sat there describing the item's OLD identity. Bump this
+   * value (e.g. a counter) after a successful re-analyze to trigger a fresh fetch here.
+   */
+  autoRefreshToken?: number;
 }
 
 interface SuggestionResult {
@@ -53,6 +61,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
   photoUrls,
   currentPrice,
   onApplyPrice,
+  autoRefreshToken,
 }) => {
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<SuggestionResult | null>(null);
@@ -109,6 +118,22 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
       setLoading(false);
     }
   };
+
+  // Auto-refresh: re-analyze changed the underlying title/category/condition, so any
+  // suggestion on screen now describes the item's OLD identity -- clear it and, if the
+  // fields are still fillable, fetch a fresh one automatically. Skips the initial mount
+  // (token starts undefined) so this never fires before the organizer has ever asked for
+  // a suggestion at all.
+  useEffect(() => {
+    if (autoRefreshToken === undefined) return;
+    setSuggestion(null);
+    setNoDataYet(false);
+    setError(null);
+    if (isEnabled) {
+      handleSuggestPrice();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefreshToken]);
 
   const applyPrice = (price: number) => {
     onApplyPrice(price);

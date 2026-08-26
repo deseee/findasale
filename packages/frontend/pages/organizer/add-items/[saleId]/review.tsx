@@ -287,6 +287,11 @@ const ReviewPage = () => {
   // Re-analyze: per-card loading + inline error state for the "Re-run Smart tagging" control
   const [reanalyzingIds, setReanalyzingIds] = useState<Set<string>>(new Set());
   const [reanalyzeErrors, setReanalyzeErrors] = useState<Map<string, string>>(new Map());
+  // 2026-08-26 fix: bumped after a successful re-analyze so PriceSuggestion (rendered
+  // below, keyed off this via autoRefreshToken) knows the item's title/category/condition
+  // just changed and fetches a fresh price suggestion instead of showing a stale one --
+  // or none at all, which is what organizers were reporting ("no new pricing from the engine").
+  const [priceRefreshTokens, setPriceRefreshTokens] = useState<Map<string, number>>(new Map());
   // Feature #565: grounded-identity provenance returned by the last reanalyze call for
   // each item, so the card updates in place before the background query refetch lands.
   const [groundedOverrides, setGroundedOverrides] = useState<Map<string, { groundedIdentity: string | null; groundedConfidence: number | null; groundedSource: string | null }>>(new Map());
@@ -770,7 +775,7 @@ const ReviewPage = () => {
    * Overwrites title/description/category/condition/tags: the confirm dialog in
    * requestReanalyze() warns the organizer first so manual edits aren't lost silently.
    */
-  const handleReanalyze = async (item: Item) => {
+  const handleReanalyze = async (item: Item, opts: { forceGrounding?: boolean } = {}) => {
     if (reanalyzingIds.has(item.id)) return;
 
     setReanalyzeErrors((prev) => {
@@ -781,7 +786,7 @@ const ReviewPage = () => {
     setReanalyzingIds((prev) => new Set(prev).add(item.id));
 
     try {
-      const res = await api.post(`/items/${item.id}/reanalyze`);
+      const res = await api.post(`/items/${item.id}/reanalyze`, { forceGrounding: opts.forceGrounding === true });
       const updated = res.data?.item;
 
       if (updated) {
@@ -831,6 +836,9 @@ const ReviewPage = () => {
       if (saleId) {
         await queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       }
+      // Trigger PriceSuggestion's auto-refresh (see autoRefreshToken prop below) --
+      // title/category/condition may have just changed, so any prior suggestion is stale.
+      setPriceRefreshTokens((prev) => new Map(prev).set(item.id, (prev.get(item.id) ?? 0) + 1));
       showToast('Suggestions refreshed from your photos.', 'success');
     } catch (err: any) {
       const code = err?.response?.data?.code;
@@ -859,16 +867,18 @@ const ReviewPage = () => {
    * suggested title/description/category/condition/tags will be refreshed.
    * Their typed price is preserved either way.
    */
-  const requestReanalyze = (item: Item) => {
+  const requestReanalyze = (item: Item, opts: { forceGrounding?: boolean } = {}) => {
     if (reanalyzingIds.has(item.id)) return;
+    const forceGrounding = opts.forceGrounding === true;
     setConfirmState({
       open: true,
-      title: 'Re-run Smart tagging?',
-      message:
-        'This refreshes the suggested title, description, category, condition, and tags from this item\u2019s photos. Any edits you made to those fields will be replaced. Your price is kept.',
+      title: forceGrounding ? 'Look up this item\u2019s exact identity?' : 'Re-run Smart tagging?',
+      message: forceGrounding
+        ? 'This re-runs identity lookup from this item\u2019s photos even if it was already identified, and refreshes the suggested title, description, category, condition, and tags. Any edits you made to those fields will be replaced. Your price is kept -- we\u2019ll check for an updated price suggestion below, but it\u2019s never applied automatically.'
+        : 'This refreshes the suggested title, description, category, condition, and tags from this item\u2019s photos. Any edits you made to those fields will be replaced. Your price is kept -- we\u2019ll check for an updated price suggestion below, but it\u2019s never applied automatically.',
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, open: false }));
-        handleReanalyze(item);
+        handleReanalyze(item, { forceGrounding });
       },
     });
   };
@@ -1567,7 +1577,7 @@ const ReviewPage = () => {
                               lookup specifically. Hidden once the item already has photos disabled. */}
                           <button
                             type="button"
-                            onClick={() => requestReanalyze(item)}
+                            onClick={() => requestReanalyze(item, { forceGrounding: true })}
                             disabled={reanalyzingIds.has(item.id) || item.photoUrls.length === 0}
                             title={item.photoUrls.length === 0 ? 'Add a photo to identify precisely' : 'Look up this item\u2019s exact identity from its photos and markings'}
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#C8552B]/30 dark:border-[#C8552B]/40 text-[11px] font-medium text-[#C8552B] dark:text-[#E08A5F] hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -1843,6 +1853,8 @@ const ReviewPage = () => {
                                 condition={getEditState(item).condition}
                                 conditionGrade={getEditState(item).conditionGrade}
                                 photoUrls={item.photoUrls}
+                                currentPrice={item.price ?? undefined}
+                                autoRefreshToken={priceRefreshTokens.get(item.id)}
                                 onApplyPrice={(price) => setPriceInput(item.id, String(price))}
                               />
                             </div>
