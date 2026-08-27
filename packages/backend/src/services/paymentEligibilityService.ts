@@ -25,11 +25,18 @@ type PrismaClientLike = typeof prismaClient;
  * Checks, in cheapest/most-certain-first order:
  *   1. Live Stripe Connect onboarding required (no null/missing/acct_test_ organizer account).
  *   2. Sale must be PUBLISHED (blocks charges against DRAFT/ENDED sales).
- *   3. Velocity/anomaly circuit breaker: >=5 distinct guest/buyer identities OR >=3 FAILED
- *      purchases against the same sale within a rolling 30-minute window trips
+ *   3. Velocity/anomaly circuit breaker: a DECLINE-RATE spike (>=3 FAILED purchases AND a
+ *      >=30% failure rate) against the same sale within a rolling 30-minute window trips
  *      Sale.paymentsHeldAt/paymentsHeldReason and blocks this request too (not just the next).
  *      Once paymentsHeldAt is set, every subsequent request short-circuits on a fast path with
  *      no query, until an admin manually clears it.
+ *      Deliberately NOT keyed on raw distinct-buyer count: once Fix 1 already requires the
+ *      seller to be Stripe-Connect-verified, a busy sale with many successful DISTINCT buyers
+ *      is a good thing, not a fraud signal. Card testing shows up as a burst of DECLINES, not
+ *      a burst of successful buyers — a real busy sale can see 5+, 20+, 100+ genuine buyers in
+ *      30 minutes and none of it should ever hold payments. (Patrick correction, 2026-08-27:
+ *      the first version of this check keyed on distinct identities alone and would have held
+ *      any sufficiently popular legitimate sale.)
  */
 
 export interface SaleEligibilityInput {
@@ -100,19 +107,22 @@ export async function assertSaleCanAcceptPayment(params: {
     return { blocked: true, ...SALE_PAYMENTS_HELD_RESPONSE };
   }
 
-  // Fix 3b — velocity/anomaly circuit breaker.
+  // Fix 3b — velocity/anomaly circuit breaker, keyed on DECLINE RATE, not buyer volume.
   const recentPurchases = await prisma.purchase.findMany({
     where: { saleId: sale.id, createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
-    select: { status: true, userId: true, buyerEmail: true, guestName: true },
+    select: { status: true },
   });
 
-  const distinctIdentities = new Set(
-    recentPurchases.map((p) => p.userId ?? p.buyerEmail ?? p.guestName ?? 'unknown')
-  ).size;
+  const totalAttempts = recentPurchases.length;
   const failedCount = recentPurchases.filter((p) => p.status === 'FAILED').length;
+  const failureRate = totalAttempts > 0 ? failedCount / totalAttempts : 0;
 
-  if (distinctIdentities >= 5 || failedCount >= 3) {
-    const reason = `VELOCITY_ANOMALY: ${distinctIdentities} distinct guest identities + ${failedCount} FAILED purchases within 30min`;
+  // Require BOTH a minimum absolute count (so a single unlucky real decline never trips this)
+  // AND a meaningful rate (so a high-volume sale with a handful of ordinary declines mixed
+  // into many successes never trips this either). 3 FAILED / 30%+ matches the real incident
+  // (3 FAILED out of 10 attempts = 30%) without penalizing popularity.
+  if (failedCount >= 3 && failureRate >= 0.3) {
+    const reason = `VELOCITY_ANOMALY: ${failedCount} FAILED out of ${totalAttempts} purchase attempts (${Math.round(failureRate * 100)}%) within 30min`;
     await prisma.sale.update({
       where: { id: sale.id },
       data: { paymentsHeldAt: new Date(), paymentsHeldReason: reason },
