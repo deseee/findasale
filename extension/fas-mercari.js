@@ -431,12 +431,19 @@
   // candidate -- so after the full phrase is tried and fails, the code also tries it with any
   // trailing "& ..."/"and ..." qualifier stripped, and finally just its first significant word --
   // instead of only ever trying the literal segment text.
+  // BUG FIX 2026-08-27 (Patrick-reported, live): each variant is now tagged `generic: true/false`
+  // instead of a bare string -- the LAST variant (a single significant word, e.g. "cables" out of
+  // "Microphone Cables") is the one that goes on to cause the "Welding Cables" mispick below (any
+  // Mercari category sharing that one generic word scores identically once the query itself is
+  // that generic). Tagging it lets bestScoringOptionWithGenderHint require extra confidence only
+  // for this specific risky fallback, without changing behavior for the fuller, more specific
+  // queries tried first.
   function searchSimplifications(text) {
-    const out = [text];
+    const out = [{ text: text, generic: false }];
     const stripped = text.replace(/\s*[&,]\s*.*$/, '').replace(/\s+and\s+.*$/i, '').trim();
-    if (stripped && norm(stripped) !== norm(text)) out.push(stripped);
+    if (stripped && norm(stripped) !== norm(text)) out.push({ text: stripped, generic: false });
     const words = norm(stripped || text).split(' ').filter(Boolean);
-    if (words.length > 1 && words[0].length >= 3) out.push(words[0]);
+    if (words.length > 1 && words[0].length >= 3) out.push({ text: words[0], generic: true });
     return out;
   }
   // breadcrumbText: the original full eBay-taxonomy breadcrumb (colon-delimited, e.g. "...:
@@ -476,6 +483,14 @@
     // breadcrumb this file receives) and used ONLY to break ties between otherwise-equal options
     // in this search-results list -- it never invents a match on its own.
     const genderHint = segments.map(norm).find((s) => s === 'men' || s === 'women' || s === "men's" || s === "women's") || null;
+    // BUG FIX 2026-08-27: full-context words (leaf category text + every breadcrumb segment),
+    // deduped -- used ONLY for scoring/disambiguation in bestScoringOptionWithGenderHint above,
+    // never for what actually gets typed into Mercari's own search box (that stays the possibly-
+    // simplified `query`). Keeps disambiguation anchored to the item's real department even after
+    // the typed query itself has been stripped down to a single generic word.
+    const contextWords = Array.from(new Set(
+      [categoryText].concat(segments).reduce((acc, seg) => acc.concat(wordize(norm(seg || ''))), [])
+    ));
     // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): SAME "&"-as-a-word bug as
     // bestScoringOption above, confirmed live on THIS function specifically -- searching literally
     // "Tracksuits & Sets" (the untouched full leaf name, tried first before the stripped "Tracksuits"
@@ -485,10 +500,25 @@
     // collectibles" as a false match purely on the shared "&" token -- getting clicked and
     // returning success before the correctly-working "Tracksuits" fallback query ever got a turn.
     // Uses the same wordize() helper (dropping punctuation-only tokens) as bestScoringOption.
-    function bestScoringOptionWithGenderHint(options, wantText) {
+    // BUG FIX 2026-08-27 (P0, Patrick-reported live): a real "Professional Low Noise Microphone
+    // Cable 6ft XLR" item landed in Mercari's "Welding Cables" category. Root cause confirmed via
+    // direct read of this function: once a query got simplified all the way down to one generic
+    // word (e.g. "cables" out of "Microphone Cables" -- see searchSimplifications), scoring was
+    // done against that SAME single-word query, so any Mercari category sharing that one word
+    // scored identically -- nothing anchored the pick back to the item's real department. Two
+    // changes: (1) scoring now always uses `contextWords` -- built by the caller from the FULL,
+    // un-simplified categoryText + breadcrumb segments -- instead of just the current query's own
+    // words, so a fuller-context word (e.g. "microphone", "audio") still counts even when the
+    // typed query itself was generic. (2) `strictGenericMatch` (true only for the risky last-resort
+    // single-word query) requires the winning option to share at least one MORE context word beyond
+    // the single generic one before it's trusted -- "Welding Cables" shares only "cables" with the
+    // full context and is now rejected (returns null) instead of silently clicked; pickCategory's
+    // existing "no result matched" warning path handles it from there, same report-don't-guess
+    // discipline already used for Size.
+    function bestScoringOptionWithGenderHint(options, wantText, contextWords, strictGenericMatch) {
       const want = norm(wantText);
-      const wantWords = wordize(want);
-      let best = null, bestScore = -1;
+      const scoringWords = (contextWords && contextWords.length) ? contextWords : wordize(want);
+      let best = null, bestScore = -1, bestMatchedContextCount = 0;
       for (const opt of options) {
         const text = norm(opt.textContent);
         if (!text) continue;
@@ -498,14 +528,21 @@
         } else {
           const textWords = wordize(text);
           let weighted = 0;
-          for (let i = 0; i < wantWords.length; i++) {
-            if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
+          for (let i = 0; i < scoringWords.length; i++) {
+            if (textWords.indexOf(scoringWords[i]) !== -1) weighted += (scoringWords.length - i) * 100;
           }
           if (weighted === 0) continue;
           score = weighted - text.length * 0.01;
         }
         if (genderHint && wordize(text).indexOf(genderHint.replace(/'s$/, '')) !== -1) score += 5000; // tiebreak only -- smaller than any real word-match delta
-        if (score > bestScore) { bestScore = score; best = opt; }
+        if (score > bestScore) {
+          bestScore = score;
+          best = opt;
+          bestMatchedContextCount = contextWords ? wordize(text).filter((w) => contextWords.indexOf(w) !== -1).length : scoringWords.length;
+        }
+      }
+      if (best && strictGenericMatch && contextWords && contextWords.length > 1 && bestMatchedContextCount <= 1) {
+        return null; // shares only the one generic fallback word -- not confident enough, report instead of guess
       }
       return best;
     }
@@ -518,13 +555,14 @@
       const seen = new Set();
       for (const c of rawCandidates) {
         for (const variant of searchSimplifications(c)) {
-          const key = norm(variant);
+          const key = norm(variant.text);
           if (!key || seen.has(key)) continue;
           seen.add(key);
           searchCandidates.push(variant);
         }
       }
-      for (const query of searchCandidates) {
+      for (const candidate of searchCandidates) {
+        const query = candidate.text;
         searchInput.focus();
         setNativeValue(searchInput, query);
         await sleep(600); // let Mercari's own search debounce/results settle
@@ -539,7 +577,7 @@
         // before a button is even considered a candidate, so unrelated buttons ("Cancel", "×",
         // etc.) can't accidentally win.
         const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button');
-        const opt = bestScoringOptionWithGenderHint(options, query);
+        const opt = bestScoringOptionWithGenderHint(options, query, contextWords, candidate.generic);
         if (opt) {
           await realClick(opt);
           await sleep(300);
@@ -634,6 +672,36 @@
     const match = optionElByText(value);
     if (match) { await realClick(match); await sleep(200); return true; }
     console.warn('[FAS Mercari] Brand "' + value + '" had no matching suggestion (UNVERIFIED, category-dependent list) -- left unset.');
+    return false;
+  }
+
+  // BUG FIX 2026-08-27 (P0, Patrick-reported live): when item.brand is empty (generic/unbranded
+  // items, e.g. a plain XLR cable), guardedFill('Brand', item.brand, ...) never even called
+  // fillBrand() at all -- tryFill() silently no-ops on an empty value -- so nothing ever selected
+  // Mercari's real "No Brand/Not sure" brand option and the field was left completely untouched.
+  // Confirmed via public research that this option exists on Mercari's real sell form. This opens
+  // the Brand field the same way fillBrand() does and looks for that option; if the plain list
+  // doesn't surface it, tries typing "no" (a safe, non-guessed prefix, never a real brand name) to
+  // narrow the suggestion list before giving up. UNVERIFIED selector/option wording -- no live
+  // Mercari seller account to confirm this session, same caveat as the rest of this file.
+  const MERCARI_NO_BRAND_VARIANTS = ['no brand/not sure', 'no brand / not sure', 'no brand', 'not sure'];
+  async function fillMercariNoBrand(labelText) {
+    const el = fieldByLabel(labelText);
+    if (!el) return false;
+    await realClick(el);
+    try { el.focus(); } catch (e) { /* non-fatal */ }
+    await sleep(400);
+    for (const variant of MERCARI_NO_BRAND_VARIANTS) {
+      const match = optionElByText(variant);
+      if (match) { await realClick(match); await sleep(200); return true; }
+    }
+    setNativeValue(el, 'no');
+    await sleep(700);
+    for (const variant of MERCARI_NO_BRAND_VARIANTS) {
+      const match = optionElByText(variant);
+      if (match) { await realClick(match); await sleep(200); return true; }
+    }
+    console.warn('[FAS Mercari] No brand set on this item and no "No Brand/Not sure" option found in the suggestion list (UNVERIFIED) -- left unset.');
     return false;
   }
 
@@ -1424,7 +1492,13 @@
     // popup.js's queue map. tryFill's own guard still skips silently on unset items;
     // category-type gating (apparel-only for size/color) is left to Mercari's own form,
     // never assumed here.
-    await guardedFill('Brand', item.brand, (v) => fillBrand('Brand', v));
+    // BUG FIX 2026-08-27: fall through to fillMercariNoBrand() when item.brand is empty, instead
+    // of leaving the Brand field completely untouched (see fillMercariNoBrand's own comment).
+    if (item.brand) {
+      await guardedFill('Brand', item.brand, (v) => fillBrand('Brand', v));
+    } else {
+      await guardedFill('Brand', '__NO_BRAND__', () => fillMercariNoBrand('Brand'));
+    }
     await guardedFill('Size', item.size, (v) => fillMercariSize(v));
     // Color: no dedicated field-fill attempt -- see appendColorToDescription() above, folded into
     // the Description fill instead (Patrick live-confirmed no Color field exists on the real form).
