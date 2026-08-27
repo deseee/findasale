@@ -22,14 +22,39 @@ import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charge
  *   1. Inside a $transaction, the row is re-read and recording only proceeds if
  *      status !== 'COMPLETED'; the flip to COMPLETED happens FIRST so a concurrent
  *      webhook/reconciler tx re-reading the row sees COMPLETED and no-ops.
- *   2. Purchase rows key on stripePaymentIntentId `pos_<linkId>` + itemId, protected by
- *      the compound partial unique (stripePaymentIntentId, itemId); a race that reaches
- *      the insert is caught per-item as P2002 and treated as already-recorded.
+ *   2. Purchase rows key on stripePaymentIntentId + itemId, protected by the compound
+ *      partial unique (stripePaymentIntentId, itemId); a race that reaches the insert is
+ *      caught per-item as P2002 and treated as already-recorded.
+ *
+ * Real PaymentIntent id (fixed 2026-08-26): stripePaymentIntentId is now the REAL Stripe
+ * PaymentIntent id (`pi_...`), passed in by the caller via opts.paymentIntentId -- both
+ * callers (stripeController.ts's checkout.session.completed webhook and
+ * posStrandedSaleReconcileCron.ts's reconcile branch) already have a real Stripe Checkout
+ * Session object in hand and extract session.payment_intent from it, mirroring the exact
+ * idiom used elsewhere in stripeController.ts and holdInvoicePaymentRecorder.ts (the correct
+ * reference pattern for this fix). Previously this wrote a synthetic `pos_<linkId>` placeholder,
+ * which refundService.ts's executeVerifiedRefund then passed straight to
+ * stripe().refunds.create({ payment_intent: ... }) -- a call that always failed, silently
+ * breaking refunds for every POS Payment Link sale. The compound unique index above is what
+ * makes this safe: it was never actually the synthetic string that provided idempotency, a
+ * real PI shared across multiple items' Purchase rows already works elsewhere in this
+ * codebase (Cart Checkout's multi-item sessions, holdInvoicePaymentRecorder.ts). The synthetic
+ * `pos_${fresh.id}` string is kept ONLY as a defensive last-resort fallback for the rare case
+ * a caller cannot supply a real PaymentIntent id -- see the fallback branch below, which logs
+ * a warning whenever it fires, since it means a caller is missing data it should have.
  */
 
 export interface RecordPosPaymentLinkSaleOpts {
   source: 'webhook' | 'reconcile';
   sessionId?: string;
+  /**
+   * The REAL Stripe PaymentIntent id (`pi_...`) for this sale, when the caller has it
+   * (both current callers do -- see the docblock above). Used as Purchase.stripePaymentIntentId
+   * instead of the synthetic `pos_<linkId>` fallback so refundService.ts's
+   * executeVerifiedRefund can actually refund the charge. Falls back to the synthetic id
+   * (with a warning logged) only if a caller genuinely cannot supply one.
+   */
+  paymentIntentId?: string;
 }
 
 export interface RecordPosPaymentLinkSaleResult {
@@ -57,7 +82,7 @@ export async function recordPosPaymentLinkSale(
   posPaymentLink: POSPaymentLink,
   opts: RecordPosPaymentLinkSaleOpts
 ): Promise<RecordPosPaymentLinkSaleResult> {
-  const { source } = opts;
+  const { source, paymentIntentId } = opts;
 
   // Fast path — already recorded before we even open a transaction.
   if (posPaymentLink.status === 'COMPLETED') {
@@ -158,6 +183,16 @@ export async function recordPosPaymentLinkSale(
           : false);
       }
 
+      // Defensive fallback: real PaymentIntent id should always be present from both current
+      // callers (see docblock above). If it's ever missing, fall back to the synthetic
+      // `pos_<linkId>` placeholder rather than writing a null/blank stripePaymentIntentId --
+      // but log loudly, since it means a caller is missing data it should have and refunds
+      // for this Purchase will fail exactly like the pre-fix bug this change closes.
+      const resolvedPaymentIntentId = paymentIntentId || `pos_${fresh.id}`;
+      if (!paymentIntentId) {
+        console.warn(`[pos-record/${source}] No real PaymentIntent id supplied for link ${fresh.id} -- falling back to synthetic placeholder '${resolvedPaymentIntentId}'. Refunds for this Purchase will FAIL until this is fixed.`);
+      }
+
       const createdPurchaseIds: string[] = [];
       for (const item of items) {
         try {
@@ -173,7 +208,7 @@ export async function recordPosPaymentLinkSale(
               ...snapshotForCommissionOnly((item.price || 0) * posFeeRate, posFeeRate),
               status: 'PAID',
               source: 'POS',
-              stripePaymentIntentId: `pos_${fresh.id}`,
+              stripePaymentIntentId: resolvedPaymentIntentId,
               chargeType: posUseDirect ? 'DIRECT' : 'DESTINATION',
               ...(posUseDirect && posStripeConnectId ? { stripeAccountId: posStripeConnectId } : {}),
             },

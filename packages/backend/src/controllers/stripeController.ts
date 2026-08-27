@@ -3071,7 +3071,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // a shared, idempotent, transaction-based function reused by the stranded-sale
           // reconciliation cron. An already-COMPLETED link is a safe no-op inside it.
           try {
-            await recordPosPaymentLinkSale(posPaymentLink, { source: 'webhook', sessionId: session.id });
+            // P0 fix (2026-08-26): pass the REAL Stripe PaymentIntent id through so
+            // recordPosPaymentLinkSale stops writing the synthetic `pos_<linkId>`
+            // placeholder into Purchase.stripePaymentIntentId -- that placeholder made
+            // refundService.ts's executeVerifiedRefund call stripe().refunds.create with a
+            // non-existent payment_intent, silently breaking refunds for every POS Payment
+            // Link sale. Same extraction idiom already used elsewhere in this file (ALA_CARTE
+            // / AUCTION_WINNER branches above) -- session.payment_intent can come back either
+            // as a plain string id or an expanded object, handle both.
+            const posPaymentIntentId = typeof session.payment_intent === 'string'
+              ? session.payment_intent
+              : (session.payment_intent as any)?.id ?? undefined;
+            await recordPosPaymentLinkSale(posPaymentLink, { source: 'webhook', sessionId: session.id, paymentIntentId: posPaymentIntentId });
           } catch (recErr: any) {
             // Re-throw so the outer handler try/catch marks the event FAILED and returns 500,
             // letting Stripe retry -- and the reconciliation cron is the additional backstop.

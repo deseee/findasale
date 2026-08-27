@@ -285,9 +285,21 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
       const fresh = await prisma.pOSPaymentLink.findUnique({ where: { id: link.id } });
       if (!fresh || fresh.status === 'COMPLETED') continue;
 
+      // P0 fix (2026-08-26): pass the REAL Stripe PaymentIntent id through -- paidSession is
+      // already a real Stripe Checkout Session object fetched above via
+      // checkout.sessions.list(), no new Stripe API call needed. Same extraction idiom used
+      // in stripeController.ts's checkout.session.completed handler (payment_intent can come
+      // back either as a plain string id or an expanded object). Without this, recordPosPaymentLinkSale
+      // fell back to the synthetic `pos_<linkId>` placeholder, which broke refunds for every
+      // POS Payment Link sale recorded via this reconcile path.
+      const reconcilePaymentIntentId = typeof paidSession.payment_intent === 'string'
+        ? paidSession.payment_intent
+        : (paidSession.payment_intent as any)?.id ?? undefined;
+
       const result = await recordPosPaymentLinkSale(fresh, {
         source: 'reconcile',
         sessionId: paidSession.id,
+        paymentIntentId: reconcilePaymentIntentId,
       });
 
       if (result.recorded) {

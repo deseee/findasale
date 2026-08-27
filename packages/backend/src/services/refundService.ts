@@ -389,6 +389,30 @@ export async function executeVerifiedRefund(
     }
   }
 
+  // Stock-count reset (2026-08-27 fix): mirrors the ItemReservation fix directly above --
+  // a refunded purchase decremented Item.stockSold at sale time (sellItemUnits.ts) but this
+  // function never reversed that on refund, so a refunded item's stock counter stayed
+  // permanently "sold" even after each caller resets Item.status back to AVAILABLE right
+  // after this function returns. A single-stock item (stockTotal defaults to 1, matching
+  // sellItemUnits' own COALESCE) is invisibly blocked from ever selling again -- confirmed
+  // live 2026-08-27: a real $0.75 POS Payment Link payment was captured by Stripe for
+  // exactly this reason, but posPaymentLinkRecorder.ts's own oversell guard correctly
+  // refused to record a duplicate Purchase against a stockSold count that looked exhausted
+  // (see S-PAYMENT-LINK-REDIRECT-WEBHOOK-2026-08-26 QA session). Floored at 0 via the
+  // stockSold:{gt:0} WHERE guard (an atomic updateMany, never goes negative even under a
+  // concurrent refund) -- same try/catch/non-fatal contract as the ItemReservation reset
+  // above, since the buyer's refund has already succeeded on Stripe by this point.
+  if (purchase.itemId) {
+    try {
+      await prisma.item.updateMany({
+        where: { id: purchase.itemId, stockSold: { gt: 0 } },
+        data: { stockSold: { decrement: 1 } },
+      });
+    } catch (err) {
+      console.error(`[executeVerifiedRefund] Failed to decrement stockSold for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal):`, err);
+    }
+  }
+
   // Tell the VENDOR their booth sale was refunded. No-ops on non-booth-cart purchases.
   // Fire-and-forget and never-throwing: the buyer's refund has already succeeded on Stripe
   // and must not be disturbed by a notification. Exactly-once without a new column: the
