@@ -2011,9 +2011,49 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // must be re-sent, not just the new one. Non-fatal -- never blocks invoice
     // creation, matches the checkout.session.completed handler's existing non-fatal
     // PaymentIntent-retrieve pattern in stripeController.ts.
-    const stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
+    let stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
       ? stripeSession.payment_intent
       : (stripeSession.payment_intent as any)?.id ?? null;
+
+    // P0 fix (2026-08-27, HoldInvoice cmtbgy90q0211p46d8yq5lfuv): `expand: ['payment_intent']`
+    // above (the 2026-08-26 fix) does not reliably guarantee the synchronous
+    // sessions.create response has payment_intent populated -- confirmed live on a real
+    // 2-item bundled invoice via the sibling posController.ts call sites (sendHoldInvoice,
+    // createCombinedInvoice), which share this exact typeof-string-else-.id pattern. If
+    // it's still falsy here, do a short retry loop against sessions.retrieve (same
+    // account-scoping as the create call) before giving up -- silently leaving it null
+    // skips the metadata backfill below entirely, orphaning the real webhook-side
+    // PaymentIntent from this HoldInvoice.
+    if (!stripePaymentIntentId) {
+      const retrieveOptions = useDirect ? { stripeAccount: organizer.stripeConnectId! } : undefined;
+      for (let attempt = 1; attempt <= 2 && !stripePaymentIntentId; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        try {
+          const retrieved = await stripe.checkout.sessions.retrieve(
+            stripeSession.id,
+            { expand: ['payment_intent'] },
+            retrieveOptions
+          );
+          stripePaymentIntentId = typeof retrieved.payment_intent === 'string'
+            ? retrieved.payment_intent
+            : (retrieved.payment_intent as any)?.id ?? null;
+        } catch (retrieveErr: any) {
+          console.error(
+            `[hold-invoice] markSoldAndCreateInvoice: PaymentIntent retry retrieve (attempt ${attempt}) failed for session ${stripeSession.id}:`,
+            retrieveErr?.message ?? retrieveErr
+          );
+        }
+      }
+      if (!stripePaymentIntentId) {
+        const piGapMsg = `[hold-invoice] markSoldAndCreateInvoice: stripePaymentIntentId still unavailable after retries for session ${stripeSession.id} -- metadata backfill will be skipped, this invoice depends entirely on invoiceExpiryJob's STRANDED-PAID reconcile backstop.`;
+        console.error(piGapMsg);
+        try {
+          Sentry.captureMessage(piGapMsg, 'error');
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+      }
+    }
     if (stripePaymentIntentId) {
       try {
         await stripe.paymentIntents.update(stripePaymentIntentId, {
