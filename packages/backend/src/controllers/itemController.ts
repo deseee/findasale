@@ -664,6 +664,10 @@ const ITEM_DETAIL_SELECT = {
         shippingPriceSource: true,
         shippingPriceConfirmedByOrganizer: true,
         crosslisterFreeShipping: true,
+        // 2026-08-27: lets the item edit page know an item was already pushed to Discogs
+        // without re-checking eligibility every load.
+        discogsListingId: true,
+        discogsListedAt: true,
         listingType: true,
         isAiTagged: true,
         isActive: true,

@@ -14,6 +14,7 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useEbayConnection } from '../../../lib/useEbayConnection';
+import { useDiscogsConnection } from '../../../lib/useDiscogsConnection';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
@@ -62,6 +63,7 @@ const EditItemPage = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { isConnected: ebayConnected } = useEbayConnection();
+  const { isConnected: discogsConnected } = useDiscogsConnection();
   const { tier } = useOrganizerTier();
 
   const [formData, setFormData] = useState({
@@ -645,6 +647,60 @@ const EditItemPage = () => {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  // Discogs Push Section (2026-08-27, UX spec: claude_docs/ux-spotchecks/discogs-push-flow-2026-08-27.md)
+  // Auto-fetch eligibility on mount -- same no-manual-button pattern as the shipping-price
+  // suggestion already on this page. Skipped entirely once item.discogsListingId is persisted
+  // (already pushed) or if Discogs isn't connected (section doesn't render at all -- see JSX gate).
+  const [discogsPushPending, setDiscogsPushPending] = useState(false);
+  const {
+    data: discogsEligibility,
+    isLoading: discogsEligibilityLoading,
+    isError: discogsEligibilityError,
+    refetch: refetchDiscogsEligibility,
+  } = useQuery({
+    queryKey: ['discogs-eligibility', id],
+    queryFn: async () => {
+      const response = await api.get(`/discogs/items/${id}/eligibility`);
+      return response.data as { eligible: boolean; releaseId: number | null };
+    },
+    enabled: discogsConnected && !!id && !item?.discogsListingId,
+  });
+
+  const discogsPushMutation = useMutation({
+    mutationFn: async ({ publish }: { publish: boolean }) => {
+      return api.post(`/discogs/items/${id}/listing`, { publish });
+    },
+    onSuccess: (response, variables) => {
+      if (response.data?.success) {
+        showToast(variables.publish ? 'Published to Discogs' : 'Pushed to Discogs', 'success');
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      } else {
+        showToast('Discogs push failed', 'error');
+      }
+      setDiscogsPushPending(false);
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to push item to Discogs';
+      showToast(msg, 'error');
+      setDiscogsPushPending(false);
+    },
+  });
+
+  const handlePushToDiscogs = async (publish: boolean) => {
+    setDiscogsPushPending(true);
+    try {
+      // Same reasoning as handlePushToEbay: the Discogs payload is built server-side from
+      // the persisted Item row (price/condition/description), so save current form state
+      // first or a push could send stale data if the organizer edited but hasn't saved yet.
+      await saveFormState();
+    } catch (err) {
+      setDiscogsPushPending(false);
+      showToast('Save failed. Fix errors before pushing to Discogs', 'error');
+      return;
+    }
+    discogsPushMutation.mutate({ publish });
+  };
 
   useEffect(() => {
     if (item) {
@@ -2407,6 +2463,79 @@ const EditItemPage = () => {
                   >
                     {ebayPushPending ? 'Pushing...' : 'Push to eBay'}
                   </button>
+                )}
+              </div>
+            )}
+
+            {/* Discogs Push Section (2026-08-27) -- gated entirely on connection status per
+                UX spec: if not connected, render nothing at all (avoids clutter on the ~95%
+                of items/organizers this never applies to). */}
+            {discogsConnected && (
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
+                {item?.discogsListingId ? (
+                  <div className="space-y-2">
+                    <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
+                      Pushed to Discogs
+                    </div>
+                    <div className="flex gap-2">
+                      <a
+                        href={`https://www.discogs.com/sell/item/${item.discogsListingId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                      >
+                        View listing
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handlePushToDiscogs(true)}
+                        disabled={discogsPushPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {discogsPushPending ? 'Publishing...' : 'Re-push to Discogs'}
+                      </button>
+                    </div>
+                  </div>
+                ) : discogsEligibilityLoading ? (
+                  <p className="text-sm text-warm-500 dark:text-gray-400">Checking Discogs catalog…</p>
+                ) : discogsEligibilityError ? (
+                  <p className="text-sm text-warm-500 dark:text-gray-400">
+                    Couldn&apos;t check Discogs eligibility right now.{' '}
+                    <button
+                      type="button"
+                      onClick={() => refetchDiscogsEligibility()}
+                      className="underline text-blue-600 dark:text-blue-400"
+                    >
+                      Retry
+                    </button>
+                  </p>
+                ) : discogsEligibility?.eligible ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-warm-600 dark:text-gray-400">Matches a Discogs catalog release.</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePushToDiscogs(false)}
+                        disabled={discogsPushPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {discogsPushPending ? 'Pushing...' : 'Push to Discogs'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePushToDiscogs(true)}
+                        disabled={discogsPushPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {discogsPushPending ? 'Publishing...' : 'Publish to Discogs now'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-warm-500 dark:text-gray-400">
+                    No matching Discogs catalog release found for this item.
+                  </p>
                 )}
               </div>
             )}

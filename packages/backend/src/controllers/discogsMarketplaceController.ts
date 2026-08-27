@@ -190,6 +190,23 @@ export const pushItemToDiscogs = async (req: AuthRequest, res: Response) => {
     }
     const publish = req.body?.publish === true;
     const listing = await createDiscogsListing(organizer.id, item, { publish });
+    // 2026-08-27: persist the real Discogs listing id so the frontend can show "already
+    // pushed" on a later page load instead of forgetting the moment the organizer refreshes.
+    // listing_id is Discogs' own documented Marketplace API field name (POST
+    // /marketplace/listings response) -- createDiscogsListing returns the raw parsed API
+    // response untyped (Promise<any>), so this is read defensively rather than assumed.
+    const discogsListingId = listing && listing.listing_id != null ? String(listing.listing_id) : null;
+    if (discogsListingId) {
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { discogsListingId, discogsListedAt: new Date() },
+      }).catch((e) => {
+        // Non-fatal: the real Discogs listing already exists at this point: failing the
+        // whole request over a persistence write would leave the organizer thinking the
+        // push itself failed when it didn't.
+        console.error('[Discogs] Failed to persist discogsListingId after a successful push:', e);
+      });
+    }
     res.json({ success: true, listing });
   } catch (error: any) {
     respondDiscogsError(res, error, 'Failed to create Discogs listing');
@@ -198,9 +215,11 @@ export const pushItemToDiscogs = async (req: AuthRequest, res: Response) => {
 
 /**
  * DELETE /api/discogs/items/:id/listing
- * Body: { discogsListingId: string } — FindA.Sale does not yet persist the
- * remote Discogs listing id anywhere (same gap Reverb's own controller notes
- * for its platform — a follow-up pass should persist listing ids).
+ * Body: { discogsListingId: string } — the caller still supplies it explicitly (mirrors
+ * Reverb's own controller) rather than trusting Item.discogsListingId server-side, since the
+ * frontend already has it in hand from the item fetch and this keeps the endpoint usable even
+ * if persistence ever falls out of sync. 2026-08-27: Item.discogsListingId/discogsListedAt now
+ * ARE persisted (see pushItemToDiscogs above) and are cleared here on a successful delete.
  */
 export const removeItemFromDiscogs = async (req: AuthRequest, res: Response) => {
   try {
@@ -225,6 +244,14 @@ export const removeItemFromDiscogs = async (req: AuthRequest, res: Response) => 
       return;
     }
     const result = await deleteDiscogsListing(organizer.id, discogsListingId);
+    // 2026-08-27: clear the persisted fields on a successful delete so the frontend goes back
+    // to showing the eligibility/push UI instead of a stale "already pushed" state.
+    await prisma.item.update({
+      where: { id: item.id },
+      data: { discogsListingId: null, discogsListedAt: null },
+    }).catch((e) => {
+      console.error('[Discogs] Failed to clear discogsListingId after a successful delete:', e);
+    });
     res.json({ success: true, ...result });
   } catch (error: any) {
     respondDiscogsError(res, error, 'Failed to delete Discogs listing');

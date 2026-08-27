@@ -1161,6 +1161,13 @@ model Item {
   // Patrick manually corrected it) means this must never default to giving shipping away -- same
   // "never default" posture as EbayPolicyMapping.freeShippingOptIn (~line 703).
   crosslisterFreeShipping           Boolean               @default(false)
+  // Discogs push persistence (2026-08-27): the Discogs marketplace connector
+  // (services/marketplace/discogsListingConnector.ts) creates real listings but never persisted
+  // the result anywhere -- without these, a push confirmation would vanish the moment the
+  // organizer refreshed the item edit page. Nullable/additive, cleared back to null by
+  // removeItemFromDiscogs on a successful delete.
+  discogsListingId                  String?
+  discogsListedAt                   DateTime?
   // B1: Item listing/transaction type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
   listingType                     String                  @default("FIXED")
   // CD2: Live Drop — item hidden until liveDropAt time
