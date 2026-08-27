@@ -551,7 +551,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const { data: approachNotes, isLoading: approachNotesLoading } = useArrivalAssistant(id as string, saleExists);
 
   // Feature #67: Fetch social proof metrics for this sale
-  const { data: saleSocialProof, isLoading: socialProofLoading } = useSaleSocialProof(id as string, saleExists);
+  // Anon 401 reduction: only fetch when a real session exists — /api/social-proof/sale/:id requires auth.
+  const { data: saleSocialProof, isLoading: socialProofLoading } = useSaleSocialProof(id as string, saleExists && !!user);
 
   // #403: Family Bundle Pricing: fetch active bundles for this sale
   const { data: saleBundles } = useQuery<Array<{

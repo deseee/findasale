@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
+import { useAuth } from './AuthContext';
 
 interface CrawlerStats {
   total: number;
@@ -16,10 +17,17 @@ interface ClaimListingBannerProps {
 }
 
 const ClaimListingBanner: React.FC<ClaimListingBannerProps> = ({ saleId, cityName, citySlug, organizerId, isUnmanagedListing }) => {
+  const { user } = useAuth();
   const [stats, setStats] = useState<CrawlerStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Anon 401 reduction: /api/crawler-stats/sale/:id requires auth — skip the
+    // call entirely for logged-out visitors instead of firing it and eating a 401.
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
     fetch(`${apiBase}/crawler-stats/sale/${saleId}`)
       .then((res) => {
@@ -34,7 +42,7 @@ const ClaimListingBanner: React.FC<ClaimListingBannerProps> = ({ saleId, cityNam
         // Fail silently — show banner in default state
         setLoading(false);
       });
-  }, [saleId]);
+  }, [saleId, user]);
 
   // Only render the claim UI for unmanaged (scraped) listings
   if (!isUnmanagedListing) return null;

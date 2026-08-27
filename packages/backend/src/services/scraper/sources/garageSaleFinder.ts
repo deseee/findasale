@@ -58,6 +58,9 @@ export async function scrapeGarageSaleFinder(
   rateLimiter: RateLimiter
 ): Promise<{ created: number; updated: number; skipped: number; failed: number; skippedFresh: number }> {
   const stats = { created: 0, updated: 0, skipped: 0, failed: 0, skippedFresh: 0 };
+  // Measurement-only (2026-08-26 ADR): tracks bytes transferred for this metro's run so
+  // Railway egress footprint can be read back from logs before deciding on a GH Actions migration.
+  const byteTracker = { totalBytes: 0, fetchCount: 0 };
 
   try {
     await rateLimiter.loadRobotsTxt(GARAGE_SALES_BASE_URL);
@@ -95,6 +98,8 @@ export async function scrapeGarageSaleFinder(
     }
 
     const html = await response.text();
+    byteTracker.totalBytes += Number(response.headers.get('content-length')) || Buffer.byteLength(html, 'utf8');
+    byteTracker.fetchCount += 1;
     const $ = cheerio.load(html);
 
     // Build map of saleId → {galleryUrl, thumbnailUrl} from listing cards that have photos
@@ -179,7 +184,7 @@ export async function scrapeGarageSaleFinder(
       const idMatch = saleUrl.match(/\/s\/([A-Za-z0-9]+)\//);
       const saleId = idMatch ? idMatch[1] : '';
       const galleryInfo = galleryMap.get(saleId);
-      const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter, galleryInfo);
+      const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter, galleryInfo, byteTracker);
       if (!item) {
         stats.failed++;
         continue;
@@ -197,6 +202,7 @@ export async function scrapeGarageSaleFinder(
     console.log(`[GarageSaleFinder] ${metro} done — created=${stats.created} updated=${stats.updated} skipped=${stats.skipped} skippedFresh=${stats.skippedFresh} failed=${stats.failed}`);
 
     rateLimiter.clearBackoff(domain);
+    console.log(`[GarageSaleFinder] metro=${metro} bytesTransferred=${byteTracker.totalBytes} fetches=${byteTracker.fetchCount} stats=${JSON.stringify(stats)}`);
     return stats;
   } catch (error) {
     console.error(`[GarageSaleFinder] Scrape failed for ${metro}:`, error);
@@ -211,7 +217,8 @@ export async function scrapeGarageSaleFinder(
 export async function parseGarageSalesFinderSale(
   saleUrl: string,
   rateLimiter: RateLimiter,
-  galleryInfo?: { galleryUrl: string; thumbnailUrl: string }
+  galleryInfo?: { galleryUrl: string; thumbnailUrl: string },
+  byteTracker?: { totalBytes: number; fetchCount: number }
 ): Promise<ScrapedItem | null> {
   try {
     const domain = new URL(saleUrl).hostname;
@@ -243,6 +250,10 @@ export async function parseGarageSalesFinderSale(
     }
 
     const html = await response.text();
+    if (byteTracker) {
+      byteTracker.totalBytes += Number(response.headers.get('content-length')) || Buffer.byteLength(html, 'utf8');
+      byteTracker.fetchCount += 1;
+    }
     const parsed = parseGarageSalesFinderListing(html);
 
     // address and zip intentionally omitted — GSF hides street addresses on many
@@ -271,6 +282,10 @@ export async function parseGarageSalesFinderSale(
 
           if (galleryResult.status === 'FETCHED' && galleryResult.response!.ok) {
             const galleryHtml = await galleryResult.response!.text();
+            if (byteTracker) {
+              byteTracker.totalBytes += Number(galleryResult.response!.headers.get('content-length')) || Buffer.byteLength(galleryHtml, 'utf8');
+              byteTracker.fetchCount += 1;
+            }
             galleryPhotos = parseGarageSalesFinderGallery(galleryHtml);
             console.log(`[GarageSaleFinder] Gallery fetched: ${galleryPhotos.length} photos from ${galleryUrl}`);
           }
