@@ -112,6 +112,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // organizer-facing edit-item page has captured all along via a separate, unrelated select).
       brand: true, size: true, color: true, material: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
+      // 2026-08-27: organizer's per-item crosslister free-shipping toggle -- see the `shaped`
+      // payload build below (crosslisterFreeShipping field) for why this exists.
+      crosslisterFreeShipping: true,
       // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, Patrick-directed): bestOfferAutoAcceptAmt
       // added -- Patrick's explicit direction is that the eBay auto-accept threshold should be
       // the DEFAULT Smart Pricing floor source (ahead of the old 25%-of-price fallback), but it
@@ -402,6 +405,14 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' || it.packageWeightOz == null
         ? 'LOCAL_PICKUP_ONLY'
         : it.ebayShippingOverride,
+    // Crosslister shipping-payer preference (2026-08-27) -- organizer's per-item opt-in to offer
+    // free shipping (they absorb the cost) when this item is cross-listed to an external
+    // marketplace (Mercari today via fas-mercari.js's fillMercariShippingPayer(); other
+    // marketplaces can read the same field once they implement their own equivalent control).
+    // Straight passthrough, default false (see Item.crosslisterFreeShipping's own schema
+    // comment for why it must never default true) -- SEPARATE from shippingAvailable/
+    // shippingPrice above, which are FindA.Sale's own native-checkout shipping, not this.
+    crosslisterFreeShipping: it.crosslisterFreeShipping === true,
     // Mirror the item's existing eBay Best Offer settings onto Facebook's Offer step.
     // bestOfferMinimumAmt is a Prisma Decimal (stored in DOLLARS, same unit as price) --
     // coerce to a plain number so it serializes as JSON number, not a Decimal string.

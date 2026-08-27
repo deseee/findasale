@@ -1151,6 +1151,16 @@ model Item {
   // packageEstimateSource/packageConfirmedByOrganizer pattern verbatim (~line 1275 below).
   shippingPriceSource             String? // AUTO | ORGANIZER -- provenance of shippingPrice
   shippingPriceConfirmedByOrganizer Boolean               @default(false) // True once organizer explicitly edits/confirms shipping -- never silently overwritten by auto-suggest after this flips true
+  // Crosslister shipping-payer preference (2026-08-27, Patrick-directed): whether this item should
+  // offer FREE shipping (organizer absorbs cost) when cross-listed to external marketplaces (Mercari
+  // now, Poshmark/Grailed/Vinted equivalents later) via extension/*.js content scripts. SEPARATE from
+  // shippingAvailable/shippingPrice above -- those are for FindA.Sale's own native-checkout flat-rate
+  // shipping, unrelated to crosslister marketplace listings (see extensionController.ts's own comment
+  // on shippingAvailable for that distinction). Default false: an incident this session (real Mercari
+  // listing published with Mercari's own free-shipping default silently on, costing real money before
+  // Patrick manually corrected it) means this must never default to giving shipping away -- same
+  // "never default" posture as EbayPolicyMapping.freeShippingOptIn (~line 703).
+  crosslisterFreeShipping           Boolean               @default(false)
   // B1: Item listing/transaction type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
   listingType                     String                  @default("FIXED")
   // CD2: Live Drop — item hidden until liveDropAt time

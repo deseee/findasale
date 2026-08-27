@@ -663,6 +663,7 @@ const ITEM_DETAIL_SELECT = {
         shippingPrice: true,
         shippingPriceSource: true,
         shippingPriceConfirmedByOrganizer: true,
+        crosslisterFreeShipping: true,
         listingType: true,
         isAiTagged: true,
         isActive: true,
@@ -1120,6 +1121,7 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         photoUrls: true,
         shippingAvailable: true,
         shippingPrice: true,
+        crosslisterFreeShipping: true,
         listingType: true,
         isAiTagged: true,
         isActive: true,
@@ -1249,7 +1251,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // #102: Validate price >= 0
@@ -1700,6 +1702,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (backgroundRemoved !== undefined) updateData.backgroundRemoved = backgroundRemoved === true || backgroundRemoved === 'true'; // #145: Persist background removal state
     if (shippingAvailable !== undefined) updateData.shippingAvailable = shippingAvailable === true || shippingAvailable === 'true';
     if (shippingPrice !== undefined) updateData.shippingPrice = shippingPrice ? parseFloat(shippingPrice) : null;
+    // 2026-08-27: organizer's per-item crosslister free-shipping toggle (Mercari via
+    // fas-mercari.js today) -- SEPARATE from shippingAvailable/shippingPrice above (FindA.Sale's
+    // own native-checkout shipping). Same true/'true' coercion pattern as every other boolean
+    // field in this handler.
+    if (crosslisterFreeShipping !== undefined) updateData.crosslisterFreeShipping = crosslisterFreeShipping === true || crosslisterFreeShipping === 'true';
     if (reverseAuction !== undefined) updateData.reverseAuction = reverseAuction === true || reverseAuction === 'true';
     if (reverseDailyDrop !== undefined) updateData.reverseDailyDrop = reverseDailyDrop ? parseInt(reverseDailyDrop, 10) : null;
     if (reverseFloorPrice !== undefined) updateData.reverseFloorPrice = reverseFloorPrice ? parseInt(reverseFloorPrice, 10) : null;

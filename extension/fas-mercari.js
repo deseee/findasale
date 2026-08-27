@@ -1118,6 +1118,49 @@
   // candidate list doesn't even include plain `<input>` elements) could never find it, no matter how
   // long Title/Category had already been set. This wasn't a timing problem at all. Real, stable
   // selector confirmed live: `input[data-testid="SelectShipping"]`.
+  // BUG FIX 2026-08-27 (P0, Patrick-reported live, real money at risk): a real listing (this same
+  // XLR cable) published with "Offer buyers free shipping?" left on Mercari's own default -- Patrick
+  // had to manually change it to "No" immediately after publish to avoid eating the shipping cost.
+  // This file previously had ZERO code touching this control at all (it only handles the SEPARATE
+  // shipping-label/carrier wizard below). Selectors live-Chrome-confirmed 2026-08-27 by inspecting
+  // the real Mercari edit-listing DOM directly (via a tab Patrick shared): opener is
+  // `[data-testid="ShippingPayerOption"]` (a custom dropdown, not a native <select>); its two options
+  // render as `<li data-testid="FreeShippingYesButton" role="option">Yes (Recommended)</li>` and
+  // `<li data-testid="FreeShippingNoButton" role="option">No</li>` inside a
+  // `<ul data-testid="ShippingPayerOption" role="listbox">` that only mounts once the opener is
+  // clicked -- note the opener DIV and the options UL share the SAME data-testid, so the two options'
+  // own distinct testids are used directly rather than re-querying the ambiguous shared one.
+  // Confirmed via the same live inspection: Mercari's own UI labels "Yes" as "(Recommended)" --
+  // consistent with what Patrick actually saw (free shipping was the default, not something this
+  // file set). FindA.Sale has no organizer-facing setting yet to express a per-item shipping-payer
+  // preference for crosslister listings (flagged separately, not blocking this fix) -- until one
+  // exists, always choosing "No" (buyer pays) protects the organizer's margin by default instead of
+  // silently costing them money, matching standard secondary-marketplace practice. Confirmed live on
+  // Mercari's /sell/edit/ page specifically (Patrick's already-published listing); the /sell/ create
+  // flow is presumed to reuse the same shipping component but has not been separately confirmed this
+  // session -- if a future live-test shows a different selector on /sell/, update this comment.
+  // BUG FIX 2026-08-27 (feature follow-up): item.crosslisterFreeShipping now exists (organizer
+  // toggle, extensionController.ts payload, default false) -- reads the organizer's real per-item
+  // choice instead of always forcing "No". Still defaults to buyer-pays (the safe posture) for
+  // false/null/undefined; only explicitly-true flips to "Yes". The "Yes" branch is CODE-ONLY --
+  // no live Mercari account to re-verify it in the browser this session, only the pre-existing
+  // "No" branch and the FreeShippingYesButton/-NoButton testids themselves were live-confirmed.
+  async function fillMercariShippingPayer(item) {
+    const wantFree = !!(item && item.crosslisterFreeShipping === true);
+    const opener = await waitForSelector(() => document.querySelector('[data-testid="ShippingPayerOption"]'), 5000);
+    if (!opener) return false;
+    await realClick(opener);
+    await sleep(300);
+    const targetTestId = wantFree ? 'FreeShippingYesButton' : 'FreeShippingNoButton';
+    const targetOpt = await waitForSelector(() => document.querySelector('[data-testid="' + targetTestId + '"]'), 2000);
+    if (!targetOpt) {
+      console.warn('[FAS Mercari] "Offer buyers free shipping?" dropdown opened but the "' + (wantFree ? 'Yes' : 'No') + '" option wasn\'t found (UNVERIFIED) -- left at Mercari\'s own default (likely "Yes"/free shipping) -- please check before publishing.');
+      return false;
+    }
+    await realClick(targetOpt);
+    await sleep(200);
+    return true;
+  }
   function mercariShippingOpener() {
     return document.querySelector('input[data-testid="SelectShipping"]') || openerByLabel('Shipping label');
   }
@@ -1531,6 +1574,11 @@
     // List click that could never succeed. Now stops the run right here (same pattern as
     // interstitialAt/navigatedAwayFrom) instead of continuing to a doomed List click, so the real,
     // specific diagnostic message stays on screen instead of being clobbered.
+    // BUG FIX 2026-08-27: set the buyer-pays-shipping choice BEFORE the shipping-label wizard runs
+    // (same page section, no known ordering dependency either way, but keeping shipping-related
+    // fills grouped together). Runs through the same guardedFill guards (interstitial/navigation/
+    // human-pause) as every other field.
+    await guardedFill('Shipping payer', '__SHIPPING_PAYER__', () => fillMercariShippingPayer(item));
     let shippingLabelFailedReason = null;
     if (!interstitialAt && stillOnSellPage()) {
       const shippingResult = await fillMercariShippingLabel(item);

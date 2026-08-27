@@ -97,6 +97,10 @@ const EditItemPage = () => {
     // Native FindA.Sale checkout shipping (ADR-104 Sec3): independent of eBay/tier.
     shippingAvailable: false,
     shippingPrice: '',
+    // Crosslister shipping-payer toggle (2026-08-27): SEPARATE from shippingAvailable/
+    // shippingPrice above -- this is whether to offer free shipping when this item is
+    // cross-listed to an external marketplace (Mercari today), not FindA.Sale's own checkout.
+    crosslisterFreeShipping: false,
     // Product identifiers (populated by barcode scan)
     brand: '',
     // 2026-08-18: size/color/material -- feed the Poshmark/Mercari/Vinted/Grailed content
@@ -709,6 +713,8 @@ const EditItemPage = () => {
         // Native FindA.Sale checkout shipping (ADR-104 Sec3)
         shippingAvailable: item.shippingAvailable === true,
         shippingPrice: item.shippingPrice !== undefined && item.shippingPrice !== null ? String(item.shippingPrice) : '',
+        // Crosslister shipping-payer toggle (2026-08-27)
+        crosslisterFreeShipping: item.crosslisterFreeShipping === true,
         // Product identifiers (populated by barcode scan or pre-existing data)
         brand: item.brand || '',
         size: item.size || '',
@@ -840,6 +846,10 @@ const EditItemPage = () => {
         shippingPrice: shippingTouched
           ? (formData.shippingPrice ? parseFloat(formData.shippingPrice) : null)
           : undefined,
+        // Crosslister shipping-payer toggle (2026-08-27) -- always sent as an explicit value
+        // (unlike shippingAvailable/shippingPrice above, there's no auto-suggest logic here to
+        // protect against overwriting, so no "touched" gate is needed).
+        crosslisterFreeShipping: formData.crosslisterFreeShipping,
         // Bug fix (2026-08-08, P1 data corruption): same naive-local-string bug as
         // add-items.tsx / create-sale.tsx -- formData.auctionEndTime comes from
         // <input type="datetime-local"> as a naive local string with no timezone info.
@@ -1923,6 +1933,32 @@ const EditItemPage = () => {
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Crosslister shipping-payer toggle (2026-08-27): separate from the native-checkout
+                block above. Applies to marketplaces this item gets cross-listed to via the
+                browser extension (Mercari today; more later). Defaults unchecked (buyer pays) --
+                a real Mercari listing cost real money when this was left at Mercari's own
+                free-shipping default before this toggle existed. */}
+            <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping (Cross-listed Marketplaces)</h3>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="crosslister-free-shipping"
+                  checked={formData.crosslisterFreeShipping}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, crosslisterFreeShipping: e.target.checked }));
+                  }}
+                  className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                />
+                <label htmlFor="crosslister-free-shipping" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                  Offer free shipping when cross-listed to other marketplaces (Mercari, etc.)
+                </label>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Unchecked means the buyer pays shipping on Mercari and similar marketplaces. Checking this means you absorb the shipping cost there instead.
+              </p>
             </div>
 
             {/* Shipping Dimensions: shown for PRO/TEAMS (eBay shipping requires dimensions) */}
