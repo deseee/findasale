@@ -75,7 +75,12 @@ describe('Payment Integration Tests', () => {
         businessName: 'Payment Test Business',
         // Organizer.address is NOT NULL in schema.prisma.
         address: '100 Test Ave',
-        stripeConnectId: 'acct_test_payment_001',
+        // NOT an 'acct_test_' prefix -- stripeController's assertSaleCanAcceptPayment gates
+        // Connect eligibility on `stripeConnectId && !stripeConnectId.startsWith('acct_test_')`
+        // (2026-08-27 carding-incident fix). The original 'acct_test_payment_001' tripped that
+        // guard and every payment-intent call in this file was silently blocked before reaching
+        // Stripe. Same gotcha already documented in stripe.e2e.test.ts.
+        stripeConnectId: 'acct_paymentintegrationtest001',
       },
     });
 
@@ -108,6 +113,11 @@ describe('Payment Integration Tests', () => {
         endDate: tomorrow,
         organizerId: testOrganizer.id,
         isAuctionSale: false,
+        // 2026-08-27 carding-incident fix: assertSaleCanAcceptPayment now requires
+        // status === 'PUBLISHED' before any payment intent can be created (Sale defaults to
+        // DRAFT). This fixture never set it, so every payment-intent call in this file was
+        // blocked before reaching Stripe.
+        status: 'PUBLISHED',
       },
     });
 
