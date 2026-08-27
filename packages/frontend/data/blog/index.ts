@@ -32,8 +32,9 @@ import { postS } from './posts/what-a-30-percent-commission-actually-costs-you';
 import { postT } from './posts/facebook-marketplace-listings-auto-renew';
 import { postU } from './posts/estate-sale-industry-is-majority-women-led';
 import { postV } from './posts/shipping-rates-refreshed-camera-guide-social-ready';
+import { postW } from './posts/do-you-owe-sales-tax-on-estate-sale-yard-sale';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);
