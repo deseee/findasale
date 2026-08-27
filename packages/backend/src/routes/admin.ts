@@ -42,6 +42,8 @@ import {
   listAllFraudSignals,
   reviewFraudSignalAdmin,
   getMarketplaceReviewBacklog,
+  getAdminPurchases,
+  bulkRefundPurchases,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -88,6 +90,12 @@ router.get('/sales', getSales);
 router.delete('/sales/:saleId', deleteSale);
 router.get('/activity', getRecentActivity);
 router.patch('/organizers/:organizerId/tier', updateOrganizerTier);
+
+// Admin Purchases (2026-08-27, carding-incident cleanup): search/filter/paginate ALL
+// purchases (authenticated + guest checkout) and bulk-refund up to 25 at once. See
+// getAdminPurchases/bulkRefundPurchases in adminController.ts for full context.
+router.get('/purchases', getAdminPurchases);
+router.post('/purchases/bulk-refund', bulkRefundPurchases);
 
 // Beta invite management
 router.get('/invites', listInvites);

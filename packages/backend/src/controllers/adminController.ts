@@ -8,6 +8,7 @@ import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
 import { createNotification } from '../lib/notificationService';
 import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
+import { executeVerifiedRefund, RefundError } from '../services/refundService';
 
 // BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
 // sync with the canonical `user.roles[]` array. Compute the highest-precedence role
@@ -2166,5 +2167,132 @@ export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Respons
     console.error('[admin] getMarketplaceReviewBacklog error:', error);
     Sentry.captureException(error);
     res.status(500).json({ message: 'Failed to load marketplace review backlog' });
+  }
+};
+
+// GET /api/admin/purchases -- searchable, filterable, paginated purchase list covering BOTH
+// authenticated-user purchases AND guest checkouts (userId null). Built 2026-08-27 as part of
+// the carding-incident cleanup: there was previously no admin surface to find or refund a guest
+// purchase at all -- getUserById above can only ever reach purchases via User.purchases, which
+// is structurally empty for every guest checkout (userId is NULL there by design -- POS walk-ins
+// and online guest checkout, see schema.prisma Purchase.userId comment).
+export const getAdminPurchases = async (req: AuthRequest, res: Response) => {
+  try {
+    const status = (req.query.status as string) || '';
+    const saleId = (req.query.saleId as string) || '';
+    const organizerId = (req.query.organizerId as string) || '';
+    const search = (req.query.search as string) || '';
+    const dateFrom = (req.query.dateFrom as string) || '';
+    const dateTo = (req.query.dateTo as string) || '';
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    // Hard cap at 100 -- this is an admin lookup/cleanup tool, not a bulk export endpoint.
+    const requestedLimit = parseInt(req.query.limit as string) || 25;
+    const limit = Math.min(100, Math.max(1, requestedLimit));
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (status) where.status = status;
+    if (saleId) where.saleId = saleId;
+    if (organizerId) where.sale = { organizerId };
+    if (search) {
+      where.OR = [
+        { buyerEmail: { contains: search, mode: 'insensitive' } },
+        { guestName: { contains: search, mode: 'insensitive' } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+        { user: { name: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
+      if (dateTo) where.createdAt.lte = new Date(dateTo);
+    }
+
+    const [purchases, total] = await Promise.all([
+      prisma.purchase.findMany({
+        where,
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          createdAt: true,
+          source: true,
+          guestName: true,
+          buyerEmail: true,
+          stripePaymentIntentId: true,
+          chargeType: true,
+          refundedAt: true,
+          refundedAmount: true,
+          user: { select: { id: true, email: true, name: true } },
+          item: { select: { id: true, title: true } },
+          sale: { select: { id: true, title: true, organizerId: true, organizer: { select: { businessName: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.purchase.count({ where }),
+    ]);
+
+    res.json({ purchases, total, page, limit });
+  } catch (error) {
+    console.error('Error fetching admin purchases:', error);
+    res.status(500).json({ message: 'Failed to fetch purchases' });
+  }
+};
+
+// POST /api/admin/purchases/bulk-refund -- refund up to 25 purchases in one admin action.
+// Built alongside getAdminPurchases above for the same carding-incident cleanup gap (Patrick's
+// direct ask: admin needs the ability to find/fix guest purchases en masse). Sequential (NOT
+// Promise.all) so one Stripe failure can't leave concurrent writes in a bad interleaved state --
+// matches the money-path discipline already established in refundService.ts's own TOCTOU claim.
+// Each purchase's own current `amount` is fetched fresh here and passed through as the full
+// refund amount -- this is a full-refund cleanup tool, not a partial-refund tool.
+// Deliberately capped at 25: this is a cleanup tool scoped to a specific incident's purchases,
+// not a mass-refund cannon -- needing more than 25 at once in the future is a signal to revisit
+// the cap deliberately, not to raise it silently here.
+export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
+  try {
+    const { purchaseIds } = req.body as { purchaseIds?: string[] };
+
+    if (!Array.isArray(purchaseIds) || purchaseIds.length === 0) {
+      return res.status(400).json({ message: 'purchaseIds must be a non-empty array' });
+    }
+    if (purchaseIds.length > 25) {
+      return res.status(400).json({ message: 'Cannot refund more than 25 purchases in a single request' });
+    }
+
+    const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string }> = [];
+
+    // Sequential loop, intentionally not parallelized -- see file comment above.
+    for (const purchaseId of purchaseIds) {
+      try {
+        const purchase = await prisma.purchase.findUnique({
+          where: { id: purchaseId },
+          select: { amount: true },
+        });
+        if (!purchase) {
+          results.push({ purchaseId, success: false, error: 'Purchase not found' });
+          continue;
+        }
+
+        const result = await executeVerifiedRefund(purchaseId, purchase.amount, 'admin');
+        results.push({ purchaseId, success: true, refundedAmount: result.refundedAmount });
+      } catch (err) {
+        if (err instanceof RefundError) {
+          // Expected, per-item failure (already REFUNDED/FAILED, no payment intent, 30-day
+          // window, etc.) -- report it and keep processing the rest of the batch.
+          results.push({ purchaseId, success: false, error: err.message });
+        } else {
+          console.error(`[admin bulk-refund] Unexpected error refunding purchase ${purchaseId}:`, err);
+          results.push({ purchaseId, success: false, error: 'Unexpected error processing refund' });
+        }
+      }
+    }
+
+    res.json({ results });
+  } catch (error) {
+    console.error('Error bulk-refunding purchases:', error);
+    res.status(500).json({ message: 'Failed to process bulk refund' });
   }
 };

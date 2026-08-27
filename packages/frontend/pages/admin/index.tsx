@@ -702,6 +702,11 @@ const AdminDashboard = () => {
           <p className="text-warm-600 dark:text-warm-400 text-sm">View and delete sales, monitor activity</p>
         </Link>
 
+        <Link href="/admin/purchases" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition">
+          <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Purchases</h3>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Search all purchases (incl. guest checkout) and issue refunds</p>
+        </Link>
+
         <Link href="/admin/verification" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-green-50 dark:bg-green-900/20 border border-green-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Verification</h3>
           <p className="text-warm-600 dark:text-warm-400 text-sm">Review pending organizer verifications</p>
