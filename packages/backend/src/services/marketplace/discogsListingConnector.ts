@@ -27,10 +27,14 @@
  *      cannot be auto-listed. findDiscogsReleaseId() below is the required
  *      pre-check; callers must treat a null result as "not eligible," not an error.
  *
- * CODE-ONLY (CLAUDE.md §9) — no real Discogs personal token has been used
- * end-to-end yet. The /oauth/identity response shape is defensively parsed
- * (.username falling back to .id) rather than assumed exactly, since it was not
- * independently fetched this session.
+ * LIVE-VERIFIED (2026-08-27): connect + eligibility exercised end-to-end against
+ * the real Discogs API with a real organizer personal access token (ArtifactM
+ * seller account). Connect round-trip, /oauth/identity parsing, and real catalog
+ * search results all confirmed working against live data — no longer CODE-ONLY
+ * for the connect/eligibility path. createDiscogsListing (the actual POST that
+ * creates a live marketplace listing) has NOT yet been exercised live — that
+ * remains CODE-ONLY (CLAUDE.md §9) pending an explicit Patrick go-ahead to push
+ * a real Draft listing to his connected seller account.
  */
 
 import { prisma } from '../../lib/prisma';
@@ -210,27 +214,164 @@ function decryptAccessToken(account: MarketplaceAccount): string {
 // ============================================================================
 
 /**
- * Search Discogs's catalog for a release matching this item's title. Returns
- * the top result's release id, or null if nothing was found — a null result
- * means the item is NOT eligible to be listed on Discogs (see file header),
- * not that the search failed.
+ * Title cleaning + fuzzy matching (2026-08-27). Root-caused live against the real
+ * Discogs API (packages/database prod org, real PAT) after two false "not eligible"
+ * results turned out to be matcher bugs, not real absence from Discogs's catalog:
+ *
+ *   1. FindA.Sale's AI-generated item titles follow an "Artist - Title LP/Vinyl/
+ *      Record/Album, Year, Label" pattern. Sending that FULL raw title as Discogs's
+ *      free-text search query often returns ZERO results -- the trailing ", Year,
+ *      Label" clause and embedded format words are noise Discogs's search chokes on.
+ *      Verified: "Kenny Loggins with Jim Messina Sittin' In LP Vinyl Record, 1970s
+ *      Columbia" -> 0 results. Cleaned to "Kenny Loggins with Jim Messina Sittin' In"
+ *      -> real release 1318188 is the #1 result.
+ *   2. Even a cleaned title can miss on a one-character data-entry typo (verified:
+ *      item said "Time and Change", Discogs's real catalog has "Time And Chance" --
+ *      a FindA.Sale AI-photo-tagging title-accuracy bug, tracked separately, NOT
+ *      fixed here). A generic free-text search for the cleaned title doesn't
+ *      surface the real release in this case (Discogs's own relevance ranking
+ *      puts unrelated tracks first). An artist-scoped search + fuzzy string-score
+ *      across ALL candidates DOES find it (release 13685723, dice score 0.87
+ *      against the cleaned item title, vs 0.00-0.04 for the wrong candidates the
+ *      primary search returned).
+ *
+ * No fuzzy-matching npm package is installed (checked package.json) -- this hand-
+ * rolls a normalized bigram Dice-coefficient scorer rather than adding a new
+ * dependency. Thresholds (0.55 primary / 0.45 fallback) were tuned against real
+ * API responses this session: true matches scored 1.00/0.87, false candidates
+ * scored 0.35/0.04/0.00 -- comfortable separation either side of both cutoffs.
  */
-export async function findDiscogsReleaseId(accessToken: string, item: Pick<Item, 'title'>): Promise<number | null> {
+
+const DISCOGS_FORMAT_WORDS = ['LP', 'Vinyl', 'Record', 'Records', 'Album', 'CD', 'EP', '45', 'Cassette', 'Disc'];
+const DISCOGS_FORMAT_WORDS_PATTERN = new RegExp(`\\b(${DISCOGS_FORMAT_WORDS.join('|')})\\b`, 'gi');
+
+/** Drop the ", Year, Label" style trailing clause and standalone format words
+ * (LP/Vinyl/Record/etc.) that break Discogs's free-text search. */
+function cleanDiscogsSearchTitle(title: string): string {
+  let cleaned = title.split(',')[0] ?? '';
+  cleaned = cleaned.replace(DISCOGS_FORMAT_WORDS_PATTERN, ' ');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  return cleaned;
+}
+
+/** Best-effort artist guess for the fallback path: text before the first
+ * "Artist - Title" style separator, else the first few words. */
+function extractLikelyArtist(cleanedTitle: string): string {
+  const separatorMatch = cleanedTitle.match(/^(.+?)\s*[-\u2013\u2014:]\s*(.+)$/);
+  if (separatorMatch && separatorMatch[1].trim()) return separatorMatch[1].trim();
+  const words = cleanedTitle.split(' ').filter(Boolean);
+  return words.slice(0, Math.min(3, words.length)).join(' ');
+}
+
+function normalizeForCompare(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function toBigrams(s: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+  return out;
+}
+
+/** Dice coefficient over character bigrams -- tolerant of small typos (e.g. one
+ * letter swapped), unlike exact/substring matching. 1.0 = identical, 0.0 = no
+ * shared bigrams at all. */
+function diceCoefficient(a: string, b: string): number {
+  const normA = normalizeForCompare(a);
+  const normB = normalizeForCompare(b);
+  const bigramsA = toBigrams(normA);
+  const bigramsB = toBigrams(normB);
+  if (bigramsA.length === 0 || bigramsB.length === 0) return normA === normB ? 1 : 0;
+  const remaining = new Map<string, number>();
+  for (const bg of bigramsB) remaining.set(bg, (remaining.get(bg) || 0) + 1);
+  let matches = 0;
+  for (const bg of bigramsA) {
+    const count = remaining.get(bg) || 0;
+    if (count > 0) {
+      matches++;
+      remaining.set(bg, count - 1);
+    }
+  }
+  return (2 * matches) / (bigramsA.length + bigramsB.length);
+}
+
+const DISCOGS_HIGH_CONFIDENCE_THRESHOLD = 0.55;
+const DISCOGS_FUZZY_CONFIDENCE_THRESHOLD = 0.45;
+
+export interface DiscogsMatch {
+  releaseId: number;
+  /** 'high' = primary cleaned-title search found a confidently-scored match.
+   * 'fuzzy' = only the artist-scoped fallback found something above the (lower)
+   * fuzzy threshold -- callers should surface this distinction to the organizer
+   * rather than presenting it identically to a high-confidence match. */
+  matchConfidence: 'high' | 'fuzzy';
+  matchedTitle: string;
+}
+
+function bestScoringCandidate(
+  cleanedItemTitle: string,
+  results: any[]
+): { id: number; title: string; score: number } | null {
+  let best: { id: number; title: string; score: number } | null = null;
+  for (const r of results) {
+    if (r?.id == null || !r?.title) continue;
+    const score = diceCoefficient(cleanedItemTitle, String(r.title));
+    if (!best || score > best.score) {
+      best = { id: Number(r.id), title: String(r.title), score };
+    }
+  }
+  return best;
+}
+
+/**
+ * Search Discogs's catalog for a release matching this item's title. Returns
+ * the best-scoring match (with a confidence tier) or null if nothing cleared
+ * the fuzzy threshold -- a null result means the item is NOT eligible to be
+ * listed on Discogs (see file header), not that the search failed.
+ */
+export async function findDiscogsReleaseId(accessToken: string, item: Pick<Item, 'title'>): Promise<DiscogsMatch | null> {
   if (!item.title) return null;
-  const { status, text } = await discogsRequest(
-    `/database/search?q=${encodeURIComponent(item.title)}&type=release`,
+  const cleanedTitle = cleanDiscogsSearchTitle(item.title);
+  if (!cleanedTitle) return null;
+
+  // Primary: cleaned-title free-text search, best-scoring result among the top 10.
+  const primary = await discogsRequest(
+    `/database/search?q=${encodeURIComponent(cleanedTitle)}&type=release`,
     accessToken
   );
-  if (status !== 200) return null;
+  if (primary.status === 200) {
+    try {
+      const data = JSON.parse(primary.text) as any;
+      const results = Array.isArray(data?.results) ? data.results.slice(0, 10) : [];
+      const best = bestScoringCandidate(cleanedTitle, results);
+      if (best && best.score >= DISCOGS_HIGH_CONFIDENCE_THRESHOLD) {
+        return { releaseId: best.id, matchConfidence: 'high', matchedTitle: best.title };
+      }
+    } catch {
+      // Fall through to the fallback path below.
+    }
+  }
 
+  // Fallback: artist-scoped search, fuzzy-score every candidate against the
+  // cleaned item title, accept the best if it clears the (lower) fuzzy threshold.
+  const likelyArtist = extractLikelyArtist(cleanedTitle);
+  if (!likelyArtist) return null;
+  const fallback = await discogsRequest(
+    `/database/search?artist=${encodeURIComponent(likelyArtist)}&type=release`,
+    accessToken
+  );
+  if (fallback.status !== 200) return null;
   try {
-    const data = JSON.parse(text) as any;
+    const data = JSON.parse(fallback.text) as any;
     const results = Array.isArray(data?.results) ? data.results : [];
-    const top = results[0];
-    return top?.id != null ? Number(top.id) : null;
+    const best = bestScoringCandidate(cleanedTitle, results);
+    if (best && best.score >= DISCOGS_FUZZY_CONFIDENCE_THRESHOLD) {
+      return { releaseId: best.id, matchConfidence: 'fuzzy', matchedTitle: best.title };
+    }
   } catch {
     return null;
   }
+  return null;
 }
 
 // ============================================================================
@@ -282,13 +423,13 @@ export async function createDiscogsListing(
   }
 
   const accessToken = decryptAccessToken(account);
-  const releaseId = await findDiscogsReleaseId(accessToken, item);
-  if (releaseId == null) {
+  const match = await findDiscogsReleaseId(accessToken, item);
+  if (match == null) {
     throw new DiscogsNotEligibleError();
   }
 
   const body: Record<string, any> = {
-    release_id: releaseId,
+    release_id: match.releaseId,
     condition: resolveDiscogsCondition(item.condition ?? null),
     price: item.price ?? 0, // Discogs takes a plain decimal in the seller's currency, not cents
     status: options.publish === true ? 'For Sale' : 'Draft',
@@ -345,12 +486,20 @@ export async function deleteDiscogsListing(organizerId: string, discogsListingId
  * all? Requires an active Discogs connection (reuses the organizer's own
  * authenticated rate-limit budget rather than the unauthenticated tier).
  */
-export async function checkDiscogsEligibility(organizerId: string, item: Item): Promise<{ eligible: boolean; releaseId: number | null }> {
+export async function checkDiscogsEligibility(
+  organizerId: string,
+  item: Item
+): Promise<{ eligible: boolean; releaseId: number | null; matchConfidence: 'high' | 'fuzzy' | null; matchedTitle: string | null }> {
   const account = await getActiveDiscogsAccount(organizerId);
   if (!account) {
     throw new Error('[Discogs] No active Discogs connection for this organizer');
   }
   const accessToken = decryptAccessToken(account);
-  const releaseId = await findDiscogsReleaseId(accessToken, item);
-  return { eligible: releaseId != null, releaseId };
+  const match = await findDiscogsReleaseId(accessToken, item);
+  return {
+    eligible: match != null,
+    releaseId: match?.releaseId ?? null,
+    matchConfidence: match?.matchConfidence ?? null,
+    matchedTitle: match?.matchedTitle ?? null,
+  };
 }

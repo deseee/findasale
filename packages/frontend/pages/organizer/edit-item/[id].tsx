@@ -662,7 +662,12 @@ const EditItemPage = () => {
     queryKey: ['discogs-eligibility', id],
     queryFn: async () => {
       const response = await api.get(`/discogs/items/${id}/eligibility`);
-      return response.data as { eligible: boolean; releaseId: number | null };
+      return response.data as {
+        eligible: boolean;
+        releaseId: number | null;
+        matchConfidence: 'high' | 'fuzzy' | null;
+        matchedTitle: string | null;
+      };
     },
     enabled: discogsConnected && !!id && !item?.discogsListingId,
   });
@@ -2512,7 +2517,14 @@ const EditItemPage = () => {
                   </p>
                 ) : discogsEligibility?.eligible ? (
                   <div className="space-y-2">
-                    <p className="text-sm text-warm-600 dark:text-gray-400">Matches a Discogs catalog release.</p>
+                    {discogsEligibility?.matchConfidence === 'fuzzy' ? (
+                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                        Possible Discogs match: &quot;{discogsEligibility?.matchedTitle}&quot; — double-check this is
+                        the right release before pushing.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-warm-600 dark:text-gray-400">Matches a Discogs catalog release.</p>
+                    )}
                     <div className="flex gap-2">
                       <button
                         type="button"
