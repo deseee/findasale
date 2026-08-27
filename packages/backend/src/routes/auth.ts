@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
+import { createRateLimitStore, isWhitelistedIP } from '../middleware/rateLimitShared'; // rate-limit hardening Item 2
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { createNotification } from '../lib/notificationService';
 
@@ -67,24 +68,35 @@ const isQABypass = (req: import('express').Request): boolean => {
   return req.headers['x-qa-bypass'] === secret;
 };
 
+// rate-limit hardening Item 2 (2026-08-27): whitelisted IP gets a MATERIALLY HIGHER cap,
+// not an unconditional skip -- Hacker review flagged that an unconditional bypass on these
+// two TIGHTEST limiters (login/register) is a real risk: home/residential IPs are
+// DHCP-leased and get reassigned, and if RATE_LIMIT_WHITELIST_IPS is ever expanded to a
+// shared IP (coworking space, coffee shop, VPN exit), anyone sharing that IP would inherit
+// unlimited login/register attempts, defeating brute-force protection entirely. Also adds a
+// Redis-backed store -- previously in-memory only, so the ONLY way to clear either limiter
+// once tripped was a full backend process restart (confirmed: what happened today, and why
+// Patrick's own whitelisted IP stayed blocked from his own login test).
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15,
+  max: (req) => (isWhitelistedIP(req) ? 100 : 15),
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many failed login attempts. Please try again in 15 minutes.' },
   skip: (req) => isQABypass(req),
+  store: createRateLimitStore(),
 });
 
 // L2: Register rate limiter
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
+  max: (req) => (isWhitelistedIP(req) ? 20 : 5), // rate-limit hardening Item 2 -- see loginLimiter comment above
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many registration attempts.' },
   skip: (req) => isQABypass(req),
+  store: createRateLimitStore(),
 });
 
 const router = Router();
