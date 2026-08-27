@@ -10,6 +10,7 @@ import BoostBadge from './BoostBadge'; // Phase 2b: Boost badges
 import SocialProofBadge from './SocialProofBadge'; // Feature 67: Social proof metrics
 import CountdownTimer from './CountdownTimer'; // Feature 67: Countdown timer for auctions
 import { useItemSocialProof } from '../hooks/useSocialProof'; // Feature 67: Fetch social proof data
+import { useAuth } from './AuthContext';
 
 // Unified item type supporting multiple surfaces
 export interface UnifiedItemCardItem {
@@ -148,11 +149,15 @@ const ItemCard: React.FC<ItemCardProps> = ({
   const [imgError, setImgError] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const { isLowBandwidth } = useNetworkQuality();
+  const { user } = useAuth();
 
   // Feature 67: Fetch social proof metrics for this item
+  // Gated on !!user: this hook fires once PER ItemCard instance, so on a grid of N items
+  // an anonymous visitor previously triggered N separate 401s from the auth-gated
+  // /api/social-proof/item/:itemId endpoint.
   const { socialProof, loading: socialProofLoading } = useItemSocialProof(
     showSocialProof ? item.id : null,
-    showSocialProof
+    showSocialProof && !!user
   );
 
   // Resolve primary photo URL (photoUrls array takes precedence, fallback to photoUrl)

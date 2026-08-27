@@ -1,5 +1,6 @@
 import React from 'react';
 import { useItemSocialProof } from '../hooks/useSocialProof';
+import { useAuth } from './AuthContext';
 
 interface SocialProofMessageProps {
   itemId: string;
@@ -16,7 +17,10 @@ const SocialProofMessage: React.FC<SocialProofMessageProps> = ({
   itemId,
   className = '',
 }) => {
-  const { socialProof, loading } = useItemSocialProof(itemId);
+  const { user } = useAuth();
+  // Gated on !!user: this hook had no enabled flag at all, so it always fired even for
+  // anonymous visitors against the auth-gated /api/social-proof/item/:itemId endpoint.
+  const { socialProof, loading } = useItemSocialProof(itemId, !!user);
 
   // No render while loading or if no data
   if (loading || !socialProof) {

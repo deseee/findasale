@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useAuth } from './AuthContext';
+import api from '../lib/api';
 
 interface CrawlerStats {
   total: number;
@@ -28,14 +29,9 @@ const ClaimListingBanner: React.FC<ClaimListingBannerProps> = ({ saleId, cityNam
       setLoading(false);
       return;
     }
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    fetch(`${apiBase}/crawler-stats/sale/${saleId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('fetch failed');
-        return res.json() as Promise<CrawlerStats>;
-      })
-      .then((data) => {
-        setStats(data);
+    api.get<CrawlerStats>(`/crawler-stats/sale/${saleId}`)
+      .then((response) => {
+        setStats(response.data);
         setLoading(false);
       })
       .catch(() => {
