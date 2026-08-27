@@ -70,12 +70,12 @@ jobs:
     # Rather than raise the single-job timeout again (it would just move the
     # wall further out for the same per-candidate serial-I/O bottleneck), the
     # full state list is now split across 6 parallel matrix shards -- same
-    # pattern as .github/workflows/scrape-osm.yml's batch_index. 90 min/shard
+    # pattern as .github/workflows/scrape-osm.yml's batch_index. 300 min/shard
     # is comfortably under GitHub Actions' hard 360 min (6h) job-timeout cap,
     # and this is a public repo so Actions minutes are unlimited/free
     # (CLAUDE.md Sec 10d) -- no cost reason to keep any shard's timeout tight
     # beyond having real margin.
-    timeout-minutes: 90
+    timeout-minutes: 300
     strategy:
       matrix:
         shard: [0, 1, 2, 3, 4, 5]
