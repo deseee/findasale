@@ -869,6 +869,13 @@ model Sale {
   photoUrls                   String[]
   tags                        String[]
   status                      String                     @default("DRAFT") // DRAFT, PUBLISHED, ENDED
+  // Fraud circuit breaker (2026-08-27 carding incident, S-incident-2026-08-27): set by the
+  // automated velocity check in createPaymentIntent/createCheckoutSession/createCartCheckoutSession
+  // when a sale crosses the guest-checkout anomaly threshold (>=5 distinct guest identities OR
+  // >=3 FAILED purchases within a rolling 30-minute window). Non-null blocks new charges on this
+  // sale (checked alongside item.status/sale.status) until an admin clears it. NULL = normal.
+  paymentsHeldAt               DateTime?
+  paymentsHeldReason           String? // Human-readable reason, e.g. "VELOCITY_ANOMALY: 6 distinct guest identities + 3 FAILED purchases within 30min"
   isAuctionSale               Boolean                    @default(false) // Deprecated: use saleType instead
   saleType                    String                     @default("ESTATE") // B1: ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
   // Design S703: Online-only + subtype (UI wired, schema lands here)

@@ -44,6 +44,7 @@ import { sendConsignorItemSold } from '../services/consignorEmailService'; // Fe
 import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail, disputeClawbackEnabled } from '../services/refundService'; // P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment at this file's createRefund call site.
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
+import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // 2026-08-27 carding incident: shared Connect/sale-status/velocity gate
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): shared HoldInvoice-PAID recorder, webhook + reconcile
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
@@ -561,6 +562,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             status: true, // Security: gate purchases to PUBLISHED sales only
+            paymentsHeldAt: true, // 2026-08-27 carding incident: velocity circuit breaker
+            paymentsHeldReason: true,
             isAuctionSale: true,
             saleType: true,
             saleSubtype: true,
@@ -601,13 +604,23 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(409).json({ message: `Item is no longer available (status: ${item.status})` });
     }
 
-    if (!item.sale!.organizer.stripeConnectId) {
-      return res.status(400).json({ message: 'Organizer has not set up payment processing' });
-    }
-
-    // Security: block purchases against non-published (DRAFT/ENDED) sales
-    if (item.sale!.status !== 'PUBLISHED') {
-      return res.status(403).json({ message: 'This sale is not currently available for purchase.' });
+    // 2026-08-27 carding incident: shared Connect-onboarding / sale-status / velocity gate.
+    // Supersedes the previous narrower stripeConnectId-null-only and sale-status-only checks
+    // that lived here (400/403, non-standard messages) -- this closes the acct_test_-prefixed
+    // "looks connected but never really onboarded" gap and standardizes on the 409 +
+    // SELLER_PAYMENTS_UNAVAILABLE / SALE_NOT_ACTIVE / SALE_PAYMENTS_HELD shape shared with
+    // createCartCheckoutSession.
+    const paymentEligibility = await assertSaleCanAcceptPayment({
+      prisma,
+      sale: {
+        id: item.sale!.id,
+        status: item.sale!.status,
+        paymentsHeldAt: item.sale!.paymentsHeldAt,
+      },
+      organizerStripeConnectId: item.sale!.organizer.stripeConnectId,
+    });
+    if (paymentEligibility.blocked) {
+      return res.status(paymentEligibility.status).json(paymentEligibility.body);
     }
 
     // VALID-STATE-ONLY-EXPOSURE (Security-QA Gate, added 2026-08-17 alongside the buyer-premium
@@ -4508,6 +4521,9 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
           select: {
             id: true,
             title: true,
+            status: true, // 2026-08-27 carding incident: gate purchases to PUBLISHED sales only
+            paymentsHeldAt: true, // 2026-08-27 carding incident: velocity circuit breaker
+            paymentsHeldReason: true,
             organizerId: true,
             organizer: {
               select: {
@@ -4555,6 +4571,23 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
         return res.status(403).json({ error: guardError.message });
       }
       throw guardError;
+    }
+
+    // 2026-08-27 carding incident: shared Connect-onboarding / sale-status / velocity gate.
+    // This endpoint previously never checked sale.status at all -- only item.status below --
+    // so a cart checkout against an already-ENDED sale was never blocked. Same shared helper
+    // and response shape as createPaymentIntent.
+    const cartPaymentEligibility = await assertSaleCanAcceptPayment({
+      prisma,
+      sale: {
+        id: saleId,
+        status: items[0].sale!.status,
+        paymentsHeldAt: items[0].sale!.paymentsHeldAt,
+      },
+      organizerStripeConnectId: organizer?.stripeConnectId,
+    });
+    if (cartPaymentEligibility.blocked) {
+      return res.status(cartPaymentEligibility.status).json(cartPaymentEligibility.body);
     }
 
     // Validate all items are AVAILABLE
