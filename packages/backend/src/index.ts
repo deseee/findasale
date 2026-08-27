@@ -59,8 +59,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { RedisStore } from 'rate-limit-redis';
-import { createClient, RedisClientType } from 'redis';
+import { createRateLimitStore, resilientLimiter, isWhitelistedIP, createBurstAlerter } from './middleware/rateLimitShared'; // rate-limit hardening (2026-08-27): Redis store/whitelist/burst-alert helpers extracted here so routes/auth.ts and middleware/rateLimiter.ts can reach them without a circular import back to this file
 import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
@@ -397,106 +396,6 @@ app.use((req, res, next) => {
   })(req, res, next);
 });
 
-// Feature #106: Initialize Redis client for distributed rate limiting
-// Falls back gracefully to in-memory store if Redis is unavailable
-let redisRateLimitClient: RedisClientType | null = null;
-// Deduped health flag so we emit exactly ONE Sentry event per drop (and one per
-// recovery), not one per failed request. Sentry FINDASALE-NODEJS-4G (2026-07-02).
-let redisRateLimitHealthy = true;
-if (process.env.REDIS_URL) {
-  try {
-    redisRateLimitClient = createClient({ url: process.env.REDIS_URL });
-    redisRateLimitClient.on('error', (err) => {
-      // Do NOT null the client here — node-redis auto-reconnects; nulling our
-      // reference permanently defeats recovery, leaving the limiter dead until a
-      // process restart. The store closure guards on isReady instead.
-      console.error('[rateLimit] Redis error:', err);
-      // Deduped alert: only the first error in a drop fires Sentry (check-then-set is
-      // synchronous, no await between, so no interleave). Subsequent errors log only.
-      if (redisRateLimitHealthy) {
-        redisRateLimitHealthy = false;
-        try {
-          Sentry.captureMessage(
-            `[rateLimit] Redis connection lost — rate limiting failing open to in-memory (${err instanceof Error ? err.message : String(err)})`,
-            'error'
-          );
-        } catch (_sentryErr) {
-          // Sentry not ready — continue
-        }
-      }
-    });
-    // Recovery alert: fire once when the client becomes ready again after a drop.
-    redisRateLimitClient.on('ready', () => {
-      if (!redisRateLimitHealthy) {
-        redisRateLimitHealthy = true;
-        console.log('[rateLimit] Redis reconnected — distributed limiting restored');
-        try {
-          Sentry.captureMessage(
-            '[rateLimit] Redis reconnected — distributed limiting restored',
-            'info'
-          );
-        } catch (_sentryErr) {
-          // Sentry not ready — continue
-        }
-      }
-    });
-    redisRateLimitClient.connect().catch((err) => {
-      console.error('[rateLimit] Failed to connect to Redis:', err);
-      redisRateLimitClient = null;
-    });
-  } catch (error) {
-    console.error('[rateLimit] Failed to initialize Redis client:', error);
-    redisRateLimitClient = null;
-  }
-}
-
-// Build store config for rate limiters
-const createRateLimitStore = () => {
-  // Guard on isReady (not isOpen): rate-limit-redis runs a SCRIPT LOAD inside the
-  // RedisStore constructor; when the client is isOpen-but-not-isReady at boot, the
-  // guarded sendCommand closure's Promise.reject becomes an unhandled rejection
-  // (Sentry FINDASALE-NODEJS-4G). isReady means the store is only built when Redis can
-  // actually serve — otherwise this returns undefined → in-memory fallback (documented).
-  if (redisRateLimitClient && redisRateLimitClient.isReady) {
-    return new RedisStore({
-      sendCommand: (...args: string[]) => {
-        const c = redisRateLimitClient;
-        if (!c || !c.isReady) return Promise.reject(new Error('redis-unavailable'));
-        return c.sendCommand(args);
-      },
-    });
-  }
-  return undefined; // Falls back to default in-memory store
-};
-
-// Fail-open wrapper: if the rate-limit store errors (e.g. Redis drop mid-life),
-// proceed instead of 500ing. Over-limit still returns 429 (express-rate-limit
-// sends it itself and never calls this callback). Incident: Sentry
-// FINDASALE-NODEJS-4F (2026-07-02) — the RedisStore closure NPE'd on a Redis drop
-// and 500'd every rate-limited request; store now fails open + the client
-// reference is no longer nulled so Redis-backed limiting self-restores on reconnect.
-const resilientLimiter = (limiter: express.RequestHandler): express.RequestHandler =>
-  (req, res, next) => limiter(req, res, (err?: unknown) => {
-    if (err) {
-      console.error('[rateLimit] store error — failing open:', err instanceof Error ? err.message : err);
-      return next();
-    }
-    next();
-  });
-
-// IP whitelist — comma-separated IPs in RATE_LIMIT_WHITELIST_IPS env var bypass all rate limits
-// Usage: set RATE_LIMIT_WHITELIST_IPS=203.0.113.1,203.0.113.2 in Railway environment variables
-const RATE_LIMIT_WHITELIST = (process.env.RATE_LIMIT_WHITELIST_IPS || '')
-  .split(',')
-  .map((ip) => ip.trim())
-  .filter(Boolean);
-
-const isWhitelistedIP = (req: express.Request): boolean => {
-  if (RATE_LIMIT_WHITELIST.length === 0) return false;
-  const clientIP = req.ip || req.socket?.remoteAddress || '';
-  return RATE_LIMIT_WHITELIST.some((allowed) => clientIP === allowed || clientIP.endsWith(allowed));
-};
-
 // QA bypass — set QA_RATE_LIMIT_BYPASS_SECRET in Railway env vars.
 // Chrome QA sessions send this secret in the X-QA-Bypass header to skip all rate limiting.
 // Secure: requires knowledge of the secret; does not weaken prod security (secret is never public).
@@ -509,6 +408,7 @@ const isQABypassRequest = (req: express.Request): boolean => {
 // Global rate limit — anonymous: 500 req / 15 min per IP, authenticated: 3000 req / 15 min per IP
 // Authenticated users (valid Bearer token present) get 6x headroom — they're real logged-in users,
 // not bots. This prevents polling-heavy pages (POS, dashboard) from self-rate-limiting.
+const globalLimiterBurstAlert = createBurstAlerter('globalLimiter'); // rate-limit hardening Item 3: sustained-429-burst Sentry alerting
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: (req) => {
@@ -526,6 +426,7 @@ const globalLimiter = rateLimit({
   handler: (req, res) => {
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip;
     console.warn(`[rateLimit] 429 ${req.method} ${req.path} ip=${ip} ua="${req.headers['user-agent'] || ''}"`);
+    globalLimiterBurstAlert(req); // rate-limit hardening Item 3
     res.status(429).json({ error: 'Too many requests, please try again later.' });
   },
   // 2026-07-28: verified-crawler bypass (GET only) — GSC Live Test showed /map's client-side

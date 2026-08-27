@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth';
+import { shopperReservationsLimiter } from '../middleware/rateLimiter'; // rate-limit hardening Item 1
 import {
   placeHold,
   cancelHold,
@@ -46,8 +47,11 @@ router.use(authenticate);
 router.get('/invoice-status/item/:itemId', getItemInvoiceStatus); // auth required: check if item has invoice
 
 // Shopper holds and invoice routes
-router.get('/my-holds-full', getMyHoldsFull);                  // Shopper: full holds detail for CartDrawer
-router.get('/shopper', getMyHoldsFull);                        // Shopper: full holds detail (My Holds page)
+// rate-limit hardening Item 1 (2026-08-27): dedicated 40/min-per-user budget on both --
+// same handler, one limiter instance -- after a ~17min external 429-storm against these
+// two routes that the global/auth limiters contained but had no dedicated budget for.
+router.get('/my-holds-full', shopperReservationsLimiter, getMyHoldsFull);  // Shopper: full holds detail for CartDrawer
+router.get('/shopper', shopperReservationsLimiter, getMyHoldsFull);        // Shopper: full holds detail (My Holds page)
 router.get('/my-invoices', getMyInvoices);                     // Shopper: list their pending invoices
 
 // Invoice detail route (auth required: shopper or organizer)
