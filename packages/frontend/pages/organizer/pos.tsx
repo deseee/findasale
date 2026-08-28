@@ -254,6 +254,24 @@ export default function POSPage() {
     Math.min(rawDiscountAmount, discountCapDollars ?? Infinity, cartSubtotal)
   );
   const cartTotal = Math.max(0, cartSubtotal - discountAmount);
+  // Bug found live 2026-08-28 (POS Cashier Discount Permission re-verification, cash path):
+  // every discount POST body below sent the RAW discountValueNum (e.g. 25) even when it
+  // exceeded the cap, while this panel's own "Max for your role is X%. Applying $Y instead."
+  // message (rendered further down) implied the capped amount would be what's actually
+  // charged. resolvePosDiscount (posDiscountService.ts) does NOT auto-clamp an over-cap
+  // value server-side -- it hard-rejects with 400 "Max discount for your role is X%." So
+  // every over-cap discount attempt failed checkout entirely instead of applying the
+  // displayed clamped amount. This bug predates this session (already present in the
+  // card-path payload at ~line 1584 before this fix) -- surfaced now because the cash path
+  // (fixed this session) finally started validating server-side too. Fix: when the discount
+  // type matches the cap's type, clamp the submitted value to the cap so the request matches
+  // what the UI already promised. A type MISMATCH (e.g. FIXED input against a PERCENT cap)
+  // still hard-rejects server-side either way -- that's a real "wrong discount type for this
+  // workspace's cap" case, not something a client-side clamp can silently paper over.
+  const discountValueToSubmit =
+    discountCap && discountType === discountCap.type
+      ? Math.min(discountValueNum, discountCap.value)
+      : discountValueNum;
 
   // Numpad state (price / custom amount only)
   const [numpadOpen, setNumpadOpen] = useState(false);
@@ -1583,7 +1601,7 @@ export default function POSPage() {
         // POS Cashier Discount Permission (2026-08-28)
         ...(discountAmount > 0 ? {
           discountType,
-          discountValue: discountValueNum,
+          discountValue: discountValueToSubmit,
           ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
         } : {}),
       });
@@ -1649,7 +1667,7 @@ export default function POSPage() {
         // discount applied while offline isn't silently dropped once synced.
         ...(discountAmount > 0 ? {
           discountType,
-          discountValue: discountValueNum,
+          discountValue: discountValueToSubmit,
           ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
         } : {}),
       });
@@ -1686,7 +1704,7 @@ export default function POSPage() {
         // above (search discountAmount > 0 in this file).
         ...(discountAmount > 0 ? {
           discountType,
-          discountValue: discountValueNum,
+          discountValue: discountValueToSubmit,
           ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
         } : {}),
       });
@@ -1746,7 +1764,7 @@ export default function POSPage() {
         // same cash-payment endpoint and had the identical gap as the Cash button.
         ...(discountAmount > 0 ? {
           discountType,
-          discountValue: discountValueNum,
+          discountValue: discountValueToSubmit,
           ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
         } : {}),
       });
@@ -2281,7 +2299,7 @@ export default function POSPage() {
       // trusting the total alone. See ADR-pos-cashier-discount-permission.md.
       if (discountAmount > 0) {
         payload.discountType = discountType;
-        payload.discountValue = discountValueNum;
+        payload.discountValue = discountValueToSubmit;
         if (discountReasonNote.trim()) payload.discountReasonNote = discountReasonNote.trim();
       }
 
