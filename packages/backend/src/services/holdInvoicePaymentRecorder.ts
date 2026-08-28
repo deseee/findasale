@@ -81,7 +81,10 @@ import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row 
  */
 
 export interface MarkHoldInvoicePaidOpts {
-  source: 'webhook' | 'reconcile';
+  // ADR-111 (2026-08-28): 'webhook-fallback' added for the stripeController.ts charge.succeeded
+  // self-healing branch (stripeSessionId lookup when paymentIntent.metadata.invoiceId is missing) --
+  // kept distinguishable from plain 'webhook' in logs/Sentry so fallback usage stays visible/monitorable.
+  source: 'webhook' | 'reconcile' | 'webhook-fallback';
   chargeId?: string;
   /** Estimated Stripe processing fee, in cents. Defaults to 0 if not supplied. */
   stripeFeeAmountCents?: number;

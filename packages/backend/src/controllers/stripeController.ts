@@ -3329,6 +3329,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           charge.payment_intent as string,
           (event as any).account ? { stripeAccount: (event as any).account as string } : undefined
         );
+        const chargeAccountOptions = (event as any).account
+          ? { stripeAccount: (event as any).account as string }
+          : undefined;
         if (paymentIntent.metadata?.invoiceId) {
           const invoiceId = paymentIntent.metadata.invoiceId;
           // LOCKED DECISION #1: Calculate organizer payout (total amount - platform fee - Stripe fee)
@@ -3338,6 +3341,67 @@ export const webhookHandler = async (req: Request, res: Response) => {
             chargeId: charge.id,
             stripeFeeAmountCents: Math.round(stripeFeeAmount * 100),
           });
+        } else {
+          // ADR-111 self-healing fallback (2026-08-28): paymentIntent.metadata.invoiceId is
+          // sometimes missing because reservationController.ts's markSoldAndCreateInvoice (and
+          // posController.ts's sendHoldInvoice) backfill that key via a best-effort retry loop
+          // AFTER the Checkout Session is created -- the HoldInvoice row doesn't exist yet at
+          // session-creation time, so the id can't be baked in up front. Confirmed live 2026-08-28
+          // (Sentry FINDASALE-NODEJS-7H, 4/4 reproductions same day) that the retry can exhaust
+          // and leave metadata.invoiceId permanently unset, silently stranding a real captured
+          // charge with no HoldInvoice ever flipped to PAID -- no Purchase row, no items marked
+          // SOLD, shopper charged with nothing to show for it. HoldInvoice.stripeSessionId is set
+          // at session-creation time (never subject to the same backfill race) and is @unique, so
+          // it's a durable correlation key independent of the metadata gap. This fallback looks up
+          // the Checkout Session(s) for this PaymentIntent, finds the matching still-PENDING
+          // HoldInvoice by stripeSessionId, and records payment directly -- same recorder, same
+          // idempotency guarantees, just a different id lookup. Does not touch or replace the
+          // invoiceExpiryJob.ts STRANDED-PAID cron, which remains the final backstop. See
+          // claude_docs/feature-notes/ADR-111-hold-invoice-self-healing-webhook-fallback.md.
+          try {
+            const sessions = await stripe().checkout.sessions.list(
+              { payment_intent: paymentIntent.id, limit: 1 },
+              chargeAccountOptions
+            );
+            const fallbackSession = sessions.data[0];
+            if (fallbackSession) {
+              const fallbackInvoice = await prisma.holdInvoice.findUnique({
+                where: { stripeSessionId: fallbackSession.id },
+              });
+              if (fallbackInvoice && fallbackInvoice.status === 'PENDING') {
+                console.warn(
+                  `[hold-invoice/webhook-fallback] ADR-111: recording HoldInvoice ${fallbackInvoice.id} via ` +
+                    `stripeSessionId fallback -- paymentIntent.metadata.invoiceId was missing on pi=${paymentIntent.id}`
+                );
+                const stripeFeeAmount =
+                  (charge.amount - (charge.amount - (charge.amount_refunded || 0))) / 100;
+                await markHoldInvoicePaid(fallbackInvoice.id, paymentIntent.id, {
+                  source: 'webhook-fallback',
+                  chargeId: charge.id,
+                  stripeFeeAmountCents: Math.round(stripeFeeAmount * 100),
+                });
+                try {
+                  Sentry.captureMessage(
+                    `[hold-invoice/webhook-fallback] ADR-111 fallback used for HoldInvoice ${fallbackInvoice.id} ` +
+                      `(pi=${paymentIntent.id}) -- metadata.invoiceId backfill gap, recovered via stripeSessionId`,
+                    'warning'
+                  );
+                } catch {
+                  // Sentry may not be initialized -- never let visibility logging break the webhook
+                }
+              }
+            }
+          } catch (fallbackErr) {
+            console.error('[hold-invoice/webhook-fallback] ADR-111 fallback lookup failed:', fallbackErr);
+            try {
+              Sentry.captureException(
+                fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr)),
+                { tags: { area: 'hold-invoice-webhook-fallback' }, extra: { paymentIntentId: paymentIntent.id, chargeId: charge.id } }
+              );
+            } catch {
+              // Sentry may not be initialized -- silently continue, never let alerting throw into the webhook
+            }
+          }
         }
       }
       break;
