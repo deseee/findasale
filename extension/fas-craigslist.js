@@ -442,15 +442,22 @@
 
     clearAttempts();
     const more = (index + 1) < total;
+    // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, same root cause as fas-poshmark.js's,
+    // fas-mercari.js's, and fas-grailed.js's identical fixes shipped same session): this tail only
+    // runs when autoPublish is true (see the `if (!autoPublish)` guard earlier in doPreviewStep),
+    // so a mid-run item must never wait on a manual click to continue.
+    if (more) {
+      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+      await humanPause(600, 1200);
+      location.href = POST_URL;
+      return;
+    }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
-      (more ? button('fas-cl-next', 'Next item &#9654;', true) : '') +
       button('fas-cl-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
-    const next = document.getElementById('fas-cl-next');
-    if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
-      location.href = POST_URL;
-    };
     const close = document.getElementById('fas-cl-close');
     if (close) close.onclick = () => bar && bar.remove();
   }

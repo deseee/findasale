@@ -1366,14 +1366,21 @@
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'GRAILED' }); } catch (e) {}
     try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
     const more = (index + 1) < total;
+    // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, same root cause as fas-poshmark.js's and
+    // fas-mercari.js's identical fixes shipped same session): auto-publish must not wait on a
+    // manual click to continue. Uses reopenGrailedTab (NOT location.href) -- see background.js's
+    // handler comment for why an in-page reassignment doesn't reliably reset Grailed's SPA state.
+    if (more) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+      await humanPause(600, 1200);
+      try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
+      return;
+    }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
-      (more ? button('fas-gr-next', 'Next item &#9654;', true) : '') +
       button('fas-gr-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
-    const next = document.getElementById('fas-gr-next');
-    if (next) next.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
-    };
     closeBtnHandler();
   }
 
@@ -1706,10 +1713,19 @@
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'GRAILED' });
       if (statusRes && statusRes.ok && statusRes.listed) {
         const more = (queued.index + 1) < queued.total;
+        try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
+        // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET): same fix as doGrailedAutoPublish
+        // above -- auto-publish must not wait on a manual click past a skipped item either.
+        if (more && queued.autoPublish !== false) {
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Grailed, so it was not filled or published again (avoiding a duplicate listing).</div>' +
+            '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+          await humanPause(600, 1200);
+          try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
+          return;
+        }
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Grailed, so it was not filled or published again (avoiding a duplicate listing).</div>' +
           (more ? button('fas-gr-next', 'Next item &#9654;', true) : '') +
           button('fas-gr-close', 'Close', false));
-        try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
         const next = document.getElementById('fas-gr-next');
         if (next) next.onclick = async () => {
           try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}

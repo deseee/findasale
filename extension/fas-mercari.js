@@ -1704,12 +1704,21 @@
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'MERCARI' }); } catch (e) {}
     try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
     const more = (index + 1) < total;
+    // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, Patrick live report: "mercari seemed to
+    // have the same thing" -- same root cause as fas-poshmark.js's identical fix shipped same
+    // session): this function only runs when autoPublish is true, so a mid-run item must never
+    // wait on a manual click to continue -- auto-navigate when one remains.
+    if (more) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+      await humanPause(600, 1200);
+      location.href = SELL_URL_HINT;
+      return;
+    }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
-      (more ? button('fas-merc-next', 'Next item &#9654;', true) : '') +
       button('fas-merc-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
-    const next = document.getElementById('fas-merc-next');
-    if (next) next.onclick = () => { location.href = SELL_URL_HINT; };
     closeBtnHandler();
   }
 
@@ -1800,10 +1809,19 @@
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'MERCARI' });
       if (statusRes && statusRes.ok && statusRes.listed) {
         const more = (queued.index + 1) < queued.total;
+        try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
+        // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET): same fix as doMercariAutoPublish
+        // above -- auto-publish must not wait on a manual click past a skipped item either.
+        if (more && queued.autoPublish !== false) {
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Mercari, so it was not filled or published again (avoiding a duplicate listing).</div>' +
+            '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+          await humanPause(600, 1200);
+          location.href = SELL_URL_HINT;
+          return;
+        }
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Mercari, so it was not filled or published again (avoiding a duplicate listing).</div>' +
           (more ? button('fas-merc-next', 'Next item &#9654;', true) : '') +
           button('fas-merc-close', 'Close', false));
-        try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
         const next = document.getElementById('fas-merc-next');
         if (next) next.onclick = () => { location.href = SELL_URL_HINT; };
         closeBtnHandler();
