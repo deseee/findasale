@@ -21,7 +21,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
-import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
+import { resolveOrganizerOrTeamMember, type ResolvedPosActor } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Shared cash-commission accrual (2026-08-17) — same mechanism reservationController's RECORD mode uses
 import { resolvePosDiscount } from '../services/posDiscountService';
@@ -890,14 +890,39 @@ export async function processCashSaleCore(params: {
   // resolver) already selects it, so the live cash path now honours an active referral
   // discount exactly as the card path above does. A caller that does not select it (the
   // offline-sync replay) simply gets no discount applied — the pre-existing behaviour.
-  organizer: { id: string; subscriptionTier: string | null; referralDiscountExpiry?: Date | null };
+  // POS Cashier Discount Permission fix (2026-08-28, findasale-hacker P0): the extra fields
+  // below (actorKind/actingUserId/etc.) are what resolvePosDiscount needs to permission-check
+  // a TEAM_MEMBER, mirroring the card path. They're optional here (rather than requiring the
+  // full ResolvedPosActor) because syncController.ts's offline-replay caller only has
+  // { id, subscriptionTier } -- that caller's resolvePosDiscount call always hits the no-op
+  // branch (it never sends discountType/discountValue... see the residual gap noted at that
+  // call site: an offline TEAM_MEMBER's discount cap is not enforced on replay, only on live
+  // checkout) so the missing fields are never dereferenced for it at runtime.
+  organizer: {
+    id: string;
+    subscriptionTier: string | null;
+    referralDiscountExpiry?: Date | null;
+    ownerUserId?: string;
+    stripeConnectId?: string | null;
+    actorKind?: 'ORGANIZER' | 'TEAM_MEMBER';
+    actingUserId?: string;
+    workspaceId?: string;
+    workspaceRole?: import('@prisma/client').WorkspaceRole;
+  };
   saleId: string;
   items: Array<{ itemId?: string; amount: number; label?: string }>;
   cashReceived: number;
   buyerEmail?: string;
   clientTransactionId?: string;
+  // POS Cashier Discount Permission fix (2026-08-28): previously accepted by
+  // createTerminalPaymentIntent only — cashPayment silently dropped these, so a discount
+  // shown to the cashier (client-side clamp only) never reached the server and was never
+  // applied to the persisted Purchase.amount. See DiscountRequestInput in posDiscountService.ts.
+  discountType?: string | null;
+  discountValue?: number | null;
+  discountReasonNote?: string | null;
 }): Promise<CashSaleResult> {
-  const { organizer, saleId, items, cashReceived, buyerEmail, clientTransactionId } = params;
+  const { organizer, saleId, items, cashReceived, buyerEmail, clientTransactionId, discountType, discountValue, discountReasonNote } = params;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     throw new CashSaleError('items array is required and must be non-empty', 400, false, 'VALIDATION');
@@ -909,10 +934,11 @@ export async function processCashSaleCore(params: {
     throw new CashSaleError('cashReceived must be a non-negative number', 400, false, 'VALIDATION');
   }
 
-  const totalAmount = items.reduce((sum, i) => sum + i.amount, 0);
-  if (cashReceived < totalAmount) {
-    throw new CashSaleError('Insufficient cash received', 400, false, 'VALIDATION');
-  }
+  // POS Cashier Discount Permission fix (2026-08-28): the "cashReceived < totalAmount"
+  // sufficiency check moved below (after discount resolution) so it validates against the
+  // DISCOUNTED total, not the full catalog total -- a cashier legitimately collecting exact
+  // change on a discounted sale was previously rejected here with "Insufficient cash
+  // received" because this ran before any discount was applied.
 
   // Idempotent replay check — must run BEFORE any item-availability check, since a genuine
   // replay of an already-synced sale should never re-validate item state (the item may have
@@ -956,7 +982,10 @@ export async function processCashSaleCore(params: {
   if (itemIds.length > 0) {
     const fetched = await prisma.item.findMany({
       where: { id: { in: itemIds }, saleId },
-      select: { id: true, title: true, status: true, draftStatus: true },
+      // POS Cashier Discount Permission fix (2026-08-28): price is now selected so
+      // catalogSubtotalCents (below) can be computed the same way the card path does --
+      // this cash path previously had no way to validate a discount against catalog price.
+      select: { id: true, title: true, status: true, draftStatus: true, price: true },
     });
     dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
 
@@ -976,6 +1005,47 @@ export async function processCashSaleCore(params: {
     }
   }
 
+  // POS Cashier Discount Permission fix (2026-08-28, findasale-hacker P0): resolve + validate
+  // any requested discount server-side BEFORE computing totals/fees, mirroring
+  // createTerminalPaymentIntent's card-path handling above (see resolvePosDiscount doc comment
+  // -- it already claimed to cover "the cash flow" but was never actually wired in here; that
+  // gap meant the staff discount cap was unenforceable and the discount never reached
+  // Purchase.amount for Cash/Venmo/Zelle). No-op when no discount was sent.
+  const catalogSubtotalCents = Math.round(
+    items.reduce((sum, i) => sum + (i.itemId && dbItems[i.itemId]?.price ? dbItems[i.itemId].price : 0), 0) * 100
+  );
+  // Cast: organizer here is the permissive shape (see the param type comment above) --
+  // the live cashPayment route always supplies a genuine full ResolvedPosActor at runtime,
+  // and the no-op branch (no discount requested) never dereferences the extra fields, so
+  // this is safe for both callers.
+  const discountResolution = await resolvePosDiscount({
+    actor: organizer as ResolvedPosActor,
+    input: { discountType, discountValue, discountReasonNote },
+    catalogSubtotalCents,
+  });
+  if (!discountResolution.ok) {
+    throw new CashSaleError(discountResolution.message, discountResolution.status, false, 'VALIDATION');
+  }
+
+  // Apply the authorized discount proportionally across catalog items only (misc items, i.e.
+  // no itemId, are untouched), identical logic to the card path's chargedItems computation.
+  const discountRatio = discountResolution.discountAmountCents > 0 && catalogSubtotalCents > 0
+    ? discountResolution.discountAmountCents / catalogSubtotalCents
+    : 0;
+  const chargedItems = items.map((i) => {
+    if (discountRatio === 0 || !i.itemId) return { ...i, rowDiscountCents: 0 };
+    const beforeCents = Math.round(i.amount * 100);
+    const afterCents = Math.round(beforeCents * (1 - discountRatio));
+    return { ...i, amount: afterCents / 100, rowDiscountCents: beforeCents - afterCents };
+  });
+
+  // Recomputed AFTER discount resolution -- see the removed early check above. This is the
+  // authoritative, server-computed total (never the client's own display total).
+  const totalAmount = chargedItems.reduce((sum, i) => sum + i.amount, 0);
+  if (cashReceived < totalAmount) {
+    throw new CashSaleError('Insufficient cash received', 400, false, 'VALIDATION');
+  }
+
   // Fee: same rate as the card flow. The cash organizer collects the full amount in person, so
   // platformFeeAmount is recorded for accounting and the commission is accrued to
   // Organizer.cashFeeBalance below for collection out of their next payout.
@@ -989,7 +1059,7 @@ export async function processCashSaleCore(params: {
 
   // Create Purchase records immediately with status PAID
   const purchaseIds: string[] = [];
-  for (const item of items) {
+  for (const item of chargedItems) {
     // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
     const cashPIId = `cash_${randomUUID()}`;
     const itemPlatformFeeAmount = cashCommissionOn(item.amount, feeRate);
@@ -1002,6 +1072,14 @@ export async function processCashSaleCore(params: {
         platformFeeAmount: itemPlatformFeeAmount,
         // FEE SNAPSHOT (2026-08-17): commission-only, same reasoning as the card flow above.
         ...snapshotForCommissionOnly(itemPlatformFeeAmount, feeRate),
+        // POS Cashier Discount Permission fix (2026-08-28): per-row share of the cart-level
+        // discount, null/0 on every row when no discount was applied -- same convention the
+        // card path uses.
+        discountType: item.rowDiscountCents > 0 ? discountResolution.discountType : null,
+        discountValueRaw: item.rowDiscountCents > 0 ? discountResolution.discountValueRaw : null,
+        discountAmountCents: item.rowDiscountCents > 0 ? item.rowDiscountCents : null,
+        discountReasonNote: item.rowDiscountCents > 0 ? discountResolution.discountReasonNote : null,
+        discountAppliedByUserId: item.rowDiscountCents > 0 ? organizer.actingUserId : null,
         stripePaymentIntentId: cashPIId,
         status: 'PAID',
         source: 'POS',
@@ -1025,7 +1103,7 @@ export async function processCashSaleCore(params: {
   // Same failure class as captureTerminalPaymentIntent's card-path fix above: alert to
   // Sentry, keep processing the rest of the cart, never let a partial failure masquerade as
   // a total one.
-  for (const item of items) {
+  for (const item of chargedItems) {
     if (item.itemId) {
       let fullySoldOut: boolean;
       let remainingStock: number;
@@ -1078,7 +1156,7 @@ export async function processCashSaleCore(params: {
   // Accumulate the commission on this cash sale to the organizer's cash-fee balance, which
   // payoutController nets out of their next Stripe payout. Shared with RECORD-mode settlement
   // via services/cashFeeService.ts — one implementation, two callers.
-  const totalPlatformFees = items.reduce(
+  const totalPlatformFees = chargedItems.reduce(
     (sum, item) => sum + cashCommissionOn(item.amount, feeRate),
     0
   );
@@ -1092,7 +1170,7 @@ export async function processCashSaleCore(params: {
 
       const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
-      const itemsList = items
+      const itemsList = chargedItems
         .map(i => `<li>${i.label ?? 'Item'}: $${i.amount.toFixed(2)}</li>`)
         .join('');
       const change = (cashReceived - totalAmount).toFixed(2);
@@ -1157,12 +1235,21 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
-    const { items, cashReceived, buyerEmail, saleId, clientTransactionId } = req.body as {
+    // POS Cashier Discount Permission fix (2026-08-28, findasale-hacker P0): discountType/
+    // discountValue/discountReasonNote were previously silently dropped here -- the card path
+    // (createTerminalPaymentIntent) already accepted and enforced them, this cash path (which
+    // also serves the frontend's Venmo/Zelle buttons, both of which POST to this same route)
+    // never did, so the staff discount cap was unenforceable for those 3 payment methods and
+    // the discount never reached the persisted Purchase.amount.
+    const { items, cashReceived, buyerEmail, saleId, clientTransactionId, discountType, discountValue, discountReasonNote } = req.body as {
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
       cashReceived?: number;
       buyerEmail?: string;
       saleId?: string;
       clientTransactionId?: string;
+      discountType?: string;
+      discountValue?: number;
+      discountReasonNote?: string;
     };
 
     if (!saleId) {
@@ -1186,6 +1273,9 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       cashReceived: cashReceived ?? 0,
       buyerEmail,
       clientTransactionId,
+      discountType,
+      discountValue,
+      discountReasonNote,
     });
 
     // S1072 Finding #4: cash/offsite sales have no verifiable buyer account (Purchase.userId

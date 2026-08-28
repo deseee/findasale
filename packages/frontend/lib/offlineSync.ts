@@ -53,6 +53,12 @@ export interface CashCheckoutPayload {
   cashReceived: number;
   buyerEmail?: string;
   clientTransactionId: string;
+  // POS Cashier Discount Permission fix (2026-08-28): previously omitted entirely, so a
+  // discount applied while offline was always silently dropped on sync. See the residual-gap
+  // note at syncController.ts's handleCheckoutCash for what's still not fully covered.
+  discountType?: string;
+  discountValue?: number;
+  discountReasonNote?: string;
 }
 
 const DB_NAME = 'findASaleOffline';

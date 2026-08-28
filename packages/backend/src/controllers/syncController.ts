@@ -405,6 +405,17 @@ async function handleCheckoutCash(
   const { payload } = operation;
 
   try {
+    // POS Cashier Discount Permission fix (2026-08-28): pass discount fields through if the
+    // queued payload has them (added to CashCheckoutPayload the same session) so a discount
+    // applied while offline is no longer silently dropped on sync -- it was ALWAYS dropped
+    // before this fix, for every actor kind, since processCashSaleCore never resolved a
+    // discount at all. KNOWN RESIDUAL GAP: `organizer` here is `sale.organizer` (the workspace
+    // owner), not the actual acting TEAM_MEMBER who queued the sale, and carries no
+    // actorKind/workspaceRole -- so resolvePosDiscount's permission/cap check cannot be
+    // enforced for an offline-then-synced TEAM_MEMBER discount the way it is for a live one.
+    // This is strictly better than today (discount always dropped to $0), not a complete fix;
+    // flagged for a follow-up that threads the original actor's workspace role into the
+    // offline queue payload.
     const result = await processCashSaleCore({
       organizer,
       saleId: operation.saleId,
@@ -412,6 +423,9 @@ async function handleCheckoutCash(
       cashReceived: payload?.cashReceived ?? 0,
       buyerEmail: payload?.buyerEmail,
       clientTransactionId: payload?.clientTransactionId,
+      discountType: payload?.discountType,
+      discountValue: payload?.discountValue,
+      discountReasonNote: payload?.discountReasonNote,
     });
 
     return {

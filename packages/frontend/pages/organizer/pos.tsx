@@ -1644,6 +1644,14 @@ export default function POSPage() {
         items,
         cashReceived,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
+        // POS Cashier Discount Permission fix (2026-08-28): see the matching note on the
+        // live-path POST above -- keeps the offline-queued payload consistent with it so a
+        // discount applied while offline isn't silently dropped once synced.
+        ...(discountAmount > 0 ? {
+          discountType,
+          discountValue: discountValueNum,
+          ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
+        } : {}),
       });
       setPaymentStatus('success');
       setSuccessMessage(
@@ -1667,10 +1675,20 @@ export default function POSPage() {
 
     try {
       const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
-        items,
+        items, // raw, undiscounted per-item amounts -- backend applies the discount itself
         cashReceived,
         saleId: selectedSaleId,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
+        // POS Cashier Discount Permission fix (2026-08-28, findasale-hacker P0): previously
+        // omitted here -- the cash-payment endpoint silently never applied any discount to
+        // the persisted sale even though this same UI computed and displayed a discounted
+        // total. Mirrors the pattern already used for the card/terminal payment-intent POST
+        // above (search discountAmount > 0 in this file).
+        ...(discountAmount > 0 ? {
+          discountType,
+          discountValue: discountValueNum,
+          ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
+        } : {}),
       });
 
       setLastCashFee(response.data);
@@ -1719,11 +1737,18 @@ export default function POSPage() {
       }));
 
       const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
-        items,
+        items, // raw, undiscounted per-item amounts -- backend applies the discount itself
         cashReceived: cartTotal, // organizer collects the full amount
         saleId: selectedSaleId,
         paymentMethod: method, // flag for backend reporting
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
+        // POS Cashier Discount Permission fix (2026-08-28): Venmo/Zelle route through this
+        // same cash-payment endpoint and had the identical gap as the Cash button.
+        ...(discountAmount > 0 ? {
+          discountType,
+          discountValue: discountValueNum,
+          ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
+        } : {}),
       });
 
       setLastCashFee(response.data);
