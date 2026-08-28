@@ -183,18 +183,23 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     if (!discountResolution.ok) {
       return res.status(discountResolution.status).json({ message: discountResolution.message });
     }
-    if (discountResolution.discountAmountCents > 0) {
-      // Lower-bound check: catalog items can only be discounted through this
-      // authorized, capped path -- misc/custom-amount items (no catalog price) can
-      // still add to the total freely (unchanged, separate trust boundary -- see ADR),
-      // but the total can never come in BELOW what the authorized discount explains.
-      // 1-cent tolerance for rounding.
-      const minAllowedTotalCents = catalogSubtotalCents - discountResolution.discountAmountCents - 1;
-      if (totalAmountCents < minAllowedTotalCents) {
-        return res.status(400).json({
-          message: `Total does not match the applied discount. Expected at least ${minAllowedTotalCents} cents.`,
-        });
-      }
+    // ADR-112 (2026-08-28): this floor check now runs UNCONDITIONALLY, not just when a
+    // discount is present. Lower-bound check: catalog items can only be discounted
+    // through this authorized, capped path -- misc/custom-amount items (no catalog
+    // price) can still add to the total freely (unchanged, separate trust boundary --
+    // see ADR-112), but the total can never come in BELOW what the real catalog
+    // subtotal minus any authorized discount explains. With no discount requested,
+    // discountAmountCents is 0 and this simply enforces totalAmountCents >=
+    // catalogSubtotalCents - 1, closing the gap where a lowballed total with no
+    // discount fields sent was previously trusted completely. 1-cent tolerance for
+    // rounding.
+    const minAllowedTotalCents = catalogSubtotalCents - discountResolution.discountAmountCents - 1;
+    if (totalAmountCents < minAllowedTotalCents) {
+      return res.status(400).json({
+        message: discountResolution.discountAmountCents > 0
+          ? `Total does not match the applied discount. Expected at least ${minAllowedTotalCents} cents.`
+          : `Total does not match catalog pricing. Expected at least ${minAllowedTotalCents} cents.`,
+      });
     }
 
     // Verify shopper exists

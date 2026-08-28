@@ -348,10 +348,19 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     const discountRatio = discountResolution.discountAmountCents > 0 && catalogSubtotalCents > 0
       ? discountResolution.discountAmountCents / catalogSubtotalCents
       : 0;
+    // ADR-112 (2026-08-28): catalog rows (itemId present) are ALWAYS priced from the
+    // real dbItems[itemId].price, never from the client-sent `amount` -- this closes a
+    // gap where a real itemId paired with a lowballed `amount` passed through unchecked
+    // in BOTH the no-discount branch (amount trusted outright) AND the discount branch
+    // (the ratio was correctly discount-authorized, but was applied to the client's own
+    // lowballed `amount` rather than the real catalog price, so the underlying base
+    // price was never actually verified either way). Misc/custom-amount rows (no
+    // itemId) are unaffected and keep using the client's `amount` verbatim -- that is
+    // the deliberate, unchanged trust boundary for custom-amount items.
     const chargedItems = items.map((i) => {
-      if (discountRatio === 0 || !i.itemId) return { ...i, itemAmountCentsBeforeDiscount: Math.round(i.amount * 100), rowDiscountCents: 0 };
-      const beforeCents = Math.round(i.amount * 100);
-      const afterCents = Math.round(beforeCents * (1 - discountRatio));
+      if (!i.itemId) return { ...i, itemAmountCentsBeforeDiscount: Math.round(i.amount * 100), rowDiscountCents: 0 };
+      const beforeCents = Math.round((dbItems[i.itemId]?.price ?? 0) * 100);
+      const afterCents = discountRatio > 0 ? Math.round(beforeCents * (1 - discountRatio)) : beforeCents;
       return { ...i, amount: afterCents / 100, itemAmountCentsBeforeDiscount: beforeCents, rowDiscountCents: beforeCents - afterCents };
     });
 
