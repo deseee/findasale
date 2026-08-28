@@ -2394,6 +2394,24 @@ export const impersonateUser = async (req: AuthRequest, res: Response) => {
       maxAge: 15 * 60 * 1000,
     });
 
+    // 2026-08-28: clear the ADMIN's own refreshToken cookie for the duration of the
+    // impersonation session. Without this, any 401/403 the impersonated (lower-
+    // privilege) user hits -- exactly the kind of permission-boundary check this
+    // tool exists to QA -- trips the app's normal refresh interceptor, which still
+    // holds the admin's real, valid refreshToken and silently re-mints an admin
+    // accessToken, clobbering the impersonation with zero signal. Impersonation
+    // was deliberately built with no refreshToken of its own (15m access-token-only,
+    // see above); clearing the admin's real one here closes the silent-privilege-
+    // escalation path instead of leaving it live in the background. If the 15m
+    // window lapses mid-QA, the fix is a fresh "Log in as" click, not a silent
+    // fallback to admin.
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+    });
+
     await prisma.adminImpersonationLog.create({
       data: {
         adminUserId,
