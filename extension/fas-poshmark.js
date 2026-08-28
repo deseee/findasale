@@ -1372,25 +1372,35 @@
       try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: note }); } catch (e) {}
     }
     const more = (index + 1) < total;
+    // BUG FIX 2026-08-28 (S-EXT-POSHMARK-AUTOPUBLISH-STALL, Patrick live report: "poshmark
+    // extension is only pushing one item at a time not multiples"): this function only runs when
+    // autoPublish is true (see run()'s call site), so a mid-run item must never wait on a manual
+    // click to continue -- that defeats the entire point of auto-publish. Previously this always
+    // rendered a "Next item" button and only navigated on click, silently stalling every run after
+    // item 1. Now: auto-navigate to the next item when one remains; only the LAST item in the run
+    // shows the run-notes summary + a Close button, since that's genuinely the end of the run.
+    if (more) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+      await humanPause(600, 1200);
+      location.href = POST_URL_HINT;
+      return;
+    }
     let summaryHtml = '';
-    if (!more) {
-      let notes = [];
-      try {
-        const res = await chrome.runtime.sendMessage({ type: 'getPoshmarkRunNotes' });
-        notes = (res && res.notes) || [];
-      } catch (e) {}
-      if (notes.length) {
-        summaryHtml = '<div style="margin-top:8px;font-size:12px;color:#ffcf7a">' + notes.length + ' item' + (notes.length === 1 ? '' : 's') + ' published this run with something worth double-checking:' +
-          '<ul style="margin:4px 0 0 16px;padding:0">' + notes.map((n) => '<li>' + escapeHtml(n.title) + ' -- ' + escapeHtml(n.note) + '</li>').join('') + '</ul></div>';
-      }
+    let notes = [];
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'getPoshmarkRunNotes' });
+      notes = (res && res.notes) || [];
+    } catch (e) {}
+    if (notes.length) {
+      summaryHtml = '<div style="margin-top:8px;font-size:12px;color:#ffcf7a">' + notes.length + ' item' + (notes.length === 1 ? '' : 's') + ' published this run with something worth double-checking:' +
+        '<ul style="margin:4px 0 0 16px;padding:0">' + notes.map((n) => '<li>' + escapeHtml(n.title) + ' -- ' + escapeHtml(n.note) + '</li>').join('') + '</ul></div>';
     }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
       summaryHtml +
-      (more ? button('fas-posh-next', 'Next item &#9654;', true) : '') +
       button('fas-posh-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
-    const next = document.getElementById('fas-posh-next');
-    if (next) next.onclick = () => { location.href = POST_URL_HINT; };
     closeBtnHandler();
   }
 
@@ -1559,10 +1569,21 @@
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'POSHMARK' });
       if (statusRes && statusRes.ok && statusRes.listed) {
         const more = (queued.index + 1) < queued.total;
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
+        // BUG FIX 2026-08-28 (S-EXT-POSHMARK-AUTOPUBLISH-STALL, same root cause as
+        // doPoshmarkAutoPublish's fix below): auto-publish must never wait on a manual click to
+        // continue past a skipped (already-listed) item either -- auto-navigate straight to the
+        // next queued item when one remains and autoPublish is on.
+        if (more && queued.autoPublish !== false) {
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Poshmark, so it was not filled or published again (avoiding a duplicate listing).</div>' +
+            '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+          await humanPause(600, 1200);
+          location.href = POST_URL_HINT;
+          return;
+        }
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Poshmark, so it was not filled or published again (avoiding a duplicate listing).</div>' +
           (more ? button('fas-posh-next', 'Next item &#9654;', true) : '') +
           button('fas-posh-close', 'Close', false));
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
         const next = document.getElementById('fas-posh-next');
         if (next) next.onclick = () => { location.href = POST_URL_HINT; };
         closeBtnHandler();
