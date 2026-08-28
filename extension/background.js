@@ -154,12 +154,33 @@ const FAS_AUTOPUBLISH_LISTING_URL_PATTERNS = {
   // fix existed) -- not a regression, just an unconfirmed enhancement.
   MERCARI: /mercari\.com\/item\//i,
   GRAILED: /grailed\.com\/listings\//i,
+  // LIVE-CONFIRMED (2026-08-28, Patrick's real 4-marketplace re-test, S-EXT-AUTOPUBLISH-STALL-FLEET
+  // follow-up): fas-craigslist.js's own in-page continuation (doPreviewStep -> waitForCraigslistPublish
+  // -> markListed/advanceCraigslistQueue/location.href=POST_URL) never runs after a REAL publish --
+  // Craigslist's publish click causes a genuine full-page navigation to its own "Thanks for posting!"
+  // confirmation page (Patrick's screenshot: kalamazoo.craigslist.org/atq/d/paw-paw-star-wars-electronic-talking/7956743525.html),
+  // which destroys the old page's JS execution context mid-poll -- the exact same failure class this
+  // reliability net was built for (see the 2026-08-22 header comment above), except Craigslist has NO
+  // fallback at all today (not even in FAS_AUTOPUBLISH_QUEUE_KEYS below) since it predates this net.
+  // Worse than Poshmark/Mercari/Grailed: the confirmation page lives on the CONNECTED-account regional
+  // subdomain (<region>.craigslist.org), not post.craigslist.org, so fas-craigslist.js's content script
+  // (manifest-scoped to post.craigslist.org/* only) cannot even run there to self-heal via detectStep().
+  // chrome.tabs.onUpdated fires regardless of content-script injection permissions, so this background
+  // net is the ONLY place that can observe this transition at all -- see the CRAIGSLIST-specific
+  // re-navigation branch below, which the other 3 platforms don't need (their own SPA-style publish
+  // doesn't destroy the JS context, so their content scripts drive their own next-item navigation).
+  CRAIGSLIST: /craigslist\.org\/[a-z]{2,8}\/d\/[^/]+\/\d+\.html/i,
 };
 const FAS_AUTOPUBLISH_QUEUE_KEYS = {
   POSHMARK: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', autoPublish: 'fasPoshmarkAutoPublish' },
   MERCARI: { queue: 'fasMercariQueue', index: 'fasMercariIndex', autoPublish: 'fasMercariAutoPublish' },
   GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish' },
+  CRAIGSLIST: { queue: 'fasCraigslistQueue', index: 'fasCraigslistIndex', autoPublish: 'fasCraigslistAutoPublish' },
 };
+// Craigslist-only: post.craigslist.org, matches fas-craigslist.js's own POST_URL constant. Used to
+// resume the queue loop from background.js since Craigslist's own content script can't do it itself
+// once the browser has navigated to the (out-of-scope-for-injection) regional confirmation page.
+const FAS_CRAIGSLIST_POST_URL = 'https://post.craigslist.org/';
 // Registered at top level (not inside a message handler) so it survives MV3 service worker
 // restarts -- Chrome re-runs this whole script on wake and re-registers top-level listeners
 // automatically, the same way the existing onInstalled/onStartup listeners below do.
@@ -191,7 +212,23 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
       // Re-read the index right before advancing -- if the content script's own fast-path already
       // advanced it between our read above and now, advancing again here would skip an item.
       const fresh = await chrome.storage.local.get([keys.index]);
-      if ((fresh[keys.index] || 0) === index) await chrome.storage.local.set({ [keys.index]: index + 1 });
+      let didAdvanceHere = false;
+      if ((fresh[keys.index] || 0) === index) {
+        await chrome.storage.local.set({ [keys.index]: index + 1 });
+        didAdvanceHere = true;
+      }
+      // CRAIGSLIST-only continuation (2026-08-28, see header comment above for why): the other 3
+      // platforms' own content scripts drive their own next-item navigation via location.href once
+      // their SPA-style publish resolves in-place. Craigslist's publish is a hard navigation to a
+      // page this extension can't inject into, so nothing else will ever send this tab back to
+      // POST_URL -- if we don't do it here, the queue is permanently stuck even though the index
+      // above just correctly advanced. Only fire once per item: guarded by didAdvanceHere (skip if
+      // the content script's fast path already handled navigation itself, e.g. a future fix lands
+      // there too) and by there being a next item to actually resume for.
+      if (platform === 'CRAIGSLIST' && didAdvanceHere && (index + 1) < queue.length) {
+        await new Promise((r) => setTimeout(r, 700)); // let Craigslist's own confirmation page settle
+        chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => { void chrome.runtime.lastError; });
+      }
     }
   })();
 });

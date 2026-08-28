@@ -902,24 +902,59 @@
     return null;
   }
 
-  // Package size: required final step, determines shipping-label eligibility. FindA.Sale has no
-  // package-size data today (no such field on Item -- confirmed against schema.prisma), so this
-  // always defaults to a reasonable tier and logs a loud warning either way, since even a
-  // "successful" pick here is a real assumption per this dispatch's explicit instruction.
-  // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): live-confirmed real UI is three persistently-visible
-  // selectable size cards under a "Select your package size" heading (Small/Medium/Large, each
-  // with its own descriptive sentence, "Medium" marked "Recommended" by Vinted itself) -- NOT a
-  // click-to-open dropdown with popup options the way this function originally assumed (which is
-  // why it was reporting "couldn't find that field automatically" every time). Now looks directly
-  // for the "Medium" card -- a real content-driven default (Vinted's own "Recommended" tag), not
-  // an arbitrary middle-of-whatever-list-appears index guess. Falls back to the old opener+popup
-  // path in case a different Vinted layout variant still uses one.
-  async function fillPackageSize() {
+  // Package size: required final step, determines shipping-label eligibility.
+  // BUG FIX 2026-08-28 (S-EXT-VINTED-PACKAGE-SIZE-STALE-DATA-CLAIM, Patrick live report: "Vinted
+  // chooses medium for shipping on a small microphone cable instead of the small option which was
+  // also the Vinted recommended size"): the "FindA.Sale has no package-size data today" claim in
+  // the header comment below was TRUE when written (2026-08-19) but went STALE without this file
+  // being updated -- packages/database/prisma/schema.prisma DOES carry real per-item
+  // packageWeightOz/packageLengthIn/packageWidthIn/packageHeightIn (+ aiPackageWeightOz fallback,
+  // "ADR eBay Parity Phase B") and fas-mercari.js's shipping-label wizard has already been using
+  // exactly this data (see its itemFitsInShoebox()) since before this file's own comment was
+  // written. This function was simply never updated to use it, so it always fell through to
+  // Vinted's platform-wide "Recommended" tag regardless of the specific item -- not a bug in the
+  // click logic, a real data gap that closed elsewhere and was never revisited here. Fix: when real
+  // weight data exists, read each size card's OWN stated weight limit (Vinted's own wording, never
+  // a hardcoded threshold) and pick the smallest tier that comfortably fits -- same "read the real
+  // DOM, don't guess the business rule" approach as fas-mercari.js's Smart Pricing floor-error fix
+  // and itemFitsInShoebox(). Falls all the way back to the original always-Medium behavior,
+  // unchanged, whenever no real weight data exists OR no card's text can be parsed -- a guess is
+  // never replaced with a different, equally-blind guess.
+  function parseVintedCardWeightLimitKg(cardEl) {
+    if (!cardEl) return null;
+    const text = String(cardEl.textContent || '');
+    // Accepts "up to 5kg", "up to 5 kg", "max 11 lb", "up to 11lbs", etc. -- whatever unit Vinted's
+    // own copy actually uses, never assumed in advance.
+    const kgMatch = /(?:up to|max(?:imum)?)\s*([\d.]+)\s*kg/i.exec(text);
+    if (kgMatch) return Number(kgMatch[1]);
+    const lbMatch = /(?:up to|max(?:imum)?)\s*([\d.]+)\s*lbs?/i.exec(text);
+    if (lbMatch) return Number(lbMatch[1]) * 0.453592;
+    return null;
+  }
+  function pickVintedSizeCardByRealWeight(item) {
+    const ounces = item.packageWeightOz != null ? Number(item.packageWeightOz) : (item.aiPackageWeightOz != null ? Number(item.aiPackageWeightOz) : null);
+    if (ounces == null || !isFinite(ounces) || ounces <= 0) return null; // no real weight data -- caller keeps existing Medium-default behavior
+    const itemKg = ounces * 0.0283495;
+    for (const label of ['Small', 'Medium', 'Large']) {
+      const card = clickableOptionByExactText(label);
+      const limitKg = parseVintedCardWeightLimitKg(card);
+      if (card && limitKg != null && isFinite(limitKg) && itemKg <= limitKg) return { card, label, limitKg, itemKg };
+    }
+    return null; // real weight data exists but didn't fit under any parsed limit, or no card text was parseable -- caller keeps existing behavior
+  }
+  async function fillPackageSize(item) {
+    const byWeight = item ? pickVintedSizeCardByRealWeight(item) : null;
+    if (byWeight) {
+      byWeight.card.click();
+      await sleep(200);
+      overlayWarn('Selected <b>' + escapeHtml(byWeight.label) + '</b> package size based on this item\'s real weight (' + byWeight.itemKg.toFixed(2) + 'kg, fits under Vinted\'s own ' + byWeight.limitKg + 'kg ' + byWeight.label + ' limit) -- please confirm it before publishing.');
+      return true;
+    }
     const medium = clickableOptionByExactText('Medium');
     if (medium) {
       medium.click();
       await sleep(200);
-      overlayWarn('Selected Vinted\'s own "Recommended" Medium package size (FindA.Sale has no real package-size data for this item) -- please confirm it before publishing.');
+      overlayWarn('Selected Vinted\'s own "Recommended" Medium package size (FindA.Sale has no usable package-size data for this item) -- please confirm it before publishing.');
       return true;
     }
     const opener = openerByLabel('Package size') || openerByLabel('Parcel size') || openerByLabel('Select your package size');
@@ -1083,7 +1118,7 @@
       }
       await tryFill('Price', priceVal, (v) => fillText('Price', String(v)), warnings);
     }
-    const packageSizeOk = await fillPackageSize();
+    const packageSizeOk = await fillPackageSize(item);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);

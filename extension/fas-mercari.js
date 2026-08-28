@@ -907,7 +907,18 @@
       floor = price * (1 - declinePct / 100);
     }
     floor = Math.max(1, Math.min(floor, price - 0.01));
-    floor = Math.round(floor);
+    // BUG FIX 2026-08-28 (S-EXT-MERCARI-FLOOR-BOUNDARY-STALL, Patrick live report: "Mercari stopped
+    // on this floor pricing step", screenshot showed floor=$9.00 against a $10.00 item with Mercari's
+    // own inline error "The floor price needs to be more than $9"): whole-dollar Math.round(floor)
+    // here could land EXACTLY on whatever boundary Mercari computes as the minimum-gap threshold for
+    // this item -- a "must be MORE than $X" (strict) comparison rejects an exact-$X value, and this
+    // code never checked for that rejection, so the run silently sat on an invalid, unsubmittable
+    // value forever. Two changes: (1) round to cents, not whole dollars, so an arbitrary boundary is
+    // far less likely to be hit by coincidence; (2) after setting the value, read Mercari's OWN
+    // inline validation message (if any appears) instead of guessing its formula, and retry once
+    // just above whatever threshold Mercari actually states -- same "read the real DOM, never guess
+    // the business rule" philosophy this whole file already follows for selectors.
+    floor = Math.round(floor * 100) / 100;
     if (floor >= price) return false; // price too low for a valid floor strictly below it -- leave Mercari's own default rather than set an invalid one
     const el = await waitForSelector(() => document.querySelector('input#sellMinPriceForAutoPriceDrop[name="sellMinPriceForAutoPriceDrop"][data-testid="SmartPricingFloorPrice"]')
       || fieldByLabel('Smart Pricing Floor Price') || fieldByLabel('Floor Price'), 5000);
@@ -916,8 +927,37 @@
       return false;
     }
     el.focus();
-    const set = setNativeValue(el, String(floor));
-    await sleep(150);
+    let set = setNativeValue(el, String(floor));
+    await sleep(300); // give Mercari's own inline validation a moment to render before we check it
+    const readMercariFloorError = () => {
+      // Walk a couple of ancestor levels from the field (same field-container shape as the rest of
+      // this file's UNVERIFIED-but-defensive DOM reads) and look for Mercari's own error text --
+      // never a class-name guess, only the literal wording it renders.
+      let node = el.parentElement;
+      for (let i = 0; i < 3 && node; i++) {
+        const m = /needs? to be (?:more than|greater than|at least) \$?([\d.]+)/i.exec(node.textContent || '');
+        if (m) return Number(m[1]);
+        node = node.parentElement;
+      }
+      return null;
+    };
+    const rejectedAt = readMercariFloorError();
+    if (rejectedAt != null && isFinite(rejectedAt) && floor <= rejectedAt) {
+      const retryFloor = Math.round((rejectedAt + 0.01) * 100) / 100;
+      if (retryFloor < price) {
+        console.warn('[FAS Mercari] Smart Pricing floor $' + floor.toFixed(2) + ' was rejected by Mercari (needs to be more than $' + rejectedAt + ') -- retrying at $' + retryFloor.toFixed(2) + '.');
+        el.focus();
+        set = setNativeValue(el, String(retryFloor));
+        await sleep(300);
+        if (readMercariFloorError() != null) {
+          console.warn('[FAS Mercari] Smart Pricing floor still rejected after one retry -- leaving as-is for manual review before publishing.');
+          return false;
+        }
+      } else {
+        console.warn('[FAS Mercari] Smart Pricing floor rejected and no valid retry value fits below this item\'s price -- leaving as-is for manual review before publishing.');
+        return false;
+      }
+    }
     return set;
   }
 

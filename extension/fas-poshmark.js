@@ -42,6 +42,40 @@
  */
 (function () {
   const POST_URL_HINT = 'https://poshmark.com/create-listing'; // UNVERIFIED -- best-effort guess, not live-confirmed
+  // BUG FIX 2026-08-28 (S-EXT-POSHMARK-QUEUE-CONTINUATION-STALL, Patrick live report: "poshmark
+  // stops at https://poshmark.com/closet/artifactm and never starts the 2nd item"): POST_URL_HINT
+  // above was flagged UNVERIFIED from the day it was written and Patrick's real multi-item run just
+  // confirmed it's wrong as a hard-navigation target -- location.href = POST_URL_HINT lands on the
+  // closet page instead of the create-listing form (Poshmark is a SPA; a fresh full-page load of an
+  // unrecognized/changed deep route redirects to a default page server-side, even if the SAME path
+  // would work fine as a client-side route change from inside the already-loaded app). Root-caused
+  // from the code, not guessed: SPA route mismatch on hard reload, not "the URL used to work and
+  // stopped." Fix: never hard-navigate to a guessed URL for a mid-run continuation. Instead, find
+  // Poshmark's own real "Sell" nav control (present in the persistent header on every logged-in
+  // page, including the closet page we know for a fact renders) and .click() it so POSHMARK'S OWN
+  // client-side router handles the transition exactly like a real user clicking it -- same
+  // "never guess, read the real DOM" rule this whole file already follows everywhere else. Only
+  // falls back to the old guessed URL (better than nothing) if no matching nav control is found at
+  // all, and always warns the organizer either way so a wrong guess is never silent.
+  function findPoshmarkSellNavLink() {
+    const candidates = qa('a, button').filter((el) => el.offsetParent !== null);
+    const byExactText = candidates.find((el) => norm(el.textContent) === 'sell' || norm(el.getAttribute('aria-label') || '') === 'sell');
+    if (byExactText) return byExactText;
+    // Secondary signal: an anchor whose own href already points at a listing-creation route,
+    // regardless of its visible label (Poshmark may render an icon-only "Sell" control on some
+    // layouts) -- still a real DOM anchor, not an invented URL.
+    return candidates.find((el) => el.tagName === 'A' && /\/(create-listing|sell|listing\/create)(\/|$|\?)/i.test(el.getAttribute('href') || '')) || null;
+  }
+  async function navigateToPoshmarkCreateListing() {
+    const sellLink = findPoshmarkSellNavLink();
+    if (sellLink) {
+      sellLink.click(); // SPA-safe: lets Poshmark's own router handle the route change
+      return true;
+    }
+    console.warn('[FAS Poshmark] Could not find a real "Sell" nav control -- falling back to the UNVERIFIED guessed create-listing URL.');
+    location.href = POST_URL_HINT;
+    return false;
+  }
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
@@ -1259,7 +1293,7 @@
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
       try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
-      if (more) { location.href = POST_URL_HINT; } else { bar && bar.remove(); }
+      if (more) { await navigateToPoshmarkCreateListing(); } else { bar && bar.remove(); }
     };
     closeBtnHandler();
   }
@@ -1384,7 +1418,7 @@
         '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
       await humanPause(600, 1200);
-      location.href = POST_URL_HINT;
+      await navigateToPoshmarkCreateListing();
       return;
     }
     let summaryHtml = '';
