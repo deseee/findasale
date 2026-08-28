@@ -428,36 +428,48 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       ];
     }
 
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          roles: true,
-          createdAt: true,
-          oauthProvider: true,
-          emailVerified: true,
-          suspendedAt: true,
-          deletedAt: true,
-          _count: { select: { purchases: true } },
-          organizer: {
-            select: {
-              id: true,
-              customStorefrontSlug: true,
-              subscriptionTier: true,
-              _count: { select: { sales: true } },
+    // 2026-08-28: this WHERE (esp. hideScraped's organizer anti-join) forces a
+    // Parallel Hash Anti Join across the full User/Organizer tables (~180k rows
+    // each, confirmed via live EXPLAIN ANALYZE). Under concurrent load, the
+    // parallel workers' /dev/shm (POSIX dynamic shared memory) allocations can
+    // collectively exceed the container's shm capacity, throwing Postgres
+    // error 53100 "could not resize shared memory segment ... No space left on
+    // device" -- an intermittent 500 on this endpoint, unrelated to schema.
+    // Forcing a serial plan for just this transaction avoids the DSM path
+    // entirely with no schema change and no global Postgres config touch.
+    const [users, total] = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL max_parallel_workers_per_gather = 0');
+      return Promise.all([
+        tx.user.findMany({
+          where,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            roles: true,
+            createdAt: true,
+            oauthProvider: true,
+            emailVerified: true,
+            suspendedAt: true,
+            deletedAt: true,
+            _count: { select: { purchases: true } },
+            organizer: {
+              select: {
+                id: true,
+                customStorefrontSlug: true,
+                subscriptionTier: true,
+                _count: { select: { sales: true } },
+              },
             },
           },
-        },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.user.count({ where }),
-    ]);
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        tx.user.count({ where }),
+      ]);
+    });
 
     const formattedUsers = users.map((user: any) => ({
       id: user.id,
