@@ -453,29 +453,36 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       console.log('✓ Response shape correct: clientSecret, purchaseId, platformFee, totalAmount');
     });
 
-    it('should return 400 when the organizer has no Stripe Connect account', async () => {
-      // Temporarily remove the Connect ID
+    it('should return 409 (SELLER_PAYMENTS_UNAVAILABLE) when the organizer has no Stripe Connect account', async () => {
+      // Temporarily remove the Connect ID. try/finally is deliberate: this test's own assertion
+      // used to throw on the wrong status code and skip the restore below, leaving
+      // stripeConnectId null for every remaining test in the file (2026-08-27 carding-incident
+      // fix bumped this from 400 to a standardized 409 -- see assertSaleCanAcceptPayment /
+      // paymentEligibilityService.ts -- and the un-restored null cascaded into 13 unrelated
+      // failures further down this suite before the root cause was traced).
       await prisma.organizer.update({
         where: { id: testOrganizer.id },
         data:  { stripeConnectId: null },
       });
 
-      const req: any = {
-        user: { id: testShopper.id, role: 'USER' },
-        body: { itemId: testItem.id },
-      };
-      const res = makeMockRes();
+      try {
+        const req: any = {
+          user: { id: testShopper.id, role: 'USER' },
+          body: { itemId: testItem.id },
+        };
+        const res = makeMockRes();
 
-      await createPaymentIntent(req, res);
+        await createPaymentIntent(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      console.log('✓ 400 returned when organizer lacks Stripe Connect account');
-
-      // Restore
-      await prisma.organizer.update({
-        where: { id: testOrganizer.id },
-        data:  { stripeConnectId: STRIPE_CONNECT_ID },
-      });
+        expect(res.status).toHaveBeenCalledWith(409);
+        console.log('✓ 409 SELLER_PAYMENTS_UNAVAILABLE returned when organizer lacks Stripe Connect account');
+      } finally {
+        // Restore -- MUST run even if the assertion above throws.
+        await prisma.organizer.update({
+          where: { id: testOrganizer.id },
+          data:  { stripeConnectId: STRIPE_CONNECT_ID },
+        });
+      }
     });
   });
 
