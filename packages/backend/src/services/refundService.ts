@@ -170,7 +170,13 @@ export function sendRefundConfirmationEmail(params: {
 export async function executeVerifiedRefund(
   purchaseId: string,
   refundAmount: number,
-  initiatedBy: 'organizer' | 'admin' | 'dispute'
+  initiatedBy: 'organizer' | 'admin' | 'dispute',
+  // Optional Stripe refund reason (2026-08-28, carding-incident follow-up): threads through to
+  // refunds.create's own `reason` field so a confirmed-fraud refund is actually tagged as such
+  // in Stripe (feeds Radar/reporting) instead of going out with no reason at all regardless of
+  // why it was issued. Optional + backward compatible -- every existing caller (createRefund/
+  // organizer, disputeController, deadInvoiceRefundService) keeps working unchanged.
+  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
 ): Promise<{
   refundedAmount: number;
   purchase: {
@@ -305,6 +311,7 @@ export async function executeVerifiedRefund(
     await stripe().refunds.create({
       payment_intent: purchase.stripePaymentIntentId,
       amount: Math.round(refundAmount * 100), // Convert to cents
+      ...(reason ? { reason } : {}),
       // P1 money-path fix (2026-07-28): booth-cart legs are DIRECT charges on the
       // booth's own connected account — see stripeController.ts (git history) for the
       // full Stripe-semantics rationale this was moved from, unchanged.

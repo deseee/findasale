@@ -2276,7 +2276,10 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
           continue;
         }
 
-        const result = await executeVerifiedRefund(purchaseId, purchase.amount, 'admin');
+        // Carding-incident cleanup tool -- always tags the Stripe refund `reason` as
+        // 'fraudulent' so it's actually flagged in Stripe (Radar/reporting), not just
+        // reversed with no reason on file. See refundService.ts's `reason` param (2026-08-28).
+        const result = await executeVerifiedRefund(purchaseId, purchase.amount, 'admin', 'fraudulent');
         results.push({ purchaseId, success: true, refundedAmount: result.refundedAmount });
       } catch (err) {
         if (err instanceof RefundError) {
