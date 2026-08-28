@@ -2379,9 +2379,20 @@ export const webhookHandler = async (req: Request, res: Response) => {
             where: { stripePaymentIntentId: paymentIntentId },
             // organizer.userId added (2026-08-04 notification audit fix) -- needed to
             // notify the organizer a chargeback landed against their sale, below.
-            include: { item: { include: { sale: { include: { organizer: { select: { userId: true } } } } } }, user: true }
+            // Income-tracking fix (2026-08-28, S-POS-MISC-CHARGE-PURCHASE-GAP): Purchase now
+            // also fetches its own direct `sale` relation (not just via item), since a
+            // misc/quick-add POS charge has itemId: null but a real saleId -- without this,
+            // dispute/chargeback handling below silently skipped every misc-charge Purchase.
+            include: {
+              item: { include: { sale: { include: { organizer: { select: { userId: true } } } } } },
+              sale: { include: { organizer: { select: { userId: true } } } },
+              user: true,
+            }
           });
-          if (purchase && purchase.item?.sale) {
+          // Prefer the direct sale relation (always present); fall back to item.sale for any
+          // pre-fix row shape. Covers both item-linked and misc-charge (itemId: null) Purchases.
+          const disputeSale = purchase?.sale ?? purchase?.item?.sale;
+          if (purchase && disputeSale) {
             await prisma.purchase.update({
               where: { id: purchase.id },
               data: { status: 'DISPUTED' }
@@ -2424,7 +2435,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // Feature #107: Record chargeback incident in fraud tracking
             const { recordChargebackIncident } = await import('../services/fraudService');
             await recordChargebackIncident(
-              purchase.item.sale!.organizerId,
+              disputeSale!.organizerId,
               purchase.id,
               dispute.id
             );
@@ -2450,14 +2461,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // Email on -- a chargeback is time-sensitive (organizers can submit evidence to
             // Stripe within a deadline) and must not rely on the organizer happening to open
             // the app.
-            const disputeOrganizerUserId = purchase.item.sale!.organizer?.userId;
+            const disputeOrganizerUserId = disputeSale!.organizer?.userId;
             if (disputeOrganizerUserId) {
               createNotification({
                 userId: disputeOrganizerUserId,
                 type: 'chargeback_opened',
                 title: 'Chargeback filed against a sale',
                 body: `A buyer's bank has filed a chargeback for "${purchase.item?.title || 'an item'}". This may affect your payout -- check Stripe for details and any response deadline.`,
-                link: `/organizer/sales/${purchase.item.sale!.id}`,
+                link: `/organizer/sales/${disputeSale!.id}`,
                 channel: 'OPERATIONAL',
                 sendEmail: true,
               }).catch((err) => console.error(`[notification] Failed to create chargeback_opened notification for purchase ${purchase.id}:`, err));

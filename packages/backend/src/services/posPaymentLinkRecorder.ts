@@ -117,6 +117,49 @@ export async function recordPosPaymentLinkSale(
       return; // unreachable in practice (we just updated this row), defensive only
     }
 
+    // Look up organizer tier + Connect id for fee calculation and Direct-charge routing.
+    // Hoisted out of the itemIds-only branch (2026-08-28 income-tracking fix, S-POS-MISC-
+    // CHARGE-PURCHASE-GAP): both the per-item path AND the misc/quick-add path below need
+    // this same fee-rate + charge-routing decision, so it must run regardless of whether
+    // fresh.itemIds is populated.
+    const posOrganizerLookup = fresh.saleId
+      ? await tx.sale.findUnique({
+          where: { id: fresh.saleId },
+          select: { organizerId: true, organizer: { select: { subscriptionTier: true, stripeConnectId: true } } },
+        })
+      : null;
+    const posOrganizerTier = posOrganizerLookup?.organizer?.subscriptionTier ?? null;
+    const posFeeRate = getPlatformFeeRate(posOrganizerTier as SubscriptionTier);
+
+    // Stripe account snapshot (2026-08-20 migration: 20260820190000_add_pos_payment_
+    // link_stripe_account_snapshot): prefer the value pinned on the link itself at
+    // creation time. Only a pre-migration row (chargeType NULL) recomputes the SAME
+    // live-Stripe-eligibility + allowlist check (posController.createPaymentLinkInternal
+    // already ran it once when the Payment Link itself was created) -- mirrors
+    // holdInvoicePaymentRecorder.ts's identical chargeType-NULL fallback shape. The
+    // recompute path can still disagree with the original decision if eligibility or the
+    // allowlist changed in the window between link creation and completion; the pinned
+    // path (the common case going forward) cannot.
+    const posStripeConnectId = fresh.stripeAccountId ?? posOrganizerLookup?.organizer?.stripeConnectId ?? null;
+    let posUseDirect: boolean;
+    if (fresh.chargeType) {
+      posUseDirect = fresh.chargeType === 'DIRECT';
+    } else {
+      posUseDirect = !!(posOrganizerLookup?.organizerId && posStripeConnectId
+        ? await shouldUseDirectCharge(posOrganizerLookup.organizerId, posStripeConnectId)
+        : false);
+    }
+
+    // Defensive fallback: real PaymentIntent id should always be present from both current
+    // callers (see docblock above). If it's ever missing, fall back to the synthetic
+    // `pos_<linkId>` placeholder rather than writing a null/blank stripePaymentIntentId --
+    // but log loudly, since it means a caller is missing data it should have and refunds
+    // for this Purchase will fail exactly like the pre-fix bug this change closes.
+    const resolvedPaymentIntentId = paymentIntentId || `pos_${fresh.id}`;
+    if (!paymentIntentId) {
+      console.warn(`[pos-record/${source}] No real PaymentIntent id supplied for link ${fresh.id} -- falling back to synthetic placeholder '${resolvedPaymentIntentId}'. Refunds for this Purchase will FAIL until this is fixed.`);
+    }
+
     if (fresh.itemIds?.length) {
       // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement. Collects which
       // items are now fully sold out so the cross-channel removal hooks (fired outside the
@@ -153,45 +196,6 @@ export async function recordPosPaymentLinkSale(
       const items = sellableItemIds.length
         ? await tx.item.findMany({ where: { id: { in: sellableItemIds } } })
         : [];
-
-      // Look up organizer tier + Connect id for fee calculation and Direct-charge routing.
-      const posOrganizerLookup = fresh.saleId
-        ? await tx.sale.findUnique({
-            where: { id: fresh.saleId },
-            select: { organizerId: true, organizer: { select: { subscriptionTier: true, stripeConnectId: true } } },
-          })
-        : null;
-      const posOrganizerTier = posOrganizerLookup?.organizer?.subscriptionTier ?? null;
-      const posFeeRate = getPlatformFeeRate(posOrganizerTier as SubscriptionTier);
-
-      // Stripe account snapshot (2026-08-20 migration: 20260820190000_add_pos_payment_
-      // link_stripe_account_snapshot): prefer the value pinned on the link itself at
-      // creation time. Only a pre-migration row (chargeType NULL) recomputes the SAME
-      // live-Stripe-eligibility + allowlist check (posController.createPaymentLinkInternal
-      // already ran it once when the Payment Link itself was created) -- mirrors
-      // holdInvoicePaymentRecorder.ts's identical chargeType-NULL fallback shape. The
-      // recompute path can still disagree with the original decision if eligibility or the
-      // allowlist changed in the window between link creation and completion; the pinned
-      // path (the common case going forward) cannot.
-      const posStripeConnectId = fresh.stripeAccountId ?? posOrganizerLookup?.organizer?.stripeConnectId ?? null;
-      let posUseDirect: boolean;
-      if (fresh.chargeType) {
-        posUseDirect = fresh.chargeType === 'DIRECT';
-      } else {
-        posUseDirect = !!(posOrganizerLookup?.organizerId && posStripeConnectId
-          ? await shouldUseDirectCharge(posOrganizerLookup.organizerId, posStripeConnectId)
-          : false);
-      }
-
-      // Defensive fallback: real PaymentIntent id should always be present from both current
-      // callers (see docblock above). If it's ever missing, fall back to the synthetic
-      // `pos_<linkId>` placeholder rather than writing a null/blank stripePaymentIntentId --
-      // but log loudly, since it means a caller is missing data it should have and refunds
-      // for this Purchase will fail exactly like the pre-fix bug this change closes.
-      const resolvedPaymentIntentId = paymentIntentId || `pos_${fresh.id}`;
-      if (!paymentIntentId) {
-        console.warn(`[pos-record/${source}] No real PaymentIntent id supplied for link ${fresh.id} -- falling back to synthetic placeholder '${resolvedPaymentIntentId}'. Refunds for this Purchase will FAIL until this is fixed.`);
-      }
 
       const createdPurchaseIds: string[] = [];
       for (const item of items) {
@@ -231,6 +235,43 @@ export async function recordPosPaymentLinkSale(
           where: { id: fresh.id },
           data: { purchaseIds: createdPurchaseIds },
         });
+      }
+    } else if (fresh.amount > 0) {
+      // Misc/quick-add charge — no linked inventory item, but real money was captured at
+      // Stripe (correct application_fee_amount collected). Income-tracking fix (2026-08-28,
+      // S-POS-MISC-CHARGE-PURCHASE-GAP): before this branch existed, this case silently
+      // created ZERO Purchase row — Stripe had the money and the correct platform commission,
+      // but FindA.Sale's own Purchase table, revenue analytics, and dispute/refund handling
+      // had no record the sale ever happened. Purchase.itemId is nullable specifically to
+      // support this case (confirmed via architect schema review — no migration needed).
+      const miscAmount = fresh.amount / 100;
+      const miscFeeAmount = parseFloat((miscAmount * posFeeRate).toFixed(2));
+      try {
+        const purchase = await tx.purchase.create({
+          data: {
+            itemId: null,
+            saleId: fresh.saleId,
+            amount: miscAmount,
+            platformFeeAmount: miscFeeAmount,
+            ...snapshotForCommissionOnly(miscFeeAmount, posFeeRate),
+            status: 'PAID',
+            source: 'POS',
+            stripePaymentIntentId: resolvedPaymentIntentId,
+            chargeType: posUseDirect ? 'DIRECT' : 'DESTINATION',
+            ...(posUseDirect && posStripeConnectId ? { stripeAccountId: posStripeConnectId } : {}),
+          },
+        });
+        purchaseIds = [purchase.id];
+        await tx.pOSPaymentLink.update({
+          where: { id: fresh.id },
+          data: { purchaseIds: [purchase.id] },
+        });
+      } catch (purchaseErr: any) {
+        if (purchaseErr.code === 'P2002') {
+          console.warn(`[pos-record/${source}] Misc-charge Purchase already exists for link ${fresh.id} — treating as already recorded.`);
+        } else {
+          throw purchaseErr;
+        }
       }
     }
   });
