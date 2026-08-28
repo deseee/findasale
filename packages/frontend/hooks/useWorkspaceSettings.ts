@@ -25,6 +25,9 @@ export interface WorkspaceSettings {
   enableLeaderboard: boolean;
   enableTeamChat: boolean;
   commissionOverride?: number;
+  // POS Cashier Discount Permission (2026-08-28)
+  staffDiscountCapType?: string | null;
+  staffDiscountCapValue?: string | null;
   createdAt: string;
   updatedAt: string;
 }
