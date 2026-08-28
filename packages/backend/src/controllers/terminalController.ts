@@ -24,6 +24,7 @@ import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Find
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Shared cash-commission accrual (2026-08-17) — same mechanism reservationController's RECORD mode uses
+import { resolvePosDiscount } from '../services/posDiscountService';
 
 const stripe = () => getStripe();
 
@@ -193,7 +194,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
-    const { items, buyerEmail, saleId: bodySaleId, cashAmountCents, clientTransactionId } = req.body as {
+    const { items, buyerEmail, saleId: bodySaleId, cashAmountCents, clientTransactionId, discountType, discountValue, discountReasonNote } = req.body as {
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
       buyerEmail?: string;
       saleId?: string;  // required when cart contains only misc items (no itemId)
@@ -202,6 +203,10 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       // processCashSaleCore clientTransactionId dedup below): the frontend generates one
       // UUID per checkout "attempt" (same cart) and resends it on retry/double-tap.
       clientTransactionId?: string;
+      // POS Cashier Discount Permission (2026-08-28) -- see posDiscountService.ts
+      discountType?: string;
+      discountValue?: number;
+      discountReasonNote?: string;
     };
 
     // Validate items array
@@ -296,6 +301,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           title: true,
           status: true,
           draftStatus: true,
+          price: true, // POS Cashier Discount Permission (2026-08-28): authoritative catalog price for discount validation
           sale: { select: { id: true, organizerId: true } },
         },
       });
@@ -319,8 +325,38 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       }
     }
 
+    // POS Cashier Discount Permission (2026-08-28): resolve + validate any requested
+    // discount BEFORE computing totals/fees/Stripe amount. No-op when no discount was
+    // sent -- chargedItems === items unchanged, zero behavior change to the pre-existing
+    // flow in that case.
+    const catalogSubtotalCents = Math.round(
+      items.reduce((sum, i) => sum + (i.itemId && dbItems[i.itemId]?.price ? dbItems[i.itemId].price : 0), 0) * 100
+    );
+    const discountResolution = await resolvePosDiscount({
+      actor: organizer,
+      input: { discountType, discountValue, discountReasonNote },
+      catalogSubtotalCents,
+    });
+    if (!discountResolution.ok) {
+      return res.status(discountResolution.status).json({ message: discountResolution.message });
+    }
+
+    // Apply the authorized discount proportionally across catalog items only (misc items,
+    // i.e. no itemId, are untouched -- they were never part of catalogSubtotalCents).
+    // itemAmountCentsBeforeDiscount is tracked per row so the actual applied cents can be
+    // stored on each Purchase row below without floating-point drift accumulating.
+    const discountRatio = discountResolution.discountAmountCents > 0 && catalogSubtotalCents > 0
+      ? discountResolution.discountAmountCents / catalogSubtotalCents
+      : 0;
+    const chargedItems = items.map((i) => {
+      if (discountRatio === 0 || !i.itemId) return { ...i, itemAmountCentsBeforeDiscount: Math.round(i.amount * 100), rowDiscountCents: 0 };
+      const beforeCents = Math.round(i.amount * 100);
+      const afterCents = Math.round(beforeCents * (1 - discountRatio));
+      return { ...i, amount: afterCents / 100, itemAmountCentsBeforeDiscount: beforeCents, rowDiscountCents: beforeCents - afterCents };
+    });
+
     // Calculate total amount in cents
-    const totalAmountCents = Math.round(items.reduce((sum, i) => sum + i.amount, 0) * 100);
+    const totalAmountCents = Math.round(chargedItems.reduce((sum, i) => sum + i.amount, 0) * 100);
 
     // Calculate card amount: if split payment (cashAmountCents provided and less than total), use remaining
     const cardAmountCents = cashAmountCents != null && cashAmountCents > 0 && cashAmountCents < totalAmountCents
@@ -386,7 +422,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       capture_method: 'manual' as const,      // Terminal requires explicit capture
       ...(!isSimulated ? { application_fee_amount: platformFeeAmount } : {}),
       metadata: {
-        items: JSON.stringify(items),
+        items: JSON.stringify(chargedItems),
         saleId,
         source: 'POS',
         ...(buyerEmail ? { buyerEmail } : {}),
@@ -410,7 +446,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
 
     // Create PENDING Purchase records for each cart item
     const purchaseIds: string[] = [];
-    for (const item of items) {
+    for (const item of chargedItems) {
       const itemAmount = item.amount;
       const itemAmountCents = Math.round(itemAmount * 100);
       const itemPlatformFeeAmount = item.itemId ? Math.round(itemAmountCents * feeRate) : 0;
@@ -421,6 +457,14 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           saleId,
           amount: itemAmount,
           platformFeeAmount: itemPlatformFeeAmount / 100,
+          // POS Cashier Discount Permission (2026-08-28): per-row share of the cart-level
+          // discount, and the metadata explaining it -- null/0 on every row when no
+          // discount was applied (discountResolution.discountAmountCents === 0).
+          discountType: item.rowDiscountCents > 0 ? discountResolution.discountType : null,
+          discountValueRaw: item.rowDiscountCents > 0 ? discountResolution.discountValueRaw : null,
+          discountAmountCents: item.rowDiscountCents > 0 ? item.rowDiscountCents : null,
+          discountReasonNote: item.rowDiscountCents > 0 ? discountResolution.discountReasonNote : null,
+          discountAppliedByUserId: item.rowDiscountCents > 0 ? organizer.actingUserId : null,
           // FEE SNAPSHOT (2026-08-17): commission-only — Terminal is card-present POS, never an
           // auction lot, so the premium fields record a hard 0 ("no premium was charged" is a
           // fact worth recording, not an unknown). Pinning the rate here stops an organizer's

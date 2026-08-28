@@ -19,6 +19,7 @@ export const WORKSPACE_PERMISSIONS = {
   PROCESS_POS: 'process_pos',
   VIEW_SALES_ANALYTICS: 'view_sales_analytics',
   VOID_TRANSACTIONS: 'void_transactions',
+  APPLY_POS_DISCOUNT: 'apply_pos_discount',
   // Team
   VIEW_STAFF: 'view_staff',
   INVITE_STAFF: 'invite_staff',
@@ -66,6 +67,7 @@ export const PERMISSION_CATEGORIES = [
       WORKSPACE_PERMISSIONS.PROCESS_POS,
       WORKSPACE_PERMISSIONS.VIEW_SALES_ANALYTICS,
       WORKSPACE_PERMISSIONS.VOID_TRANSACTIONS,
+      WORKSPACE_PERMISSIONS.APPLY_POS_DISCOUNT,
     ],
   },
   {

@@ -435,6 +435,8 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
           enableLeaderboard: true,
           enableTeamChat: true,
           commissionOverride: null,
+          staffDiscountCapType: null,
+          staffDiscountCapValue: null,
         },
       });
     }
@@ -470,6 +472,9 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
       enableLeaderboard: settings.enableLeaderboard,
       enableTeamChat: settings.enableTeamChat,
       commissionOverride: settings.commissionOverride?.toString() || null,
+      // POS Cashier Discount Permission (2026-08-28)
+      staffDiscountCapType: settings.staffDiscountCapType,
+      staffDiscountCapValue: settings.staffDiscountCapValue?.toString() || null,
       memberCount,
       ownerName,
       createdAt: settings.createdAt,
@@ -485,7 +490,7 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
 export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
-    const { name, description, brandRules, templateUsed, enableAnalytics, enableLeaderboard, enableTeamChat } = req.body;
+    const { name, description, brandRules, templateUsed, enableAnalytics, enableLeaderboard, enableTeamChat, staffDiscountCapType, staffDiscountCapValue } = req.body;
 
     if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
 
@@ -502,6 +507,8 @@ export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) =
         enableLeaderboard: enableLeaderboard !== undefined ? enableLeaderboard : true,
         enableTeamChat: enableTeamChat !== undefined ? enableTeamChat : true,
         commissionOverride: null,
+        staffDiscountCapType: staffDiscountCapType || null,
+        staffDiscountCapValue: staffDiscountCapValue != null ? staffDiscountCapValue : null,
       },
       update: {
         ...(name !== undefined && { name: name || null }),
@@ -511,6 +518,10 @@ export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) =
         ...(enableAnalytics !== undefined && { enableAnalytics }),
         ...(enableLeaderboard !== undefined && { enableLeaderboard }),
         ...(enableTeamChat !== undefined && { enableTeamChat }),
+        // POS Cashier Discount Permission (2026-08-28): explicit null clears the cap
+        // (organizer sets "no limit"), undefined leaves the existing value untouched.
+        ...(staffDiscountCapType !== undefined && { staffDiscountCapType }),
+        ...(staffDiscountCapValue !== undefined && { staffDiscountCapValue }),
       },
     });
 
@@ -528,6 +539,8 @@ export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) =
       enableLeaderboard: settings.enableLeaderboard,
       enableTeamChat: settings.enableTeamChat,
       commissionOverride: settings.commissionOverride?.toString() || null,
+      staffDiscountCapType: settings.staffDiscountCapType,
+      staffDiscountCapValue: settings.staffDiscountCapValue?.toString() || null,
       createdAt: settings.createdAt,
       updatedAt: settings.updatedAt,
     });

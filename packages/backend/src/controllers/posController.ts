@@ -24,6 +24,8 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
+import { checkPermission } from '../services/workspacePermissionService'; // POS Cashier Discount Permission (2026-08-28)
+import { WORKSPACE_PERMISSIONS } from '../utils/workspacePermissions'; // POS Cashier Discount Permission (2026-08-28)
 import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { invoiceableWhere, isInvoicedOrClaimed, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim must be visible to every hold read site; P0 (2026-08-17): dead-anchor release
@@ -223,6 +225,8 @@ export async function createPaymentLinkInternal(opts: {
  *   sales: Array<{ id, title, status, startDate, endDate }>; // PUBLISHED only
  *   venmoHandle: string | null;
  *   zelleHandle: string | null;
+ *   canApplyDiscount: boolean; // POS Cashier Discount Permission (2026-08-28)
+ *   discountCap: { type: 'PERCENT' | 'FIXED'; value: number } | null; // null = uncapped or not applicable
  * }
  */
 export const getPosContext = async (req: AuthRequest, res: Response) => {
@@ -242,6 +246,25 @@ export const getPosContext = async (req: AuthRequest, res: Response) => {
       }),
     ]);
 
+    // POS Cashier Discount Permission (2026-08-28): ORGANIZER is always allowed,
+    // uncapped -- no lookup needed. TEAM_MEMBER requires the apply_pos_discount
+    // WorkspacePermission; the UI should not render the discount control at all when
+    // this is false (see claude_docs/ux-spotchecks/pos-cashier-discount-permission.md).
+    let canApplyDiscount = actor.actorKind === 'ORGANIZER';
+    let discountCap: { type: string; value: number } | null = null;
+    if (actor.actorKind === 'TEAM_MEMBER' && actor.workspaceId && actor.workspaceRole) {
+      canApplyDiscount = await checkPermission(actor.workspaceId, actor.workspaceRole, WORKSPACE_PERMISSIONS.APPLY_POS_DISCOUNT);
+      if (canApplyDiscount) {
+        const settings = await prisma.workspaceSettings.findUnique({
+          where: { workspaceId: actor.workspaceId },
+          select: { staffDiscountCapType: true, staffDiscountCapValue: true },
+        });
+        if (settings?.staffDiscountCapType && settings.staffDiscountCapValue != null) {
+          discountCap = { type: settings.staffDiscountCapType, value: Number(settings.staffDiscountCapValue) };
+        }
+      }
+    }
+
     return res.json({
       actorKind: actor.actorKind,
       organizerId: actor.id,
@@ -254,6 +277,8 @@ export const getPosContext = async (req: AuthRequest, res: Response) => {
       })),
       venmoHandle: organizerRow?.venmoHandle ?? null,
       zelleHandle: organizerRow?.zelleHandle ?? null,
+      canApplyDiscount,
+      discountCap,
     });
   } catch (error) {
     console.error('[pos] getPosContext error:', error);

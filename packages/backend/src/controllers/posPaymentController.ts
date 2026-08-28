@@ -18,6 +18,7 @@ import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutG
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 import { snapshotForCommissionOnly, getPlatformFeeRate } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); getPlatformFeeRate: split-payment commission fix (2026-08-22)
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use
+import { resolvePosDiscount } from '../services/posDiscountService';
 
 const stripe = () => getStripe();
 
@@ -66,6 +67,9 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       isSplitPayment = false,
       cashAmountCents,
       cardAmountCents,
+      discountType,
+      discountValue,
+      discountReasonNote,
     } = req.body as {
       shopperUserId?: string;
       saleId?: string;
@@ -75,6 +79,10 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       isSplitPayment?: boolean;
       cashAmountCents?: number;
       cardAmountCents?: number;
+      // POS Cashier Discount Permission (2026-08-28) -- see posDiscountService.ts
+      discountType?: string;
+      discountValue?: number;
+      discountReasonNote?: string;
     };
 
     // Validation
@@ -160,6 +168,33 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       // POS cashier has physical possession — exclude already-SOLD items silently
       // rather than rejecting the entire request (common in test/reuse scenarios)
       items = items.filter((item) => ['AVAILABLE', 'RESERVED'].includes(item.status));
+    }
+
+    // POS Cashier Discount Permission (2026-08-28): resolve + validate any requested
+    // discount against the actor's permission and the workspace's cap BEFORE creating
+    // any Stripe resources. No-op (discountAmountCents: 0) when no discount was sent --
+    // zero behavior change to the pre-existing flow in that case.
+    const catalogSubtotalCents = Math.round(items.reduce((sum, i) => sum + (i.price ?? 0), 0) * 100);
+    const discountResolution = await resolvePosDiscount({
+      actor: organizer,
+      input: { discountType, discountValue, discountReasonNote },
+      catalogSubtotalCents,
+    });
+    if (!discountResolution.ok) {
+      return res.status(discountResolution.status).json({ message: discountResolution.message });
+    }
+    if (discountResolution.discountAmountCents > 0) {
+      // Lower-bound check: catalog items can only be discounted through this
+      // authorized, capped path -- misc/custom-amount items (no catalog price) can
+      // still add to the total freely (unchanged, separate trust boundary -- see ADR),
+      // but the total can never come in BELOW what the authorized discount explains.
+      // 1-cent tolerance for rounding.
+      const minAllowedTotalCents = catalogSubtotalCents - discountResolution.discountAmountCents - 1;
+      if (totalAmountCents < minAllowedTotalCents) {
+        return res.status(400).json({
+          message: `Total does not match the applied discount. Expected at least ${minAllowedTotalCents} cents.`,
+        });
+      }
     }
 
     // Verify shopper exists
@@ -258,6 +293,13 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
               isSplitPayment,
               cashAmountCents: isSplitPayment ? splitCashAmountCents : null,
               cardAmountCents: isSplitPayment ? splitCardAmountCents : null,
+              // POS Cashier Discount Permission (2026-08-28): null when no discount was
+              // applied (discountResolution.discountAmountCents === 0).
+              discountType: discountResolution.discountAmountCents > 0 ? discountResolution.discountType : null,
+              discountValueRaw: discountResolution.discountAmountCents > 0 ? discountResolution.discountValueRaw : null,
+              discountAmountCents: discountResolution.discountAmountCents > 0 ? discountResolution.discountAmountCents : null,
+              discountReasonNote: discountResolution.discountAmountCents > 0 ? discountResolution.discountReasonNote : null,
+              discountAppliedByUserId: discountResolution.discountAmountCents > 0 ? organizer.actingUserId : null,
             },
           });
         },

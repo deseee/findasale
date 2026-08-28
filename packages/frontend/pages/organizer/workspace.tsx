@@ -41,7 +41,7 @@ const PERMISSION_CATEGORIES = [
   },
   {
     name: 'POS',
-    permissions: ['process_pos', 'view_sales_analytics', 'void_transactions'],
+    permissions: ['process_pos', 'view_sales_analytics', 'void_transactions', 'apply_pos_discount'],
   },
   {
     name: 'Team',
@@ -64,6 +64,7 @@ const PERMISSION_DISPLAY_NAMES: Record<string, string> = {
   view_staff: 'View Members',
   invite_staff: 'Invite Members',
   edit_staff_roles: 'Edit Member Roles',
+  apply_pos_discount: 'Apply Discounts at Checkout',
 };
 
 // Template definitions
@@ -124,6 +125,10 @@ export default function WorkspaceSettingsPage() {
     customerServiceStandards: '',
     customRules: '',
   });
+  // POS Cashier Discount Permission (2026-08-28): org-wide cap on staff discounting.
+  // '' capType = no cap configured (matches backend null -- "no limit").
+  const [staffDiscountCapType, setStaffDiscountCapType] = useState<'' | 'PERCENT' | 'FIXED'>('');
+  const [staffDiscountCapValue, setStaffDiscountCapValue] = useState('');
 
   // Initialize local state from queries
   useEffect(() => {
@@ -135,6 +140,8 @@ export default function WorkspaceSettingsPage() {
   useEffect(() => {
     if (settings) {
       setDescription((settings as any).description || '');
+      setStaffDiscountCapType(((settings as any).staffDiscountCapType as '' | 'PERCENT' | 'FIXED') || '');
+      setStaffDiscountCapValue((settings as any).staffDiscountCapValue || '');
     }
   }, [settings]);
 
@@ -228,6 +235,19 @@ export default function WorkspaceSettingsPage() {
       showToast('Permissions saved', 'success');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to save permissions', 'error');
+    }
+  };
+
+  const handleSaveDiscountCap = async () => {
+    if (!workspace) return;
+    try {
+      await updateSettingsMutation.mutateAsync({
+        staffDiscountCapType: staffDiscountCapType || null,
+        staffDiscountCapValue: staffDiscountCapType ? (staffDiscountCapValue || null) : null,
+      });
+      showToast('Discount cap saved', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to save discount cap', 'error');
     }
   };
 
@@ -472,6 +492,73 @@ export default function WorkspaceSettingsPage() {
                     </button>
                   </div>
                 )}
+
+                {/* POS Cashier Discount Cap (2026-08-28): org-wide guardrail on how much
+                    a permitted staff member can discount without the organizer's own
+                    login. Blank = no limit. */}
+                <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Staff Discount Limit</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Max discount without your login. Leave blank for no limit.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
+                      <button
+                        type="button"
+                        onClick={() => setStaffDiscountCapType('PERCENT')}
+                        disabled={!isOwner}
+                        className={`px-4 py-2 text-sm font-semibold min-w-[44px] ${
+                          staffDiscountCapType === 'PERCENT'
+                            ? 'bg-sage-600 text-white'
+                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStaffDiscountCapType('FIXED')}
+                        disabled={!isOwner}
+                        className={`px-4 py-2 text-sm font-semibold min-w-[44px] ${
+                          staffDiscountCapType === 'FIXED'
+                            ? 'bg-sage-600 text-white'
+                            : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        $
+                      </button>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={staffDiscountCapValue}
+                      onChange={(e) => setStaffDiscountCapValue(e.target.value)}
+                      disabled={!isOwner || !staffDiscountCapType}
+                      placeholder="No limit"
+                      className="w-32 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white disabled:opacity-50"
+                    />
+                    {staffDiscountCapType && (
+                      <button
+                        type="button"
+                        onClick={() => { setStaffDiscountCapType(''); setStaffDiscountCapValue(''); }}
+                        disabled={!isOwner}
+                        className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                    {isOwner && (
+                      <button
+                        onClick={handleSaveDiscountCap}
+                        disabled={updateSettingsMutation.isPending}
+                        className="bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-6 rounded-md disabled:opacity-50 text-sm"
+                      >
+                        {updateSettingsMutation.isPending ? 'Saving...' : 'Save Limit'}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </section>

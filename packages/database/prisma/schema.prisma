@@ -1600,6 +1600,17 @@ model Purchase {
   refundedAt             DateTime? // When Stripe confirmed the refund
   refundInitiatedBy      String? // 'organizer' | 'admin' | 'dispute' — who/what triggered the refund
 
+  // POS Cashier Discount Permission (2026-08-28): this row's share of a cart-level
+  // discount applied at Terminal checkout (terminalController.ts createTerminalPaymentIntent).
+  // `amount` above is already net of the discount; these columns record what/why/who for
+  // VIEW_SALES_ANALYTICS auditing. All null when no discount was applied to this row.
+  // See claude_docs/feature-notes/ADR-pos-cashier-discount-permission.md.
+  discountType            String?  // 'PERCENT' | 'FIXED'
+  discountValueRaw        Decimal? @db.Decimal(10, 2)
+  discountAmountCents     Int? // this row's share, in cents (cart-level discount distributed proportionally)
+  discountReasonNote      String?
+  discountAppliedByUserId String?
+
   // ── FEE SNAPSHOT (2026-08-17) — what was ACTUALLY charged, pinned at charge time ────────
   // `platformFeeAmount` above stores the COMBINED Stripe application_fee_amount (auction buyer
   // premium + organizer commission). Nothing recorded how it split, so every organizer-facing
@@ -4331,6 +4342,16 @@ model POSPaymentRequest {
   isSplitPayment        Boolean   @default(false)
   cashAmountCents       Int?
   cardAmountCents       Int?
+  // POS Cashier Discount Permission (2026-08-28): only populated when a discount was
+  // applied. discountAmountCents is always server-computed (never trusted from the
+  // client) -- see ADR-pos-cashier-discount-permission.md ADR #3 for the enforcement
+  // contract. discountAppliedByUserId is the acting user (ResolvedPosActor.actingUserId),
+  // distinct from organizerUserId when a TEAM_MEMBER applied it.
+  discountType            String?  // 'PERCENT' | 'FIXED'
+  discountValueRaw        Decimal? @db.Decimal(10, 2)
+  discountAmountCents     Int?
+  discountReasonNote      String?
+  discountAppliedByUserId String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -4504,6 +4525,14 @@ model WorkspaceSettings {
   enableLeaderboard  Boolean            @default(true)
   enableTeamChat     Boolean            @default(true)
   commissionOverride Decimal? // Workspace-level default commission rate
+  // POS Cashier Discount Permission (2026-08-28): org-wide cap on how much a
+  // TEAM_MEMBER (not the organizer themselves) can discount at POS checkout without
+  // the organizer's own login. Null cap = uncapped for whichever roles are granted
+  // the apply_pos_discount WorkspacePermission. Enforced server-side in
+  // posPaymentController.ts createPaymentRequest and terminalController.ts
+  // createTerminalPaymentIntent -- see claude_docs/feature-notes/ADR-pos-cashier-discount-permission.md.
+  staffDiscountCapType  String?  // 'PERCENT' | 'FIXED'
+  staffDiscountCapValue Decimal? @db.Decimal(10, 2) // percent (0-100) or dollars, per staffDiscountCapType
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 

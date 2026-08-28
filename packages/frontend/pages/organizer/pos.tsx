@@ -210,6 +210,18 @@ export default function POSPage() {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [buyerEmail, setBuyerEmail] = useState('');
+
+  // POS Cashier Discount Permission (2026-08-28): populated from /pos/context.
+  // canApplyDiscount false => discount control must not render at all (per UX spec --
+  // absence, not a disabled control, is the correct signal for a cashier without the
+  // permission). discountCap null = uncapped (or not applicable to this actor).
+  const [canApplyDiscount, setCanApplyDiscount] = useState(false);
+  const [discountCap, setDiscountCap] = useState<{ type: 'PERCENT' | 'FIXED'; value: number } | null>(null);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountType, setDiscountType] = useState<'PERCENT' | 'FIXED'>('PERCENT');
+  const [discountValueInput, setDiscountValueInput] = useState('');
+  const [discountReasonNote, setDiscountReasonNote] = useState('');
+
   // BQ fix (2026-07-29): moved up from its original spot further down in this
   // component (was a plain `const cartTotal = ...` right before the numpad-ops
   // section) -- the S1178 venue-mode useCallback added tonight references
@@ -219,7 +231,29 @@ export default function POSPage() {
   // Only cartTotal itself needed to move -- cartChange/cardAmount (which derive
   // from cartTotal) stay at their original location, nothing else references
   // them before that point.
-  const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
+  //
+  // POS Cashier Discount Permission (2026-08-28): cartTotal is now the DISCOUNTED
+  // total (cartSubtotal minus the clamped, permission-gated discount) -- every
+  // existing downstream usage of cartTotal (display, cash-split math, the
+  // /pos/payment-request totalAmountCents payload) picks up the discount automatically
+  // with no per-call-site changes needed. The one path that must NOT use this reduced
+  // number is the /stripe/terminal/payment-intent `items` payload, which is built from
+  // raw `cart` (per-item, undiscounted) -- the backend applies the discount itself from
+  // the separate discountType/discountValue fields sent alongside it. See
+  // claude_docs/feature-notes/ADR-pos-cashier-discount-permission.md.
+  const cartSubtotal = cart.reduce((sum, c) => sum + c.amount, 0);
+  const discountValueNum = parseFloat(discountValueInput) || 0;
+  const rawDiscountAmount =
+    discountType === 'PERCENT' ? (discountValueNum / 100) * cartSubtotal : discountValueNum;
+  const discountCapDollars = discountCap
+    ? (discountCap.type === 'PERCENT' ? (discountCap.value / 100) * cartSubtotal : discountCap.value)
+    : null;
+  const discountExceedsCap = discountCapDollars != null && rawDiscountAmount > discountCapDollars;
+  const discountAmount = Math.max(
+    0,
+    Math.min(rawDiscountAmount, discountCapDollars ?? Infinity, cartSubtotal)
+  );
+  const cartTotal = Math.max(0, cartSubtotal - discountAmount);
 
   // Numpad state (price / custom amount only)
   const [numpadOpen, setNumpadOpen] = useState(false);
@@ -398,7 +432,7 @@ export default function POSPage() {
   // with register access reaches this too and is cleanly rejected downstream if not.
   useEffect(() => {
     if (!user) return;
-    api.get<{ actorKind?: string; organizerId?: string; sales?: Sale[]; venmoHandle?: string | null; zelleHandle?: string | null }>('/pos/context')
+    api.get<{ actorKind?: string; organizerId?: string; sales?: Sale[]; venmoHandle?: string | null; zelleHandle?: string | null; canApplyDiscount?: boolean; discountCap?: { type: 'PERCENT' | 'FIXED'; value: number } | null }>('/pos/context')
       .then(r => {
         setOrganizerVenmo(r.data.venmoHandle || null);
         setOrganizerZelle(r.data.zelleHandle || null);
@@ -406,6 +440,9 @@ export default function POSPage() {
         const active = all.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i); // dedup by id
         setSales(active);
         if (active.length === 1 && !venueHubId) setSelectedSaleId(active[0].id);
+        // POS Cashier Discount Permission (2026-08-28)
+        setCanApplyDiscount(!!r.data.canApplyDiscount);
+        setDiscountCap(r.data.discountCap ?? null);
       })
       .catch(err => console.error('[pos] Failed to load POS context:', err));
   }, [user, venueHubId]);
@@ -1538,11 +1575,17 @@ export default function POSPage() {
         totalAmount: number;
         platformFee: number;
       }>('/stripe/terminal/payment-intent', {
-        items,
+        items, // raw, undiscounted per-item amounts -- backend applies the discount itself
         saleId: selectedSaleId,
         clientTransactionId,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
         ...(remainingCents > 0 ? { cashAmountCents: cashReceivedCents } : {}),
+        // POS Cashier Discount Permission (2026-08-28)
+        ...(discountAmount > 0 ? {
+          discountType,
+          discountValue: discountValueNum,
+          ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
+        } : {}),
       });
 
       const { paymentIntentId: piId, clientSecret } = piRes.data;
@@ -2207,6 +2250,16 @@ export default function POSPage() {
         totalAmountCents,
       };
 
+      // POS Cashier Discount Permission (2026-08-28): totalAmountCents above already
+      // nets out the discount (cartTotal is discount-adjusted) -- these fields let the
+      // backend independently verify + permission-check that reduction rather than
+      // trusting the total alone. See ADR-pos-cashier-discount-permission.md.
+      if (discountAmount > 0) {
+        payload.discountType = discountType;
+        payload.discountValue = discountValueNum;
+        if (discountReasonNote.trim()) payload.discountReasonNote = discountReasonNote.trim();
+      }
+
       // If split payment (cash + card), include split details
       if (remainingCents > 0) {
         payload.isSplitPayment = true;
@@ -2608,10 +2661,92 @@ export default function POSPage() {
           </ul>
 
           <div className="border-t border-warm-200 dark:border-gray-700 pt-3 text-sm">
+            {/* POS Cashier Discount Permission (2026-08-28): control is absent entirely
+                (not disabled) for a cart-holder without the apply_pos_discount permission
+                or an empty cart -- see claude_docs/ux-spotchecks/pos-cashier-discount-permission.md
+                for why absence, not a disabled-with-tooltip control, is the correct signal. */}
+            {canApplyDiscount && cart.length > 0 && discountOpen && (
+              <div className="mb-3 p-3 rounded-md bg-warm-50 dark:bg-gray-700/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-warm-700 dark:text-warm-300">Discount</span>
+                  <button
+                    type="button"
+                    onClick={() => { setDiscountOpen(false); setDiscountValueInput(''); setDiscountReasonNote(''); }}
+                    className="text-xs text-warm-400 hover:text-warm-600 dark:hover:text-warm-200"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-md overflow-hidden border border-warm-300 dark:border-gray-600 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('PERCENT')}
+                      className={`px-3 py-2 text-sm font-semibold min-w-[44px] min-h-[44px] ${discountType === 'PERCENT' ? 'bg-sage-600 text-white' : 'bg-white dark:bg-gray-700 text-warm-700 dark:text-warm-300'}`}
+                    >
+                      %
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountType('FIXED')}
+                      className={`px-3 py-2 text-sm font-semibold min-w-[44px] min-h-[44px] ${discountType === 'FIXED' ? 'bg-sage-600 text-white' : 'bg-white dark:bg-gray-700 text-warm-700 dark:text-warm-300'}`}
+                    >
+                      $
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={discountValueInput}
+                    onChange={(e) => setDiscountValueInput(e.target.value)}
+                    placeholder={discountType === 'PERCENT' ? 'e.g. 10' : 'e.g. 5.00'}
+                    className="flex-1 min-h-[44px] px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
+                  />
+                </div>
+                {discountExceedsCap && discountCapDollars != null && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Max for your role is {discountCap?.type === 'PERCENT' ? `${discountCap.value}%` : `$${discountCapDollars.toFixed(2)}`}. Applying ${discountAmount.toFixed(2)} instead.
+                  </p>
+                )}
+                <input
+                  type="text"
+                  value={discountReasonNote}
+                  onChange={(e) => setDiscountReasonNote(e.target.value)}
+                  placeholder="Reason (optional)"
+                  maxLength={280}
+                  className="w-full min-h-[44px] px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
+                />
+              </div>
+            )}
+
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-warm-600 dark:text-warm-400 mb-1">
+                <span>Subtotal:</span>
+                <span>${cartSubtotal.toFixed(2)}</span>
+              </div>
+            )}
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sage-700 dark:text-green-400 mb-1">
+                <span>Discount:</span>
+                <span>&minus;${discountAmount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-semibold text-warm-900 dark:text-warm-100 mb-1">
               <span>Total:</span>
               <span>${cartTotal.toFixed(2)}</span>
             </div>
+
+            {canApplyDiscount && cart.length > 0 && !discountOpen && (
+              <button
+                type="button"
+                onClick={() => setDiscountOpen(true)}
+                className="text-xs text-sage-600 dark:text-sage-400 hover:underline mb-2 min-h-[44px]"
+              >
+                Add discount
+              </button>
+            )}
 
             {/* Split Bill button (#406) -- hidden per Patrick decision 2026-08-24, code intact */}
             {ENABLE_SPLIT_BILL && cart.length > 0 && (

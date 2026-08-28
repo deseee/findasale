@@ -26,6 +26,7 @@
 import { Response, RequestHandler } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { WorkspaceRole } from '@prisma/client';
 
 export type ResolvedPosActor = {
   id: string; // Organizer.id — the RESOLVED organizer, not the caller
@@ -43,6 +44,12 @@ export type ResolvedPosActor = {
   actorKind: 'ORGANIZER' | 'TEAM_MEMBER';
   actingUserId: string; // req.user.id — who is actually standing at the register
   teamMemberId?: string; // set only when actorKind === 'TEAM_MEMBER'
+  // POS discount permission (2026-08-28): only set when actorKind === 'TEAM_MEMBER'.
+  // ORGANIZER actors are never permission-gated on discounting their own sale, so these
+  // are deliberately left undefined on that branch rather than populated with a
+  // meaningless "owner always allowed" value -- callers should branch on actorKind first.
+  workspaceId?: string;
+  workspaceRole?: WorkspaceRole;
 };
 
 const NO_ACCESS_MESSAGE = 'Organizer access required';
@@ -107,6 +114,8 @@ export async function resolveOrganizerOrTeamMember(
   const member = await prisma.workspaceMember.findFirst({
     where: { userId: actingUserId, acceptedAt: { not: null }, teamMember: { isNot: null } },
     select: {
+      workspaceId: true,
+      role: true,
       workspace: {
         select: {
           owner: {
@@ -145,6 +154,8 @@ export async function resolveOrganizerOrTeamMember(
     actorKind: 'TEAM_MEMBER',
     actingUserId,
     teamMemberId: member.teamMember.id,
+    workspaceId: member.workspaceId,
+    workspaceRole: member.role,
   };
 }
 
