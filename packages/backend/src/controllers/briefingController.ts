@@ -15,22 +15,24 @@ import { getIO } from '../lib/socket';
 export const getBriefing = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
-    const organizerId = req.user?.organizerProfile?.id;
-
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
 
-    // Verify workspace membership
+    // 2026-08-28: this route already runs behind `requireWorkspaceMember()`
+    // (packages/backend/src/routes/workspace.ts), which resolves membership by
+    // organizerId OR userId -- correctly covering MEMBER-role staff who have no
+    // organizerProfile of their own. This controller previously re-checked
+    // membership using ONLY req.user.organizerProfile.id and 401'd immediately
+    // if absent, before ever reaching the (also organizerId-only, so doubly
+    // broken) re-check below. That meant every non-organizer staff account was
+    // hard-blocked from their own workspace's morning briefing, which then
+    // cascaded into a full session-kill redirect via the frontend's refresh
+    // interceptor treating the 401 as an expired session. Trusting the
+    // middleware (which already ran) instead of re-deriving authorization here.
     const workspace = await prisma.organizerWorkspace.findUnique({
       where: { id: workspaceId },
-      select: { id: true, ownerId: true, members: { select: { organizerId: true } } },
+      select: { id: true, ownerId: true },
     });
     if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
-
-    const isMember =
-      workspace.ownerId === organizerId ||
-      workspace.members.some((m) => m.organizerId === organizerId);
-    if (!isMember) return res.status(403).json({ message: 'Not a workspace member' });
 
     // Detection window: startDate within 12h future or 6h past
     const now = new Date();
@@ -295,9 +297,11 @@ export const createPrepTask = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
     const { saleId, title, assigneeId, urgent, phase, checklistItemId } = req.body;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    // 2026-08-28: dropped the organizerProfile-only gate here -- same bug class as
+    // getBriefing above. This route runs behind requireWorkspaceMember() (organizerId
+    // OR userId), which already authorized the request; re-gating on organizerProfile
+    // alone 401'd every MEMBER-role staff account with no Organizer profile of its own.
     if (!workspaceId || !saleId) return res.status(400).json({ message: 'Workspace ID and Sale ID required' });
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
       return res.status(400).json({ message: 'Title is required' });
@@ -353,9 +357,14 @@ export const updatePrepTask = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId, taskId } = req.params;
     const { done, assigneeId, title, urgent } = req.body;
-    const organizerId = req.user?.organizerProfile?.id;
+    // 2026-08-28: was organizerProfile-only (same bug as getBriefing/createPrepTask) --
+    // swapped to userId, which authenticate() always sets, so MEMBER-role staff with no
+    // Organizer profile aren't 401'd. requireWorkspaceMember() already authorized this
+    // request; userId also now correctly attributes staff-completed tasks in the
+    // briefing:prepToggled socket payload below instead of blocking them outright.
+    const userId = req.user?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId || !taskId) return res.status(400).json({ message: 'Workspace ID and Task ID required' });
 
     // Fetch existing task to get saleId and checklistItemId
@@ -419,7 +428,7 @@ export const updatePrepTask = async (req: AuthRequest, res: Response) => {
         taskId: task.id,
         done: task.done,
         doneAt: task.doneAt,
-        doneBy: organizerId,
+        doneBy: userId,
       });
     } catch (socketErr) {
       console.warn('[briefing] Socket emit failed:', socketErr);
