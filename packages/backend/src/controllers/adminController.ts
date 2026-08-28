@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -2297,5 +2298,104 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error bulk-refunding purchases:', error);
     res.status(500).json({ message: 'Failed to process bulk refund' });
+  }
+};
+
+/**
+ * Admin impersonation ("log in as user") — QA/support tooling, 2026-08-28.
+ * Issues a short-lived (15m) accessToken cookie for the target user, identical in
+ * shape to a real login's JWT payload (see authController.ts login functions) so
+ * downstream code decodes it the same way. Deliberately issues NO refreshToken —
+ * the session cannot silently renew itself; it just ends when the 15m token expires.
+ * Every use is logged to AdminImpersonationLog. An admin can never impersonate
+ * another admin (privilege-escalation guard), and cannot "impersonate" themselves.
+ * No password is ever read, stored, or transmitted anywhere in this flow.
+ */
+export const impersonateUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId: targetUserId } = req.params;
+    const { reason } = req.body as { reason?: string };
+    const adminUserId = req.user!.id;
+
+    if (targetUserId === adminUserId) {
+      return res.status(400).json({ message: 'Cannot impersonate yourself' });
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!targetUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const targetRoles = targetUser.roles && targetUser.roles.length > 0 ? targetUser.roles : [targetUser.role];
+    if (targetRoles.includes('ADMIN') || targetUser.role === 'ADMIN') {
+      return res.status(403).json({ message: 'Cannot impersonate an admin account' });
+    }
+
+    // Mirror authController's login payload build exactly (organizerProfile +
+    // subscriptionLapsed), so AuthContext on the frontend decodes an impersonated
+    // session identically to a real one.
+    let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
+    let subscriptionLapsed = false;
+    if (targetUser.role === 'ORGANIZER' || targetUser.roles?.includes('ORGANIZER')) {
+      organizerProfile = await prisma.organizer.findUnique({
+        where: { userId: targetUser.id },
+      });
+
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: { userId: targetUser.id, role: 'ORGANIZER' },
+      });
+      if (roleSubscription) {
+        subscriptionLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+      }
+    }
+
+    const accessToken = jwt.sign(
+      {
+        id: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+        roles: targetRoles,
+        referralCode: targetUser.referralCode,
+        tokenVersion: targetUser.tokenVersion,
+        emailVerified: targetUser.emailVerified,
+        subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+        subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+        subscriptionLapsed,
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
+        onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+        createdAt: targetUser.createdAt.toISOString(),
+        huntPassActive: targetUser.huntPassActive,
+        huntPassExpiry: targetUser.huntPassExpiry,
+        guildXp: targetUser.guildXp || 0,
+        impersonatedBy: adminUserId, // trace claim — any action taken during this session is attributable
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: '15m' } // deliberately shorter than real login's 1h — no refreshToken issued either
+    );
+
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    await prisma.adminImpersonationLog.create({
+      data: {
+        adminUserId,
+        targetUserId,
+        reason: reason ?? null,
+      },
+    });
+
+    res.json({
+      message: 'Impersonation session started',
+      user: { id: targetUser.id, email: targetUser.email, name: targetUser.name },
+    });
+  } catch (error) {
+    console.error('Error starting impersonation session:', error);
+    res.status(500).json({ message: 'Failed to start impersonation session' });
   }
 };

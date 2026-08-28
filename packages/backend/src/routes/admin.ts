@@ -44,6 +44,7 @@ import {
   getMarketplaceReviewBacklog,
   getAdminPurchases,
   bulkRefundPurchases,
+  impersonateUser,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -86,6 +87,7 @@ router.delete('/users/:userId', deleteUser);
 router.delete('/users/:userId/purge', purgeUser);
 router.post('/users/:userId/message', sendDirectMessageToUser);
 router.patch('/users/:userId/restore', restoreUser);
+router.post('/users/:userId/impersonate', impersonateUser);
 router.get('/sales', getSales);
 router.delete('/sales/:saleId', deleteSale);
 router.get('/activity', getRecentActivity);

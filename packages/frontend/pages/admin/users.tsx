@@ -140,6 +140,23 @@ const AdminUsers = () => {
     }
   };
 
+  const handleImpersonate = async (u: User) => {
+    if (u.role === 'ADMIN') {
+      setError('Cannot impersonate an admin account');
+      return;
+    }
+    const reason = window.prompt(`Reason for logging in as ${u.email}? (optional, for the audit log)`) || undefined;
+    try {
+      setActionLoading(u.id);
+      await api.post(`/admin/users/${u.id}/impersonate`, { reason });
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Error starting impersonation session:', err);
+      setError('Failed to start impersonation session');
+      setActionLoading(null);
+    }
+  };
+
   const handleDelete = async (userId: string) => {
     try {
       setActionLoading(userId);
@@ -358,6 +375,16 @@ const AdminUsers = () => {
                             >
                               {u.suspendedAt ? 'Unsuspend' : 'Suspend'}
                             </button>
+                            {u.role !== 'ADMIN' && (
+                              <button
+                                onClick={() => handleImpersonate(u)}
+                                disabled={actionLoading === u.id}
+                                title="Start a QA session as this user — no password needed, logged to AdminImpersonationLog"
+                                className="px-2 py-1 text-xs rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 disabled:opacity-50"
+                              >
+                                Log in as
+                              </button>
+                            )}
                             <button
                               onClick={() => setDeleteDialog(u.id)}
                               disabled={actionLoading === u.id}

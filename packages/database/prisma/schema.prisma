@@ -266,6 +266,9 @@ model User {
   // Feature: Shopper Organizer Introductions — organizers this shopper has introduced to FindA.Sale
   shopperIntroductions   ShopperOrganizerIntroduction[] @relation("ShopperIntroductions")
   shopperWaitlistEntries ShopperWaitlistEntry[] // Feature #455: Shopper Notify Me Waitlist
+  // Admin impersonation ('log in as user' QA tooling) — audit trail of admin-initiated sessions
+  adminImpersonationsInitiated AdminImpersonationLog[] @relation("AdminImpersonationsInitiated")
+  adminImpersonationsReceived  AdminImpersonationLog[] @relation("AdminImpersonationsReceived")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -6343,4 +6346,17 @@ model MarketplaceAccount {
   @@unique([organizerId, platform])
   @@index([organizerId])
   @@index([platform, status])
+}
+
+model AdminImpersonationLog {
+  id           String   @id @default(cuid())
+  adminUserId  String
+  targetUserId String
+  reason       String?
+  createdAt    DateTime @default(now())
+  admin        User     @relation("AdminImpersonationsInitiated", fields: [adminUserId], references: [id], onDelete: Cascade)
+  targetUser   User     @relation("AdminImpersonationsReceived", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([targetUserId])
 }
