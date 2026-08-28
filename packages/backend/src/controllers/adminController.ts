@@ -2282,7 +2282,7 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
       try {
         const purchase = await prisma.purchase.findUnique({
           where: { id: purchaseId },
-          select: { amount: true },
+          select: { amount: true, itemId: true },
         });
         if (!purchase) {
           results.push({ purchaseId, success: false, error: 'Purchase not found' });
@@ -2293,6 +2293,21 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         // 'fraudulent' so it's actually flagged in Stripe (Radar/reporting), not just
         // reversed with no reason on file. See refundService.ts's `reason` param (2026-08-28).
         const result = await executeVerifiedRefund(purchaseId, purchase.amount, 'admin', 'fraudulent');
+        // BUG FIX 2026-08-28 (P0, live-DB-confirmed): executeVerifiedRefund deliberately does NOT
+        // reset Item.status itself -- refundService.ts's own comment says that happens in "each
+        // caller...right after this function returns", matching stripeController.ts's createRefund
+        // (`packages/backend/src/controllers/stripeController.ts`, restores AVAILABLE right after
+        // this same call) and disputeController.ts's updateDisputeStatus (identical pattern). This
+        // admin bulk-refund caller was the one place that call was missing entirely -- confirmed via
+        // direct prod DB query: 9 REFUNDED purchase rows across 4 real items left stuck at
+        // Item.status=SOLD. Mirrors the exact same unconditional restore those two siblings already
+        // use (no "was this the item's last outstanding sale" guard in either of them either).
+        if (purchase.itemId) {
+          await prisma.item.update({
+            where: { id: purchase.itemId },
+            data: { status: 'AVAILABLE' },
+          });
+        }
         results.push({ purchaseId, success: true, refundedAmount: result.refundedAmount });
       } catch (err) {
         if (err instanceof RefundError) {
