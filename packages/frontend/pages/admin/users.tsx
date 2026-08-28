@@ -145,10 +145,14 @@ const AdminUsers = () => {
       setError('Cannot impersonate an admin account');
       return;
     }
-    const reason = window.prompt(`Reason for logging in as ${u.email}? (optional, for the audit log)`) || undefined;
+    // 2026-08-28: no window.prompt/confirm here on purpose -- a native blocking
+    // dialog freezes the tab's JS thread entirely, which browser-automation
+    // tooling (Chrome extension driven QA) cannot dismiss. This action is
+    // already admin-gated, blocks self/admin targets server-side, and is
+    // fully audit-logged (AdminImpersonationLog) without needing a reason.
     try {
       setActionLoading(u.id);
-      await api.post(`/admin/users/${u.id}/impersonate`, { reason });
+      await api.post(`/admin/users/${u.id}/impersonate`, {});
       window.location.href = '/';
     } catch (err) {
       console.error('Error starting impersonation session:', err);
