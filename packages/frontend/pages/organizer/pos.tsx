@@ -98,6 +98,9 @@ const ENABLE_SPLIT_BILL = false;
 interface CashPaymentResponse {
   platformFee: number;
   cashFeeBalance: number;
+  // Test Transaction safety net UI (2026-08-29): backend returns this so the success
+  // panel can say honestly whether the displayed fee/balance below actually moved.
+  isTestTransaction?: boolean;
 }
 
 interface HoldItem {
@@ -3643,11 +3646,21 @@ export default function POSPage() {
           {paymentMode === 'cash' && lastCashFee && (
             <div className="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800 space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-emerald-700 dark:text-emerald-400">Platform fee:</span>
+                <span className="text-emerald-700 dark:text-emerald-400">Platform fee{lastCashFee.isTestTransaction ? ' (not charged)' : ''}:</span>
                 <span className="font-semibold text-emerald-900 dark:text-emerald-300">${lastCashFee.platformFee.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 italic">This fee will be deducted from your next payout.</p>
-              {lastCashFee.cashFeeBalance > 0 && (
+              {/* Test Transaction safety net UI (2026-08-29): terminalController.ts
+                  computes platformFee for a test transaction (so the math is genuinely
+                  exercised) but deliberately never accrues it to cashFeeBalance -- the
+                  old unconditional "will be deducted" copy was misleading here. */}
+              {lastCashFee.isTestTransaction ? (
+                <p className="text-xs text-amber-700 dark:text-amber-400 italic">
+                  🧪 Test transaction — this fee was calculated but NOT charged or added to your balance.
+                </p>
+              ) : (
+                <p className="text-xs text-emerald-700 dark:text-emerald-400 italic">This fee will be deducted from your next payout.</p>
+              )}
+              {!lastCashFee.isTestTransaction && lastCashFee.cashFeeBalance > 0 && (
                 <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800">
                   <p className="text-xs text-emerald-700 dark:text-emerald-400">
                     <span className="font-semibold">Pending fee balance:</span> ${lastCashFee.cashFeeBalance.toFixed(2)} total
