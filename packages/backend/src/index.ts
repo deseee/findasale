@@ -193,6 +193,7 @@ import markdownCycleRoutes from './routes/markdownCycles';       // Feature: Aut
 import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import qrScannerRoutes from './routes/qrScanner';                // QR Scanner Phase 2: scan analytics
 import imageProxyRoutes from './routes/imageProxy';              // Image proxy for eBay CDN images
+import curioRoutes from './routes/curio';                        // Curio (resale-value scanner) -- curio-api-adr-2026-07-17.md
 import { crawlerAnalyticsMiddleware, detectCrawler } from './middleware/crawlerAnalytics'; // AI Crawler Analytics
 import crawlerStatsRouter from './routes/crawlerStats';           // AI Crawler Stats endpoint
 import crawlerLogRouter from './routes/crawlerLog';               // AI Crawler Log — SSR bot tracking
@@ -777,6 +778,7 @@ app.use('/api/xp', xpController);                                      // Phase 
 app.use('/api/support', supportRoutes);                                 // #128: Automated Support Stack
 app.use('/api/sales', settlementRoutes);                                   // Feature #228: Settlement Hub
 app.use('/api/consignor-settlements', consignorSettlementRoutes);          // Feature #239: Multi-Consignor Estate Settlement
+app.use('/api/curio', curioRoutes);                                         // Curio (resale-value scanner), Phases 1-4
 app.use('/api/ebay', ebayRoutes);                                          // eBay Marketplace Account Deletion
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
 app.use('/api/reverb', reverbRoutes);                                       // Universal Crosslister -- Reverb Official-API Tier

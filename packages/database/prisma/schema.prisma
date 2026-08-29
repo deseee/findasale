@@ -269,6 +269,8 @@ model User {
   // Admin impersonation ('log in as user' QA tooling) — audit trail of admin-initiated sessions
   adminImpersonationsInitiated AdminImpersonationLog[] @relation("AdminImpersonationsInitiated")
   adminImpersonationsReceived  AdminImpersonationLog[] @relation("AdminImpersonationsReceived")
+  // Curio (2026-08-28): resale-value scanner -- a user's scan history (Finds collection)
+  curioScans                    CurioScan[]
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -1307,6 +1309,8 @@ model Item {
   ebayOfferId                     String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
   // Feature #XXX: Shopify Cross-Listing
   shopifyListing                  ShopifyListing?
+  // Curio (2026-08-28): inverse relation -- set when a CurioScan is converted to this Item
+  curioScan                        CurioScan?
   ebayCategoryId                  String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
   ebayCategoryName                String? // eBay leaf category name (e.g. "Guitar Amplifiers") — user-friendly display name for eBay category selected
   ebayNeedsReview                 Boolean                 @default(false) // Set true when all category suggestions fail 25005 — organizer must set category manually
@@ -3807,6 +3811,53 @@ model PricingComp {
   @@index([sourceId])
   @@index([saleDate])
   @@index([expireAt])
+}
+
+// Curio (2026-08-28) -- resale-value scanner. See
+// claude_docs/feature-notes/curio-api-adr-2026-07-17.md. Purely additive; no changes to any
+// existing table. userId is REQUIRED (login-required v1, no anonymous scanning -- ADR Decision #3).
+model CurioScan {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sourceSurface     String    // PWA_CAMERA | EXTENSION_RIGHTCLICK | EXTENSION_UPLOAD | EXTENSION_DEALCHECK
+
+  // Identification -- mirrors AITagResult (cloudAIService.ts) deliberately, so the existing
+  // camera-pipeline shape is reused rather than re-invented.
+  photoUrls         String[]  @default([])
+  title             String
+  description       String?
+  category          String?
+  brand             String?
+  condition         String?
+  aiConfidence      Float     @default(0.5)
+
+  // Value estimate -- cents, matches ItemValuation's cents convention
+  priceLow          Int?
+  priceHigh         Int?
+  priceMedian       Int?
+  valueBasis        String?   @default("similar_active_listings") // NEVER "sold" -- permanent, see ADR Rationale #1
+  comparableListings Json?    // frozen snapshot array, not a live FK
+
+  // Deal Check specific (null for PWA scans)
+  dealCheckVerdict  String?
+  dealCheckAskingPriceCents Int?
+  dealCheckSourceDomain String?
+
+  // Flywheel -- convert scan to a draft Item listing
+  convertedToItemId String?   @unique
+  convertedToItem   Item?     @relation(fields: [convertedToItemId], references: [id], onDelete: SetNull)
+  convertedAt       DateTime?
+
+  guildXpAwarded    Int       @default(0)
+
+  createdAt         DateTime  @default(now())
+  deletedAt         DateTime? // soft delete, matches Item.deletedAt convention
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([convertedToItemId])
 }
 
 // Google Trends + eBay momentum signals

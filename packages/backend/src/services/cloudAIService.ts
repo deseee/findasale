@@ -287,6 +287,43 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
   }
 }
 
+// ── Curio degraded-mode Vision (curio-api-adr-2026-07-17.md, Phase 1) ─────────────────────────
+// Single-feature LABEL_DETECTION-only variant of getVisionLabels() above, used ONLY when
+// isCurioDegradedMode()/isCurioCostCeilingExceeded() (lib/curioCostTracker.ts) route a Curio scan
+// to the cheaper pipeline (~71% cheaper per image than the bundled 3-feature call). Deliberately a
+// SEPARATE, additive function -- NOT a parameterized version of getVisionLabels() -- so every
+// existing caller of getVisionLabels() (6 call sites) keeps requesting all 3 bundled features
+// completely unchanged; this function never touches that code path.
+//
+// Does NOT call trackVisionCall()/recordApiUsage(): Curio's Vision spend is accounted for
+// separately via curioCostTracker.ts's trackCurioScan(), a fully separate cost pool from the
+// shared organizer AI ceiling that getVisionLabels()/trackVisionCall() feed into (ai:tokens:YYYY-MM
+// Redis key, isAICostCeilingExceeded()). See ADR "Constraints Added" -- Curio must never share that
+// pool. Callers (curioController.ts) are responsible for calling trackCurioScan() themselves.
+export async function getVisionLabelsDegraded(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[] }> {
+  try {
+    const response = await axios.post(
+      `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+      {
+        requests: [
+          {
+            image: { content: imageBase64 },
+            features: [{ type: 'LABEL_DETECTION', maxResults: 10 }],
+          },
+        ],
+      },
+      { timeout: 15000 }
+    );
+    const annotations = response.data.responses?.[0];
+    const labelAnnotations: any[] = annotations?.labelAnnotations ?? [];
+    const objectLabels: string[] = labelAnnotations.map((l: any) => l.description);
+    return { objectLabels, detectedText: [] };
+  } catch (error: any) {
+    console.warn('[cloudAIService] Curio degraded-mode Vision API error:', error.message || error);
+    return { objectLabels: [], detectedText: [] };
+  }
+}
+
 // ── Web Detection (ADR-web-detection-hard-gating-2026-07-01) ──────────────────
 // Deliberately a SEPARATE function from getVisionLabels() — never merged into that call — so
 // that Web Detection being disabled, rate-capped, or erroring can never affect the existing,

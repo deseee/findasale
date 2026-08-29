@@ -79,7 +79,7 @@ const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 // ── Cloudinary image variants ─────────────────────────────────────────
 // Transformation URLs are generated on-the-fly from the original URL.
 // This ensures the public_id is always preserved and URLs remain valid.
-interface CloudinaryUrls {
+export interface CloudinaryUrls {
   original: string;
   thumbnail: string;
   optimized: string;
@@ -88,7 +88,9 @@ interface CloudinaryUrls {
 
 // Upload a single buffer to Cloudinary — returns multi-res URLs
 // Retry wrapper for Cloudinary 420 rate limit errors (rapid-fire mode fires in bursts)
-const uploadToCloudinaryWithRetry = async (buffer: Buffer, folder = 'findasale', maxRetries = 3): Promise<CloudinaryUrls> => {
+// Exported 2026-08-28 (Curio ADR) so curioController.ts can reuse this instead of duplicating
+// Cloudinary upload logic -- behavior is completely unchanged for every existing caller in this file.
+export const uploadToCloudinaryWithRetry = async (buffer: Buffer, folder = 'findasale', maxRetries = 3): Promise<CloudinaryUrls> => {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await uploadToCloudinary(buffer, folder);
