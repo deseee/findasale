@@ -130,9 +130,10 @@ async function computeRecapMetrics(saleId: string): Promise<RecapMetrics> {
     prisma.sale.findUnique({ where: { id: saleId }, select: { qrScanCount: true } }),
     prisma.linkClick.count({ where: { saleId } }),
     prisma.item.count({ where: { saleId } }),
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     prisma.item.findMany({
       where: { saleId, status: 'SOLD' },
-      select: { price: true, purchases: { where: { status: 'PAID' }, select: { amount: true } } },
+      select: { price: true, purchases: { where: { status: 'PAID', isTestTransaction: false }, select: { amount: true } } },
     }),
   ]);
 

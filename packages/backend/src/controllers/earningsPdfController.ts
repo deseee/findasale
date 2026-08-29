@@ -32,9 +32,11 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: { organizerId: organizer.id },
       include: {
+        // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         purchases: {
           where: {
             status: 'PAID',
+            isTestTransaction: false,
             createdAt: { gte: startDate, lt: endDate },
           },
           // listingType + auctionStartPrice let the reporting helper below recognise an

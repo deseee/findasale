@@ -66,8 +66,9 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
     include: {
+      // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
       purchases: {
-        where: { status: 'PAID' },
+        where: { status: 'PAID', isTestTransaction: false },
       },
     },
   });
@@ -84,13 +85,14 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   // Returned items have saleId=null but lastSaleId=this sale's id
   // Only count SOLD items if they have PAID purchases
   const [itemsInSale, returnedItems] = await Promise.all([
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     prisma.item.findMany({
       where: { saleId },
-      include: { purchases: { where: { status: 'PAID' } } },
+      include: { purchases: { where: { status: 'PAID', isTestTransaction: false } } },
     }),
     prisma.item.findMany({
       where: { lastSaleId: saleId, status: 'SOLD' },
-      include: { purchases: { where: { status: 'PAID' } } },
+      include: { purchases: { where: { status: 'PAID', isTestTransaction: false } } },
     }),
   ]);
   const saleItems = [...itemsInSale, ...returnedItems];

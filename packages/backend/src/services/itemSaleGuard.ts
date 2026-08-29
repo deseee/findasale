@@ -102,8 +102,12 @@ export async function commitItemSale(
   // Defense-in-depth: reject if a PAID Purchase already exists for this item,
   // even if Item.status itself is somehow stale/wrong (e.g. a prior bug left
   // it at AVAILABLE despite a completed sale).
+  // isTestTransaction exclusion (2026-08-29): a test-transaction Purchase (terminalController.ts's
+  // cash-payment safety net, reservationController.ts's RECORD/markSold path) is deliberately
+  // written as PAID while leaving Item.status untouched -- no real inventory was consumed -- so it
+  // must never be mistaken here for a real completed sale that should block this item's real commit.
   const existingPaidPurchase = await client.purchase.findFirst({
-    where: { itemId, status: 'PAID' },
+    where: { itemId, status: 'PAID', isTestTransaction: false },
     select: { id: true },
   });
   if (existingPaidPurchase) {

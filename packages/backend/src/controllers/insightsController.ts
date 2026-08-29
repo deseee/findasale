@@ -74,8 +74,9 @@ export const getPerSaleAnalytics = async (req: AuthRequest, res: Response) => {
     const itemsOnHold = items.filter(i => i.status === 'RESERVED' || i.status === 'AUCTION_ENDED').length;
 
     // Revenue from PAID purchases for this sale
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const purchases = await prisma.purchase.findMany({
-      where: { saleId, status: 'PAID' },
+      where: { saleId, status: 'PAID', isTestTransaction: false },
       select: { amount: true, createdAt: true },
     });
     const totalRevenue = purchases.reduce((sum, p) => sum + p.amount, 0);
@@ -184,7 +185,8 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
             category: true,
             // PAID Purchase amount — the real money-received figure, used for
             // totalRevenue below instead of listing price (see loop below).
-            purchases: { where: { status: 'PAID' }, select: { amount: true } },
+            // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
+            purchases: { where: { status: 'PAID', isTestTransaction: false }, select: { amount: true } },
           },
         },
       },

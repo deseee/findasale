@@ -41,10 +41,12 @@ export const getSaleStatus = async (saleId: string): Promise<SaleStatus> => {
     }
 
     // Items sold today — purchases with status PAID created since start of today
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const itemsSoldToday = await prisma.purchase.count({
       where: {
         saleId,
         status: 'PAID',
+        isTestTransaction: false,
         createdAt: {
           gte: todayStart,
         },
@@ -71,10 +73,12 @@ export const getSaleStatus = async (saleId: string): Promise<SaleStatus> => {
     });
 
     // Revenue today — sum of paid purchases since start of today
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const revenueTodayResult = await prisma.purchase.aggregate({
       where: {
         saleId,
         status: 'PAID',
+        isTestTransaction: false,
         createdAt: {
           gte: todayStart,
         },

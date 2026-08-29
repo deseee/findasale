@@ -187,10 +187,12 @@ export const referralTrancheService = {
 
         // Check if this is a 2nd purchase by looking for prior REFERRAL_TRANCHE_C award to this referrer
         // Count how many purchases this user has made (via PointsTransaction PURCHASE type or via Purchase count)
+        // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         const purchaseCount = await prisma.purchase.count({
           where: {
             userId: referredUserId,
             status: 'PAID',
+            isTestTransaction: false,
           },
         });
 

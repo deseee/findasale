@@ -1867,10 +1867,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
             if (organizerReferral && organizerReferral.status === 'PENDING') {
               // Count completed purchases where buyer is the referee AND NOT the referrer
+              // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
               const externalPurchaseCount = await prisma.purchase.count({
                 where: {
                   userId: purchase.userId,
                   status: 'PAID',
+                  isTestTransaction: false,
                   // Ensure buyer is not the referrer (prevents self-dealing)
                   sale: {
                     organizer: {
@@ -2192,11 +2194,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
           (async () => {
             try {
               const saleId = purchase.saleId!;
+              // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
               const distinctBuyerCount = await (prisma as any).$queryRaw`
                 SELECT COUNT(DISTINCT "userId") as cnt
                 FROM "Purchase"
                 WHERE "saleId" = ${saleId}
                 AND status = 'PAID'
+                AND "isTestTransaction" = false
                 AND "userId" IS NOT NULL
               ` as Array<{ cnt: bigint }>;
               const buyerCount = Number(distinctBuyerCount[0]?.cnt ?? 0);
@@ -2216,11 +2220,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 }
 
                 // Fetch all 100 distinct purchaser userIds for this sale
+                // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
                 const purchasers = await (prisma as any).$queryRaw`
                   SELECT DISTINCT "userId"
                   FROM "Purchase"
                   WHERE "saleId" = ${saleId}
                   AND status = 'PAID'
+                  AND "isTestTransaction" = false
                   AND "userId" IS NOT NULL
                   LIMIT 100
                 ` as Array<{ userId: string }>;
@@ -2254,10 +2260,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
               const saleZip = (purchase.sale as any).zip as string;
               const badgeName = 'Local Legend';
 
+              // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
               const zipPurchaseCount = await prisma.purchase.count({
                 where: {
                   userId,
                   status: 'PAID',
+                  isTestTransaction: false,
                   item: { sale: { zip: saleZip } },
                 },
               });

@@ -67,8 +67,9 @@ async function backfillBatch(skip: number): Promise<{
       sale: {
         select: { zip: true },
       },
+      // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
       purchases: {
-        where: { status: 'PAID' },
+        where: { status: 'PAID', isTestTransaction: false },
         select: { amount: true },
         take: 1,
       },

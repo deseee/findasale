@@ -124,10 +124,12 @@ function parseDateRange(range: string, fromParam?: string, toParam?: string): { 
  * Compute revenue metrics: total, fees, split by source (online vs POS)
  */
 async function computeRevenueMetrics(saleId: string, from: Date, to: Date) {
+  // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
   const purchases = await prisma.purchase.findMany({
     where: {
       saleId,
       status: 'PAID',
+      isTestTransaction: false,
       createdAt: { gte: from, lte: to },
     },
     select: {
@@ -169,10 +171,12 @@ async function computeRevenueMetrics(saleId: string, from: Date, to: Date) {
  * Top-selling items: count by itemId, sum revenue, top 10
  */
 async function computeTopSellingItems(saleId: string, from: Date, to: Date) {
+  // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
   const purchases = await prisma.purchase.findMany({
     where: {
       saleId,
       status: 'PAID',
+      isTestTransaction: false,
       createdAt: { gte: from, lte: to },
       itemId: { not: null },
     },
@@ -268,10 +272,12 @@ async function computeTopSellingItems(saleId: string, from: Date, to: Date) {
  * Fallback: (purchases / items) if no favorite data
  */
 async function computeConversionRate(saleId: string, from: Date, to: Date) {
+  // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
   const purchases = await prisma.purchase.findMany({
     where: {
       saleId,
       status: 'PAID',
+      isTestTransaction: false,
       createdAt: { gte: from, lte: to },
     },
     select: {
@@ -386,10 +392,12 @@ async function computeCategoryBreakdown(saleId: string, from: Date, to: Date) {
   }
 
   // Fetch purchases per category to compute revenue
+  // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
   const purchases = await prisma.purchase.findMany({
     where: {
       saleId,
       status: 'PAID',
+      isTestTransaction: false,
       createdAt: { gte: from, lte: to },
       item: { category: { not: null } },
     },

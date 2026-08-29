@@ -170,11 +170,13 @@ export async function getCommandCenterSummary(
     _count: { id: true },
   });
 
+  // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
   const revenue = await prisma.purchase.groupBy({
     by: ['saleId'],
     where: {
       saleId: { in: saleIds },
       status: 'PAID',
+      isTestTransaction: false,
     },
     _sum: { amount: true },
   });

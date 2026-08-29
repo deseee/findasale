@@ -50,11 +50,13 @@ export async function getOrganizerActivityFeed(
     );
 
     // Fetch recent purchases (last 24 hours)
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const recentPurchases = await prisma.purchase.findMany({
       where: {
         saleId: { in: salesInScope },
         createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         status: { in: ['PAID', 'PENDING'] },
+        isTestTransaction: false,
       },
       include: { sale: { select: { title: true } } },
       orderBy: { createdAt: 'desc' },

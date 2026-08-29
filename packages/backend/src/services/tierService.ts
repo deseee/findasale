@@ -29,7 +29,8 @@ export async function calculateOrganizerTier(organizerId: string): Promise<Organ
       // loop to inflate tier count (BRONZE/SILVER/GOLD) at zero cost. Require at least
       // one item AND at least one PAID purchase before a sale counts toward tier.
       items: { some: {} },
-      purchases: { some: { status: 'PAID' } },
+      // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
+      purchases: { some: { status: 'PAID', isTestTransaction: false } },
     },
   });
 
@@ -38,8 +39,9 @@ export async function calculateOrganizerTier(organizerId: string): Promise<Organ
   const soldItemsCount = await prisma.item.count({
     where: {
       sale: { organizerId },
+      // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
       purchases: {
-        some: { status: 'PAID' },
+        some: { status: 'PAID', isTestTransaction: false },
       },
     },
   });
@@ -132,15 +134,17 @@ export async function getTierProgress(organizerId: string): Promise<{
       // loop to inflate tier count (BRONZE/SILVER/GOLD) at zero cost. Require at least
       // one item AND at least one PAID purchase before a sale counts toward tier.
       items: { some: {} },
-      purchases: { some: { status: 'PAID' } },
+      // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
+      purchases: { some: { status: 'PAID', isTestTransaction: false } },
     },
   });
 
   const soldItemsCount = await prisma.item.count({
     where: {
       sale: { organizerId },
+      // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
       purchases: {
-        some: { status: 'PAID' },
+        some: { status: 'PAID', isTestTransaction: false },
       },
     },
   });

@@ -205,8 +205,9 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     });
 
     // Ala-carte revenue today
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const alaCartePurchasesToday = await prisma.purchase.aggregate({
-      where: { source: 'ALA_CARTE', status: 'PAID', createdAt: { gte: todayStart } },
+      where: { source: 'ALA_CARTE', status: 'PAID', isTestTransaction: false, createdAt: { gte: todayStart } },
       _sum: { amount: true },
     });
     const alaCarteRevenueToday = Math.round((alaCartePurchasesToday._sum.amount || 0) * 100);
@@ -216,8 +217,9 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const huntPassRevenueLast30d = 0;
 
     // À la carte revenue — real query against Purchase.source = 'ALA_CARTE'
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const alaCartePurchasesLast30d = await prisma.purchase.aggregate({
-      where: { source: 'ALA_CARTE', status: 'PAID', createdAt: { gte: thirtyDaysAgo } },
+      where: { source: 'ALA_CARTE', status: 'PAID', isTestTransaction: false, createdAt: { gte: thirtyDaysAgo } },
       _sum: { amount: true },
     });
     const alaCarteRevenueLast30d = Math.round((alaCartePurchasesLast30d._sum.amount || 0) * 100);

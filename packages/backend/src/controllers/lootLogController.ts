@@ -20,6 +20,7 @@ export const getMyLootLog = async (req: Request, res: Response) => {
         where: {
           userId,
           status: 'PAID',
+          isTestTransaction: false, // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         },
         include: {
           item: {
@@ -46,6 +47,7 @@ export const getMyLootLog = async (req: Request, res: Response) => {
         where: {
           userId,
           status: 'PAID',
+          isTestTransaction: false, // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         },
       }),
     ]);
@@ -85,10 +87,12 @@ export const getLootLogStats = async (req: Request, res: Response) => {
     }
 
     // Get all PAID purchases for this user
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const purchases = await prisma.purchase.findMany({
       where: {
         userId,
         status: 'PAID',
+        isTestTransaction: false,
       },
       include: {
         item: {
@@ -224,6 +228,7 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
         where: {
           userId,
           status: 'PAID',
+          isTestTransaction: false, // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         },
         include: {
           item: {
@@ -249,6 +254,7 @@ export const getPublicLootLog = async (req: Request, res: Response) => {
         where: {
           userId,
           status: 'PAID',
+          isTestTransaction: false, // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         },
       }),
     ]);

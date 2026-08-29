@@ -98,10 +98,12 @@ export async function checkAffiliateCodeEligibility(userId: string): Promise<{
 
   // SIMPLIFIED: Check via Purchase records (more accurate)
   if (user.organizer) {
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const completedPurchases = await prisma.purchase.count({
       where: {
         sale: { organizerId: user.organizer.id },
         status: 'PAID', // Assume Purchase has status field
+        isTestTransaction: false,
       },
     });
 

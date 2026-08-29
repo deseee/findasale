@@ -289,13 +289,16 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
 
     const { saleId } = req.query;
 
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const whereClause: {
       sale: { organizerId: string };
       status: string;
+      isTestTransaction: boolean;
       saleId?: string;
     } = {
       sale: { organizerId: organizer.id },
       status: 'PAID',
+      isTestTransaction: false,
     };
     if (saleId && typeof saleId === 'string') {
       whereClause.saleId = saleId;

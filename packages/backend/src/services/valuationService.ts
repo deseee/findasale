@@ -23,9 +23,11 @@ export async function generateValuation(itemId: string) {
         category: item.category,
         // Feature #300: conditional spread — item may have null saleId (inventory item)
         ...(item.saleId ? { saleId: { not: item.saleId } } : {}), // Different sale
+        // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         purchases: {
           some: {
             status: 'PAID', // Sold
+            isTestTransaction: false,
           },
         },
         price: item.price
@@ -37,7 +39,7 @@ export async function generateValuation(itemId: string) {
       },
       include: {
         purchases: {
-          where: { status: 'PAID' },
+          where: { status: 'PAID', isTestTransaction: false },
           include: { sale: true },
         },
       },

@@ -144,8 +144,9 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
         items: {
           select: { id: true, status: true },
         },
+        // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         purchases: {
-          where: { status: 'PAID' },
+          where: { status: 'PAID', isTestTransaction: false },
           // item.listingType/auctionStartPrice let the reporting helper below recognise an
           // auction and strip the buyer's 5% premium back out of `amount`. The fee-snapshot
           // columns are what the platform ACTUALLY took at charge time — preferred over any
@@ -282,8 +283,9 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
         items: {
           select: { id: true, status: true, draftStatus: true, inInventory: true },
         },
+        // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
         purchases: {
-          where: { status: 'PAID' },
+          where: { status: 'PAID', isTestTransaction: false },
           select: { amount: true, createdAt: true },
         },
       },

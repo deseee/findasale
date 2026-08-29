@@ -54,9 +54,11 @@ export const getPosTierStatus = async (req: AuthRequest, res: Response) => {
     }
 
     // Fetch all PAID purchases for this organizer's sales
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const purchases = await prisma.purchase.findMany({
       where: {
         status: 'PAID',
+        isTestTransaction: false,
         sale: {
           organizerId: organizer.id,
         },

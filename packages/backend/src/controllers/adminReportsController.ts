@@ -148,10 +148,12 @@ export const getRevenueReport = async (req: AuthRequest, res: Response) => {
     startDate.setDate(startDate.getDate() - daysBack);
 
     // Fetch all purchases in period
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const purchases = await prisma.purchase.findMany({
       where: {
         createdAt: { gte: startDate },
         status: 'PAID',
+        isTestTransaction: false,
       },
       include: {
         item: {

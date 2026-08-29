@@ -11,10 +11,12 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
     // Query Purchase directly — DigitalReceipt records are not auto-created
     // for all purchase types (auction wins, hold invoices). Purchase is the
     // source of truth for what a shopper has bought.
+    // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     const purchases = await prisma.purchase.findMany({
       where: {
         userId: req.user.id,
         status: 'PAID',
+        isTestTransaction: false,
       },
       select: {
         id: true,
