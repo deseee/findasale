@@ -1037,11 +1037,17 @@ export const redeemInvite = async (req: Request, res: Response) => {
     }
 
     // Promote user to ORGANIZER and create organizer profile
+    // BUG FIX (findasale-hacker/QA pass, 2026-08-29): only the deprecated singular `role` field
+    // was ever updated here, never the `roles` array -- same gap fixed in
+    // curioController.ts convertScanToListing() (which explicitly mirrors this function), same
+    // dispatch. DB-confirmed via QA this session on the Curio side (role became 'ORGANIZER' but
+    // roles stayed ['USER']).
+    const rolesWithOrganizer = user.roles?.includes('ORGANIZER') ? user.roles : [...(user.roles || ['USER']), 'ORGANIZER'];
     const updatedUser = await prisma.$transaction(async (tx) => {
       // Update user role to ORGANIZER
       const updated = await tx.user.update({
         where: { id: userId },
-        data: { role: 'ORGANIZER' }
+        data: { role: 'ORGANIZER', roles: rolesWithOrganizer }
       });
 
       // Check if organizer profile already exists

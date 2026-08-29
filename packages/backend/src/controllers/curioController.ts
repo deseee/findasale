@@ -181,7 +181,25 @@ export const submitScan = async (req: AuthRequest, res: Response): Promise<Respo
     } else {
       const buffers = files.map((f) => f.buffer);
       const mimeTypes = files.map((f) => f.mimetype || 'image/jpeg');
-      const aiResult = files.length > 1 ? await analyzeItemImages(buffers, mimeTypes) : await analyzeItemImage(buffers[0], mimeTypes[0]);
+      let aiResult: Awaited<ReturnType<typeof analyzeItemImage>> | null = null;
+      let aiThrew = false;
+      try {
+        aiResult = files.length > 1 ? await analyzeItemImages(buffers, mimeTypes) : await analyzeItemImage(buffers[0], mimeTypes[0]);
+      } catch (aiErr) {
+        // BUG FIX (findasale-hacker/QA pass, 2026-08-29): analyzeItemImage(s)() does not only
+        // return null on failure -- it can also THROW (AI_TIMEOUT/AI_RATE_LIMIT/AI_PARSE_ERROR/
+        // AI_ERROR, see cloudAIService.ts's catch block). This branch previously only handled the
+        // null-return case, so any thrown error propagated past this function entirely and
+        // surfaced as a raw 500 "Scan failed" from submitScan's outer try/catch -- confirmed live
+        // this session with a degenerate test image (Railway log: "AI_ERROR: AI analysis
+        // unavailable" at the old analyzeItemImage(s) call site). Worse, because the throw
+        // happened before trackCurioScan() below, a scan that may well have incurred real
+        // Vision/Haiku spend went completely unrecorded in Curio's own $ ledger. Route any thrown
+        // AI error into the same graceful "Unidentified item" fallback the null-return case
+        // already has, instead of losing the request.
+        aiThrew = true;
+        console.warn('[curioController] analyzeItemImage(s) threw, falling back to placeholder identification:', aiErr);
+      }
       if (aiResult) {
         // A real Vision+Haiku call actually ran (analyzeItemImage(s)() only returns non-null
         // after completing the full pipeline) -- charge the worst-case estimate against Curio's
@@ -195,6 +213,13 @@ export const submitScan = async (req: AuthRequest, res: Response): Promise<Respo
           condition: aiResult.condition || null,
           confidence: aiResult.confidence ?? 0.5,
         };
+      } else if (aiThrew) {
+        // The pipeline was actually invoked and failed partway through (timeout/rate-limit/parse
+        // error, or a photo the AI genuinely could not analyze) -- unlike the "returned null
+        // before any call" case below, real API spend may well have already been incurred, so
+        // this is charged the same worst-case estimate as a completed call rather than 0.
+        scanCostUsd = CURIO_FULL_SCAN_COST_ESTIMATE_USD;
+        identification = { title: 'Unidentified item', description: '', category: null, brand: null, condition: null, confidence: 0.2 };
       } else {
         // analyzeItemImage(s)() returned null BEFORE making any Vision/Haiku call -- either cloud
         // AI isn't configured, or the shared organizer AI ceiling/daily-call-cap
@@ -488,8 +513,16 @@ export const convertScanToListing = async (req: AuthRequest, res: Response): Pro
       // @unique (schema.prisma), the second would throw and surface as a raw 500 instead of
       // resolving cleanly. Re-checking inside the transaction, exactly like redeemInvite(), closes
       // that gap.
+      // BUG FIX (findasale-hacker/QA pass, 2026-08-29): only the deprecated singular `role`
+      // field was ever updated here, never the `roles` array -- DB-confirmed via QA this session
+      // (role became 'ORGANIZER' but roles stayed ['USER']). Any caller that checks
+      // `roles.includes('ORGANIZER')` without also OR-ing `role === 'ORGANIZER'` would silently
+      // miss a Curio-auto-provisioned organizer. Same gap existed in authController.ts
+      // redeemInvite() (the function this block explicitly mirrors) -- fixed there too, same
+      // dispatch.
+      const rolesWithOrganizer = user.roles?.includes('ORGANIZER') ? user.roles : [...(user.roles || ['USER']), 'ORGANIZER'];
       await prisma.$transaction(async (tx) => {
-        await tx.user.update({ where: { id: userId }, data: { role: 'ORGANIZER' } });
+        await tx.user.update({ where: { id: userId }, data: { role: 'ORGANIZER', roles: rolesWithOrganizer } });
         const existingOrganizer = await tx.organizer.findUnique({ where: { userId } });
         if (!existingOrganizer) {
           await tx.organizer.create({
