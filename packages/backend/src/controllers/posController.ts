@@ -788,6 +788,28 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // ADR-113 (2026-08-28): the anchor item gets commitItemSale + a reservation.invoiceId
+    // stamp (below), but until this fix a merged real item got NEITHER -- its Item.status
+    // stayed RESERVED and its ItemReservation.invoiceId stayed null for the whole time this
+    // invoice is outstanding, even though it IS correctly bundled into HoldInvoice.itemIds
+    // (2026-08-25 fix) and gets sold/Purchase'd on payment. Real consequence: isInvoicedOrClaimed
+    // / invoiceableWhere() (holdInvoiceClaim.ts) key off exactly those two fields, so nothing
+    // stopped a second, independent invoice from being issued against the same merged item
+    // while this one is still open -- a genuine double-invoice race, not cosmetic bookkeeping.
+    // Committed here, BEFORE the Stripe Checkout Session is created below, mirroring exactly
+    // why the anchor's own commitItemSale (above) runs before any Stripe call -- catch a losing
+    // race before money moves, not after.
+    for (const mergedItemId of mergedRealItemIds) {
+      try {
+        await commitItemSale(mergedItemId, 'INVOICE_ISSUED', ['AVAILABLE', 'RESERVED']);
+      } catch (guardError) {
+        if (guardError instanceof ItemAlreadyCommittedError) {
+          return res.status(409).json({ message: 'One of the additional items is no longer available to invoice -- it may have already been sold or invoiced elsewhere.' });
+        }
+        throw guardError;
+      }
+    }
+
     // Direct-charges migration (2026-08-08): staged-rollout routing decision, same pattern
     // as every other invoice-creation path in this file.
     const useDirect = organizer.stripeConnectId
@@ -940,6 +962,17 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       where: { id: reservationId },
       data: { invoiceId: holdInvoice.id },
     });
+
+    // ADR-113 (2026-08-28): stamp invoiceId on the merged item(s)' own ItemReservation rows too --
+    // previously only the anchor's reservation got this. Scoped by itemId (not a specific
+    // reservation id), matching the established itemId-keyed multi-item update idiom already
+    // used for these same items in holdInvoicePaymentRecorder.ts's markHoldInvoicePaid.
+    if (mergedRealItemIds.length > 0) {
+      await prisma.itemReservation.updateMany({
+        where: { itemId: { in: mergedRealItemIds } },
+        data: { invoiceId: holdInvoice.id },
+      });
+    }
 
     // Backfill invoiceId onto the PaymentIntent's metadata now that the HoldInvoice row (and
     // its id) exists -- mirrors createCombinedInvoice / markSoldAndCreateInvoice. Non-fatal:
