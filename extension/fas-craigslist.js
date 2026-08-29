@@ -248,6 +248,67 @@
     return true;
   }
 
+  // ---- posted-confirmation detection (S-EXT-CRAIGSLIST-STALL round 4, 2026-08-29) ----
+  // Craigslist's REAL post-publish confirmation page lives at post.craigslist.org/k/<key1>/<key2>
+  // -- SAME ORIGIN as the rest of this posting flow, confirmed live this session by directly
+  // reading location.href + document.body.innerText against a real completed post (href was
+  // "https://post.craigslist.org/k/1toQtDedSdub691crYUtBT/mQagP", title "kalamazoo | posting
+  // confirmation"). The regional-subdomain URL shown in the page's own "View your post at ..."
+  // line is only hyperlink TEXT, never this page's own address -- round 2/3's background.js
+  // cross-origin re-navigation net was built around that wrong premise and its CRAIGSLIST regex
+  // has never actually matched anything real. Two independent signals are required before this
+  // is treated as the posted-confirmation state (same "don't guess past an unrecognized page"
+  // discipline the rest of this file already uses): the URL shape AND page-copy text Craigslist
+  // uses on this exact screen. Logged either way so a live console watch can tell "detected, both
+  // signals matched" apart from "URL looked right but copy didn't match -- not treated as
+  // posted-confirmation" if Craigslist ever changes this page's wording.
+  function isCraigslistPostedConfirmation() {
+    const urlMatch = location.hostname === 'post.craigslist.org' && /^\/k\//.test(location.pathname);
+    if (!urlMatch) return false;
+    const text = bodyText().toLowerCase();
+    const textMatch = text.indexOf('thanks for posting') !== -1 ||
+      text.indexOf('view your post at') !== -1 ||
+      text.indexOf('post another') !== -1;
+    if (textMatch) {
+      console.log('[FAS Craigslist] posted-confirmation detected -- url=' + location.pathname + ' textSignal=matched');
+      return true;
+    }
+    console.warn('[FAS Craigslist] URL looked like a posting confirmation (' + location.pathname +
+      ') but expected page copy was not found -- NOT treating this as posted-confirmation.');
+    return false;
+  }
+
+  // ---- copy-from-previous-posting prompt detection (S-EXT-CRAIGSLIST-STALL round 5, 2026-08-29)
+  // ----
+  // After round 4's "Post another" click succeeds, Craigslist can insert its OWN "copy from your
+  // previous posting" convenience screen before opening a fresh posting form -- SAME URL SHAPE as
+  // the real posted-confirmation page (post.craigslist.org/k/<key1>/<key2>), but with a
+  // `?s=copyfromanother` query string this time. Confirmed live this session by directly reading
+  // location.href + document.title + document.body.innerText against the real screen (href ended
+  // in "?s=copyfromanother", title "kalamazoo | copy from previous", body asking to "Re-use
+  // selected data from your previous posting ..." with same_area/same_loc/same_category/
+  // same_address checkboxes, all checked by default -- this is Craigslist's OWN UI, not ours).
+  // The category/region/location/address shown here are whatever the PREVIOUS unrelated posting
+  // used, not derived from the item currently being posted -- if "re-use selected data" were
+  // clicked as-is, a new item would silently inherit a stale, likely-wrong category (and
+  // potentially stale region/location/address too). Two independent signals required before this
+  // is treated as the copy-from-previous state, same discipline as isCraigslistPostedConfirmation()
+  // above: the URL shape AND either the query-string flag or the page's own prompt copy, so a
+  // future Craigslist wording change doesn't silently break detection.
+  function isCraigslistCopyFromPreviousPrompt() {
+    const urlMatch = location.hostname === 'post.craigslist.org' && /^\/k\//.test(location.pathname);
+    if (!urlMatch) return false;
+    const search = location.search.toLowerCase();
+    const text = bodyText().toLowerCase();
+    const signalMatch = search.indexOf('copyfromanother') !== -1 ||
+      text.indexOf('re-use selected data from your previous posting') !== -1;
+    if (signalMatch) {
+      console.log('[FAS Craigslist] copy-from-previous-posting prompt detected -- url=' + location.pathname + location.search);
+      return true;
+    }
+    return false;
+  }
+
   // ---- step detection: unambiguous DOM anchors first (PostingTitle = edit form, file input =
   // images), then the ?s= URL param / page copy for the radio-list steps. ----
   function detectStep() {
@@ -258,6 +319,8 @@
     if (s === 'cat' || radioByLabelText('general for sale')) return 'cat';
     if (s === 'geoverify' || (q('#xstreet0') && (q('#postal_code') || q('input[name="postal"]')))) return 'geoverify';
     if (s === 'preview' || bodyText().toLowerCase().indexOf('unpublished draft') !== -1) return 'preview';
+    if (isCraigslistCopyFromPreviousPrompt()) return 'copyFromPrevious';
+    if (isCraigslistPostedConfirmation()) return 'posted';
     if (s === 'subarea' || s === 'area') return 'subarea';
     return 'unknown';
   }
@@ -462,17 +525,94 @@
     if (close) close.onclick = () => bar && bar.remove();
   }
 
+  // Handles Craigslist's REAL post-publish confirmation page (post.craigslist.org/k/...).
+  // doPreviewStep's own markListed/advanceCraigslistQueue/POST_URL continuation never gets a
+  // chance to run here -- Craigslist's publish click causes a genuine full-page navigation to
+  // THIS page, which destroys the old page's JS execution context mid-poll (same failure class
+  // documented at waitForStepChange above). A fresh script instance loads on this page instead,
+  // and this is where that dropped continuation actually gets picked back up. Mirrors
+  // doPreviewStep's own success-path shape exactly: markListed always fires (this item genuinely
+  // posted); advanceCraigslistQueue + onward navigation only fire when there's a next item to
+  // process (a queue-complete last item just sits here, same as doPreviewStep's own !more branch).
+  function craigslistPostedAlreadyHandled() { return sessionStorage.getItem('fasCLPostedHandled') === '1'; }
+  function markCraigslistPostedHandled() { sessionStorage.setItem('fasCLPostedHandled', '1'); }
+
+  async function doPostedStep(item, index, total) {
+    // Guard against double-handling (e.g. a bfcache restore of this exact page) -- markListed and
+    // advanceCraigslistQueue must each fire at most once per real publish.
+    if (craigslistPostedAlreadyHandled()) return;
+    markCraigslistPostedHandled();
+    clearAttempts();
+
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+
+    const more = (index + 1) < total;
+    if (!more) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Item posted -- queue complete.</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+        button('fas-cl-posted-close', 'Close', false) +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+      const closeBtn = document.getElementById('fas-cl-posted-close');
+      if (closeBtn) closeBtn.onclick = () => bar && bar.remove();
+      return;
+    }
+
+    try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Item posted -- advancing to the next item.</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Published <b>' + escapeHtml(item.title) + '</b>. Auto-publish is on -- moving to the next item...</div>' +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+    await humanPause(600, 1200);
+
+    // Prefer Craigslist's own real "Post another" control (confirmed present on this exact
+    // confirmation screen) over a hardcoded URL -- lets Craigslist's own flow drive whatever the
+    // correct next step actually is, same "click real controls, don't hard-navigate to guessed
+    // URLs" lesson already learned on Poshmark. Only fall back to POST_URL if it can't be found.
+    const postAnother = Array.from(document.querySelectorAll('a, button')).find((el) => /post another/i.test(el.textContent || ''));
+    if (postAnother) {
+      console.log('[FAS Craigslist] clicking "Post another" to resume the queue for item', index + 2, 'of', total);
+      postAnother.click();
+    } else {
+      console.warn('[FAS Craigslist] "Post another" control not found on the confirmation page -- falling back to POST_URL navigation.');
+      location.href = POST_URL;
+    }
+  }
+
+  // Handles Craigslist's own "copy from previous posting" convenience prompt (see
+  // isCraigslistCopyFromPreviousPrompt() above). The safe, simple fix is to click Craigslist's own
+  // "skip" button -- found by text match, same defensive approach doPostedStep() already uses to
+  // find "Post another" (never a hardcoded selector/id that hasn't been verified live). Clicking
+  // "skip" forces a genuinely fresh, empty posting form for the new item, so this file's own
+  // existing category/condition/field-filling logic (doTypeStep/doCatStep/doEditStep etc.) runs
+  // cleanly from scratch with zero risk of inheriting a stale category -- or stale region/
+  // location/address -- from an unrelated prior post. Deliberately does NOT attempt to selectively
+  // uncheck just the category checkbox and click "re-use selected data" instead -- skip is
+  // simpler, safer, and sidesteps region/location/address reuse risk too (e.g. an organizer
+  // running sales from more than one address).
+  async function doCopyFromPreviousStep() {
+    overlay('<b>FindA.Sale</b> - skipping Craigslist\'s "copy from previous posting" prompt for a clean form...');
+    console.log('[FAS Craigslist] copy-from-previous-posting prompt detected, clicking skip for a clean form');
+    const skipBtn = Array.from(document.querySelectorAll('a, button, input[type="submit"], input[type="button"]'))
+      .find((el) => norm(el.textContent || el.value) === 'skip');
+    if (!skipBtn) {
+      throw hardError('CopyFromPrevious', 'Couldn\'t find Craigslist\'s "skip" control on the copy-from-previous-posting prompt.');
+    }
+    await humanPause(400, 800);
+    skipBtn.click(); // -> a genuinely fresh, empty posting form; the script re-runs on the next step
+  }
+
   async function run(item, index, total, autoPublish) {
     const step = detectStep();
     if (step === 'edit') { if (!guardStop('edit')) await doEditStep(item); return; }
     if (step === 'images') { await doImagesStep(item, index, total); return; }
     if (step === 'preview') { await doPreviewStep(item, index, total, autoPublish); return; }
+    if (step === 'posted') { await doPostedStep(item, index, total); return; }
+    if (step === 'copyFromPrevious') { await doCopyFromPreviousStep(); return; }
     if (step === 'type') { if (!guardStop('type')) await doTypeStep(); return; }
     if (step === 'cat') { if (!guardStop('cat')) await doCatStep(item); return; }
     if (step === 'geoverify') { if (!guardStop('geoverify')) await doGeoverifyStep(item); return; }
     // subarea / area / unrecognized location chooser: we can't pick a location confidently (the
     // item carries no Craigslist area), so guide the human rather than guess.
-    overlayInfo('Ready to autofill. Choose your Craigslist location/area on this screen and continue - FindA.Sale takes over at the posting details.');
+    overlayInfo('Ready to autofill. Continue through this Craigslist screen -- FindA.Sale takes over at the posting details.');
   }
 
   // ================================================================================================

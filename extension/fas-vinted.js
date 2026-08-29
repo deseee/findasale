@@ -920,7 +920,31 @@
   // and itemFitsInShoebox(). Falls all the way back to the original always-Medium behavior,
   // unchanged, whenever no real weight data exists OR no card's text can be parsed -- a guess is
   // never replaced with a different, equally-blind guess.
-  function parseVintedCardWeightLimitKg(cardEl) {
+  //
+  // BUG FIX 2026-08-29 ROUND 2 (S-EXT-VINTED-PACKAGE-SIZE-MEDIUM-DEFAULT-ROUND-2, Patrick's REAL
+  // live re-test today still picked Medium for a small item): root-caused this round from Patrick's
+  // own screenshot of the real Vinted package-size step, taken during this exact test. The three
+  // real cards read VERBATIM: "Small -- For items that'd fit in a large envelope.", "Medium -- For
+  // items that'd fit in a shoebox." (tagged "Recommended", plus a separate "See sizing and
+  // compensation details" link), "Large -- For items that'd fit in a moving box." NONE of these
+  // contain any numeric weight figure anywhere in their own visible text -- no "up to Xkg"/"max
+  // Xlb" at all. So parseVintedCardWeightLimitKg (which only ever read cardEl.textContent) returned
+  // null for every card on the REAL page, every time, and pickVintedSizeCardByRealWeight always fell
+  // through to the unchanged Medium default below -- confirmed NOT a missing-item-data problem
+  // (item.packageWeightOz/aiPackageWeightOz ARE populated and returned by
+  // packages/backend/src/controllers/extensionController.ts, confirmed by the main session this
+  // same round). The real numeric limits are evidently gated behind the "See sizing and
+  // compensation details" link instead of living in the card text. UNVERIFIED (no live Vinted DOM
+  // access this round to confirm the details panel's actual shape): openVintedSizingDetailsText()
+  // below attempts to click that link and read whatever text appears (a dialog/tooltip/panel, or
+  // failing that the whole page's grown text) for a per-label weight number. Every step of this is
+  // logged via console.warn specifically so a future LIVE session can see exactly what happened --
+  // found the link or not, found a dialog or not, parsed a number or not -- instead of another
+  // guess reconstructed in isolation. If that also finds nothing, a clearly-commented, UNVERIFIED
+  // hardcoded last-resort tier table is tried (logged loudly every time it fires). If even that
+  // can't place the item, behavior falls back to the original always-Medium default, but with an
+  // honest overlay message (see fillPackageSize below) instead of the old misleading one.
+  function parseVintedCardWeightLimitKg(cardEl, label, detailsText) {
     if (!cardEl) return null;
     const text = String(cardEl.textContent || '');
     // Accepts "up to 5kg", "up to 5 kg", "max 11 lb", "up to 11lbs", etc. -- whatever unit Vinted's
@@ -929,32 +953,195 @@
     if (kgMatch) return Number(kgMatch[1]);
     const lbMatch = /(?:up to|max(?:imum)?)\s*([\d.]+)\s*lbs?/i.exec(text);
     if (lbMatch) return Number(lbMatch[1]) * 0.453592;
+    // BUG FIX 2026-08-29 round 2: the card's own text has no number on the real page (see comment
+    // above) -- try the "sizing and compensation details" panel text instead, scoped to this
+    // label, if the caller managed to open and capture one.
+    if (detailsText && label) {
+      const fromDetails = parseWeightLimitForLabelFromText(detailsText, label);
+      if (fromDetails != null) return fromDetails;
+    }
     return null;
   }
-  function pickVintedSizeCardByRealWeight(item) {
+  // Best-effort search for whatever "See sizing and compensation details" (or close variants)
+  // control Vinted shows -- UNVERIFIED wording/placement, not live-confirmed this round.
+  function findVintedSizingDetailsOpener() {
+    const want = ['see sizing and compensation details', 'sizing and compensation details', 'sizing and compensation', 'compensation details', 'sizing details'];
+    const candidates = qa('a, button, [role="button"], span, div');
+    let looseMatch = null;
+    for (const el of candidates) {
+      const txt = norm(el.textContent);
+      if (!txt || txt.length > 100) continue;
+      if (want.some((w) => txt.indexOf(w) !== -1)) {
+        // Prefer a real link/button over a plain span/div wrapper.
+        if (el.tagName === 'A' || el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') return el;
+        if (!looseMatch) looseMatch = el;
+      }
+    }
+    return looseMatch;
+  }
+  // Looks for an explicit close control inside an opened dialog/panel -- Patrick's live screenshot
+  // (2026-08-29 round 3 bug, see openVintedSizingDetailsText below) showed a real "X" close icon
+  // top-right of a "Shipping options" modal left open after this fix's own click. Scoped to the
+  // dialog element the caller identified -- never searches the whole document, to avoid misclicking
+  // an unrelated close control elsewhere on the page.
+  function findDialogCloseButton(dialogEl) {
+    if (!dialogEl) return null;
+    const candidates = Array.from(dialogEl.querySelectorAll('button, [role="button"], a'));
+    for (const el of candidates) {
+      const aria = (el.getAttribute('aria-label') || el.getAttribute('title') || '');
+      if (/close/i.test(aria)) return el;
+    }
+    for (const el of candidates) {
+      const txt = norm(el.textContent);
+      if (txt === 'close') return el;
+      // Icon-only close buttons ("x"/"\u00d7"/"\u2715") -- require short own text so a large
+      // wrapper that merely contains an x somewhere deep inside other content isn't matched.
+      if ((txt === 'x' || txt === '\u00d7' || txt === '\u2715') && (el.textContent || '').trim().length <= 2) return el;
+    }
+    return null;
+  }
+  // Clicks the sizing/compensation details opener (if found) and tries to capture whatever text
+  // appears as a result -- a dialog/tooltip/popover element if one can be identified, else the
+  // whole page's text if it visibly grew after the click.
+  //
+  // BUG FIX 2026-08-29 ROUND 3 (S-EXT-VINTED-PACKAGE-SIZE-MEDIUM-DEFAULT, Patrick's live re-test
+  // today confirmed the round-2 weight-detection fix above now correctly picks Small for a small
+  // item -- but the "sizing and compensation details" dialog this exact click opens was left open
+  // afterward: a real "Shipping options" modal sitting on top of the page, covering the Save
+  // draft/Upload buttons underneath it (visible but inert in Patrick's screenshot). Root cause: the
+  // old close logic only ever dispatched Escape once, then a conditional outside click gated on
+  // `dialog && dialog.offsetParent !== null` -- and never re-checked the outcome afterward, so
+  // "best-effort close" never actually confirmed anything closed; it also never tried the dialog's
+  // own close button at all. Rewritten below to try, in order, and VERIFY after each step via a
+  // stillOpen() check: (1) an explicit close button inside the dialog itself if one was found,
+  // (2) Escape, (3) a real outside click on document.body. Every attempt and the final confirmed
+  // open/closed state is logged via console.warn so a live session can see exactly what happened.
+  // Weight-detection/fallback-table logic (pickVintedSizeCardByRealWeight, above) is unchanged --
+  // this only touches close behavior.
+  async function openVintedSizingDetailsText() {
+    const opener = findVintedSizingDetailsOpener();
+    if (!opener) {
+      console.warn('[FAS Vinted] Package size: "sizing and compensation details" link/control NOT found on this page -- cannot read real weight limits from a details panel this way.');
+      return null;
+    }
+    console.warn('[FAS Vinted] Package size: found a "sizing and compensation details" control (tag=' + opener.tagName + ', text="' + norm(opener.textContent).slice(0, 60) + '") -- attempting to open it.');
+    const beforeLen = bodyText().length;
+    try { opener.click(); } catch (e) { console.warn('[FAS Vinted] Package size: clicking the sizing-details control threw:', e && e.message); return null; }
+    await sleep(400);
+    const dialog = qa('[role="dialog"], [role="tooltip"], [class*="modal" i], [class*="Modal" i], [class*="tooltip" i], [class*="popover" i]').find((el) => el.offsetParent !== null);
+    let text = dialog ? dialog.textContent : '';
+    if (!text || text.length < 10) {
+      const afterLen = bodyText().length;
+      if (afterLen > beforeLen + 20) text = bodyText();
+    }
+    console.warn('[FAS Vinted] Package size: sizing-details ' + (dialog ? 'opened as a distinct dialog/panel element' : 'did not open as a distinct dialog element (used whole-page text growth instead)') + ' -- captured ' + (text ? text.length : 0) + ' chars to search for weight numbers.');
+
+    // Close it -- MUST be genuinely closed (verified, not assumed) before this function returns,
+    // since fillPackageSize() clicks a size card right after this and a real modal left open blocks
+    // the Save draft/Upload buttons underneath it (Patrick-confirmed live bug, see comment above).
+    function stillOpen() {
+      if (dialog) return document.body.contains(dialog) && dialog.offsetParent !== null;
+      // No distinct dialog element was ever identified -- fall back to a page-text-length heuristic
+      // as the only available signal (UNVERIFIED as a general check, logged as such below).
+      return bodyText().length > beforeLen + 20;
+    }
+
+    if (dialog && stillOpen()) {
+      const closeBtn = findDialogCloseButton(dialog);
+      if (closeBtn) {
+        console.warn('[FAS Vinted] Package size: sizing-details dialog open -- clicking its own close control (tag=' + closeBtn.tagName + ', aria-label="' + (closeBtn.getAttribute('aria-label') || '') + '", text="' + norm(closeBtn.textContent).slice(0, 20) + '").');
+        try { closeBtn.click(); } catch (e) { console.warn('[FAS Vinted] Package size: clicking the dialog close control threw:', e && e.message); }
+        await sleep(250);
+      } else {
+        console.warn('[FAS Vinted] Package size: sizing-details dialog open -- no explicit close button found inside it, trying Escape next.');
+      }
+    }
+    if (stillOpen()) {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await sleep(250);
+    }
+    if (stillOpen()) {
+      console.warn('[FAS Vinted] Package size: sizing-details dialog STILL open after Escape -- trying a real outside click on the page body.');
+      realOutsideClick(document.body);
+      await sleep(250);
+    }
+    const finalOpen = stillOpen();
+    console.warn('[FAS Vinted] Package size: sizing-details dialog close result -- ' + (finalOpen ? 'STILL OPEN after all close attempts (close button / Escape / outside click) -- it may be blocking Save draft/Upload underneath it, please close it manually before publishing' : 'confirmed closed') + (dialog ? '' : ' [no distinct dialog element was ever identified -- verified via page-text-length heuristic only, not a DOM/visibility check]') + '.');
+    return text || null;
+  }
+  // Scoped, per-label search within a blob of captured details text -- avoids matching a DIFFERENT
+  // tier's number when all three are listed together on the same panel/page.
+  function parseWeightLimitForLabelFromText(text, label) {
+    if (!text) return null;
+    const lower = String(text).toLowerCase();
+    const labelIdx = lower.indexOf(String(label).toLowerCase());
+    if (labelIdx === -1) return null;
+    const window = lower.slice(labelIdx, labelIdx + 200);
+    const kgMatch = /(?:up to|max(?:imum)?)?\s*([\d.]+)\s*kg/i.exec(window);
+    if (kgMatch) return Number(kgMatch[1]);
+    const lbMatch = /(?:up to|max(?:imum)?)?\s*([\d.]+)\s*lbs?/i.exec(window);
+    if (lbMatch) return Number(lbMatch[1]) * 0.453592;
+    return null;
+  }
+  async function pickVintedSizeCardByRealWeight(item) {
     const ounces = item.packageWeightOz != null ? Number(item.packageWeightOz) : (item.aiPackageWeightOz != null ? Number(item.aiPackageWeightOz) : null);
     if (ounces == null || !isFinite(ounces) || ounces <= 0) return null; // no real weight data -- caller keeps existing Medium-default behavior
     const itemKg = ounces * 0.0283495;
+    const detailsText = await openVintedSizingDetailsText();
     for (const label of ['Small', 'Medium', 'Large']) {
       const card = clickableOptionByExactText(label);
-      const limitKg = parseVintedCardWeightLimitKg(card);
-      if (card && limitKg != null && isFinite(limitKg) && itemKg <= limitKg) return { card, label, limitKg, itemKg };
+      const limitKg = parseVintedCardWeightLimitKg(card, label, detailsText);
+      if (card && limitKg != null && isFinite(limitKg) && itemKg <= limitKg) return { card, label, limitKg, itemKg, source: 'live-page-text' };
     }
-    return null; // real weight data exists but didn't fit under any parsed limit, or no card text was parseable -- caller keeps existing behavior
+    // BUG FIX 2026-08-29 round 2, option (b) -- LAST-RESORT fallback ONLY, fires only if neither the
+    // card text nor the details-panel text (if any was found) had a usable number for ANY tier.
+    // UNVERIFIED -- NOT live-confirmed this round (no Vinted seller account / live DOM access
+    // available). Vinted's real published standard-parcel weight tiers are commonly cited (Vinted's
+    // own general shipping-rate info, not necessarily this exact package-size step) as roughly "up
+    // to 5kg" (Small), "up to 10kg" (Medium), "up to 20kg" (Large). Treat this as an ASSUMPTION, not
+    // a confirmed fact, until checked directly against the real package-size step. Logs loudly every
+    // time it's used so it's easy to find and correct.
+    const UNVERIFIED_FALLBACK_LIMITS_KG = { Small: 5, Medium: 10, Large: 20 };
+    for (const label of ['Small', 'Medium', 'Large']) {
+      if (itemKg <= UNVERIFIED_FALLBACK_LIMITS_KG[label]) {
+        const card = clickableOptionByExactText(label);
+        if (card) {
+          console.warn('[FAS Vinted] Package size: using an UNVERIFIED hardcoded fallback weight table (Small<=5kg / Medium<=10kg / Large<=20kg -- NOT live-confirmed against Vinted\'s real package-size step) because neither the card text nor the sizing-details panel exposed a usable number for this item\'s weight (' + itemKg.toFixed(2) + 'kg). Verify these thresholds against the real Vinted page and correct this table once confirmed.');
+          return { card, label, limitKg: UNVERIFIED_FALLBACK_LIMITS_KG[label], itemKg, source: 'unverified-hardcoded-fallback' };
+        }
+      }
+    }
+    return null; // nothing usable found anywhere -- caller keeps existing Medium-default behavior
   }
   async function fillPackageSize(item) {
-    const byWeight = item ? pickVintedSizeCardByRealWeight(item) : null;
+    const byWeight = item ? await pickVintedSizeCardByRealWeight(item) : null;
     if (byWeight) {
       byWeight.card.click();
       await sleep(200);
-      overlayWarn('Selected <b>' + escapeHtml(byWeight.label) + '</b> package size based on this item\'s real weight (' + byWeight.itemKg.toFixed(2) + 'kg, fits under Vinted\'s own ' + byWeight.limitKg + 'kg ' + byWeight.label + ' limit) -- please confirm it before publishing.');
+      if (byWeight.source === 'unverified-hardcoded-fallback') {
+        overlayWarn('Selected <b>' + escapeHtml(byWeight.label) + '</b> package size using an UNVERIFIED hardcoded weight-tier guess (' + byWeight.itemKg.toFixed(2) + 'kg vs an assumed ' + byWeight.limitKg + 'kg ' + byWeight.label + ' limit, NOT confirmed against Vinted\'s real page) -- please double-check this is correct before publishing.');
+      } else {
+        overlayWarn('Selected <b>' + escapeHtml(byWeight.label) + '</b> package size based on this item\'s real weight (' + byWeight.itemKg.toFixed(2) + 'kg, fits under a ' + byWeight.limitKg + 'kg ' + byWeight.label + ' limit read from Vinted\'s own page) -- please confirm it before publishing.');
+      }
       return true;
     }
     const medium = clickableOptionByExactText('Medium');
     if (medium) {
       medium.click();
       await sleep(200);
-      overlayWarn('Selected Vinted\'s own "Recommended" Medium package size (FindA.Sale has no usable package-size data for this item) -- please confirm it before publishing.');
+      // BUG FIX 2026-08-29 round 2 (option c, honest-message fix): the old wording ("FindA.Sale has
+      // no usable package-size data for this item") was misleading whenever the item DID have real
+      // weight data (packageWeightOz/aiPackageWeightOz) but Vinted's own page simply had no
+      // parseable number to match it against -- confirmed this round the real blocker is what
+      // Vinted's card text (and, this round, its sizing-details panel) exposes, not a gap in
+      // FindA.Sale's own item data. Message now says which case actually happened.
+      const oz = item && (item.packageWeightOz != null ? Number(item.packageWeightOz) : (item.aiPackageWeightOz != null ? Number(item.aiPackageWeightOz) : null));
+      const hasWeightData = oz != null && isFinite(oz) && oz > 0;
+      if (hasWeightData) {
+        overlayWarn('Selected Vinted\'s "Recommended" Medium package size -- this item HAS real weight data, but Vinted\'s own package-size cards (and sizing-details panel, if one was found) don\'t expose a numeric weight limit FindA.Sale could match it against. Selected Medium as a safe default -- please verify manually before publishing.');
+      } else {
+        overlayWarn('Selected Vinted\'s own "Recommended" Medium package size (FindA.Sale has no weight data for this item) -- please confirm it before publishing.');
+      }
       return true;
     }
     const opener = openerByLabel('Package size') || openerByLabel('Parcel size') || openerByLabel('Select your package size');

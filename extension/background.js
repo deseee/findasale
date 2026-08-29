@@ -227,7 +227,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
       // there too) and by there being a next item to actually resume for.
       if (platform === 'CRAIGSLIST' && didAdvanceHere && (index + 1) < queue.length) {
         await new Promise((r) => setTimeout(r, 700)); // let Craigslist's own confirmation page settle
-        chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => { void chrome.runtime.lastError; });
+        chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
+          // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-STALL round 3): this used to be
+          // `void chrome.runtime.lastError` -- read-then-discarded, so a failed re-navigation
+          // (closed tab, wrong tabId, permission issue, etc.) was completely invisible. If this
+          // call fails, the tab is left stranded on Craigslist's own confirmation page (which
+          // fas-craigslist.js cannot inject into -- manifest-scoped to post.craigslist.org/*
+          // and www.craigslist.org/account* only) with no toast, no error, nothing. Now logged
+          // so a live console watch can immediately tell re-navigation failure (this branch)
+          // apart from the re-navigation succeeding but landing on Craigslist's own unavoidable
+          // "choose your posting area" step, which requires a human click by design (see
+          // fas-craigslist.js's run()/detectStep() fallback comment).
+          if (chrome.runtime.lastError) {
+            console.warn('[FAS Craigslist] re-navigation to POST_URL failed for tab', tabId, '-', chrome.runtime.lastError.message);
+          }
+        });
       }
     }
   })();

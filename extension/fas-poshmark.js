@@ -59,14 +59,108 @@
   // all, and always warns the organizer either way so a wrong guess is never silent.
   function findPoshmarkSellNavLink() {
     const candidates = qa('a, button').filter((el) => el.offsetParent !== null);
+    // Signal 1: exact-word "sell" as the ENTIRE visible text or aria-label (cheapest, most precise
+    // -- matches a bare "Sell" control if Poshmark ever renders one that way).
     const byExactText = candidates.find((el) => norm(el.textContent) === 'sell' || norm(el.getAttribute('aria-label') || '') === 'sell');
-    if (byExactText) return byExactText;
-    // Secondary signal: an anchor whose own href already points at a listing-creation route,
-    // regardless of its visible label (Poshmark may render an icon-only "Sell" control on some
-    // layouts) -- still a real DOM anchor, not an invented URL.
-    return candidates.find((el) => el.tagName === 'A' && /\/(create-listing|sell|listing\/create)(\/|$|\?)/i.test(el.getAttribute('href') || '')) || null;
+    if (byExactText) { console.warn('[FAS Poshmark] Sell nav control found via Signal 1 (exact text "sell").'); return byExactText; }
+    // Signal 2: normalized text/aria-label CONTAINS "sell" as a whole word, capped at a short length
+    // so this can't accidentally match a paragraph or unrelated block of copy that happens to mention
+    // "sell" -- real nav controls are short labels. Patrick's 2026-08-29 live screenshot of the real
+    // logged-in header shows the actual control text is "SELL ON POSHMARK" (with a leading $ icon),
+    // not bare "Sell" -- exactly the case Signal 1 above can never match, and the reason Round 2
+    // (byExactText only, with an href-regex fallback) fell through to the broken guessed-URL path
+    // every time on Patrick's real re-test.
+    const byContainsText = candidates.find((el) => {
+      const text = norm(el.textContent);
+      const aria = norm(el.getAttribute('aria-label') || '');
+      return (text && text.length <= 40 && wordBoundaryHas(text, 'sell')) ||
+        (aria && aria.length <= 40 && wordBoundaryHas(aria, 'sell'));
+    });
+    if (byContainsText) { console.warn('[FAS Poshmark] Sell nav control found via Signal 2 (contains "sell", <=40 chars, e.g. "SELL ON POSHMARK").'); return byContainsText; }
+    // Signal 3: an anchor whose own href already points at a listing-creation route, regardless of
+    // its visible label (Poshmark may render an icon-only "Sell" control on some layouts) -- still a
+    // real DOM anchor, not an invented URL.
+    const byHrefPattern = candidates.find((el) => el.tagName === 'A' && /\/(create-listing|sell|listing\/create)(\/|$|\?)/i.test(el.getAttribute('href') || ''));
+    if (byHrefPattern) { console.warn('[FAS Poshmark] Sell nav control found via Signal 3 (href matches create-listing/sell route pattern).'); return byHrefPattern; }
+    // Signal 4: broadest, least precise real-DOM signal -- any href, data-testid, data-test, or
+    // aria-* attribute value containing "sell" case-insensitively (covers e.g. a
+    // data-testid="sell-nav-link" hook, or an href containing "sell" that doesn't match Signal 3's
+    // stricter route-shape regex). Still a real DOM attribute being read, never an invented value.
+    const byLooseAttr = candidates.find((el) => {
+      const href = el.getAttribute('href') || '';
+      const testId = el.getAttribute('data-testid') || el.getAttribute('data-test') || '';
+      const ariaAttrs = Array.from(el.attributes || []).filter((a) => a.name.indexOf('aria-') === 0).map((a) => a.value).join(' ');
+      return /sell/i.test(href) || /sell/i.test(testId) || /sell/i.test(ariaAttrs);
+    });
+    if (byLooseAttr) { console.warn('[FAS Poshmark] Sell nav control found via Signal 4 (loose href/data-testid/aria "sell" match).'); return byLooseAttr; }
+    console.warn('[FAS Poshmark] All 4 Sell nav-control signals failed to find a match -- falling back to the UNVERIFIED guessed create-listing URL (see navigateToPoshmarkCreateListing).');
+    return null;
   }
-  async function navigateToPoshmarkCreateListing() {
+  // BUG FIX 2026-08-29 (S-EXT-POSHMARK-BOUNCE-RETRY, Patrick-directed, based on live evidence from
+  // this session's direct test): navigateToPoshmarkCreateListing() (all 3 prior rounds) was never
+  // actually the blocker -- a direct hard-nav to https://poshmark.com/sell DID land on the real,
+  // fillable create-listing form and the extension DID start auto-filling real fields (Brand/
+  // Condition/Size all populated correctly, confirmed live). A few seconds INTO that fill, the tab
+  // navigated back to the closet page on its own -- Poshmark's own router/session check bouncing the
+  // route, not a wrong selector on this file's side. Since this is a genuine full page
+  // navigation/reload (confirmed by the fact the "doesn't look like a fillable form" message
+  // reappeared, which only a FRESH run of this content script -- re-injected after a real page
+  // unload -- can produce; a client-side-only SPA route change would not re-run this script at all),
+  // any state needed to recognize "we're mid-attempt, this is a bounce" has to survive that reload.
+  // Module-scope JS variables do not survive a page unload; sessionStorage does (same-origin,
+  // persists for the tab's lifetime across navigations, cleared when the tab/window closes) -- used
+  // here instead of a plain variable for exactly that reason.
+  //
+  // Patrick's own diagnosis, direct quote: "I think it's a thing that requires a wait or a poll so
+  // once it's back on the closet page it then tries to navigate to create-listing again." This
+  // implements exactly that: a small retry-with-backoff, capped at POSH_NAV_MAX_RETRIES, gated on a
+  // marker written right before every navigateToPoshmarkCreateListing() call and read back on the
+  // next page load's run() (see run()'s formState === 'timeout' branch below).
+  //
+  // Deliberately NOT cleared the instant the form is first confirmed loaded (waitForFormReady
+  // returns 'ready') -- live evidence above shows the bounce happens A FEW SECONDS INTO FILLING,
+  // after the form was already confirmed ready, so clearing this early would silently disable the
+  // exact retry this feature exists for. Instead it stays live for POSH_NAV_BOUNCE_WINDOW_MS (long
+  // enough to cover navigation + waitForFormReady's own up-to-8s wait + a realistic fill duration)
+  // and is explicitly cleared only at a genuine terminal state for this item -- published, shown to
+  // the organizer for manual review, or retries exhausted (see clearPoshNavRetryState() call sites:
+  // showReviewOverlay's no-more-items branch, doPoshmarkAutoPublish's end-of-run branch, run()'s own
+  // give-up path, and start()'s nothing-queued early return). A brand-new
+  // navigateToPoshmarkCreateListing() call for the NEXT item naturally resets attempt back to 0 with
+  // a fresh timestamp, so retries never leak across items.
+  const POSH_NAV_RETRY_KEY = 'fasPoshmarkNavRetryState';
+  const POSH_NAV_MAX_RETRIES = 3;
+  const POSH_NAV_RETRY_BACKOFF_MS = [1500, 3000, 5000]; // wait before retry 1, 2, 3 respectively
+  const POSH_NAV_BOUNCE_WINDOW_MS = 20000; // best-effort: nav + up to 8s form-ready wait + realistic fill time
+
+  function readPoshNavRetryState() {
+    try {
+      const raw = sessionStorage.getItem(POSH_NAV_RETRY_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ts !== 'number' || typeof parsed.attempt !== 'number') return null;
+      return parsed;
+    } catch (e) { return null; }
+  }
+  function writePoshNavRetryState(state) {
+    try { sessionStorage.setItem(POSH_NAV_RETRY_KEY, JSON.stringify(state)); } catch (e) {
+      // sessionStorage unavailable (rare -- e.g. privacy mode) -- fails safe: the next page load's
+      // readPoshNavRetryState() just finds nothing and falls straight through to the pre-existing
+      // give-up message, same behavior as before this feature existed.
+      console.warn('[FAS Poshmark] Could not persist nav-retry state (sessionStorage unavailable) -- bounce retry will not work this run:', e && e.message);
+    }
+  }
+  function clearPoshNavRetryState() {
+    try { sessionStorage.removeItem(POSH_NAV_RETRY_KEY); } catch (e) { /* nothing to clean up if this throws */ }
+  }
+
+  // Accepts an optional retryAttempt number so a bounce-retry (see run()'s formState === 'timeout'
+  // branch) can carry its attempt count forward; omitted/0 means "a fresh navigation attempt for a
+  // (new) item," which is exactly what every pre-existing call site already means and correctly
+  // resets the retry counter for that item.
+  async function navigateToPoshmarkCreateListing(retryAttempt) {
+    const attempt = retryAttempt || 0;
+    writePoshNavRetryState({ ts: Date.now(), attempt: attempt });
     const sellLink = findPoshmarkSellNavLink();
     if (sellLink) {
       sellLink.click(); // SPA-safe: lets Poshmark's own router handle the route change
@@ -1293,7 +1387,7 @@
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
       try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
-      if (more) { await navigateToPoshmarkCreateListing(); } else { bar && bar.remove(); }
+      if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); bar && bar.remove(); }
     };
     closeBtnHandler();
   }
@@ -1421,6 +1515,9 @@
       await navigateToPoshmarkCreateListing();
       return;
     }
+    // This item's create-listing attempt reached a genuine terminal state (published, no more
+    // items) -- clear the bounce-retry marker so it can't leak into some unrelated future page load.
+    clearPoshNavRetryState();
     let summaryHtml = '';
     let notes = [];
     try {
@@ -1560,11 +1657,42 @@
       return;
     }
     if (formState === 'timeout') {
+      // BUG FIX 2026-08-29 (S-EXT-POSHMARK-BOUNCE-RETRY, Patrick-directed): before treating this as
+      // a genuine dead end, check whether we're actually mid-bounce -- a recent, still-in-flight
+      // navigateToPoshmarkCreateListing() attempt (marker written right before that call, read back
+      // here after this fresh page load) is real evidence this is a transient bounce, not "we've
+      // been sitting on some unrelated page with no active attempt in flight." See the marker
+      // helpers' own comment above navigateToPoshmarkCreateListing for the full reasoning.
+      const retryState = readPoshNavRetryState();
+      const bounceInFlight = !!retryState && (Date.now() - retryState.ts) < POSH_NAV_BOUNCE_WINDOW_MS;
+      if (bounceInFlight && retryState.attempt < POSH_NAV_MAX_RETRIES) {
+        const nextAttempt = retryState.attempt + 1;
+        const waitMs = POSH_NAV_RETRY_BACKOFF_MS[retryState.attempt] || POSH_NAV_RETRY_BACKOFF_MS[POSH_NAV_RETRY_BACKOFF_MS.length - 1];
+        console.warn('[FAS Poshmark] Bounced off create-listing back to "' + location.pathname + '" -- retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' in ' + (waitMs / 1000) + 's...');
+        overlayWarn('Poshmark bounced back to a different page mid-attempt -- retrying (' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ') in ' + (waitMs / 1000) + 's...');
+        await sleep(waitMs);
+        console.warn('[FAS Poshmark] Retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' firing now -- navigating back to create-listing.');
+        await navigateToPoshmarkCreateListing(nextAttempt);
+        return;
+      }
+      if (retryState && retryState.attempt >= POSH_NAV_MAX_RETRIES) {
+        // Honest signal, not papered over: every retry bounced too, so this is very likely a
+        // persistent Poshmark-side block (a real session/freshness check, a rate limit, etc.), not a
+        // one-off transient glitch -- a different approach will be needed if this keeps happening on
+        // the next live test, not just another retry-count bump.
+        console.warn('[FAS Poshmark] Gave up after ' + POSH_NAV_MAX_RETRIES + ' retries -- create-listing bounced back to "' + location.pathname + '" every single time. This looks persistent, not transient -- see this dispatch\'s handoff.');
+      }
+      clearPoshNavRetryState();
       if (maybeShowAppLoginHint()) return;
       overlayWarn('This doesn\'t look like a fillable Poshmark listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
       return;
     }
+    // Form confirmed loaded -- NOT clearing the bounce-retry marker here (see its own comment above
+    // navigateToPoshmarkCreateListing): live evidence shows the bounce can happen a few seconds INTO
+    // fillListing below, after this exact point, so the marker needs to stay live through the fill,
+    // not just through the initial page-ready check.
+    console.log('[FAS Poshmark] Form confirmed loaded -- proceeding to fill (bounce-retry marker kept live for the duration of this fill).');
     const fillResult = await fillListing(item);
     const photosOk = fillResult.photosOk;
     // Re-check for an interstitial that may have appeared mid-fill (e.g. triggered by the photo
@@ -1588,7 +1716,7 @@
     await sleep(600); // let the page settle before reading the DOM
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
-    if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry marker
     // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD, Patrick live-confirmed incident): a
     // resumed queue entry (via popup.js's "reopen that tab" banner, or any tab reload while a
     // queue is still pending) used to unconditionally re-fill and re-publish, with zero check for

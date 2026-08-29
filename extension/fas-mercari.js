@@ -930,15 +930,84 @@
     let set = setNativeValue(el, String(floor));
     await sleep(300); // give Mercari's own inline validation a moment to render before we check it
     const readMercariFloorError = () => {
-      // Walk a couple of ancestor levels from the field (same field-container shape as the rest of
-      // this file's UNVERIFIED-but-defensive DOM reads) and look for Mercari's own error text --
-      // never a class-name guess, only the literal wording it renders.
+      // Round 3 (this session, earlier) added the 3 strategies below (aria-describedby / 6-level
+      // ancestor walk / form-section search), all ancestor-chain-based. Patrick's live re-test
+      // still failed ($8.99 in the field, error still showing, no retry fired), and the console
+      // confirmed all 3 missed. Main session then queried the live DOM directly on that exact tab
+      // and found the real error node: a <p> with text "The floor price needs to be more than $9."
+      // sitting under an Accordion/Container wrapper -- NOT a direct ancestor of the input at all,
+      // which is exactly why all 3 ancestor-chain strategies missed it (portal-rendered /
+      // accordion-relocated validation text, structurally disconnected from the field itself).
+      // Round 4 (this fix): a whole-page text scan makes no assumption about DOM structure at all,
+      // so it can't be defeated by wherever Mercari's component library chooses to mount the error.
+      // Tried FIRST since it doesn't depend on guessing a wrapper shape and is proven to match the
+      // real error text seen live. The original 3 strategies are kept as a fallback/cross-check
+      // chain in case the whole-page scan ever needs a second opinion (e.g. multiple matches) or a
+      // future Mercari DOM change moves the error into a genuinely structured location.
+      const pattern = /needs? to be (?:more than|greater than|at least) \$?([\d.]+)/i;
+
+      // Strategy 0 (NEW, tried first): whole-page text-node scan. No DOM-structure assumption --
+      // walks every text node under <body> and matches the same error pattern. This is the
+      // strategy confirmed against the real live DOM (see comment above): the error text exists on
+      // the page even though it is not reachable via aria-describedby, an ancestor walk, or a
+      // form/section container search. A false-positive match elsewhere on the same sell-page at
+      // the same moment is considered extremely unlikely for this specific phrase.
+      const wholePageMatch = () => {
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+          const m = pattern.exec(node.textContent || '');
+          if (m) return Number(m[1]);
+        }
+        return null;
+      };
+      const pageResult = wholePageMatch();
+      if (pageResult != null) {
+        console.warn('[FAS Mercari] Smart Pricing floor error detected via whole-page text scan (value: $' + pageResult + ').');
+        return pageResult;
+      }
+
+      // Strategy 1: aria-describedby -- if the input is wired to its error via this attribute (a
+      // common accessible-forms pattern), it is a direct, depth-independent reference to the exact
+      // error node regardless of where it actually sits in the DOM.
+      const describedBy = el.getAttribute('aria-describedby');
+      if (describedBy) {
+        for (const id of describedBy.split(/\s+/).filter(Boolean)) {
+          const node = document.getElementById(id);
+          const m = node && pattern.exec(node.textContent || '');
+          if (m) {
+            console.warn('[FAS Mercari] Smart Pricing floor error detected via aria-describedby (#' + id + ').');
+            return Number(m[1]);
+          }
+        }
+      }
+
+      // Strategy 2: widened ancestor walk -- some component libraries render validation messages
+      // several DOM levels above the input, not just 1-3. Widened from 3 to 6 levels; each level's
+      // own textContent is checked (this also naturally covers any descendant of that level).
       let node = el.parentElement;
-      for (let i = 0; i < 3 && node; i++) {
-        const m = /needs? to be (?:more than|greater than|at least) \$?([\d.]+)/i.exec(node.textContent || '');
-        if (m) return Number(m[1]);
+      for (let i = 0; i < 6 && node; i++) {
+        const m = pattern.exec(node.textContent || '');
+        if (m) {
+          console.warn('[FAS Mercari] Smart Pricing floor error detected via ancestor walk (level ' + (i + 1) + ' of 6).');
+          return Number(m[1]);
+        }
         node = node.parentElement;
       }
+
+      // Strategy 3: broad container search -- the message may render in a SIBLING subtree instead of
+      // an ancestor of the input (e.g. a shared error region elsewhere in the same form/section), so
+      // search the nearest form/section container as a last resort before giving up.
+      const container = el.closest('form') || el.closest('section') || el.closest('[role="form"]');
+      if (container) {
+        const m = pattern.exec(container.textContent || '');
+        if (m) {
+          console.warn('[FAS Mercari] Smart Pricing floor error detected via broad form/section search (aria-describedby and ancestor walk both missed it).');
+          return Number(m[1]);
+        }
+      }
+
+      console.warn('[FAS Mercari] Smart Pricing floor error detection: no match via whole-page scan, aria-describedby, 6-level ancestor walk, or form/section search -- no error is currently shown for this value.');
       return null;
     };
     const rejectedAt = readMercariFloorError();
