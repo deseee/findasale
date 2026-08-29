@@ -228,6 +228,15 @@ export async function executeVerifiedRefund(
     throw new RefundError('No payment intent found for this purchase', 400);
   }
 
+  // Cash-recorded POS sales (terminalController.ts, vendorBoothCartController.ts) get a
+  // placeholder stripePaymentIntentId of the form `cash_<uuid>` instead of a real Stripe
+  // PaymentIntent -- there is no Stripe charge behind them to reverse. Reuses the exact
+  // discriminator convention terminalController.ts already applies elsewhere
+  // (`!p.stripePaymentIntentId.startsWith('cash_')`) rather than inventing a new one. A cash
+  // purchase still goes through the TOCTOU claim, the REFUNDED finalize, the hold release, and
+  // the stockSold decrement below -- only the actual Stripe API call is skipped for it.
+  const isCashPurchase = purchase.stripePaymentIntentId.startsWith('cash_');
+
   // P2-2: Verify purchase is within 30 days
   const purchaseAgeMs = Date.now() - purchase.createdAt.getTime();
   const purchaseAgeDays = purchaseAgeMs / (1000 * 60 * 60 * 24);
@@ -297,7 +306,15 @@ export async function executeVerifiedRefund(
   // that lived here. Regular (non-booth-cart) purchases are either DESTINATION or DIRECT.
   const isDirectCharge = !isBoothCartPurchase && purchase.chargeType === 'DIRECT';
   const isRegularDestinationCharge = !isBoothCartPurchase && purchase.chargeType === 'DESTINATION';
-  const applyOrganizerClawback = refundClawbackEnabled() && isRegularDestinationCharge;
+  // Cash purchases (see isCashPurchase above) fall through to chargeType's schema default
+  // ('DESTINATION') because non-booth cash sales never set chargeType explicitly
+  // (terminalController.ts's card path does; its cash path does not) -- so
+  // isRegularDestinationCharge alone would misclassify a cash sale as clawback-eligible.
+  // Guarded here (not just at the now-skipped Stripe-call site) because applyOrganizerClawback
+  // is also read below to decide whether to send the organizer a "refund deducted from your
+  // payout" notification -- without this guard that notification would fire for a cash refund
+  // even though no real Stripe reverse_transfer ever happens for one.
+  const applyOrganizerClawback = !isCashPurchase && refundClawbackEnabled() && isRegularDestinationCharge;
 
   if (isDirectCharge && !purchase.stripeAccountId) {
     await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
@@ -307,42 +324,50 @@ export async function executeVerifiedRefund(
     );
   }
 
-  try {
-    await stripe().refunds.create({
-      payment_intent: purchase.stripePaymentIntentId,
-      amount: Math.round(refundAmount * 100), // Convert to cents
-      ...(reason ? { reason } : {}),
-      // P1 money-path fix (2026-07-28): booth-cart legs are DIRECT charges on the
-      // booth's own connected account — see stripeController.ts (git history) for the
-      // full Stripe-semantics rationale this was moved from, unchanged.
-      ...(isBoothCartPurchase ? { refund_application_fee: true } : {}),
-      // Direct-charges migration (2026-08-08): Stripe does NOT auto-refund the application
-      // fee on a Direct charge the way reverse_transfer does for a destination charge — this
-      // must ALWAYS fire for a Direct-charge refund, never gated behind a flag, or the
-      // platform keeps its commission on a refunded sale. No reverse_transfer param — there
-      // is no Transfer object for a Direct charge.
-      ...(isDirectCharge ? { refund_application_fee: true } : {}),
-      // PART B (2026-07-28) — DEFAULT OFF, gated on STRIPE_REFUND_LIVE_CLAWBACK.
-      // Mutually exclusive with the booth-cart and Direct-charge spreads above.
-      ...(applyOrganizerClawback
-        ? { reverse_transfer: true, refund_application_fee: true }
-        : {}),
-    }, {
-      idempotencyKey: `refund-${purchase.id}`,
-      ...(isBoothCartPurchase ? { stripeAccount: boothStripeAccountId! } : {}),
-      // Direct-charges migration (2026-08-08): a Direct charge lives on the connected
-      // account itself, not the platform account — the refund call must be scoped there.
-      ...(isDirectCharge ? { stripeAccount: purchase.stripeAccountId! } : {}),
-    });
-  } catch (stripeErr) {
-    // Stripe failed — revert the claim back to PAID so the caller can retry. Rethrow the
-    // ORIGINAL error unwrapped (not a RefundError) so callers' generic catch-all handling
-    // produces the same 500 response createRefund always has for a Stripe failure.
-    await prisma.purchase.updateMany({
-      where: { id: purchaseId, status: 'REFUNDING' },
-      data: { status: 'PAID' }
-    });
-    throw stripeErr;
+  // Cash purchases have no real Stripe charge to reverse -- skip the API call entirely and
+  // fall straight through to the shared finalize-to-REFUNDED path below. Every other Stripe-
+  // backed purchase (booth-cart, Direct, destination-charge, clawback) is completely
+  // unaffected -- this is the ONLY conditional part of the function; everything before and
+  // after it (the TOCTOU claim above, the REFUNDED finalize / hold release / stockSold
+  // decrement below) still runs exactly once regardless of which branch was taken.
+  if (!isCashPurchase) {
+    try {
+      await stripe().refunds.create({
+        payment_intent: purchase.stripePaymentIntentId,
+        amount: Math.round(refundAmount * 100), // Convert to cents
+        ...(reason ? { reason } : {}),
+        // P1 money-path fix (2026-07-28): booth-cart legs are DIRECT charges on the
+        // booth's own connected account — see stripeController.ts (git history) for the
+        // full Stripe-semantics rationale this was moved from, unchanged.
+        ...(isBoothCartPurchase ? { refund_application_fee: true } : {}),
+        // Direct-charges migration (2026-08-08): Stripe does NOT auto-refund the application
+        // fee on a Direct charge the way reverse_transfer does for a destination charge — this
+        // must ALWAYS fire for a Direct-charge refund, never gated behind a flag, or the
+        // platform keeps its commission on a refunded sale. No reverse_transfer param — there
+        // is no Transfer object for a Direct charge.
+        ...(isDirectCharge ? { refund_application_fee: true } : {}),
+        // PART B (2026-07-28) — DEFAULT OFF, gated on STRIPE_REFUND_LIVE_CLAWBACK.
+        // Mutually exclusive with the booth-cart and Direct-charge spreads above.
+        ...(applyOrganizerClawback
+          ? { reverse_transfer: true, refund_application_fee: true }
+          : {}),
+      }, {
+        idempotencyKey: `refund-${purchase.id}`,
+        ...(isBoothCartPurchase ? { stripeAccount: boothStripeAccountId! } : {}),
+        // Direct-charges migration (2026-08-08): a Direct charge lives on the connected
+        // account itself, not the platform account — the refund call must be scoped there.
+        ...(isDirectCharge ? { stripeAccount: purchase.stripeAccountId! } : {}),
+      });
+    } catch (stripeErr) {
+      // Stripe failed — revert the claim back to PAID so the caller can retry. Rethrow the
+      // ORIGINAL error unwrapped (not a RefundError) so callers' generic catch-all handling
+      // produces the same 500 response createRefund always has for a Stripe failure.
+      await prisma.purchase.updateMany({
+        where: { id: purchaseId, status: 'REFUNDING' },
+        data: { status: 'PAID' }
+      });
+      throw stripeErr;
+    }
   }
 
   // Stripe confirmed — finalize status to REFUNDED, and record Refund History

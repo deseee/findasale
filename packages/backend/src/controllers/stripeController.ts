@@ -4125,7 +4125,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('createRefund error:', error);
-    res.status(500).json({ message: 'Failed to issue refund' });
+    res.status(500).json({ message: error instanceof Error ? `Failed to issue refund: ${error.message}` : 'Failed to issue refund' });
   }
 };
 

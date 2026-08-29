@@ -2316,7 +2316,7 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
           results.push({ purchaseId, success: false, error: err.message });
         } else {
           console.error(`[admin bulk-refund] Unexpected error refunding purchase ${purchaseId}:`, err);
-          results.push({ purchaseId, success: false, error: 'Unexpected error processing refund' });
+          results.push({ purchaseId, success: false, error: err instanceof Error ? err.message : 'Unexpected error processing refund' });
         }
       }
     }
