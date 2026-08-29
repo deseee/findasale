@@ -54,6 +54,13 @@ export interface EbayImageMatch {
   // more of its own response. Used by cloudAIService.ts's reconcileTitleWithDetectedText()
   // as a second candidate-word source alongside Google Vision's OCR.
   titleWordConsensus: string[];
+
+  // ADR ROUND 4 (2026-08-29): raw per-listing title strings (all up to 15, not just the
+  // 4-cap `alternates`) -- used by cloudAIService.ts's context-anchored bigram-consensus
+  // correction layer, which needs the ORIGINAL word sequences (not just the flattened
+  // titleWordConsensus set) to determine what word typically follows a given word across
+  // the independently-sourced listings.
+  listingTitles: string[];
 }
 
 // No server-side image downscaler is available in the backend (sharp/jimp are not
@@ -297,6 +304,12 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
       return consensusWords;
     })();
 
+    // ADR ROUND 4 (2026-08-29): raw per-listing title strings, all up to 15 -- see interface
+    // comment above. Zero added cost, same summaries array already fetched.
+    const listingTitles: string[] = summaries
+      .map((s) => (s?.title ?? '').trim())
+      .filter(Boolean);
+
     console.log(
       `[ebayImageSearch] match: title="${topTitle}" ` +
         `category=${categoryConsensus?.categoryId ?? leafCategoryId ?? topCategoryId ?? 'n/a'} ` +
@@ -333,6 +346,7 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
       categoryConsensus,
       conditionConsensus,
       titleWordConsensus,
+      listingTitles,
     };
   } catch (err: any) {
     console.warn('[ebayImageSearch] error:', err?.message || err);
@@ -415,6 +429,19 @@ export function buildEbayMatchContext(match: EbayImageMatch | null): string {
     parts.push(`${match.totalMatches} similar listings found (more = stronger consensus)`);
   }
   if (match.shortDescription) parts.push(`listing description: "${match.shortDescription.slice(0, 200)}"`);
+
+  // ADR ROUND 4 (2026-08-29): in demoted mode ONLY, surface the MAJORITY-CONSENSUS words
+  // (computed across all returned listings, round 3) as confirmed evidence -- deliberately
+  // different from the single-listing literal title this mode withholds above. A word that
+  // a majority of independently-sourced listings agree on is a materially different, more
+  // trustworthy signal than one possibly-wrong top pick, and is presented as such.
+  if (!titleAsIdentity && match.titleWordConsensus.length > 0) {
+    parts.push(
+      `multiple independent listings for this exact item consistently include: ${match.titleWordConsensus
+        .slice(0, 8)
+        .join(', ')} (majority agreement across listings, not a single pick -- prefer this confirmed wording over your own guess if they conflict on a similar term)`
+    );
+  }
 
   // Demoted mode: alternates are also literal title strings from other listings -- withheld
   // for the same reason as topTitle above. Anchored mode keeps them (unchanged behavior).

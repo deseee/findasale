@@ -78,17 +78,36 @@ function replaceWordOnce(text: string, word: string, replacement: string): strin
 }
 
 /**
- * Cross-checks title/detectedPrintedText against Google Vision's own raw detectedText
- * tokens (already fetched, zero additional cost) and corrects a near-miss single-word
- * substitution in place -- e.g. Haiku wrote "Change" but Vision's OCR literally read
- * "Chance" printed on the item. Conservative by design: only corrects when there's a
- * near-miss (Levenshtein distance 1-2, not an exact match and not wildly different) on
- * a word of meaningful length (>=4 chars), so short/common words are never touched.
+ * Cross-checks title/detectedPrintedText against trusted evidence and corrects wrong
+ * words in place. Two layers, both zero additional cost (all inputs already fetched):
+ *
+ * LAYER 1 (near-miss spelling correction): Haiku wrote "Change" but a trusted word
+ * (Google Vision OCR or eBay listing-consensus) is a close spelling match ("Chance").
+ * Conservative by design -- only corrects a near-miss (Levenshtein distance 1-2) on a
+ * word of meaningful length (>=4 chars), so short/common words are never touched.
+ *
+ * LAYER 2 (ADR ROUND 4, context-anchored evidence override): catches the case near-miss
+ * spelling can't -- Haiku free-generated an entirely different, spelling-unrelated word
+ * once literal anchor text was withheld from the prompt (e.g. "Distance" instead of
+ * "Chance", edit distance 4, confirmed via production re-test 2026-08-29). Only fires
+ * when a title word has ZERO evidentiary support anywhere (not in trustedWords, not as
+ * an exact word in any individual eBay listing title) AND the immediately preceding word
+ * has a STRICT MAJORITY consensus next-word across the independently-sourced listings
+ * that differs from Haiku's word -- i.e. overwhelming, already-fetched evidence the
+ * pipeline was simply ignoring. Deliberately narrow: will not touch a word that has SOME
+ * support somewhere, only a word with none at all contradicted by strong positional
+ * consensus, per Patrick's direction ("one bad ebay listing should not [ruin] an entire
+ * known album... there's plenty of good evidence... our algo just ignores it").
+ *
  * Falls back to a passive telemetry warning when Vision has OCR text that doesn't
  * correspond to anything in the title at all, but nothing close enough to auto-correct.
  * Never throws -- any error returns the original, unmodified result.
  */
-function reconcileTitleWithDetectedText(result: AITagResult, detectedText: string[]): AITagResult {
+function reconcileTitleWithDetectedText(
+  result: AITagResult,
+  detectedText: string[],
+  listingTitles?: string[]
+): AITagResult {
   try {
     // DIAGNOSTIC 2026-08-29 (AI title transcription-fidelity investigation): always log
     // Vision's raw detectedText for this call, even when empty -- confirms/denies whether
@@ -96,62 +115,167 @@ function reconcileTitleWithDetectedText(result: AITagResult, detectedText: strin
     // comes out wrong. Read-only observability, no behavior change, zero added cost
     // (Vision is already called every time; this just logs what it already returned).
     console.log('[cloudAI] Vision detectedText for this call:', { count: (detectedText || []).length, detectedText: detectedText || [] });
-    if (!result?.title || !detectedText || detectedText.length === 0) return result;
+    if (!result?.title) return result;
 
-    const titleWords = result.title.split(/\s+/).filter((w) => w.replace(/[^a-zA-Z0-9]/g, '').length >= 4);
     let corrected = { ...result };
     let replacedAny = false;
     let replacedWordLog: string | undefined;
     let detectedTokenLog: string | undefined;
     let minDistanceAcrossAllWords = Infinity;
 
-    for (const rawWord of titleWords) {
-      const word = rawWord.replace(/[^a-zA-Z0-9]/g, '');
-      if (word.length < 4) continue;
-      const wordLower = word.toLowerCase();
+    // ---- LAYER 1: near-miss spelling correction (existing, unchanged logic) ----
+    if (detectedText && detectedText.length > 0) {
+      const titleWords = corrected.title.split(/\s+/).filter((w) => w.replace(/[^a-zA-Z0-9]/g, '').length >= 4);
 
-      let bestToken: string | null = null;
-      let bestDistance = Infinity;
-      for (const token of detectedText) {
-        const cleanToken = (token || '').trim();
-        if (cleanToken.length < 4) continue;
-        const dist = levenshteinDistance(wordLower, cleanToken.toLowerCase());
-        if (dist < bestDistance) {
-          bestDistance = dist;
-          bestToken = cleanToken;
+      for (const rawWord of titleWords) {
+        const word = rawWord.replace(/[^a-zA-Z0-9]/g, '');
+        if (word.length < 4) continue;
+        const wordLower = word.toLowerCase();
+
+        let bestToken: string | null = null;
+        let bestDistance = Infinity;
+        for (const token of detectedText) {
+          const cleanToken = (token || '').trim();
+          if (cleanToken.length < 4) continue;
+          const dist = levenshteinDistance(wordLower, cleanToken.toLowerCase());
+          if (dist < bestDistance) {
+            bestDistance = dist;
+            bestToken = cleanToken;
+          }
+        }
+        if (bestDistance < minDistanceAcrossAllWords) minDistanceAcrossAllWords = bestDistance;
+
+        if (bestToken && bestDistance >= 1 && bestDistance <= 2 && bestToken.toLowerCase() !== wordLower) {
+          const replacement = matchCapitalization(word, bestToken);
+          const newTitle = replaceWordOnce(corrected.title, word, replacement);
+          if (newTitle !== corrected.title) {
+            corrected.title = newTitle;
+            if (corrected.detectedPrintedText) {
+              corrected.detectedPrintedText = replaceWordOnce(corrected.detectedPrintedText, word, replacement);
+            }
+            replacedAny = true;
+            replacedWordLog = word;
+            detectedTokenLog = bestToken;
+            break; // one targeted correction per pass -- conservative, avoid compounding edits
+          }
         }
       }
-      if (bestDistance < minDistanceAcrossAllWords) minDistanceAcrossAllWords = bestDistance;
 
-      if (bestToken && bestDistance >= 1 && bestDistance <= 2 && bestToken.toLowerCase() !== wordLower) {
-        const replacement = matchCapitalization(word, bestToken);
+      if (replacedAny) {
+        console.log('[cloudAI] title corrected from detected on-item text:', {
+          before: result.title,
+          after: corrected.title,
+          replacedWord: replacedWordLog,
+          detectedToken: detectedTokenLog,
+        });
+      }
+    }
+
+    // ---- LAYER 2 (ADR ROUND 4): context-anchored evidence override ----
+    let contextReplacedAny = false;
+    let contextLog: { before: string; after: string; replacedWord: string; contextWord: string; consensusWord: string } | undefined;
+
+    if (listingTitles && listingTitles.length > 0) {
+      const normalizeWord = (w: string) => w.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+      // Zero-evidence check pool: the trusted words already passed in (Vision OCR +
+      // eBay majority-consensus, per round 3's call-site) PLUS every exact word from
+      // EVERY individual listing (a broader pool than just the majority-consensus subset).
+      const trustedWordsLower = new Set((detectedText || []).map((t) => normalizeWord(t)).filter(Boolean));
+      const allListingWordsLower = new Set<string>();
+      // Per-listing tokenized (UNFILTERED -- short connector words like "and" are kept
+      // here deliberately, since they are exactly the words that anchor bigram context
+      // for a following content word, e.g. "Time AND Chance". Only candidate words being
+      // considered FOR REPLACEMENT are length-filtered, not context words.)
+      const perListingTokens: string[][] = listingTitles.map((t) =>
+        (t || '').split(/\s+/).map((w) => normalizeWord(w)).filter((w) => w.length > 0)
+      );
+      for (const tokens of perListingTokens) {
+        for (const t of tokens) allListingWordsLower.add(t);
+      }
+
+      // Bigram map: prevWord -> (nextWord -> count of DISTINCT LISTINGS containing that
+      // exact bigram). Deduped per listing via a Set so one listing repeating a bigram
+      // doesn't inflate its own weight.
+      const bigramCounts = new Map<string, Map<string, number>>();
+      for (const tokens of perListingTokens) {
+        const seenPairs = new Set<string>();
+        for (let i = 1; i < tokens.length; i++) {
+          const prev = tokens[i - 1];
+          const next = tokens[i];
+          if (!prev || !next) continue;
+          const pairKey = `${prev}|${next}`;
+          if (seenPairs.has(pairKey)) continue;
+          seenPairs.add(pairKey);
+          if (!bigramCounts.has(prev)) bigramCounts.set(prev, new Map());
+          const nextMap = bigramCounts.get(prev)!;
+          nextMap.set(next, (nextMap.get(next) ?? 0) + 1);
+        }
+      }
+
+      // Re-tokenize from the (possibly layer-1-corrected) title, preserving raw words so
+      // we can find the immediately preceding word for context.
+      const rawTitleWords = corrected.title.split(/\s+/);
+
+      for (let i = 0; i < rawTitleWords.length; i++) {
+        const word = rawTitleWords[i].replace(/[^a-zA-Z0-9]/g, '');
+        if (word.length < 4) continue; // only consider meaningful content words for replacement
+        const wordLower = word.toLowerCase();
+
+        // Zero evidentiary support anywhere?
+        if (trustedWordsLower.has(wordLower) || allListingWordsLower.has(wordLower)) continue;
+        if (i === 0) continue; // no preceding word to anchor on
+
+        const prevWord = normalizeWord(rawTitleWords[i - 1]);
+        if (!prevWord) continue;
+        const nextMap = bigramCounts.get(prevWord);
+        if (!nextMap || nextMap.size === 0) continue;
+
+        let topWord: string | null = null;
+        let topCount = 0;
+        let denominator = 0;
+        for (const [nw, c] of nextMap.entries()) {
+          denominator += c;
+          if (c > topCount) {
+            topCount = c;
+            topWord = nw;
+          }
+        }
+        if (!topWord || topWord === wordLower) continue;
+        if (!(topCount > denominator / 2)) continue; // strict majority required
+
+        const replacement = matchCapitalization(word, topWord);
         const newTitle = replaceWordOnce(corrected.title, word, replacement);
         if (newTitle !== corrected.title) {
+          const beforeTitle = corrected.title;
           corrected.title = newTitle;
           if (corrected.detectedPrintedText) {
             corrected.detectedPrintedText = replaceWordOnce(corrected.detectedPrintedText, word, replacement);
           }
-          replacedAny = true;
-          replacedWordLog = word;
-          detectedTokenLog = bestToken;
+          contextReplacedAny = true;
+          contextLog = {
+            before: beforeTitle,
+            after: corrected.title,
+            replacedWord: word,
+            contextWord: prevWord,
+            consensusWord: topWord,
+          };
           break; // one targeted correction per pass -- conservative, avoid compounding edits
         }
       }
+
+      if (contextReplacedAny && contextLog) {
+        console.log('[cloudAI] title corrected via listing-context consensus (zero evidentiary support for original word):', contextLog);
+      }
     }
 
-    if (replacedAny) {
-      console.log('[cloudAI] title corrected from detected on-item text:', {
-        before: result.title,
-        after: corrected.title,
-        replacedWord: replacedWordLog,
-        detectedToken: detectedTokenLog,
-      });
+    if (replacedAny || contextReplacedAny) {
       return corrected;
     }
 
     // No confident correction fired -- if there's OCR text that doesn't match anything in
     // the title at all (distance 3+ everywhere), keep a passive, non-blocking warning.
-    if (minDistanceAcrossAllWords >= 3 && minDistanceAcrossAllWords !== Infinity) {
+    if (detectedText && detectedText.length > 0 && minDistanceAcrossAllWords >= 3 && minDistanceAcrossAllWords !== Infinity) {
       console.warn('[cloudAI] title/OCR low-similarity telemetry (non-blocking) -- generated title may not match Vision-detected on-item text', { title: result.title, detectedText });
     }
     return result;
@@ -676,10 +800,11 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
     // Vision OCR tokens -- second zero-cost candidate-word source (see
     // ADR-ai-title-transcription-fidelity-2026-08-29-round3.md). Same non-blocking
     // Levenshtein correction, just given a richer candidate list.
-    parsed = reconcileTitleWithDetectedText(parsed, [
-      ...detectedText,
-      ...(ebayMatch?.titleWordConsensus ?? []),
-    ]);
+    parsed = reconcileTitleWithDetectedText(
+      parsed,
+      [...detectedText, ...(ebayMatch?.titleWordConsensus ?? [])],
+      ebayMatch?.listingTitles
+    );
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
@@ -1384,10 +1509,11 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
     // Vision OCR tokens -- second zero-cost candidate-word source (see
     // ADR-ai-title-transcription-fidelity-2026-08-29-round3.md). Same non-blocking
     // Levenshtein correction, just given a richer candidate list.
-    parsed = reconcileTitleWithDetectedText(parsed, [
-      ...detectedText,
-      ...(ebayMatch?.titleWordConsensus ?? []),
-    ]);
+    parsed = reconcileTitleWithDetectedText(
+      parsed,
+      [...detectedText, ...(ebayMatch?.titleWordConsensus ?? [])],
+      ebayMatch?.listingTitles
+    );
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
