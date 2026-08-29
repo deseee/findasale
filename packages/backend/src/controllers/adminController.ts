@@ -136,10 +136,13 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+    // isTestTransaction exclusion (2026-08-29): RECORD-mode/terminal test-transaction
+    // rows must never count toward real revenue/badge totals
     const purchasesLast30d = await prisma.purchase.findMany({
       where: {
         createdAt: { gte: thirtyDaysAgo },
         status: 'PAID',
+        isTestTransaction: false,
         source: { not: 'ALA_CARTE' },
       },
       include: {
@@ -169,10 +172,13 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
+    // isTestTransaction exclusion (2026-08-29): RECORD-mode/terminal test-transaction
+    // rows must never count toward real revenue/badge totals
     const purchasestoday = await prisma.purchase.findMany({
       where: {
         createdAt: { gte: todayStart },
         status: 'PAID',
+        isTestTransaction: false,
         source: { not: 'ALA_CARTE' },
       },
       include: {
@@ -283,10 +289,13 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       sparklines.signups.push(signupCount);
 
       // Transaction revenue
+      // isTestTransaction exclusion (2026-08-29): RECORD-mode/terminal test-transaction
+      // rows must never count toward real revenue/badge totals
       const dayPurchases = await prisma.purchase.findMany({
         where: {
           createdAt: { gte: dayStart, lt: dayEnd },
           status: 'PAID',
+          isTestTransaction: false,
         },
         include: {
           item: {
@@ -360,8 +369,10 @@ export const getStats = async (req: AuthRequest, res: Response) => {
         prisma.sale.count({
           where: { organizer: { country: 'CA', isUnmanagedListing: false } },
         }),
+        // isTestTransaction exclusion (2026-08-29): RECORD-mode/terminal test-transaction
+        // rows must never count toward real revenue/badge totals
         prisma.purchase.findMany({
-          where: { status: 'PAID', item: { sale: { organizer: { country: 'CA', isUnmanagedListing: false } } } },
+          where: { status: 'PAID', isTestTransaction: false, item: { sale: { organizer: { country: 'CA', isUnmanagedListing: false } } } },
           select: { amount: true },
           take: 10000,
         }),

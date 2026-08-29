@@ -74,10 +74,13 @@ export async function getOrganizerWeeklyStats(organizerId: string): Promise<Orga
   // status: 'PAID' — revenue must reflect real completed payments only, never
   // PENDING/FAILED/REFUNDED/DISPUTED Purchase rows (which would overstate revenue).
   const salesIds = activeSales.map((s) => s.id);
+  // isTestTransaction exclusion (2026-08-29): RECORD-mode/terminal test-transaction
+  // rows must never count toward real revenue/badge totals
   const purchases = await prisma.purchase.findMany({
     where: {
       saleId: { in: salesIds },
       status: 'PAID',
+      isTestTransaction: false,
       createdAt: { gte: sevenDaysAgo },
     },
     select: { amount: true },

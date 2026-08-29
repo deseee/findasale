@@ -810,10 +810,19 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
-    const { ids, action, settlementMode: requestedMode } = req.body as {
+    const { ids, action, settlementMode: requestedMode, isTestTransaction } = req.body as {
       ids: string[];
       action: string;
       settlementMode?: SettlementMode;
+      // Test Transaction safety net (2026-08-29 incident) -- mirrors stripeController.ts's
+      // checkout.session.completed webhook precedent and terminalController.ts's cash-payment
+      // sibling fix, added the same session. Only has any effect on the RECORD settlement
+      // branch below (the only markSold branch that flips AVAILABLE->SOLD directly) -- see the
+      // isTestTransaction handling inside `action === 'markSold'` further down. AUTHORIZATION:
+      // takes effect only for holds already re-verified as belonging to THIS organizer
+      // (`h.item.sale?.organizerId === organizer.id`, both in validRouted above and validHolds
+      // inside the transaction below) -- there is no separate code path or bypass.
+      isTestTransaction?: boolean;
     };
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ message: 'ids array is required' });
@@ -1155,121 +1164,171 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         // excluded by every `status: { in: ['PENDING','CONFIRMED'] }` filter in the
         // codebase, which is what makes the row disappear from the organizer's holds
         // list once it is settled.
-        const claim = await tx.itemReservation.updateMany({
-          where: {
-            id: { in: validIds },
-            status: { in: ['PENDING', 'CONFIRMED'] }, // idempotency claim — re-checked at row-lock time
-            item: { sale: { organizerId: organizer.id } } // re-verify ownership in where clause
-          },
-          data: { status: 'COMPLETED' },
-        });
-        if (claim.count !== validIds.length) {
-          // Someone else settled at least one of these holds between our read and this
-          // write. Abort everything — no partial settlement, no duplicate Purchase rows.
-          throw new Error(MARKSOLD_ALREADY_SETTLED);
-        }
-        // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
-        // old unconditional status update. Capture which items became fully SOLD so the
-        // post-transaction eBay/Shopify/FB removal hooks only fire for those (a multi-unit
-        // item with remaining stock stays AVAILABLE and must keep its external listing).
-        for (const itemId of validItemIds) {
-          try {
-            const stockResult = await sellItemUnits(itemId, 1, tx);
-            if (stockResult.fullySoldOut) {
-              soldOutItemIds.push(itemId);
-            } else {
-              partialSaleUpdates.push({ itemId, remainingStock: stockResult.remainingStock });
-            }
-          } catch (stockErr: any) {
-            if (stockErr instanceof InsufficientStockError) {
-              console.error(`[reservations] Oversold race on item ${itemId} during markSold:`, stockErr.message);
-            }
-            throw stockErr;
+        // Test Transaction safety net (2026-08-29 incident). Mirrors stripeController.ts's
+        // checkout.session.completed webhook precedent ("Safety net: test-mode checkout
+        // sessions must never deplete inventory") and today's sibling fix in
+        // terminalController.ts's cash-payment path. Everything ABOVE this point already ran
+        // for real -- the ownership re-check, the already-invoiced/claimed guard, and
+        // recordCommissionRate resolution (server-side, tier-based, resolved outside this
+        // transaction) -- so a test settlement still exercises the real pricing/fee math
+        // against the real Item.price. Only the irreversible writes differ between the two
+        // branches below.
+        if (isTestTransaction) {
+          // TEST BRANCH: deliberately does NOT --
+          //   - claim/consume the hold (no updateMany to 'COMPLETED') -- a REAL shopper's
+          //     hold must not be silently consumed by a test run. Left exactly as-is, so a
+          //     test settlement is safely repeatable and never blocks the later real one.
+          //   - decrement stock or flip the item to SOLD (no sellItemUnits call) --
+          //     soldOutItemIds/partialSaleUpdates are deliberately left empty (their
+          //     enclosing-scope declarations default to []), so the post-transaction
+          //     fire-and-forget eBay/Shopify/FB withdraw-on-sale block further down never
+          //     fires for a test settlement.
+          //   - accrue anything to Organizer.cashFeeBalance -- no real commission is owed on
+          //     a fake sale; accrueCashFeeBalance is simply never called.
+          //   - notify the shopper "Item sold" -- would falsely tell a real person their
+          //     real item sold.
+          // A Purchase row IS still written, tagged isTestTransaction: true, so the fee
+          // snapshot math is genuinely verified end-to-end -- this is what QA should use
+          // going forward instead of settling a real hold from the organizer's holds screen.
+          const testPurchaseRows = validHolds.map((h) => {
+            const amount = h.item.price || 0;
+            const commission = cashCommissionOn(amount, recordCommissionRate);
+            const cashPIId = `cash_test_${randomUUID()}`;
+            return {
+              itemId: h.item.id,
+              saleId: h.item.saleId,
+              userId: h.userId,
+              amount,
+              platformFeeAmount: commission,
+              ...snapshotForCommissionOnly(commission, recordCommissionRate),
+              stripePaymentIntentId: cashPIId,
+              status: 'PAID',
+              source: 'POS',
+              isTestTransaction: true,
+            };
+          });
+          await tx.purchase.createMany({ data: testPurchaseRows });
+          // Computed for the response only (see the platformFee field returned below) --
+          // deliberately NOT run through accrueCashFeeBalance, so Organizer.cashFeeBalance
+          // is provably untouched by a test settlement.
+          recordCommissionAccrued = testPurchaseRows.reduce((sum, r) => sum + r.platformFeeAmount, 0);
+        } else {
+          const claim = await tx.itemReservation.updateMany({
+            where: {
+              id: { in: validIds },
+              status: { in: ['PENDING', 'CONFIRMED'] }, // idempotency claim — re-checked at row-lock time
+              item: { sale: { organizerId: organizer.id } } // re-verify ownership in where clause
+            },
+            data: { status: 'COMPLETED' },
+          });
+          if (claim.count !== validIds.length) {
+            // Someone else settled at least one of these holds between our read and this
+            // write. Abort everything — no partial settlement, no duplicate Purchase rows.
+            throw new Error(MARKSOLD_ALREADY_SETTLED);
           }
-        }
-        // NOTE (2026-08-25, ADR-multi-stock-partial-sale-status-revert): the revert-to-
-        // AVAILABLE-on-partial-sale logic that used to live only here (guarded on
-        // status:'RESERVED') is now centralized inside sellItemUnits() itself, covering
-        // BOTH 'RESERVED' and 'INVOICE_ISSUED' for every call site, not just this one --
-        // see itemStockService.ts. partialSaleUpdates is intentionally left populated
-        // above (still consumed further down, ADR-087 Phase 4, to revise eBay listing
-        // quantities for partially-sold items) but no longer needs its own item.status
-        // write here; sellItemUnits already did it in the same transaction.
-        // Record the cash transaction for each sold item (RECORD mode).
-        //
-        // REVENUE-LEAK FIX (2026-08-17). This block used to write `platformFeeAmount: 0` and
-        // touch nothing else, on the reasoning that a cash sale is money the platform never
-        // handles. That is true of the MONEY and false of the FEE: the organizer commission
-        // (10% SIMPLE / 8% PRO+TEAMS, utils/feeCalculator.ts) is owed on every sale type, cash
-        // included, and the mechanism for collecting it on money we never touch already
-        // existed and already worked -- terminalController's cash sale accrues it to
-        // Organizer.cashFeeBalance, and payoutController nets that balance out of the
-        // organizer's next Stripe payout. RECORD mode simply never called it, so FindA.Sale
-        // earned $0.00 on every cash sale settled from the holds screen. On a $100 cash sale a
-        // SIMPLE organizer now owes $10.00 against their next payout, where they previously
-        // owed nothing.
-        //
-        // FEE SNAPSHOT: written now, deliberately, reversing the "leave it NULL" note that
-        // stood here while the fee question was open. A populated snapshot puts these rows on
-        // the authoritative branch of resolveOrganizerFeeReport, which is the point -- the fee
-        // an organizer is shown for this sale is then the exact number that was added to their
-        // cash-fee balance, pinned at settlement time, instead of `amount * theirCurrentTierRate`
-        // recomputed on every page load. Commission-only: RECORD is never an auction lot (an
-        // auction settles through the bid/checkout path), so the buyer-premium fields record a
-        // hard 0 rather than null. INVARIANT held here:
-        // platformFeeAmount == buyerPremiumAmount + commissionAmount.
-        const recordPurchaseRows = validHolds.map((h) => {
-          const amount = h.item.price || 0;
-          const commission = cashCommissionOn(amount, recordCommissionRate);
-          // Use a UUID placeholder for cash/in-person sales, one per row (schema.prisma
-          // ~line 1580: Purchase.stripePaymentIntentId is nullable and explicitly NOT
-          // unique -- "one PI may have multiple Purchase rows (multi-item cart)" -- so
-          // nothing stops rows from sharing a value at the DB level, but sharing one here
-          // would still be wrong: refundService.ts's booth-cart Transfer-reversal lookup
-          // does `boothCartLeg.findUnique({ where: { stripePaymentIntentId } })`, and every
-          // consumer of the cash_ convention (refundService.ts's isCashPurchase discriminator,
-          // terminalController.ts's own per-item cashPIId loop) treats each id as identifying
-          // one purchase. Matches terminalController.ts's cash-sale convention exactly
-          // (cashPIId, ~line 1073) -- fixes the RECORD-mode gap where these rows were created
-          // with stripePaymentIntentId entirely unset, which the refund tool could not handle.
-          const cashPIId = `cash_${randomUUID()}`;
-          return {
-            itemId: h.item.id,
-            saleId: h.item.saleId,
-            userId: h.userId,
-            amount,
-            platformFeeAmount: commission,
-            ...snapshotForCommissionOnly(commission, recordCommissionRate),
-            stripePaymentIntentId: cashPIId,
-            status: 'PAID',
-            source: 'POS',
-          };
-        });
-        await tx.purchase.createMany({ data: recordPurchaseRows });
+          // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
+          // old unconditional status update. Capture which items became fully SOLD so the
+          // post-transaction eBay/Shopify/FB removal hooks only fire for those (a multi-unit
+          // item with remaining stock stays AVAILABLE and must keep its external listing).
+          for (const itemId of validItemIds) {
+            try {
+              const stockResult = await sellItemUnits(itemId, 1, tx);
+              if (stockResult.fullySoldOut) {
+                soldOutItemIds.push(itemId);
+              } else {
+                partialSaleUpdates.push({ itemId, remainingStock: stockResult.remainingStock });
+              }
+            } catch (stockErr: any) {
+              if (stockErr instanceof InsufficientStockError) {
+                console.error(`[reservations] Oversold race on item ${itemId} during markSold:`, stockErr.message);
+              }
+              throw stockErr;
+            }
+          }
+          // NOTE (2026-08-25, ADR-multi-stock-partial-sale-status-revert): the revert-to-
+          // AVAILABLE-on-partial-sale logic that used to live only here (guarded on
+          // status:'RESERVED') is now centralized inside sellItemUnits() itself, covering
+          // BOTH 'RESERVED' and 'INVOICE_ISSUED' for every call site, not just this one --
+          // see itemStockService.ts. partialSaleUpdates is intentionally left populated
+          // above (still consumed further down, ADR-087 Phase 4, to revise eBay listing
+          // quantities for partially-sold items) but no longer needs its own item.status
+          // write here; sellItemUnits already did it in the same transaction.
+          // Record the cash transaction for each sold item (RECORD mode).
+          //
+          // REVENUE-LEAK FIX (2026-08-17). This block used to write `platformFeeAmount: 0` and
+          // touch nothing else, on the reasoning that a cash sale is money the platform never
+          // handles. That is true of the MONEY and false of the FEE: the organizer commission
+          // (10% SIMPLE / 8% PRO+TEAMS, utils/feeCalculator.ts) is owed on every sale type, cash
+          // included, and the mechanism for collecting it on money we never touch already
+          // existed and already worked -- terminalController's cash sale accrues it to
+          // Organizer.cashFeeBalance, and payoutController nets that balance out of the
+          // organizer's next Stripe payout. RECORD mode simply never called it, so FindA.Sale
+          // earned $0.00 on every cash sale settled from the holds screen. On a $100 cash sale a
+          // SIMPLE organizer now owes $10.00 against their next payout, where they previously
+          // owed nothing.
+          //
+          // FEE SNAPSHOT: written now, deliberately, reversing the "leave it NULL" note that
+          // stood here while the fee question was open. A populated snapshot puts these rows on
+          // the authoritative branch of resolveOrganizerFeeReport, which is the point -- the fee
+          // an organizer is shown for this sale is then the exact number that was added to their
+          // cash-fee balance, pinned at settlement time, instead of `amount * theirCurrentTierRate`
+          // recomputed on every page load. Commission-only: RECORD is never an auction lot (an
+          // auction settles through the bid/checkout path), so the buyer-premium fields record a
+          // hard 0 rather than null. INVARIANT held here:
+          // platformFeeAmount == buyerPremiumAmount + commissionAmount.
+          const recordPurchaseRows = validHolds.map((h) => {
+            const amount = h.item.price || 0;
+            const commission = cashCommissionOn(amount, recordCommissionRate);
+            // Use a UUID placeholder for cash/in-person sales, one per row (schema.prisma
+            // ~line 1580: Purchase.stripePaymentIntentId is nullable and explicitly NOT
+            // unique -- "one PI may have multiple Purchase rows (multi-item cart)" -- so
+            // nothing stops rows from sharing a value at the DB level, but sharing one here
+            // would still be wrong: refundService.ts's booth-cart Transfer-reversal lookup
+            // does `boothCartLeg.findUnique({ where: { stripePaymentIntentId } })`, and every
+            // consumer of the cash_ convention (refundService.ts's isCashPurchase discriminator,
+            // terminalController.ts's own per-item cashPIId loop) treats each id as identifying
+            // one purchase. Matches terminalController.ts's cash-sale convention exactly
+            // (cashPIId, ~line 1073) -- fixes the RECORD-mode gap where these rows were created
+            // with stripePaymentIntentId entirely unset, which the refund tool could not handle.
+            const cashPIId = `cash_${randomUUID()}`;
+            return {
+              itemId: h.item.id,
+              saleId: h.item.saleId,
+              userId: h.userId,
+              amount,
+              platformFeeAmount: commission,
+              ...snapshotForCommissionOnly(commission, recordCommissionRate),
+              stripePaymentIntentId: cashPIId,
+              status: 'PAID',
+              source: 'POS',
+            };
+          });
+          await tx.purchase.createMany({ data: recordPurchaseRows });
 
-        // Accrue the commission against the organizer's next payout. Inside the SAME
-        // transaction as the idempotency claim and the Purchase rows above, so the debt can
-        // never outlive a settlement that rolled back -- and, because the claim already
-        // guarantees each hold is settled at most once, it can never be accrued twice for the
-        // same sale. (terminalController's equivalent runs outside its transaction; this one
-        // is strictly safer, and both now share services/cashFeeService.ts.)
-        recordCommissionAccrued = await accrueCashFeeBalance({
-          organizerId: organizer.id,
-          commission: recordPurchaseRows.reduce((sum, r) => sum + r.platformFeeAmount, 0),
-          tx,
-        });
-        // Notify each shopper their reserved item was marked sold
-        await tx.notification.createMany({
-          data: validHolds.map((h) => ({
-            userId: h.userId,
-            type: 'hold_update',
-            title: 'Item sold',
-            body: `"${h.item.title}" that you had on hold has been marked as sold by the organizer.`,
-            link: `/items/${h.item.id}`,
-            notificationChannel: 'IN_APP',
-            channel: 'OPERATIONAL',
-          })),
-        });
+          // Accrue the commission against the organizer's next payout. Inside the SAME
+          // transaction as the idempotency claim and the Purchase rows above, so the debt can
+          // never outlive a settlement that rolled back -- and, because the claim already
+          // guarantees each hold is settled at most once, it can never be accrued twice for the
+          // same sale. (terminalController's equivalent runs outside its transaction; this one
+          // is strictly safer, and both now share services/cashFeeService.ts.)
+          recordCommissionAccrued = await accrueCashFeeBalance({
+            organizerId: organizer.id,
+            commission: recordPurchaseRows.reduce((sum, r) => sum + r.platformFeeAmount, 0),
+            tx,
+          });
+          // Notify each shopper their reserved item was marked sold
+          await tx.notification.createMany({
+            data: validHolds.map((h) => ({
+              userId: h.userId,
+              type: 'hold_update',
+              title: 'Item sold',
+              body: `"${h.item.title}" that you had on hold has been marked as sold by the organizer.`,
+              link: `/items/${h.item.id}`,
+              notificationChannel: 'IN_APP',
+              channel: 'OPERATIONAL',
+            })),
+          });
+        }
       }
 
       return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds, soldOutItemIds, partialSaleUpdates, recordCommissionAccrued };
@@ -1386,13 +1445,17 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       console.warn('[reservations] Failed to read cashFeeBalance after RECORD settlement:', balanceErr);
     }
 
-    // Include settlementMode for RECORD so the frontend can show the correct toast copy
+    // Include settlementMode for RECORD so the frontend can show the correct toast copy.
+    // isTestTransaction echoed back (Test Transaction safety net, 2026-08-29) so a QA/Chrome
+    // pass has explicit server-side confirmation the hold(s)/item(s) were NOT actually
+    // consumed or sold.
     res.json({
       ...responseResult,
       settlementMode: 'RECORD',
       platformFee,
       platformFeeRate: recordCommissionRate,
       cashFeeBalance,
+      isTestTransaction: isTestTransaction === true,
     });
   } catch (error) {
     console.error('[reservations] batchUpdateHolds error:', error);

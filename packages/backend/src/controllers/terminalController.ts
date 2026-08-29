@@ -883,6 +883,11 @@ export interface CashSaleResult {
   cashFeeBalance: number;
   cashFeeBalanceUpdatedAt: Date | null;
   replay: boolean; // true = this was an idempotent replay of an already-synced clientTransactionId
+  // Test Transaction safety net (2026-08-29 incident, mirrors stripeController.ts's
+  // "Safety net: test-mode checkout sessions must never deplete inventory" precedent):
+  // echoed back so the caller (QA/Chrome pass, or the POS UI) can confirm server-side
+  // that this sale did NOT actually deplete inventory or accrue real commission.
+  isTestTransaction: boolean;
 }
 
 /**
@@ -930,8 +935,15 @@ export async function processCashSaleCore(params: {
   discountType?: string | null;
   discountValue?: number | null;
   discountReasonNote?: string | null;
+  // Test Transaction safety net (2026-08-29, added after a real QA pass through this exact
+  // cash path permanently marked a real production item SOLD with no clean undo -- see the
+  // "Safety net" comment above the Purchase-creation and stock-update blocks below). Mirrors
+  // the existing stripeController.ts checkout.session.completed webhook precedent
+  // ("Safety net: test-mode checkout sessions must never deplete inventory"). Optional and
+  // additive-only: omitted or false is byte-for-byte the pre-existing real-sale behavior.
+  isTestTransaction?: boolean;
 }): Promise<CashSaleResult> {
-  const { organizer, saleId, items, cashReceived, buyerEmail, clientTransactionId, discountType, discountValue, discountReasonNote } = params;
+  const { organizer, saleId, items, cashReceived, buyerEmail, clientTransactionId, discountType, discountValue, discountReasonNote, isTestTransaction } = params;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     throw new CashSaleError('items array is required and must be non-empty', 400, false, 'VALIDATION');
@@ -975,6 +987,9 @@ export async function processCashSaleCore(params: {
         cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
         cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt ?? null,
         replay: true,
+        // Reflect what was actually persisted on the replayed row(s), not the current
+        // request's flag -- the DB row is the source of truth for a replay.
+        isTestTransaction: existing[0]?.isTestTransaction ?? false,
       };
     }
   }
@@ -1092,6 +1107,14 @@ export async function processCashSaleCore(params: {
         stripePaymentIntentId: cashPIId,
         status: 'PAID',
         source: 'POS',
+        // Test Transaction safety net (2026-08-29 incident): every validation/pricing/
+        // discount-clamp step above still ran for real, so the Purchase row genuinely
+        // reflects what the server computed -- it's tagged isTestTransaction (existing
+        // Purchase column, same convention stripeController.ts's test-checkout endpoints
+        // already use) so it never depletes real inventory (see the stock-update skip
+        // below) and, as a side effect, still satisfies checklistController.ts's
+        // "hasTestTransaction" live_pos onboarding check for this sale.
+        isTestTransaction: isTestTransaction === true,
         ...(clientTransactionId ? { clientTransactionId } : {}),
         ...(buyerEmail ? { buyerEmail } : {}),
       },
@@ -1112,8 +1135,17 @@ export async function processCashSaleCore(params: {
   // Same failure class as captureTerminalPaymentIntent's card-path fix above: alert to
   // Sentry, keep processing the rest of the cart, never let a partial failure masquerade as
   // a total one.
+  // Test Transaction safety net (2026-08-29 incident): mirrors stripeController.ts's
+  // checkout.session.completed webhook precedent ("Safety net: test-mode checkout
+  // sessions must never deplete inventory") — added after a real QA pass through this
+  // exact cash path permanently marked a real production item SOLD with no clean undo
+  // (root incident behind today's refundService.ts/adminController.ts/stripeController.ts/
+  // reservationController.ts fixes). The Purchase row(s) above were still created for
+  // real (tagged isTestTransaction) so the pricing/fee math is genuinely exercised — only
+  // the irreversible stock decrement / SOLD flip / cross-channel (eBay/Shopify/FB)
+  // withdraw-on-sale below is skipped for a test transaction.
   for (const item of chargedItems) {
-    if (item.itemId) {
+    if (item.itemId && !isTestTransaction) {
       let fullySoldOut: boolean;
       let remainingStock: number;
       try {
@@ -1165,15 +1197,25 @@ export async function processCashSaleCore(params: {
   // Accumulate the commission on this cash sale to the organizer's cash-fee balance, which
   // payoutController nets out of their next Stripe payout. Shared with RECORD-mode settlement
   // via services/cashFeeService.ts — one implementation, two callers.
+  //
+  // totalPlatformFees is still computed for a test transaction (so the response's
+  // `platformFee` genuinely reflects what the server calculated, letting QA verify the
+  // fee/discount math) — but for isTestTransaction it is deliberately NEVER accrued to
+  // Organizer.cashFeeBalance below. A fee-balance debt against the organizer's real payout
+  // for a fake test sale would itself be a bug this safety net exists to prevent.
   const totalPlatformFees = chargedItems.reduce(
     (sum, item) => sum + cashCommissionOn(item.amount, feeRate),
     0
   );
-  await accrueCashFeeBalance({ organizerId: organizer.id, commission: totalPlatformFees });
+  if (!isTestTransaction) {
+    await accrueCashFeeBalance({ organizerId: organizer.id, commission: totalPlatformFees });
+  }
 
-  // Optionally send receipt email
+  // Optionally send receipt email. Skipped for a test transaction — no real money moved and
+  // no real item sold, so emailing a "Your receipt from FindA.Sale" confirmation to whatever
+  // buyerEmail the tester typed in would misrepresent a completed purchase.
   let receiptSent = false;
-  if (buyerEmail) {
+  if (buyerEmail && !isTestTransaction) {
     try {
       const { buildEmail } = await import('../services/emailTemplateService');
 
@@ -1223,6 +1265,7 @@ export async function processCashSaleCore(params: {
     cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
     cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt ?? null,
     replay: false,
+    isTestTransaction: isTestTransaction === true,
   };
 }
 
@@ -1250,7 +1293,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     // also serves the frontend's Venmo/Zelle buttons, both of which POST to this same route)
     // never did, so the staff discount cap was unenforceable for those 3 payment methods and
     // the discount never reached the persisted Purchase.amount.
-    const { items, cashReceived, buyerEmail, saleId, clientTransactionId, discountType, discountValue, discountReasonNote } = req.body as {
+    const { items, cashReceived, buyerEmail, saleId, clientTransactionId, discountType, discountValue, discountReasonNote, isTestTransaction } = req.body as {
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
       cashReceived?: number;
       buyerEmail?: string;
@@ -1259,6 +1302,13 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       discountType?: string;
       discountValue?: number;
       discountReasonNote?: string;
+      // Test Transaction safety net (2026-08-29 incident) -- see processCashSaleCore's own
+      // isTestTransaction doc comment. AUTHORIZATION: this flag only ever takes effect for the
+      // organizer (or their TEAM_MEMBER) resolved by resolveOrganizerOrTeamMember above, AND
+      // only after the `sale.organizerId !== organizer.id` ownership check below passes --
+      // there is no separate code path or bypass; a client cannot use isTestTransaction to
+      // reach a sale it doesn't already have full cash-sale rights to.
+      isTestTransaction?: boolean;
     };
 
     if (!saleId) {
@@ -1285,13 +1335,17 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       discountType,
       discountValue,
       discountReasonNote,
+      isTestTransaction,
     });
 
     // S1072 Finding #4: cash/offsite sales have no verifiable buyer account (Purchase.userId
     // is null for walk-in buyers), so identity-grade collusion cannot be checked or blocked
     // here. Record a low-confidence, non-blocking signal against the organizer for admin
     // review — this path must never reject a legitimate cash sale.
-    if (sale.organizer?.userId) {
+    // Test Transaction safety net (2026-08-29): skipped for a test transaction -- no real
+    // money moved and no real buyer exists, so there is nothing here worth an admin's
+    // self-dealing review; recording one anyway would just be false-positive noise.
+    if (sale.organizer?.userId && !isTestTransaction) {
       recordSuspectedSignal({
         prisma,
         userId: sale.organizer.userId,

@@ -141,10 +141,13 @@ export async function checkAndAwardOgBuyer(
 ): Promise<number | null> {
   try {
     // Count PAID purchases for this sale (including the current one)
+    // isTestTransaction exclusion (2026-08-29): RECORD-mode/terminal test-transaction
+    // rows must never count toward real revenue/badge totals
     const purchaseCount = await prisma.purchase.count({
       where: {
         saleId,
         status: 'PAID',
+        isTestTransaction: false,
         userId: { not: null }, // Only registered users get the badge
       },
     });
@@ -221,10 +224,13 @@ export async function getUserOgBuyerBadges(
  */
 export async function getSaleOgBuyerCount(saleId: string): Promise<number> {
   try {
+    // isTestTransaction exclusion (2026-08-29): RECORD-mode/terminal test-transaction
+    // rows must never count toward real revenue/badge totals
     return prisma.purchase.count({
       where: {
         saleId,
         status: 'PAID',
+        isTestTransaction: false,
         userId: { not: null },
       },
     });
