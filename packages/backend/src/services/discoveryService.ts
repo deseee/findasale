@@ -210,6 +210,9 @@ export async function getPersonalizedFeed(
         createdAt: {
           gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
         },
+        // isTestTransaction exclusion (2026-08-29): only a real completed purchase should inform recommendations
+        status: 'PAID',
+        isTestTransaction: false,
       },
       include: { item: { select: { category: true } } },
     }),

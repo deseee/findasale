@@ -1729,7 +1729,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
           // Wire referral first-purchase reward
           try {
-            const purchaseCount = await prisma.purchase.count({ where: { userId: purchase.userId } });
+            // isTestTransaction exclusion (2026-08-29): only a real completed purchase counts here
+            const purchaseCount = await prisma.purchase.count({
+              where: { userId: purchase.userId, status: 'PAID', isTestTransaction: false },
+            });
             if (purchaseCount === 1) {
               // This is their first purchase — award milestone XP
               awardXp(purchase.userId, 'FIRST_PURCHASE_EVER', XP_AWARDS.FIRST_PURCHASE_EVER, {

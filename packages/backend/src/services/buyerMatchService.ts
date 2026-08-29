@@ -70,6 +70,9 @@ export async function scoreSaleForUser(userId: string, saleId: string): Promise<
       where: {
         userId,
         sale: { organizerId: sale.organizerId },
+        // isTestTransaction exclusion (2026-08-29): only a real completed purchase counts here
+        status: 'PAID',
+        isTestTransaction: false,
       },
       take: 1,
     });
@@ -93,7 +96,12 @@ export async function scoreSaleForUser(userId: string, saleId: string): Promise<
     const saleCategories = new Set(sale.items.map((i) => i.category).filter(Boolean));
     if (saleCategories.size > 0) {
       const userCategoryHistory = await prisma.purchase.findMany({
-        where: { userId },
+        where: {
+          userId,
+          // isTestTransaction exclusion (2026-08-29): only a real completed purchase counts here
+          status: 'PAID',
+          isTestTransaction: false,
+        },
         include: { item: { select: { category: true } } },
         take: 20,
         orderBy: { createdAt: 'desc' },
@@ -164,6 +172,9 @@ export async function getMatchedBuyersForSale(saleId: string): Promise<MatchedBu
           where: {
             userId: shopper.id,
             sale: { organizerId: sale.organizerId },
+            // isTestTransaction exclusion (2026-08-29): only a real completed purchase counts here
+            status: 'PAID',
+            isTestTransaction: false,
           },
           take: 1,
         });
