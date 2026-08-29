@@ -189,10 +189,21 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
 
     // Phase 2a: Enforce max concurrent holds based on rank
     const rankBenefits = getRankBenefits(explorerRank);
+    // ADR (2026-08-28, Patrick-requested fix for the P3 "paid hold still counts" row): a
+    // completed Hold-to-Pay purchase already writes ItemReservation.status = 'COMPLETED'
+    // (holdInvoicePaymentRecorder.ts markHoldInvoicePaid, fixed 2026-08-26 in commit
+    // bfe909592), which this count already excludes going forward. This filter adds
+    // defense-in-depth against the residual case: a CONFIRMED row whose linked HoldInvoice
+    // has ALREADY reached PAID (legacy pre-fix data, or any future regression that
+    // reintroduces a CONFIRMED-on-paid write) -- exclude it too, so a shopper whose purchase
+    // is genuinely done never has to wait out the 30-minute expiry cron just to free up
+    // their concurrent-hold slot. Same invoiceRel.status === 'PAID' predicate already
+    // established at :318 for the equivalent "is this hold actually done" check.
     const currentHolds = await prisma.itemReservation.count({
       where: {
         userId: req.user!.id,
         status: { in: ['PENDING', 'CONFIRMED'] },
+        NOT: { invoiceRel: { status: 'PAID' } },
       },
     });
     if (currentHolds >= rankBenefits.maxConcurrentHolds) {
