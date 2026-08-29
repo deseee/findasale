@@ -224,18 +224,26 @@ export async function executeVerifiedRefund(
     throw new RefundError('Only paid purchases can be refunded', 400);
   }
 
-  if (!purchase.stripePaymentIntentId) {
-    throw new RefundError('No payment intent found for this purchase', 400);
-  }
-
-  // Cash-recorded POS sales (terminalController.ts, vendorBoothCartController.ts) get a
-  // placeholder stripePaymentIntentId of the form `cash_<uuid>` instead of a real Stripe
-  // PaymentIntent -- there is no Stripe charge behind them to reverse. Reuses the exact
-  // discriminator convention terminalController.ts already applies elsewhere
-  // (`!p.stripePaymentIntentId.startsWith('cash_')`) rather than inventing a new one. A cash
-  // purchase still goes through the TOCTOU claim, the REFUNDED finalize, the hold release, and
-  // the stockSold decrement below -- only the actual Stripe API call is skipped for it.
-  const isCashPurchase = purchase.stripePaymentIntentId.startsWith('cash_');
+  // Cash-recorded POS sales (terminalController.ts, vendorBoothCartController.ts,
+  // reservationController.ts's RECORD settlement mode) get a placeholder
+  // stripePaymentIntentId of the form `cash_<uuid>` instead of a real Stripe PaymentIntent --
+  // there is no Stripe charge behind them to reverse. Reuses the exact discriminator
+  // convention terminalController.ts already applies elsewhere
+  // (`!p.stripePaymentIntentId.startsWith('cash_')`) rather than inventing a new one.
+  //
+  // A genuinely NULL stripePaymentIntentId (found live 2026-08-29: reservationController.ts's
+  // markSold/RECORD-mode path was creating Purchase rows with this field unset entirely,
+  // before the cash_ placeholder was added there) is now treated as the SAME no-real-charge
+  // case -- there is no Stripe object to look up either way, so it must not be rejected
+  // before reaching this check. The old unconditional "no payment intent" throw ran BEFORE
+  // this discriminator and hard-errored on null (and would also have thrown on `.startsWith`
+  // being called on null/undefined even if it hadn't) -- removed; a null value now flows into
+  // the same skip-Stripe branch as a `cash_` value instead of being rejected outright.
+  //
+  // A cash purchase (or a null-stripePaymentIntentId purchase) still goes through the TOCTOU
+  // claim, the REFUNDED finalize, the hold release, and the stockSold decrement below -- only
+  // the actual Stripe API call is skipped for it.
+  const isCashPurchase = !purchase.stripePaymentIntentId || purchase.stripePaymentIntentId.startsWith('cash_');
 
   // P2-2: Verify purchase is within 30 days
   const purchaseAgeMs = Date.now() - purchase.createdAt.getTime();
@@ -333,7 +341,13 @@ export async function executeVerifiedRefund(
   if (!isCashPurchase) {
     try {
       await stripe().refunds.create({
-        payment_intent: purchase.stripePaymentIntentId,
+        // Non-null assertion is safe here: this whole block is gated on `!isCashPurchase`,
+        // and isCashPurchase is `!purchase.stripePaymentIntentId || ...startsWith('cash_')` --
+        // so stripePaymentIntentId is guaranteed truthy whenever this branch runs. TypeScript
+        // can't infer that from the separately-computed `isCashPurchase` boolean on its own
+        // (no early unconditional null-check remains above to narrow the property directly,
+        // unlike before this fix), so the assertion documents what the runtime guard proves.
+        payment_intent: purchase.stripePaymentIntentId!,
         amount: Math.round(refundAmount * 100), // Convert to cents
         ...(reason ? { reason } : {}),
         // P1 money-path fix (2026-07-28): booth-cart legs are DIRECT charges on the

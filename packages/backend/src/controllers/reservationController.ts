@@ -1221,6 +1221,18 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         const recordPurchaseRows = validHolds.map((h) => {
           const amount = h.item.price || 0;
           const commission = cashCommissionOn(amount, recordCommissionRate);
+          // Use a UUID placeholder for cash/in-person sales, one per row (schema.prisma
+          // ~line 1580: Purchase.stripePaymentIntentId is nullable and explicitly NOT
+          // unique -- "one PI may have multiple Purchase rows (multi-item cart)" -- so
+          // nothing stops rows from sharing a value at the DB level, but sharing one here
+          // would still be wrong: refundService.ts's booth-cart Transfer-reversal lookup
+          // does `boothCartLeg.findUnique({ where: { stripePaymentIntentId } })`, and every
+          // consumer of the cash_ convention (refundService.ts's isCashPurchase discriminator,
+          // terminalController.ts's own per-item cashPIId loop) treats each id as identifying
+          // one purchase. Matches terminalController.ts's cash-sale convention exactly
+          // (cashPIId, ~line 1073) -- fixes the RECORD-mode gap where these rows were created
+          // with stripePaymentIntentId entirely unset, which the refund tool could not handle.
+          const cashPIId = `cash_${randomUUID()}`;
           return {
             itemId: h.item.id,
             saleId: h.item.saleId,
@@ -1228,6 +1240,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             amount,
             platformFeeAmount: commission,
             ...snapshotForCommissionOnly(commission, recordCommissionRate),
+            stripePaymentIntentId: cashPIId,
             status: 'PAID',
             source: 'POS',
           };
