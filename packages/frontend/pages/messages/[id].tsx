@@ -78,7 +78,7 @@ const MessageThreadPage = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
-        <Head><title>Messages – FindA.Sale</title></Head>
+        <Head><title>Messages. FindA.Sale</title></Head>
         <Link href="/login" className="px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold">Log in</Link>
       </div>
     );
@@ -87,7 +87,7 @@ const MessageThreadPage = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center">
-        <Head><title>Messages – FindA.Sale</title></Head>
+        <Head><title>Messages. FindA.Sale</title></Head>
         <div className="text-center">
           <div className="animate-spin w-8 h-8 rounded-full border-2 border-amber-600 border-t-transparent mx-auto mb-4" />
           <p className="text-warm-600 dark:text-warm-400">Loading conversation...</p>
@@ -99,7 +99,7 @@ const MessageThreadPage = () => {
   if (isError || !data) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
-        <Head><title>Messages – FindA.Sale</title></Head>
+        <Head><title>Messages. FindA.Sale</title></Head>
         <div className="text-center">
           <p className="text-warm-600 dark:text-warm-400 mb-6">Conversation not found.</p>
           <Link href="/messages" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors">
@@ -118,7 +118,7 @@ const MessageThreadPage = () => {
   return (
     <div className="flex flex-col h-full bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>{otherName} – Messages – FindA.Sale</title>
+        <title>{otherName}. Messages. FindA.Sale</title>
       </Head>
 
       {/* Header */}

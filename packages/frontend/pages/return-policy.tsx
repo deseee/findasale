@@ -8,7 +8,7 @@ const ReturnPolicyPage = () => {
   return (
     <>
       <Head>
-        <title>Return &amp; Refund Policy – FindA.Sale</title>
+        <title>Return &amp; Refund Policy. FindA.Sale</title>
         <meta
           name="description"
           content="Return and refund policy for FindA.Sale. A marketplace for estate sales, yard sales, auctions, and flea markets. Each seller sets their own return policy."

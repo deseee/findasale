@@ -8,7 +8,7 @@ const PrivacyPage = () => {
   return (
     <>
       <Head>
-        <title>Privacy Policy – FindA.Sale</title>
+        <title>Privacy Policy. FindA.Sale</title>
         <meta name="description" content="Privacy Policy for FindA.Sale. Estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">

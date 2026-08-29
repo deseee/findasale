@@ -57,7 +57,7 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <Head>
-          <title>Your Feed – FindA.Sale</title>
+          <title>Your Feed. FindA.Sale</title>
           <meta name="description" content="Sales from organizers you follow on FindA.Sale" />
           <meta property="og:title" content="Your Sale Feed. FindA.Sale" />
           <meta property="og:description" content="Your personalized sales feed. Sales from organizers you follow and items matching your interests." />
@@ -100,7 +100,7 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>Your Feed – FindA.Sale</title>
+        <title>Your Feed. FindA.Sale</title>
         <meta name="description" content="Sales from organizers you follow on FindA.Sale" />
         <meta property="og:title" content="Your Sale Feed. FindA.Sale" />
         <meta property="og:description" content="Your personalized sales feed. Sales from organizers you follow and items matching your interests." />

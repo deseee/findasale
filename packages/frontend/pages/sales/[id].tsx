@@ -1117,7 +1117,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         // CSR fallback: used only when getStaticProps didn't return ogData
         sale ? (
           <Head>
-            <title>{sale.title} – FindA.Sale</title>
+            <title>{sale.title}. FindA.Sale</title>
             <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} key="canonical" />
             <meta name="description" content={`${displaySaleTypeLabel || 'Sale'} in ${sale.city}, ${sale.state}. Browse items and get directions on FindA.Sale.`} />
             <meta property="og:title" content={`${sale.title}. FindA.Sale`} />

@@ -36,7 +36,7 @@ const NewMessagePage = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
-        <Head><title>New Message – FindA.Sale</title></Head>
+        <Head><title>New Message. FindA.Sale</title></Head>
         <Link href="/login" className="px-6 py-3 bg-amber-600 text-white rounded-lg font-semibold">Log in</Link>
       </div>
     );
@@ -50,7 +50,7 @@ const NewMessagePage = () => {
 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
-      <Head><title>New Message – FindA.Sale</title></Head>
+      <Head><title>New Message. FindA.Sale</title></Head>
 
       <main className="container mx-auto px-4 py-8 max-w-lg">
         <div className="flex items-center gap-3 mb-6">

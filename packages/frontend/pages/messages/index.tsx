@@ -47,7 +47,7 @@ const MessagesPage = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center p-8">
-        <Head><title>Messages – FindA.Sale</title></Head>
+        <Head><title>Messages. FindA.Sale</title></Head>
         <div className="text-center max-w-sm">
           <div className="text-5xl mb-4">💬</div>
           <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-3">Messages</h1>
@@ -63,7 +63,7 @@ const MessagesPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
       <Head>
-        <title>Messages – FindA.Sale</title>
+        <title>Messages. FindA.Sale</title>
         <meta name="description" content="Your messages on FindA.Sale" />
       </Head>
 

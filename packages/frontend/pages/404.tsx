@@ -5,7 +5,7 @@ import Link from 'next/link';
 const NotFoundPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800 dark:from-gray-900 dark:to-gray-800">
-      <Head><title>Page Not Found – FindA.Sale</title></Head>
+      <Head><title>Page Not Found. FindA.Sale</title></Head>
       <div className="text-center px-4 max-w-md">
         <h1 className="text-6xl font-bold text-warm-900 dark:text-warm-100 mb-4">404</h1>
         <p className="text-xl text-warm-600 dark:text-warm-400 mb-8">Page not found</p>

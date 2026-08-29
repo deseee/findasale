@@ -640,7 +640,7 @@ const FAQPage = () => {
   return (
     <>
       <Head>
-        <title>FAQ – FindA.Sale</title>
+        <title>FAQ. FindA.Sale</title>
         <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the community resale marketplace." />
         <meta property="og:title" content="FAQ \u2013 FindA.Sale" />
         <meta property="og:description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the community resale marketplace." />

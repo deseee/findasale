@@ -465,7 +465,7 @@ const GuidePage = () => {
   return (
     <>
       <Head>
-        <title>Organizer Guide – FindA.Sale</title>
+        <title>Organizer Guide. FindA.Sale</title>
         <meta name="description" content="Complete guide for sale organizers on FindA.Sale. Create sales, add items, manage inventory, and get paid." />
         <meta property="og:title" content="Organizer Guide – FindA.Sale" />
         <meta property="og:description" content="Complete guide for sale organizers on FindA.Sale. Create sales, add items, manage inventory, and get paid." />
