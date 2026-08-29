@@ -318,9 +318,16 @@ export function buildEbayMatchContext(match: EbayImageMatch | null): string {
   // In "anchored" mode the matched title leads as the item's likely identity.
   // In "demoted" mode (default) it is reframed as a visually-similar listing that
   // may be a DIFFERENT product — a weak category/condition hint only, never identity.
+  // ADR ADDENDUM 2026-08-29 (AI title transcription-fidelity, round 2): in demoted mode,
+  // the matched listing's literal title text is deliberately WITHHELD from the prompt --
+  // a prose disclaimer ("MAY be a different product") changes the text's framing but not
+  // its presence, and confirmed in production that Haiku still pattern-matched onto a
+  // real eBay listing's wrong wording despite the disclaimer. Demoted mode now passes
+  // only the structured signals below (category/condition/brand/price/consensus) as
+  // evidence -- never the matched listing's exact phrasing. Anchored mode is unchanged.
   const parts: string[] = titleAsIdentity
     ? [`closest eBay listing: "${match.topTitle}"`]
-    : [`a visually-similar marketplace listing (MAY be a different product): "${match.topTitle}"`];
+    : ['a visually-similar marketplace listing was found (title withheld to avoid biasing wording — treat only the signals below as evidence)'];
 
   // Consensus signals (aggregated across the whole match set) come first — when many
   // visual matches agree, that is a stronger identity cue than any single listing.
@@ -351,7 +358,9 @@ export function buildEbayMatchContext(match: EbayImageMatch | null): string {
   }
   if (match.shortDescription) parts.push(`listing description: "${match.shortDescription.slice(0, 200)}"`);
 
-  if (match.alternates.length > 0) {
+  // Demoted mode: alternates are also literal title strings from other listings -- withheld
+  // for the same reason as topTitle above. Anchored mode keeps them (unchanged behavior).
+  if (titleAsIdentity && match.alternates.length > 0) {
     parts.push(`other visual matches: ${match.alternates.slice(0, 3).map((t) => `"${t}"`).join(', ')}`);
   }
   const closing = titleAsIdentity

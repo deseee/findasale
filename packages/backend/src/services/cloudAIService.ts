@@ -27,33 +27,132 @@ const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
-// ADR 2026-08-29 (AI title transcription-fidelity): cheap, dependency-free token-overlap
-// similarity check used only for passive mismatch telemetry between Google Vision's raw
-// OCR text and the generated title -- NOT used to block, alter, or flag anything shown
-// to the organizer. No new library dependency added (none of the existing ones cover this).
-function tokenOverlapSimilarity(a: string, b: string): number {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
-  const tokensA = new Set(norm(a));
-  const tokensB = new Set(norm(b));
-  if (tokensA.size === 0 || tokensB.size === 0) return 1; // nothing to compare, don't flag
-  let overlap = 0;
-  for (const t of tokensA) if (tokensB.has(t)) overlap++;
-  return overlap / Math.max(tokensA.size, tokensB.size);
+// ADR ADDENDUM 2026-08-29 (AI title transcription-fidelity, round 2): the original
+// whole-string token-overlap check (tokenOverlapSimilarity/logTitleOcrMismatchIfAny) was
+// too coarse -- it never fires on a single differing word when most other words match
+// (confirmed: it did NOT catch "Time and Change" vs "Time and Chance" in production).
+// Replaced with a per-token Levenshtein near-miss check that can ACTIVELY correct a
+// single-word substitution using Google Vision's own raw OCR text (already fetched at
+// zero additional cost, before Haiku is ever called) -- "use what is written, not what
+// [the model] has confidence in." Fully non-blocking: never throws, never adds an API
+// call, worst case is a no-op identical to the pre-fix behavior.
+
+// Standard DP-table Levenshtein edit distance. No new dependency -- plain TS.
+function levenshteinDistance(a: string, b: string): number {
+  const al = a.length;
+  const bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+  const dp: number[][] = Array.from({ length: al + 1 }, () => new Array(bl + 1).fill(0));
+  for (let i = 0; i <= al; i++) dp[i][0] = i;
+  for (let j = 0; j <= bl; j++) dp[0][j] = j;
+  for (let i = 1; i <= al; i++) {
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,      // deletion
+        dp[i][j - 1] + 1,      // insertion
+        dp[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  return dp[al][bl];
 }
 
-// Passive-only: logs a warning on a likely title/OCR mismatch. Never throws, never
-// alters the AITagResult it's given -- a logging failure here must not affect tagging.
-function logTitleOcrMismatchIfAny(title: string | undefined, detectedText: string[]): void {
+// Match the replacement word's capitalization to the original word's pattern. Simple
+// rule, not over-engineered: if the original's first letter was uppercase, capitalize
+// the replacement's first letter and lowercase the rest; otherwise lowercase throughout.
+function matchCapitalization(original: string, replacement: string): string {
+  if (original.length > 0 && original[0] === original[0].toUpperCase() && /[a-zA-Z]/.test(original[0])) {
+    return replacement.charAt(0).toUpperCase() + replacement.slice(1).toLowerCase();
+  }
+  return replacement.toLowerCase();
+}
+
+// Replace a whole word (case-insensitive, word-boundary) in `text` with `replacement`,
+// preserving the surrounding text untouched. Only replaces the first occurrence found --
+// this is a targeted single-word correction, not a global find/replace.
+function replaceWordOnce(text: string, word: string, replacement: string): string {
+  const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+  return text.replace(re, replacement);
+}
+
+/**
+ * Cross-checks title/detectedPrintedText against Google Vision's own raw detectedText
+ * tokens (already fetched, zero additional cost) and corrects a near-miss single-word
+ * substitution in place -- e.g. Haiku wrote "Change" but Vision's OCR literally read
+ * "Chance" printed on the item. Conservative by design: only corrects when there's a
+ * near-miss (Levenshtein distance 1-2, not an exact match and not wildly different) on
+ * a word of meaningful length (>=4 chars), so short/common words are never touched.
+ * Falls back to a passive telemetry warning when Vision has OCR text that doesn't
+ * correspond to anything in the title at all, but nothing close enough to auto-correct.
+ * Never throws -- any error returns the original, unmodified result.
+ */
+function reconcileTitleWithDetectedText(result: AITagResult, detectedText: string[]): AITagResult {
   try {
-    if (!title || !detectedText || detectedText.length === 0) return;
-    const ocrJoined = detectedText.join(' ');
-    const similarity = tokenOverlapSimilarity(title, ocrJoined);
-    if (similarity < 0.2) {
-      console.warn('[cloudAI] title/OCR low-similarity telemetry (non-blocking) -- generated title may not match Vision-detected on-item text', { title, detectedText, similarity });
+    if (!result?.title || !detectedText || detectedText.length === 0) return result;
+
+    const titleWords = result.title.split(/\s+/).filter((w) => w.replace(/[^a-zA-Z0-9]/g, '').length >= 4);
+    let corrected = { ...result };
+    let replacedAny = false;
+    let replacedWordLog: string | undefined;
+    let detectedTokenLog: string | undefined;
+    let minDistanceAcrossAllWords = Infinity;
+
+    for (const rawWord of titleWords) {
+      const word = rawWord.replace(/[^a-zA-Z0-9]/g, '');
+      if (word.length < 4) continue;
+      const wordLower = word.toLowerCase();
+
+      let bestToken: string | null = null;
+      let bestDistance = Infinity;
+      for (const token of detectedText) {
+        const cleanToken = (token || '').trim();
+        if (cleanToken.length < 4) continue;
+        const dist = levenshteinDistance(wordLower, cleanToken.toLowerCase());
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          bestToken = cleanToken;
+        }
+      }
+      if (bestDistance < minDistanceAcrossAllWords) minDistanceAcrossAllWords = bestDistance;
+
+      if (bestToken && bestDistance >= 1 && bestDistance <= 2 && bestToken.toLowerCase() !== wordLower) {
+        const replacement = matchCapitalization(word, bestToken);
+        const newTitle = replaceWordOnce(corrected.title, word, replacement);
+        if (newTitle !== corrected.title) {
+          corrected.title = newTitle;
+          if (corrected.detectedPrintedText) {
+            corrected.detectedPrintedText = replaceWordOnce(corrected.detectedPrintedText, word, replacement);
+          }
+          replacedAny = true;
+          replacedWordLog = word;
+          detectedTokenLog = bestToken;
+          break; // one targeted correction per pass -- conservative, avoid compounding edits
+        }
+      }
     }
+
+    if (replacedAny) {
+      console.log('[cloudAI] title corrected from detected on-item text:', {
+        before: result.title,
+        after: corrected.title,
+        replacedWord: replacedWordLog,
+        detectedToken: detectedTokenLog,
+      });
+      return corrected;
+    }
+
+    // No confident correction fired -- if there's OCR text that doesn't match anything in
+    // the title at all (distance 3+ everywhere), keep a passive, non-blocking warning.
+    if (minDistanceAcrossAllWords >= 3 && minDistanceAcrossAllWords !== Infinity) {
+      console.warn('[cloudAI] title/OCR low-similarity telemetry (non-blocking) -- generated title may not match Vision-detected on-item text', { title: result.title, detectedText });
+    }
+    return result;
   } catch (telemetryError) {
-    // Never let telemetry break tagging.
-    console.warn('[cloudAI] title/OCR telemetry check itself failed (non-blocking, ignored):', telemetryError);
+    // Never let this check break tagging.
+    console.warn('[cloudAI] title/OCR reconciliation check itself failed (non-blocking, ignored):', telemetryError);
+    return result;
   }
 }
 
@@ -536,7 +635,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
     await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
-    const parsed = JSON.parse(raw) as AITagResult;
+    let parsed = JSON.parse(raw) as AITagResult;
     // Ensure tags is always an array even if Haiku omits the field
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];
@@ -567,7 +666,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       parsed.estimatedPackageType = undefined;
     }
     await finalizePricing(parsed);
-    logTitleOcrMismatchIfAny(parsed.title, detectedText);
+    parsed = reconcileTitleWithDetectedText(parsed, detectedText);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
@@ -1245,7 +1344,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
     await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
-    const parsed = JSON.parse(raw) as AITagResult;
+    let parsed = JSON.parse(raw) as AITagResult;
 
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];
@@ -1268,7 +1367,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
     }
 
     await finalizePricing(parsed);
-    logTitleOcrMismatchIfAny(parsed.title, detectedText);
+    parsed = reconcileTitleWithDetectedText(parsed, detectedText);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
