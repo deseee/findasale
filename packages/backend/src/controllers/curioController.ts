@@ -491,17 +491,27 @@ export const convertScanToListing = async (req: AuthRequest, res: Response): Pro
       await prisma.$transaction(async (tx) => {
         await tx.user.update({ where: { id: userId }, data: { role: 'ORGANIZER' } });
         const existingOrganizer = await tx.organizer.findUnique({ where: { userId } });
-        organizer = existingOrganizer
-          ? existingOrganizer
-          : await tx.organizer.create({
-              data: {
-                userId,
-                businessName: user.name || 'My Sale',
-                phone: '',
-                address: '',
-              },
-            });
+        if (!existingOrganizer) {
+          await tx.organizer.create({
+            data: {
+              userId,
+              businessName: user.name || 'My Sale',
+              phone: '',
+              address: '',
+            },
+          });
+        }
       });
+      // Re-fetch as a plain top-level statement OUTSIDE the $transaction closure -- mirrors
+      // authController.ts redeemInvite()'s `organizerProfile` re-fetch pattern (line ~1077).
+      // Root cause of TS2339 x5 (CI, 2026-08-28): assigning to the outer `organizer` from
+      // INSIDE the transaction closure above caused TypeScript to narrow `organizer` to `never`
+      // for every read below it (a documented TS closure-assignment narrowing quirk -- writing
+      // to an outer `let` from within a nested function invalidates in-block CFA narrowing back
+      // to `never` when combined with the `if (!organizer)` guard, instead of widening to the
+      // declared `Organizer | null` type). Moving the reassignment to a plain sequential
+      // statement avoids the quirk entirely, exactly as redeemInvite() already does.
+      organizer = await prisma.organizer.findUnique({ where: { userId } });
       organizerAutoProvisioned = true;
 
       const updatedUser = await prisma.user.findUnique({ where: { id: userId } });
