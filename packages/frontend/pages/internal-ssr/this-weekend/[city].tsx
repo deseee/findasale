@@ -57,9 +57,14 @@ interface ThisWeekendPageProps {
 function getThisWeekendRange(): { start: Date; end: Date } {
   const now = new Date();
   const day = now.getDay(); // 0=Sun, 1=Mon…6=Sat
-  const daysUntilFriday = ((5 - day + 7) % 7) || 7; // next Friday; if today IS Friday, still next Friday
+  // Fri/Sat/Sun: use the weekend currently in progress (offset back to this Friday).
+  // Mon-Thu: use the upcoming weekend (offset forward to the next Friday).
+  // Fixed 2026-08-28 (seo-geo-monitor S dispatch) — the old `|| 7` fallback always
+  // jumped to NEXT Friday even when today WAS Friday/Sat/Sun, so the page showed next
+  // weekend instead of the one that's happening right now on 3 of every 7 days.
+  const fridayOffset = day === 5 ? 0 : day === 6 ? -1 : day === 0 ? -2 : 5 - day;
   const friday = new Date(now);
-  friday.setDate(now.getDate() + daysUntilFriday);
+  friday.setDate(now.getDate() + fridayOffset);
   friday.setHours(0, 0, 0, 0);
   const sunday = new Date(friday);
   sunday.setDate(friday.getDate() + 2);

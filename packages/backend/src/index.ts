@@ -435,11 +435,25 @@ const globalLimiter = rateLimit({
   // can trip it. This only loosens a rate limit (not auth/payment), so a spoofed UA just wins a
   // bigger anonymous budget, not access to anything sensitive — reuses the same detectCrawler()
   // UA patterns as crawlerAnalyticsMiddleware to avoid a second list drifting out of sync.
+  //
+  // 2026-08-28 (seo-geo-monitor S dispatch): the GET-only bypass above never covers
+  // /api/crawler-log itself — that's a server-to-server POST from Vercel edge middleware
+  // (middleware.ts), whose HTTP User-Agent is Vercel's own fetch client, not the crawler's
+  // (the real bot UA only travels inside the JSON body). As real crawl volume grew, this
+  // POST started tripping the same 500/15min anonymous budget from Vercel's shared egress
+  // IPs, and 429s were silently swallowed by middleware.ts's `.catch(() => {})` — ClaudeBot
+  // logging collapsed from ~450-1200 rows/day to near-zero starting 8/11, GoogleBot the same
+  // starting 8/19. Exempt this path by the same shared secret crawlerLog.ts already requires
+  // for auth (INTERNAL_SCRAPER_KEY) — this loosens rate limiting only, not the 403 auth check
+  // in crawlerLog.ts, which still stands.
   skip: (req) =>
     req.path.startsWith('/api/viewers') ||
     req.path === '/api/health/latency' ||
     isWhitelistedIP(req) ||
-    (req.method === 'GET' && detectCrawler((req.headers['user-agent'] as string) || '') !== null),
+    (req.method === 'GET' && detectCrawler((req.headers['user-agent'] as string) || '') !== null) ||
+    (req.path === '/api/crawler-log' &&
+      !!process.env.INTERNAL_SCRAPER_KEY &&
+      req.headers['x-scraper-key'] === process.env.INTERNAL_SCRAPER_KEY),
   store: createRateLimitStore(),
 });
 app.use(resilientLimiter(globalLimiter));
