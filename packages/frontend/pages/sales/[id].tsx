@@ -2673,9 +2673,12 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
 
     if (!res.ok) {
       if (res.status === 404) {
-        // Unknown/deleted sale: return 404 but allow ISR to recheck periodically
+        // Unknown/deleted sale: confirmed-absent signal, not transient -- Sale IDs are
+        // cuid()-generated and never reused, so a real backend 404 is permanent. 30-day
+        // window (matches ENDED-sale precedent below) instead of daily re-checks.
+        // ADR: claude_docs/feature-notes/ADR-2026-08-29-isr-writes-backend404-fix.md
         console.warn('[getStaticProps:fallback] backend-404', { id });
-        return { notFound: true, revalidate: 86400 };
+        return { notFound: true, revalidate: 2592000 };
       }
       console.warn('[getStaticProps:fallback] backend-non-2xx', { id, status: res.status });
       return {
@@ -2686,9 +2689,11 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     const sale = await res.json();
 
     if (!sale?.id || !sale?.title) {
-      // Sale body empty or malformed: treat as deleted/missing → proper HTTP 404
+      // Sale body empty or malformed: treat as deleted/missing → proper HTTP 404.
+      // Same confirmed-absent reasoning as backend-404 above -- 30-day window.
+      // ADR: claude_docs/feature-notes/ADR-2026-08-29-isr-writes-backend404-fix.md
       console.warn('[getStaticProps:fallback] malformed-body', { id });
-      return { notFound: true, revalidate: 86400 };
+      return { notFound: true, revalidate: 2592000 };
     }
 
     const ogData: OGSaleData = {
