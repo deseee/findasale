@@ -45,6 +45,15 @@ export interface EbayImageMatch {
   materialConsensus?: { value: string; matchCount: number } | null;
   categoryConsensus?: { categoryId: string; categoryName: string; matchCount: number } | null;
   conditionConsensus?: { condition: string; conditionId: string | null; matchCount: number } | null;
+
+  // ADR ROUND 3 (2026-08-29, AI title transcription-fidelity): word-level majority
+  // consensus computed across ALL returned summaries (not just the top pick). Confirmed
+  // via production logs that the single top-ranked visual match can be an outlier --
+  // 14 of 15 matches for a real item agreed on the correct title word while the top-ranked
+  // one alone was wrong. Zero additional cost -- same searchByImage call, just aggregating
+  // more of its own response. Used by cloudAIService.ts's reconcileTitleWithDetectedText()
+  // as a second candidate-word source alongside Google Vision's OCR.
+  titleWordConsensus: string[];
 }
 
 // No server-side image downscaler is available in the backend (sharp/jimp are not
@@ -249,6 +258,45 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
       }
     }
 
+    // ADR ROUND 3 (2026-08-29, AI title transcription-fidelity): word-level majority
+    // consensus across ALL returned summaries (not just summaries[0]). Confirmed via
+    // production logs that the single top-ranked visual match can be an outlier -- 14 of
+    // 15 matches agreed on the correct title word while only the top-ranked one was wrong.
+    // Zero added cost: same searchByImage call already made, just aggregating more of its
+    // own response (all summaries were already fetched; only index 0 was previously used).
+    const titleWordConsensus: string[] = (() => {
+      const perListingWordSets: Set<string>[] = summaries.map((s) => {
+        const words = String(s?.title ?? '')
+          .split(/\s+/)
+          .map((w) => w.replace(/[^a-zA-Z0-9]/g, ''))
+          .filter((w) => w.length >= 4)
+          .map((w) => w.toLowerCase());
+        return new Set(words);
+      });
+      const listingCountByWord = new Map<string, number>();
+      const firstSeenCasing = new Map<string, string>();
+      for (let i = 0; i < summaries.length; i++) {
+        for (const w of perListingWordSets[i]) {
+          listingCountByWord.set(w, (listingCountByWord.get(w) ?? 0) + 1);
+          if (!firstSeenCasing.has(w)) {
+            const rawWords = String(summaries[i]?.title ?? '').split(/\s+/);
+            const match = rawWords.find(
+              (rw) => rw.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === w
+            );
+            firstSeenCasing.set(w, (match ?? w).replace(/[^a-zA-Z0-9]/g, ''));
+          }
+        }
+      }
+      const majorityThreshold = summaries.length / 2;
+      const consensusWords: string[] = [];
+      for (const [word, count] of listingCountByWord.entries()) {
+        if (count > majorityThreshold) {
+          consensusWords.push(firstSeenCasing.get(word) ?? word);
+        }
+      }
+      return consensusWords;
+    })();
+
     console.log(
       `[ebayImageSearch] match: title="${topTitle}" ` +
         `category=${categoryConsensus?.categoryId ?? leafCategoryId ?? topCategoryId ?? 'n/a'} ` +
@@ -284,6 +332,7 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
       materialConsensus,
       categoryConsensus,
       conditionConsensus,
+      titleWordConsensus,
     };
   } catch (err: any) {
     console.warn('[ebayImageSearch] error:', err?.message || err);

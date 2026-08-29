@@ -672,7 +672,14 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       parsed.estimatedPackageType = undefined;
     }
     await finalizePricing(parsed);
-    parsed = reconcileTitleWithDetectedText(parsed, detectedText);
+    // ADR ROUND 3 (2026-08-29): pass eBay's listing-title majority consensus alongside
+    // Vision OCR tokens -- second zero-cost candidate-word source (see
+    // ADR-ai-title-transcription-fidelity-2026-08-29-round3.md). Same non-blocking
+    // Levenshtein correction, just given a richer candidate list.
+    parsed = reconcileTitleWithDetectedText(parsed, [
+      ...detectedText,
+      ...(ebayMatch?.titleWordConsensus ?? []),
+    ]);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
@@ -1373,7 +1380,14 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
     }
 
     await finalizePricing(parsed);
-    parsed = reconcileTitleWithDetectedText(parsed, detectedText);
+    // ADR ROUND 3 (2026-08-29): pass eBay's listing-title majority consensus alongside
+    // Vision OCR tokens -- second zero-cost candidate-word source (see
+    // ADR-ai-title-transcription-fidelity-2026-08-29-round3.md). Same non-blocking
+    // Levenshtein correction, just given a richer candidate list.
+    parsed = reconcileTitleWithDetectedText(parsed, [
+      ...detectedText,
+      ...(ebayMatch?.titleWordConsensus ?? []),
+    ]);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
