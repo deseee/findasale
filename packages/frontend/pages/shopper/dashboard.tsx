@@ -246,7 +246,7 @@ const ShopperDashboard = () => {
 
   // All hooks MUST be called before any conditional return (Rules of Hooks).
   // Queries are guarded by `enabled: !!user?.id` so they do nothing when user is null.
-  const { data: purchases, isError: purchasesError } = useQuery({
+  const { data: purchases, isError: purchasesError, isLoading: purchasesLoading } = useQuery({
     queryKey: ['shopper-purchases'],
     queryFn: async () => {
       const response = await api.get('/users/purchases');
@@ -257,7 +257,7 @@ const ShopperDashboard = () => {
 
   // Favorites consolidated to /shopper/wishlist (My Collections page)
 
-  const { data: userData, isError: userDataError } = useQuery({
+  const { data: userData, isError: userDataError, isLoading: userDataLoading } = useQuery({
     queryKey: ['user'],
     queryFn: async () => {
       const response = await api.get('/users/me');
@@ -269,7 +269,7 @@ const ShopperDashboard = () => {
   const { data: follows, isLoading: followsLoading, isError: followsError } = useFollows();
 
   // Hold-to-Pay: Fetch pending invoices for shopper
-  const { data: pendingInvoices = [], isError: invoicesError } = useQuery({
+  const { data: pendingInvoices = [], isError: invoicesError, isLoading: invoicesLoading } = useQuery({
     queryKey: ['pending-invoices'],
     queryFn: async () => {
       const response = await api.get('/reservations/my-invoices');
@@ -343,15 +343,34 @@ const ShopperDashboard = () => {
       </Head>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          {/* Error banner: shows if any critical fetch fails */}
+          {/* Error banner: shows if any critical fetch fails. Real Retry button
+              (2026-08-29 audit fix -- was text-only "Please refresh", no clickable
+              recovery action, per D-009). Full reload chosen over per-query refetch
+              since 5 independent queries (2 of them via hooks outside this file --
+              useFollows, useXpProfile -- whose query keys/refetch fns aren't exposed
+              here) feed into one banner; a reload re-runs all of them correctly with
+              no risk of missing one. */}
           {hasError && (
-            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg">
-              <p className="text-red-800 dark:text-red-300 font-semibold">Something went wrong loading your dashboard. Please refresh.</p>
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg flex items-center justify-between gap-4">
+              <p className="text-red-800 dark:text-red-300 font-semibold">Something went wrong loading your dashboard.</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="shrink-0 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors"
+              >
+                Retry
+              </button>
             </div>
           )}
 
-          {/* Above the fold: State-aware hero section */}
-          {isNewShopper && !welcomeDismissed ? (
+          {/* Above the fold: State-aware hero section. Skeleton while purchases loads
+              (2026-08-29 audit fix -- was flashing the New Shopper banner to returning
+              shoppers for a moment because isNewShopper defaulted true pre-load). */}
+          {purchasesLoading ? (
+            <div className="mb-8">
+              <Skeleton className="h-10 w-64 mb-4" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : isNewShopper && !welcomeDismissed ? (
             // State A: New shopper
             <div className="relative bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-8 mb-8 text-center">
               <button
@@ -559,8 +578,12 @@ const ShopperDashboard = () => {
             <div className="space-y-6">
               {/* Achievements now live on /shopper/explorer-profile only (S540 dedup) */}
 
-              {/* Hold-to-Pay: Pending Payments Section: Priority #1 */}
-              {pendingInvoices && pendingInvoices.length > 0 && (
+              {/* Hold-to-Pay: Pending Payments Section: Priority #1. Skeleton while
+                  invoices load (2026-08-29 audit fix -- was silently rendering nothing
+                  until resolved). */}
+              {invoicesLoading ? (
+                <Skeleton className="h-32" />
+              ) : pendingInvoices && pendingInvoices.length > 0 && (
                 <div>
                   <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
                     💳 Pending Payments ({pendingInvoices.length})
@@ -629,9 +652,12 @@ const ShopperDashboard = () => {
                 </div>
               )}
 
-              {/* Rare Finds Feed: Hunt Pass only */}
-              {userData && userData.huntPassActive && (
-                <RareFindsFeed />
+              {/* Rare Finds Feed: Hunt Pass only. Skeleton while userData loads
+                  (2026-08-29 audit fix -- was silently rendering nothing until resolved). */}
+              {userDataLoading ? (
+                <Skeleton className="h-6 w-40" />
+              ) : (
+                userData && userData.huntPassActive && <RareFindsFeed />
               )}
 
               <ActivitySummary />

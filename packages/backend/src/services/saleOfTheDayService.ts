@@ -5,8 +5,9 @@
  * Quality score: (itemCount * 0.4) + (photoCount * 0.3) + (hasDescription ? 0.3 : 0)
  * Ties broken by earliest startDate.
  *
- * No Redis — re-runs the query each time. The GET endpoint sets Cache-Control: max-age=3600
- * so this query runs at most once per hour per CDN region in practice.
+ * No Redis — re-runs the query each time. The GET endpoint sets Cache-Control: max-age=300
+ * (shortened 2026-08-29, was 3600 -- see routes/saleOfTheDay.ts comment) so this query runs
+ * at most once per 5 minutes per CDN region in practice.
  */
 
 import { prisma } from '../lib/prisma';
