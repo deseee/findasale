@@ -559,6 +559,84 @@ function renderGuildXp(p) {
   $('guildBar').hidden = false;
 }
 
+// Live-refresh (2026-08-29 fix, popup stale-LISTED-badge bug -- Patrick's live auto-publish
+// testing report): load() above only ever fetches ITEMS once, and nothing else in this file
+// re-fetches or re-renders afterward -- no chrome.storage.onChanged listener, no polling, no
+// visibility-change handler existed before this. If the popup stays open through an
+// auto-publish run (normal for an organizer watching their queue), LISTED badges and the
+// "available to list" filter (currentListedFlag/render above) never reflect items that get
+// marked listed while the popup is open; closing and reopening re-runs load() and shows correct
+// state, but that's not a fix for someone actively watching a run. This watches the same
+// chrome.storage.local queue-index keys background.js already writes on every queue advance
+// (setXQueue/advanceXQueue -- see QUEUE_STORAGE_KEYS above for Poshmark/Mercari/Vinted/Grailed,
+// plus Craigslist's fasCraigslistIndex and Gumtree Australia's fasGumtreeAuIndex, both written
+// the same way) and the auto-publish reporting reliability net's fasAutoPublishReportedKey
+// (background.js's "Auto-publish reporting reliability net" block), and re-fetches + re-renders
+// the item list whenever any of them change -- purely additive, load()'s own one-shot call at
+// the bottom of this file is untouched.
+const LIVE_REFRESH_STORAGE_KEYS = [
+  'fasPoshmarkIndex', 'fasMercariIndex', 'fasVintedIndex', 'fasGrailedIndex',
+  'fasCraigslistIndex', 'fasGumtreeAuIndex', 'fasAutoPublishReportedKey'
+];
+const LIVE_REFRESH_DEBOUNCE_MS = 4000; // throttle: at most one refresh per this window, even if several keys change in a burst
+let liveRefreshInFlight = false;
+let liveRefreshLastRunAt = 0;
+let liveRefreshPendingTimer = null;
+
+// Re-fetches items directly (does NOT call load()) so a background refresh never re-triggers
+// load()'s one-time setup -- re-wiring onchange handlers, re-fetching guild XP, re-reading the
+// auto-remove/auto-renew settings -- and never flashes the "Loading your FindA.Sale
+// inventory…" status text over an already-open item list.
+async function liveRefreshItems() {
+  if (liveRefreshInFlight) return;
+  liveRefreshInFlight = true;
+  console.log('[FAS popup] storage change detected, refreshing item list');
+  try {
+    const r = await send({ type: 'getItems' });
+    if (!r || !r.ok) return; // best-effort -- a failed background refresh just leaves the last-known state showing
+    const newItems = (r.data && r.data.items) || [];
+    const newOrganizer = (r.data && r.data.organizer) || null;
+    // Preserve any in-progress selection across the refresh -- an organizer mid-way through
+    // picking items for a manual "Post to" action should never have their picks silently wiped
+    // out from under them by a background refresh. Re-add previously-selected IDs that still
+    // exist in the fresh ITEMS array; drop ones that don't (e.g. sold/removed elsewhere).
+    const previouslySelected = new Set(selected);
+    ITEMS = newItems;
+    ORGANIZER = newOrganizer;
+    selected.clear();
+    const currentIds = new Set(ITEMS.map((it) => it.id));
+    previouslySelected.forEach((id) => { if (currentIds.has(id)) selected.add(id); });
+    // Only re-render if the popup has already finished its initial load and is showing the item
+    // list -- if load() hasn't gotten there yet (still on the sign-in/loading/no-items status
+    // screen), let it finish on its own rather than fighting over the DOM mid-load.
+    if ($('controls') && !$('controls').hidden) render();
+  } finally {
+    liveRefreshInFlight = false;
+  }
+}
+
+function scheduleLiveRefresh() {
+  const now = Date.now();
+  const elapsed = now - liveRefreshLastRunAt;
+  if (elapsed >= LIVE_REFRESH_DEBOUNCE_MS) {
+    liveRefreshLastRunAt = now;
+    liveRefreshItems();
+    return;
+  }
+  if (liveRefreshPendingTimer) return; // a trailing refresh is already scheduled for this burst of changes
+  liveRefreshPendingTimer = setTimeout(() => {
+    liveRefreshPendingTimer = null;
+    liveRefreshLastRunAt = Date.now();
+    liveRefreshItems();
+  }, LIVE_REFRESH_DEBOUNCE_MS - elapsed);
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (!LIVE_REFRESH_STORAGE_KEYS.some((k) => Object.prototype.hasOwnProperty.call(changes, k))) return;
+  scheduleLiveRefresh();
+});
+
 $('guildBar').onclick = () => chrome.tabs.create({ url: 'https://finda.sale/shopper/guild-primer' });
 
 load();

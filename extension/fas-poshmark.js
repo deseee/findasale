@@ -664,13 +664,34 @@
   // Poshmark's own "add custom brand" action if present (UNVERIFIED -- exact wording/selector for
   // that action has never been observed live); otherwise logs and skips rather than leaving a
   // half-typed value in the field.
+  // BUG FIX 2026-08-29 (round 7, S-EXT-POSHMARK-BRAND-TIMING, Patrick-directed root cause): the
+  // fixed sleep(700) below was already flagged UNVERIFIED as a best-effort guess. Patrick pointed
+  // out fas-content.js already solved this exact class of bug with a poll-based waitFor() backed
+  // by a MutationObserver (used throughout that file instead of guessing a fixed delay), and
+  // fas-mercari.js has the same idiom via waitForSelector(). This file has no equivalent generic
+  // by-text poll helper (waitForMenuItems() nearby is filter-based, built for menu item LISTS, not
+  // a single by-text match with optionElByText()'s exact/word-boundary fallback), so a small local
+  // poll is added here instead of reusing that one. Same fix philosophy: poll for the suggestion
+  // to actually appear (checked every ~180ms up to 2.5s) instead of one fixed sleep then a single
+  // synchronous check, which races Poshmark's real async suggestion-list render latency. TIMING fix
+  // only -- optionElByText()'s own matching logic is unchanged. The "add custom brand" fallback
+  // search and the final give-up logging below are unchanged, just now gated behind the poll's
+  // result instead of the old fixed-sleep-then-check.
+  async function waitForOptionByText(value, maxWaitMs) {
+    const start = Date.now();
+    while (true) {
+      const match = optionElByText(value);
+      if (match) return match;
+      if (Date.now() - start >= maxWaitMs) return null;
+      await sleep(180);
+    }
+  }
   async function fillAutocomplete(labelText, value) {
     const el = fieldByLabel(labelText);
     if (!el) return false;
     el.focus();
     setNativeValue(el, String(value));
-    await sleep(700); // UNVERIFIED -- suggestion-list settle time, best-effort guess
-    const match = optionElByText(value);
+    const match = await waitForOptionByText(value, 2500);
     if (match) { realClick(match); await sleep(200); return true; }
     const addCustom = qa('[role="option"], li, div[role="button"], button').find((n) => /add\s+.*brand|custom brand|create\s+"/.test(norm(n.textContent)));
     if (addCustom) { realClick(addCustom); await sleep(200); return true; }
@@ -1386,7 +1407,7 @@
     const next = document.getElementById('fas-posh-next');
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
       if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); bar && bar.remove(); }
     };
     closeBtnHandler();
@@ -1486,7 +1507,7 @@
       return;
     }
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
     // Record a run note (never blocks) for every field this run had to guess, skip, or couldn't
     // set -- see this function's own header comment. fillResult.fieldNotes already covers the
     // "Category never committed at all" and Size/Color cases (fillListing above); a confidently-
@@ -1731,7 +1752,7 @@
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'POSHMARK' });
       if (statusRes && statusRes.ok && statusRes.listed) {
         const more = (queued.index + 1) < queued.total;
-        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
         // BUG FIX 2026-08-28 (S-EXT-POSHMARK-AUTOPUBLISH-STALL, same root cause as
         // doPoshmarkAutoPublish's fix below): auto-publish must never wait on a manual click to
         // continue past a skipped (already-listed) item either -- auto-navigate straight to the

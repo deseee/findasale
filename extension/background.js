@@ -172,15 +172,57 @@ const FAS_AUTOPUBLISH_LISTING_URL_PATTERNS = {
   CRAIGSLIST: /craigslist\.org\/[a-z]{2,8}\/d\/[^/]+\/\d+\.html/i,
 };
 const FAS_AUTOPUBLISH_QUEUE_KEYS = {
-  POSHMARK: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', autoPublish: 'fasPoshmarkAutoPublish' },
-  MERCARI: { queue: 'fasMercariQueue', index: 'fasMercariIndex', autoPublish: 'fasMercariAutoPublish' },
-  GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish' },
-  CRAIGSLIST: { queue: 'fasCraigslistQueue', index: 'fasCraigslistIndex', autoPublish: 'fasCraigslistAutoPublish' },
+  // tabId (S-EXT-AUTOPUBLISH-TAB-SCOPE, round 8): the tab actually driving each platform's queue,
+  // recorded at queue-creation time -- see setPoshmarkQueue/setMercariQueue/setCraigslistQueue/
+  // setGrailedQueue/reopenGrailedTab/autoRenewDueItems below. Used by the chrome.tabs.onUpdated
+  // listener below to scope itself to that one tab instead of reacting to ANY tab in the browser.
+  POSHMARK: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', autoPublish: 'fasPoshmarkAutoPublish', tabId: 'fasPoshmarkQueueTabId' },
+  MERCARI: { queue: 'fasMercariQueue', index: 'fasMercariIndex', autoPublish: 'fasMercariAutoPublish', tabId: 'fasMercariQueueTabId' },
+  GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish', tabId: 'fasGrailedQueueTabId' },
+  CRAIGSLIST: { queue: 'fasCraigslistQueue', index: 'fasCraigslistIndex', autoPublish: 'fasCraigslistAutoPublish', tabId: 'fasCraigslistQueueTabId' },
 };
 // Craigslist-only: post.craigslist.org, matches fas-craigslist.js's own POST_URL constant. Used to
 // resume the queue loop from background.js since Craigslist's own content script can't do it itself
 // once the browser has navigated to the (out-of-scope-for-injection) regional confirmation page.
 const FAS_CRAIGSLIST_POST_URL = 'https://post.craigslist.org/';
+// ---- Shared item+platform "listed" report dedup (S-EXT-AUTOPUBLISH-DEDUP fix, 2026-08-29) ----
+// Two independent paths can each believe they are the one reporting a given item as listed for a
+// given platform: (a) a content script's own fast-path 'markListed' message (handled below), and
+// (b) this file's own chrome.tabs.onUpdated reliability net (below). The net's existing
+// fasAutoPublishReportedKey guard only protects the net from firing twice on ITSELF -- it has zero
+// visibility into whether a content script's own direct message already reported the same item.
+// This shared guard closes that gap: whichever path reports a given item+platform FIRST wins:
+// apiFetch actually runs; the other path is a no-op success. Uses chrome.storage.local (not an
+// in-memory Set/Map) because an MV3 service worker can be killed and restarted mid-race -- an
+// in-memory guard would not survive that. Keyed by platform+itemId (not index -- the point is
+// catching the SAME item reported twice even if the two callers disagree about its index). A short
+// TTL comfortably covers the realistic window between "content script's fast path fires" and "the
+// onUpdated net independently fires for the same navigation" without entries accumulating forever.
+const FAS_LISTED_REPORT_DEDUP_TTL_MS = 2 * 60 * 1000;
+async function reportItemListedOnce(itemId, platform, remoteListingId) {
+  const key = platform + ':' + itemId;
+  const now = Date.now();
+  const { fasListedReportDedup = {} } = await chrome.storage.local.get(['fasListedReportDedup']);
+  // Prune stale entries on every check so this object never grows unbounded across a long session.
+  const pruned = {};
+  for (const k of Object.keys(fasListedReportDedup)) {
+    if (now - fasListedReportDedup[k] < FAS_LISTED_REPORT_DEDUP_TTL_MS) pruned[k] = fasListedReportDedup[k];
+  }
+  if (pruned[key] != null) {
+    // Some other path already reported this exact item+platform within the window -- treat as a
+    // successful no-op. Never call apiFetch a second time for the same real publish event.
+    await chrome.storage.local.set({ fasListedReportDedup: pruned });
+    return { ok: true, deduped: true };
+  }
+  pruned[key] = now;
+  await chrome.storage.local.set({ fasListedReportDedup: pruned });
+  try {
+    return await apiFetch('/extension/items/' + encodeURIComponent(itemId) + '/listed',
+      { method: 'POST', body: { remoteListingId: remoteListingId || null, platform } });
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || 'threw' };
+  }
+}
 // Registered at top level (not inside a message handler) so it survives MV3 service worker
 // restarts -- Chrome re-runs this whole script on wake and re-registers top-level listeners
 // automatically, the same way the existing onInstalled/onStartup listeners below do.
@@ -190,10 +232,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
     for (const platform of Object.keys(FAS_AUTOPUBLISH_LISTING_URL_PATTERNS)) {
       if (!FAS_AUTOPUBLISH_LISTING_URL_PATTERNS[platform].test(changeInfo.url)) continue;
       const keys = FAS_AUTOPUBLISH_QUEUE_KEYS[platform];
-      const st = await chrome.storage.local.get([keys.queue, keys.index, keys.autoPublish, 'fasAutoPublishReportedKey']);
+      const st = await chrome.storage.local.get([keys.queue, keys.index, keys.autoPublish, keys.tabId, 'fasAutoPublishReportedKey']);
       const queue = st[keys.queue] || [];
       const index = st[keys.index] || 0;
       if (!st[keys.autoPublish] || !queue.length || index >= queue.length) continue; // no active auto-publish run for this platform
+      // FIX (S-EXT-AUTOPUBLISH-TAB-SCOPE, round 8): this listener used to treat ANY tab in the
+      // browser navigating to a URL matching the platform pattern as a real signal -- it never
+      // checked that the navigating tab was actually the one running this platform's auto-publish
+      // queue. DB-CONFIRMED live incident (queried production this session): 3 real Poshmark
+      // MarketplaceListingJob rows (POST/POSTED, remoteListingId: null -- this net's signature) for
+      // "Mugig" and "Sound King", items Patrick confirmed were NEVER actually published on the real
+      // Poshmark site. With many tabs open across Poshmark/Mercari/Vinted/Craigslist/a popup and a
+      // stale fasPoshmarkAutoPublish flag left set from an earlier run, an unrelated, already-open
+      // Poshmark listing tab navigating to any /listing/ URL was enough to falsely mark whatever
+      // item was currently at the front of the Poshmark queue as posted. Now requires the
+      // navigating tab to match the tab that actually opened/is driving this platform's queue
+      // (recorded once at queue-creation time, updated again on Grailed's per-item tab reopen) --
+      // any other tab's navigation is ignored regardless of how well the URL matches.
+      const queueTabId = keys.tabId ? st[keys.tabId] : null;
+      if (queueTabId == null || tabId !== queueTabId) continue;
       const item = queue[index];
       if (!item || !item.id) continue;
       // Idempotency guard: the content script's own fast-path may have already reported (and
@@ -204,11 +261,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
       const reportKey = platform + ':' + item.id + ':' + index;
       if (st.fasAutoPublishReportedKey === reportKey) continue;
       await chrome.storage.local.set({ fasAutoPublishReportedKey: reportKey });
-      try {
-        const resp = await apiFetch('/extension/items/' + encodeURIComponent(item.id) + '/listed',
-          { method: 'POST', body: { remoteListingId: null, platform } });
-        if (!resp.ok) console.log('[FAS autopublish-reporting-net markListed FAILED]', JSON.stringify({ itemId: item.id, platform, resp }));
-      } catch (e) { console.log('[FAS autopublish-reporting-net markListed threw]', platform, e && e.message); }
+      // FIX (S-EXT-AUTOPUBLISH-DEDUP): routed through the shared reportItemListedOnce() guard
+      // above instead of calling apiFetch directly, so this net and a content script's own
+      // fast-path report can never both actually hit the backend for the same item+platform.
+      const resp = await reportItemListedOnce(item.id, platform, null);
+      if (!resp.ok && !resp.deduped) console.log('[FAS autopublish-reporting-net markListed FAILED]', JSON.stringify({ itemId: item.id, platform, resp }));
       // Re-read the index right before advancing -- if the content script's own fast-path already
       // advanced it between our read above and now, advancing again here would skip an item.
       const fresh = await chrome.storage.local.get([keys.index]);
@@ -914,8 +971,11 @@ async function autoRenewDueItems(dueItems) {
     started += fbQueue.length;
   }
   if (clQueue.length && !(await hasActiveQueue('CRAIGSLIST'))) {
-    await chrome.storage.local.set({ fasCraigslistQueue: clQueue, fasCraigslistIndex: 0, fasCraigslistAutoPublish: true });
-    chrome.tabs.create({ url: CFG.CL_POST_URL, active: false });
+    // fasCraigslistQueueTabId cleared first (fail-closed) then set to the real tab id once
+    // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener above.
+    await chrome.storage.local.set({ fasCraigslistQueue: clQueue, fasCraigslistIndex: 0, fasCraigslistAutoPublish: true, fasCraigslistQueueTabId: null });
+    const clRenewTab = await chrome.tabs.create({ url: CFG.CL_POST_URL, active: false });
+    await chrome.storage.local.set({ fasCraigslistQueueTabId: clRenewTab && clRenewTab.id != null ? clRenewTab.id : null });
     started += clQueue.length;
   }
   if (gtQueue.length && !(await hasActiveQueue('GUMTREE_AU'))) {
@@ -1135,15 +1195,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // ADR-100 (2026-08-06/07): platform threaded through -- fas-content.js's FB call site
         // never sets it (defaults 'FACEBOOK' server-side, matching today's behavior exactly);
         // fas-craigslist.js's new call site sets 'CRAIGSLIST'.
-        const markListedResp = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/listed',
-          { method: 'POST', body: { remoteListingId: msg.remoteListingId || null, platform: msg.platform || 'FACEBOOK' } });
+        // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): routed through the shared
+        // reportItemListedOnce() dedup guard (see its definition above the onUpdated listener)
+        // instead of calling apiFetch directly -- this is the other half of the same race the
+        // onUpdated reliability net above already had a one-sided guard for. A content script's
+        // own fast-path report and the net's independent report for the SAME item+platform can now
+        // only ever actually hit the backend once, no matter which one runs first or whether they race.
+        const markListedResp = await reportItemListedOnce(msg.itemId, msg.platform || 'FACEBOOK', msg.remoteListingId);
         // (2026-08-09) markListed is called fire-and-forget from fas-remove.js/fas-content.js/
         // fas-craigslist.js, none of which check the response -- a failure here (auth, 500,
         // etc.) previously vanished with zero trace anywhere, which is exactly how the
         // not_signed_in gap fixed in apiFetch() above went unnoticed. Kept as a permanent,
         // failure-only log (service worker console persists past any tab's lifecycle, unlike
         // logging from the content-script side) so a regression here is visible again.
-        if (!markListedResp.ok) console.log('[FAS markListed FAILED]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, resp: markListedResp }));
+        if (!markListedResp.ok && !markListedResp.deduped) console.log('[FAS markListed FAILED]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, resp: markListedResp }));
         sendResponse(markListedResp);
       } else if (msg.type === 'markRemoved') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
@@ -1194,19 +1259,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // queue keys so the two channels never interfere.
         // autoPublish (2026-08-06): same fasAutoPublish pattern as the FB queue below --
         // defaults true unless the popup checkbox was explicitly unchecked.
-        await chrome.storage.local.set({ fasCraigslistQueue: msg.queue || [], fasCraigslistIndex: 0, fasCraigslistAutoPublish: msg.autoPublish !== false });
-        chrome.tabs.create({ url: CFG.CL_POST_URL });
+        // fasCraigslistQueueTabId cleared first (fail-closed) then set to the real tab id once
+        // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener above.
+        await chrome.storage.local.set({ fasCraigslistQueue: msg.queue || [], fasCraigslistIndex: 0, fasCraigslistAutoPublish: msg.autoPublish !== false, fasCraigslistQueueTabId: null });
+        const clQueueTab = await chrome.tabs.create({ url: CFG.CL_POST_URL });
+        await chrome.storage.local.set({ fasCraigslistQueueTabId: clQueueTab && clQueueTab.id != null ? clQueueTab.id : null });
         sendResponse({ ok: true });
       } else if (msg.type === 'getCraigslistQueueItem') {
         const { fasCraigslistQueue = [], fasCraigslistIndex = 0, fasCraigslistAutoPublish = true } =
           await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex', 'fasCraigslistAutoPublish']);
         sendResponse({ ok: true, item: fasCraigslistQueue[fasCraigslistIndex] || null, index: fasCraigslistIndex, total: fasCraigslistQueue.length, autoPublish: fasCraigslistAutoPublish });
       } else if (msg.type === 'advanceCraigslistQueue') {
+        // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): compare-and-swap on msg.itemId -- see the
+        // reportItemListedOnce() comment above for the full incident. A content script's own
+        // fast-path advance call and the onUpdated reliability net's own advance (further up this
+        // file) can both legitimately believe they're the one advancing past a given item; without
+        // this guard the SAME real publish could increment the index twice (permanently skipping
+        // the next item) or leave the two paths disagreeing about which item is "current". If the
+        // item currently AT the index doesn't match the itemId the caller thinks it's advancing
+        // past, some other path already moved the index -- treat this as an already-succeeded
+        // no-op (return the current state unchanged) instead of double-advancing or erroring, so no
+        // caller's `.then` chain breaks. msg.itemId is optional for backward compatibility with any
+        // caller that doesn't pass it (falls back to the old unconditional-increment behavior).
         const st = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
-        const next = (st.fasCraigslistIndex || 0) + 1;
-        await chrome.storage.local.set({ fasCraigslistIndex: next });
-        const item = (st.fasCraigslistQueue || [])[next] || null;
-        sendResponse({ ok: true, item, index: next, total: (st.fasCraigslistQueue || []).length });
+        const queue = st.fasCraigslistQueue || [];
+        const curIndex = st.fasCraigslistIndex || 0;
+        const curItem = queue[curIndex];
+        if (msg.itemId != null && (!curItem || curItem.id !== msg.itemId)) {
+          sendResponse({ ok: true, item: curItem || null, index: curIndex, total: queue.length, alreadyAdvanced: true });
+        } else {
+          const next = curIndex + 1;
+          await chrome.storage.local.set({ fasCraigslistIndex: next });
+          const item = queue[next] || null;
+          sendResponse({ ok: true, item, index: next, total: queue.length });
+        }
       } else if (msg.type === 'craigslistLoginStateObserved') {
         // (2026-08-08) Best-effort DOM-observed login state reported by fas-craigslist.js's
         // isLoggedIntoCraigslist(). Only ever a definite true/false (the content script never
@@ -1260,8 +1346,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // empty on every NEW queue -- these accumulate "published but had to guess something"
         // notes across the whole run (see recordPoshmarkRunNote/getPoshmarkRunNotes below) and must
         // not leak stale notes from a prior run into this one.
-        await chrome.storage.local.set({ fasPoshmarkQueue: msg.queue || [], fasPoshmarkIndex: 0, fasPoshmarkAutoPublish: msg.autoPublish !== false, fasPoshmarkRunNotes: [] });
-        chrome.tabs.create({ url: CFG.POSH_POST_URL });
+        // fasPoshmarkQueueTabId cleared first (fail-closed) then set to the real tab id once
+        // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener above.
+        await chrome.storage.local.set({ fasPoshmarkQueue: msg.queue || [], fasPoshmarkIndex: 0, fasPoshmarkAutoPublish: msg.autoPublish !== false, fasPoshmarkRunNotes: [], fasPoshmarkQueueTabId: null });
+        const poshQueueTab = await chrome.tabs.create({ url: CFG.POSH_POST_URL });
+        await chrome.storage.local.set({ fasPoshmarkQueueTabId: poshQueueTab && poshQueueTab.id != null ? poshQueueTab.id : null });
         sendResponse({ ok: true });
       } else if (msg.type === 'getPoshmarkQueueItem') {
         const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0, fasPoshmarkAutoPublish = true } =
@@ -1282,11 +1371,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { fasPoshmarkRunNotes = [] } = await chrome.storage.local.get(['fasPoshmarkRunNotes']);
         sendResponse({ ok: true, notes: fasPoshmarkRunNotes });
       } else if (msg.type === 'advancePoshmarkQueue') {
+        // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): same itemId compare-and-swap as
+        // advanceCraigslistQueue above -- see its comment for the full rationale.
         const st = await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex']);
-        const next = (st.fasPoshmarkIndex || 0) + 1;
-        await chrome.storage.local.set({ fasPoshmarkIndex: next });
-        const item = (st.fasPoshmarkQueue || [])[next] || null;
-        sendResponse({ ok: true, item, index: next, total: (st.fasPoshmarkQueue || []).length });
+        const queue = st.fasPoshmarkQueue || [];
+        const curIndex = st.fasPoshmarkIndex || 0;
+        const curItem = queue[curIndex];
+        if (msg.itemId != null && (!curItem || curItem.id !== msg.itemId)) {
+          sendResponse({ ok: true, item: curItem || null, index: curIndex, total: queue.length, alreadyAdvanced: true });
+        } else {
+          const next = curIndex + 1;
+          await chrome.storage.local.set({ fasPoshmarkIndex: next });
+          const item = queue[next] || null;
+          sendResponse({ ok: true, item, index: next, total: queue.length });
+        }
       } else if (msg.type === 'setMercariQueue') {
         // 2026-08-18 dispatch (fas-mercari.js): same queue-storage shape as
         // setGumtreeAuQueue above. Not wired into autoRenewDueItems()/checkRenewals() above --
@@ -1295,19 +1393,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // "never auto-publish" was a real deviation from the 2026-07-17 locked decision (full
         // automation including auto-publish is a PRO/TEAMS-only opt-in, not disabled outright) --
         // corrected. Same fasAutoPublish pattern as the FB/Craigslist queues, defaults true.
-        await chrome.storage.local.set({ fasMercariQueue: msg.queue || [], fasMercariIndex: 0, fasMercariAutoPublish: msg.autoPublish !== false });
-        chrome.tabs.create({ url: CFG.MERC_POST_URL });
+        // fasMercariQueueTabId cleared first (fail-closed) then set to the real tab id once
+        // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener above.
+        await chrome.storage.local.set({ fasMercariQueue: msg.queue || [], fasMercariIndex: 0, fasMercariAutoPublish: msg.autoPublish !== false, fasMercariQueueTabId: null });
+        const mercQueueTab = await chrome.tabs.create({ url: CFG.MERC_POST_URL });
+        await chrome.storage.local.set({ fasMercariQueueTabId: mercQueueTab && mercQueueTab.id != null ? mercQueueTab.id : null });
         sendResponse({ ok: true });
       } else if (msg.type === 'getMercariQueueItem') {
         const { fasMercariQueue = [], fasMercariIndex = 0, fasMercariAutoPublish = true } =
           await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex', 'fasMercariAutoPublish']);
         sendResponse({ ok: true, item: fasMercariQueue[fasMercariIndex] || null, index: fasMercariIndex, total: fasMercariQueue.length, autoPublish: fasMercariAutoPublish });
       } else if (msg.type === 'advanceMercariQueue') {
+        // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): same itemId compare-and-swap as
+        // advanceCraigslistQueue above -- see its comment for the full rationale.
         const st = await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex']);
-        const next = (st.fasMercariIndex || 0) + 1;
-        await chrome.storage.local.set({ fasMercariIndex: next });
-        const item = (st.fasMercariQueue || [])[next] || null;
-        sendResponse({ ok: true, item, index: next, total: (st.fasMercariQueue || []).length });
+        const queue = st.fasMercariQueue || [];
+        const curIndex = st.fasMercariIndex || 0;
+        const curItem = queue[curIndex];
+        if (msg.itemId != null && (!curItem || curItem.id !== msg.itemId)) {
+          sendResponse({ ok: true, item: curItem || null, index: curIndex, total: queue.length, alreadyAdvanced: true });
+        } else {
+          const next = curIndex + 1;
+          await chrome.storage.local.set({ fasMercariIndex: next });
+          const item = queue[next] || null;
+          sendResponse({ ok: true, item, index: next, total: queue.length });
+        }
       } else if (msg.type === 'setVintedQueue') {
         // 2026-08-18 dispatch (fas-vinted.js): same queue-storage shape as
         // setGumtreeAuQueue above -- no autoPublish flag, since fas-vinted.js never
@@ -1340,8 +1450,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // corrected. Same fasAutoPublish pattern as the FB/Craigslist queues, defaults true.
         // (fas-grailed.js additionally falls back to manual review whenever Designer wasn't
         // confirmed, regardless of this flag -- see its own file header/run().)
-        await chrome.storage.local.set({ fasGrailedQueue: msg.queue || [], fasGrailedIndex: 0, fasGrailedAutoPublish: msg.autoPublish !== false });
-        chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
+        // fasGrailedQueueTabId cleared first (fail-closed) then set to the real tab id once
+        // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener
+        // above. Updated again on every reopenGrailedTab call below, since Grailed (unlike
+        // Poshmark/Mercari/Craigslist) opens a genuinely NEW tab per queue item instead of
+        // navigating the same tab in place.
+        await chrome.storage.local.set({ fasGrailedQueue: msg.queue || [], fasGrailedIndex: 0, fasGrailedAutoPublish: msg.autoPublish !== false, fasGrailedQueueTabId: null });
+        const grailedQueueTab = await chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
+        await chrome.storage.local.set({ fasGrailedQueueTabId: grailedQueueTab && grailedQueueTab.id != null ? grailedQueueTab.id : null });
         sendResponse({ ok: true });
       } else if (msg.type === 'getGrailedQueueItem') {
         const { fasGrailedQueue = [], fasGrailedIndex = 0, fasGrailedAutoPublish = true } =
@@ -1358,17 +1474,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // tab/page-load treatment: open a brand-new tab at the post URL, then close the tab the
         // request came from. sender.tab is only present for a content-script message (never a
         // popup message), which this always is -- guarded anyway for safety.
-        chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
+        // FIX (S-EXT-AUTOPUBLISH-TAB-SCOPE, round 8): this opens a brand-new tab for every
+        // subsequent Grailed queue item (see the file-header comment above) -- fasGrailedQueueTabId
+        // must be re-pointed at that new tab each time, or the onUpdated reliability net would keep
+        // matching against the now-closed previous tab's id (which Chrome may even reassign to an
+        // unrelated tab later) and never fire for the tab actually running the rest of the queue.
+        const newGrailedQueueTab = await chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
+        await chrome.storage.local.set({ fasGrailedQueueTabId: newGrailedQueueTab && newGrailedQueueTab.id != null ? newGrailedQueueTab.id : null });
         if (sender && sender.tab && sender.tab.id != null) {
           chrome.tabs.remove(sender.tab.id, () => { void chrome.runtime.lastError; });
         }
         sendResponse({ ok: true });
       } else if (msg.type === 'advanceGrailedQueue') {
+        // FIX (S-EXT-AUTOPUBLISH-DEDUP, 2026-08-29): same itemId compare-and-swap as
+        // advanceCraigslistQueue above -- see its comment for the full rationale.
         const st = await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex']);
-        const next = (st.fasGrailedIndex || 0) + 1;
-        await chrome.storage.local.set({ fasGrailedIndex: next });
-        const item = (st.fasGrailedQueue || [])[next] || null;
-        sendResponse({ ok: true, item, index: next, total: (st.fasGrailedQueue || []).length });
+        const queue = st.fasGrailedQueue || [];
+        const curIndex = st.fasGrailedIndex || 0;
+        const curItem = queue[curIndex];
+        if (msg.itemId != null && (!curItem || curItem.id !== msg.itemId)) {
+          sendResponse({ ok: true, item: curItem || null, index: curIndex, total: queue.length, alreadyAdvanced: true });
+        } else {
+          const next = curIndex + 1;
+          await chrome.storage.local.set({ fasGrailedIndex: next });
+          const item = queue[next] || null;
+          sendResponse({ ok: true, item, index: next, total: queue.length });
+        }
       } else if (msg.type === 'getRemovalQueueItem') {
         const { fasRemovalQueue = [], fasRemovalIndex = 0 } = await chrome.storage.local.get(['fasRemovalQueue', 'fasRemovalIndex']);
         sendResponse({ ok: true, item: fasRemovalQueue[fasRemovalIndex] || null, index: fasRemovalIndex, total: fasRemovalQueue.length });

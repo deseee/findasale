@@ -139,7 +139,7 @@
   // posting flow, and is cleared once the flow reaches the images step (end of automation). ----
   function attemptCount(step) { return Number(sessionStorage.getItem('fasCLAttempt_' + step) || '0'); }
   function bumpAttempt(step) { sessionStorage.setItem('fasCLAttempt_' + step, String(attemptCount(step) + 1)); }
-  function clearAttempts() { ['subarea', 'type', 'cat', 'geoverify', 'edit', 'preview'].forEach((s) => sessionStorage.removeItem('fasCLAttempt_' + s)); }
+  function clearAttempts() { ['subarea', 'type', 'cat', 'geoverify', 'chooseArea', 'edit', 'preview'].forEach((s) => sessionStorage.removeItem('fasCLAttempt_' + s)); }
   // True (and shows a stop message) when this step has already been auto-submitted twice without
   // Craigslist advancing -- hand it to the human instead of looping.
   function guardStop(step) {
@@ -182,6 +182,20 @@
     radio.checked = true;
     radio.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     radio.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  // DIAGNOSTIC helper (2026-08-29, S-EXT-CRAIGSLIST-ROUND-11): reads a radio's own visible label text
+  // back out, for diagnostic logging only -- not used by any selection logic.
+  function radioLabelTextFor(radio) {
+    if (!radio) return '';
+    const id = radio.id;
+    if (id) {
+      const lab = document.querySelector('label[for="' + id + '"]');
+      if (lab) return norm(lab.textContent);
+    }
+    const wrappingLabel = radio.closest('label');
+    if (wrappingLabel) return norm(wrappingLabel.textContent);
+    const row = radio.closest('li') || radio.parentElement;
+    return row ? norm(row.textContent) : '';
   }
 
   function continueButton() {
@@ -309,9 +323,76 @@
     return false;
   }
 
+  // ---- choose-area confirmation screen detection (S-EXT-CRAIGSLIST-STALL round 6, 2026-08-29)
+  // ----
+  // A THIRD, previously-unhandled screen seen in the "Post another" continuation flow: Craigslist
+  // sometimes re-asks which region to post to. SAME URL SHAPE as the posted-confirmation and
+  // copy-from-previous screens (post.craigslist.org/k/<key1>/<key2>), this time with a `?s=area`
+  // query string. Confirmed live this session by directly reading location.href + document.title
+  // + document.body.innerText against the real screen: href ended in "?s=area", title
+  // "kalamazoo | choose area", body asking "which city / area would you like to post to?" with
+  // the account's real region (kalamazoo, MI) already shown as the selected/displayed value above
+  // a single <select id="ui-id-1" name="n"> region picker and a single <button>continue</button>
+  // -- no radios, no map/leaflet element on this screen (confirmed via
+  // document.querySelector('#map, .leaflet-container, [class*=map]') returning nothing). This is
+  // a DIFFERENT, simpler step than the ?s=geoverify "confirm street address" step (#xstreet0)
+  // handled by doGeoverifyStep above -- don't confuse the two. Two independent signals required
+  // before this is treated as the choose-area state, same discipline as
+  // isCraigslistCopyFromPreviousPrompt() above: the URL shape (?s=area, exact and unambiguous)
+  // AND the page's own prompt copy, so a future Craigslist wording change doesn't silently break
+  // detection.
+  function isCraigslistChooseAreaStep() {
+    const urlMatch = location.hostname === 'post.craigslist.org' && /^\/k\//.test(location.pathname) &&
+      location.search.toLowerCase().includes('s=area');
+    if (!urlMatch) return false;
+    const text = bodyText().toLowerCase();
+    const textMatch = text.indexOf('which city / area would you like to post to') !== -1;
+    if (textMatch) {
+      console.log('[FAS Craigslist] choose-area step detected -- url=' + location.pathname + location.search);
+      return true;
+    }
+    console.warn('[FAS Craigslist] URL looked like the choose-area step (' + location.pathname + location.search +
+      ') but expected page copy was not found -- NOT treating this as choose-area.');
+    return false;
+  }
+
+  // ---- phone-verification wall detection (informational only, round 8 fix,
+  // S-EXT-CRAIGSLIST-STALL round 7) ----
+  // CONFIRMED LIVE GAP this round: a real item sat at post.craigslist.org/k/<key1>/<key2> whose
+  // body text (independently queried) unambiguously matched isCraigslistPostedConfirmation()'s
+  // "thanks for posting" signal, yet the console showed repeated "expected page copy was not
+  // found" warnings and doPostedStep() never fired -- zero CRAIGSLIST MarketplaceListingJob rows
+  // exist for this item despite it being genuinely live. Most likely explanation: Craigslist's own
+  // phone-verification wall (its help docs confirm "some postings may require phone verification")
+  // showed at this SAME URL first. Craigslist's real markup for this wall was not reachable to
+  // inspect live this session, so this is built defensively off body-copy signals, same two-signal
+  // (now three-signal) discipline as every other /k/-URL-shape detector in this file
+  // (isCraigslistPostedConfirmation, isCraigslistCopyFromPreviousPrompt,
+  // isCraigslistChooseAreaStep above) -- requires "phone" AND a verify/verification signal AND
+  // "code" all present so an unrelated page mentioning only one of those words in passing never
+  // false-positives into a stall message. This NEVER fills in or submits anything -- entering a
+  // real phone code requires a real human with a real phone; it only makes the stall visible
+  // instead of silent (see doPhoneVerificationStep() below).
+  function isCraigslistPhoneVerificationStep() {
+    if (location.hostname !== 'post.craigslist.org') return false;
+    const text = bodyText().toLowerCase();
+    const hasPhoneSignal = text.indexOf('phone') !== -1;
+    const hasVerifySignal = text.indexOf('verify') !== -1 || text.indexOf('verification') !== -1;
+    const hasCodeSignal = text.indexOf('code') !== -1;
+    if (hasPhoneSignal && hasVerifySignal && hasCodeSignal) {
+      console.log('[FAS Craigslist] phone-verification wall detected (best-effort text match) -- url=' + location.pathname + location.search);
+      return true;
+    }
+    return false;
+  }
+
   // ---- step detection: unambiguous DOM anchors first (PostingTitle = edit form, file input =
   // images), then the ?s= URL param / page copy for the radio-list steps. ----
   function detectStep() {
+    // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-ROUND-11): logs every step-detection evaluation so it's
+    // visible in the console whether the category-picker step is ever actually reached at all during a
+    // "Post another" continuation post specifically (vs. only on the very first post of a session).
+    console.log('[FAS Craigslist DIAG] detectStep evaluating: ' + location.pathname + location.search);
     if (q('#PostingTitle') || q('input[name="PostingTitle"]')) return 'edit';
     if (fileInput()) return 'images';
     const s = norm(new URLSearchParams(location.search).get('s'));
@@ -321,6 +402,8 @@
     if (s === 'preview' || bodyText().toLowerCase().indexOf('unpublished draft') !== -1) return 'preview';
     if (isCraigslistCopyFromPreviousPrompt()) return 'copyFromPrevious';
     if (isCraigslistPostedConfirmation()) return 'posted';
+    if (isCraigslistPhoneVerificationStep()) return 'phoneVerification';
+    if (isCraigslistChooseAreaStep()) return 'chooseArea';
     if (s === 'subarea' || s === 'area') return 'subarea';
     return 'unknown';
   }
@@ -338,11 +421,23 @@
   async function doCatStep(item) {
     overlay('<b>FindA.Sale</b> - choosing a category...');
     const target = mapCraigslistCategory(item.category);
+    // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-ROUND-11, Patrick-directed): DB-confirmed correct
+    // item.category values (e.g. "Toys & Hobbies", "Musical Instruments & Gear") but every real post
+    // tonight landed under "antiques - by owner" regardless of the actual item.
+    // mapCraigslistCategory() itself is separately confirmed correct for these cases -- this
+    // instrumentation is pure diagnostic, no logic change, so the next live run shows exactly where
+    // between "target computed" and "the actual radio Craigslist ends up posting under" the mismatch
+    // happens (not reached at all / found but mis-clicked / no fresh category picker on continuation
+    // posts at all).
+    console.log('[FAS Craigslist DIAG] doCatStep: item.category="' + item.category + '" mappedTarget="' + target + '"');
     let radio = radioByLabelText(target);
-    if (!radio && target !== 'general for sale') radio = radioByLabelText('general for sale');
+    let usedGeneralFallback = false;
+    if (!radio && target !== 'general for sale') { radio = radioByLabelText('general for sale'); usedGeneralFallback = true; }
     if (!radio) throw hardError('Category', 'Couldn\'t find a for-sale category to select on this Craigslist screen.');
+    console.log('[FAS Craigslist DIAG] doCatStep: radio found=' + !!radio + ' usedGeneralFallback=' + usedGeneralFallback + ' radioLabelText="' + radioLabelTextFor(radio) + '"');
     selectRadio(radio);
     await humanPause(500, 900);
+    console.log('[FAS Craigslist DIAG] doCatStep: checked state after select=' + radio.checked + ' label="' + radioLabelTextFor(radio) + '"');
     clickContinueOrThrow('Category');
   }
 
@@ -422,7 +517,7 @@
       // automated path).
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
       clearAttempts();
-      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
       if (more) { location.href = POST_URL; } else { bar && bar.remove(); }
     };
     const close = document.getElementById('fas-cl-close');
@@ -510,7 +605,7 @@
     // runs when autoPublish is true (see the `if (!autoPublish)` guard earlier in doPreviewStep),
     // so a mid-run item must never wait on a manual click to continue.
     if (more) {
-      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
         '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -557,7 +652,7 @@
       return;
     }
 
-    try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Item posted -- advancing to the next item.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Published <b>' + escapeHtml(item.title) + '</b>. Auto-publish is on -- moving to the next item...</div>' +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -600,13 +695,90 @@
     skipBtn.click(); // -> a genuinely fresh, empty posting form; the script re-runs on the next step
   }
 
+  // Handles the choose-area confirmation screen (see isCraigslistChooseAreaStep() above). The
+  // account's correct region is already the pre-filled/displayed value in the <select> -- do NOT
+  // attempt to change it (that risks overwriting a correct default with a guess); simply confirm
+  // by clicking Craigslist's own "continue" button via the shared continueButton()/
+  // clickContinueOrThrow() helpers, same defensive text-match approach doTypeStep()/doCatStep()
+  // already use (never a hardcoded selector/id that hasn't been verified live).
+  async function doChooseAreaStep() {
+    overlay('<b>FindA.Sale</b> - confirming the pre-filled posting region...');
+    console.log('[FAS Craigslist] choose-area step detected, clicking continue to confirm the pre-filled region');
+    await humanPause(400, 800);
+    clickContinueOrThrow('ChooseArea');
+  }
+
+  // Handles Craigslist's phone-verification wall (see isCraigslistPhoneVerificationStep() above).
+  // Deliberately does NOT attempt to bypass or fill in anything -- a human must receive the real
+  // code on a real phone and enter it. This only makes the stall visible and explains what's
+  // happening; the MutationObserver re-run wired up in setupReRunObserver() below picks the flow
+  // back up automatically once the human finishes and the real confirmation content appears,
+  // without requiring a page reload.
+  async function doPhoneVerificationStep() {
+    overlayInfo('Craigslist needs phone verification for this post -- enter the code you receive, then FindA.Sale will continue automatically once it\'s done.');
+  }
+
+  // ---- re-run on client-side content changes (round 8 fix, S-EXT-CRAIGSLIST-STALL round 7) ----
+  // start() below only ever called run()/detectStep() ONCE per page load (document_idle
+  // injection), matching every prior round's assumption that the next real state always arrives
+  // via a fresh full-page navigation (which re-injects this script from scratch). CONFIRMED GAP
+  // this round: a real item sat at a posting-confirmation URL whose body text unambiguously
+  // matched isCraigslistPostedConfirmation() when queried directly, yet doPostedStep() never
+  // fired -- most likely because Craigslist's phone-verification wall showed at that SAME URL
+  // first, and once the human completed it, the real confirmation content appeared WITHOUT a
+  // fresh navigation (a client-side swap), so this script's one-shot start() never got a chance to
+  // re-check. runInFlight/lastObservedStep/currentRunArgs below back a MutationObserver that
+  // re-detects the step (debounced) whenever the page's content changes substantially, and only
+  // actually re-invokes run() when the DETECTED STEP itself changed -- never on every mutation --
+  // so this can't thrash the same handler repeatedly. Reuses the existing guardStop()/
+  // attemptCount() loop guard (auto-fill steps) and craigslistPostedAlreadyHandled() (posted step)
+  // completely unchanged for the actual re-entrancy protection; runInFlight here additionally
+  // prevents two overlapping run() calls if a mutation fires while a previous run() is still
+  // mid-await.
+  let runInFlight = false;
+  let lastObservedStep = null;
+  let currentRunArgs = null;
+
+  async function runGuarded(item, index, total, autoPublish) {
+    if (runInFlight) return;
+    runInFlight = true;
+    try {
+      await run(item, index, total, autoPublish);
+    } catch (e) {
+      overlayError((e && e.fasStep) || 'this', (e && e.message) || '');
+    } finally {
+      runInFlight = false;
+    }
+  }
+
+  function setupReRunObserver() {
+    if (!currentRunArgs || !document.body) return; // nothing queued for this tab -- nothing to watch for
+    let debounceTimer = null;
+    const observer = new MutationObserver(() => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (runInFlight || !currentRunArgs) return;
+        const step = detectStep();
+        if (step === lastObservedStep) return; // no real state change -- don't re-fire the same handler
+        lastObservedStep = step;
+        runGuarded(currentRunArgs.item, currentRunArgs.index, currentRunArgs.total, currentRunArgs.autoPublish);
+      }, 800);
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  }
+
   async function run(item, index, total, autoPublish) {
     const step = detectStep();
+    lastObservedStep = step; // keeps the MutationObserver re-run comparison above in sync with
+                              // whatever step actually got acted on, whether this run() call came
+                              // from start() or from a later mutation-triggered re-check.
     if (step === 'edit') { if (!guardStop('edit')) await doEditStep(item); return; }
     if (step === 'images') { await doImagesStep(item, index, total); return; }
     if (step === 'preview') { await doPreviewStep(item, index, total, autoPublish); return; }
     if (step === 'posted') { await doPostedStep(item, index, total); return; }
     if (step === 'copyFromPrevious') { await doCopyFromPreviousStep(); return; }
+    if (step === 'phoneVerification') { await doPhoneVerificationStep(); return; }
+    if (step === 'chooseArea') { if (!guardStop('chooseArea')) await doChooseAreaStep(); return; }
     if (step === 'type') { if (!guardStop('type')) await doTypeStep(); return; }
     if (step === 'cat') { if (!guardStop('cat')) await doCatStep(item); return; }
     if (step === 'geoverify') { if (!guardStop('geoverify')) await doGeoverifyStep(item); return; }
@@ -738,11 +910,12 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent (page also loads for normal use)
-    try {
-      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
-    } catch (e) {
-      overlayError((e && e.fasStep) || 'this', (e && e.message) || '');
-    }
+    currentRunArgs = { item: queued.item, index: queued.index, total: queued.total, autoPublish: queued.autoPublish !== false };
+    // Watch for client-side content changes (round 8 fix -- see setupReRunObserver() above) BEFORE
+    // the first run so a transition that happens mid-run() (e.g. verification wall clearing while
+    // the first run() call is still resolving) is never missed.
+    setupReRunObserver();
+    await runGuarded(currentRunArgs.item, currentRunArgs.index, currentRunArgs.total, currentRunArgs.autoPublish);
   }
 
   // Location gate: the account/my-listings page (removal flow) is a different page from the

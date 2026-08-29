@@ -1266,7 +1266,7 @@
     const next = document.getElementById('fas-gr-next');
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'GRAILED' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) {}
       if (more) {
       // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): ask background.js for a genuinely fresh tab
       // instead of an in-page location.href reassignment -- see background.js's
@@ -1364,7 +1364,7 @@
       return;
     }
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'GRAILED' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) {}
     const more = (index + 1) < total;
     // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, same root cause as fas-poshmark.js's and
     // fas-mercari.js's identical fixes shipped same session): auto-publish must not wait on a
@@ -1395,7 +1395,7 @@
     if (skip) skip.onclick = async () => {
       // Never marks the item listed -- it genuinely was not posted. Just advances the local
       // queue so the organizer can move on to the next item.
-      try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: item.id }); } catch (e) {}
       if (more) {
       // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): ask background.js for a genuinely fresh tab
       // instead of an in-page location.href reassignment -- see background.js's
@@ -1713,7 +1713,7 @@
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'GRAILED' });
       if (statusRes && statusRes.ok && statusRes.listed) {
         const more = (queued.index + 1) < queued.total;
-        try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: queued.item.id }); } catch (e) {}
         // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET): same fix as doGrailedAutoPublish
         // above -- auto-publish must not wait on a manual click past a skipped item either.
         if (more && queued.autoPublish !== false) {

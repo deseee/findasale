@@ -298,6 +298,7 @@ export interface AITagResult {
   suggestedConditionGrade?: string; // #64: AI-suggested condition grade (S|A|B|C|D)
   photoOrderIndices?: number[]; // Enhancement 2: Best-photo-first sorting — reordered photo indices by Vision quality
   brand?: string; // Task #339: Optional if confidence < 0.6
+  color?: string; // Optional if confidence < 0.6, or item color is unclear/multi-colored/occluded -- describes the ITEM's own dominant surface color, never the background/backdrop/lighting
   mpn?: string; // Catalog Enrichment (2026-06-14): visible model/part number from labels/markings (evidence-only)
   upc?: string; // Enrichment Cascade (2026-06-14): visible UPC — barcode or printed digits ONLY (evidence-only, never recalled)
   // Calculated-shipping package estimation (same tagging pass, no extra API call)
@@ -721,6 +722,7 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy"). Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory): if you use a brand/maker name anywhere in the title, tags, or description you write above, you MUST also set that same value in the "brand" field — never state a brand in prose while leaving "brand" null or omitted. The two must always agree.
+Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
 Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
@@ -736,6 +738,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
   "mpn": null,
   "upc": null,
   "brand": null,
+  "color": null,
   "estimatedWeightOz": 24,
   "estimatedDimensionsIn": { "length": 10, "width": 8, "height": 6 },
   "estimatedPackageType": "MAILING_BOX",
@@ -782,6 +785,8 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
     if (parsed.confidence < 0.6) {
       parsed.category = undefined;
       parsed.brand = undefined;
+      // Color is a visual-observation field, same "never guess" discipline as brand -- drop it under low confidence too
+      parsed.color = undefined;
       // Catalog Enrichment: model number is evidence-only — drop it under low confidence too
       parsed.mpn = undefined;
       // Enrichment Cascade: a UPC must be visibly read, never recalled — drop it under low confidence too
@@ -1435,6 +1440,7 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in any of the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy"). Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory): if you use a brand/maker name anywhere in the title, tags, or description you write above, you MUST also set that same value in the "brand" field — never state a brand in prose while leaving "brand" null or omitted. The two must always agree.
+Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
 
 {
   "detectedPrintedText": "literal transcription of any visible printed title/name/text, or null if none visible",
@@ -1448,7 +1454,8 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
   "confidence": 0.85,
   "mpn": null,
   "upc": null,
-  "brand": null
+  "brand": null,
+  "color": null
 }`,
     });
 
@@ -1498,6 +1505,8 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
     if (parsed.confidence < 0.6) {
       parsed.category = undefined;
       parsed.brand = undefined;
+      // Color is a visual-observation field, same "never guess" discipline as brand -- drop it under low confidence too
+      parsed.color = undefined;
       // Catalog Enrichment: model number is evidence-only — drop it under low confidence too
       parsed.mpn = undefined;
       // Enrichment Cascade: a UPC must be visibly read, never recalled — drop it under low confidence too

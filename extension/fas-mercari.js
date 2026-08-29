@@ -927,8 +927,31 @@
       return false;
     }
     el.focus();
+    // BUG FIX 2026-08-29 (round 12, S-EXT-MERCARI-REACT-NOOP-WRITE, Patrick-directed): the round-11
+    // diagnostic trace showed the field correctly holds the target value on every single poll, yet
+    // Mercari's own validation never re-runs. Live external testing of the same detection code
+    // confirmed the cause: React's controlled-input change tracking suppresses its synthetic
+    // onChange/validation cycle when a native-setter write matches the value React's own internal
+    // tracker already has cached, even though real input/change DOM events are still dispatched.
+    // Since this function computes and sets the SAME deterministic floor value on every call (and
+    // every retry within a run), any set after the very first successful value-establishing set on
+    // this input is invisible to Mercari's validation. Fix: force a genuine value transition by
+    // writing a different intermediate value first (clears whatever React's tracker currently
+    // holds), waiting a short beat, then writing the real target -- guaranteeing the final set is
+    // always a real change regardless of what the field held before.
+    setNativeValue(el, '');
+    await sleep(75);
     let set = setNativeValue(el, String(floor));
-    await sleep(300); // give Mercari's own inline validation a moment to render before we check it
+    console.log('[FAS Mercari DIAG] forcing value transition: cleared then set target=' + floor);
+    // DIAGNOSTIC (2026-08-29, S-EXT-MERCARI-ROUND-11, Patrick-directed -- "stop assuming, get a real
+    // trace"): the whole-page-scan detection logic is independently confirmed correct in isolation
+    // (matched instantly via direct devtools query), yet the SAME logic inside waitForFloorError never
+    // matches during the real automated run despite the field showing $8.99 and the error being
+    // present in the DOM around the same time. This is either a sequencing bug (poll gives up before
+    // the value actually lands, or reads a stale/different element) or something not yet visible from
+    // outside -- these [FAS Mercari DIAG] logs are pure instrumentation, no control-flow change, so the
+    // next live run produces the real trace instead of another guess.
+    console.log('[FAS Mercari DIAG] floor set attempted: target=' + floor + ' actualElValue=' + el.value + ' setReturnedTrue=' + set);
     const readMercariFloorError = () => {
       // Round 3 (this session, earlier) added the 3 strategies below (aria-describedby / 6-level
       // ancestor walk / form-section search), all ancestor-chain-based. Patrick's live re-test
@@ -953,6 +976,9 @@
       // form/section container search. A false-positive match elsewhere on the same sell-page at
       // the same moment is considered extremely unlikely for this specific phrase.
       const wholePageMatch = () => {
+        // DIAGNOSTIC (2026-08-29, S-EXT-MERCARI-ROUND-11): cheap sanity signal that the DOM being
+        // walked here isn't somehow a stripped-down or detached copy of the real page.
+        console.log('[FAS Mercari DIAG] wholePageMatch scanning document.body with ' + document.body.childNodes.length + ' top-level children');
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
         let node;
         while ((node = walker.nextNode())) {
@@ -1010,15 +1036,52 @@
       console.warn('[FAS Mercari] Smart Pricing floor error detection: no match via whole-page scan, aria-describedby, 6-level ancestor walk, or form/section search -- no error is currently shown for this value.');
       return null;
     };
-    const rejectedAt = readMercariFloorError();
+    // BUG FIX 2026-08-29 (round 7, S-EXT-MERCARI-FLOOR-TIMING, Patrick-directed root cause):
+    // rounds 3-6 kept narrowing the SELECTOR/detection logic on the assumption the checks were
+    // failing to find real error text. Patrick pointed out fas-content.js already solved exactly
+    // this class of bug with a poll-based waitFor() backed by a MutationObserver, and a direct live
+    // DOM query of an already-settled Mercari page (no sleep at all) found the error text instantly
+    // using this SAME detection logic -- proving the logic was correct and the bug is TIMING: a
+    // fixed sleep(300) then a single synchronous check races Mercari's real async validation-render
+    // latency, which is confirmed to exceed 300ms in practice. Fix: poll instead of sleep-then-check-
+    // once, same idiom as waitForSelector() above. readMercariFloorError() can legitimately return
+    // the number 0 (e.g. "needs to be more than $0"), which is falsy but a real match, so this polls
+    // on `!= null` explicitly rather than reusing waitForSelector()'s truthy contract.
+    async function waitForFloorError(maxWaitMs) {
+      const start = Date.now();
+      let pollAttempt = 0;
+      while (true) {
+        pollAttempt++;
+        const val = readMercariFloorError();
+        // DIAGNOSTIC (2026-08-29, S-EXT-MERCARI-ROUND-11): logs each poll attempt with a timestamp and
+        // the CURRENT read-back value of the input at that exact moment -- reveals whether the
+        // element's value at poll-time actually matches what was set, or whether it's drifted/reset/
+        // empty, which would explain the whole-page scan finding nothing here despite matching
+        // instantly in isolation.
+        console.log('[FAS Mercari DIAG] poll attempt ' + pollAttempt + ' at +' + (Date.now() - start) + 'ms: el.value=' + el.value + ' result=' + val);
+        if (val != null) return val;
+        if (Date.now() - start >= maxWaitMs) return null;
+        await sleep(200);
+      }
+    }
+    const rejectedAt = await waitForFloorError(2500);
     if (rejectedAt != null && isFinite(rejectedAt) && floor <= rejectedAt) {
       const retryFloor = Math.round((rejectedAt + 0.01) * 100) / 100;
       if (retryFloor < price) {
         console.warn('[FAS Mercari] Smart Pricing floor $' + floor.toFixed(2) + ' was rejected by Mercari (needs to be more than $' + rejectedAt + ') -- retrying at $' + retryFloor.toFixed(2) + '.');
         el.focus();
+        // BUG FIX 2026-08-29 (round 12, S-EXT-MERCARI-REACT-NOOP-WRITE): same forced-transition fix
+        // as the initial set above, applied to the retry set -- this retry also risks writing a
+        // value React's tracker already has cached (e.g. if the retry target happens to match a
+        // prior set), so clear first, then write the real retry target.
+        setNativeValue(el, '');
+        await sleep(75);
         set = setNativeValue(el, String(retryFloor));
-        await sleep(300);
-        if (readMercariFloorError() != null) {
+        console.log('[FAS Mercari DIAG] forcing value transition: cleared then set target=' + retryFloor);
+        // DIAGNOSTIC (2026-08-29, S-EXT-MERCARI-ROUND-11): same read-back log as the initial set, for
+        // the retry attempt.
+        console.log('[FAS Mercari DIAG] floor set attempted (retry): target=' + retryFloor + ' actualElValue=' + el.value + ' setReturnedTrue=' + set);
+        if ((await waitForFloorError(2000)) != null) {
           console.warn('[FAS Mercari] Smart Pricing floor still rejected after one retry -- leaving as-is for manual review before publishing.');
           return false;
         }
@@ -1541,7 +1604,7 @@
     const next = document.getElementById('fas-merc-next');
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'MERCARI' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: item.id }); } catch (e) {}
       if (more) { location.href = SELL_URL_HINT; } else { bar && bar.remove(); }
     };
     closeBtnHandler();
@@ -1811,7 +1874,7 @@
       return;
     }
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'MERCARI' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: item.id }); } catch (e) {}
     const more = (index + 1) < total;
     // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, Patrick live report: "mercari seemed to
     // have the same thing" -- same root cause as fas-poshmark.js's identical fix shipped same
@@ -1918,7 +1981,7 @@
       const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'MERCARI' });
       if (statusRes && statusRes.ok && statusRes.listed) {
         const more = (queued.index + 1) < queued.total;
-        try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: queued.item.id }); } catch (e) {}
         // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET): same fix as doMercariAutoPublish
         // above -- auto-publish must not wait on a manual click past a skipped item either.
         if (more && queued.autoPublish !== false) {

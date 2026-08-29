@@ -673,6 +673,44 @@
     if (fieldId !== 'brand') await closePanel(fieldId);
     return false;
   }
+
+  // ROUND 10 (S-EXT-BATCH, P1, Patrick-directed -- "auto-pick something reasonable and move on"
+  // instead of just warning when item.color is null): there is no target value to search for, so
+  // calling pickFromPanel/tryFill's normal search-and-score path would never work here. Vinted
+  // itself pre-highlights a "Suggested" swatch (its own AI/heuristic guess from the item's photos)
+  // the instant the Color panel opens, BEFORE this extension does anything -- live-confirmed in
+  // pickFromPanel's own comment above (e.g. "Yellow" already carrying the "--selected" class suffix
+  // on a fresh open). Reuses the exact same building blocks pickFromPanel itself uses to open/close
+  // the panel (openerByLabel, findOpenPanel's strict-then-retry loop, closePanel) -- no new DOM
+  // interaction pattern -- but deliberately does NOT run pickFromPanel's own click-a-leaf /
+  // deselect-stale-suggestions logic, since there is nothing to deselect FOR (no competing target
+  // value) and clicking anything here would only risk stacking a second color alongside Vinted's own
+  // pick. Simply opens, reads whether a "--selected" swatch is already present (same class check
+  // pickFromPanel's dedupe logic uses), leaves it untouched, and closes.
+  async function acceptSuggestedColor(labelText) {
+    const opener = openerByLabel(labelText) || document.getElementById('color');
+    if (!opener) return false;
+    let panel = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (!findOpenPanel('color', true)) {
+        opener.click();
+        await sleep(400 + attempt * 200);
+      }
+      panel = findOpenPanel('color');
+      if (panel) break;
+      console.warn('[FAS Vinted] "' + labelText + '" panel did not open on attempt ' + attempt + '/3 while checking for a suggested color -- retrying.');
+      await sleep(300);
+    }
+    if (!panel) return false;
+    const hasSuggested = qa('[class*="--selected"]').some((el) => panel.contains(el) && el.offsetParent !== null);
+    if (hasSuggested) {
+      console.log('[FAS Vinted] Color has no value on this item -- Vinted\'s own pre-selected suggested swatch was left as-is.');
+    } else {
+      console.warn('[FAS Vinted] Color has no value on this item and Vinted did not pre-select a suggested swatch either (UNVERIFIED edge case) -- left for the organizer to set.');
+    }
+    await closePanel('color');
+    return hasSuggested;
+  }
   function setNativeValue(el, value) {
     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
@@ -691,7 +729,21 @@
   // actually sees every field that needs a manual check -- most importantly Category, which used to
   // fail completely silently (console.warn only) when the picker had no confident text match.
   async function tryFill(fieldLabel, value, fillFn, warnings) {
-    if (value === undefined || value === null || value === '') return false;
+    // BUG FIX 2026-08-29 (S-EXT-ROUND-9, P1): this guard used to skip completely silently when the
+    // item itself simply had no value for this field (e.g. Item.color/brand is null in the DB) --
+    // console and the review overlay both stayed quiet, so it looked exactly like a genuine fill
+    // failure (the "selector not found" branch below) with zero context. Vinted's own native form
+    // then shows its own generic "Fill in X to continue" error with no explanation from FindA.Sale.
+    // This branch is deliberately worded differently from the "could not be filled automatically"
+    // message below -- that one means a fill WAS attempted against the live DOM and failed to find
+    // a match; this one means there was never a value to try in the first place. Do not merge the
+    // two messages, and do not invent/guess a default value here -- the fix is honest visibility
+    // into missing source data, not fabricating data that doesn't exist.
+    if (value === undefined || value === null || value === '') {
+      console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- no value set on this item, skipped.');
+      if (warnings) warnings.push(fieldLabel + ' has no value set on this item -- please set it manually before publishing.');
+      return false;
+    }
     try {
       const ok = await fillFn(value);
       if (!ok) {
@@ -819,7 +871,15 @@
     // the whole document, then close it ourselves once this fallback is done either way.
     const panel = findOpenPanel('brand', true) || findOpenPanel('brand', false);
     const scope = panel ? Array.from(panel.querySelectorAll('[role="option"], li, div[role="button"], button, [data-testid$="--title"]')) : qa('[role="option"], li, div[role="button"], button, [data-testid$="--title"]');
-    const noBrand = scope.find((n) => /no brand/.test(norm(n.textContent)));
+    // BUG FIX 2026-08-29 (S-EXT-ROUND-11, P1, live-Chrome-confirmed): the live 'No brand'
+    // search used a literal /no brand/ regex, but Vinted's REAL no-brand fallback option is
+    // worded "No Label", not "No brand" -- live-confirmed against the actual panel leaves
+    // this session (["Popular brands","Apple","Cable","Samsung","Amazon","lightning",
+    // "hama","Universal","Nintendo","No Label","Belkin","Garmin","Sologic","Inconnu",
+    // "Sony"]) -- "No brand" never appears verbatim, so the old regex could never match and
+    // fell straight through to the final unset warning every time. Widened to match either real
+    // wording.
+    const noBrand = scope.find((n) => /no (brand|label)/.test(norm(n.textContent)));
     if (noBrand) {
       noBrand.click();
       await sleep(200);
@@ -986,6 +1046,23 @@
   // an unrelated close control elsewhere on the page.
   function findDialogCloseButton(dialogEl) {
     if (!dialogEl) return null;
+    // BUG FIX 2026-08-29 ROUND 6 (all three prior close strategies -- close-button search, Escape,
+    // outside click -- confirmed STILL failing on live re-test this round). Main session queried the
+    // real live dialog DOM directly this round (`dialog.querySelectorAll('button, [role=button], a,
+    // svg')` on the actual [role="dialog"][aria-modal="true"] element, class
+    // "ReactModal__Content ... web_ui__Dialog__dialog") and found the real close button has NO text
+    // content and NO aria-label/title at all -- it is identified purely by
+    // data-testid="close-button" (Vinted's own web_ui__Navigation__ header dismiss-button component,
+    // likely their general convention across modal dialogs, not just this one). That is exactly why
+    // every aria-label/title/text-based search below always found nothing on the real page. Try the
+    // confirmed-real data-testid signal FIRST -- keep the old aria/text search below as a fallback
+    // in case some other Vinted dialog variant doesn't use this convention.
+    const testIdBtn = dialogEl.querySelector('[data-testid="close-button"], [data-testid*="close" i]');
+    if (testIdBtn) {
+      console.warn('[FAS Vinted] Package size: found dialog close button via data-testid (testid="' + (testIdBtn.getAttribute('data-testid') || '') + '", tag=' + testIdBtn.tagName + ') -- using this as the close control.');
+      return testIdBtn;
+    }
+    console.warn('[FAS Vinted] Package size: no data-testid close button found inside the dialog -- falling back to aria-label/title/text search.');
     const candidates = Array.from(dialogEl.querySelectorAll('button, [role="button"], a'));
     for (const el of candidates) {
       const aria = (el.getAttribute('aria-label') || el.getAttribute('title') || '');
@@ -1287,9 +1364,35 @@
     // 2026-08-18: brand/size/color/material now exist on Item (single string each, not an
     // array -- see schema.prisma comment) and flow through getExtensionItems -> popup.js's
     // queue map. tryFill's own undefined/null/'' guard still skips silently on unset items.
-    await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v), warnings);
+    // ROUND 10 (S-EXT-BATCH, P1, Patrick-directed -- "auto-pick something reasonable and move on"
+    // rather than just warning when item.brand is null): routing a null brand through tryFill would
+    // just hit its generic no-value guard and skip. Instead calls fillBrand('Brand', '') directly --
+    // an empty search value can never whole-word-match any real brand leaf (bestScoringOption's
+    // wantWords list is empty for '', so it never scores anything, see splitWords/bestScoringOption
+    // above), so this deterministically falls straight into fillBrand's OWN already-existing
+    // "no match -> select Vinted's 'No brand' option" fallback path -- the exact reuse Patrick asked
+    // for, no new DOM logic. Pushes a distinct, honest warning depending on whether that fallback
+    // actually found and clicked "No brand".
+    if (item.brand === undefined || item.brand === null || item.brand === '') {
+      const usedNoBrand = await fillBrand('Brand', '');
+      warnings.push(usedNoBrand
+        ? 'Brand was not set on this item -- selected Vinted\'s own "No brand" option, please verify.'
+        : 'Brand has no value set on this item -- please set it manually before publishing.');
+    } else {
+      await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v), warnings);
+    }
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
-    await tryFill('Color', item.color, (v) => fillSelectLike('Color', v), warnings);
+    // ROUND 10: same pattern as Brand above, for Color -- see acceptSuggestedColor()'s own comment
+    // for why this reuses pickFromPanel's opener/findOpenPanel/closePanel building blocks instead of
+    // its full search-and-score flow.
+    if (item.color === undefined || item.color === null || item.color === '') {
+      const acceptedSuggestion = await acceptSuggestedColor('Color');
+      warnings.push(acceptedSuggestion
+        ? 'Color was not set on this item -- accepted Vinted\'s own suggested color, please verify it\'s correct.'
+        : 'Color has no value set on this item -- please set it manually before publishing.');
+    } else {
+      await tryFill('Color', item.color, (v) => fillSelectLike('Color', v), warnings);
+    }
     lastMaterialFallbackUsed = false;
     await tryFill('Material', item.material, (v) => fillSelectLike('Material', v), warnings);
     if (lastMaterialFallbackUsed) {
