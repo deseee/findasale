@@ -110,6 +110,11 @@ const OrganizerHoldsPage = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [settlementMode, setSettlementMode] = useState<SettlementChoice>('AUTO');
+  // Test Transaction safety net UI (2026-08-29): mirrors the same toggle in
+  // pos.tsx. Only meaningful for RECORD (reservationController.batchUpdateHolds's
+  // markSold/RECORD branch is the only settlement path wired to accept this flag
+  // server-side) -- reset whenever settlementMode leaves RECORD or a batch completes.
+  const [isTestTransaction, setIsTestTransaction] = useState(false);
 
   // Commission rate for the cash-sale confirmation copy. Read from auth context (no extra
   // request) and resolved through lib/platformFees so PRO/TEAMS see 8%, not a hardcoded 10%.
@@ -127,7 +132,7 @@ const OrganizerHoldsPage = () => {
   // Confirmation gate for Mark Sold. Marking sold is a settlement action — on the RECORD
   // path it writes a PAID Purchase row and decrements stock immediately — so it never
   // fires straight off a single click.
-  const [pendingSettlement, setPendingSettlement] = useState<{ ids: string[]; mode: SettlementChoice } | null>(null);
+  const [pendingSettlement, setPendingSettlement] = useState<{ ids: string[]; mode: SettlementChoice; isTestTransaction: boolean } | null>(null);
   // Hold-to-Pay (#221) reclaim path: the hold whose outstanding payment request is about
   // to be cancelled. Confirmed before it fires — cancelling voids the shopper's live
   // payment link.
@@ -213,17 +218,22 @@ const OrganizerHoldsPage = () => {
 
   // Batch mutation — also carries the markSold settlement mode (Decision A)
   const batchMutation = useMutation({
-    mutationFn: ({ ids, action, settlementMode: mode }: { ids: string[]; action: string; settlementMode?: SettlementChoice }) => {
-      const body: { ids: string[]; action: string; settlementMode?: string } = { ids, action };
+    mutationFn: ({ ids, action, settlementMode: mode, isTestTransaction: testTxn }: { ids: string[]; action: string; settlementMode?: SettlementChoice; isTestTransaction?: boolean }) => {
+      const body: { ids: string[]; action: string; settlementMode?: string; isTestTransaction?: boolean } = { ids, action };
       // 'AUTO' = omit so the server resolves the default for the sale type.
       // 'HOLD_INVOICE' is a client-side route to the Hold-to-Pay modal and is not a
       // value this endpoint accepts — guard it here too so it can never leak into a body.
       if (mode && mode !== 'AUTO' && mode !== 'HOLD_INVOICE') body.settlementMode = mode;
+      // Test Transaction safety net UI (2026-08-29): only ever meaningful alongside
+      // settlementMode RECORD -- sent regardless, server-side it's a no-op for any
+      // other mode since only the RECORD branch reads it.
+      if (testTxn) body.isTestTransaction = true;
       return api.post('/reservations/batch', body);
     },
     onSuccess: (res: any, variables) => {
       queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
       setSelectedIds(new Set());
+      setIsTestTransaction(false);
       const data = res.data || {};
       // Use variables.ids.length as the reliable count — selectedIds has been cleared by now
       const count = data.updated ?? variables.ids.length;
@@ -367,7 +377,7 @@ const OrganizerHoldsPage = () => {
       // Every other settlement mode goes through a confirmation first. RECORD writes a
       // PAID Purchase row and decrements stock the moment it runs, and AUTO can resolve
       // to RECORD server-side, so neither may fire from a single unguarded click.
-      setPendingSettlement({ ids, mode: settlementMode });
+      setPendingSettlement({ ids, mode: settlementMode, isTestTransaction: settlementMode === 'RECORD' && isTestTransaction });
       return;
     }
     batchMutation.mutate({ ids: Array.from(selectedIds), action });
@@ -528,7 +538,11 @@ const OrganizerHoldsPage = () => {
                 </button>
                 <select
                   value={settlementMode}
-                  onChange={(e) => setSettlementMode(e.target.value as SettlementChoice)}
+                  onChange={(e) => {
+                    const next = e.target.value as SettlementChoice;
+                    setSettlementMode(next);
+                    if (next !== 'RECORD') setIsTestTransaction(false);
+                  }}
                   disabled={batchMutation.isPending}
                   title="How to settle these items when marked sold"
                   aria-label="Settlement method"
@@ -551,6 +565,22 @@ const OrganizerHoldsPage = () => {
               <p className="basis-full text-xs text-amber-700 dark:text-amber-400 mt-1">
                 {SETTLEMENT_HELP[settlementMode]}
               </p>
+              {/* Test Transaction safety net UI (2026-08-29): only RECORD is wired
+                  server-side (reservationController's markSold/RECORD branch) to accept
+                  isTestTransaction, so the toggle is scoped to that mode only. */}
+              {settlementMode === 'RECORD' && (
+                <label className="basis-full flex items-center gap-2 mt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isTestTransaction}
+                    onChange={(e) => setIsTestTransaction(e.target.checked)}
+                    className="w-4 h-4 accent-amber-600"
+                  />
+                  <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                    🧪 Test transaction — no real inventory or fee
+                  </span>
+                </label>
+              )}
             </div>
           )}
 
@@ -765,19 +795,27 @@ const OrganizerHoldsPage = () => {
           its own review modal). */}
       {pendingSettlement && (() => {
         const copy = buildSettlementConfirm(pendingSettlement.ids, pendingSettlement.mode);
+        // Test Transaction safety net UI (2026-08-29): tell the organizer plainly, inside
+        // the confirmation copy itself, that this specific confirm click will NOT move real
+        // inventory or money -- appended here rather than in ConfirmDialog so the shared
+        // component stays untouched.
+        const testTxnMessage = pendingSettlement.isTestTransaction
+          ? `${copy.message}\n\n🧪 TEST TRANSACTION — stock will not be reduced, no fee will be accrued, and the shopper will not be notified.`
+          : copy.message;
         return (
           <ConfirmDialog
             isOpen
-            title={copy.title}
-            message={copy.message}
+            title={pendingSettlement.isTestTransaction ? `🧪 TEST — ${copy.title}` : copy.title}
+            message={testTxnMessage}
             confirmLabel={copy.confirmLabel}
             cancelLabel="Not yet"
             variant={copy.variant}
             onCancel={() => setPendingSettlement(null)}
             onConfirm={() => {
-              const { ids, mode } = pendingSettlement;
+              const { ids, mode, isTestTransaction: testTxn } = pendingSettlement;
               setPendingSettlement(null);
-              batchMutation.mutate({ ids, action: 'markSold', settlementMode: mode });
+              setIsTestTransaction(false);
+              batchMutation.mutate({ ids, action: 'markSold', settlementMode: mode, isTestTransaction: testTxn });
             }}
           />
         );

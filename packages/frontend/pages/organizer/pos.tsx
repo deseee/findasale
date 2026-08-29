@@ -282,6 +282,14 @@ export default function POSPage() {
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('card');
   const [cashReceived, setCashReceived] = useState(0);
   const [cashNumpadValue, setCashNumpadValue] = useState('');
+  // Test Transaction safety net UI (2026-08-29): organizer-facing toggle for the
+  // backend isTestTransaction flag (terminalController.processCashSaleCore). Only
+  // wired into the cash/Venmo/Zelle path -- the card/Stripe-terminal path and the
+  // venue/booth-cart path (handleVenueCashPayment) do not accept this flag server-side,
+  // so the control is intentionally only rendered for paymentMode cash/venmo/zelle in
+  // the non-venue flow. Reset on every clearCart() so it can never silently persist
+  // into the next real sale.
+  const [isTestTransaction, setIsTestTransaction] = useState(false);
 
   // Terminal state
   const [readerStatus, setReaderStatus] = useState<ReaderStatus>('idle');
@@ -1517,6 +1525,7 @@ export default function POSPage() {
     setBuyerEmail('');
     setItemSearch('');
     setSearchResults([]);
+    setIsTestTransaction(false);
   };
 
   // cartTotal declaration moved up to right after `cart` state (see comment there) -- S1178 BQ fix.
@@ -1670,6 +1679,10 @@ export default function POSPage() {
           discountValue: discountValueToSubmit,
           ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
         } : {}),
+        // Test Transaction safety net UI (2026-08-29): kept consistent with the live-path
+        // POST below so a test transaction started offline isn't silently promoted to a
+        // real one once synced.
+        ...(isTestTransaction ? { isTestTransaction: true } : {}),
       });
       setPaymentStatus('success');
       setSuccessMessage(
@@ -1707,6 +1720,8 @@ export default function POSPage() {
           discountValue: discountValueToSubmit,
           ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
         } : {}),
+        // Test Transaction safety net UI (2026-08-29)
+        ...(isTestTransaction ? { isTestTransaction: true } : {}),
       });
 
       setLastCashFee(response.data);
@@ -1767,6 +1782,8 @@ export default function POSPage() {
           discountValue: discountValueToSubmit,
           ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
         } : {}),
+        // Test Transaction safety net UI (2026-08-29)
+        ...(isTestTransaction ? { isTestTransaction: true } : {}),
       });
 
       setLastCashFee(response.data);
@@ -3649,6 +3666,45 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Test Transaction safety net UI (2026-08-29): only meaningful for the
+          cash/venmo/zelle path -- handleVenueCashPayment (booth-cart flow) and the
+          Stripe card/terminal path do not accept isTestTransaction server-side, so the
+          control is intentionally scoped to those three modes only. */}
+      {!venueHubId && paymentStatus !== 'success' && cart.length > 0 &&
+        (paymentMode === 'cash' || paymentMode === 'venmo' || paymentMode === 'zelle') && (
+        <label
+          className={`mb-3 flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition ${
+            isTestTransaction
+              ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700'
+              : 'bg-warm-50 dark:bg-gray-700/50 border-warm-200 dark:border-gray-600'
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={isTestTransaction}
+            onChange={(e) => setIsTestTransaction(e.target.checked)}
+            className="w-5 h-5 accent-amber-600"
+          />
+          <span className="text-sm">
+            <span className={`font-semibold ${isTestTransaction ? 'text-amber-800 dark:text-amber-300' : 'text-warm-700 dark:text-warm-300'}`}>
+              🧪 Test transaction
+            </span>
+            <span className="block text-xs text-warm-500 dark:text-warm-400">
+              No real inventory sold, no fee charged, no receipt sent. Use for testing only.
+            </span>
+          </span>
+        </label>
+      )}
+
+      {isTestTransaction && !venueHubId && paymentStatus !== 'success' && cart.length > 0 &&
+        (paymentMode === 'cash' || paymentMode === 'venmo' || paymentMode === 'zelle') && (
+        <div className="mb-3 p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-center">
+          <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wide">
+            ⚠️ Test mode active — this sale will not count as real
+          </p>
+        </div>
+      )}
+
       {/* Charge buttons */}
       {!venueHubId && paymentStatus !== 'success' && cart.length > 0 && (
         <div className="space-y-3">
@@ -3744,7 +3800,7 @@ export default function POSPage() {
               >
                 {paymentStatus === 'creating' && 'Recording…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
-                  `Record Cash Sale $${cartTotal.toFixed(2)}`}
+                  `${isTestTransaction ? '🧪 TEST — ' : ''}Record Cash Sale $${cartTotal.toFixed(2)}`}
               </button>
             </>
           )}
@@ -3794,7 +3850,7 @@ export default function POSPage() {
               >
                 {paymentStatus === 'creating' && 'Recording…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
-                  `Record Venmo Sale $${cartTotal.toFixed(2)}`}
+                  `${isTestTransaction ? '🧪 TEST — ' : ''}Record Venmo Sale $${cartTotal.toFixed(2)}`}
               </button>
             </>
           )}
@@ -3837,7 +3893,7 @@ export default function POSPage() {
               >
                 {paymentStatus === 'creating' && 'Recording…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
-                  `Record Zelle Sale $${cartTotal.toFixed(2)}`}
+                  `${isTestTransaction ? '🧪 TEST — ' : ''}Record Zelle Sale $${cartTotal.toFixed(2)}`}
               </button>
             </>
           )}
