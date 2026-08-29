@@ -2965,6 +2965,33 @@ export const webhookHandler = async (req: Request, res: Response) => {
         }).catch(err => console.error('[ala-carte] Failed to update sale after checkout:', err));
         // Create Purchase record for revenue tracking
         try {
+          const alaCartePaymentIntentId = typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : (session.payment_intent as any)?.id ?? null;
+          // Root-caused live 2026-08-29: a real production ALA_CARTE Purchase (2026-06-19)
+          // was found with stripePaymentIntentId=null despite alaCarteFeePaid=true on its
+          // Sale (a real $9.99 charge did happen -- this branch's own sale.update above ran).
+          // For a one-time `mode: 'payment'` Checkout Session, Stripe's checkout.session.completed
+          // payload should always carry payment_intent as a string -- a null here means either a
+          // genuinely unusual Stripe payload gap or a since-changed older version of this code path.
+          // Previously this silently fell through to `?? null`, same failure class as the POS
+          // Payment Link bug fixed 2026-08-26 elsewhere in this file (a missing real payment_intent
+          // silently breaks refundService.ts's ability to ever reverse the real charge). Surfacing
+          // loudly now instead of writing invisible bad data -- does not block Purchase creation
+          // (the fee was genuinely collected and the sale must still be marked paid), just makes
+          // the gap visible so it can be investigated instead of discovered months later by an
+          // admin hitting an unexplained refund error.
+          if (!alaCartePaymentIntentId) {
+            console.error(`[ala-carte] checkout.session.completed for sale ${session.metadata.saleId} has no resolvable payment_intent (session ${session.id}) -- Purchase will be created with a null stripePaymentIntentId, which will be unrefundable via the normal Stripe path.`);
+            try {
+              Sentry.captureException(new Error('[ala-carte] Purchase created with null stripePaymentIntentId'), {
+                tags: { area: 'ala-carte-checkout-completed-missing-payment-intent' },
+                extra: { saleId: session.metadata.saleId, sessionId: session.id },
+              });
+            } catch {
+              // Sentry may not be initialized -- silently continue
+            }
+          }
           // NO FEE SNAPSHOT, DELIBERATELY — see the PI-webhook ALA_CARTE branch above.
           await prisma.purchase.create({
             data: {
@@ -2972,9 +2999,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               platformFeeAmount: 9.99,
               status: 'PAID',
               saleId: session.metadata.saleId,
-              stripePaymentIntentId: typeof session.payment_intent === 'string'
-                ? session.payment_intent
-                : (session.payment_intent as any)?.id ?? null,
+              stripePaymentIntentId: alaCartePaymentIntentId,
               source: 'ALA_CARTE',
               isTestTransaction: false,
             },
