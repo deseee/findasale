@@ -257,6 +257,15 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
         `brand="${brandConsensus?.value ?? 'n/a'}" ` +
         `(from${summaries.length} summaries)`
     );
+    // DIAGNOSTIC 2026-08-29 (AI title transcription-fidelity investigation): log every
+    // returned match's title, not just the top one -- answers "did it just pick a bad
+    // first result, or are most/all matches wrong?" Read-only observability, no behavior
+    // change, zero added cost (same already-made eBay call, just logging more of its
+    // response).
+    console.log(
+      '[ebayImageSearch] all match titles (ranked, first = top pick):',
+      summaries.slice(0, 15).map((s, i) => `${i}: "${(s?.title ?? '').trim()}"`)
+    );
 
     return {
       topTitle,

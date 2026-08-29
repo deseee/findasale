@@ -90,6 +90,12 @@ function replaceWordOnce(text: string, word: string, replacement: string): strin
  */
 function reconcileTitleWithDetectedText(result: AITagResult, detectedText: string[]): AITagResult {
   try {
+    // DIAGNOSTIC 2026-08-29 (AI title transcription-fidelity investigation): always log
+    // Vision's raw detectedText for this call, even when empty -- confirms/denies whether
+    // Vision OCR is detecting any on-item text at all for photos where the title still
+    // comes out wrong. Read-only observability, no behavior change, zero added cost
+    // (Vision is already called every time; this just logs what it already returned).
+    console.log('[cloudAI] Vision detectedText for this call:', { count: (detectedText || []).length, detectedText: detectedText || [] });
     if (!result?.title || !detectedText || detectedText.length === 0) return result;
 
     const titleWords = result.title.split(/\s+/).filter((w) => w.replace(/[^a-zA-Z0-9]/g, '').length >= 4);
