@@ -27,6 +27,36 @@ const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
+// ADR 2026-08-29 (AI title transcription-fidelity): cheap, dependency-free token-overlap
+// similarity check used only for passive mismatch telemetry between Google Vision's raw
+// OCR text and the generated title -- NOT used to block, alter, or flag anything shown
+// to the organizer. No new library dependency added (none of the existing ones cover this).
+function tokenOverlapSimilarity(a: string, b: string): number {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const tokensA = new Set(norm(a));
+  const tokensB = new Set(norm(b));
+  if (tokensA.size === 0 || tokensB.size === 0) return 1; // nothing to compare, don't flag
+  let overlap = 0;
+  for (const t of tokensA) if (tokensB.has(t)) overlap++;
+  return overlap / Math.max(tokensA.size, tokensB.size);
+}
+
+// Passive-only: logs a warning on a likely title/OCR mismatch. Never throws, never
+// alters the AITagResult it's given -- a logging failure here must not affect tagging.
+function logTitleOcrMismatchIfAny(title: string | undefined, detectedText: string[]): void {
+  try {
+    if (!title || !detectedText || detectedText.length === 0) return;
+    const ocrJoined = detectedText.join(' ');
+    const similarity = tokenOverlapSimilarity(title, ocrJoined);
+    if (similarity < 0.2) {
+      console.warn('[cloudAI] title/OCR low-similarity telemetry (non-blocking) -- generated title may not match Vision-detected on-item text', { title, detectedText, similarity });
+    }
+  } catch (telemetryError) {
+    // Never let telemetry break tagging.
+    console.warn('[cloudAI] title/OCR telemetry check itself failed (non-blocking, ignored):', telemetryError);
+  }
+}
+
 export interface AITagResult {
   title: string;
   description: string;
@@ -47,6 +77,7 @@ export interface AITagResult {
   estimatedPackageType?: string; // eBay packageType enum (MAILING_BOX | PACKAGE_THICK_ENVELOPE | LARGE_PACKAGE | etc.)
   packageConfidence?: number; // 0.0-1.0 confidence in the package estimate
   ocrIsbn?: string; // ADR-089: checksum-valid ISBN extracted from the full Vision OCR block (books)
+  detectedPrintedText?: string; // ADR 2026-08-29: Haiku's own literal transcription of visible printed text, output before composing the title -- reduces phrase-substitution errors (e.g. "Time and Chance" mis-titled as "Time and Change")
 }
 
 /**
@@ -413,7 +444,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
 Accuracy over richness: only state attributes (era, brand, material, maker, category) you can actually SEE or verify from the photos and any visible marks/labels. When unsure, omit the attribute rather than guessing a confident-but-wrong value.
-Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice". If a title, name, or other text is printed or visible on the item itself, transcribe it EXACTLY as shown, character-by-character — do not substitute a more common or expected word/phrase for what is actually printed, even when the literal text is unusual or the substitution would read more naturally (e.g. a real album title that happens to be an atypical variant of a common phrase must be transcribed as printed, not "corrected" to the more familiar wording).
+Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice". If a title, name, or other text is printed or visible on the item itself, transcribe it EXACTLY as shown, character-by-character — do not substitute a more common or expected word/phrase for what is actually printed, even when the literal text is unusual or the substitution would read more naturally (e.g. a real album title that happens to be an atypical variant of a common phrase must be transcribed as printed, not "corrected" to the more familiar wording). Always populate the "detectedPrintedText" field with your literal transcription of any visible printed title/name/text (or null if none is visible) BEFORE composing the title -- when it is non-null, "title" and "description" must reuse that exact transcription verbatim wherever they incorporate that text, not a re-derived or "corrected" version of it.
 Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that a shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit by the item's PRIMARY USE/DOMAIN — not its materials or whether it plugs in. A powered device is categorized by what it is FOR (e.g. an aquarium air pump is "Pet Supplies", a guitar amp is "Musical Instruments", a kitchen mixer is "Kitchenware"), NOT "Electronics". Choose from: ${EBAY_L1_CATEGORIES.join(', ')}.
@@ -427,6 +458,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
 Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
+  "detectedPrintedText": "literal transcription of any visible printed title/name/text, or null if none visible",
   "title": "short specific title",
   "description": "1-2 sentence description with condition details",
   "category": "best matching category",
@@ -498,6 +530,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
       parsed.estimatedPackageType = undefined;
     }
     await finalizePricing(parsed);
+    logTitleOcrMismatchIfAny(parsed.title, detectedText);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
@@ -1117,7 +1150,7 @@ ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`
 Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 
 Accuracy over richness: only state attributes (era, brand, material, maker, category) you can actually SEE or verify from the photos and any visible marks/labels. When unsure, omit the attribute rather than guessing a confident-but-wrong value.
-Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice". If a title, name, or other text is printed or visible on the item itself, transcribe it EXACTLY as shown, character-by-character — do not substitute a more common or expected word/phrase for what is actually printed, even when the literal text is unusual or the substitution would read more naturally (e.g. a real album title that happens to be an atypical variant of a common phrase must be transcribed as printed, not "corrected" to the more familiar wording).
+Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice". If a title, name, or other text is printed or visible on the item itself, transcribe it EXACTLY as shown, character-by-character — do not substitute a more common or expected word/phrase for what is actually printed, even when the literal text is unusual or the substitution would read more naturally (e.g. a real album title that happens to be an atypical variant of a common phrase must be transcribed as printed, not "corrected" to the more familiar wording). Always populate the "detectedPrintedText" field with your literal transcription of any visible printed title/name/text (or null if none is visible) BEFORE composing the title -- when it is non-null, "title" and "description" must reuse that exact transcription verbatim wherever they incorporate that text, not a re-derived or "corrected" version of it.
 Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that a shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit by the item's PRIMARY USE/DOMAIN — not its materials or whether it plugs in. A powered device is categorized by what it is FOR (e.g. an aquarium air pump is "Pet Supplies", a guitar amp is "Musical Instruments", a kitchen mixer is "Kitchenware"), NOT "Electronics". Choose from: ${EBAY_L1_CATEGORIES.join(', ')}.
@@ -1130,6 +1163,7 @@ UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the p
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy"). Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory): if you use a brand/maker name anywhere in the title, tags, or description you write above, you MUST also set that same value in the "brand" field — never state a brand in prose while leaving "brand" null or omitted. The two must always agree.
 
 {
+  "detectedPrintedText": "literal transcription of any visible printed title/name/text, or null if none visible",
   "title": "short specific title",
   "description": "1-2 sentence description with condition details",
   "category": "best matching category",
@@ -1197,6 +1231,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
     }
 
     await finalizePricing(parsed);
+    logTitleOcrMismatchIfAny(parsed.title, detectedText);
     return parsed;
   } catch (error: any) {
     // P0-3: Capture specific error context and re-throw with context for caller
