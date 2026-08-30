@@ -663,13 +663,42 @@
 
   // Brand: category-aware autocomplete -- Mercari's own brand list changes based on the selected
   // category, so this must run AFTER pickCategory (enforced by call order in fillListing below).
+  // BUG FIX 2026-08-29 (round 13, S-EXT-MERCARI-BRAND-TIMING, Patrick-directed root cause): this
+  // file's own header comment (~line 55-56) already flagged "700ms for Brand's suggestion list" as
+  // an UNVERIFIED fixed-sleep guess and a known risk -- the exact same class of bug already found
+  // and fixed on fas-poshmark.js's Brand autocomplete (S-EXT-POSHMARK-BRAND-TIMING, round 7): a
+  // fixed sleep(700) then a single synchronous optionElByText() check races Mercari's real
+  // suggestion-list render latency, which is category-dependent and not guaranteed to settle inside
+  // 700ms. Patrick reported an intermittent "missed the brand" live symptom -- "occasionally," which
+  // is the exact signature of a race losing sometimes rather than a selector being wrong every time.
+  // Fix: poll for the suggestion to actually appear (same waitForOptionByText idiom already proven
+  // on Poshmark, fas-poshmark.js ~line 680) instead of one fixed sleep then a single check.
+  async function waitForOptionByText(value, maxWaitMs) {
+    const start = Date.now();
+    while (true) {
+      const match = optionElByText(value);
+      if (match) return match;
+      if (Date.now() - start >= maxWaitMs) return null;
+      await sleep(180);
+    }
+  }
+  async function waitForAnyOptionByText(variants, maxWaitMs) {
+    const start = Date.now();
+    while (true) {
+      for (const v of variants) {
+        const match = optionElByText(v);
+        if (match) return match;
+      }
+      if (Date.now() - start >= maxWaitMs) return null;
+      await sleep(180);
+    }
+  }
   async function fillBrand(labelText, value) {
     const el = fieldByLabel(labelText);
     if (!el) return false;
     el.focus();
     setNativeValue(el, String(value));
-    await sleep(700); // UNVERIFIED -- suggestion-list settle time, best-effort guess
-    const match = optionElByText(value);
+    const match = await waitForOptionByText(value, 2500);
     if (match) { await realClick(match); await sleep(200); return true; }
     console.warn('[FAS Mercari] Brand "' + value + '" had no matching suggestion (UNVERIFIED, category-dependent list) -- left unset.');
     return false;
@@ -685,22 +714,21 @@
   // narrow the suggestion list before giving up. UNVERIFIED selector/option wording -- no live
   // Mercari seller account to confirm this session, same caveat as the rest of this file.
   const MERCARI_NO_BRAND_VARIANTS = ['no brand/not sure', 'no brand / not sure', 'no brand', 'not sure'];
+  // BUG FIX 2026-08-29 (round 13, same S-EXT-MERCARI-BRAND-TIMING root cause as fillBrand above):
+  // both fixed sleeps here (400ms before checking the un-typed default list, 700ms after typing
+  // "no") have the identical race against Mercari's real suggestion-list render latency. Replaced
+  // with waitForAnyOptionByText polls; behavior is otherwise unchanged (try the un-typed list
+  // first, then type "no" and retry).
   async function fillMercariNoBrand(labelText) {
     const el = fieldByLabel(labelText);
     if (!el) return false;
     await realClick(el);
     try { el.focus(); } catch (e) { /* non-fatal */ }
-    await sleep(400);
-    for (const variant of MERCARI_NO_BRAND_VARIANTS) {
-      const match = optionElByText(variant);
-      if (match) { await realClick(match); await sleep(200); return true; }
-    }
+    let match = await waitForAnyOptionByText(MERCARI_NO_BRAND_VARIANTS, 2000);
+    if (match) { await realClick(match); await sleep(200); return true; }
     setNativeValue(el, 'no');
-    await sleep(700);
-    for (const variant of MERCARI_NO_BRAND_VARIANTS) {
-      const match = optionElByText(variant);
-      if (match) { await realClick(match); await sleep(200); return true; }
-    }
+    match = await waitForAnyOptionByText(MERCARI_NO_BRAND_VARIANTS, 2000);
+    if (match) { await realClick(match); await sleep(200); return true; }
     console.warn('[FAS Mercari] No brand set on this item and no "No Brand/Not sure" option found in the suggestion list (UNVERIFIED) -- left unset.');
     return false;
   }
@@ -952,6 +980,33 @@
     // outside -- these [FAS Mercari DIAG] logs are pure instrumentation, no control-flow change, so the
     // next live run produces the real trace instead of another guess.
     console.log('[FAS Mercari DIAG] floor set attempted: target=' + floor + ' actualElValue=' + el.value + ' setReturnedTrue=' + set);
+    // BUG FIX 2026-08-29 (round 13, S-EXT-MERCARI-BLUR-VALIDATION, Patrick-directed -- round 12
+    // shipped and Patrick's fresh live retest still showed the floor price wrong, which is real
+    // evidence AGAINST the round-12 theory being the (sole) cause: the clear-then-set above forces a
+    // genuine React value transition on every set, so if Mercari's validation ran off change/input
+    // events, round 12 should already have made it re-fire. It didn't. Re-reading this file end to
+    // end with fresh eyes: setNativeValue() (~line 321) dispatches ONLY 'input' and 'change' -- a
+    // grep of this entire file for "blur"/"focusout" before this fix returned zero matches,
+    // anywhere. Many real-world form-validation libraries (React Hook Form's default mode, Formik
+    // with validateOnBlur, plain HTML5-pattern custom validation) only run field validation ON
+    // BLUR, not on every input/change event -- which would mean Mercari's error text structurally
+    // CANNOT appear during this poll no matter how long it waits or how many times the value is
+    // re-written, because the one event that actually triggers validation is never dispatched. This
+    // also explains the round-11 puzzle (a manual/external DOM query instantly found the error
+    // against "the same page state" that the automated poll never matched): that manual query was
+    // run via a connected Chrome session/devtools interaction, which itself would blur the floor
+    // input as a side effect of clicking elsewhere on the page or into devtools -- i.e. it was NOT
+    // actually the same moment in time as the automated poll, it was a LATER moment after a human
+    // interaction had already supplied the missing blur that the automated run never provided.
+    // Fix: dispatch a real blur (el.blur(), which fires native 'blur' + 'focusout') immediately
+    // after the field is set, before the wait-for-error poll begins. UNVERIFIED against a live run
+    // -- if this still doesn't surface the error, the next diagnostic needed is a
+    // MutationObserver-based timestamp log of exactly when the error DOM node is inserted relative
+    // to this blur call, to confirm or rule out a slower server-side/XHR validation round-trip
+    // instead (Mercari's price-suggestion widget elsewhere on this page is known to call out to a
+    // pricing service; the floor-price validation may do the same).
+    el.blur();
+    await sleep(150);
     const readMercariFloorError = () => {
       // Round 3 (this session, earlier) added the 3 strategies below (aria-describedby / 6-level
       // ancestor walk / form-section search), all ancestor-chain-based. Patrick's live re-test
@@ -1081,6 +1136,10 @@
         // DIAGNOSTIC (2026-08-29, S-EXT-MERCARI-ROUND-11): same read-back log as the initial set, for
         // the retry attempt.
         console.log('[FAS Mercari DIAG] floor set attempted (retry): target=' + retryFloor + ' actualElValue=' + el.value + ' setReturnedTrue=' + set);
+        // BUG FIX 2026-08-29 (round 13, S-EXT-MERCARI-BLUR-VALIDATION): same blur fix as the initial
+        // set above, applied to the retry set for the identical reason.
+        el.blur();
+        await sleep(150);
         if ((await waitForFloorError(2000)) != null) {
           console.warn('[FAS Mercari] Smart Pricing floor still rejected after one retry -- leaving as-is for manual review before publishing.');
           return false;

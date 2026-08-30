@@ -154,6 +154,77 @@
     try { sessionStorage.removeItem(POSH_NAV_RETRY_KEY); } catch (e) { /* nothing to clean up if this throws */ }
   }
 
+  // BUG FIX 2026-08-29 (S-EXT-POSHMARK-DUPLICATE-PUBLISH-CLICK, Patrick live-photographic-proof
+  // this session: the SAME item -- "Speaker Cable (GP1 16/2 High Power Speaker Wire) - $10" --
+  // appeared 4 TIMES in his real Poshmark closet grid AFTER the round-13 advancePoshmarkQueue
+  // compare-and-swap fix had already shipped). Traced against background.js (read-only reference,
+  // not modified): the round-13 CAS on 'advancePoshmarkQueue' only protects the STORED QUEUE INDEX
+  // from being advanced twice for the same item -- it does nothing to stop THIS TAB from clicking
+  // Poshmark's real "List this item" button more than once for the same item content in the first
+  // place. background.js's own S-EXT-AUTOPUBLISH-REPORTING-NET header comment documents the
+  // confirmed root cause of an EARLIER two-real-live-Poshmark-listing-IDs incident on this exact
+  // platform: "if Poshmark's real post-publish behavior is a hard navigation (full page load)
+  // rather than a client-side route change, the content script's execution context is destroyed at
+  // that exact moment, and the async continuation (markListed, advanceQueue) may simply never run."
+  // doPoshmarkAutoPublish's own waitForPoshmarkPublishConfirmation() below is exactly that async
+  // continuation -- a polling loop awaiting sleep(400) in a while-loop, which silently stops
+  // executing forever (not throws, not rejects -- just never resumes) if the frame that owns it is
+  // torn down mid-poll. When that happens, markListed/advancePoshmarkQueue/
+  // navigateToPoshmarkCreateListing() below never fire from THIS tab's own fast path at all.
+  // background.js's chrome.tabs.onUpdated reliability net is meant to catch this via a SEPARATE,
+  // independent report+advance -- but that net explicitly does NOT drive Poshmark's tab to the next
+  // item's create-listing page (its own comment: "the other 3 platforms' own content scripts drive
+  // their own next-item navigation ... their SPA-style publish doesn't destroy the JS context" --
+  // which directly contradicts the very reason that net exists for Poshmark in the first place).
+  // So whatever page Poshmark's own post-publish redirect naturally lands the tab on re-injects this
+  // file fresh. If that happens before the net's own backend report has landed (a real, unbounded
+  // network race -- reportItemListedOnce's apiFetch call has no guaranteed-fast completion time),
+  // this file's OWN existing checkItemListedStatus() duplicate-guard in start() reads
+  // marketplaceListedPoshmark=false (server hasn't caught up yet) and lets a brand-new run() through
+  // -- and if the pre-existing bounce-retry marker (POSH_NAV_RETRY_KEY, still live from this exact
+  // navigation) is also still within its window, run()'s own formState==='timeout' branch retries
+  // navigating straight back into a fresh create-listing form for the SAME still-not-advanced queue
+  // item, fillListing()+doPoshmarkAutoPublish() run again, and "List this item" gets clicked a
+  // second (third, fourth...) time for identical content -- exactly Patrick's 4x screenshot.
+  //
+  // Fix: a second, itemId-scoped sessionStorage marker -- same durable-across-navigation mechanism
+  // already proven for POSH_NAV_RETRY_KEY above -- written the INSTANT before (not after) the real
+  // "List this item" click, i.e. at the single riskiest moment where a context-destroying navigation
+  // could immediately follow. Unlike checkItemListedStatus, reading this marker back on the next
+  // page load needs no network round-trip at all, so it can catch the exact race window the backend
+  // check cannot: "did THIS tab already click publish for this exact item a few seconds ago, even if
+  // the server doesn't know it yet." On a match, this file refuses to click publish again and hands
+  // off to the organizer instead -- same "never guess, hand to a human" posture already used
+  // everywhere else in this file (CAPTCHA hard-stop, ambiguous closet-card match, etc.) -- rather
+  // than silently risking a real duplicate Poshmark listing a second time.
+  const POSH_PUBLISH_ATTEMPT_KEY = 'fasPoshmarkPublishAttemptState';
+  // Covers: the publish click itself + a possible context-destroying navigation + content-script
+  // re-injection + this file's own 600ms start()-settle delay + waitForFormReady's own up-to-8s poll
+  // + real network/render slop, with margin. Deliberately longer than POSH_NAV_BOUNCE_WINDOW_MS
+  // since this guard must outlive a FULL bounce-retry cycle (up to POSH_NAV_MAX_RETRIES attempts),
+  // not just one bounce.
+  const POSH_PUBLISH_ATTEMPT_WINDOW_MS = 45000;
+  function readPoshPublishAttemptState() {
+    try {
+      const raw = sessionStorage.getItem(POSH_PUBLISH_ATTEMPT_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.ts !== 'number' || !parsed.itemId) return null;
+      return parsed;
+    } catch (e) { return null; }
+  }
+  function writePoshPublishAttemptState(itemId) {
+    try { sessionStorage.setItem(POSH_PUBLISH_ATTEMPT_KEY, JSON.stringify({ itemId: itemId, ts: Date.now() })); } catch (e) {
+      // Fails safe, same as writePoshNavRetryState's identical note -- if sessionStorage is
+      // unavailable this guard simply can't protect this run; behavior degrades to exactly what it
+      // was before this fix existed, never worse.
+      console.warn('[FAS Poshmark] Could not persist publish-attempt state (sessionStorage unavailable) -- duplicate-publish guard will not work this run:', e && e.message);
+    }
+  }
+  function clearPoshPublishAttemptState() {
+    try { sessionStorage.removeItem(POSH_PUBLISH_ATTEMPT_KEY); } catch (e) { /* nothing to clean up if this throws */ }
+  }
+
   // Accepts an optional retryAttempt number so a bounce-retry (see run()'s formState === 'timeout'
   // branch) can carry its attempt count forward; omitted/0 means "a fresh navigation attempt for a
   // (new) item," which is exactly what every pre-existing call site already means and correctly
@@ -1408,7 +1479,7 @@
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
       try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
-      if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); bar && bar.remove(); }
+      if (more) { await navigateToPoshmarkCreateListing(); } else { clearPoshNavRetryState(); clearPoshPublishAttemptState(); bar && bar.remove(); }
     };
     closeBtnHandler();
   }
@@ -1499,13 +1570,24 @@
     }
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
+    // BUG FIX 2026-08-29 (S-EXT-POSHMARK-DUPLICATE-PUBLISH-CLICK) -- write the local duplicate-click
+    // guard marker RIGHT BEFORE the real click, the single riskiest instant for a context-destroying
+    // navigation to follow (see this marker's own definition/comment above for the full incident).
+    writePoshPublishAttemptState(item.id);
     realClick(publishBtn);
     const published = await waitForPoshmarkPublishConfirmation(6000);
     if (!published) {
+      // Deliberately NOT clearing the publish-attempt marker here -- this is exactly the ambiguous
+      // case the marker exists to protect against: we don't actually know whether the click went
+      // through, so a future page load (e.g. this same tab bouncing afterward) must still see it.
       overlayWarn('Clicked <b>List this item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Poshmark yourself before assuming it posted.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
       return;
     }
+    // Publish confirmed -- this exact attempt's outcome is now known, so the guard's job for THIS
+    // click is done (a later click for a DIFFERENT item id will never match this marker anyway, but
+    // clearing here keeps the marker's lifecycle honest -- "live only while genuinely ambiguous").
+    clearPoshPublishAttemptState();
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
     try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: item.id }); } catch (e) {}
     // Record a run note (never blocks) for every field this run had to guess, skip, or couldn't
@@ -1539,6 +1621,7 @@
     // This item's create-listing attempt reached a genuine terminal state (published, no more
     // items) -- clear the bounce-retry marker so it can't leak into some unrelated future page load.
     clearPoshNavRetryState();
+    clearPoshPublishAttemptState();
     let summaryHtml = '';
     let notes = [];
     try {
@@ -1704,6 +1787,7 @@
         console.warn('[FAS Poshmark] Gave up after ' + POSH_NAV_MAX_RETRIES + ' retries -- create-listing bounced back to "' + location.pathname + '" every single time. This looks persistent, not transient -- see this dispatch\'s handoff.');
       }
       clearPoshNavRetryState();
+      clearPoshPublishAttemptState();
       if (maybeShowAppLoginHint()) return;
       overlayWarn('This doesn\'t look like a fillable Poshmark listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
@@ -1737,7 +1821,32 @@
     await sleep(600); // let the page settle before reading the DOM
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
-    if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry marker
+    if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); clearPoshPublishAttemptState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry/publish-attempt markers
+    // BUG FIX 2026-08-29 (S-EXT-POSHMARK-DUPLICATE-PUBLISH-CLICK, Patrick live-photographic-proof
+    // of a real 4x duplicate listing AFTER the round-13 CAS fix already shipped): checked BEFORE the
+    // existing checkItemListedStatus() network check below, not instead of it -- this is a same-tab,
+    // no-network-round-trip guard against the exact race checkItemListedStatus's backend dependency
+    // cannot close (see writePoshPublishAttemptState's definition above for the full incident and
+    // why this check has to be local). If this tab clicked "List this item" for this exact item id
+    // within the last POSH_PUBLISH_ATTEMPT_WINDOW_MS, refuse to click it again -- hand off to the
+    // organizer instead of silently risking another real duplicate Poshmark listing.
+    const publishAttempt = readPoshPublishAttemptState();
+    if (publishAttempt && publishAttempt.itemId === queued.item.id && (Date.now() - publishAttempt.ts) < POSH_PUBLISH_ATTEMPT_WINDOW_MS) {
+      console.warn('[FAS Poshmark] This tab already clicked "List this item" for "' + queued.item.title + '" (itemId=' + queued.item.id + ') ' + Math.round((Date.now() - publishAttempt.ts) / 1000) + 's ago -- refusing to click it again to avoid a duplicate Poshmark listing. Falling back to manual review.');
+      overlayWarn('FindA.Sale already clicked <b>List this item</b> for <b>' + escapeHtml(queued.item.title) + '</b> moments ago on this tab, but this page reloaded before that could be confirmed. To avoid creating a duplicate listing, please check your Poshmark closet for this item first -- if it\'s already there, click below to continue the queue; if not, list it manually then click below.' +
+        button('fas-posh-dupe-ack', 'Got it -- continue queue', true) +
+        button('fas-posh-close', 'Close', false));
+      const dupeAck = document.getElementById('fas-posh-dupe-ack');
+      if (dupeAck) dupeAck.onclick = async () => {
+        clearPoshPublishAttemptState();
+        clearPoshNavRetryState();
+        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+        location.reload();
+      };
+      closeBtnHandler();
+      return;
+    }
     // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD, Patrick live-confirmed incident): a
     // resumed queue entry (via popup.js's "reopen that tab" banner, or any tab reload while a
     // queue is still pending) used to unconditionally re-fill and re-publish, with zero check for

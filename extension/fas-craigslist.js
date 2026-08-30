@@ -163,28 +163,24 @@
     return document.querySelector('input[type="file"][accept*="image"]') || document.querySelector('input[type="file"]');
   }
 
-  // Find a radio (for-sale-by-owner / category list) whose label (or row) text contains `target`.
-  function radioByLabelText(target) {
-    const want = norm(target);
-    const labels = Array.from(document.querySelectorAll('label'));
-    for (const lab of labels) {
-      const radio = lab.querySelector('input[type="radio"]');
-      if (radio && norm(lab.textContent).indexOf(want) !== -1) return radio;
-    }
-    const radios = Array.from(document.querySelectorAll('input[type="radio"]'));
-    for (const radio of radios) {
-      const row = radio.closest('li') || radio.parentElement;
-      if (row && norm(row.textContent).indexOf(want) !== -1) return radio;
-    }
-    return null;
-  }
-  function selectRadio(radio) {
-    radio.checked = true;
-    radio.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    radio.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-  // DIAGNOSTIC helper (2026-08-29, S-EXT-CRAIGSLIST-ROUND-11): reads a radio's own visible label text
-  // back out, for diagnostic logging only -- not used by any selection logic.
+  // Returns THIS radio's own label text, and only this radio's -- covers both markup patterns
+  // Craigslist's classic forms use (label[for="id"] association, and label-wraps-input), and
+  // deliberately does NOT trust an ambiguous container fallback. ROOT CAUSE FOUND BY READING THE
+  // CODE (2026-08-29, round 12, S-EXT-CRAIGSLIST-CAT-ANTIQUES): this function used to be
+  // diagnostic-only while the OLD radioByLabelText() below had its own, separate, buggy
+  // container-scoping fallback (radio.closest('li') || radio.parentElement, with NO check that the
+  // resulting container actually held only one radio). If Craigslist's real category-picker markup
+  // has no per-row <li> wrapper and no label[for=id]/wrapping-label association -- i.e. a flat list
+  // of radios sharing one parent -- that fallback's `row` resolves to the SAME shared container for
+  // every radio on the page, so `row.textContent` is the concatenation of every category's label
+  // text. `.indexOf(want) !== -1` then returns true on the very FIRST radio checked in DOM order
+  // for ANY search target that appears anywhere on the page -- and Craigslist's for-sale category
+  // list is alphabetical, so the first radio in DOM order is "antiques". This exactly explains the
+  // symptom: every item, regardless of its mapped target category, lands on "antiques" -- and why
+  // it was untouched by two prior rounds of fixing mapCraigslistCategory() itself, which was never
+  // the broken part. Fix: only trust a row/container match when it is verified to contain EXACTLY
+  // ONE radio (i.e. genuinely scoped to this radio alone); otherwise return '' rather than risk a
+  // false match.
   function radioLabelTextFor(radio) {
     if (!radio) return '';
     const id = radio.id;
@@ -195,7 +191,29 @@
     const wrappingLabel = radio.closest('label');
     if (wrappingLabel) return norm(wrappingLabel.textContent);
     const row = radio.closest('li') || radio.parentElement;
-    return row ? norm(row.textContent) : '';
+    if (row && row.querySelectorAll('input[type="radio"]').length === 1) return norm(row.textContent);
+    return '';
+  }
+  // Find a radio (for-sale-by-owner / category list) whose OWN label -- via radioLabelTextFor's
+  // guarded lookup above, never an ambiguous shared container -- contains `target`. BUG FIX
+  // (2026-08-29, round 12): previously had its own separate, less-safe implementation (see
+  // radioLabelTextFor's comment above for the confirmed failure mode that caused). Now the single
+  // source of truth for "this radio's label text" is radioLabelTextFor, used consistently by both
+  // real selection logic (this function) and diagnostic logging.
+  function radioByLabelText(target) {
+    const want = norm(target);
+    if (!want) return null;
+    const radios = Array.from(document.querySelectorAll('input[type="radio"]'));
+    for (const radio of radios) {
+      const text = radioLabelTextFor(radio);
+      if (text && text.indexOf(want) !== -1) return radio;
+    }
+    return null;
+  }
+  function selectRadio(radio) {
+    radio.checked = true;
+    radio.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function continueButton() {
@@ -430,6 +448,11 @@
     // happens (not reached at all / found but mis-clicked / no fresh category picker on continuation
     // posts at all).
     console.log('[FAS Craigslist DIAG] doCatStep: item.category="' + item.category + '" mappedTarget="' + target + '"');
+    // DIAGNOSTIC (2026-08-29, round 12): dumps every radio's own resolved label text on this page --
+    // directly confirms or refutes the round-12 root-cause theory (radioLabelTextFor previously
+    // falling back to a shared, all-categories-text container) on the next live run.
+    console.log('[FAS Craigslist DIAG] doCatStep: radios on page=' +
+      Array.from(document.querySelectorAll('input[type="radio"]')).map((r) => '"' + radioLabelTextFor(r) + '"').join(', '));
     let radio = radioByLabelText(target);
     let usedGeneralFallback = false;
     if (!radio && target !== 'general for sale') { radio = radioByLabelText('general for sale'); usedGeneralFallback = true; }
@@ -461,26 +484,37 @@
     if (!title) throw hardError('Details', 'Couldn\'t find the posting Title field.');
     setInputValue(title, item.title);
 
+    // BUG FIX (2026-08-29, round 12, S-EXT-CRAIGSLIST-DUP): price/geo/postal below used to be
+    // "fill ONLY when the item carries the data", silently trusting whatever the field already held
+    // otherwise -- a "fill only if present" pattern that, if the form handed to this step is ever NOT
+    // genuinely empty (browser autofill, or Craigslist's own remembered value from the prior item on
+    // this same tab/session -- Fix D above hardens the copy-from-previous "skip" path but doesn't
+    // guarantee every individual field came back blank), would silently submit a prior item's price
+    // or location under the current item's title/description. Still never INVENTS a value for an
+    // item that has none (same intent as the original comment) -- it now actively clears the field to
+    // '' in that case instead of leaving whatever was already there.
     const price = q('input[name="price"]') || q('#price');
-    if (price && item.price != null && isFinite(Number(item.price))) {
-      setInputValue(price, String(Math.max(0, Math.round(Number(item.price)))));
+    if (price) {
+      const hasPrice = item.price != null && isFinite(Number(item.price));
+      setInputValue(price, hasPrice ? String(Math.max(0, Math.round(Number(item.price)))) : '');
     }
 
-    // Location fields: fill ONLY when the item carries the data -- never invent a city or ZIP
-    // (Craigslist requires postal, so a missing value is simply left for the human, who owns the
-    // final review + publish anyway).
     const geo = q('#geographic_area') || q('input[name="geographic_area"]');
     const geoVal = item.geographicArea || item.city || item.saleCity;
-    if (geo && geoVal) setInputValue(geo, geoVal);
+    if (geo) setInputValue(geo, geoVal || '');
     const postal = q('#postal') || q('input[name="postal"]');
     const postalVal = item.postal || item.postalCode || item.zip || item.saleZip;
-    if (postal && postalVal) setInputValue(postal, String(postalVal));
+    if (postal) setInputValue(postal, postalVal || '');
 
     // Reply-option email (2026-08-06, live-verified selector against a real
     // post.craigslist.org edit-details page: input[name="FromEMail"], no id, no login
     // required -- Craigslist accepts guest posts, it just needs a real email here for its
     // own mail-relay/confirmation. Filled from the organizer's own account email (data we
-    // already have) -- never invents one, same rule as the location fields above.
+    // already have) -- never invents one, same rule as the location fields above. Deliberately NOT
+    // cleared when absent (round 12, unlike price/geo/postal above): an empty FromEMail is far more
+    // likely to block the whole post outright (Craigslist requires a contact email) than to produce a
+    // wrong-but-plausible-looking duplicate, so leaving Craigslist's own remembered default here is
+    // the safer failure mode, not a staleness risk worth clearing.
     const email = q('input[name="FromEMail"]');
     if (email && item.email) setInputValue(email, item.email);
 
@@ -527,6 +561,25 @@
 
   async function doImagesStep(item, index, total) {
     clearAttempts(); // reached the end of the automatable flow -- reset guards for the next item
+    // BUG FIX (2026-08-29, round 12, S-EXT-CRAIGSLIST-DUP): ROOT CAUSE FOUND BY READING THE CODE --
+    // 'fasCLPostedHandled' (set by markCraigslistPostedHandled(), checked by
+    // craigslistPostedAlreadyHandled(), both below) was NEVER cleared anywhere in this file.
+    // sessionStorage survives same-origin navigation within the posting flow, so once item 1's real
+    // /k/ confirmation page set this flag, doPostedStep() silently returned immediately -- before
+    // markListed, advanceCraigslistQueue, or the "Post another" click -- for every SUBSEQUENT item's
+    // own real confirmation page for the rest of the tab session. That leaves item 2+ never reported
+    // to the backend as listed and the queue index never advanced past them, so any retry/resume
+    // re-processes and re-publishes an item Craigslist already has a live posting for -- exactly the
+    // duplicate "Speaker Cable" / "Mugig Guitar Instrument Cable" postings confirmed live in
+    // Patrick's craigslist.org/account screenshot. Cleared HERE rather than inside clearAttempts()
+    // itself: clearAttempts() is also called from inside doPostedStep() right after
+    // markCraigslistPostedHandled() sets this exact flag for THIS item's own confirmation page --
+    // folding the removal into that shared helper would have made doPostedStep() immediately erase
+    // its own just-set guard, defeating its bfcache double-handling protection. doImagesStep() runs
+    // once per item, before that item ever reaches its own posted-confirmation page, so clearing it
+    // here guarantees a clean flag for every item's own eventual 'posted' check without touching
+    // doPostedStep()'s own use of it.
+    sessionStorage.removeItem('fasCLPostedHandled');
     overlay('<b>FindA.Sale</b> - adding photos...');
     const photosOk = await injectPhotos(item.photoUrls);
     sessionStorage.setItem('fasCLPhotosOk', photosOk ? '1' : '0');
@@ -686,13 +739,33 @@
   async function doCopyFromPreviousStep() {
     overlay('<b>FindA.Sale</b> - skipping Craigslist\'s "copy from previous posting" prompt for a clean form...');
     console.log('[FAS Craigslist] copy-from-previous-posting prompt detected, clicking skip for a clean form');
-    const skipBtn = Array.from(document.querySelectorAll('a, button, input[type="submit"], input[type="button"]'))
+    const findSkipBtn = () => Array.from(document.querySelectorAll('a, button, input[type="submit"], input[type="button"]'))
       .find((el) => norm(el.textContent || el.value) === 'skip');
+    let skipBtn = findSkipBtn();
     if (!skipBtn) {
       throw hardError('CopyFromPrevious', 'Couldn\'t find Craigslist\'s "skip" control on the copy-from-previous-posting prompt.');
     }
     await humanPause(400, 800);
-    skipBtn.click(); // -> a genuinely fresh, empty posting form; the script re-runs on the next step
+    skipBtn.click();
+    // BUG FIX (2026-08-29, round 12, S-EXT-CRAIGSLIST-DUP): this used to click skip and return
+    // immediately with NO verification the click actually produced a fresh, empty form -- unlike
+    // doImagesStep's "Done with images" click, which DOES poll via waitForStepChange. Fire-and-forget
+    // here meant a no-op click (Craigslist's own JS not yet settled) would go completely unnoticed,
+    // and the next item's flow could carry on filling out whatever form was still showing. Now polls
+    // for a real step change the same way doImagesStep does, retries the click once, and hands off to
+    // the human with a clear error instead of silently assuming success.
+    let advanced = await waitForStepChange('copyFromPrevious', 6000);
+    if (!advanced) {
+      skipBtn = findSkipBtn();
+      if (skipBtn) {
+        await humanPause(400, 800);
+        skipBtn.click();
+        advanced = await waitForStepChange('copyFromPrevious', 6000);
+      }
+    }
+    if (!advanced) {
+      throw hardError('CopyFromPrevious', 'Clicked "skip" but Craigslist didn\'t move to a fresh posting form -- please check this screen and continue yourself so a stale category or details don\'t carry over.');
+    }
   }
 
   // Handles the choose-area confirmation screen (see isCraigslistChooseAreaStep() above). The

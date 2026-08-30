@@ -63,6 +63,7 @@ export interface ReanalyzeAfter {
   ebayCategoryName: string | null;
   aiConfidence: number | null;
   brand: string | null;
+  color: string | null;
   mpn: string | null;
   upc: string | null;
   catalogEnrichment: {
@@ -135,6 +136,7 @@ export async function reanalyzeItem(
       ebayCategoryId: true,
       ebayCategoryName: true,
       brand: true,
+      color: true,
       mpn: true,
       upc: true,
       ean: true,
@@ -253,6 +255,12 @@ export async function reanalyzeItem(
   if (result.category) appliedData.category = result.category;
   if (result.condition) appliedData.condition = result.condition;
   if (result.suggestedConditionGrade) appliedData.conditionGrade = result.suggestedConditionGrade;
+  // Color (S-COLOR-EXTRACTION follow-up): a plain AI-suggested attribute, same tier as
+  // title/description/category/condition above -- NOT a catalog identifier like brand/mpn/upc,
+  // so it does not go through the enrichItem/planEnrichmentApply cascade below. Never overwrites
+  // an organizer-entered value: only ever written when result.color is truthy, and appliedData is
+  // merged into a Prisma update -- an omitted key leaves the existing item.color untouched.
+  if (result.color) appliedData.color = result.color;
   if (nextTags && nextTags.length) appliedData.tags = nextTags;
   if (cat?.categoryId) {
     appliedData.ebayCategoryId = cat.categoryId;
@@ -276,6 +284,7 @@ export async function reanalyzeItem(
     ebayCategoryName: cat?.categoryName ?? null,
     aiConfidence: result.confidence ?? null,
     brand: (catalogApply.brand as string) ?? item.brand ?? result.brand ?? null,
+    color: (appliedData.color as string) ?? item.color ?? result.color ?? null,
     mpn: (catalogApply.mpn as string) ?? item.mpn ?? result.mpn ?? null,
     upc: (catalogApply.upc as string) ?? item.upc ?? null,
     catalogEnrichment: Object.keys(merged).length > 0

@@ -31,6 +31,32 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
+  // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
+  // color/brand null-value fallback behavior across runs -- worked once earlier tonight, then did
+  // nothing on a fresh run). Established MutationObserver-backed poll-until-present pattern, same
+  // convention already used elsewhere in this codebase (fas-content.js/fas-grailed.js/fas-remove.js/
+  // fas-tracking.js's own waitFor/observer helpers) -- ported into this file per its own established
+  // conventions instead of the fixed-sleep-then-single-check pattern acceptSuggestedColor() used to
+  // rely on. Deliberately RESOLVES (never rejects) with null on timeout, unlike fas-content.js's
+  // reject-on-timeout convention -- every call site added in this file treats "never appeared" as a
+  // legitimate, expected outcome (e.g. a real panel genuinely has no suggested swatch), not an
+  // exceptional error every caller must try/catch. observeOpts defaults to childList+subtree, which
+  // only catches a genuinely NEW element appearing (e.g. the panel container itself) -- pass
+  // { attributes: true, attributeFilter: [...] } explicitly when watching for a class changing on an
+  // ALREADY-PRESENT node (e.g. Vinted marking an existing swatch "--selected"), since a plain
+  // childList observer never sees an attribute-only mutation.
+  function waitFor(getter, timeout, observeOpts) {
+    return new Promise((resolve) => {
+      const first = getter();
+      if (first) return resolve(first);
+      const obs = new MutationObserver(() => {
+        const el = getter();
+        if (el) { obs.disconnect(); resolve(el); }
+      });
+      obs.observe(document.body, observeOpts || { childList: true, subtree: true });
+      setTimeout(() => { obs.disconnect(); resolve(null); }, timeout);
+    });
+  }
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
@@ -694,19 +720,49 @@
     for (let attempt = 1; attempt <= 3; attempt++) {
       if (!findOpenPanel('color', true)) {
         opener.click();
-        await sleep(400 + attempt * 200);
+        // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): was a fixed
+        // `sleep(400 + attempt * 200)` guess followed by a single re-check -- a page rendering the
+        // panel even slightly slower than that guess meant this gave up before the panel had
+        // actually appeared (this file's OWN pickFromPanel comment thread already documents Vinted's
+        // real panels/search results repeatedly rendering slower than earlier fixed-sleep guesses in
+        // this same file, e.g. the ~600ms-too-short brand search timing fix above). Replaced with
+        // waitFor() (defined near sleep/humanPause above) -- resolves the INSTANT the panel actually
+        // renders instead of sleeping a fixed guess and re-checking once.
+        panel = await waitFor(() => findOpenPanel('color'), 2500);
+        if (panel) break;
+      } else {
+        panel = findOpenPanel('color');
+        if (panel) break;
       }
-      panel = findOpenPanel('color');
-      if (panel) break;
       console.warn('[FAS Vinted] "' + labelText + '" panel did not open on attempt ' + attempt + '/3 while checking for a suggested color -- retrying.');
       await sleep(300);
     }
     if (!panel) return false;
-    const hasSuggested = qa('[class*="--selected"]').some((el) => panel.contains(el) && el.offsetParent !== null);
+    // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): the panel container appearing is
+    // NOT the same moment as Vinted's own suggested-swatch class landing on it -- that swatch is
+    // Vinted's own photo-analysis result (see this function's header comment above) and can render a
+    // beat after the panel shell itself is present. The old code read `[class*="--selected"]` exactly
+    // ONCE, immediately after the panel was found, with no wait for that specific mutation at all --
+    // a real reliability gap independent of the panel-open timing fixed above. Note this ALSO needs
+    // `attributes: true` explicitly (see waitFor's own comment) since Vinted marks a swatch
+    // "selected" by adding a class to a node that's already in the DOM, not by inserting a new one --
+    // a plain childList/subtree observer would never see it.
+    const hasSuggested = !!(await waitFor(
+      () => qa('[class*="--selected"]').find((el) => panel.contains(el) && el.offsetParent !== null),
+      2000,
+      { attributes: true, attributeFilter: ['class'], subtree: true }
+    ));
     if (hasSuggested) {
       console.log('[FAS Vinted] Color has no value on this item -- Vinted\'s own pre-selected suggested swatch was left as-is.');
     } else {
-      console.warn('[FAS Vinted] Color has no value on this item and Vinted did not pre-select a suggested swatch either (UNVERIFIED edge case) -- left for the organizer to set.');
+      // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): this branch used to be logged as
+      // an "UNVERIFIED edge case" with no further context. It is now a well-understood, EXPECTED
+      // outcome whenever Vinted has not finished (or not started) analyzing this item's photos yet --
+      // see fillListing()'s own comment on why injectPhotos() now runs right after Category, well
+      // before this check, specifically to give Vinted real wall-clock time to produce a suggestion.
+      // If this still logs consistently after that reorder, the remaining gap is more analysis time
+      // needed (or this item's photos genuinely have no confident AI suggestion), not this poll.
+      console.warn('[FAS Vinted] Color has no value on this item and Vinted did not pre-select a suggested swatch either -- left for the organizer to set.');
     }
     await closePanel('color');
     return hasSuggested;
@@ -1361,6 +1417,21 @@
     // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up
     // persistently on the review screen below instead of vanishing.
     await tryFill('Category', item.category, (v) => pickCategory(v), warnings);
+    // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
+    // color/brand null-value fallback behavior across runs -- worked once earlier tonight, then
+    // apparently did nothing on a fresh run). injectPhotos() used to run dead LAST in this function,
+    // after Color/Material/Condition/Price/Package size. acceptSuggestedColor() (called below, in
+    // the item.color null branch) opens Vinted's Color panel looking for Vinted's OWN "--selected"
+    // suggested swatch, which per that function's own header comment is Vinted's own AI/heuristic
+    // guess FROM THE ITEM'S PHOTOS. With photos not yet uploaded to Vinted at all by the time the old
+    // code reached Color, no such photo-based suggestion could structurally exist yet -- confirmed
+    // directly from this function's own prior fill order, not a guess. Moved photo injection here,
+    // right after Category and before Brand/Size/Color, so Vinted has real wall-clock time (the DOM
+    // interactions + sleeps for Brand and Size below) to actually analyze the photos before Color's
+    // suggested-swatch check runs.
+    const photosOk = await injectPhotos(item.photoUrls);
+    if (!photosOk) console.warn('[FAS Vinted] Photos did not attach -- Color\'s suggested-swatch check below will very likely find nothing to accept, since Vinted has no photos to analyze from.');
+    await humanPause(400, 800);
     // 2026-08-18: brand/size/color/material now exist on Item (single string each, not an
     // array -- see schema.prisma comment) and flow through getExtensionItems -> popup.js's
     // queue map. tryFill's own undefined/null/'' guard still skips silently on unset items.
@@ -1373,23 +1444,48 @@
     // "no match -> select Vinted's 'No brand' option" fallback path -- the exact reuse Patrick asked
     // for, no new DOM logic. Pushes a distinct, honest warning depending on whether that fallback
     // actually found and clicked "No brand".
+    // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): this call (and Color's matching
+    // direct call below) was the ONLY place in this function that called a fill function directly
+    // instead of through tryFill() -- every other field's fillFn is wrapped in tryFill's own
+    // try/catch, so one field throwing can never take down the rest of the form. These two direct
+    // calls had NO such protection, and run()'s own `await fillListing(item)` call (see run(), below
+    // this function) is unguarded too -- so a real DOM-timing throw here (e.g. a still-open stray
+    // panel racing Brand's opener click right after Category's own selection commits, the exact kind
+    // of race this file's pickFromPanel comment thread already documents happening live) would
+    // silently kill EVERY remaining field below (Color, Material, Condition, Price, Package size)
+    // with zero visibility -- no console warning, no overlay update, nothing. That is the confirmed,
+    // evidence-based explanation for Patrick's report that NEITHER field did anything on a fresh run,
+    // versus the SAME run type visibly working (down to the "No Label"/"no suggestion" DIAG lines)
+    // hours earlier. Wrapped in try/catch matching tryFill's own error-handling shape so a future
+    // failure here is always visible and can never take the rest of the form down with it again.
     if (item.brand === undefined || item.brand === null || item.brand === '') {
-      const usedNoBrand = await fillBrand('Brand', '');
-      warnings.push(usedNoBrand
-        ? 'Brand was not set on this item -- selected Vinted\'s own "No brand" option, please verify.'
-        : 'Brand has no value set on this item -- please set it manually before publishing.');
+      try {
+        const usedNoBrand = await fillBrand('Brand', '');
+        warnings.push(usedNoBrand
+          ? 'Brand was not set on this item -- selected Vinted\'s own "No brand" option, please verify.'
+          : 'Brand has no value set on this item -- please set it manually before publishing.');
+      } catch (e) {
+        console.warn('[FAS Vinted] Brand fallback threw an error, skipped:', e && e.message);
+        warnings.push('Brand fallback hit an error while filling -- please set it manually before publishing.');
+      }
     } else {
       await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v), warnings);
     }
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
     // ROUND 10: same pattern as Brand above, for Color -- see acceptSuggestedColor()'s own comment
     // for why this reuses pickFromPanel's opener/findOpenPanel/closePanel building blocks instead of
-    // its full search-and-score flow.
+    // its full search-and-score flow. Wrapped in try/catch for the same reason as Brand's direct call
+    // above -- see that comment for the full explanation.
     if (item.color === undefined || item.color === null || item.color === '') {
-      const acceptedSuggestion = await acceptSuggestedColor('Color');
-      warnings.push(acceptedSuggestion
-        ? 'Color was not set on this item -- accepted Vinted\'s own suggested color, please verify it\'s correct.'
-        : 'Color has no value set on this item -- please set it manually before publishing.');
+      try {
+        const acceptedSuggestion = await acceptSuggestedColor('Color');
+        warnings.push(acceptedSuggestion
+          ? 'Color was not set on this item -- accepted Vinted\'s own suggested color, please verify it\'s correct.'
+          : 'Color has no value set on this item -- please set it manually before publishing.');
+      } catch (e) {
+        console.warn('[FAS Vinted] Color fallback threw an error, skipped:', e && e.message);
+        warnings.push('Color fallback hit an error while filling -- please set it manually before publishing.');
+      }
     } else {
       await tryFill('Color', item.color, (v) => fillSelectLike('Color', v), warnings);
     }
@@ -1410,8 +1506,8 @@
     }
     const packageSizeOk = await fillPackageSize(item);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
-    await humanPause(400, 800);
-    const photosOk = await injectPhotos(item.photoUrls);
+    // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): photosOk/injectPhotos() moved up to
+    // right after Category (see comment there) -- no longer computed here.
     return { photosOk, warnings };
   }
 
