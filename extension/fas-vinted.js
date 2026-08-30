@@ -1849,8 +1849,30 @@
     }
   }
 
+  // BUG FIX 2026-08-30 (round 5, Patrick live-reported "no change" after round 4 shipped and the
+  // extension was reloaded): round 4's continue-prompt only fires from start(), which only runs
+  // once per genuine document load (content_scripts inject at document_idle on a real navigation,
+  // per manifest.json). If Vinted's post-Upload transition to /member/... is a CLIENT-SIDE route
+  // change (history.pushState-style SPA navigation, same document, no new page load -- plausible
+  // for a modal-driven "Item listed" confirmation like the one in Patrick's screenshot) rather than
+  // a full page reload, this script never re-executes at all and the prompt genuinely never had a
+  // chance to run, regardless of what round 4's logic does. UNCONFIRMED which mechanism Vinted
+  // actually uses (no live tab was available to verify this round) -- rather than guess further,
+  // this adds a persistent watcher that works either way: polls location.pathname on an interval
+  // for the life of the tab, independent of whether a fresh script injection ever happens, and
+  // calls maybeShowVintedContinuePrompt() (already self-guarded via sessionStorage so it only ever
+  // shows once per pending item) the moment we're off the listing page. If round 4's on-load path
+  // was in fact the real gap, this covers it too -- redundant but harmless, never fires twice for
+  // the same item.
+  function watchForVintedNavigationAway() {
+    setInterval(() => {
+      if (!looksLikeVintedListingPage()) maybeShowVintedContinuePrompt();
+    }, 1500);
+  }
+
 (async () => {
     const ranRemoval = await maybeRunVintedRemoval();
     if (!ranRemoval) start();
+    watchForVintedNavigationAway();
   })();
 })();
