@@ -1,5 +1,11 @@
 * { box-sizing: border-box; }
-body { width: 380px; max-height: 560px; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; overflow-y: auto; }
+body { width: 380px; max-height: 600px; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; overflow-y: auto; display: flex; flex-direction: column; }
+/* Every direct child except #list is fixed-height chrome (header, guildBar, status/controls,
+   banners, footer) -- flex-shrink: 0 keeps all of it at its natural size so footer (Post to /
+   Publish automatically / List button) is always visible without scrolling past it. #list is the
+   ONLY child that flexes/shrinks to absorb whatever space is left over. See .list's own comment
+   below for the full history. */
+body > *:not(.list) { flex-shrink: 0; }
 header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; align-items: baseline; gap: 8px; }
 .brand { font-weight: 800; font-size: 16px; } .brand b { color: #4caf6d; }
 .sub { font-size: 11px; color: #9fb6a8; }
@@ -16,7 +22,7 @@ header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; al
 .status a, .status button.link { color: #6fd08c; cursor: pointer; text-decoration: underline; background: none; border: none; font: inherit; padding: 0; }
 .controls { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid #26362d; }
 .chk { font-size: 12px; color: #cfe3d6; } .count { font-size: 12px; color: #9fb6a8; } #selCount { color: #6fd08c; font-weight: 700; }
-.list { overflow-y: auto; max-height: 380px; }
+.list { overflow-y: auto; flex: 1 1 auto; min-height: 60px; }
 .sale-group { padding: 6px 14px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7f9b8a; }
 .item { display: flex; gap: 10px; align-items: center; padding: 8px 14px; border-bottom: 1px solid #1d2a22; cursor: pointer; }
 .item:hover { background: #182720; }
@@ -39,20 +45,21 @@ button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; 
    to" section becoming unreachable when banners pushed content past the popup's rendering
    bounds; collapsing these (still one click away) is a safe, direct reduction of that height
    without touching popup sizing/overflow mechanics at all.
-   FOLLOW-UP 2026-08-30 (S-EXT-MARK-POSTED-PARITY): that collapse alone wasn't the real fix --
-   `body` had `max-height: 560px` but no `overflow-y` at all, so once combined content (header +
-   optional guildBar + status/controls + notes/banners + #list's own up-to-380px) exceeded 560px,
-   everything past that point -- footer's "Post to" dropdown, "Publish automatically" checkbox,
-   and List button -- was clipped with nothing to scroll it into view (Patrick: "the sizing of
-   the extension makes it hard to see anything below the items"). Added `overflow-y: auto` to
-   `body` above so the WHOLE popup scrolls once its content exceeds max-height, same as #list
-   already does for its own item rows -- footer is now always reachable by scrolling, regardless
-   of how tall any given channel's notes/settings blocks happen to be. Deliberately did not also
-   restructure into a flex layout with a hard-pinned footer: footer's real height varies a lot per
-   channel (Craigslist's short note vs. the combined removeSetting+renewSetting blocks), and a
-   flex-shrink:0 footer would still get clipped by Chrome's own popup height ceiling on a tall
-   channel -- a single scrollable body guarantees reachability in every case instead of depending
-   on a footer-height guess. */
+   FOLLOW-UP 2026-08-30, ROUND 1 (S-EXT-MARK-POSTED-PARITY): tried adding only `overflow-y: auto`
+   to `body` (no flex restructure), reasoning that a single scrollable body would always make
+   footer reachable by scrolling past it, regardless of banner/note height. Patrick live-tested
+   this and reported it back as still bad: with the resumeQueueBanner ("reopen that tab") and
+   the "N items hidden" note both showing, #list's own separate `overflow-y:auto` region (then
+   still capped at a fixed max-height) created a confusing double-scroll -- footer was technically
+   reachable but not without real scrolling effort, and "Post to" still wasn't visible by default.
+   FOLLOW-UP 2026-08-30, ROUND 2: `body` is now `display: flex; flex-direction: column` with
+   every child except `.list` (see `body > *:not(.list)` above) pinned to `flex-shrink: 0` --
+   header, guildBar, status/controls, both banners, and footer all render at their natural,
+   un-shrunk size, and `.list` (now `flex: 1 1 auto` with `min-height: 60px`, no more fixed
+   max-height) is the ONLY region that absorbs/gives back space. Footer is pinned visible without
+   scrolling in the normal case; `overflow-y: auto` stays on `body` purely as a safety net for the
+   rare case where even a min-height'd #list can't make enough room (e.g. every banner showing at
+   once on a small screen) -- worst case you still scroll the whole popup, never a true dead end. */
 .note summary { cursor: pointer; color: #6fd08c; }
 .note[open] summary { margin-bottom: 4px; }
 .removeSetting { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26362d; }
