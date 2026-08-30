@@ -36,6 +36,19 @@ const PLATFORM_ELIGIBILITY_KEY = { poshmark: 'POSHMARK', mercari: 'MERCARI', vin
 // by checkResumeableQueue() below to detect an in-progress run and offer to resume it instead of
 // silently showing the full, un-filtered item picker again -- see that function's own comment.
 const QUEUE_STORAGE_KEYS = {
+  // 2026-08-30 addition (Patrick live report -- ran into Craigslist's own rate-limit page mid-run,
+  // "for some reason facebook and craigslist don't seem to have the same reopen that tab button
+  // that the other marketplaces do"): facebook/craigslist/gumtree_au were never added here when
+  // checkResumeableQueue() below was first built for the 4 newer platforms (S-EXT-BATCH-2026-08-19)
+  // -- it's already called for every channel including these three (see onChannelChange), it just
+  // silently no-ops for them (`if (!cfg) { banner.hidden = true; return; }`) since they had no entry.
+  // All 3 queue/index storage keys and post-URL constants already exist and are already used
+  // elsewhere in this exact way (background.js's own advanceQueue/advanceCraigslistQueue/
+  // advanceGumtreeAuQueue handlers, config.js's FB_CREATE_URL/CL_POST_URL/GT_POST_URL) -- this is
+  // purely wiring the existing data into the existing banner, no new mechanism.
+  facebook: { queue: 'fasQueue', index: 'fasIndex', postUrlKey: 'FB_CREATE_URL', label: 'Facebook Marketplace' },
+  craigslist: { queue: 'fasCraigslistQueue', index: 'fasCraigslistIndex', postUrlKey: 'CL_POST_URL', label: 'Craigslist' },
+  gumtree_au: { queue: 'fasGumtreeAuQueue', index: 'fasGumtreeAuIndex', postUrlKey: 'GT_POST_URL', label: 'Gumtree Australia' },
   poshmark: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', postUrlKey: 'POSH_POST_URL', label: 'Poshmark' },
   mercari: { queue: 'fasMercariQueue', index: 'fasMercariIndex', postUrlKey: 'MERC_POST_URL', label: 'Mercari' },
   vinted: { queue: 'fasVintedQueue', index: 'fasVintedIndex', postUrlKey: 'VINTED_POST_URL', label: 'Vinted' },
