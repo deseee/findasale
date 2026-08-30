@@ -343,7 +343,7 @@
         ' textSignal=' + (textMatch ? 'matched' : 'no') + ' titleSignal=' + (titleMatch ? 'matched' : 'no'));
       return true;
     }
-    console.warn('[FAS Craigslist] URL looked like a posting confirmation (' + location.pathname +
+    console.log('[FAS Craigslist] URL looked like a posting confirmation (' + location.pathname +
       ') but expected page copy was not found -- NOT treating this as posted-confirmation. ' +
       'title="' + (document.title || '') + '" bodyTextSample="' + text.slice(0, 400).replace(/\s+/g, ' ') + '"');
     return false;
@@ -408,7 +408,7 @@
       console.log('[FAS Craigslist] choose-area step detected -- url=' + location.pathname + location.search);
       return true;
     }
-    console.warn('[FAS Craigslist] URL looked like the choose-area step (' + location.pathname + location.search +
+    console.log('[FAS Craigslist] URL looked like the choose-area step (' + location.pathname + location.search +
       ') but expected page copy was not found -- NOT treating this as choose-area.');
     return false;
   }
@@ -759,7 +759,7 @@
       console.log('[FAS Craigslist] clicking "Post another" to resume the queue for item', index + 2, 'of', total);
       postAnother.click();
     } else {
-      console.warn('[FAS Craigslist] "Post another" control not found on the confirmation page -- falling back to POST_URL navigation.');
+      console.log('[FAS Craigslist] "Post another" control not found on the confirmation page -- falling back to POST_URL navigation.');
       location.href = POST_URL;
     }
   }

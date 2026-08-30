@@ -156,6 +156,30 @@ function currentListedFlag(it) {
   return it.marketplaceListedFacebook === true;
 }
 
+// Human-readable channel name, used by row()'s "Already posted?" button title. (2026-08-30,
+// S-EXT-MARK-POSTED-PARITY -- kept separate from updateCount()'s local POST_LABELS map, which
+// needs slightly different "on X" / "Post/List" phrasing for the List button.)
+const CHANNEL_NAMES = {
+  facebook: 'Facebook', craigslist: 'Craigslist', gumtree_au: 'Gumtree Australia',
+  poshmark: 'Poshmark', mercari: 'Mercari', vinted: 'Vinted', grailed: 'Grailed'
+};
+function channelName(ch) { return CHANNEL_NAMES[ch] || 'this marketplace'; }
+
+// Sets the marketplaceListed<Platform> field matching the currently-selected channel -- the
+// write-side mirror of currentListedFlag's read-side channel->field map above. Used by
+// markAlreadyPosted() after a successful manual mark (2026-08-30, S-EXT-MARK-POSTED-PARITY) so
+// every channel updates its own field instead of always writing marketplaceListedFacebook.
+function setCurrentListedFlag(it) {
+  const ch = currentChannel();
+  if (ch === 'craigslist') { it.marketplaceListedCraigslist = true; return; }
+  if (ch === 'gumtree_au') { it.marketplaceListedGumtreeAu = true; return; }
+  if (ch === 'poshmark') { it.marketplaceListedPoshmark = true; return; }
+  if (ch === 'mercari') { it.marketplaceListedMercari = true; return; }
+  if (ch === 'vinted') { it.marketplaceListedVinted = true; return; }
+  if (ch === 'grailed') { it.marketplaceListedGrailed = true; return; }
+  it.marketplaceListedFacebook = true;
+}
+
 // Facebook publishes automatically and manages sold-elsewhere removal; Craigslist does neither
 // (the human owns the final publish + all verification), so hide the FB-only controls and show
 // the Craigslist explainer when Craigslist is the selected channel.
@@ -324,12 +348,16 @@ function row(it) {
   // same item stays fully selectable on Craigslist/Gumtree AU. The backend's markItemListed is
   // still the authoritative reject -- this is UI guidance, not the real gate.
   const fbBlocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
-  // "Already posted on Facebook?" manual mark -- covers the case where the organizer posted
-  // this item to Facebook by hand (extension automation stalled, or they just did it
-  // themselves on facebook.com). Only offered on the Facebook channel, only for an item this
-  // extension doesn't already think is posted there, and never for a coin/currency item (same
-  // Facebook Commerce Policy restriction that blocks the normal push -- see fbBlocked above).
-  const showMarkPosted = currentChannel() === 'facebook' && !fbBlocked && !currentListedFlag(it);
+  // "Already posted?" manual mark -- covers the case where the organizer posted this item by
+  // hand on the current channel (extension automation stalled, or they just did it themselves
+  // directly on that marketplace). GENERALIZED 2026-08-30 (S-EXT-MARK-POSTED-PARITY,
+  // Patrick-directed -- "make it so the others are similar to facebook with the already posted
+  // buttons"): used to be Facebook-only; now offered on every channel, for any item this
+  // extension doesn't already think is posted there. fbBlocked stays Facebook-only (it's a real
+  // Facebook Commerce Policy restriction on coin/currency items -- see fbBlocked above), so on
+  // the Facebook channel a blocked item still correctly gets no button; every other channel has
+  // no such restriction and fbBlocked is always false there.
+  const showMarkPosted = !fbBlocked && !currentListedFlag(it);
   // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19) -- render() already hides an
   // ineligible item entirely unless "Show all items" is checked, so by the time row() sees one,
   // the organizer has explicitly opted in to seeing it. UNLIKE fbBlocked above, the checkbox
@@ -343,7 +371,7 @@ function row(it) {
     (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
     (fbBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
     (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT THIS MARKETPLACE</span>' : '') +
-    (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to Facebook myself, outside the extension">Already posted?</button>' : '') +
+    (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to ' + esc(channelName(currentChannel())) + ' myself, outside the extension">Already posted?</button>' : '') +
     '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '"' : '') + '>';
   const cb = d.querySelector('.cb');
   if (fbBlocked) {
@@ -363,18 +391,23 @@ function row(it) {
   return d;
 }
 
-// Manual "I already posted this on Facebook myself" action (see showMarkPosted in row() above).
-// Calls the extension worker's markAlreadyPosted passthrough (background.js), which hits the
-// backend's POST /extension/items/:id/mark-posted (extensionController.ts
-// markItemAlreadyPostedManually) -- writes a real MarketplaceListingJob POST/POSTED row, the
-// same shape a genuine automated post creates, so the item both stops showing as "available to
-// push" and re-enters reverse sold-detection. On success, updates local state in place (same
-// optimistic-update approach as sync()/updateCount() elsewhere in this file) and re-renders
-// instead of re-fetching the whole item list.
+// Manual "I already posted this myself" action (see showMarkPosted in row() above). Calls the
+// extension worker's markAlreadyPosted passthrough (background.js), which hits the backend's
+// POST /extension/items/:id/mark-posted (extensionController.ts markItemAlreadyPostedManually)
+// -- writes a real MarketplaceListingJob POST/POSTED row, the same shape a genuine automated
+// post creates, so the item both stops showing as "available to push" and re-enters reverse
+// sold-detection. On success, updates local state in place (same optimistic-update approach as
+// sync()/updateCount() elsewhere in this file) and re-renders instead of re-fetching the whole
+// item list. GENERALIZED 2026-08-30 (S-EXT-MARK-POSTED-PARITY): sends the current channel as
+// `platform` (currentChannel()'s raw values -- 'facebook'/'craigslist'/'gumtree_au'/'poshmark'/
+// 'mercari'/'vinted'/'grailed' -- uppercase exactly to VALID_LISTING_PLATFORMS' enum casing, e.g.
+// 'gumtree_au'.toUpperCase() === 'GUMTREE_AU', confirmed against extensionController.ts) instead
+// of always defaulting server-side to FACEBOOK, and sets the matching marketplaceListed<Platform>
+// field via setCurrentListedFlag() instead of always writing marketplaceListedFacebook.
 async function markAlreadyPosted(it, btn) {
   btn.disabled = true;
   btn.textContent = 'Marking…';
-  const r = await send({ type: 'markAlreadyPosted', itemId: it.id });
+  const r = await send({ type: 'markAlreadyPosted', itemId: it.id, platform: currentChannel().toUpperCase() });
   if (!r || !r.ok) {
     btn.disabled = false;
     btn.textContent = 'Already posted?';
@@ -383,7 +416,7 @@ async function markAlreadyPosted(it, btn) {
     setTimeout(() => { if ($('controls') && !$('controls').hidden) $('status').hidden = true; }, 4000);
     return;
   }
-  it.marketplaceListedFacebook = true;
+  setCurrentListedFlag(it);
   selected.delete(it.id);
   render();
 }

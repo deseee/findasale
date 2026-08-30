@@ -1186,7 +1186,7 @@
       };
       const pageResult = wholePageMatch();
       if (pageResult != null) {
-        console.warn('[FAS Mercari] Smart Pricing floor error detected via whole-page text scan (value: $' + pageResult + ').');
+        console.log('[FAS Mercari] Smart Pricing floor error detected via whole-page text scan (value: $' + pageResult + ').');
         return pageResult;
       }
 
@@ -1199,7 +1199,7 @@
           const node = document.getElementById(id);
           const m = node && pattern.exec(node.textContent || '');
           if (m) {
-            console.warn('[FAS Mercari] Smart Pricing floor error detected via aria-describedby (#' + id + ').');
+            console.log('[FAS Mercari] Smart Pricing floor error detected via aria-describedby (#' + id + ').');
             return Number(m[1]);
           }
         }
@@ -1212,7 +1212,7 @@
       for (let i = 0; i < 6 && node; i++) {
         const m = pattern.exec(node.textContent || '');
         if (m) {
-          console.warn('[FAS Mercari] Smart Pricing floor error detected via ancestor walk (level ' + (i + 1) + ' of 6).');
+          console.log('[FAS Mercari] Smart Pricing floor error detected via ancestor walk (level ' + (i + 1) + ' of 6).');
           return Number(m[1]);
         }
         node = node.parentElement;
@@ -1225,12 +1225,12 @@
       if (container) {
         const m = pattern.exec(container.textContent || '');
         if (m) {
-          console.warn('[FAS Mercari] Smart Pricing floor error detected via broad form/section search (aria-describedby and ancestor walk both missed it).');
+          console.log('[FAS Mercari] Smart Pricing floor error detected via broad form/section search (aria-describedby and ancestor walk both missed it).');
           return Number(m[1]);
         }
       }
 
-      console.warn('[FAS Mercari] Smart Pricing floor error detection: no match via whole-page scan, aria-describedby, 6-level ancestor walk, or form/section search -- no error is currently shown for this value.');
+      console.log('[FAS Mercari] Smart Pricing floor error detection: no match via whole-page scan, aria-describedby, 6-level ancestor walk, or form/section search -- no error is currently shown for this value.');
       return null;
     };
     // BUG FIX 2026-08-29 (round 7, S-EXT-MERCARI-FLOOR-TIMING, Patrick-directed root cause):
@@ -1265,7 +1265,7 @@
     if (rejectedAt != null && isFinite(rejectedAt) && floor <= rejectedAt) {
       const retryFloor = Math.round((rejectedAt + 0.01) * 100) / 100;
       if (retryFloor < price) {
-        console.warn('[FAS Mercari] Smart Pricing floor $' + floor.toFixed(2) + ' was rejected by Mercari (needs to be more than $' + rejectedAt + ') -- retrying at $' + retryFloor.toFixed(2) + '.');
+        console.log('[FAS Mercari] Smart Pricing floor $' + floor.toFixed(2) + ' was rejected by Mercari (needs to be more than $' + rejectedAt + ') -- retrying at $' + retryFloor.toFixed(2) + '.');
         el.focus();
         // BUG FIX 2026-08-29 (round 12, S-EXT-MERCARI-REACT-NOOP-WRITE): same forced-transition fix
         // as the initial set above, applied to the retry set -- this retry also risks writing a
@@ -1922,7 +1922,7 @@
     await guardedFill('Condition', conditionLabel, (v) => fillMercariCondition(v));
     if (item.price != null && isFinite(Number(item.price))) {
       const priceVal = Math.max(1, Math.round(Number(item.price)));
-      if (priceVal > 2000) console.warn('[FAS Mercari] Price $' + priceVal + ' exceeds Mercari\'s standard $2,000 cap -- may need an authenticate-eligible designer category. Filling anyway; Mercari\'s own form is the real gate.');
+      if (priceVal > 2000) console.log('[FAS Mercari] Price $' + priceVal + ' exceeds Mercari\'s standard $2,000 cap -- may need an authenticate-eligible designer category. Filling anyway; Mercari\'s own form is the real gate.');
       // Smart Pricing TOGGLE sits next to Price -- deliberately never touched here (stays at
       // Mercari's own default, currently ON, per Patrick's 2026-08-23 decision). The FLOOR PRICE
       // next to it is a separate field and IS filled -- see fillMercariSmartPricingFloor() below.

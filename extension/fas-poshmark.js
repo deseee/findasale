@@ -62,7 +62,7 @@
     // Signal 1: exact-word "sell" as the ENTIRE visible text or aria-label (cheapest, most precise
     // -- matches a bare "Sell" control if Poshmark ever renders one that way).
     const byExactText = candidates.find((el) => norm(el.textContent) === 'sell' || norm(el.getAttribute('aria-label') || '') === 'sell');
-    if (byExactText) { console.warn('[FAS Poshmark] Sell nav control found via Signal 1 (exact text "sell").'); return byExactText; }
+    if (byExactText) { console.log('[FAS Poshmark] Sell nav control found via Signal 1 (exact text "sell").'); return byExactText; }
     // Signal 2: normalized text/aria-label CONTAINS "sell" as a whole word, capped at a short length
     // so this can't accidentally match a paragraph or unrelated block of copy that happens to mention
     // "sell" -- real nav controls are short labels. Patrick's 2026-08-29 live screenshot of the real
@@ -76,12 +76,12 @@
       return (text && text.length <= 40 && wordBoundaryHas(text, 'sell')) ||
         (aria && aria.length <= 40 && wordBoundaryHas(aria, 'sell'));
     });
-    if (byContainsText) { console.warn('[FAS Poshmark] Sell nav control found via Signal 2 (contains "sell", <=40 chars, e.g. "SELL ON POSHMARK").'); return byContainsText; }
+    if (byContainsText) { console.log('[FAS Poshmark] Sell nav control found via Signal 2 (contains "sell", <=40 chars, e.g. "SELL ON POSHMARK").'); return byContainsText; }
     // Signal 3: an anchor whose own href already points at a listing-creation route, regardless of
     // its visible label (Poshmark may render an icon-only "Sell" control on some layouts) -- still a
     // real DOM anchor, not an invented URL.
     const byHrefPattern = candidates.find((el) => el.tagName === 'A' && /\/(create-listing|sell|listing\/create)(\/|$|\?)/i.test(el.getAttribute('href') || ''));
-    if (byHrefPattern) { console.warn('[FAS Poshmark] Sell nav control found via Signal 3 (href matches create-listing/sell route pattern).'); return byHrefPattern; }
+    if (byHrefPattern) { console.log('[FAS Poshmark] Sell nav control found via Signal 3 (href matches create-listing/sell route pattern).'); return byHrefPattern; }
     // Signal 4: broadest, least precise real-DOM signal -- any href, data-testid, data-test, or
     // aria-* attribute value containing "sell" case-insensitively (covers e.g. a
     // data-testid="sell-nav-link" hook, or an href containing "sell" that doesn't match Signal 3's
@@ -92,7 +92,7 @@
       const ariaAttrs = Array.from(el.attributes || []).filter((a) => a.name.indexOf('aria-') === 0).map((a) => a.value).join(' ');
       return /sell/i.test(href) || /sell/i.test(testId) || /sell/i.test(ariaAttrs);
     });
-    if (byLooseAttr) { console.warn('[FAS Poshmark] Sell nav control found via Signal 4 (loose href/data-testid/aria "sell" match).'); return byLooseAttr; }
+    if (byLooseAttr) { console.log('[FAS Poshmark] Sell nav control found via Signal 4 (loose href/data-testid/aria "sell" match).'); return byLooseAttr; }
     console.warn('[FAS Poshmark] All 4 Sell nav-control signals failed to find a match -- falling back to the UNVERIFIED guessed create-listing URL (see navigateToPoshmarkCreateListing).');
     return null;
   }
@@ -1796,10 +1796,10 @@
       if (bounceInFlight && retryState.attempt < POSH_NAV_MAX_RETRIES) {
         const nextAttempt = retryState.attempt + 1;
         const waitMs = POSH_NAV_RETRY_BACKOFF_MS[retryState.attempt] || POSH_NAV_RETRY_BACKOFF_MS[POSH_NAV_RETRY_BACKOFF_MS.length - 1];
-        console.warn('[FAS Poshmark] Bounced off create-listing back to "' + location.pathname + '" -- retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' in ' + (waitMs / 1000) + 's...');
+        console.log('[FAS Poshmark] Bounced off create-listing back to "' + location.pathname + '" -- retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' in ' + (waitMs / 1000) + 's...');
         overlayWarn('Poshmark bounced back to a different page mid-attempt -- retrying (' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ') in ' + (waitMs / 1000) + 's...');
         await sleep(waitMs);
-        console.warn('[FAS Poshmark] Retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' firing now -- navigating back to create-listing.');
+        console.log('[FAS Poshmark] Retry ' + nextAttempt + '/' + POSH_NAV_MAX_RETRIES + ' firing now -- navigating back to create-listing.');
         await navigateToPoshmarkCreateListing(nextAttempt);
         return;
       }
@@ -1856,7 +1856,7 @@
     // organizer instead of silently risking another real duplicate Poshmark listing.
     const publishAttempt = readPoshPublishAttemptState();
     if (publishAttempt && publishAttempt.itemId === queued.item.id && (Date.now() - publishAttempt.ts) < POSH_PUBLISH_ATTEMPT_WINDOW_MS) {
-      console.warn('[FAS Poshmark] This tab already clicked "List this item" for "' + queued.item.title + '" (itemId=' + queued.item.id + ') ' + Math.round((Date.now() - publishAttempt.ts) / 1000) + 's ago -- checking the real outcome before deciding whether to stop or continue.');
+      console.log('[FAS Poshmark] This tab already clicked "List this item" for "' + queued.item.title + '" (itemId=' + queued.item.id + ') ' + Math.round((Date.now() - publishAttempt.ts) / 1000) + 's ago -- checking the real outcome before deciding whether to stop or continue.');
       // BUG FIX 2026-08-29 (S-EXT-POSHMARK-GUARD-VERIFY-AND-ADVANCE, Patrick live report: "poshmark
       // didn't go past the closet again"): the guard above (S-EXT-POSHMARK-DUPLICATE-PUBLISH-CLICK)
       // correctly stopped a real duplicate-listing bug, but its response to detecting a recent
@@ -1890,7 +1890,7 @@
         // index (safe even if background.js's reliability net already advanced it independently --
         // see advancePoshmarkQueue's own compare-and-swap), then continue the run forward instead of
         // stalling on manual review.
-        console.warn('[FAS Poshmark] Sell form did not reappear within 5s after reload -- treating the earlier "List this item" click as a successful publish and continuing the queue.');
+        console.log('[FAS Poshmark] Sell form did not reappear within 5s after reload -- treating the earlier "List this item" click as a successful publish and continuing the queue.');
         clearPoshPublishAttemptState();
         clearPoshNavRetryState();
         try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}

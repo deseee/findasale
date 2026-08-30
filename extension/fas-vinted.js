@@ -27,6 +27,16 @@
  * Every field mapping is commented "UNVERIFIED -- confirm against live DOM".
  */
 (function () {
+  // DIAGNOSTIC (2026-08-30 round 8, Patrick-directed -- "nothing in console" after landing on the
+  // member-profile page following the round-4/5 continue-prompt fix). Unconditional, always fires
+  // regardless of any later logic or gate -- the previous continue-prompt code had ZERO console
+  // output anywhere in its own path (only DOM changes via overlay()), so "nothing in console" was
+  // never actually proof the script didn't run; it just meant nothing was ever wired to say so.
+  // This settles that ambiguity for the next test: if this line is missing from console on that
+  // page, the content script itself never re-injected there (points to an SPA-style client-side
+  // transition, not a real page load, since content_scripts only inject at document_idle on an
+  // actual navigation) -- a different problem than anything inside this file's own logic.
+  console.log('[FAS Vinted] content script loaded on ' + location.pathname + location.search);
   const LISTING_URL_HINT = 'https://www.vinted.com/items/new'; // UNVERIFIED -- best-effort guess, not live-confirmed
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -723,7 +733,31 @@
   // value) and clicking anything here would only risk stacking a second color alongside Vinted's own
   // pick. Simply opens, reads whether a "--selected" swatch is already present (same class check
   // pickFromPanel's dedupe logic uses), leaves it untouched, and closes.
-  async function acceptSuggestedColor(labelText) {
+  // BUG FIX 2026-08-30 (round 9, Patrick live-reported: item's Colors panel had no Vinted
+  // "Suggested" group at all this time, left completely blank). Live-confirmed via DB query this was
+  // NOT a selector bug -- item.color was genuinely NULL in FindA.Sale's own database for this item
+  // (never AI-tagged/organizer-set), and Vinted's own photo-AI simply didn't produce a suggestion
+  // this time either (confirmed live: zero "Suggested" label anywhere in the panel DOM). But the
+  // organizer's own item DESCRIPTION explicitly said "black rubber jacket" -- real signal FindA.Sale
+  // already has, just not in the structured color field. Full color vocabulary read directly off
+  // Vinted's real swatch grid this session (Black/Gray/White/Cream/Beige/Apricot/Orange/Coral/Red/
+  // Burgundy/Pink/Rose/Purple/Lilac/Light blue/Blue/Navy/Turquoise/Mint/Green/Dark green/Khaki/Brown/
+  // Mustard/Yellow/Silver/Gold/Multi/Clear) -- 29 real color words, live-confirmed exact labels, not
+  // guessed. Longer/more-specific phrases are checked before their shorter substrings so "dark green"
+  // wins over "green" and "light blue" wins over "blue".
+  const VINTED_COLOR_WORDS = ['dark green', 'light blue', 'black', 'gray', 'grey', 'white', 'cream', 'beige', 'apricot', 'orange', 'coral', 'red', 'burgundy', 'pink', 'rose', 'purple', 'lilac', 'blue', 'navy', 'turquoise', 'mint', 'green', 'khaki', 'brown', 'mustard', 'yellow', 'silver', 'gold', 'multi', 'clear'];
+  function inferVintedColorFromText(text) {
+    const t = norm(text);
+    for (const w of VINTED_COLOR_WORDS) {
+      if (new RegExp('\\b' + w.replace(/ /g, '\\s+') + '\\b').test(t)) return w === 'grey' ? 'gray' : w;
+    }
+    return null;
+  }
+  function findVintedColorSwatchByText(panel, colorWord) {
+    return Array.from(panel.querySelectorAll('[role="checkbox"]')).find((c) => norm(c.textContent) === norm(colorWord)) || null;
+  }
+
+  async function acceptSuggestedColor(labelText, inferFromText) {
     const opener = openerByLabel(labelText) || document.getElementById('color');
     if (!opener) return false;
     let panel = null;
@@ -797,7 +831,20 @@
       // after Category, well before this check, specifically to give Vinted real wall-clock time to
       // produce a suggestion. If this still logs consistently after that reorder, the remaining gap is
       // more analysis time needed (or this item's photos genuinely have no confident AI suggestion).
-      console.warn('[FAS Vinted] Color has no value on this item and Vinted did not offer a Suggested swatch either -- left for the organizer to set.');
+      // BUG FIX (round 9): before giving up, try inferring a color from the item's own title/
+      // description text (see VINTED_COLOR_WORDS comment above) -- a real, organizer-authored signal,
+      // not a guess invented by this code. Clearly logged as inferred-from-text, distinct from an
+      // actual Vinted AI suggestion, so it's easy to spot and double-check.
+      const inferredWord = inferFromText ? inferVintedColorFromText(inferFromText) : null;
+      const inferredSwatch = inferredWord ? findVintedColorSwatchByText(panel, inferredWord) : null;
+      if (inferredSwatch) {
+        inferredSwatch.click();
+        await sleep(250);
+        hasSuggested = true;
+        console.log('[FAS Vinted] Color has no value on this item and Vinted offered no Suggested swatch -- inferred "' + inferredWord + '" from the item\'s own title/description text and selected it. Please verify.');
+      } else {
+        console.warn('[FAS Vinted] Color has no value on this item, Vinted did not offer a Suggested swatch, and no known color word was found in the title/description either -- left for the organizer to set.');
+      }
     }
     await closePanel('color');
     return hasSuggested;
@@ -1277,10 +1324,10 @@
     // in case some other Vinted dialog variant doesn't use this convention.
     const testIdBtn = dialogEl.querySelector('[data-testid="close-button"], [data-testid*="close" i]');
     if (testIdBtn) {
-      console.warn('[FAS Vinted] Package size: found dialog close button via data-testid (testid="' + (testIdBtn.getAttribute('data-testid') || '') + '", tag=' + testIdBtn.tagName + ') -- using this as the close control.');
+      console.log('[FAS Vinted] Package size: found dialog close button via data-testid (testid="' + (testIdBtn.getAttribute('data-testid') || '') + '", tag=' + testIdBtn.tagName + ') -- using this as the close control.');
       return testIdBtn;
     }
-    console.warn('[FAS Vinted] Package size: no data-testid close button found inside the dialog -- falling back to aria-label/title/text search.');
+    console.log('[FAS Vinted] Package size: no data-testid close button found inside the dialog -- falling back to aria-label/title/text search.');
     const candidates = Array.from(dialogEl.querySelectorAll('button, [role="button"], a'));
     for (const el of candidates) {
       const aria = (el.getAttribute('aria-label') || el.getAttribute('title') || '');
@@ -1319,7 +1366,7 @@
       console.warn('[FAS Vinted] Package size: "sizing and compensation details" link/control NOT found on this page -- cannot read real weight limits from a details panel this way.');
       return null;
     }
-    console.warn('[FAS Vinted] Package size: found a "sizing and compensation details" control (tag=' + opener.tagName + ', text="' + norm(opener.textContent).slice(0, 60) + '") -- attempting to open it.');
+    console.log('[FAS Vinted] Package size: found a "sizing and compensation details" control (tag=' + opener.tagName + ', text="' + norm(opener.textContent).slice(0, 60) + '") -- attempting to open it.');
     const beforeLen = bodyText().length;
     try { opener.click(); } catch (e) { console.warn('[FAS Vinted] Package size: clicking the sizing-details control threw:', e && e.message); return null; }
     await sleep(400);
@@ -1329,7 +1376,7 @@
       const afterLen = bodyText().length;
       if (afterLen > beforeLen + 20) text = bodyText();
     }
-    console.warn('[FAS Vinted] Package size: sizing-details ' + (dialog ? 'opened as a distinct dialog/panel element' : 'did not open as a distinct dialog element (used whole-page text growth instead)') + ' -- captured ' + (text ? text.length : 0) + ' chars to search for weight numbers.');
+    console.log('[FAS Vinted] Package size: sizing-details ' + (dialog ? 'opened as a distinct dialog/panel element' : 'did not open as a distinct dialog element (used whole-page text growth instead)') + ' -- captured ' + (text ? text.length : 0) + ' chars to search for weight numbers.');
 
     // Close it -- MUST be genuinely closed (verified, not assumed) before this function returns,
     // since fillPackageSize() clicks a size card right after this and a real modal left open blocks
@@ -1344,11 +1391,11 @@
     if (dialog && stillOpen()) {
       const closeBtn = findDialogCloseButton(dialog);
       if (closeBtn) {
-        console.warn('[FAS Vinted] Package size: sizing-details dialog open -- clicking its own close control (tag=' + closeBtn.tagName + ', aria-label="' + (closeBtn.getAttribute('aria-label') || '') + '", text="' + norm(closeBtn.textContent).slice(0, 20) + '").');
+        console.log('[FAS Vinted] Package size: sizing-details dialog open -- clicking its own close control (tag=' + closeBtn.tagName + ', aria-label="' + (closeBtn.getAttribute('aria-label') || '') + '", text="' + norm(closeBtn.textContent).slice(0, 20) + '").');
         try { closeBtn.click(); } catch (e) { console.warn('[FAS Vinted] Package size: clicking the dialog close control threw:', e && e.message); }
         await sleep(250);
       } else {
-        console.warn('[FAS Vinted] Package size: sizing-details dialog open -- no explicit close button found inside it, trying Escape next.');
+        console.log('[FAS Vinted] Package size: sizing-details dialog open -- no explicit close button found inside it, trying Escape next.');
       }
     }
     if (stillOpen()) {
@@ -1356,12 +1403,20 @@
       await sleep(250);
     }
     if (stillOpen()) {
-      console.warn('[FAS Vinted] Package size: sizing-details dialog STILL open after Escape -- trying a real outside click on the page body.');
+      console.log('[FAS Vinted] Package size: sizing-details dialog STILL open after Escape -- trying a real outside click on the page body.');
       realOutsideClick(document.body);
       await sleep(250);
     }
     const finalOpen = stillOpen();
-    console.warn('[FAS Vinted] Package size: sizing-details dialog close result -- ' + (finalOpen ? 'STILL OPEN after all close attempts (close button / Escape / outside click) -- it may be blocking Save draft/Upload underneath it, please close it manually before publishing' : 'confirmed closed') + (dialog ? '' : ' [no distinct dialog element was ever identified -- verified via page-text-length heuristic only, not a DOM/visibility check]') + '.');
+    // BUG FIX 2026-08-30 (round 11, Patrick-directed -- "if people see them they might think it's
+    // broken when it's not"): this whole Package Size block used console.warn for every step,
+    // including ones that succeeded normally -- every yellow warning triangle looked identical
+    // whether something actually needed attention or the step just... worked. Split by real
+    // outcome: a successful close is console.log (informational only); an ACTUAL stuck dialog
+    // (still open after every close attempt, genuinely blocking Save draft/Upload) stays
+    // console.warn, since that one really does need a look.
+    const closeMsg = '[FAS Vinted] Package size: sizing-details dialog close result -- ' + (finalOpen ? 'STILL OPEN after all close attempts (close button / Escape / outside click) -- it may be blocking Save draft/Upload underneath it, please close it manually before publishing' : 'confirmed closed') + (dialog ? '' : ' [no distinct dialog element was ever identified -- verified via page-text-length heuristic only, not a DOM/visibility check]') + '.';
+    if (finalOpen) console.warn(closeMsg); else console.log(closeMsg);
     return text || null;
   }
   // Scoped, per-label search within a blob of captured details text -- avoids matching a DIFFERENT
@@ -1401,7 +1456,11 @@
       if (itemKg <= UNVERIFIED_FALLBACK_LIMITS_KG[label]) {
         const card = clickableOptionByExactText(label);
         if (card) {
-          console.warn('[FAS Vinted] Package size: using an UNVERIFIED hardcoded fallback weight table (Small<=5kg / Medium<=10kg / Large<=20kg -- NOT live-confirmed against Vinted\'s real package-size step) because neither the card text nor the sizing-details panel exposed a usable number for this item\'s weight (' + itemKg.toFixed(2) + 'kg). Verify these thresholds against the real Vinted page and correct this table once confirmed.');
+          // BUG FIX 2026-08-30 (round 11, Patrick-directed): this is a normal, working fallback --
+          // it correctly picks a package size every time it runs, it just can't confirm Vinted's
+          // exact real thresholds. Downgraded from warn to log and reworded calmer (no "please
+          // verify" urgency) since nothing here is actually broken.
+          console.log('[FAS Vinted] Package size: no real weight-limit text was found on the page for this item (' + itemKg.toFixed(2) + 'kg) -- used a built-in size table instead (Small up to 5kg / Medium up to 10kg / Large up to 20kg) and picked "' + label + '".');
           return { card, label, limitKg: UNVERIFIED_FALLBACK_LIMITS_KG[label], itemKg, source: 'unverified-hardcoded-fallback' };
         }
       }
@@ -1640,9 +1699,9 @@
     // above -- see that comment for the full explanation.
     if (item.color === undefined || item.color === null || item.color === '') {
       try {
-        const acceptedSuggestion = await acceptSuggestedColor('Color');
+        const acceptedSuggestion = await acceptSuggestedColor('Color', (item.title || '') + ' ' + (item.description || ''));
         warnings.push(acceptedSuggestion
-          ? 'Color was not set on this item -- accepted Vinted\'s own suggested color, please verify it\'s correct.'
+          ? 'Color was not set on this item -- accepted Vinted\'s own suggested color (or inferred one from the title/description if Vinted had no suggestion), please verify it\'s correct.'
           : 'Color has no value set on this item -- please set it manually before publishing.');
       } catch (e) {
         console.warn('[FAS Vinted] Color fallback threw an error, skipped:', e && e.message);
@@ -1668,6 +1727,23 @@
     }
     const packageSizeOk = await fillPackageSize(item);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
+    // BUG FIX 2026-08-30 (round 10, Patrick live-reported "price input didn't take this time" +
+    // live-confirmed on his actual open tab): the field's real value was correct ($10.00) and had
+    // already been cleanly set earlier in this function via fillVintedPrice's clear+retype fix, but
+    // the stale "must be greater than or equal to 1.0" banner was back by the time the review
+    // overlay showed. Live-tested directly on Patrick's page: fillPackageSize's own sizing-details
+    // dialog open/close (the only interactive step that runs AFTER Price in this function) is a
+    // plausible trigger for Vinted re-running its own validation and resurfacing this same stale
+    // banner -- and re-running the exact same clear+retype sequence fillVintedPrice already uses,
+    // AFTER package size, instantly cleared it again on the real page. Final guard: re-check right
+    // before finishing and re-apply the fix once more if anything after Price knocked it back into
+    // this state, whatever the exact trigger turns out to be.
+    if (item.price != null && isFinite(Number(item.price)) && vintedErrorStillShown()) {
+      console.warn('[FAS Vinted] Price -- stale validation error reappeared after a later field (likely Package Size) touched the page -- re-clearing.');
+      const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.min(VINTED_MAX_PRICE, Math.round(Number(item.price))));
+      await fillVintedPrice(String(rePriceVal));
+      if (vintedErrorStillShown()) warnings.push('Price shows a validation error that would not clear -- please check it manually before publishing.');
+    }
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): photosOk/injectPhotos() moved up to
     // right after Category (see comment there) -- no longer computed here.
     return { photosOk, warnings };
@@ -1856,20 +1932,37 @@
   // navigation actually lands him. Keyed by item id in sessionStorage so it shows once per pending
   // item, not on every re-render of the same page.
   async function maybeShowVintedContinuePrompt() {
+    // DIAGNOSTIC (round 8): every branch below now logs why it did or didn't show the prompt --
+    // "nothing in console" last round could mean either "this function never ran" (a real gap) or
+    // "it ran and quietly no-opped" (this function had zero console output either way before this
+    // round, so those two cases were indistinguishable from Patrick's report alone).
     let queued;
-    try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
-    if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) {
+      console.warn('[FAS Vinted] continue-prompt: getVintedQueueItem message failed:', e && e.message);
+      return;
+    }
+    if (!queued || !queued.ok || !queued.item) {
+      console.log('[FAS Vinted] continue-prompt: no queue item pending -- nothing to show.');
+      return;
+    }
     const seenKey = 'fasVintedContinuePromptShown_' + queued.item.id;
-    if (sessionStorage.getItem(seenKey)) return;
-    sessionStorage.setItem(seenKey, '1');
+    let alreadyShown = false;
+    try { alreadyShown = !!sessionStorage.getItem(seenKey); } catch (e) { console.warn('[FAS Vinted] continue-prompt: sessionStorage read failed:', e && e.message); }
+    if (alreadyShown) {
+      console.log('[FAS Vinted] continue-prompt: already shown this tab session for item ' + queued.item.id + ' -- not re-showing.');
+      return;
+    }
+    console.log('[FAS Vinted] continue-prompt: showing for item ' + queued.item.id + ' ("' + queued.item.title + '") on ' + location.pathname);
+    try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* non-fatal -- worst case it re-shows once more */ }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Finished with <b>' + escapeHtml(queued.item.title) + '</b>?</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Vinted took you away from the review screen before you could confirm. If you already clicked Vinted\'s own Upload for this item, continue to the next one below -- if not, just close this.</div>' +
       button('fas-vin-continue', 'Continue to next item &#9654;', true) +
       button('fas-vin-close', 'Not yet', false));
     const cont = document.getElementById('fas-vin-continue');
     if (cont) cont.onclick = async () => {
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) {}
-      try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
+      console.log('[FAS Vinted] continue-prompt: Continue clicked for item ' + queued.item.id);
+      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
+      try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: advanceVintedQueue failed:', e && e.message); }
       location.href = LISTING_URL_HINT;
     };
     closeBtnHandler();
@@ -1905,8 +1998,13 @@
   // was in fact the real gap, this covers it too -- redundant but harmless, never fires twice for
   // the same item.
   function watchForVintedNavigationAway() {
+    console.log('[FAS Vinted] navigation watcher started on ' + location.pathname);
     setInterval(() => {
-      if (!looksLikeVintedListingPage()) maybeShowVintedContinuePrompt();
+      try {
+        if (!looksLikeVintedListingPage()) maybeShowVintedContinuePrompt();
+      } catch (e) {
+        console.warn('[FAS Vinted] navigation watcher tick threw:', e && e.message);
+      }
     }, 1500);
   }
 

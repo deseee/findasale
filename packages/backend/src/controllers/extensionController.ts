@@ -1100,25 +1100,44 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
 //
 // Idempotent: mirrors the "most-recent-row-per-item+platform wins" idiom used by
 // getExtensionItems' latestByItemPlatform / getPendingRenewals' renewalInfoByItem (first-seen
-// under `orderBy: { createdAt: 'desc' }`) -- if the latest FACEBOOK job for this item is
+// under `orderBy: { createdAt: 'desc' }`) -- if the latest job for this item+platform is
 // already POST/POSTED, this is a no-op success rather than inserting a duplicate row.
+//
+// GENERALIZED 2026-08-30 (S-EXT-MARK-POSTED-PARITY, Patrick-directed -- "make it so the others
+// are similar to facebook with the already posted buttons"): this used to be hardcoded to
+// platform: 'FACEBOOK' throughout, exactly mirroring markItemListed's pre-2026-08-19 bug (see
+// MarketplaceListingPlatform's comment above) -- a Poshmark/Mercari/Vinted/etc. "Already
+// posted?" click would have written a FACEBOOK row instead of that platform's own row, leaving
+// marketplaceListedPoshmark (etc.) stuck false forever. Now follows markItemListed's exact
+// established pattern: platform from req.body, validated against VALID_LISTING_PLATFORMS,
+// Facebook Commerce Policy gate scoped to platform === 'FACEBOOK' only (see markItemListed's own
+// comment for why this is deliberately NOT extended to the other 4 platforms), and renewDueAt
+// gated by isRenewalEligiblePlatform instead of unconditionally reading
+// RENEWAL_LAPSE_WINDOW_DAYS.FACEBOOK (which has no entry for Grailed/Poshmark/Mercari/Vinted).
 export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const itemId = req.params.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
-  const fbItem = await prisma.item.findUnique({
-    where: { id: itemId },
-    select: { category: true, ebayCategoryId: true },
-  });
-  if (fbItem && isFacebookRestrictedCoinOrCurrencyItem(fbItem.category, fbItem.ebayCategoryId)) {
-    res.status(400).json({ message: 'Coins and currency items cannot be listed on Facebook Marketplace (Facebook Commerce Policy).' });
-    return;
+  const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : 'FACEBOOK';
+  const platform: MarketplaceListingPlatform = (VALID_LISTING_PLATFORMS as string[]).includes(platformRaw)
+    ? (platformRaw as MarketplaceListingPlatform)
+    : 'FACEBOOK';
+
+  if (platform === 'FACEBOOK') {
+    const fbItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { category: true, ebayCategoryId: true },
+    });
+    if (fbItem && isFacebookRestrictedCoinOrCurrencyItem(fbItem.category, fbItem.ebayCategoryId)) {
+      res.status(400).json({ message: 'Coins and currency items cannot be listed on Facebook Marketplace (Facebook Commerce Policy).' });
+      return;
+    }
   }
 
   const latestJob = await prisma.marketplaceListingJob.findFirst({
-    where: { itemId, platform: 'FACEBOOK' },
+    where: { itemId, platform },
     orderBy: { createdAt: 'desc' },
     select: { action: true, status: true },
   });
@@ -1129,9 +1148,11 @@ export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Respo
     return;
   }
 
-  const renewDueAt = new Date(Date.now() + RENEWAL_LAPSE_WINDOW_DAYS.FACEBOOK * 24 * 60 * 60 * 1000);
+  const renewDueAt = isRenewalEligiblePlatform(platform)
+    ? new Date(Date.now() + RENEWAL_LAPSE_WINDOW_DAYS[platform] * 24 * 60 * 60 * 1000)
+    : null;
   await prisma.marketplaceListingJob.create({
-    data: { itemId, action: 'POST', status: 'POSTED', platform: 'FACEBOOK', renewDueAt },
+    data: { itemId, action: 'POST', status: 'POSTED', platform, renewDueAt },
   });
   res.json({ ok: true, status: 'POSTED' });
 };

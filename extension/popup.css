@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-body { width: 380px; max-height: 560px; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; }
+body { width: 380px; max-height: 560px; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; overflow-y: auto; }
 header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; align-items: baseline; gap: 8px; }
 .brand { font-weight: 800; font-size: 16px; } .brand b { color: #4caf6d; }
 .sub { font-size: 11px; color: #9fb6a8; }
@@ -38,7 +38,21 @@ button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; 
    paragraphs don't inflate the popup's total height by default -- Patrick reported the "Post
    to" section becoming unreachable when banners pushed content past the popup's rendering
    bounds; collapsing these (still one click away) is a safe, direct reduction of that height
-   without touching popup sizing/overflow mechanics at all. */
+   without touching popup sizing/overflow mechanics at all.
+   FOLLOW-UP 2026-08-30 (S-EXT-MARK-POSTED-PARITY): that collapse alone wasn't the real fix --
+   `body` had `max-height: 560px` but no `overflow-y` at all, so once combined content (header +
+   optional guildBar + status/controls + notes/banners + #list's own up-to-380px) exceeded 560px,
+   everything past that point -- footer's "Post to" dropdown, "Publish automatically" checkbox,
+   and List button -- was clipped with nothing to scroll it into view (Patrick: "the sizing of
+   the extension makes it hard to see anything below the items"). Added `overflow-y: auto` to
+   `body` above so the WHOLE popup scrolls once its content exceeds max-height, same as #list
+   already does for its own item rows -- footer is now always reachable by scrolling, regardless
+   of how tall any given channel's notes/settings blocks happen to be. Deliberately did not also
+   restructure into a flex layout with a hard-pinned footer: footer's real height varies a lot per
+   channel (Craigslist's short note vs. the combined removeSetting+renewSetting blocks), and a
+   flex-shrink:0 footer would still get clipped by Chrome's own popup height ceiling on a tall
+   channel -- a single scrollable body guarantees reachability in every case instead of depending
+   on a footer-height guess. */
 .note summary { cursor: pointer; color: #6fd08c; }
 .note[open] summary { margin-bottom: 4px; }
 .removeSetting { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26362d; }

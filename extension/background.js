@@ -1589,14 +1589,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           { method: 'POST', body: {} }));
       } else if (msg.type === 'markAlreadyPosted') {
         // Manual counterpart to markListed above -- the organizer is telling us they already
-        // posted this item to Facebook themselves (outside this extension's automated flow),
-        // so there is no MarketplaceListingJob row for it yet. Straight passthrough to the
-        // backend's authoritative endpoint (extensionController.ts
-        // markItemAlreadyPostedManually), same shape as markItemSoldFromFacebook above --
-        // ownership + Facebook Commerce Policy (coins/currency) gating both live server-side,
-        // this worker never re-derives either check.
+        // posted this item themselves (outside this extension's automated flow), so there is no
+        // MarketplaceListingJob row for it yet. Straight passthrough to the backend's
+        // authoritative endpoint (extensionController.ts markItemAlreadyPostedManually), same
+        // shape as markItemSoldFromFacebook above -- ownership + Facebook Commerce Policy
+        // (coins/currency) gating both live server-side, this worker never re-derives either
+        // check. GENERALIZED 2026-08-30 (S-EXT-MARK-POSTED-PARITY): now passes msg.platform
+        // through (popup.js sends the current channel, e.g. 'FACEBOOK'/'CRAIGSLIST'/'VINTED')
+        // instead of always leaving it unset, which the backend used to default -- and used to
+        // hardcode regardless -- to FACEBOOK.
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/mark-posted',
-          { method: 'POST', body: {} }));
+          { method: 'POST', body: { platform: msg.platform } }));
       } else if (msg.type === 'removalQueueDone') {
         // fas-remove.js finished the queue -- restore the organizer's tab + close the auto-opened
         // silent-mode removal tab. No-op in notify mode (no fasRemovalTabId tracked there).
