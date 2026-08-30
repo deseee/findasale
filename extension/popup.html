@@ -45,20 +45,23 @@
     <details class="note" id="vintedPostNote" hidden><summary>What does this do?</summary>Fills one new Vinted listing at a time &mdash; category, brand, material, and package size are best-effort guesses (CODE-ONLY, not yet verified). Click Vinted&rsquo;s own <b>Upload</b> button yourself &mdash; this channel never publishes automatically, and never reposts a listing on its own.</details>
     <details class="note" id="grailedPostNote" hidden><summary>What does this do?</summary>Fills the Grailed listing form as best it can, but leaves measurements blank for you to add (Grailed listings perform better with them) and skips an item entirely if its brand isn&rsquo;t a match on Grailed&rsquo;s designer list (CODE-ONLY, not yet verified). With <b>Publish automatically</b> checked, it clicks Grailed&rsquo;s own <b>List item</b> button for you &mdash; unless the Designer field couldn&rsquo;t be confirmed, which always stops for your review first. Uncheck to review and publish every item yourself.</details>
     <details class="note" id="fbPublishNote"><summary>What does this do?</summary>Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></details>
-    <div class="removeSetting">
-      <label class="chk" for="autoRemoveMode">Keep Facebook listings in sync</label>
-      <select id="autoRemoveMode" class="select">
-        <option value="notify">Notify me</option>
-        <option value="silent">Remove automatically</option>
-        <option value="off">Off</option>
-      </select>
-      <details class="note"><summary>What does this do?</summary>Checked every ~20 min. When an item sells elsewhere, the extension removes its Facebook listing &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. The same check also looks the other way: if an item sells right there on Facebook, it's marked sold on FindA.Sale automatically (and its eBay listing withdrawn) &mdash; no extra setup, it uses this same setting. When you change an item's price on FindA.Sale, you'll also get a notification to update it on Facebook yourself &mdash; automatic price updates aren't built yet, so this always just notifies for now, even in &ldquo;Remove automatically&rdquo; mode. &ldquo;Off&rdquo; turns off all of the above.</details>
-      <p class="note dim" id="removalDiag">Automatic check status loading&hellip;</p>
-    </div>
-    <div class="renewSetting">
-      <label class="chk"><input type="checkbox" id="autoRenew"> Automatically renew expiring listings</label>
-      <details class="note"><summary>What does this do?</summary>Checked about once a day. When a listing you posted through the extension is close to expiring on Facebook, Craigslist, or Gumtree Australia, FindA.Sale can re-post it for you automatically &mdash; off by default. If Craigslist or Gumtree Australia asks for phone/email verification during a renewal, or if you're not signed into Gumtree Australia, it stops and sends a notification instead of guessing. Leave unchecked to just get a reminder notification when it's time to renew yourself.</details>
-    </div>
+    <details class="note footerSettings">
+      <summary>&#9881; More settings</summary>
+      <div class="removeSetting">
+        <label class="chk" for="autoRemoveMode">Keep Facebook listings in sync</label>
+        <select id="autoRemoveMode" class="select">
+          <option value="notify">Notify me</option>
+          <option value="silent">Remove automatically</option>
+          <option value="off">Off</option>
+        </select>
+        <details class="note"><summary>What does this do?</summary>Checked every ~20 min. When an item sells elsewhere, the extension removes its Facebook listing &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. The same check also looks the other way: if an item sells right there on Facebook, it's marked sold on FindA.Sale automatically (and its eBay listing withdrawn) &mdash; no extra setup, it uses this same setting. When you change an item's price on FindA.Sale, you'll also get a notification to update it on Facebook yourself &mdash; automatic price updates aren't built yet, so this always just notifies for now, even in &ldquo;Remove automatically&rdquo; mode. &ldquo;Off&rdquo; turns off all of the above.</details>
+        <p class="note dim" id="removalDiag">Automatic check status loading&hellip;</p>
+      </div>
+      <div class="renewSetting">
+        <label class="chk"><input type="checkbox" id="autoRenew"> Automatically renew expiring listings</label>
+        <details class="note"><summary>What does this do?</summary>Checked about once a day. When a listing you posted through the extension is close to expiring on Facebook, Craigslist, or Gumtree Australia, FindA.Sale can re-post it for you automatically &mdash; off by default. If Craigslist or Gumtree Australia asks for phone/email verification during a renewal, or if you're not signed into Gumtree Australia, it stops and sends a notification instead of guessing. Leave unchecked to just get a reminder notification when it's time to renew yourself.</details>
+      </div>
+    </details>
   </footer>
   <script src="config.js"></script>
   <script src="popup.js"></script>
