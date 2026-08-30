@@ -514,8 +514,7 @@ const RENEWAL_LAPSE_WINDOW_DAYS: Record<MarketplaceRenewalPlatform, number> = {
   // do not treat this number as researched.
   GUMTREE_AU: 14,
 };
-// TODO Patrick: confirm notify-lead-time per ADR-100 §7 Q2 -- how many days before renewDueAt
-// the nudge/auto-renewal should fire. Placeholder: same-day (0) until Patrick decides.
+// ADR-100 §7 Q2 CONFIRMED 2026-08-30 (Patrick): same-day (0) is correct.
 const RENEWAL_NOTIFY_LEAD_TIME_DAYS = 0;
 
 // Listing platforms accepted by markItemListed below -- a SUPERSET of the 3 renewal-eligible
