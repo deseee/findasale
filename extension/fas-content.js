@@ -337,6 +337,44 @@
       'font-weight:600;font-size:13px;background:' + (primary ? '#3c8c5a' : '#3a4842') + ';color:#fff">' + label + '</button>';
   }
 
+  // ---- queue-advance countdown (2026-08-30) ----
+  // Purely cosmetic -- background.js already runs a 10-25s pacing pause between items
+  // (S-EXT-QUEUE-PACING, deliberately tuned to avoid a machine-gun posting pattern) and its own
+  // comment already flagged the gap this closes: "no on-page waiting indicator yet ... would
+  // read as broken to a non-technical organizer watching the tab" (Patrick confirmed live --
+  // couldn't tell if a run had stalled or was just in this pause). This does NOT control or
+  // change the pacing timing in any way -- it only reflects the same countdown background.js is
+  // already running, via a one-way notification (see humanQueueDelay() in background.js). Stops
+  // itself the moment it reaches zero; any other overlay() call after that simply shows normally.
+  let queueDelayInterval = null;
+  function clearQueueDelayCountdown() {
+    if (queueDelayInterval) { clearInterval(queueDelayInterval); queueDelayInterval = null; }
+  }
+  function startQueueDelayCountdown(totalMs) {
+    clearQueueDelayCountdown();
+    const deadline = Date.now() + Math.max(0, Number(totalMs) || 0);
+    const renderTick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'fas-bar';
+        bar.style.cssText = 'position:fixed;z-index:2147483647;right:16px;bottom:16px;max-width:340px;' +
+          'background:#1f2a24;color:#f3f5f2;border:1px solid #3c8c5a;border-radius:12px;padding:14px 16px;' +
+          'font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.4)';
+        document.documentElement.appendChild(bar);
+      }
+      bar.innerHTML = '<b>FindA.Sale</b> — pacing pause before the next item: ' + remaining + 's (this is normal, not a stall)…';
+      if (remaining <= 0) clearQueueDelayCountdown();
+    };
+    renderTick();
+    queueDelayInterval = setInterval(renderTick, 1000);
+  }
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === 'fasQueueDelayStarted' && typeof msg.ms === 'number') {
+      startQueueDelayCountdown(msg.ms);
+    }
+  });
+
   async function humanPause(minMs, maxMs) {
     await sleep(minMs + Math.random() * (maxMs - minMs));
   }

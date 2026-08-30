@@ -1165,8 +1165,20 @@ chrome.notifications.onClicked.addListener((notifId) => {
 // this one constant; nothing else needs to change.
 const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
-async function humanQueueDelay() {
+// 2026-08-30 addition (Patrick live report -- watching a real run, couldn't tell if it had
+// stalled or was just in this pause): the comment above ("no on-page waiting indicator yet")
+// flagged this exact gap when the delay itself was first added. Fixes it WITHOUT touching the
+// timing/pacing logic at all (ms/MIN/MAX all unchanged) -- purely adds an optional one-way
+// notification to the tab that originated the request, so its content script can render its own
+// live countdown. Fire-and-forget: `tabId` may legitimately be undefined (message came from a
+// non-tab context) and the receiving tab may have no listener yet (fresh page load) or may have
+// navigated away already -- both are harmless, non-fatal, and must never block or delay the real
+// sleep, so the sendMessage call is wrapped and its rejection is swallowed.
+async function humanQueueDelay(tabId) {
   const ms = QUEUE_ADVANCE_DELAY_MS.MIN + Math.random() * (QUEUE_ADVANCE_DELAY_MS.MAX - QUEUE_ADVANCE_DELAY_MS.MIN);
+  if (tabId) {
+    try { chrome.tabs.sendMessage(tabId, { type: 'fasQueueDelayStarted', ms: ms }).catch(() => {}); } catch (e) {}
+  }
   await sleep(ms);
 }
 
@@ -1274,7 +1286,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // never gets treated as abandoned mid-way through.
         await chrome.storage.local.set({ fasIndex: next, fasQueueSetAt: Date.now() });
         const item = (st.fasQueue || [])[next] || null;
-        await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        // 2026-08-30: pass the originating tab id so humanQueueDelay can show a live countdown --
+        // see that function's own comment. sender.tab is present here because 'advanceQueue' is
+        // always sent from the FB content script's own tab context, never the popup.
+        await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
       } else if (msg.type === 'setCraigslistQueue') {
         // Craigslist channel (ADR-084 extension): store the queue and OPEN the posting tab here in
