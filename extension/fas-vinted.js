@@ -569,7 +569,17 @@
         })
       : null;
     console.log('[FAS Vinted DIAG] ' + fieldId + ': searchInput found=' + !!searchInput + (searchInput ? (' testid=' + searchInput.getAttribute('data-testid')) : ''));
-    if (searchInput) {
+    // BUG FIX 2026-08-30 round 3 (S-EXT-VINTED-SUGGESTED-BRAND-MISSING, real root cause, live-traced):
+    // this used to type/dispatch an EMPTY string into the search box whenever `value` was '' (exactly
+    // what fillBrand('Brand', '') passes when item.brand is null) -- focusing the input and firing
+    // input/change events on it, even with nothing typed, is enough to flip Vinted's own panel out of
+    // its default "Suggested / Popular brands" browse view into a "search results" view, which is why
+    // the suggested-brand check added right after this function returns kept finding nothing: the
+    // empty search had already wiped the Suggested group out of the DOM before that check ever ran.
+    // There is nothing meaningful to search for with an empty value anyway (every caller that reaches
+    // here with real data has a real string), so skip the search step entirely and leave the panel in
+    // its natural default state for the caller.
+    if (searchInput && value) {
       searchInput.focus();
       setNativeValue(searchInput, String(value));
       // BUG FIX 2026-08-19 (S-EXT-BATCH-7, P1, live-Chrome-confirmed): a fixed 600ms sleep here was
@@ -963,10 +973,20 @@
     // the field shows the picked value) -- checked BEFORE the "No brand" search below so a real
     // suggestion always wins over the deliberately-unbranded fallback.
     if (panel) {
-      const suggestedLabel = qa('div,span,p,label').find((e) => e.children.length === 0 && e.textContent.trim() === 'Suggested' && panel.contains(e));
-      const suggestedGroup = suggestedLabel && suggestedLabel.parentElement && suggestedLabel.parentElement.parentElement;
-      const suggestedRow = suggestedGroup && suggestedGroup.nextElementSibling;
-      const suggestedRadio = suggestedRow ? suggestedRow.querySelector('[role="radio"]') : null;
+      // BUG FIX 2026-08-30 round 2 (Patrick-caught AGAIN, live-confirmed): this checked
+      // synchronously, once, immediately -- but a live retest showed Vinted's own Brand
+      // "Suggested" group renders a beat after the panel itself (confirmed live: opening the
+      // SAME panel a moment later DID show "Accessoires" under Suggested, but this function's
+      // one-shot check had already moved on to "No brand" by then). Exactly the same timing
+      // lesson already learned and fixed for Color's suggested-swatch check above in this file
+      // -- applying the identical waitFor() poll here instead of a single synchronous read.
+      function findSuggestedBrandRadio() {
+        const suggestedLabel = qa('div,span,p,label').find((e) => e.children.length === 0 && e.textContent.trim() === 'Suggested' && panel.contains(e));
+        const suggestedGroup = suggestedLabel && suggestedLabel.parentElement && suggestedLabel.parentElement.parentElement;
+        const suggestedRow = suggestedGroup && suggestedGroup.nextElementSibling;
+        return suggestedRow ? suggestedRow.querySelector('[role="radio"]') : null;
+      }
+      const suggestedRadio = await waitFor(findSuggestedBrandRadio, 2000, { attributes: true, attributeFilter: ['class'], subtree: true, childList: true });
       if (suggestedRadio) {
         const suggestedText = norm(suggestedRadio.textContent);
         suggestedRadio.click();

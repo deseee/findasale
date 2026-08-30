@@ -773,18 +773,31 @@
   // unrelated paragraph or the page's other buttons. On a miss, logs exactly what WAS found near
   // the Brand field so the next live console capture can nail the real selector instead of another
   // guess.
+  // BUG FIX 2026-08-30 round 2 (P0, Patrick-caught the first attempt completely missed the row --
+  // live DOM inspection via javascript_tool against Patrick's real open Mercari tab, not a guess).
+  // Root cause of the miss: the heading text is literally "Suggested brands:" (with a colon, exact),
+  // and the chip row is NOT a sibling of the heading itself -- it's the heading's PARENT's THIRD
+  // child (`div[class*="ChipGroupWrapper"]`), one level further out than the old code searched.
+  // Confirmed live each chip carries its own stable `data-testid`: real suggestions are
+  // `SuggestedBrand-<Name>` (e.g. "SuggestedBrand-Fender") and the honest opt-out is literally
+  // `data-testid="NoBrandLink"` -- exact, stable selectors, no fuzzy text matching needed at all.
+  // CRITICAL second finding: each chip DIV is a wrapper around a real `<input type="checkbox">` --
+  // dispatching a full realClick() pointer-event sequence on the WRAPPER div did NOT register
+  // (live-confirmed, tried first) -- only a plain `.click()` on the INNER `<input>` actually checks
+  // it and updates the Brand field. Live-confirmed end to end: clicking NoBrandLink's inner input
+  // changed the real Brand field's value to "No brand / Not sure" and cleared Mercari's own
+  // validation error.
   function findMercariSuggestedBrandChips() {
-    const heading = qa('div, span, p, h1, h2, h3, h4, h5, legend').find((el) => {
-      const t = norm(el.textContent);
-      return t && t.length < 40 && t.indexOf('suggested brand') !== -1;
-    });
-    const scope = (heading && heading.parentElement) ? heading.parentElement : document;
-    const candidates = Array.from(scope.querySelectorAll('button, [role="button"], [role="option"], li, div[tabindex]'))
-      .filter((el) => el.offsetParent !== null);
-    return candidates.filter((el) => {
-      const t = norm(el.textContent);
-      return t && t.length > 0 && t.length < 40;
-    });
+    const heading = qa('div, span, p, h1, h2, h3, h4, h5, legend').find((el) => el.children.length === 0 && norm(el.textContent) === 'suggested brands:');
+    const container = heading ? heading.parentElement : null;
+    const chipGroup = container ? container.querySelector('[class*="ChipGroupWrapper" i]') : null;
+    if (!chipGroup) return [];
+    return Array.from(chipGroup.children).filter((el) => el.offsetParent !== null);
+  }
+  async function clickMercariBrandChip(chip) {
+    const input = chip.querySelector('input');
+    (input || chip).click();
+    await sleep(300);
   }
   async function fillMercariBrandFromSuggestedChip(value) {
     const chips = findMercariSuggestedBrandChips();
@@ -796,13 +809,12 @@
     }
     if (value) {
       const want = norm(value);
-      const wantWords = wordize(want);
-      const match = chips.find((c) => norm(c.textContent) === want)
-        || chips.find((c) => wordize(norm(c.textContent)).some((w) => wantWords.indexOf(w) !== -1));
-      if (match) { await realClick(match); await sleep(200); return true; }
+      const match = chips.find((c) => (c.getAttribute('data-testid') || '').toLowerCase() === ('suggestedbrand-' + want).replace(/\s+/g, '-'))
+        || chips.find((c) => norm(c.textContent) === want);
+      if (match) { await clickMercariBrandChip(match); return true; }
     }
-    const noBrandChip = chips.find((c) => /no brand|not sure/i.test(norm(c.textContent)));
-    if (noBrandChip) { await realClick(noBrandChip); await sleep(200); return true; }
+    const noBrandChip = chips.find((c) => c.getAttribute('data-testid') === 'NoBrandLink') || chips.find((c) => /no brand|not sure/i.test(norm(c.textContent)));
+    if (noBrandChip) { await clickMercariBrandChip(noBrandChip); return true; }
     console.warn('[FAS Mercari DIAG] Brand -- suggested-brand chip row found (' + chips.length + ' chips: ' + JSON.stringify(chips.map((c) => norm(c.textContent))) + ') but neither the item\'s brand nor a "No brand/Not sure" chip matched.');
     return false;
   }
