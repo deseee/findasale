@@ -1014,6 +1014,31 @@
     // directly (scoped, not page-wide, same discipline as pickFromPanel's own leaf scan) instead of
     // the whole document, then close it ourselves once this fallback is done either way.
     const panel = findOpenPanel('brand', true) || findOpenPanel('brand', false);
+    // BUG FIX 2026-08-30 (round 7, Patrick live-reported "Planet Waves" -- a real, legitimate brand
+    // just not in Vinted's own catalog -- still left unset after the #empty-brand fix). Live console
+    // trace off Patrick's own run showed EXACTLY why: pickFromPanel's search for "Planet Waves"
+    // returned real leaves ["No items found", "Use \"Planet Waves\" as brand"] -- Vinted itself
+    // offers a free-text "Use X as brand" option whenever a typed brand isn't in its catalog, but
+    // bestScoringOption() only matches a leaf's text AGAINST the value, and 'use "planet waves" as
+    // brand' doesn't score as a match against "planet waves" (it's a sentence wrapping the value,
+    // not the value itself) -- so pickFromPanel correctly returned no match, and #empty-brand simply
+    // isn't present once the panel has switched into search-results view (confirmed live: only
+    // exists in the panel's default/un-searched state). This is a BETTER outcome than any no-brand
+    // fallback -- it sets the organizer's real, correct brand name exactly as given -- so it's
+    // checked FIRST, before the Suggested-radio and No-brand fallbacks below. Live-verified against
+    // Patrick's actual open tab: clicking this exact leaf set #brand's value to "Planet Waves" and
+    // closed the panel.
+    if (panel) {
+      const useAsBrand = Array.from(panel.querySelectorAll('[role="option"], li, div[role="button"], button, [data-testid$="--title"], [role="radio"]'))
+        .find((n) => /^use ".*" as brand$/i.test(norm(n.textContent)));
+      if (useAsBrand) {
+        useAsBrand.click();
+        await sleep(200);
+        await closePanel('brand');
+        console.log('[FAS Vinted] Brand "' + value + '" is not in Vinted\'s catalog -- used Vinted\'s own "Use as brand" free-text option to set it exactly as given.');
+        return true;
+      }
+    }
     // BUG FIX 2026-08-30 (S-EXT-VINTED-SUGGESTED-BRAND-MISSING, P0, Patrick-caught -- same class of
     // bug as the suggested-color fix just above/before this function in the file: Brand's panel ALSO
     // has its own "Suggested" group above "Popular brands", live-confirmed via javascript_tool against
@@ -1048,16 +1073,31 @@
         return true;
       }
     }
+    // BUG FIX 2026-08-30 (round 6, Patrick live-reported: "Planet Waves" not found, and the
+    // automation didn't pick any of the other real options shown -- "Unbranded", "Cable", "List
+    // without Brand"). Root cause: the wording guess below has now been wrong THREE times in a row
+    // across different Vinted sessions/categories ("No brand" -> "No Label" -> still missed "List
+    // without Brand"), because Vinted's own catalog-driven brand list is category-dependent and its
+    // exact no-brand wording apparently varies. openerByLabel's own comment a few hundred lines up
+    // already identified the one thing that DOESN'T vary: `id="empty-brand"` is Vinted's real,
+    // always-present quick-skip control for this exact purpose (that comment even live-confirmed it
+    // exists and is stable enough that it used to get matched BY ACCIDENT before being excluded).
+    // Try that authoritative ID first -- it can't be defeated by category-specific wording -- before
+    // falling back to the widened text scan for the (unlikely, but not impossible) case a future
+    // Vinted layout drops the id.
+    const emptyBrandControl = document.getElementById('empty-brand');
+    if (emptyBrandControl) {
+      emptyBrandControl.click();
+      await sleep(200);
+      await closePanel('brand');
+      console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion -- selected Vinted\'s own "List without Brand" control (#empty-brand) instead.');
+      return true;
+    }
     const scope = panel ? Array.from(panel.querySelectorAll('[role="option"], li, div[role="button"], button, [data-testid$="--title"]')) : qa('[role="option"], li, div[role="button"], button, [data-testid$="--title"]');
-    // BUG FIX 2026-08-29 (S-EXT-ROUND-11, P1, live-Chrome-confirmed): the live 'No brand'
-    // search used a literal /no brand/ regex, but Vinted's REAL no-brand fallback option is
-    // worded "No Label", not "No brand" -- live-confirmed against the actual panel leaves
-    // this session (["Popular brands","Apple","Cable","Samsung","Amazon","lightning",
-    // "hama","Universal","Nintendo","No Label","Belkin","Garmin","Sologic","Inconnu",
-    // "Sony"]) -- "No brand" never appears verbatim, so the old regex could never match and
-    // fell straight through to the final unset warning every time. Widened to match either real
-    // wording.
-    const noBrand = scope.find((n) => /no (brand|label)/.test(norm(n.textContent)));
+    // Widened again this round to also catch "List without Brand" phrasing by text, as a fallback
+    // behind the #empty-brand id check above -- kept broad (three separate phrasings) since Vinted's
+    // exact wording has proven unreliable to predict.
+    const noBrand = scope.find((n) => /no (brand|label)|without brand/.test(norm(n.textContent)));
     if (noBrand) {
       noBrand.click();
       await sleep(200);
@@ -1066,7 +1106,7 @@
       return true;
     }
     await closePanel('brand');
-    console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion and no "No brand" option was found (UNVERIFIED) -- left unset.');
+    console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion and no "No brand"/"List without Brand" option was found (UNVERIFIED) -- left unset.');
     return false;
   }
 
