@@ -15,7 +15,7 @@
   <div id="controls" class="controls" hidden>
     <label class="chk"><input type="checkbox" id="hideListed" checked> Hide items already listed</label>
     <label class="chk" id="showAllItemsRow" hidden><input type="checkbox" id="showAllItems"> Show all items</label>
-    <div class="count"><span id="selCount">0</span> selected</div>
+    <div class="count"><button type="button" id="selectAllBtn" class="linkbtn">Select all</button> &middot; <span id="selCount">0</span> selected</div>
   </div>
   <div id="eligibilityNote" class="note dim" hidden></div>
   <div id="resumeQueueBanner" class="note" hidden></div>
@@ -48,13 +48,13 @@
     <details class="note footerSettings">
       <summary>&#9881; More settings</summary>
       <div class="removeSetting">
-        <label class="chk" for="autoRemoveMode">Keep Facebook listings in sync</label>
+        <label class="chk" for="autoRemoveMode">Keep listings in sync</label>
         <select id="autoRemoveMode" class="select">
           <option value="notify">Notify me</option>
           <option value="silent">Remove automatically</option>
           <option value="off">Off</option>
         </select>
-        <details class="note"><summary>What does this do?</summary>Checked every ~20 min. When an item sells elsewhere, the extension removes its Facebook listing &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. The same check also looks the other way: if an item sells right there on Facebook, it's marked sold on FindA.Sale automatically (and its eBay listing withdrawn) &mdash; no extra setup, it uses this same setting. When you change an item's price on FindA.Sale, you'll also get a notification to update it on Facebook yourself &mdash; automatic price updates aren't built yet, so this always just notifies for now, even in &ldquo;Remove automatically&rdquo; mode. &ldquo;Off&rdquo; turns off all of the above.</details>
+        <details class="note"><summary>What does this do?</summary>Checked every ~20 min. When an item sells elsewhere, the extension removes its listing on Facebook, Poshmark, Mercari, Vinted, Grailed, and Gumtree Australia &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. (Craigslist isn't covered yet &mdash; it has no persistent "my postings" page to check, so it can't be auto-removed the same way.) The same check also looks the other way for Facebook specifically: if an item sells right there on Facebook, it's marked sold on FindA.Sale automatically (and its eBay listing withdrawn) &mdash; no extra setup, it uses this same setting. That reverse check isn't built yet for the other platforms. When you change an item's price on FindA.Sale, you'll also get a notification to update it on Facebook yourself &mdash; automatic price updates aren't built yet, so this always just notifies for now, even in &ldquo;Remove automatically&rdquo; mode. &ldquo;Off&rdquo; turns off all of the above.</details>
         <p class="note dim" id="removalDiag">Automatic check status loading&hellip;</p>
       </div>
       <div class="renewSetting">

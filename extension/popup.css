@@ -6,11 +6,11 @@ body { width: 380px; max-height: 600px; margin: 0; font: 13px/1.4 -apple-system,
    ONLY child that flexes/shrinks to absorb whatever space is left over. See .list's own comment
    below for the full history. */
 body > *:not(.list) { flex-shrink: 0; }
-header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; align-items: baseline; gap: 8px; }
+header { padding: 8px 10px; border-bottom: 1px solid #26362d; display: flex; align-items: baseline; gap: 8px; }
 .brand { font-weight: 800; font-size: 16px; } .brand b { color: #4caf6d; }
 .sub { font-size: 11px; color: #9fb6a8; }
 .status { padding: 12px 14px; color: #cfe3d6; font-size: 12px; }
-.guildBar { display: flex; flex-direction: column; gap: 4px; padding: 8px 14px; border-bottom: 1px solid #26362d; cursor: pointer; }
+.guildBar { display: flex; flex-direction: column; gap: 2px; padding: 5px 10px; border-bottom: 1px solid #26362d; cursor: pointer; }
 .guildBar:hover { background: #182720; }
 .guildBarRow { display: flex; align-items: center; gap: 8px; }
 .guildRank { font-size: 12px; font-weight: 700; color: #eef3ee; white-space: nowrap; flex: 0 0 auto; }
@@ -20,13 +20,15 @@ header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; al
 .guildHuntPass { font-size: 10px; color: #7f9b8a; }
 .guildHuntPass.active { color: #6fd08c; }
 .status a, .status button.link { color: #6fd08c; cursor: pointer; text-decoration: underline; background: none; border: none; font: inherit; padding: 0; }
-.controls { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid #26362d; }
+.linkbtn { color: #6fd08c; cursor: pointer; text-decoration: underline; background: none; border: none; font: inherit; padding: 0; }
+.linkbtn:disabled { opacity: .4; cursor: default; text-decoration: none; }
+.controls { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid #26362d; flex-wrap: wrap; row-gap: 4px; }
 .chk { font-size: 12px; color: #cfe3d6; } .count { font-size: 12px; color: #9fb6a8; } #selCount { color: #6fd08c; font-weight: 700; }
-.list { overflow-y: auto; flex: 1 1 auto; min-height: 60px; }
-.sale-group { padding: 6px 14px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7f9b8a; }
-.item { display: flex; gap: 10px; align-items: center; padding: 8px 14px; border-bottom: 1px solid #1d2a22; cursor: pointer; }
+.list { overflow-y: auto; flex: 1 1 auto; min-height: 100px; }
+.sale-group { padding: 4px 10px 1px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7f9b8a; }
+.item { display: flex; gap: 8px; align-items: center; padding: 5px 10px; border-bottom: 1px solid #1d2a22; cursor: pointer; }
 .item:hover { background: #182720; }
-.item img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; background: #26362d; flex: 0 0 auto; }
+.item img { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; background: #26362d; flex: 0 0 auto; }
 .item .meta { flex: 1; min-width: 0; }
 .item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .p { color: #9fb6a8; font-size: 12px; }
@@ -36,7 +38,7 @@ header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; al
 .item .markPostedBtn { flex: 0 0 auto; font-size: 10px; color: #6fd08c; background: none; border: 1px solid #3c8c5a; border-radius: 4px; padding: 2px 6px; cursor: pointer; white-space: nowrap; }
 .item .markPostedBtn:hover { background: #1d2a22; }
 .item .markPostedBtn:disabled { opacity: .5; cursor: default; }
-footer { padding: 10px 14px; border-top: 1px solid #26362d; }
+footer { padding: 8px 10px; border-top: 1px solid #26362d; }
 button.primary { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #3c8c5a; color: #fff; font-weight: 700; cursor: pointer; }
 button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; }
 .note { font-size: 11px; color: #9fb6a8; margin: 8px 0 0; }

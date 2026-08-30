@@ -4,6 +4,11 @@ const $ = (id) => document.getElementById(id);
 let ITEMS = [];
 let ORGANIZER = null;
 const selected = new Set();
+// (2026-08-30, S-EXT-SELECT-ALL) IDs of the currently-rendered, currently-selectable rows --
+// recomputed every render() pass. "Selectable" excludes fbBlocked coin/currency items (row()
+// never gives those a checkbox at all -- see fbBlocked in row()). Select All operates on exactly
+// this set so it never tries to select something that isn't actually checkable on screen.
+let visibleSelectableIds = [];
 
 // (#596 Guild/XP Toolbar Tie-In) Canonical rank emoji/labels + XP floors, mirrored from
 // packages/frontend/pages/shopper/guild-primer.tsx (RANK_THRESHOLDS) and
@@ -62,6 +67,19 @@ async function load() {
   $('showAllItems').onchange = render;
   $('listBtn').onclick = startQueue;
   $('channel').onchange = onChannelChange;
+  // (2026-08-30, S-EXT-SELECT-ALL, Patrick-directed -- "should we have a select all items")
+  // Toggles between selecting every currently-visible+selectable row and clearing the whole
+  // selection -- render() keeps its label ("Select all" / "Deselect all") and visibleSelectableIds
+  // in sync with what's actually on screen and what's currently selected.
+  $('selectAllBtn').onclick = () => {
+    const allSelected = visibleSelectableIds.length > 0 && visibleSelectableIds.every((id) => selected.has(id));
+    if (allSelected) {
+      visibleSelectableIds.forEach((id) => selected.delete(id));
+    } else {
+      visibleSelectableIds.forEach((id) => selected.add(id));
+    }
+    render();
+  };
   onChannelChange();
   await loadAutoRemoveMode();
   await loadAutoRenewSetting();
@@ -336,6 +354,22 @@ function render() {
     const h = document.createElement('div'); h.className = 'sale-group'; h.textContent = saleTitle; list.appendChild(h);
     groups[saleTitle].forEach((it) => list.appendChild(row(it)));
   });
+  // (2026-08-30, S-EXT-SELECT-ALL) Recompute the selectable-id set from exactly what's on
+  // screen right now (same fbBlocked exclusion row() itself applies), then sync the button's
+  // label to whether everything currently visible is already selected.
+  visibleSelectableIds = [];
+  keys.forEach((saleTitle) => {
+    groups[saleTitle].forEach((it) => {
+      const blocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
+      if (!blocked) visibleSelectableIds.push(it.id);
+    });
+  });
+  const selectAllBtn = $('selectAllBtn');
+  if (selectAllBtn) {
+    const allSelected = visibleSelectableIds.length > 0 && visibleSelectableIds.every((id) => selected.has(id));
+    selectAllBtn.textContent = allSelected ? 'Deselect all' : 'Select all';
+    selectAllBtn.disabled = visibleSelectableIds.length === 0;
+  }
   updateCount();
 }
 

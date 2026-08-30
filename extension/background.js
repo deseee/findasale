@@ -1146,6 +1146,30 @@ chrome.notifications.onClicked.addListener((notifId) => {
   }
 });
 
+// (2026-08-30, S-EXT-QUEUE-PACING, Patrick-directed research: "investigate what other listing
+// software does and let's create some safe defaults that we can tune as needed") -- until this
+// session, there was NO delay at all between items in any posting queue; each item advanced as
+// fast as the DOM allowed. Verified research (see claude_docs session log 2026-08-30) found: no
+// platform publishes a specific numeric "safe" posting-velocity limit; Poshmark's own real
+// enforced risk ("share jail") is about bulk SHARING/liking/following, which this extension never
+// does, not listing creation; established browser-extension crosslisting tools (Vendoo, List
+// Perfectly, Crosslist) use the same client-side automation model as this extension and are not
+// reported as banned for listing-creation speed itself. The one CONFIRMED real risk already
+// documented in this file is Vinted's active enforcement wave against automated relist/bump
+// behavior (see advanceVintedQueue's queue-setup comment) -- already mitigated there by Vinted's
+// manual-publish-only design (fillListing() fills and stops; the organizer always clicks Upload
+// themselves). Given no evidence supports a specific number, this is a modest, deliberately-tuned
+// default -- long enough to break up an obviously-instant machine-gun pattern, short enough not to
+// look like the extension has stalled (there's no on-page "waiting" indicator yet, so anything
+// much longer would read as broken to a non-technical organizer watching the tab). Tune by editing
+// this one constant; nothing else needs to change.
+const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+async function humanQueueDelay() {
+  const ms = QUEUE_ADVANCE_DELAY_MS.MIN + Math.random() * (QUEUE_ADVANCE_DELAY_MS.MAX - QUEUE_ADVANCE_DELAY_MS.MIN);
+  await sleep(ms);
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
@@ -1250,6 +1274,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // never gets treated as abandoned mid-way through.
         await chrome.storage.local.set({ fasIndex: next, fasQueueSetAt: Date.now() });
         const item = (st.fasQueue || [])[next] || null;
+        await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
       } else if (msg.type === 'setCraigslistQueue') {
         // Craigslist channel (ADR-084 extension): store the queue and OPEN the posting tab here in
@@ -1291,6 +1316,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasCraigslistIndex: next });
           const item = queue[next] || null;
+          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'craigslistLoginStateObserved') {
@@ -1322,6 +1348,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const next = (st.fasGumtreeAuIndex || 0) + 1;
         await chrome.storage.local.set({ fasGumtreeAuIndex: next });
         const item = (st.fasGumtreeAuQueue || [])[next] || null;
+        await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
         sendResponse({ ok: true, item, index: next, total: (st.fasGumtreeAuQueue || []).length });
       } else if (msg.type === 'gumtreeAuLoginStateObserved') {
         // (ADR-102, 2026-08-09) Same shape as craigslistLoginStateObserved above -- best-effort
@@ -1383,6 +1410,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasPoshmarkIndex: next });
           const item = queue[next] || null;
+          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'setMercariQueue') {
@@ -1416,6 +1444,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasMercariIndex: next });
           const item = queue[next] || null;
+          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'setVintedQueue') {
@@ -1439,6 +1468,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const next = (st.fasVintedIndex || 0) + 1;
         await chrome.storage.local.set({ fasVintedIndex: next });
         const item = (st.fasVintedQueue || [])[next] || null;
+        await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
         sendResponse({ ok: true, item, index: next, total: (st.fasVintedQueue || []).length });
       } else if (msg.type === 'setGrailedQueue') {
         // 2026-08-18 dispatch (fas-grailed.js): same queue-storage shape as
@@ -1498,6 +1528,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasGrailedIndex: next });
           const item = queue[next] || null;
+          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'getRemovalQueueItem') {
