@@ -73,6 +73,15 @@ const ADDR_FETCH_MAX_PER_RUN = 150;          // run-global fetch cap (NOT per me
 const ADDR_FETCH_TIME_BUDGET_MS = 10 * 60_000; // 10-min wall-clock enrichment ceiling
 const ADDR_FETCH_TIMEOUT_MS = 8_000;         // per-fetch timeout for this path
 
+// ---------------------------------------------------------------------------
+// Date-recovery pass (2026-08-30, S-FB-EVENTS-DATE-RECOVERY) -- PER-METRO cap
+// (not run-global like the address-enrichment budget above). Evidence this
+// session: a metro with genuinely no-date search-page stubs has only a
+// handful of unique candidates (2 in the confirmed Tuscaloosa case), so this
+// stays small and bounded regardless of how many sub-query duplicates surface.
+// ---------------------------------------------------------------------------
+const DATE_RECOVERY_MAX_PER_METRO = 10;
+
 /**
  * Shared, mutable enrichment context threaded through EVERY metro call in a run
  * so the cap (used) and wall-clock budget (startMs) are enforced run-globally.
@@ -384,7 +393,14 @@ function mapEventToScrapedItem(
   // `return null` exit. Purely additive -- does not change accept/reject logic,
   // only makes WHICH check fired visible in the run log (see aggregate log line
   // in scrapeFacebookEventsForMetroViaProxy). undefined when caller doesn't care.
-  reasons?: Record<string, number>
+  reasons?: Record<string, number>,
+  // Date-recovery out-param (2026-08-30, S-FB-EVENTS-DATE-RECOVERY): when a
+  // no-date rejection fires AND a valid fbEventId/sourceUrl were already
+  // resolved, the candidate is pushed here (in addition to, not instead of,
+  // the existing reasons tally + null return) so the caller can give it one
+  // more chance via the individual event page. Purely additive -- undefined
+  // when the caller doesn't pass it, in which case behavior is unchanged.
+  noDateCandidates?: Array<{ ev: any; typeHint: string; fbEventId: string; sourceUrl: string }>
 ): ScrapedItem | null {
   const rejectReason = (reason: string): null => {
     if (reasons) reasons[reason] = (reasons[reason] ?? 0) + 1;
@@ -409,8 +425,36 @@ function mapEventToScrapedItem(
   // Deterministic past/stale drop FIRST (FB's own boolean), then real date.
   if (ev?.is_past === true) return rejectReason('past');
 
+  // Numeric FB event id (dedup anchor) -- from ev.id, else from the url.
+  // MOVED BEFORE date resolution (2026-08-30, S-FB-EVENTS-DATE-RECOVERY): a
+  // no-date rejection still needs a valid id/url to be queued as a
+  // date-recovery candidate below. This extraction never depended on any
+  // date field, so moving it earlier changes no existing behavior.
+  const url = typeof ev?.url === 'string' ? ev.url : '';
+  let fbEventId: string | null = null;
+  if (typeof ev?.id === 'string' && /^\d{6,}$/.test(ev.id)) {
+    fbEventId = ev.id;
+  } else if (url) {
+    fbEventId = extractFbEventIdFromUrl(url);
+  }
+  if (!fbEventId) return rejectReason('no-event-id');
+
+  const sourceUrl = url
+    ? canonicalizeEventUrl(url)
+    : `https://www.facebook.com/events/${fbEventId}/`;
+
   const dateResolved = resolveEventDate(ev);
-  if (!dateResolved) return rejectReason('no-date'); // no trustworthy date -> skip, never fabricate
+  if (!dateResolved) {
+    // No trustworthy date signal on the search-page stub -- queue it for the
+    // date-recovery pass (individual event page) in
+    // scrapeFacebookEventsForMetroViaProxy. Purely additive: the immediate
+    // reject-null behavior for THIS pass is unchanged, and nothing is
+    // fabricated here.
+    if (noDateCandidates) {
+      noDateCandidates.push({ ev, typeHint, fbEventId, sourceUrl });
+    }
+    return rejectReason('no-date');
+  }
   const startDate = dateResolved.date;
 
   // STALE-DATE REJECT (S1117) -- ONLY for a REAL parsed start_timestamp. FB keeps
@@ -440,19 +484,49 @@ function mapEventToScrapedItem(
       ? endFromEvent
       : new Date(startDate.getTime() + 86_400_000);
 
-  // Numeric FB event id (dedup anchor) -- from ev.id, else from the url.
-  const url = typeof ev?.url === 'string' ? ev.url : '';
-  let fbEventId: string | null = null;
-  if (typeof ev?.id === 'string' && /^\d{6,}$/.test(ev.id)) {
-    fbEventId = ev.id;
-  } else if (url) {
-    fbEventId = extractFbEventIdFromUrl(url);
-  }
-  if (!fbEventId) return rejectReason('no-event-id');
+  const item = buildScrapedItemFromEvent(
+    ev,
+    metro,
+    typeHint,
+    fbEventId,
+    sourceUrl,
+    startDate,
+    endDate,
+    dateResolved.approximate,
+    'search-page'
+  );
+  if (!item) return rejectReason('quebec');
+  return item;
+}
 
-  const sourceUrl = url
-    ? canonicalizeEventUrl(url)
-    : `https://www.facebook.com/events/${fbEventId}/`;
+// ---------------------------------------------------------------------------
+// Shared tail: place/quebec/organizer resolution + ScrapedItem construction.
+// Factored out (2026-08-30, S-FB-EVENTS-DATE-RECOVERY) so the normal
+// search-page accept path (mapEventToScrapedItem, dateSource:'search-page')
+// and the date-recovery accept path (scrapeFacebookEventsForMetroViaProxy,
+// dateSource:'page-fetch-recovery') build byte-identical ScrapedItem shapes
+// from a single source instead of duplicating ~40 lines twice. Returns null
+// for the Quebec reject (parity with the original inline check) -- caller
+// decides how to log/count that.
+// ---------------------------------------------------------------------------
+function buildScrapedItemFromEvent(
+  ev: any,
+  metro: MetroTarget,
+  typeHint: string,
+  fbEventId: string,
+  sourceUrl: string,
+  startDate: Date,
+  endDate: Date,
+  dateApproximate: boolean,
+  dateSource: 'search-page' | 'page-fetch-recovery'
+): ScrapedItem | null {
+  const rawName = typeof ev?.name === 'string' ? ev.name.trim() : '';
+  const inferred = inferSaleType(rawName, typeHint);
+  // Defensive only -- both callers already confirmed a non-null classification
+  // for this same event before reaching here (search-page path checks it
+  // directly above; the date-recovery path re-uses an event that already
+  // passed this check on its first pass). Never expected to fire.
+  if (inferred === null) return null;
 
   const { city, state, address, cityStateSource, country, geoUnresolved, rawPlaceText } =
     parsePlace(ev, metro);
@@ -463,7 +537,7 @@ function mapEventToScrapedItem(
   // Quebec/Quebec (spelled-out province with no 2-letter code token). No US
   // state is 'QC' and metro.state is always a US state, so state==='QC' can only
   // arise from a Canadian address parse -- this never rejects a US listing.
-  if (state === 'QC' || /\bqu[eé]bec\b/i.test(address)) return rejectReason('quebec');
+  if (state === 'QC' || /\bqu[eé]bec\b/i.test(address)) return null;
 
   // Organizer attribution -- resolved in priority order, never guessed:
   //   1. A STRUCTURED host/creator NAME on the Event JSON (event_creator.name,
@@ -505,7 +579,13 @@ function mapEventToScrapedItem(
     scrapedMetadata: {
       metro: `${metro.city}, ${metro.state}`,
       sourceApi: 'fb-proxy-discovery',
-      dateApproximate: dateResolved.approximate,
+      dateApproximate,
+      // Provenance of the date itself: 'search-page' (normal path, resolveEventDate
+      // found a real signal on the aggregate search result) vs 'page-fetch-recovery'
+      // (search-page stub had zero date fields; recovered from the individual event
+      // page via fetchFacebookEventPage -- see date-recovery pass). Additive field,
+      // useful for future debugging of ingest volume by source.
+      dateSource,
       // Geo provenance -- how city/state were resolved, so downstream cleanup can
       // find listings still sitting on the query-metro fallback (geo mismatch).
       cityStateSource,
@@ -550,6 +630,11 @@ export async function scrapeFacebookEventsForMetroViaProxy(
   // S-FB-EVENTS-ZERO-INGEST-DIAG) -- reset per metro call, aggregated across all
   // SUB_QUERIES, logged once below. Diagnostic only; does not affect ingest.
   const rejectReasons: Record<string, number> = {};
+  // Date-recovery candidates for this metro's whole sub-query loop (2026-08-30,
+  // S-FB-EVENTS-DATE-RECOVERY) -- reset per metro call (NOT run-global), fed by
+  // every mapEventToScrapedItem no-date rejection below, consumed by the
+  // date-recovery pass after the sub-query loop.
+  const noDateCandidates: Array<{ ev: any; typeHint: string; fbEventId: string; sourceUrl: string }> = [];
 
   for (const sub of SUB_QUERIES) {
     const q = `${sub.phrase} ${metro.city} ${metro.state}`;
@@ -574,7 +659,7 @@ export async function scrapeFacebookEventsForMetroViaProxy(
 
     let mapped = 0;
     for (const ev of events) {
-      const item = mapEventToScrapedItem(ev, metro, sub.typeHint, rejectReasons);
+      const item = mapEventToScrapedItem(ev, metro, sub.typeHint, rejectReasons, noDateCandidates);
       if (!item) continue;
       const key = item.sourceItemId ?? item.sourceUrl;
       if (!byEventId.has(key)) {
@@ -604,6 +689,89 @@ export async function scrapeFacebookEventsForMetroViaProxy(
       .join(', ');
     console.log(
       `[FB-Events-Discovery] ${metro.city}, ${metro.state} -- rejection reasons: ${breakdown}`
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // DATE-RECOVERY PASS (2026-08-30, S-FB-EVENTS-DATE-RECOVERY).
+  //
+  // Confirmed live (GH Actions run #81, 2026-08-30): for a metro+phrase combo
+  // with few real matching events, FB serves a LEAN search-result stub for
+  // those events (bare __typename:"Event" with id/name/url only -- zero date
+  // fields anywhere), which resolveEventDate correctly cannot resolve. The
+  // INDIVIDUAL event page reliably carries the real date (confirmed live via
+  // fetchFacebookEventPage against a real Tuscaloosa no-date event -- its
+  // og:description read "...on Friday, August 28 2026", parsed by the
+  // existing Pattern 0 regex in facebook-events-page-fetch.ts). This gives
+  // every no-date candidate ONE more chance before it is permanently dropped.
+  //
+  // Runs UNCONDITIONALLY -- independent of enrichCtx/FB_EVENTS_ADDRESS_FETCH.
+  // This recovers a REAL date (not an address-only upgrade), so it must not
+  // be gated behind the address-only feature flag below. Bounded to
+  // DATE_RECOVERY_MAX_PER_METRO unique candidates (deduped by fbEventId --
+  // confirmed live that the same stub event can surface multiple times within
+  // and across sub-queries) and throttled with the same jitter pattern used
+  // elsewhere in this file. Never fabricates a date: if the page-fetch also
+  // fails or yields no date, the event stays dropped exactly as before.
+  if (noDateCandidates.length > 0) {
+    const dedupedCandidates = new Map<
+      string,
+      { ev: any; typeHint: string; fbEventId: string; sourceUrl: string }
+    >();
+    for (const candidate of noDateCandidates) {
+      if (!dedupedCandidates.has(candidate.fbEventId)) {
+        dedupedCandidates.set(candidate.fbEventId, candidate);
+      }
+    }
+    const recoveryCandidates = Array.from(dedupedCandidates.values()).slice(
+      0,
+      DATE_RECOVERY_MAX_PER_METRO
+    );
+
+    let dateRecovered = 0;
+    for (const candidate of recoveryCandidates) {
+      // Already present (recovered via a different sub-query's duplicate, or
+      // otherwise accepted) -- skip the redundant fetch.
+      if (byEventId.has(`fb:events:${candidate.fbEventId}`)) continue;
+
+      try {
+        const page = await fetchFacebookEventPage(candidate.sourceUrl, ADDR_FETCH_TIMEOUT_MS);
+        if (page?.startDate) {
+          const recoveredItem = buildScrapedItemFromEvent(
+            candidate.ev,
+            metro,
+            candidate.typeHint,
+            candidate.fbEventId,
+            candidate.sourceUrl,
+            page.startDate,
+            page.endDate ?? new Date(page.startDate.getTime() + 86_400_000),
+            /* dateApproximate */ false,
+            'page-fetch-recovery'
+          );
+          if (recoveredItem) {
+            const key = recoveredItem.sourceItemId ?? recoveredItem.sourceUrl;
+            if (!byEventId.has(key)) {
+              byEventId.set(key, recoveredItem);
+              dateRecovered++;
+            }
+          }
+        }
+        // page === null or no startDate -- leave dropped, never fabricate.
+      } catch (err) {
+        console.warn(
+          `[FB-Events-Discovery] date-recovery fetch failed for ${candidate.sourceUrl}:`,
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+
+      // Serial throttle between fetches (concurrency 1), same pacing as the
+      // address-enrichment pass below.
+      await jitterDelay(800, 1500);
+    }
+
+    console.log(
+      `[FB-Events-Discovery] ${metro.city}, ${metro.state} -- date-recovery: ` +
+        `${dateRecovered}/${recoveryCandidates.length} no-date candidates rescued via page-fetch`
     );
   }
 
