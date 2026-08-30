@@ -757,8 +757,32 @@
       await sleep(180);
     }
   }
+  // BUG FIX 2026-08-29 (S-EXT-POSHMARK-BRAND-FIELD-NOT-FOUND, Patrick live-console-report:
+  // '[FAS Poshmark] Field "Brand" -- selector not found, skipped'): fieldByLabel/nearestControlAfter
+  // is a single one-shot synchronous DOM query with no retry -- and Brand (see fillListing's call
+  // order) is filled IMMEDIATELY after pickCategory() returns, which just spent several seconds
+  // opening/closing Category's dropdown and drilling through department/leaf clicks, each
+  // triggering its own Vue re-render, with no settle pause added before Brand's own lookup runs.
+  // This is the same class of cross-field SPA-hydration race already found and fixed elsewhere in
+  // this file (see pickCategory's own S-EXT-POSHMARK-CATEGORY-STALE-STATE / -SMARTSELL comments and
+  // waitForFormReady's comment) -- but unlike those, only Brand's SUGGESTION-list lookup was ever
+  // given poll-based robustness (waitForOptionByText, added round 7); the field-discovery step
+  // itself never was. Ported the same small-poll idiom one step earlier: retry fieldByLabel every
+  // ~150ms for up to 1.5s instead of one synchronous check taken right after Category's DOM churn.
+  // Concrete, code-read evidence (call-order + one-shot-query-after-heavy-churn), not a guess --
+  // still UNVERIFIED against a live account whether this specific report reproduces from exactly
+  // this cause, since no live re-test confirmed it this session.
+  async function waitForFieldByLabel(labelText, maxWaitMs) {
+    const start = Date.now();
+    while (true) {
+      const el = fieldByLabel(labelText);
+      if (el) return el;
+      if (Date.now() - start >= maxWaitMs) return null;
+      await sleep(150);
+    }
+  }
   async function fillAutocomplete(labelText, value) {
-    const el = fieldByLabel(labelText);
+    const el = await waitForFieldByLabel(labelText, 1500);
     if (!el) return false;
     el.focus();
     setNativeValue(el, String(value));
@@ -1832,8 +1856,64 @@
     // organizer instead of silently risking another real duplicate Poshmark listing.
     const publishAttempt = readPoshPublishAttemptState();
     if (publishAttempt && publishAttempt.itemId === queued.item.id && (Date.now() - publishAttempt.ts) < POSH_PUBLISH_ATTEMPT_WINDOW_MS) {
-      console.warn('[FAS Poshmark] This tab already clicked "List this item" for "' + queued.item.title + '" (itemId=' + queued.item.id + ') ' + Math.round((Date.now() - publishAttempt.ts) / 1000) + 's ago -- refusing to click it again to avoid a duplicate Poshmark listing. Falling back to manual review.');
-      overlayWarn('FindA.Sale already clicked <b>List this item</b> for <b>' + escapeHtml(queued.item.title) + '</b> moments ago on this tab, but this page reloaded before that could be confirmed. To avoid creating a duplicate listing, please check your Poshmark closet for this item first -- if it\'s already there, click below to continue the queue; if not, list it manually then click below.' +
+      console.warn('[FAS Poshmark] This tab already clicked "List this item" for "' + queued.item.title + '" (itemId=' + queued.item.id + ') ' + Math.round((Date.now() - publishAttempt.ts) / 1000) + 's ago -- checking the real outcome before deciding whether to stop or continue.');
+      // BUG FIX 2026-08-29 (S-EXT-POSHMARK-GUARD-VERIFY-AND-ADVANCE, Patrick live report: "poshmark
+      // didn't go past the closet again"): the guard above (S-EXT-POSHMARK-DUPLICATE-PUBLISH-CLICK)
+      // correctly stopped a real duplicate-listing bug, but its response to detecting a recent
+      // same-item attempt was to UNCONDITIONALLY fall back to manual review -- even when the earlier
+      // click actually succeeded -- which stalls the entire auto-publish run on exactly the event
+      // (a page reload mid-publish) this guard exists to handle, defeating the point of unattended
+      // auto-publish. Before deciding, reuse this file's own existing waitForFormReady() poll (the
+      // SAME signal that gates run()'s initial fill, and the same looksLikeSellForm() check
+      // waitForPoshmarkPublishConfirmation already uses to confirm a normal publish) to find out
+      // what is actually on screen right now, instead of guessing from the marker alone:
+      //   'ready'       -- the sell form IS showing again (a fresh, unfilled create-listing form) --
+      //                    genuinely ambiguous, the earlier click may never have gone through at
+      //                    all. Stays on the safe, conservative manual-review path (unchanged
+      //                    behavior from before this fix).
+      //   'timeout'     -- the sell form never (re)appeared within the poll window -- we're on some
+      //                    other page (closet, listing detail, a generic post-publish redirect),
+      //                    which is exactly what a genuine successful publish looks like from this
+      //                    tab's perspective (Poshmark hard-navigates away from create-listing on
+      //                    success). Treated as published; the run continues.
+      //   'interstitial' -- a real CAPTCHA/verification screen -- same hard-stop posture as
+      //                    everywhere else in this file, never guessed past.
+      const outcomeState = await waitForFormReady(5000);
+      if (outcomeState === 'interstitial') {
+        overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));
+        closeBtnHandler();
+        return;
+      }
+      if (outcomeState === 'timeout') {
+        // Sell form did not reappear -- treat exactly like doPoshmarkAutoPublish's own normal
+        // success path: clear both markers, report the publish, and advance the CAS-protected queue
+        // index (safe even if background.js's reliability net already advanced it independently --
+        // see advancePoshmarkQueue's own compare-and-swap), then continue the run forward instead of
+        // stalling on manual review.
+        console.warn('[FAS Poshmark] Sell form did not reappear within 5s after reload -- treating the earlier "List this item" click as a successful publish and continuing the queue.');
+        clearPoshPublishAttemptState();
+        clearPoshNavRetryState();
+        try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+        const more = (queued.index + 1) < queued.total;
+        if (more && queued.autoPublish !== false) {
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Confirmed <b>' + escapeHtml(queued.item.title) + '</b> published (this tab reloaded right after clicking List this item, and the sell form did not come back -- treating as a success).</div>' +
+            '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+          await humanPause(600, 1200);
+          await navigateToPoshmarkCreateListing();
+          return;
+        }
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Confirmed <b>' + escapeHtml(queued.item.title) + '</b> published (this tab reloaded right after clicking List this item, and the sell form did not come back -- treating as a success).</div>' +
+          (more ? button('fas-posh-next', 'Next item &#9654;', true) : button('fas-posh-close', 'Close', false)));
+        const next = document.getElementById('fas-posh-next');
+        if (next) next.onclick = async () => { await navigateToPoshmarkCreateListing(); };
+        closeBtnHandler();
+        return;
+      }
+      // outcomeState === 'ready': the sell form is showing again -- genuinely ambiguous, can't
+      // confirm the earlier click went through. Stays on the safe, conservative manual-review path
+      // (unchanged behavior from before this fix).
+      overlayWarn('FindA.Sale already clicked <b>List this item</b> for <b>' + escapeHtml(queued.item.title) + '</b> moments ago on this tab, but this page reloaded before that could be confirmed, and a fresh listing form is showing again -- so it\'s not clear whether that click actually went through. To avoid creating a duplicate listing, please check your Poshmark closet for this item first -- if it\'s already there, click below to continue the queue; if not, list it manually then click below.' +
         button('fas-posh-dupe-ack', 'Got it -- continue queue', true) +
         button('fas-posh-close', 'Close', false));
       const dupeAck = document.getElementById('fas-posh-dupe-ack');

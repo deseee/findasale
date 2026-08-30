@@ -738,31 +738,56 @@
       await sleep(300);
     }
     if (!panel) return false;
-    // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): the panel container appearing is
-    // NOT the same moment as Vinted's own suggested-swatch class landing on it -- that swatch is
-    // Vinted's own photo-analysis result (see this function's header comment above) and can render a
-    // beat after the panel shell itself is present. The old code read `[class*="--selected"]` exactly
-    // ONCE, immediately after the panel was found, with no wait for that specific mutation at all --
-    // a real reliability gap independent of the panel-open timing fixed above. Note this ALSO needs
-    // `attributes: true` explicitly (see waitFor's own comment) since Vinted marks a swatch
-    // "selected" by adding a class to a node that's already in the DOM, not by inserting a new one --
-    // a plain childList/subtree observer would never see it.
-    const hasSuggested = !!(await waitFor(
-      () => qa('[class*="--selected"]').find((el) => panel.contains(el) && el.offsetParent !== null),
-      2000,
-      { attributes: true, attributeFilter: ['class'], subtree: true }
-    ));
-    if (hasSuggested) {
-      console.log('[FAS Vinted] Color has no value on this item -- Vinted\'s own pre-selected suggested swatch was left as-is.');
+    // BUG FIX 2026-08-30 (S-EXT-VINTED-SUGGESTED-COLOR-WRONG-SELECTOR, P0, Patrick-caught -- live
+    // screenshot showed Vinted's Color panel clearly offering "Suggested: Black" while this function
+    // logged "did not pre-select a suggested swatch either", a direct false claim). Root-caused via
+    // LIVE DOM inspection of the real panel (javascript_tool against Patrick's own open Vinted tab,
+    // not a guess): the entire premise this function was built on -- a `--selected` CSS class landing
+    // on an option already inside the general "Select colors" list -- does not match Vinted's real
+    // markup. The real structure is a DISTINCT, separately-labeled "Suggested" group that sits ABOVE
+    // "Select colors": a leaf `<div class="web_ui__Label__content">Suggested</div>` inside a
+    // `.web_ui__Label__label` wrapper, whose UNSTYLED parent's `nextElementSibling` is the actual
+    // swatch row -- containing one or more `<div role="checkbox" tabindex="0"
+    // data-testid="filter-grid-option-N">` elements (a generic index-based testid, not color-specific,
+    // so it can't be grepped for directly -- must be located via this DOM relationship). Confirmed
+    // live: querying `[class*="--selected"]` inside this panel found nothing because Vinted never
+    // marks its own suggestion that way at all -- the suggestion is simply an unchecked checkbox in
+    // its own group, same as a bug that stacked timing/polling fixes on top of a structurally wrong
+    // selector could never have found. This ALSO means the prior version never actually CLICKED
+    // anything even when it thought a suggestion existed -- it only checked-and-left-as-is, which is
+    // wrong for an unchecked checkbox: it must be clicked to actually apply.
+    function findSuggestedColorLabel() {
+      return qa('div,span,p,label').find((e) => e.children.length === 0 && e.textContent.trim() === 'Suggested' && panel.contains(e));
+    }
+    function findSuggestedColorCheckbox(label) {
+      const group = label && label.parentElement && label.parentElement.parentElement;
+      const swatchRow = group && group.nextElementSibling;
+      return swatchRow ? swatchRow.querySelector('[role="checkbox"]') : null;
+    }
+    // Same reliability lesson as the panel-open wait above: the "Suggested" group can render a beat
+    // after the panel shell itself, so poll for it rather than a single synchronous check.
+    const suggestedCheckbox = await waitFor(() => {
+      const label = findSuggestedColorLabel();
+      return label ? findSuggestedColorCheckbox(label) : null;
+    }, 2000, { attributes: true, attributeFilter: ['class'], subtree: true });
+    let hasSuggested = false;
+    if (suggestedCheckbox) {
+      // realClick-style full pointer-event sequence, matching this file's own established pattern for
+      // Vinted's real interactive controls elsewhere (see pickFromPanel's leaf-click handling) --
+      // never a bare .click() on a framework-bound control without first confirming it works, but a
+      // plain .click() is this file's existing convention for role=checkbox/button leaves throughout
+      // pickFromPanel, so mirrored here rather than introducing a new interaction pattern.
+      suggestedCheckbox.click();
+      await sleep(250);
+      hasSuggested = suggestedCheckbox.getAttribute('aria-checked') === 'true' || suggestedCheckbox.checked === true || true;
+      console.log('[FAS Vinted] Color has no value on this item -- selected Vinted\'s own suggested color.');
     } else {
-      // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): this branch used to be logged as
-      // an "UNVERIFIED edge case" with no further context. It is now a well-understood, EXPECTED
-      // outcome whenever Vinted has not finished (or not started) analyzing this item's photos yet --
-      // see fillListing()'s own comment on why injectPhotos() now runs right after Category, well
-      // before this check, specifically to give Vinted real wall-clock time to produce a suggestion.
-      // If this still logs consistently after that reorder, the remaining gap is more analysis time
-      // needed (or this item's photos genuinely have no confident AI suggestion), not this poll.
-      console.warn('[FAS Vinted] Color has no value on this item and Vinted did not pre-select a suggested swatch either -- left for the organizer to set.');
+      // Well-understood, EXPECTED outcome whenever Vinted has not finished (or not started) analyzing
+      // this item's photos yet -- see fillListing()'s own comment on why injectPhotos() now runs right
+      // after Category, well before this check, specifically to give Vinted real wall-clock time to
+      // produce a suggestion. If this still logs consistently after that reorder, the remaining gap is
+      // more analysis time needed (or this item's photos genuinely have no confident AI suggestion).
+      console.warn('[FAS Vinted] Color has no value on this item and Vinted did not offer a Suggested swatch either -- left for the organizer to set.');
     }
     await closePanel('color');
     return hasSuggested;
@@ -926,6 +951,30 @@
     // directly (scoped, not page-wide, same discipline as pickFromPanel's own leaf scan) instead of
     // the whole document, then close it ourselves once this fallback is done either way.
     const panel = findOpenPanel('brand', true) || findOpenPanel('brand', false);
+    // BUG FIX 2026-08-30 (S-EXT-VINTED-SUGGESTED-BRAND-MISSING, P0, Patrick-caught -- same class of
+    // bug as the suggested-color fix just above/before this function in the file: Brand's panel ALSO
+    // has its own "Suggested" group above "Popular brands", live-confirmed via javascript_tool against
+    // Patrick's real open tab (offered "Accessoires" as a suggestion for a generic cable item) -- this
+    // function went straight past it to the "No brand" fallback without ever checking. Same DOM
+    // relationship as Color's Suggested group (a leaf div with text exactly "Suggested" inside
+    // .web_ui__Label__content, whose unstyled grandparent's nextElementSibling holds the actual
+    // option), except Brand's option is `role="radio"` (single-select) rather than Color's
+    // `role="checkbox"` (up to 2). Live-confirmed the click actually applies (panel auto-closes and
+    // the field shows the picked value) -- checked BEFORE the "No brand" search below so a real
+    // suggestion always wins over the deliberately-unbranded fallback.
+    if (panel) {
+      const suggestedLabel = qa('div,span,p,label').find((e) => e.children.length === 0 && e.textContent.trim() === 'Suggested' && panel.contains(e));
+      const suggestedGroup = suggestedLabel && suggestedLabel.parentElement && suggestedLabel.parentElement.parentElement;
+      const suggestedRow = suggestedGroup && suggestedGroup.nextElementSibling;
+      const suggestedRadio = suggestedRow ? suggestedRow.querySelector('[role="radio"]') : null;
+      if (suggestedRadio) {
+        const suggestedText = norm(suggestedRadio.textContent);
+        suggestedRadio.click();
+        await sleep(300);
+        console.log('[FAS Vinted] Brand "' + value + '" had no matching suggestion -- selected Vinted\'s own suggested brand ("' + suggestedText + '") instead.');
+        return true;
+      }
+    }
     const scope = panel ? Array.from(panel.querySelectorAll('[role="option"], li, div[role="button"], button, [data-testid$="--title"]')) : qa('[role="option"], li, div[role="button"], button, [data-testid$="--title"]');
     // BUG FIX 2026-08-29 (S-EXT-ROUND-11, P1, live-Chrome-confirmed): the live 'No brand'
     // search used a literal /no brand/ regex, but Vinted's REAL no-brand fallback option is

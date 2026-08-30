@@ -294,19 +294,58 @@
   // uses on this exact screen. Logged either way so a live console watch can tell "detected, both
   // signals matched" apart from "URL looked right but copy didn't match -- not treated as
   // posted-confirmation" if Craigslist ever changes this page's wording.
+  // BROADENED (2026-08-29, S-EXT-CRAIGSLIST-DUP round 2 -- live console evidence: two DIFFERENT
+  // real /k/ confirmation URLs both hit the "expected page copy was not found" warning tonight,
+  // despite round 4's 3-phrase list having been confirmed live against a real completed post
+  // earlier this session. Read in full before changing this again: full URL-only trust was
+  // considered and REJECTED -- the round-7 comment on isCraigslistPhoneVerificationStep() above
+  // documents a CONFIRMED live case of Craigslist's phone-verification wall sharing this EXACT
+  // bare /k/<key1>/<key2> URL shape with no distinguishing query string, so URL alone cannot
+  // safely stand in for "really posted" (it would mark an item listed/advance the queue while a
+  // human still has to enter a phone code -- worse than the current bug). The balanced fix kept
+  // the text/title gate but made it far less brittle two ways: (1) many more plausible phrasings
+  // instead of 3 exact ones, since Craigslist's real wording is not independently re-observable
+  // from static reading alone, and (2) the page's own <title> is now a second, independent
+  // signal -- this file's own round-4 comment above (search "posting confirmation") already
+  // recorded a real completed post's title as "kalamazoo | posting confirmation", so that phrase
+  // is cross-referenced FROM this file's own prior live evidence, not a new guess. Either signal
+  // alone is now enough (OR, same permissiveness philosophy as the original 3-phrase OR, just a
+  // bigger net). If this round's console capture STILL shows the warning, the warning itself now
+  // logs the real title + a body-text sample so the actual current copy is visible directly
+  // instead of just "not found" -- that capture should replace guessed phrasings with the real
+  // ones next round.
   function isCraigslistPostedConfirmation() {
     const urlMatch = location.hostname === 'post.craigslist.org' && /^\/k\//.test(location.pathname);
     if (!urlMatch) return false;
     const text = bodyText().toLowerCase();
-    const textMatch = text.indexOf('thanks for posting') !== -1 ||
-      text.indexOf('view your post at') !== -1 ||
-      text.indexOf('post another') !== -1;
-    if (textMatch) {
-      console.log('[FAS Craigslist] posted-confirmation detected -- url=' + location.pathname + ' textSignal=matched');
+    const title = (document.title || '').toLowerCase();
+    const textSignals = [
+      'thanks for posting',
+      'thank you for posting',
+      'view your post at',
+      'view your ad at',
+      'view posting',
+      'post another',
+      'edit your post',
+      'manage your post',
+      'delete this posting',
+      'email a link to this posting',
+      'your posting is now live',
+      'is now posted',
+      'has been posted',
+      'posting published',
+      'successfully posted'
+    ];
+    const textMatch = textSignals.some((s) => text.indexOf(s) !== -1);
+    const titleMatch = title.indexOf('posting confirmation') !== -1;
+    if (textMatch || titleMatch) {
+      console.log('[FAS Craigslist] posted-confirmation detected -- url=' + location.pathname +
+        ' textSignal=' + (textMatch ? 'matched' : 'no') + ' titleSignal=' + (titleMatch ? 'matched' : 'no'));
       return true;
     }
     console.warn('[FAS Craigslist] URL looked like a posting confirmation (' + location.pathname +
-      ') but expected page copy was not found -- NOT treating this as posted-confirmation.');
+      ') but expected page copy was not found -- NOT treating this as posted-confirmation. ' +
+      'title="' + (document.title || '') + '" bodyTextSample="' + text.slice(0, 400).replace(/\s+/g, ' ') + '"');
     return false;
   }
 

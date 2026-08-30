@@ -451,6 +451,35 @@
   // men, etc.) if the clean leaf name alone doesn't resolve. categoryText: FindA.Sale's clean leaf
   // category name (post S-EXT-BATCH-12, e.g. "Tracksuits & Sets") -- always tried first, including
   // its simplified variants, since it's normally the most specific and most useful term.
+  // BUG FIX 2026-08-29 (S-EXT-MERCARI-CATEGORY-CASCADE, Patrick-reported: "mercari got stuck in
+  // category on one of the items", live console showed Category's own "no result matched" warning
+  // immediately followed by Brand's own selector-not-found warning AND Smart Pricing floor's own
+  // selector-not-found warning on the SAME item -- all three in one run, an item where Smart Pricing
+  // floor detection had ALREADY been confirmed working earlier in the SAME run on a different item.
+  // Root cause confirmed by direct read of this function: opener.click() (above) opens Mercari's real
+  // category-search modal, but BOTH no-match exit paths below (search-input exhausted, and the
+  // tree-walk fallback) returned false WITHOUT ever attempting to close it -- unlike fillMercariSize's
+  // proven "warn, then find+click a close control, then return false" pattern (~line 803 below), which
+  // this file already established for exactly this situation. Left open, Mercari's modal keeps sitting
+  // on top of the Sell page, which is the most likely explanation for every field FILLED AFTER Category
+  // (Brand, then eventually Price/Smart-Pricing-Floor) also coming up "selector not found" on this same
+  // item while the identical selectors worked minutes earlier on a different item in the same run.
+  // Whether Mercari's real form ALSO progressively renders Brand/Price only after a category is
+  // actually committed (a second, independent possible contributor) cannot be confirmed from static
+  // code alone -- that needs live DOM evidence. The diagnostic logging added below (mirroring
+  // fas-vinted.js's DIAG leaf-list logging, ~line 602 of that file) now captures that evidence on the
+  // next live run: the actual visible category options Mercari offered for the last query tried, and a
+  // same-run findable/not-findable snapshot of the Brand and Smart Pricing Floor selectors taken the
+  // instant Category gives up -- so the next live failure has a direct answer instead of another guess.
+  async function closeCategoryModal() {
+    const closeBtn = qa('button, [role="button"], [aria-label]').find((b) => {
+      const aria = norm(b.getAttribute('aria-label') || '');
+      const t = norm(b.textContent);
+      return (aria === 'close' || aria.indexOf('close') !== -1 || t === '\u00d7' || t === 'x') && b.offsetParent !== null;
+    });
+    if (closeBtn) { await realClick(closeBtn); await sleep(150); return true; }
+    return false;
+  }
   async function pickCategory(categoryText, breadcrumbText) {
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
@@ -624,10 +653,34 @@
             });
             if (closeBtn) { await realClick(closeBtn); await sleep(200); }
           }
+          // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-MODAL-STAYS-OPEN-ON-SUCCESS, Patrick-directed,
+          // live-screenshot-confirmed): a real live screenshot showed Mercari's own Category modal
+          // still visibly open ON TOP of the page immediately after a category value was successfully
+          // committed (the real Category field behind the modal already read "Other > Musical
+          // instrume..." -- the value WAS written, the modal just never closed). The modal-close call
+          // added by the earlier S-EXT-MERCARI-CATEGORY-CASCADE fix (~line 474 area) only ever ran on
+          // the NO-MATCH/give-up exit paths, never here on the success path. Whether Mercari's own
+          // confirm-button click above is SUPPOSED to auto-close the modal and simply doesn't for a
+          // fallback/generic leaf pick, or never auto-closes at all, isn't confirmable from static
+          // code alone -- this explicit close is a safe, defensive addition either way:
+          // closeCategoryModal() is itself a no-op (returns false, changes nothing) if no close
+          // control is found, i.e. if the modal had already closed on its own.
+          await closeCategoryModal();
           return true;
         }
       }
       console.warn('[FAS Mercari] Category "' + categoryText + '" -- search input found but no result matched any segment (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      // DIAGNOSTIC (S-EXT-MERCARI-CATEGORY-CASCADE): capture what Mercari's own search actually
+      // returned for the LAST attempted query, and whether Brand/Smart-Pricing-Floor are findable in
+      // the DOM right now, BEFORE closing the modal -- direct live evidence for whichever hypothesis
+      // (blocked-by-open-modal vs. progressively-rendered-post-category) is actually true, without
+      // needing a separate live debugging pass next time this happens.
+      const lastQuery = searchCandidates.length ? searchCandidates[searchCandidates.length - 1].text : categoryText;
+      const lastOptionsSeen = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button')
+        .map((o) => norm(o.textContent)).filter(Boolean).slice(0, 20);
+      console.log('[FAS Mercari DIAG] Category: last query="' + lastQuery + '" visible options=' + JSON.stringify(lastOptionsSeen));
+      console.log('[FAS Mercari DIAG] Category: Brand findable=' + !!fieldByLabel('Brand') + ' SmartPricingFloor findable=' + !!(document.querySelector('input#sellMinPriceForAutoPriceDrop[name="sellMinPriceForAutoPriceDrop"][data-testid="SmartPricingFloorPrice"]') || fieldByLabel('Smart Pricing Floor Price') || fieldByLabel('Floor Price')));
+      await closeCategoryModal();
       return false;
     }
     // Fallback: segmented tree-walk (S-EXT-BATCH-2 logic, unchanged), in case a different Mercari
@@ -657,7 +710,14 @@
       }
       if (!matched) break;
     }
-    if (!pickedAny) console.warn('[FAS Mercari] Category "' + categoryText + '" -- no level matched in the picker (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+    if (!pickedAny) {
+      console.warn('[FAS Mercari] Category "' + categoryText + '" -- no level matched in the picker (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+    }
+    // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-MODAL-STAYS-OPEN-ON-SUCCESS): close the modal on
+    // BOTH the success (pickedAny true) and no-match (pickedAny false) exit paths -- see the
+    // identical fix in the search-input branch above for the full incident writeup. Defensive/no-op
+    // via closeCategoryModal() if the modal already closed on its own.
+    await closeCategoryModal();
     return pickedAny;
   }
 
@@ -693,6 +753,59 @@
       await sleep(180);
     }
   }
+  // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-BRAND-SUGGESTED-CHIPS, Patrick-directed,
+  // live-screenshot-confirmed): a real live screenshot of a stuck listing (Mugig guitar cable)
+  // showed the Brand field empty and red-outlined with Mercari's own "Please select a brand"
+  // validation error, and directly beneath it a "Suggested brands:" chip row (Fender, Korg,
+  // Buckle-Down, D'Addario, Livewire, Dunlop, and critically a "No brand / Not sure" chip) that
+  // this file never looked at -- fillBrand()/fillMercariNoBrand() only ever tried the typed-
+  // autocomplete list (waitForOptionByText/waitForAnyOptionByText) and gave up when that came up
+  // empty, even though a real, honest fallback option was sitting right there in the DOM. Mirrors
+  // this session's Vinted equivalent fix (verified working live): try a real suggested chip
+  // matching the item's actual brand text first, then fall back to the honest "No brand / Not
+  // sure" chip rather than leaving the field red and blocking submission.
+  // No live DOM access this dispatch to confirm the chip row's exact markup (Mercari's own
+  // "Suggested brands" row is NOT a dropdown/modal panel the way Category's picker is -- it reads
+  // in the screenshot as small pill/button elements sitting directly in the page flow below the
+  // Brand field) -- best-effort, defensive selector: look for a "Suggested brand" heading first
+  // and scope to its container when found, otherwise fall back to a page-wide scan; either way,
+  // only short/pill-length visible-text elements are considered candidates so this can't grab an
+  // unrelated paragraph or the page's other buttons. On a miss, logs exactly what WAS found near
+  // the Brand field so the next live console capture can nail the real selector instead of another
+  // guess.
+  function findMercariSuggestedBrandChips() {
+    const heading = qa('div, span, p, h1, h2, h3, h4, h5, legend').find((el) => {
+      const t = norm(el.textContent);
+      return t && t.length < 40 && t.indexOf('suggested brand') !== -1;
+    });
+    const scope = (heading && heading.parentElement) ? heading.parentElement : document;
+    const candidates = Array.from(scope.querySelectorAll('button, [role="button"], [role="option"], li, div[tabindex]'))
+      .filter((el) => el.offsetParent !== null);
+    return candidates.filter((el) => {
+      const t = norm(el.textContent);
+      return t && t.length > 0 && t.length < 40;
+    });
+  }
+  async function fillMercariBrandFromSuggestedChip(value) {
+    const chips = findMercariSuggestedBrandChips();
+    if (!chips.length) {
+      const nearby = qa('div, span, p').filter((el) => el.offsetParent !== null && norm(el.textContent).length > 0 && norm(el.textContent).length < 60)
+        .slice(0, 15).map((el) => norm(el.textContent));
+      console.warn('[FAS Mercari DIAG] Brand -- no suggested-brand chip row found near the field (UNVERIFIED selector). Nearby short text on page: ' + JSON.stringify(nearby));
+      return false;
+    }
+    if (value) {
+      const want = norm(value);
+      const wantWords = wordize(want);
+      const match = chips.find((c) => norm(c.textContent) === want)
+        || chips.find((c) => wordize(norm(c.textContent)).some((w) => wantWords.indexOf(w) !== -1));
+      if (match) { await realClick(match); await sleep(200); return true; }
+    }
+    const noBrandChip = chips.find((c) => /no brand|not sure/i.test(norm(c.textContent)));
+    if (noBrandChip) { await realClick(noBrandChip); await sleep(200); return true; }
+    console.warn('[FAS Mercari DIAG] Brand -- suggested-brand chip row found (' + chips.length + ' chips: ' + JSON.stringify(chips.map((c) => norm(c.textContent))) + ') but neither the item\'s brand nor a "No brand/Not sure" chip matched.');
+    return false;
+  }
   async function fillBrand(labelText, value) {
     const el = fieldByLabel(labelText);
     if (!el) return false;
@@ -700,6 +813,8 @@
     setNativeValue(el, String(value));
     const match = await waitForOptionByText(value, 2500);
     if (match) { await realClick(match); await sleep(200); return true; }
+    const chipMatch = await fillMercariBrandFromSuggestedChip(value);
+    if (chipMatch) return true;
     console.warn('[FAS Mercari] Brand "' + value + '" had no matching suggestion (UNVERIFIED, category-dependent list) -- left unset.');
     return false;
   }
@@ -729,6 +844,13 @@
     setNativeValue(el, 'no');
     match = await waitForAnyOptionByText(MERCARI_NO_BRAND_VARIANTS, 2000);
     if (match) { await realClick(match); await sleep(200); return true; }
+    // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-BRAND-SUGGESTED-CHIPS): before giving up, try the
+    // same "Suggested brands:" chip row's own "No brand / Not sure" chip -- see
+    // fillMercariBrandFromSuggestedChip()'s comment for the live-screenshot evidence this chip
+    // reliably exists once Category is set, independent of the typed-autocomplete list checked
+    // above.
+    const chipMatch = await fillMercariBrandFromSuggestedChip(null);
+    if (chipMatch) return true;
     console.warn('[FAS Mercari] No brand set on this item and no "No Brand/Not sure" option found in the suggestion list (UNVERIFIED) -- left unset.');
     return false;
   }
@@ -1828,6 +1950,24 @@
   // every time -- Patrick correctly reported "it didn't click List with auto publish checked."
   // Real testid checked first (most robust), exact-text "list" kept as a fallback in case Mercari
   // ever drops the testid.
+  // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-PUBLISH-BLOCKED-BY-MODAL, Patrick-directed,
+  // live-screenshot-confirmed): a real live screenshot showed this file attempt the final List
+  // click WHILE Mercari's own Category modal was still visibly open and blocking the page (the
+  // overlay Patrick saw, "Clicked List but couldn't confirm it went through", is the direct
+  // downstream symptom of that click landing on a covered/blocked page -- nothing behind an open
+  // modal is normally clickable). Checks for any visible dialog/modal-shaped element -- or the
+  // Category picker's own still-mounted "Search category" input specifically -- before ever
+  // attempting a publish click. Reuses the same `offsetParent !== null` visibility signal
+  // closeCategoryModal() and isBlockingCaptchaIframe() already use elsewhere in this file,
+  // consistent with this file's "never click past an unexpected state" discipline (same philosophy
+  // as the CAPTCHA/interstitial hard-stop).
+  function isBlockingModalOpen() {
+    const dialog = qa('[role="dialog"], [role="alertdialog"]').find((d) => d.offsetParent !== null);
+    if (dialog) return true;
+    const catSearch = document.querySelector('input[placeholder="Search category" i]');
+    if (catSearch && catSearch.offsetParent !== null) return true;
+    return false;
+  }
   function findMercariPublishButton() {
     return document.querySelector('[data-testid="ListButton"]')
       || qa('button').find((b) => norm(b.textContent) === 'list');
@@ -1891,6 +2031,15 @@
     if (!publishBtn) {
       // Auto-publish is on but the button couldn't be found (UNVERIFIED selector, file header) --
       // never guess past this; fall back to the exact same manual-review path as autoPublish=false.
+      showReviewOverlay(item, index, total, photosOk);
+      return;
+    }
+    // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-PUBLISH-BLOCKED-BY-MODAL): refuse the publish
+    // click outright if a blocking modal (most likely Category's own picker, per the live
+    // screenshot evidence) is still open -- see isBlockingModalOpen()'s comment. Falls back to the
+    // same manual-review overlay as a not-found button, never a guessed/doomed click.
+    if (isBlockingModalOpen()) {
+      console.warn('[FAS Mercari] A modal is still open (likely the Category picker) -- refusing to click List while the page is blocked. Falling back to manual review instead of a doomed/no-op click.');
       showReviewOverlay(item, index, total, photosOk);
       return;
     }
