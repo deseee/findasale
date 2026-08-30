@@ -764,7 +764,7 @@ const ITEM_DETAIL_SELECT = {
             expiresAt: true,
             userId: true,
             user: { select: { name: true, email: true } },
-            invoice: { select: { expiresAt: true, stripeSessionId: true, stripeAccountId: true, status: true } }
+            invoice: { select: { expiresAt: true, stripeSessionId: true, stripeAccountId: true, status: true, totalAmount: true, itemIds: true } }
           }
         }
 } as const;
@@ -784,7 +784,7 @@ type HoldForViewer = {
   expiresAt: Date;
   userId: string;
   user?: { name: string | null; email: string } | null;
-  invoice?: { expiresAt: Date; stripeSessionId: string | null; stripeAccountId: string | null; status: string } | null;
+  invoice?: { expiresAt: Date; stripeSessionId: string | null; stripeAccountId: string | null; status: string; totalAmount: number; itemIds: string[] } | null;
 } | null | undefined;
 
 // Statuses in which a hold is genuinely live. A settled ('COMPLETED'), cancelled or
@@ -841,7 +841,23 @@ async function buildHoldFieldsForViewer(
         );
       }
     }
-    return { reservedBy: reservation.userId, invoiceExpiresAt, invoiceCheckoutUrl };
+    // Bug fix (2026-08-30, Patrick: bundled Hold-to-Pay invoice email link only showed
+    // this item's own price, not the real bundled total shown on the actual Stripe
+    // checkout -- e.g. a 2-item $1.50 invoice showed "Amount Due $0.75" on the item
+    // page, even though clicking through correctly charged $1.50 for both items.
+    // Expose the invoice's real total + item count so the card can show the true amount.
+    const invoiceItemCount = reservation.invoice?.itemIds?.length ?? 1;
+    const invoiceTotalAmount =
+      invoiceItemCount > 1 && reservation.invoice
+        ? reservation.invoice.totalAmount / 100
+        : null; // null = not bundled, frontend falls back to this item's own price
+    return {
+      reservedBy: reservation.userId,
+      invoiceExpiresAt,
+      invoiceCheckoutUrl,
+      invoiceItemCount,
+      invoiceTotalAmount,
+    };
   }
 
   return {};

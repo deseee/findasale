@@ -10,6 +10,12 @@ import HoldTimer from './HoldTimer';
 interface HoldInvoiceStatusCardProps {
   itemId: string;
   itemPrice: number;
+  // Bug fix (2026-08-30): when this item is part of a bundled Hold-to-Pay invoice
+  // (2+ items on one Stripe Checkout Session), bundledTotal/bundledItemCount carry
+  // the invoice's real total so the card doesn't understate what checkout will
+  // actually charge. bundledTotal is null when the invoice covers only this item.
+  bundledTotal?: number | null;
+  bundledItemCount?: number;
   checkoutUrl: string;
   expiresAt: string;
   organizerName: string;
@@ -18,10 +24,15 @@ interface HoldInvoiceStatusCardProps {
 export default function HoldInvoiceStatusCard({
   itemId,
   itemPrice,
+  bundledTotal,
+  bundledItemCount = 1,
   checkoutUrl,
   expiresAt,
   organizerName,
 }: HoldInvoiceStatusCardProps) {
+  const isBundled = bundledItemCount > 1 && bundledTotal != null;
+  const amountDue = isBundled ? bundledTotal! : itemPrice;
+
   const handleCheckout = () => {
     if (checkoutUrl) {
       window.open(checkoutUrl, '_blank');
@@ -42,10 +53,17 @@ export default function HoldInvoiceStatusCard({
 
       {/* Amount */}
       <div className="mb-3">
-        <p className="text-sm text-amber-700 dark:text-amber-400">Amount Due</p>
-        <p className="text-2xl font-bold text-amber-900 dark:text-amber-100">
-          ${itemPrice.toFixed(2)}
+        <p className="text-sm text-amber-700 dark:text-amber-400">
+          Amount Due{isBundled ? ` (${bundledItemCount} items)` : ''}
         </p>
+        <p className="text-2xl font-bold text-amber-900 dark:text-amber-100">
+          ${amountDue.toFixed(2)}
+        </p>
+        {isBundled && (
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+            This item is ${itemPrice.toFixed(2)} of a combined invoice for {bundledItemCount} items from {organizerName}.
+          </p>
+        )}
       </div>
 
       {/* Timer */}

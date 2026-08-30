@@ -120,6 +120,8 @@ interface Item {
   reservedByEmail?: string;
   invoiceCheckoutUrl?: string;
   invoiceExpiresAt?: string;
+  invoiceItemCount?: number;
+  invoiceTotalAmount?: number | null;
   variantSku?: string; // V4: Multi-variant support
   priceBeforeMarkdown?: number; // Feature #91: Auto-Markdown
   markdownApplied?: boolean; // Feature #91: Auto-Markdown
@@ -969,6 +971,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 <HoldInvoiceStatusCard
                   itemId={item.id}
                   itemPrice={item.price}
+                  bundledTotal={item.invoiceTotalAmount ?? null}
+                  bundledItemCount={item.invoiceItemCount ?? 1}
                   checkoutUrl={item.invoiceCheckoutUrl || ''}
                   expiresAt={item.invoiceExpiresAt || ''}
                   organizerName={item.sale.organizer?.businessName ?? item.sale.organizer?.name ?? 'Organizer'}
