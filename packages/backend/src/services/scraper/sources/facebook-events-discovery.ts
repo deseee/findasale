@@ -378,28 +378,39 @@ function extractHostName(ev: any): string | undefined {
 function mapEventToScrapedItem(
   ev: any,
   metro: MetroTarget,
-  typeHint: string
+  typeHint: string,
+  // Rejection-reason tally (2026-08-30, S-FB-EVENTS-ZERO-INGEST-DIAG): optional
+  // out-param, keyed and incremented by rejectReason() below at every early
+  // `return null` exit. Purely additive -- does not change accept/reject logic,
+  // only makes WHICH check fired visible in the run log (see aggregate log line
+  // in scrapeFacebookEventsForMetroViaProxy). undefined when caller doesn't care.
+  reasons?: Record<string, number>
 ): ScrapedItem | null {
+  const rejectReason = (reason: string): null => {
+    if (reasons) reasons[reason] = (reasons[reason] ?? 0) + 1;
+    return null;
+  };
+
   // Title
   const rawName = typeof ev?.name === 'string' ? ev.name.trim() : '';
-  if (!rawName) return null;
+  if (!rawName) return rejectReason('no-name');
 
   // Online-only events are not physical sales -- skip.
-  if (ev?.is_online === true) return null;
+  if (ev?.is_online === true) return rejectReason('online');
 
   // Non-sale content rejection (concerts/funerals/etc). Feed the event's OWN
   // name as both title and combined text -- no SERP snippet carousel bleed here.
-  if (isRejectedNonSaleContent(rawName, rawName)) return null;
+  if (isRejectedNonSaleContent(rawName, rawName)) return rejectReason('non-sale');
 
   // Sale-type classification -- reject when there is no positive signal at all.
   const inferred = inferSaleType(rawName, typeHint);
-  if (inferred === null) return null;
+  if (inferred === null) return rejectReason('unclassified-type');
 
   // Deterministic past/stale drop FIRST (FB's own boolean), then real date.
-  if (ev?.is_past === true) return null;
+  if (ev?.is_past === true) return rejectReason('past');
 
   const dateResolved = resolveEventDate(ev);
-  if (!dateResolved) return null; // no trustworthy date -> skip, never fabricate
+  if (!dateResolved) return rejectReason('no-date'); // no trustworthy date -> skip, never fabricate
   const startDate = dateResolved.date;
 
   // STALE-DATE REJECT (S1117) -- ONLY for a REAL parsed start_timestamp. FB keeps
@@ -411,7 +422,7 @@ function mapEventToScrapedItem(
     !dateResolved.approximate &&
     startDate.getTime() < Date.now() - STALE_PAST_GRACE_MS
   ) {
-    return null;
+    return rejectReason('stale-date');
   }
 
   // endDate: prefer the event's OWN real end_timestamp when it is a valid UNIX
@@ -437,7 +448,7 @@ function mapEventToScrapedItem(
   } else if (url) {
     fbEventId = extractFbEventIdFromUrl(url);
   }
-  if (!fbEventId) return null;
+  if (!fbEventId) return rejectReason('no-event-id');
 
   const sourceUrl = url
     ? canonicalizeEventUrl(url)
@@ -452,7 +463,7 @@ function mapEventToScrapedItem(
   // Quebec/Quebec (spelled-out province with no 2-letter code token). No US
   // state is 'QC' and metro.state is always a US state, so state==='QC' can only
   // arise from a Canadian address parse -- this never rejects a US listing.
-  if (state === 'QC' || /\bqu[eé]bec\b/i.test(address)) return null;
+  if (state === 'QC' || /\bqu[eé]bec\b/i.test(address)) return rejectReason('quebec');
 
   // Organizer attribution -- resolved in priority order, never guessed:
   //   1. A STRUCTURED host/creator NAME on the Event JSON (event_creator.name,
@@ -535,6 +546,10 @@ export async function scrapeFacebookEventsForMetroViaProxy(
   enrichCtx?: AddressEnrichCtx
 ): Promise<ScrapedItem[]> {
   const byEventId = new Map<string, ScrapedItem>();
+  // Rejection-reason tally for this metro's whole sub-query loop (2026-08-30,
+  // S-FB-EVENTS-ZERO-INGEST-DIAG) -- reset per metro call, aggregated across all
+  // SUB_QUERIES, logged once below. Diagnostic only; does not affect ingest.
+  const rejectReasons: Record<string, number> = {};
 
   for (const sub of SUB_QUERIES) {
     const q = `${sub.phrase} ${metro.city} ${metro.state}`;
@@ -559,7 +574,7 @@ export async function scrapeFacebookEventsForMetroViaProxy(
 
     let mapped = 0;
     for (const ev of events) {
-      const item = mapEventToScrapedItem(ev, metro, sub.typeHint);
+      const item = mapEventToScrapedItem(ev, metro, sub.typeHint, rejectReasons);
       if (!item) continue;
       const key = item.sourceItemId ?? item.sourceUrl;
       if (!byEventId.has(key)) {
@@ -576,6 +591,20 @@ export async function scrapeFacebookEventsForMetroViaProxy(
     // Light inter-query jitter -- one proxy request per phrase; the Worker + FB
     // tolerate this pacing across the sharded metro run.
     await jitterDelay(800, 1800);
+  }
+
+  // Aggregate rejection-reason breakdown for this metro, ALL sub-queries combined.
+  // Diagnostic for S-FB-EVENTS-ZERO-INGEST-DIAG (2026-08-30) -- only printed when at
+  // least one rejection happened, so a genuinely quiet metro (few/no events found)
+  // doesn't spam an all-zero line.
+  const rejectTotal = Object.values(rejectReasons).reduce((a, b) => a + b, 0);
+  if (rejectTotal > 0) {
+    const breakdown = Object.entries(rejectReasons)
+      .map(([reason, n]) => `${reason}=${n}`)
+      .join(', ');
+    console.log(
+      `[FB-Events-Discovery] ${metro.city}, ${metro.state} -- rejection reasons: ${breakdown}`
+    );
   }
 
   // ------------------------------------------------------------------
