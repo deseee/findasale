@@ -200,7 +200,7 @@ export async function executeVerifiedRefund(
           // stripeConnectId (PART B, 2026-07-28): needed to determine whether this
           // purchase's charge was routed through Connect as a destination charge before
           // any Transfer can be reversed.
-          organizer: { select: { userId: true, businessName: true, stripeConnectId: true } }
+          organizer: { select: { id: true, userId: true, businessName: true, stripeConnectId: true } }
         }
       },
       item: {
@@ -456,6 +456,46 @@ export async function executeVerifiedRefund(
       });
     } catch (err) {
       console.error(`[executeVerifiedRefund] Failed to decrement stockSold for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal):`, err);
+    }
+  }
+
+  // Cash-fee-balance reversal (2026-08-30 fix): a CASH-settled purchase (isCashPurchase)
+  // accrues its commission into Organizer.cashFeeBalance at sale time via
+  // services/cashFeeService.ts's accrueCashFeeBalance (see reservationController.ts's RECORD
+  // mode and terminalController.ts's cash paths, all three of which stamp the exact accrued
+  // amount onto Purchase.platformFeeAmount for this reason). Before this fix, refunding a cash
+  // purchase through ANY path (this shared function, including the admin refund tool) never
+  // reversed that accrual -- the organizer's next payout still deducted commission on a sale
+  // that was refunded and never actually kept. Confirmed live 2026-08-30: Artifact's dashboard
+  // showed "$8.20 in commission due on your cash sales" while several of the underlying cash
+  // Purchase rows had already been refunded (test data) -- the balance was never adjusted down.
+  // Reverses by this purchase's own stored platformFeeAmount (not a recomputed rate -- avoids
+  // rate drift if the organizer's tier changed between sale and refund), floored at 0 via the
+  // same gte-guard-then-zero pattern as the stockSold reset above. A card purchase's commission
+  // is already reversed by Stripe's own application-fee-refund mechanism (refund_application_fee
+  // above) -- this block is cash-only. Non-fatal: the refund has already succeeded by this point.
+  if (isCashPurchase && purchase.platformFeeAmount && purchase.platformFeeAmount > 0) {
+    const organizerId = purchase.sale?.organizer?.id;
+    if (organizerId) {
+      try {
+        const reversed = purchase.platformFeeAmount;
+        const decremented = await prisma.organizer.updateMany({
+          where: { id: organizerId, cashFeeBalance: { gte: reversed } },
+          data: { cashFeeBalance: { decrement: reversed }, cashFeeBalanceUpdatedAt: new Date() },
+        });
+        if (decremented.count === 0) {
+          // Balance is already lower than this purchase's own accrual (e.g. a payout already
+          // ran and zeroed it since this sale) -- floor at 0 rather than go negative.
+          await prisma.organizer.updateMany({
+            where: { id: organizerId },
+            data: { cashFeeBalance: 0, cashFeeBalanceUpdatedAt: new Date() },
+          });
+        }
+      } catch (err) {
+        console.error(`[executeVerifiedRefund] Failed to reverse cashFeeBalance for organizer ${organizerId} after refund of purchase ${purchaseId} (non-fatal):`, err);
+      }
+    } else {
+      console.error(`[executeVerifiedRefund] Cash purchase ${purchaseId} refunded but sale.organizer.id did not resolve -- cashFeeBalance reversal skipped`);
     }
   }
 
