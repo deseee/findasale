@@ -284,6 +284,21 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
       // there too) and by there being a next item to actually resume for.
       if (platform === 'CRAIGSLIST' && didAdvanceHere && (index + 1) < queue.length) {
         await new Promise((r) => setTimeout(r, 700)); // let Craigslist's own confirmation page settle
+        // BUG FIX (2026-08-30, S-EXT-CRAIGSLIST-RATE-LIMIT, Patrick live report -- hit Craigslist's
+        // own "You are posting too rapidly. Craig can't type them in this fast." page mid-run):
+        // this branch is the ONLY thing that actually advances a real Craigslist run in production
+        // (see the header comment above -- fas-craigslist.js's own in-page continuation never
+        // survives Craigslist's real cross-origin publish navigation) -- but it was re-navigating
+        // straight back to POST_URL after only the 700ms settle-pause above, with NO pacing at all.
+        // Every OTHER platform's queue-advance goes through humanQueueDelay() (10-25s randomized
+        // pacing, S-EXT-QUEUE-PACING) before advancing; Craigslist was silently skipping it entirely
+        // on the path that actually runs, so real multi-item Craigslist runs were posting roughly
+        // 700ms+processing-time apart -- exactly the kind of rapid-fire pattern Craigslist's own
+        // anti-spam throttle exists to catch. This was FindA.Sale's own extension causing the
+        // rate-limit, not an unrelated Craigslist-side coincidence. Fix: apply the same
+        // humanQueueDelay() every other platform already gets, right before the re-navigation --
+        // does not change the 700ms settle-pause above (a separate, shorter DOM-render concern).
+        await humanQueueDelay(tabId);
         chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
           // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-STALL round 3): this used to be
           // `void chrome.runtime.lastError` -- read-then-discarded, so a failed re-navigation
