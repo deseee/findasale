@@ -476,6 +476,17 @@
       }
       throw hardError('Delivery', 'Couldn\'t find the shipping label control.');
     }
+    // BUG FIX (same session, found immediately live -- Mad Max NES cart, 8oz, stalled next on
+    // "Couldn't find the Package weight control."): the version of this block that only checked
+    // for the control above never actually CLICKED it -- the original waitThenClick() did both
+    // find-and-click, and this replacement dropped the click. Without the click the "Change
+    // shipping method" modal never opens, so the very next line's Package-weight lookup always
+    // fails for any item that legitimately has a real shipping label to select. Re-query fresh
+    // immediately before clicking (same waitThenClick pattern used everywhere else in this file --
+    // Facebook's React can replace a just-rendered node's contents within a few hundred ms).
+    await humanPause(350, 800);
+    const freshShippingLabelControl = SEL.elementByText('Select shipping label') || shippingLabelControl;
+    await SEL.realClick(freshShippingLabelControl);
     await humanPause(400, 700); // let the "Change shipping method" modal fully render
 
     // The modal opens with Package weight collapsed -- its options only render after clicking
