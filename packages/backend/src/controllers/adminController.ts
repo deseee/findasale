@@ -2279,7 +2279,7 @@ export const getAdminPurchases = async (req: AuthRequest, res: Response) => {
 // the cap deliberately, not to raise it silently here.
 export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
   try {
-    const { purchaseIds } = req.body as { purchaseIds?: string[] };
+    const { purchaseIds, reason: rawReason } = req.body as { purchaseIds?: string[]; reason?: string };
 
     if (!Array.isArray(purchaseIds) || purchaseIds.length === 0) {
       return res.status(400).json({ message: 'purchaseIds must be a non-empty array' });
@@ -2287,6 +2287,22 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
     if (purchaseIds.length > 25) {
       return res.status(400).json({ message: 'Cannot refund more than 25 purchases in a single request' });
     }
+
+    // Bug fix (2026-08-30, Patrick: "we need some way to stop it recurring when it's not
+    // real fraud"): this endpoint used to ALWAYS tag every refund -- single or bulk -- as
+    // Stripe reason='fraudulent', with no way to opt out. Stripe auto-adds the buyer's email
+    // + card fingerprint to the connected account's Radar block list whenever 'fraudulent' is
+    // used, so every routine refund through this admin page (a $0.50 test purchase, a
+    // legitimate buyer-requested refund) silently blocklisted that person from ever paying
+    // this organizer again -- confirmed live: `deseee@yahoo.com` + a card fingerprint were
+    // auto-blocklisted this way on 2026-08-29 from refunding a $0.50 test purchase, blocking
+    // a real $1.50 Hold-to-Pay charge the next day. 'fraudulent' is now opt-in only (the
+    // frontend's "mark as fraudulent" checkbox, unchecked by default) -- the safe default for
+    // routine refunds is 'requested_by_customer', matching Stripe's own reason enum.
+    const ALLOWED_REFUND_REASONS = ['duplicate', 'fraudulent', 'requested_by_customer'] as const;
+    const reason = ALLOWED_REFUND_REASONS.includes(rawReason as any)
+      ? (rawReason as 'duplicate' | 'fraudulent' | 'requested_by_customer')
+      : 'requested_by_customer';
 
     const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string }> = [];
 
@@ -2302,10 +2318,9 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
           continue;
         }
 
-        // Carding-incident cleanup tool -- always tags the Stripe refund `reason` as
-        // 'fraudulent' so it's actually flagged in Stripe (Radar/reporting), not just
-        // reversed with no reason on file. See refundService.ts's `reason` param (2026-08-28).
-        const result = await executeVerifiedRefund(purchaseId, purchase.amount, 'admin', 'fraudulent');
+        // 'reason' now comes from the caller (validated above) instead of being hardcoded --
+        // see the fix note above the reason resolution block.
+        const result = await executeVerifiedRefund(purchaseId, purchase.amount, 'admin', reason);
         // BUG FIX 2026-08-28 (P0, live-DB-confirmed): executeVerifiedRefund deliberately does NOT
         // reset Item.status itself -- refundService.ts's own comment says that happens in "each
         // caller...right after this function returns", matching stripeController.ts's createRefund

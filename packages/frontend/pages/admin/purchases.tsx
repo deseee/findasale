@@ -60,6 +60,12 @@ const AdminPurchases = () => {
   const [refundResults, setRefundResults] = useState<RefundResult[] | null>(null);
   const [confirmBulkRefund, setConfirmBulkRefund] = useState(false);
   const [singleRefundTarget, setSingleRefundTarget] = useState<AdminPurchase | null>(null);
+  // Bug fix (2026-08-30): refunds used to always be tagged 'fraudulent' in Stripe with no
+  // way to opt out, which auto-blocklists the buyer's email + card on Stripe for this
+  // organizer. Default is now a normal, non-blocking refund; fraud is an explicit,
+  // informed opt-in via these checkboxes.
+  const [singleRefundMarkFraud, setSingleRefundMarkFraud] = useState(false);
+  const [bulkRefundMarkFraud, setBulkRefundMarkFraud] = useState(false);
   const [singleRefundError, setSingleRefundError] = useState('');
   const [singleRefundLoading, setSingleRefundLoading] = useState(false);
 
@@ -131,13 +137,14 @@ const AdminPurchases = () => {
     setRefunding(true);
     setRefundResults(null);
     try {
-      const res = await api.post('/admin/purchases/bulk-refund', { purchaseIds: ids });
+      const res = await api.post('/admin/purchases/bulk-refund', { purchaseIds: ids, reason: bulkRefundMarkFraud ? 'fraudulent' : 'requested_by_customer' });
       const results: RefundResult[] = res.data.results;
       setRefundResults(results);
       // Reflect successful refunds locally without a full refetch
       const succeededIds = new Set(results.filter(r => r.success).map(r => r.purchaseId));
       setPurchases(prev => prev.map(p => succeededIds.has(p.id) ? { ...p, status: 'REFUNDED' } : p));
       setSelected(new Set());
+      setBulkRefundMarkFraud(false);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to process bulk refund');
     } finally {
@@ -152,12 +159,13 @@ const AdminPurchases = () => {
     setSingleRefundLoading(true);
     setSingleRefundError('');
     try {
-      const res = await api.post('/admin/purchases/bulk-refund', { purchaseIds: [target.id] });
+      const res = await api.post('/admin/purchases/bulk-refund', { purchaseIds: [target.id], reason: singleRefundMarkFraud ? 'fraudulent' : 'requested_by_customer' });
       const results: RefundResult[] = res.data.results;
       const result = results[0];
       if (result?.success) {
         setPurchases(prev => prev.map(p => p.id === target.id ? { ...p, status: 'REFUNDED' } : p));
         setSingleRefundTarget(null);
+        setSingleRefundMarkFraud(false);
       } else {
         setSingleRefundError(result?.error || 'Failed to issue refund');
       }
@@ -450,13 +458,26 @@ const AdminPurchases = () => {
               {singleRefundTarget.user?.email || singleRefundTarget.buyerEmail || 'this buyer'}? This reverses
               the Stripe charge and cannot be undone.
             </p>
+            <label className="flex items-start gap-2 text-sm text-warm-700 dark:text-warm-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={singleRefundMarkFraud}
+                onChange={e => setSingleRefundMarkFraud(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                This is fraud — mark the refund as fraudulent in Stripe. <strong>This auto-blocks the
+                buyer&apos;s email and card from ever paying this organizer again.</strong> Leave unchecked
+                for a normal refund (test purchase, buyer request, mistake, etc.).
+              </span>
+            </label>
             {singleRefundError && (
               <p className="text-sm text-red-600 dark:text-red-400">{singleRefundError}</p>
             )}
           </div>
           <div className="flex justify-end gap-3 px-5 pb-5">
             <button
-              onClick={() => { if (!singleRefundLoading) { setSingleRefundTarget(null); setSingleRefundError(''); } }}
+              onClick={() => { if (!singleRefundLoading) { setSingleRefundTarget(null); setSingleRefundError(''); setSingleRefundMarkFraud(false); } }}
               disabled={singleRefundLoading}
               className="px-4 py-2 text-sm text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 disabled:opacity-50 transition-colors"
             >
@@ -467,7 +488,7 @@ const AdminPurchases = () => {
               onClick={runSingleRefund}
               className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
             >
-              {singleRefundLoading ? 'Refunding…' : 'Refund'}
+              {singleRefundLoading ? 'Refunding…' : (singleRefundMarkFraud ? 'Refund & Block Buyer' : 'Refund')}
             </button>
           </div>
         </div>
@@ -492,10 +513,23 @@ const AdminPurchases = () => {
               Refund <span className="font-semibold">{selected.size}</span> selected purchase{selected.size === 1 ? '' : 's'}?
               Each reverses its Stripe charge in full and cannot be undone.
             </p>
+            <label className="flex items-start gap-2 text-sm text-warm-700 dark:text-warm-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bulkRefundMarkFraud}
+                onChange={e => setBulkRefundMarkFraud(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                This is a fraud incident — mark all {selected.size} refund{selected.size === 1 ? '' : 's'} as
+                fraudulent in Stripe. <strong>This auto-blocks each buyer&apos;s email and card from ever
+                paying this organizer again.</strong> Leave unchecked for routine refunds.
+              </span>
+            </label>
           </div>
           <div className="flex justify-end gap-3 px-5 pb-5">
             <button
-              onClick={() => { if (!refunding) setConfirmBulkRefund(false); }}
+              onClick={() => { if (!refunding) { setConfirmBulkRefund(false); setBulkRefundMarkFraud(false); } }}
               disabled={refunding}
               className="px-4 py-2 text-sm text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 disabled:opacity-50 transition-colors"
             >
@@ -506,7 +540,7 @@ const AdminPurchases = () => {
               onClick={runBulkRefund}
               className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
             >
-              {refunding ? 'Refunding…' : 'Refund All'}
+              {refunding ? 'Refunding…' : (bulkRefundMarkFraud ? 'Refund All & Block Buyers' : 'Refund All')}
             </button>
           </div>
         </div>
