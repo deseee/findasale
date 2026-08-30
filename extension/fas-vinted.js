@@ -858,6 +858,59 @@
     return true;
   }
 
+  // BUG FIX 2026-08-30 (round 3, Patrick live-reported): fillText() above never verifies the value
+  // actually stuck, and setNativeValue() only dispatches plain 'input'/'change' Events -- Patrick
+  // reported $9 typed into Vinted's Price field but rejected on Upload. First fix (blur + numeric
+  // stuck-check + retry) was NOT enough: live re-test still showed the field correctly holding
+  // "$9.00" (value genuinely stuck) while Vinted's own stale "Price must be greater than or equal
+  // to 1.0" error stayed visible regardless -- confirmed live via javascript_tool directly against
+  // Patrick's real open tab. Isolated the actual cause with a series of live experiments against
+  // that exact broken page state: a plain re-focus+blur did NOT clear it; re-setting the SAME value
+  // via the native setter + a proper `new InputEvent('input', {inputType:'insertText', data:...})`
+  // (rather than plain `new Event('input')`) also did NOT clear it; but clearing the field to empty
+  // first via native setter + `new InputEvent('input', {inputType:'deleteContentBackward'})`
+  // immediately cleared the stale error, and re-typing the value the same InputEvent-with-inputType
+  // way then kept it clear through blur. Vinted's real validation only re-runs off a genuine
+  // typed-style InputEvent (inputType set), which the shared setNativeValue() in this file never
+  // sends -- so it can leave a stale error banner even when the field's raw value is already
+  // correct. Dedicated clear-then-type sequence below reproduces exactly what was live-confirmed to
+  // work; success now requires BOTH the value being numerically correct AND no leftover error text,
+  // not value-match alone.
+  function vintedErrorStillShown() {
+    return Array.from(document.querySelectorAll('div, span, p')).some((e) => e.offsetParent !== null && /must be greater than or equal to/i.test(e.textContent || '') && e.textContent.length < 100);
+  }
+  async function vintedTypeLikePrice(el, value) {
+    const proto = window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
+    const nativeSet = (v) => { if (setter) setter.call(el, v); else el.value = v; };
+    el.focus();
+    nativeSet('');
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+    await sleep(150);
+    nativeSet(String(value));
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: String(value) }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(150);
+    el.blur();
+    await sleep(200);
+  }
+  async function fillVintedPrice(value) {
+    const el = fieldByLabel('Price');
+    if (!el) return false;
+    const wantNum = parseFloat(String(value).replace(/[^0-9.]/g, ''));
+    const checkStuck = () => {
+      const seenNum = parseFloat(String(el.value || '').replace(/[^0-9.]/g, ''));
+      return Number.isFinite(seenNum) && Number.isFinite(wantNum) && Math.abs(seenNum - wantNum) < 0.005;
+    };
+    await vintedTypeLikePrice(el, value);
+    if (checkStuck() && !vintedErrorStillShown()) return true;
+    console.warn('[FAS Vinted] Price -- set attempted but the field did not confirm cleanly afterward (value="' + el.value + '", wanted "' + value + '", staleError=' + vintedErrorStillShown() + ') -- retrying once.');
+    await vintedTypeLikePrice(el, value);
+    if (checkStuck() && !vintedErrorStillShown()) return true;
+    console.warn('[FAS Vinted] Price -- retry also did not confirm cleanly (value="' + el.value + '", wanted "' + value + '", staleError=' + vintedErrorStillShown() + ') -- UNVERIFIED, please check before publishing.');
+    return false;
+  }
+
   // Category: 3-4 level tree-based picker. Same fuzzy best-effort click-through pattern as the
   // other three new scripts -- FindA.Sale's item.category is a single flat string, not Vinted's
   // real taxonomy tree, so this clicks the closest text match at each level and stops once a
@@ -1571,7 +1624,7 @@
         console.warn('[FAS Vinted] Price $' + priceVal + ' falls outside Vinted\'s platform-enforced $' + VINTED_MIN_PRICE + '-$' + VINTED_MAX_PRICE + ' range -- clamping rather than submitting an invalid value.');
         priceVal = Math.max(VINTED_MIN_PRICE, Math.min(VINTED_MAX_PRICE, priceVal));
       }
-      await tryFill('Price', priceVal, (v) => fillText('Price', String(v)), warnings);
+      await tryFill('Price', priceVal, (v) => fillVintedPrice(String(v)), warnings);
     }
     const packageSizeOk = await fillPackageSize(item);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
@@ -1728,7 +1781,62 @@
     return true;
   }
 
+  // BUG FIX 2026-08-30 (round 3, Patrick live-reported): this content script runs on ALL
+  // https://www.vinted.com/* pages (manifest.json match pattern) and used to unconditionally poll
+  // for a listing form and error out on timeout. Live-confirmed failure: Patrick clicked Vinted's
+  // own real Upload button, which navigated the tab to his own /member/<id>?promo_shown=true
+  // profile page BEFORE he could click FindA.Sale's own "I posted -- next item" overlay button (the
+  // navigation destroys that injected overlay along with the rest of the page). The script then
+  // re-injects fresh on the member-profile page, still sees the SAME queued item (its index only
+  // advances on that now-destroyed button's click), and burns 8s polling waitForFormReady() before
+  // showing a scary "doesn't look like a fillable Vinted listing form" error -- same failure class
+  // already fixed for Poshmark's closet-page bug. Vinted's own listing pages all live under
+  // /items/... (confirmed by this file's own LISTING_URL_HINT and the removal-queue code's
+  // "Vinted's own listing pages are typically /items/<id>-<slug>" comment) -- a pathname outside
+  // that namespace is never a listing form no matter how long we wait, so bail immediately and
+  // silently instead of polling and erroring. This does NOT auto-advance the queue or infer
+  // success/failure -- Patrick still confirms every listing by hand via the overlay button on the
+  // real listing page; this only stops the extension from complaining on pages it has no business
+  // running on.
+  function looksLikeVintedListingPage() {
+    return /\/items\//.test(location.pathname);
+  }
+
+  // BUG FIX 2026-08-30 (round 4, Patrick live-reported): the round-3 fix above stopped the false
+  // error on off-listing pages, but that was only half the problem -- Patrick's own screenshot this
+  // round shows Vinted's real "Item listed" success modal on the /member/... page, and confirmed
+  // "didn't start on the 2nd item." Root cause: showReviewOverlay()'s "I posted -- next item"
+  // button is the ONLY place that calls markListed + advanceVintedQueue + navigates to the next
+  // item -- but Vinted's own Upload button navigates the tab away immediately (confirmed round 3),
+  // destroying that overlay before it can ever be clicked. So the queue index never advances no
+  // matter how many items Patrick actually finishes. Fix: when we land on a non-listing page WHILE
+  // a queue item is still pending, offer the same "continue" action from here instead -- still
+  // 100% human-confirmed (Patrick must click it, exactly like the original review-overlay button;
+  // this does not detect or infer success on its own), just reachable from wherever Vinted's own
+  // navigation actually lands him. Keyed by item id in sessionStorage so it shows once per pending
+  // item, not on every re-render of the same page.
+  async function maybeShowVintedContinuePrompt() {
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
+    if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    const seenKey = 'fasVintedContinuePromptShown_' + queued.item.id;
+    if (sessionStorage.getItem(seenKey)) return;
+    sessionStorage.setItem(seenKey, '1');
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Finished with <b>' + escapeHtml(queued.item.title) + '</b>?</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Vinted took you away from the review screen before you could confirm. If you already clicked Vinted\'s own Upload for this item, continue to the next one below -- if not, just close this.</div>' +
+      button('fas-vin-continue', 'Continue to next item &#9654;', true) +
+      button('fas-vin-close', 'Not yet', false));
+    const cont = document.getElementById('fas-vin-continue');
+    if (cont) cont.onclick = async () => {
+      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
+      location.href = LISTING_URL_HINT;
+    };
+    closeBtnHandler();
+  }
+
   async function start() {
+    if (!looksLikeVintedListingPage()) { await maybeShowVintedContinuePrompt(); return; }
     await sleep(600);
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }

@@ -1023,7 +1023,15 @@
     await sleep(150);
     const seenDigits = String(el.value || '').replace(/[^0-9.]/g, '');
     const wantDigits = String(value).replace(/[^0-9.]/g, '');
-    const stuck = set && seenDigits !== '' && seenDigits === wantDigits;
+    // BUG FIX 2026-08-30 (round 3, Patrick-caught): the digits-only comparison above was still a
+    // raw STRING compare -- Mercari auto-formats the price field to two decimals on set/blur
+    // ("12" typed becomes "12.00" in the DOM), so "12.00" !== "12" as strings even though they are
+    // the same number. This produced a false "did not confirm" warning on every price fill, live-
+    // confirmed via Patrick's console paste (saw "12.00", wanted "12"). Compare as parsed floats
+    // instead so a same-value reformat is correctly recognized as success.
+    const seenNum = parseFloat(seenDigits);
+    const wantNum = parseFloat(wantDigits);
+    const stuck = set && seenDigits !== '' && Number.isFinite(seenNum) && Number.isFinite(wantNum) && Math.abs(seenNum - wantNum) < 0.005;
     if (!stuck) console.warn('[FAS Mercari] Price -- set attempted but the field did not confirm the expected value afterward (saw "' + el.value + '", wanted "' + value + '") -- UNVERIFIED, please check before publishing.');
     return stuck;
   }
