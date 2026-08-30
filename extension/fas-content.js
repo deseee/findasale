@@ -448,8 +448,34 @@
       return { mode: 'pickup' };
     }
 
-    await waitThenClick(() => SEL.elementByText('Select shipping label'), 'Delivery',
-      'Couldn\'t find the shipping label control.', 8000);
+    // 2026-08-30 fix (Patrick live report -- Winfield Cigarettes thermometer sign, $775,
+    // 32oz confirmed weight, stalled with "Couldn't find the shipping label control."):
+    // this branch used to assume a real confirmed weight always means Facebook will offer a
+    // "Select shipping label" control. Live DOM evidence from that stall shows Facebook had
+    // ALREADY defaulted the item to Local-pickup-only on its own -- "Delivery method" already
+    // read "Local pickup" with Shipping unchecked -- before this code ever touched the
+    // dropdown, so no shipping-label control exists to find. Two plausible Facebook-side
+    // causes (not distinguished here, root cause unconfirmed -- the fix below is correct
+    // either way): a per-item value/insurance cap on prepaid-label eligibility, or a content/
+    // category restriction on tobacco-branded advertising (Facebook already restricts a
+    // different category outright -- see isFacebookRestrictedCoinOrCurrencyItem above -- so a
+    // narrower shipping-only restriction on cigarette-branded items is plausible). Rather than
+    // guessing which, detect Facebook's own resulting state: if the shipping-label control
+    // never appears, check whether "Delivery method" already reads pickup-only. If so, accept
+    // it as a legitimate Facebook-side outcome (not a bug in this extension) and continue in
+    // pickup mode. If the combo shows anything else, this is still a genuine unexplained
+    // failure -- keep the original hard error, per this file's "never silently guess" rule.
+    const shippingLabelControl = await waitFor(() => SEL.elementByText('Select shipping label'), 8000).catch(() => null);
+    if (!shippingLabelControl) {
+      const deliveryCombo = SEL.comboByLabel('Delivery method');
+      const comboText = deliveryCombo ? (deliveryCombo.getAttribute('aria-label') || deliveryCombo.textContent || '').toLowerCase() : '';
+      const looksPickupOnly = comboText.indexOf('pickup') !== -1 && comboText.indexOf('shipping') === -1;
+      if (looksPickupOnly) {
+        console.warn('[FAS] Delivery: Facebook defaulted this item to Local-pickup-only on its own (no shipping-label control ever appeared) -- accepting as pickup mode, not treating as a failure. Item may be price- or category-restricted from FB shipping; not FindA.Sale-side.');
+        return { mode: 'pickup', fbRestrictedShipping: true };
+      }
+      throw hardError('Delivery', 'Couldn\'t find the shipping label control.');
+    }
     await humanPause(400, 700); // let the "Change shipping method" modal fully render
 
     // The modal opens with Package weight collapsed -- its options only render after clicking
