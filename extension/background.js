@@ -298,7 +298,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         // rate-limit, not an unrelated Craigslist-side coincidence. Fix: apply the same
         // humanQueueDelay() every other platform already gets, right before the re-navigation --
         // does not change the 700ms settle-pause above (a separate, shorter DOM-render concern).
-        await humanQueueDelay(tabId);
+        await humanQueueDelay(tabId, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS);
         chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
           // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-STALL round 3): this used to be
           // `void chrome.runtime.lastError` -- read-then-discarded, so a failed re-navigation
@@ -1179,6 +1179,15 @@ chrome.notifications.onClicked.addListener((notifId) => {
 // much longer would read as broken to a non-technical organizer watching the tab). Tune by editing
 // this one constant; nothing else needs to change.
 const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
+// CRAIGSLIST-only override (2026-08-30, S-EXT-CRAIGSLIST-RATE-LIMIT round 2, Patrick live report --
+// hit "You are posting too rapidly" AGAIN even after the same-session fix that gave the
+// reliability-net re-navigation branch the standard 10-25s humanQueueDelay() pacing every other
+// platform gets. Confirmed the delay itself WAS firing (Patrick: "the delay between listings
+// appeared to be working") -- this isn't a repeat of the missing-pacing bug, it's that Craigslist's
+// own anti-spam throttle is simply stricter than the shared 10-25s range tuned against the other 6
+// platforms. Patrick-directed: widen Craigslist specifically to 25-45s rather than raising the
+// shared range (which would needlessly slow every other platform that wasn't hitting a limit).
+const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 25000, MAX: 45000 };
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 // 2026-08-30 addition (Patrick live report -- watching a real run, couldn't tell if it had
 // stalled or was just in this pause): the comment above ("no on-page waiting indicator yet")
@@ -1189,8 +1198,12 @@ function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 // non-tab context) and the receiving tab may have no listener yet (fresh page load) or may have
 // navigated away already -- both are harmless, non-fatal, and must never block or delay the real
 // sleep, so the sendMessage call is wrapped and its rejection is swallowed.
-async function humanQueueDelay(tabId) {
-  const ms = QUEUE_ADVANCE_DELAY_MS.MIN + Math.random() * (QUEUE_ADVANCE_DELAY_MS.MAX - QUEUE_ADVANCE_DELAY_MS.MIN);
+async function humanQueueDelay(tabId, range) {
+  // 2026-08-30: optional `range` param ({MIN,MAX}) lets a specific platform override the shared
+  // 10-25s pacing -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS above. Defaults to the shared range so
+  // every other existing call site (unchanged) behaves exactly as before.
+  const r = range || QUEUE_ADVANCE_DELAY_MS;
+  const ms = r.MIN + Math.random() * (r.MAX - r.MIN);
   if (tabId) {
     try { chrome.tabs.sendMessage(tabId, { type: 'fasQueueDelayStarted', ms: ms }).catch(() => {}); } catch (e) {}
   }
@@ -1346,7 +1359,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasCraigslistIndex: next });
           const item = queue[next] || null;
-          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          await humanQueueDelay(undefined, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'craigslistLoginStateObserved') {
