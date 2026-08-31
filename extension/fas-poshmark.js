@@ -1264,6 +1264,25 @@
     if (bestDept) { realClick(bestDept); pickedAny = true; await sleep(350); }
     const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
+    // BUG FIX 2026-08-31 (Patrick live report -- "Lamps" landed on "Home > Other" -- root-caused
+    // live, not guessed: walked Poshmark's real picker directly. Home's real 14 subcats (Accents/
+    // Art/Bath/Bedding/Design/Dining/Games/Holiday/Kitchen/Office/Party Supplies/Storage &
+    // Organization/Wall Decor/Other) and Accents' real 12 leaves (Accent Pillows/Baskets & Bins/
+    // Candles & Holders/Coffee Table Books/Curtains & Drapes/Decor/Door Mats/Faux Florals/
+    // Furniture Covers/Lanterns/Picture Frames/Vases/None) confirmed live to have NO lighting/lamp
+    // category anywhere -- "lamp" shares no word or >=3-char substring with any real leaf,
+    // including "Lanterns", so the normal scoring loop correctly found nothing and "Other" was
+    // the honest result, not a matching bug. Home > Accents > Decor is Poshmark's own general
+    // catch-all leaf one level in from Other -- a real, specific, browsable bucket. Added as an
+    // EXTRA scoring candidate only for this confirmed gap (lamp/lighting/fixture keywords under
+    // Home) -- a real matching segment elsewhere still wins purely on score, this only helps when
+    // nothing else would have matched anyway. Still lands with confident=false (goes through the
+    // normal usedOtherFallback-style scoring, not a forced pick), so it's still surfaced to the
+    // organizer for review, just with a more specific starting point than the bare department.
+    if (bestDept && /home/.test(norm(bestDept.textContent)) && /\b(lamp|lamps|lighting|light fixture|chandelier|sconce)\b/i.test(categoryText)) {
+      remaining.push({ seg: 'Accents', i: remaining.length });
+      remaining.push({ seg: 'Decor', i: remaining.length });
+    }
     // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): tracks whether a REAL
     // subcategory-level match was ever clicked in this loop, separate from `pickedAny` (which is
     // also true just from the department click above). Needed below to decide whether to fall back
@@ -1652,7 +1671,16 @@
     // navigation to follow (see this marker's own definition/comment above for the full incident).
     writePoshPublishAttemptState(item.id);
     realClick(publishBtn);
-    const published = await waitForPoshmarkPublishConfirmation(6000);
+    // BUG FIX 2026-08-31 (Patrick live report: stuck on the 2nd "Publish Listing" confirmation
+    // modal with the "couldn't confirm it went through" toast already shown): 6000ms left almost
+    // no real-world margin for the Fragile Item modal chain -- 2 sequential dismiss cycles, each
+    // a humanPause(300,600) + click + the outer loop's own sleep(400), plus normal Poshmark
+    // render/network slop -- so a legitimately-in-progress chained dismissal could still be
+    // running when the old 6s window expired, surfacing the honest-but-wrong "unverified" bail-out
+    // overlay while a real second modal sat on screen untouched. Widened to give 2 full chained
+    // modal dismissals real headroom without making a genuinely-stuck run wait unreasonably long
+    // before falling back to the organizer.
+    const published = await waitForPoshmarkPublishConfirmation(15000);
     if (!published) {
       // Deliberately NOT clearing the publish-attempt marker here -- this is exactly the ambiguous
       // case the marker exists to protect against: we don't actually know whether the click went
