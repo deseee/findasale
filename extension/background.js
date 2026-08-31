@@ -298,7 +298,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         // rate-limit, not an unrelated Craigslist-side coincidence. Fix: apply the same
         // humanQueueDelay() every other platform already gets, right before the re-navigation --
         // does not change the 700ms settle-pause above (a separate, shorter DOM-render concern).
-        await humanQueueDelay(tabId, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS);
+        await craigslistDelayWithOverlay(tabId, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS); // 2026-08-31: was humanQueueDelay() -- see injectCraigslistCountdownOverlay comment above for why sendMessage never worked here
         chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
           // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-STALL round 3): this used to be
           // `void chrome.runtime.lastError` -- read-then-discarded, so a failed re-navigation
@@ -1190,6 +1190,74 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 // shared range (which would needlessly slow every other platform that wasn't hitting a limit).
 const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 45000, MAX: 60000 }; // widened again 2026-08-31 -- Patrick hit "posting too rapidly" at 25-45s live, bumped to 45-60s
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+// FIX (2026-08-31, S-EXT-CRAIGSLIST-COUNTDOWN-VISIBILITY, Patrick live report -- "still no
+// countdown timer for craigslist visible although the delay does seem to be working"): the
+// humanQueueDelay() 'fasQueueDelayStarted' chrome.tabs.sendMessage approach (added earlier this
+// session to give Craigslist the same countdown fas-content.js already renders for Facebook)
+// silently does nothing here, because of a fact already documented above (S-EXT-CRAIGSLIST-STALL
+// round 3, ~line 306): at the exact moment this delay fires, the tab is sitting on Craigslist's
+// OWN "Thanks for posting!" confirmation page on the regional subdomain (e.g.
+// kalamazoo.craigslist.org/...), NOT on post.craigslist.org -- and fas-craigslist.js is
+// manifest-scoped to post.craigslist.org/* + www.craigslist.org/account* only, so it isn't
+// injected there at all. sendMessage to a tab with no listening content script just goes nowhere.
+// Fix: inject the overlay directly via chrome.scripting.executeScript instead of relying on a
+// content-script listener -- manifest already grants "scripting" + "https://*.craigslist.org/*"
+// host permission (used elsewhere in this file), so this works on ANY craigslist.org origin the
+// tab happens to be on, confirmation page included. Self-contained: the injected function must
+// not close over anything in this file's scope (it runs in the page's own isolated world).
+async function injectCraigslistCountdownOverlay(tabId, ms) {
+  if (tabId == null) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (totalMs) => {
+        try {
+          const ID = 'fas-cl-queue-delay-overlay';
+          let el = document.getElementById(ID);
+          if (!el) {
+            el = document.createElement('div');
+            el.id = ID;
+            el.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;' +
+              'background:#1a1a1a;color:#fff;padding:10px 14px;border-radius:8px;' +
+              'font:13px/1.4 -apple-system,Segoe UI,Arial,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.4);' +
+              'border:1px solid #f97316;max-width:280px;';
+            document.body.appendChild(el);
+          }
+          const deadline = Date.now() + Math.max(0, Number(totalMs) || 0);
+          if (window.__fasClOverlayInterval) clearInterval(window.__fasClOverlayInterval);
+          const render = () => {
+            const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+            el.textContent = 'Pacing pause before the next item: ' + remaining + 's (this is normal, not a stall)\u2026';
+            if (remaining <= 0) {
+              clearInterval(window.__fasClOverlayInterval);
+              window.__fasClOverlayInterval = null;
+              if (el && el.parentNode) el.parentNode.removeChild(el);
+            }
+          };
+          render();
+          window.__fasClOverlayInterval = setInterval(render, 1000);
+        } catch (e) { /* best-effort visual only -- never let this break the real pacing pause */ }
+      },
+      args: [ms],
+    });
+  } catch (e) {
+    // Injection can legitimately fail (tab closed, mid-navigation, chrome:// page, etc.) -- this
+    // overlay is cosmetic only, so swallow and let the real sleep()-based pacing continue unaffected.
+    console.warn('[FAS Craigslist] countdown overlay injection failed (non-fatal):', e && e.message);
+  }
+}
+
+// Craigslist-specific wrapper around the shared pacing pattern: resolves the actual delay ms
+// itself (instead of letting humanQueueDelay() pick internally) so the SAME ms value can drive
+// both the visible overlay above and the real sleep -- kept separate from humanQueueDelay() so
+// the other 3 platforms' behavior is untouched.
+async function craigslistDelayWithOverlay(tabId, range) {
+  const ms = range.MIN + Math.random() * (range.MAX - range.MIN);
+  injectCraigslistCountdownOverlay(tabId, ms); // fire-and-forget, cosmetic only
+  await sleep(ms);
+}
+
 // 2026-08-30 addition (Patrick live report -- watching a real run, couldn't tell if it had
 // stalled or was just in this pause): the comment above ("no on-page waiting indicator yet")
 // flagged this exact gap when the delay itself was first added. Fixes it WITHOUT touching the
@@ -1360,7 +1428,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasCraigslistIndex: next });
           const item = queue[next] || null;
-          await humanQueueDelay(undefined, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
+          // 2026-08-31: pass sender.tab.id (was undefined) so the overlay has a tab to inject
+          // into on the rare path where this in-page continuation actually runs -- see the
+          // header comment above ("never runs after a REAL publish") for why the onUpdated
+          // branch's craigslistDelayWithOverlay() call is the one that matters in practice.
+          const clAdvanceTabId = sender && sender.tab && sender.tab.id != null ? sender.tab.id : undefined;
+          await craigslistDelayWithOverlay(clAdvanceTabId, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'craigslistLoginStateObserved') {
