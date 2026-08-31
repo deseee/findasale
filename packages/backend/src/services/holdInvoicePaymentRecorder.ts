@@ -188,7 +188,7 @@ export async function markHoldInvoicePaid(
     where: { id: invoiceId },
     include: {
       shopper: { select: { id: true, email: true, name: true, guildXp: true } },
-      organizer: { select: { id: true, email: true, name: true, subscriptionTier: true, referralDiscountExpiry: true } }, // subscriptionTier/referralDiscountExpiry added ADR-114 (2026-08-31) for cash-leg commission accrual below
+      organizer: { select: { id: true, email: true, name: true } },
       sale: true,
     },
   });
@@ -543,14 +543,24 @@ export async function markHoldInvoicePaid(
     // Purchase-row creation -- NOT at invoice-creation time) so a rolled-back settlement can
     // never leave an accrued debt behind for a sale that was not actually recorded, matching
     // cashFeeService.ts's own documented guidance for transactional callers.
-    if (holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0) {
+    if (holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0 && saleOrganizerId) {
       try {
-        const cashFeeRate = await resolveCashCommissionRate({
-          subscriptionTier: holdInvoice.organizer.subscriptionTier,
-          referralDiscountExpiry: holdInvoice.organizer.referralDiscountExpiry,
+        // holdInvoice.organizer is the organizer's USER row (organizerUserId relation) -- it
+        // has no subscriptionTier/referralDiscountExpiry (those live on Organizer). Fetch the
+        // real Organizer profile via saleOrganizerId (holdInvoice.sale.organizerId, already
+        // resolved above for the useDirect/chargeAccountId snapshot logic).
+        const cashFeeOrganizer = await tx.organizer.findUnique({
+          where: { id: saleOrganizerId },
+          select: { subscriptionTier: true, referralDiscountExpiry: true },
         });
-        const cashCommission = cashCommissionOn(holdInvoice.cashAmountCents / 100, cashFeeRate);
-        await accrueCashFeeBalance({ organizerId: holdInvoice.organizer.id, commission: cashCommission, tx });
+        if (cashFeeOrganizer) {
+          const cashFeeRate = await resolveCashCommissionRate({
+            subscriptionTier: cashFeeOrganizer.subscriptionTier,
+            referralDiscountExpiry: cashFeeOrganizer.referralDiscountExpiry,
+          });
+          const cashCommission = cashCommissionOn(holdInvoice.cashAmountCents / 100, cashFeeRate);
+          await accrueCashFeeBalance({ organizerId: saleOrganizerId, commission: cashCommission, tx });
+        }
       } catch (cashFeeErr: any) {
         // Never let a commission-accrual failure block the actual sale recording -- log +
         // Sentry, same non-fatal pattern posPaymentController.ts's split-cash accrual uses.
@@ -560,7 +570,7 @@ export async function markHoldInvoicePaid(
             tags: { area: 'hold-invoice-cash-commission-accrual', source },
             extra: {
               invoiceId,
-              organizerId: holdInvoice.organizer.id,
+              organizerId: saleOrganizerId,
               cashAmountCents: holdInvoice.cashAmountCents,
             },
           });
