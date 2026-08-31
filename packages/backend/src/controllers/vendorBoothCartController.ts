@@ -337,8 +337,13 @@ export const startBoothCart = async (req: BoothAuthRequest, res: Response) => {
     const { hubId } = req.params;
     if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
 
-    const hub = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { id: true } });
+    const hub = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { id: true, isActive: true } });
     if (!hub) return res.status(404).json({ error: 'Hub not found' });
+    // FIX (2026-08-31, live-confirmed gap): a closed market's register could still open a
+    // brand-new cart with no warning at all. Block at the earliest possible point.
+    if (!hub.isActive) {
+      return res.status(403).json({ error: 'This market has been closed and can no longer accept payments.' });
+    }
 
     // Refresh-during-sale fix (2026-08-01, live bug): a page refresh mid-sale used to
     // always create a brand-new PENDING cart, orphaning the previous one -- its RESERVED
@@ -419,8 +424,13 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     // Fix 2 (2026-08-01): the hub's own organizerId, so an item belonging to the hub
     // OWNER (not a claimed vendor) can be recognized below and lazily routed to the
     // synthetic house booth instead of being rejected as "not a vendor here."
-    const hub = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { organizerId: true } });
+    const hub = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { organizerId: true, isActive: true } });
     if (!hub) return res.status(404).json({ error: 'Hub not found' });
+    // FIX (2026-08-31, live-confirmed gap): if the market is closed mid-session (cart was
+    // started before close, items added after), block the add rather than let the cart grow.
+    if (!hub.isActive) {
+      return res.status(403).json({ error: 'This market has been closed and can no longer accept payments.' });
+    }
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
@@ -726,6 +736,19 @@ async function beginCartCheckout(params: {
 
   if (cart.status !== 'PENDING') {
     throw new Error(`CART_NOT_CHARGEABLE:${cart.status}`);
+  }
+
+  // FIX (2026-08-31, S-EXT-CRAIGSLIST-QA session, live-confirmed gap): SaleHub.isActive was
+  // never checked anywhere in this file -- a closed market's register could still authorize
+  // and capture real charges. This is the single choke point for all three payment rails
+  // (terminal + QR both call this directly; cash capture calls it too, see
+  // captureBoothCartCash below), so one check here closes the gap for all of them at the
+  // authorize step. captureBoothCart (the separate post-authorize capture step for the
+  // terminal/QR rails) has its own direct check for the narrower authorize->capture window --
+  // see its own isActive check below.
+  const hubForActiveCheck = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { isActive: true } });
+  if (!hubForActiveCheck || !hubForActiveCheck.isActive) {
+    throw new CheckoutGuardError('This market has been closed and can no longer accept payments.');
   }
 
   await assertBoothCartCheckoutAllowed({
@@ -1526,6 +1549,16 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
     }
     if (cart.status !== 'IN_PROGRESS') {
       return res.status(409).json({ error: `Cart cannot be captured (status: ${cart.status})` });
+    }
+
+    // FIX (2026-08-31): beginCartCheckout already checked isActive when this cart's FIRST
+    // leg was authorized, but the market could have been closed in the window between that
+    // authorize call and this capture call -- re-check here rather than trust the earlier
+    // pass is still valid. Direct check (not routed through beginCartCheckout, which is a
+    // no-op once the cart is already IN_PROGRESS and would silently skip this).
+    const hubForCapture = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { isActive: true } });
+    if (!hubForCapture || !hubForCapture.isActive) {
+      return res.status(403).json({ error: 'This market has been closed and can no longer accept payments.' });
     }
 
     // Race-safe capture lock (findasale-hacker adversarial pass, 2026-07-08): atomically
