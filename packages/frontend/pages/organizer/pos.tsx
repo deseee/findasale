@@ -2136,6 +2136,18 @@ export default function POSPage() {
     setLinkedShopperId(hold.shopperId || null);
     // Track the loaded hold
     setLoadedHold(hold);
+    // ADR-114 follow-up (2026-08-31, same-session live-Chrome retest): a held item's
+    // Item.status is RESERVED, not AVAILABLE -- every OTHER payment method (Cash, Stripe
+    // QR, Card Reader, Venmo, Zelle, Send to Phone) posts to the generic walk-up endpoints
+    // (e.g. POST /stripe/terminal/cash-payment via handleCashPayment), which require
+    // AVAILABLE and reject a RESERVED item with a real 400 ("... is sold or unavailable") --
+    // confirmed live even after the POS_CART routing fix, because that fix only closed the
+    // POS_CART entry path; once loaded, the item still sits in the same shared `cart` array
+    // every payment-method tab reads from. Auto-selecting 'invoice' here, combined with the
+    // disabled guards on the other payment-method buttons below (search `loadedHold` in the
+    // "How are they paying?" block), keeps the organizer on the one flow that actually knows
+    // how to settle a hold (sendHoldInvoice, cash/card split already fixed this session).
+    setPaymentMode('invoice');
 
     let mergedCount = 0;
 
@@ -3342,8 +3354,12 @@ export default function POSPage() {
                 setCashReceived(0);
                 setCashNumpadValue('');
               }}
+              disabled={!!loadedHold}
+              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
-                paymentMode === 'cash'
+                loadedHold
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                  : paymentMode === 'cash'
                   ? 'bg-sage-700 text-white'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
@@ -3353,11 +3369,12 @@ export default function POSPage() {
             </button>
             <button
               onClick={() => setPaymentMode('qr')}
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || !!loadedHold}
+              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 paymentMode === 'qr'
                   ? 'bg-sage-700 text-white'
-                  : cart.length === 0
+                  : cart.length === 0 || loadedHold
                   ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
@@ -3367,16 +3384,16 @@ export default function POSPage() {
             </button>
             <button
               onClick={() => {
-                if (readerStatus !== 'connected') return;
+                if (readerStatus !== 'connected' || loadedHold) return;
                 setPaymentMode('card');
                 setNumpadOpen(false);
               }}
-              disabled={readerStatus !== 'connected'}
-              title={readerStatus !== 'connected' ? 'Tap the status indicator in the top corner to connect your reader' : ''}
+              disabled={readerStatus !== 'connected' || !!loadedHold}
+              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : readerStatus !== 'connected' ? 'Tap the status indicator in the top corner to connect your reader' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
-                paymentMode === 'card' && readerStatus === 'connected'
+                paymentMode === 'card' && readerStatus === 'connected' && !loadedHold
                   ? 'bg-sage-700 text-white'
-                  : readerStatus !== 'connected'
+                  : readerStatus !== 'connected' || loadedHold
                   ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
@@ -3402,8 +3419,12 @@ export default function POSPage() {
             {/* Venmo: peer-to-peer, organizer collects outside app, platform fee via Stripe */}
             <button
               onClick={() => setPaymentMode('venmo')}
+              disabled={!!loadedHold}
+              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
-                paymentMode === 'venmo'
+                loadedHold
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                  : paymentMode === 'venmo'
                   ? 'bg-[#3D95CE] text-white'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
@@ -3414,8 +3435,12 @@ export default function POSPage() {
             {/* Zelle: peer-to-peer, organizer collects outside app, platform fee via Stripe */}
             <button
               onClick={() => setPaymentMode('zelle')}
+              disabled={!!loadedHold}
+              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
-                paymentMode === 'zelle'
+                loadedHold
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                  : paymentMode === 'zelle'
                   ? 'bg-[#6D1ED4] text-white'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
@@ -3427,10 +3452,10 @@ export default function POSPage() {
             {(linkedShopperId || linkedShopperData?.id) && (
               <button
                 onClick={handleSendToPhone}
-                disabled={cart.length === 0 || paymentStatus === 'creating'}
-                title={cart.length === 0 ? 'Add items to cart first' : `Send $${cartTotal.toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
+                disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold}
+                title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : cart.length === 0 ? 'Add items to cart first' : `Send $${cartTotal.toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
                 className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 col-span-2 ${
-                  cart.length === 0 || paymentStatus === 'creating'
+                  cart.length === 0 || paymentStatus === 'creating' || loadedHold
                     ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                     : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                 }`}
