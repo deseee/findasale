@@ -1546,13 +1546,48 @@
     return null;
   }
 
+  // BUG FIX 2026-08-31 (S-EXT-POSHMARK-FRAGILE-MODAL, P1, live-Chrome-confirmed on Patrick's real
+  // tab, tab shared directly): Poshmark shows an additional native confirmation modal ("Fragile
+  // Item Detected") for items in categories it flags as breakable (this run: category "Home /
+  // Other") -- this is Poshmark's own shipping disclaimer copy ("package carefully... if damaged
+  // in transit... we will be unable to compensate you"), NOT a security/verification screen.
+  // looksLikeInterstitial() correctly does not match this text, and it must never be treated as
+  // one -- a real human seller sees and clicks through this exact modal routinely; it is the
+  // expected next step of the SAME publish action already initiated, not a new consequential
+  // decision. Before this fix: clicking "List this item" opened this modal ON TOP of the
+  // still-present sell form. waitForPoshmarkPublishConfirmation() below only polled
+  // looksLikeSellForm() -- the form itself never goes away, it's just covered by the modal -- so
+  // the poll always timed out after 6s and fell into doPoshmarkAutoPublish's "couldn't confirm"
+  // UNVERIFIED warning branch. Confirmed live 2026-08-31: exact repro of Patrick's report (the
+  // extension's own honest UNVERIFIED overlay firing instead of a real publish).
+  function findPoshmarkFragileModalPublishButton() {
+    const lower = bodyText().toLowerCase();
+    if (lower.indexOf('fragile item detected') === -1) return null;
+    return findPoshmarkVisibleButtonByText('publish listing');
+  }
+  async function dismissPoshmarkFragileModalIfPresent() {
+    const btn = findPoshmarkFragileModalPublishButton();
+    if (!btn) return false;
+    overlay('<b>FindA.Sale</b> - Poshmark flagged this as a fragile item; continuing publish...');
+    await humanPause(300, 600);
+    realClick(btn);
+    return true;
+  }
+
   // Confirms a real publish happened by polling for the sell form to disappear (Title field gone)
   // -- no live-confirmed success marker exists yet (CODE-ONLY/UNTESTED, file header), so this is
   // the same conservative "did the form go away" signal fas-craigslist.js uses for its own publish
   // confirmation (waitForCraigslistPublish), adapted to this file's own looksLikeSellForm() check.
+  // Also polls for and clicks through the Fragile Item modal above -- see that function's own
+  // comment for the full incident this closes.
   async function waitForPoshmarkPublishConfirmation(maxWaitMs) {
     const start = Date.now();
+    let dismissedFragileModal = false;
     while (Date.now() - start < maxWaitMs) {
+      if (!dismissedFragileModal) {
+        dismissedFragileModal = await dismissPoshmarkFragileModalIfPresent();
+        if (dismissedFragileModal) { await sleep(400); continue; }
+      }
       if (!looksLikeSellForm()) return true;
       await sleep(400);
     }
