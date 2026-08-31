@@ -174,7 +174,15 @@ const PROFILES: Profile[] = [
   // this session's PackageProfile weight audit). The old 4oz default was ~1oz+ over the real weight
   // of a single coin in a thick envelope and was also pushing these items over the eBay Standard
   // Envelope program's 3oz cap for no real physical reason.
-  { category: 'Collectibles', keyword: 'coin', weightOz: 2, lengthIn: 6, widthIn: 5, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
+  // CORRECTED FURTHER 2026-08-31 (Patrick, live guidance): "most coins are only 1oz. it's bigger
+  // coins that hit 2 or 3oz for the most part" -- the 2oz value above was itself still too high
+  // for the median case a single generic 'coin' keyword actually covers. Also discovered same
+  // session: this row's 2oz value never reached production at all (PROFILES only inserts on an
+  // empty table, so the 4->2 correction above silently never applied) -- production still had the
+  // original 4oz until fixed directly 2026-08-31. Using 1oz now per Patrick's real-world default;
+  // a separate bigger-coin-specific keyword (e.g. "silver dollar") is a possible follow-up if he
+  // wants that split tracked distinctly, not added here.
+  { category: 'Collectibles', keyword: 'coin', weightOz: 1, lengthIn: 6, widthIn: 5, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
   { keyword: 'card', weightOz: 3, lengthIn: 6, widthIn: 4, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
 
   // Sports
@@ -208,6 +216,11 @@ const GAP_FILL_PROFILES: Profile[] = [
   // comics (bagged+boarded in a rigid mailer) agreed consistently at 8oz, not 4oz (confirmed via
   // GetItem ShippingPackageDetails, this session's PackageProfile weight audit). The dims fix on
   // 2026-08-13 addressed the box size but left this stale weight untouched.
+  // NOTE 2026-08-31: this 8oz correction never reached production either -- GAP_FILL_PROFILES only
+  // inserts when the keyword is entirely absent ("skip if present"), so an UPDATE to an existing
+  // row's value here never propagates on its own. Production still had 4oz until fixed directly
+  // 2026-08-31 (see coin row above for the same root cause). No value change needed here, just
+  // this note -- the 8oz below was already correct.
   { category: 'Comic Books & Memorabilia', keyword: 'comic', weightOz: 8, lengthIn: 11, widthIn: 8, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
 
   // Tobacciana -- zero prior coverage, recurring category for this organizer.
@@ -215,6 +228,19 @@ const GAP_FILL_PROFILES: Profile[] = [
   { keyword: 'tobacco tin', weightOz: 8, lengthIn: 6, widthIn: 5, heightIn: 3, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
   { keyword: 'cigar tin', weightOz: 8, lengthIn: 6, widthIn: 5, heightIn: 3, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
   { keyword: 'humidor', weightOz: 64, lengthIn: 12, widthIn: 10, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.5 },
+
+  // Physical media (VHS/cassette/Blu-ray) -- 2026-08-31 (Patrick): "records, cd's comics, coins,
+  // video games, vhs tapes etc... not necessarily books" already had coverage except VHS; Patrick
+  // then asked to bundle in cassette and Blu-ray too, same media family. Researched USPS-typical
+  // packed estimates (tape/disc + case + padded mailer), NOT eBay-recorded live data like the
+  // coin/comic rows above -- confidence set lower (0.55) to reflect that. Blu-ray mirrors the
+  // existing DVD keyword profile (same keep-case size) since a Blu-ray case is physically
+  // identical to a DVD case; added under both the hyphenated and unhyphenated spelling since
+  // real listing titles use both ("Blu-ray" / "Bluray").
+  { keyword: 'vhs', weightOz: 8, lengthIn: 8, widthIn: 5, heightIn: 1.5, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.55 },
+  { keyword: 'cassette', weightOz: 3, lengthIn: 5, widthIn: 3, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.55 },
+  { keyword: 'blu-ray', weightOz: 6, lengthIn: 8, widthIn: 6, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.55 },
+  { keyword: 'bluray', weightOz: 6, lengthIn: 8, widthIn: 6, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.55 },
 
   // The exact item types that got force-defaulted to pickup-only this session.
   { keyword: 'cooler', weightOz: 32, lengthIn: 14, widthIn: 10, heightIn: 10, packageType: 'MAILING_BOX', confidence: 0.5 },
