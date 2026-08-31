@@ -534,7 +534,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                         <h3 className="font-heading text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Items</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                           {searchResults.items.map((item) => (
-                            <Link key={item.id} href={`/sales/${item.sale.id}`}>
+                            <Link key={item.id} href={`/items/${item.id}`}>
                               <a className="group rounded-lg border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full hover:shadow-card-hover transition-shadow duration-300">
                                 <div className="w-full h-48 bg-warm-100 dark:bg-gray-700 relative overflow-hidden">
                                   {item.photoUrls && item.photoUrls.length > 0 ? (
