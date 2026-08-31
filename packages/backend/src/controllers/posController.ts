@@ -30,6 +30,7 @@ import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { invoiceableWhere, isInvoicedOrClaimed, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim must be visible to every hold read site; P0 (2026-08-17): dead-anchor release
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): a Checkout Session orphaned by a failed HoldInvoice transaction stays OPEN and payable
+import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // ADR-114 (2026-08-31): fully-cash sendHoldInvoice path reuses the single source of truth for recording a paid invoice
 
 const stripe = () => getStripe();
 
@@ -650,15 +651,23 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     if (!organizer) return;
 
     const { reservationId } = req.params as { reservationId?: string };
-    const { deliverVia, expiryHours, miscItems } = req.body as {
+    const { deliverVia, expiryHours, miscItems, cashAmountCents } = req.body as {
       deliverVia?: string;
       expiryHours?: number;
       miscItems?: Array<{ id: string; itemId?: string; title: string; amount: number }>;
+      // ADR-114 (2026-08-31): amount of cash already collected at the register before this
+      // invoice goes out for the remaining balance -- mirrors createCombinedInvoice's
+      // identically-named body field. Previously silently ignored here even though
+      // PosInvoiceModal has sent it all along; the full total was always charged via card.
+      cashAmountCents?: number;
     };
 
     if (!reservationId) return res.status(400).json({ message: 'reservationId required' });
     if (!deliverVia || deliverVia !== 'EMAIL') {
       return res.status(400).json({ message: 'deliverVia must be EMAIL (MVP)' });
+    }
+    if (typeof cashAmountCents === 'number' && cashAmountCents < 0) {
+      return res.status(400).json({ message: 'cashAmountCents cannot be negative' });
     }
 
     // Fetch reservation
@@ -706,7 +715,16 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const miscTotal = miscItems ? miscItems.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) : 0;
     const grandTotal = heldItemTotal + miscTotal;
     const holdFeeRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
-    const platformFeeAmount = Math.round(grandTotal * holdFeeRate);
+
+    // ADR-114 (2026-08-31): cash/card split, ported from createCombinedInvoice's
+    // already-tested math (posCombinedInvoiceFee.test.ts) rather than re-derived --
+    // clamp any cash collected to the grand total, the card leg covers the remainder,
+    // and the platform fee is computed on the CARD portion only (no fee on cash, matching
+    // createCombinedInvoice's documented intentional asymmetry -- there is no
+    // Organizer.cashFeeBalance accrual for a hold-invoice cash leg).
+    const finalCashAmountCents = Math.min(cashAmountCents ?? 0, grandTotal);
+    const cardAmountCents = grandTotal - finalCashAmountCents;
+    const platformFeeAmount = Math.round(cardAmountCents * holdFeeRate);
 
     // P0 fix (2026-08-17): HoldInvoice.reservationId is @unique
     // (HoldInvoice_reservationId_key, confirmed live in Postgres) and, before this,
@@ -810,6 +828,70 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // ADR-114 (2026-08-31): fully-cash invoice -- the organizer already collected the
+    // whole amount in cash at the register, so there is nothing left for the shopper to
+    // pay online. Skip Stripe entirely (no Checkout Session, no card charge) and record
+    // the sale as PAID immediately via the same single-source-of-truth recorder the
+    // Stripe webhook and invoiceExpiryJob's reconcile branch use (holdInvoicePaymentRecorder.ts) --
+    // it already flips the reservation(s) to COMPLETED, marks the item(s) SOLD, creates
+    // Purchase row(s) (source 'POS', no fabricated PaymentIntent id -- stripePaymentIntentId
+    // is stored as null throughout, matching Purchase.stripePaymentIntentId's nullable
+    // column, never a synthetic placeholder string), awards shopper XP, emits the
+    // HOLD_RELEASED live-feed event, and sends the same "Payment Confirmed" emails a real
+    // Stripe payment would.
+    if (cardAmountCents <= 0) {
+      const cashOnlyInvoice = await prisma.holdInvoice.create({
+        data: {
+          reservationId,
+          shopperUserId: reservation.userId,
+          organizerUserId: organizer.ownerUserId,
+          saleId: reservation.item.sale!.id,
+          itemIds: [reservation.itemId, ...mergedRealItemIds],
+          totalAmount: grandTotal,
+          platformFeeAmount, // 0 -- no platform fee on a cash-only leg (matches createCombinedInvoice)
+          status: 'PENDING',
+          expiresAt,
+          stripeSessionId: null,
+          stripePaymentIntentId: null,
+          cashAmountCents: finalCashAmountCents > 0 ? finalCashAmountCents : null,
+          cardAmountCents: null,
+          // NULL/NULL -- mirrors createCombinedInvoice's own 100%-cash branch (no Stripe
+          // session is ever created there either, see its "chargeType: createdChargeType"
+          // comment): there is no real charge, so there is no charge shape to snapshot.
+          chargeType: null,
+          stripeAccountId: null,
+        },
+      });
+
+      await prisma.itemReservation.update({
+        where: { id: reservationId },
+        data: { invoiceId: cashOnlyInvoice.id },
+      });
+      if (mergedRealItemIds.length > 0) {
+        await prisma.itemReservation.updateMany({
+          where: { itemId: { in: mergedRealItemIds } },
+          data: { invoiceId: cashOnlyInvoice.id },
+        });
+      }
+
+      const paidResult = await markHoldInvoicePaid(cashOnlyInvoice.id, null, { source: 'pos-cash' });
+      if (paidResult.deadInvoice || (!paidResult.recorded && !paidResult.alreadyPaid)) {
+        // Effectively unreachable (the invoice was just created PENDING above, nothing else
+        // could have raced it), but fail loudly rather than silently claim a payment that
+        // was not actually recorded.
+        console.error(`[pos] sendHoldInvoice: cash-only invoice ${cashOnlyInvoice.id} failed to record as paid.`);
+        return res.status(500).json({ message: 'Failed to record cash payment for this invoice.' });
+      }
+
+      return res.json({
+        invoiceId: cashOnlyInvoice.id,
+        status: 'PAID',
+        cashAmountCents: finalCashAmountCents,
+        cardAmountCents: 0,
+        platformFeeAmount,
+      });
+    }
+
     // Direct-charges migration (2026-08-08): staged-rollout routing decision, same pattern
     // as every other invoice-creation path in this file.
     const useDirect = organizer.stripeConnectId
@@ -819,6 +901,26 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // key trap reservationController.markSoldAndCreateInvoice's own comment documents (a stable
     // key tied only to the reservation would freeze every retry for a day after one failure).
     const idempotencyKey = `send-hold-invoice-${reservationId}-${crypto.randomUUID()}`;
+
+    // ADR-114 (2026-08-31): when cash was collected at the register, the card leg only
+    // covers the remaining balance -- charging the full itemized total via card AS WELL
+    // would double-collect from the shopper on top of the cash already in hand. Collapse
+    // to a single "balance due" line item priced at cardAmountCents in that case. The
+    // common all-card case (no cash collected, the only case this endpoint has ever
+    // supported until this fix) keeps the existing itemized per-item breakdown unchanged.
+    const checkoutLineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = finalCashAmountCents > 0
+      ? [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'Balance due',
+              description: `Remaining balance after $${(finalCashAmountCents / 100).toFixed(2)} cash collected at checkout`,
+            },
+            unit_amount_decimal: String(cardAmountCents),
+          },
+          quantity: 1,
+        }]
+      : line_items;
 
     let stripeSession: Stripe.Checkout.Session;
     try {
@@ -838,7 +940,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           // slow invoiceExpiryJob STRANDED-PAID backstop caught it ~1hr later.
           expand: ['payment_intent'],
           customer_email: reservation.user.email,
-          line_items,
+          line_items: checkoutLineItems,
           success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,
           cancel_url: `${baseUrl}/shopper/holds?paymentStatus=cancelled`,
           expires_at: checkoutExpiry.expiresAtUnix,
@@ -943,6 +1045,11 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         expiresAt,
         stripeSessionId: stripeSession.id,
         stripePaymentIntentId,
+        // ADR-114 (2026-08-31): persist the split so refund/reconcile tooling and the
+        // organizer-facing invoice detail can see how much was cash vs. card, mirroring
+        // createCombinedInvoice's identical fields.
+        cashAmountCents: finalCashAmountCents > 0 ? finalCashAmountCents : null,
+        cardAmountCents: cardAmountCents > 0 ? cardAmountCents : null,
         // Stripe account + charge-shape snapshot -- same fields createCombinedInvoice /
         // markSoldAndCreateInvoice already populate for this exact reason (invoiceExpiryJob,
         // holdInvoicePaymentRecorder.ts, and stripeController.ts's webhook all read these
@@ -1109,6 +1216,9 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       status: 'SENT',
       stripeSessionId: stripeSession.id,
       checkoutUrl: stripeSession.url,
+      cashAmountCents: finalCashAmountCents > 0 ? finalCashAmountCents : null,
+      cardAmountCents,
+      platformFeeAmount,
       ...(emailWarning ? { emailWarning } : {}),
     });
   } catch (error) {
@@ -1473,6 +1583,22 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
       return res.status(403).json({ message: 'Session does not belong to your sale' });
     }
 
+    // SECURITY FIX (findasale-hacker adversarial pass, 2026-08-30): `shopperId` was
+    // previously trusted verbatim from the request body with no check that it was the
+    // actual shopper who shared this cart. An organizer-authenticated caller could pass
+    // ANY existing user id as `shopperId` and this endpoint would build a Stripe Checkout
+    // Session addressed to that arbitrary victim's real email (`customer_email`) and write
+    // a HoldInvoice.shopperUserId pointing at them -- a stranger with no relationship to
+    // this sale, cart, or hold. This is the identical no-client-supplied-identity pattern
+    // `sendHoldInvoice` already gets right by deriving the shopper from `reservation.user`
+    // instead of trusting the client. Fix: if this POSSession has a linked shopper (it was
+    // created via shareCart), the invoice's shopperId MUST match that shopper -- an
+    // organizer cannot redirect an invoice to a different account than the one who shared
+    // the cart.
+    if (session.shopperId && session.shopperId !== shopperId) {
+      return res.status(403).json({ message: 'shopperId does not match the shopper linked to this session' });
+    }
+
     // Fetch shopper
     const shopper = await prisma.user.findUnique({
       where: { id: shopperId },
@@ -1500,6 +1626,13 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
       // Live in-flight claims count too (P0 fix 2026-08-16 — see holdInvoiceClaim.ts).
       if (isInvoicedOrClaimed(heldItem)) {
         return res.status(409).json({ message: `Hold ${heldItem.id} already has an invoice` });
+      }
+      // SECURITY FIX (findasale-hacker adversarial pass, 2026-08-30): a held item's
+      // reservation always belongs to a real shopper (ItemReservation.userId) -- an
+      // invoice being created for these held items must be addressed to that same
+      // shopper, never a client-supplied `shopperId` for an unrelated account.
+      if (heldItem.userId !== shopperId) {
+        return res.status(403).json({ message: `Hold ${heldItem.id} does not belong to the specified shopper` });
       }
     }
 
