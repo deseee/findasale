@@ -180,7 +180,36 @@
     return bar;
   }
   function overlay(html) { ensureBar().innerHTML = html; }
+  function overlayInfo(text) { overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#cfe3d6">' + text + '</div>'); }
   function overlayWarn(text) { overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:12px;color:#ffcf7a">' + text + '</div>'); }
+
+  // ---- queue-advance countdown (2026-08-31, parity with fas-content.js/fas-craigslist.js's
+  // countdown -- Patrick live report: Mercari showed no indication anything was happening between
+  // queued items, same gap Craigslist had before its own 2026-08-31 fix). Purely cosmetic --
+  // background.js's own humanQueueDelay() pacing pause runs regardless of this; it only reflects
+  // that same delay via a one-way 'fasQueueDelayStarted' notification (background.js's
+  // advanceMercariQueue handler now passes the real tab id for this -- see that file's own
+  // comment for the matching root-cause fix on the sending side).
+  let queueDelayInterval = null;
+  function clearQueueDelayCountdown() {
+    if (queueDelayInterval) { clearInterval(queueDelayInterval); queueDelayInterval = null; }
+  }
+  function startQueueDelayCountdown(totalMs) {
+    clearQueueDelayCountdown();
+    const deadline = Date.now() + Math.max(0, Number(totalMs) || 0);
+    const renderTick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      overlayInfo('Pacing pause before the next item: ' + remaining + 's (this is normal, not a stall)\u2026');
+      if (remaining <= 0) clearQueueDelayCountdown();
+    };
+    renderTick();
+    queueDelayInterval = setInterval(renderTick, 1000);
+  }
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === 'fasQueueDelayStarted' && typeof msg.ms === 'number') {
+      startQueueDelayCountdown(msg.ms);
+    }
+  });
   function button(id, label, primary) {
     return '<button id="' + id + '" style="margin-top:10px;margin-right:8px;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;' +
       'font-weight:600;font-size:13px;background:' + (primary ? '#3c8c5a' : '#3a4842') + ';color:#fff">' + label + '</button>';

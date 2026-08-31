@@ -1555,7 +1555,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasPoshmarkIndex: next });
           const item = queue[next] || null;
-          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          // BUG FIX 2026-08-31 (Patrick live report: Poshmark/Mercari never show the queue-advance
+          // countdown Craigslist/FB do): humanQueueDelay() only sends its 'fasQueueDelayStarted'
+          // notification when a tabId is actually passed in (see its own comment) -- this call site
+          // passed none, so no message was ever sent for Poshmark, independent of whether the content
+          // script even listens for it. 'advancePoshmarkQueue' is always sent from fas-poshmark.js's
+          // own tab context (same pattern as the FB 'advanceQueue' handler above), so sender.tab.id
+          // is the real originating tab.
+          await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'setMercariQueue') {
@@ -1589,7 +1596,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasMercariIndex: next });
           const item = queue[next] || null;
-          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          // BUG FIX 2026-08-31 (Patrick live report, same root cause as the Poshmark branch above):
+          // no tabId was passed, so humanQueueDelay() never sent its countdown notification for
+          // Mercari either. 'advanceMercariQueue' always comes from fas-mercari.js's own tab.
+          await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'setVintedQueue') {

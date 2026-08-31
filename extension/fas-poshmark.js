@@ -374,6 +374,34 @@
   function overlay(html) { ensureBar().innerHTML = html; }
   function overlayInfo(text) { overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#cfe3d6">' + text + '</div>'); }
   function overlayWarn(text) { overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:12px;color:#ffcf7a">' + text + '</div>'); }
+
+  // ---- queue-advance countdown (2026-08-31, parity with fas-content.js/fas-craigslist.js's
+  // countdown -- Patrick live report: Poshmark showed no indication anything was happening between
+  // queued items, same gap Craigslist had before its own 2026-08-31 fix). Purely cosmetic --
+  // background.js's own humanQueueDelay() pacing pause runs regardless of this; it only reflects
+  // that same delay via a one-way 'fasQueueDelayStarted' notification (background.js's
+  // advancePoshmarkQueue handler now passes the real tab id for this -- see that file's own
+  // comment for the matching root-cause fix on the sending side).
+  let queueDelayInterval = null;
+  function clearQueueDelayCountdown() {
+    if (queueDelayInterval) { clearInterval(queueDelayInterval); queueDelayInterval = null; }
+  }
+  function startQueueDelayCountdown(totalMs) {
+    clearQueueDelayCountdown();
+    const deadline = Date.now() + Math.max(0, Number(totalMs) || 0);
+    const renderTick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      overlayInfo('Pacing pause before the next item: ' + remaining + 's (this is normal, not a stall)\u2026');
+      if (remaining <= 0) clearQueueDelayCountdown();
+    };
+    renderTick();
+    queueDelayInterval = setInterval(renderTick, 1000);
+  }
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === 'fasQueueDelayStarted' && typeof msg.ms === 'number') {
+      startQueueDelayCountdown(msg.ms);
+    }
+  });
   function button(id, label, primary) {
     return '<button id="' + id + '" style="margin-top:10px;margin-right:8px;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;' +
       'font-weight:600;font-size:13px;background:' + (primary ? '#3c8c5a' : '#3a4842') + ';color:#fff">' + label + '</button>';
@@ -1510,10 +1538,26 @@
     return false;
   }
 
-  function showReviewOverlay(item, index, total, photosOk) {
+  // BUG FIX 2026-08-31 (Patrick live report: run stuck on Poshmark's own "Missing Price" dialog
+  // on item 12/12, tab shared directly -- root-caused live, not guessed): fillListing() already
+  // computes fillResult.fieldNotes, including a specific "Price could not be set..." note whenever
+  // fillPoshmarkPrice() genuinely fails (see fillListing's own Price block) -- but this function
+  // never received or rendered fieldNotes at all, in EITHER of its two call sites (the plain
+  // manual-review path, and doPoshmarkAutoPublish's own fallback when the final publish button
+  // can't be reached). The generic "category/brand/size/color are UNVERIFIED guesses" line doesn't
+  // even mention Price, so a genuine Price-fill failure was completely invisible until Poshmark's
+  // own required-field validation blocked the organizer with no context. Now takes fieldNotes and
+  // renders them the same way doPoshmarkAutoPublish's own end-of-run notes rollup already does.
+  function showReviewOverlay(item, index, total, photosOk, fieldNotes) {
     const more = (index + 1) < total;
+    const notes = fieldNotes || [];
+    const notesHtml = notes.length
+      ? '<div style="margin-top:6px;font-size:12px;color:#ffcf7a"><ul style="margin:4px 0 0 16px;padding:0">' +
+        notes.map((n) => '<li>' + escapeHtml(n) + '</li>').join('') + '</ul></div>'
+      : '';
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/size/color are UNVERIFIED guesses), then click Poshmark\'s own <b>List this item</b> yourself.</div>' +
+      notesHtml +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-posh-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-posh-close', 'Close', false) +
@@ -1593,13 +1637,28 @@
   // every layer Poshmark actually showed has been dismissed.
   function findPoshmarkFragileModalPublishButton() {
     const lower = bodyText().toLowerCase();
-    if (lower.indexOf('fragile item detected') !== -1) {
-      const outerBtn = findPoshmarkVisibleButtonByText('publish listing');
-      if (outerBtn) return outerBtn;
-    }
+    // BUG FIX 2026-08-31 (P0, live-Chrome-confirmed root cause on Patrick's real shared tab --
+    // NOT a timing issue, the earlier 6000->15000 widen changed nothing because this is a logic
+    // bug that repeats identically on every single poll no matter how long you wait): Poshmark
+    // does NOT remove the outer "Fragile Item Detected" modal's DOM/text when its own "Publish
+    // Listing" button is clicked -- it stays present underneath the new inner confirmation dialog
+    // that opens on top, and findPoshmarkVisibleButtonByText only checks b.offsetParent !== null
+    // (layout presence), which says nothing about z-order/occlusion -- so that outer button reads
+    // as just as "visible" as before. With the outer check FIRST and an early return, this used to
+    // re-match "fragile item detected" and re-return the SAME already-clicked, now-dead outer
+    // button on every single poll, and never once reached the inner "will not be compensating me"
+    // branch -- confirmed live: both modals visibly stacked, toast already fired, exactly this
+    // trace. Checking the INNER (more specific, only-present-after-the-outer-was-already-
+    // dismissed-once) condition FIRST fixes this: once the inner confirm dialog is actually open,
+    // its own text is what's checked, its own "Publish" button is what's returned -- the outer
+    // check only ever fires again if the inner dialog is genuinely not open.
     if (lower.indexOf('will not be compensating me') !== -1) {
       const innerBtn = findPoshmarkVisibleButtonByText('publish');
       if (innerBtn) return innerBtn;
+    }
+    if (lower.indexOf('fragile item detected') !== -1) {
+      const outerBtn = findPoshmarkVisibleButtonByText('publish listing');
+      if (outerBtn) return outerBtn;
     }
     return null;
   }
@@ -1661,7 +1720,7 @@
       // file header) -- never guess past this; fall back to the exact same manual-review path as
       // autoPublish=false. Whatever step Next already advanced to (if any) is left exactly as-is
       // for the organizer to finish.
-      showReviewOverlay(item, index, total, photosOk);
+      showReviewOverlay(item, index, total, photosOk, fillResult.fieldNotes);
       return;
     }
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
@@ -1919,7 +1978,7 @@
     // not be a reason to stop the extension continuing forward." doPoshmarkAutoPublish now records
     // a run note instead of refusing to publish; see its own header comment.
     if (autoPublish) { await doPoshmarkAutoPublish(item, index, total, fillResult); return; }
-    showReviewOverlay(item, index, total, photosOk);
+    showReviewOverlay(item, index, total, photosOk, fillResult.fieldNotes);
   }
 
   async function start() {
