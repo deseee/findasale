@@ -1560,10 +1560,29 @@
   // the poll always timed out after 6s and fell into doPoshmarkAutoPublish's "couldn't confirm"
   // UNVERIFIED warning branch. Confirmed live 2026-08-31: exact repro of Patrick's report (the
   // extension's own honest UNVERIFIED overlay firing instead of a real publish).
+  // BUG FIX 2026-08-31 (S-EXT-POSHMARK-FRAGILE-MODAL-CHAINED, live-Chrome-confirmed, tab shared
+  // directly, same session as the fix above): clicking the outer "Fragile Item Detected" modal's
+  // own "Publish Listing" button does NOT publish -- Poshmark chains a SECOND confirmation modal
+  // (same disclaimer restated: "By publishing this listing I understand that if items are not
+  // packaged securely and break in transit, Poshmark will not be compensating me."), with its own
+  // short-text "Publish" button and a "Cancel" button. Detected via this restated disclaimer's
+  // distinctive tail phrase rather than a second "fragile item detected" check, since the outer
+  // modal's heading is gone by the time this one is showing. Written as a loop rather than two
+  // fixed steps because there is no live-confirmed guarantee Poshmark stops at exactly two layers
+  // -- each iteration just asks "is SOME known fragile-flow confirmation still open" and clicks
+  // whichever one currently matches; it naturally stops matching (and this returns null) once
+  // every layer Poshmark actually showed has been dismissed.
   function findPoshmarkFragileModalPublishButton() {
     const lower = bodyText().toLowerCase();
-    if (lower.indexOf('fragile item detected') === -1) return null;
-    return findPoshmarkVisibleButtonByText('publish listing');
+    if (lower.indexOf('fragile item detected') !== -1) {
+      const outerBtn = findPoshmarkVisibleButtonByText('publish listing');
+      if (outerBtn) return outerBtn;
+    }
+    if (lower.indexOf('will not be compensating me') !== -1) {
+      const innerBtn = findPoshmarkVisibleButtonByText('publish');
+      if (innerBtn) return innerBtn;
+    }
+    return null;
   }
   async function dismissPoshmarkFragileModalIfPresent() {
     const btn = findPoshmarkFragileModalPublishButton();
@@ -1578,16 +1597,15 @@
   // -- no live-confirmed success marker exists yet (CODE-ONLY/UNTESTED, file header), so this is
   // the same conservative "did the form go away" signal fas-craigslist.js uses for its own publish
   // confirmation (waitForCraigslistPublish), adapted to this file's own looksLikeSellForm() check.
-  // Also polls for and clicks through the Fragile Item modal above -- see that function's own
-  // comment for the full incident this closes.
+  // Also polls for and clicks through every layer of the Fragile Item modal chain above -- see
+  // findPoshmarkFragileModalPublishButton's own comment for the full incident this closes. Checked
+  // on EVERY iteration (not just once) so a second (or further) chained confirmation is still
+  // caught after the first is dismissed.
   async function waitForPoshmarkPublishConfirmation(maxWaitMs) {
     const start = Date.now();
-    let dismissedFragileModal = false;
     while (Date.now() - start < maxWaitMs) {
-      if (!dismissedFragileModal) {
-        dismissedFragileModal = await dismissPoshmarkFragileModalIfPresent();
-        if (dismissedFragileModal) { await sleep(400); continue; }
-      }
+      const dismissed = await dismissPoshmarkFragileModalIfPresent();
+      if (dismissed) { await sleep(400); continue; }
       if (!looksLikeSellForm()) return true;
       await sleep(400);
     }
