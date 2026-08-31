@@ -240,15 +240,25 @@ const OrganizerHoldsPage = () => {
       if (data.settlementMode === 'CHECKOUT_LINK' && data.paymentLinkUrl) {
         showToast('Checkout link created and sent to the shopper.', 'success');
         window.open(data.paymentLinkUrl, '_blank', 'noopener');
-      } else if (data.settlementMode === 'POS_CART' || data.cartCount != null) {
-        const cartCount = data.cartCount ?? count;
+      } else if (data.settlementMode === 'POS_CART' || data.cartCount != null || data.reservationIds != null) {
+        const cartCount = data.cartCount ?? (Array.isArray(data.reservationIds) ? data.reservationIds.length : count);
         showToast(`Added to POS cart (${cartCount} item${cartCount === 1 ? '' : 's'}). Finish at checkout.`, 'success');
         // ADR-114 (2026-08-31): previously just a toast -- the organizer still had to
-        // manually navigate to /organizer/pos and find the linked cart themselves. The
-        // items are already visible there the moment this response comes back (the
-        // POSSession this just wrote/merged into is picked up by pos.tsx's existing
-        // GET /pos/sessions poll), so take them straight there instead.
-        if (data.saleId) {
+        // manually navigate to /organizer/pos and find the linked cart themselves.
+        //
+        // CORRECTED 2026-08-31 (same-session live-Chrome retest): the first version of this
+        // took the organizer to /organizer/pos relying on the server having written the
+        // items into a POSSession the page's linked-carts poll would pick up -- but that
+        // generic linked-cart pull path checks out via the raw terminal endpoints, which
+        // correctly refuse a still-RESERVED (held) item (see reservationController.ts's
+        // POS_CART handler for the full incident note). Reverted to passing the resolved
+        // reservationIds straight through as a query param instead; pos.tsx's
+        // `holdReservationIds` effect picks them up and feeds them into the existing,
+        // already-correct `handleLoadHold` flow (the same one the manual hold-search UI
+        // uses), which knows how to actually settle a held item's sale via sendHoldInvoice.
+        if (data.saleId && Array.isArray(data.reservationIds) && data.reservationIds.length > 0) {
+          router.push(`/organizer/pos?saleId=${data.saleId}&holdReservationIds=${data.reservationIds.join(',')}`);
+        } else if (data.saleId) {
           router.push(`/organizer/pos?saleId=${data.saleId}`);
         }
       } else if (data.updated === 0) {

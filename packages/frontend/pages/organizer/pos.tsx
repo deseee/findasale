@@ -336,6 +336,9 @@ export default function POSPage() {
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [loadedHold, setLoadedHold] = useState<HoldItem | null>(null);
   const [holdsRefreshInterval, setHoldsRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  // ADR-114 POS_CART fix (2026-08-31): guards the `holdReservationIds` query-param effect
+  // below against double-handling -- see that effect's comment for the full story.
+  const handledHoldReservationIdsRef = useRef<string | null>(null);
   const [cancellingSalesId, setCancellingSalesId] = useState<string | null>(null);
   // Cart share request: tracks whether organizer has requested the shopper share their cart
   const [cartShareRequesting, setCartShareRequesting] = useState(false);
@@ -2183,6 +2186,60 @@ export default function POSPage() {
     }
     // If linked cart was merged, handleAddLinkedCart already showed its own toast
   };
+
+  // ─── Load hold(s) passed via ?holdReservationIds= (from /organizer/holds "Add to POS
+  // cart") ──────────────────────────────────────────────────────────────────────────────
+  //
+  // ADR-114 POS_CART fix (2026-08-31, same-session live-Chrome retest): holds.tsx's
+  // POS_CART settlement mode navigates here with the resolved reservation ids in the
+  // query string (see holds.tsx's batchMutation onSuccess) instead of relying on the old
+  // POSSession/linked-carts pull -- that generic pull path adds items as plain walk-up
+  // `cart` entries and checks out via the raw terminal endpoints, which correctly refuse a
+  // still-RESERVED item (confirmed live: a real 400, "... is sold or unavailable", from
+  // POST /stripe/terminal/cash-payment). `handleLoadHold` is the existing, already-correct
+  // flow for a held item -- it sets `loadedHold`, which routes checkout through
+  // sendHoldInvoice/PosInvoiceModal instead, and it already auto-merges any other holds
+  // for the same shopper. Only the FIRST resolved reservation id is explicitly loaded here;
+  // if the organizer selected holds for more than one shopper on the holds page, the
+  // others are simply left in the Active Holds list to load separately -- `handleLoadHold`
+  // has never supported multiple simultaneous invoices and this does not attempt to add
+  // that.
+  useEffect(() => {
+    let raw: string | null = null;
+    let saleIdFromUrl: string | null = null;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      raw = params.get('holdReservationIds');
+      saleIdFromUrl = params.get('saleId');
+    }
+    if (!raw) {
+      const q = router.query.holdReservationIds;
+      raw = typeof q === 'string' && q ? q : null;
+    }
+    if (!raw) return;
+    if (handledHoldReservationIdsRef.current === raw) return; // already handled this exact param
+    if (holds.length === 0) return; // wait for /pos/holds to load before searching it
+
+    const ids = raw.split(',').filter(Boolean);
+    const match = holds.find(h => ids.includes(h.reservationId));
+    handledHoldReservationIdsRef.current = raw; // mark handled even if not found -- don't retry forever
+    if (match) {
+      handleLoadHold(match);
+    } else {
+      showToast('Could not find that hold to load -- it may have expired or already been settled.', 'error');
+    }
+
+    // Clear the query param so a refresh doesn't try to re-load it.
+    if (!saleIdFromUrl) {
+      const s = router.query.saleId;
+      saleIdFromUrl = typeof s === 'string' && s ? s : null;
+    }
+    router.replace({
+      pathname: router.pathname,
+      query: saleIdFromUrl ? { saleId: saleIdFromUrl } : {},
+    }, undefined, { shallow: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holds, router.isReady, router.query.holdReservationIds]);
 
   // ─── Request Cart Share (organizer → shopper push) ────────────────────────────────────
 
