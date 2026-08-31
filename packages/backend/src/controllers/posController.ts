@@ -721,7 +721,14 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // and the platform fee is computed on the CARD portion only (no fee on cash, matching
     // createCombinedInvoice's documented intentional asymmetry -- there is no
     // Organizer.cashFeeBalance accrual for a hold-invoice cash leg).
-    const finalCashAmountCents = Math.min(cashAmountCents ?? 0, grandTotal);
+    // Security-QA hardening (2026-08-31): coerce to a non-negative integer before use --
+    // a non-integer or NaN cashAmountCents would otherwise flow into an Int? column
+    // (HoldInvoice.cashAmountCents) and into Stripe's unit_amount_decimal computation below,
+    // risking a 500 from Prisma/Stripe rather than a clean, predictable clamp. This cannot be
+    // used to reduce the platform fee below its correct value -- Math.min still bounds it to
+    // grandTotal either way, so the fee floor stays exactly proportional to the real card leg.
+    const safeCashAmountCents = Number.isFinite(cashAmountCents) ? Math.max(0, Math.round(cashAmountCents as number)) : 0;
+    const finalCashAmountCents = Math.min(safeCashAmountCents, grandTotal);
     const cardAmountCents = grandTotal - finalCashAmountCents;
     const platformFeeAmount = Math.round(cardAmountCents * holdFeeRate);
 

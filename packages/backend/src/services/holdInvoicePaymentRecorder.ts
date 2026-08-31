@@ -9,6 +9,7 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row backfill (2026-08-09): recompute chargeType at payment-confirmation time, mirrors posPaymentLinkRecorder.ts
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from './cashFeeService'; // ADR-114 (2026-08-31) Security-QA fix: cash-leg commission accrual, same mechanism posPaymentController/terminalController/reservationController already use
 
 /**
  * holdInvoicePaymentRecorder.ts — payments fix (2026-08-03)
@@ -120,7 +121,12 @@ export interface MarkHoldInvoicePaidResult {
  */
 function reportDeadInvoicePayment(params: {
   invoiceId: string;
-  paymentIntentId: string;
+  // ADR-114 (2026-08-31): nullable -- markHoldInvoicePaid's 'pos-cash' source calls with
+  // paymentIntentId=null (a fully-cash invoice has no Stripe PaymentIntent at all). This
+  // guard is effectively unreachable for that source in practice (the invoice was just
+  // created PENDING moments earlier in the same request), but must still type-check for
+  // the case where it's ever reached.
+  paymentIntentId: string | null;
   invoiceStatus: string;
   amountCents: number;
   source: string;
@@ -182,7 +188,7 @@ export async function markHoldInvoicePaid(
     where: { id: invoiceId },
     include: {
       shopper: { select: { id: true, email: true, name: true, guildXp: true } },
-      organizer: { select: { id: true, email: true, name: true } },
+      organizer: { select: { id: true, email: true, name: true, subscriptionTier: true, referralDiscountExpiry: true } }, // subscriptionTier/referralDiscountExpiry added ADR-114 (2026-08-31) for cash-leg commission accrual below
       sale: true,
     },
   });
@@ -515,6 +521,51 @@ export async function markHoldInvoicePaid(
           console.warn(`[hold-invoice/${source}] Purchase already exists for invoice ${invoiceId} (no bundled items) — treating as already recorded.`);
         } else {
           throw purchaseErr;
+        }
+      }
+    }
+
+    // ADR-114 (2026-08-31) Security-QA fix (fix-and-reverify, applicable-feature adversarial
+    // pass on the ADR-114 payment-path changes): any HoldInvoice with a cash leg -- a fully-cash
+    // 'pos-cash' sale OR a partial cash+card split, both created by posController.ts's
+    // sendHoldInvoice -- previously accrued ZERO commission on the cash portion.
+    // HoldInvoice.platformFeeAmount is computed on the CARD portion only (by design, mirroring
+    // createCombinedInvoice's documented asymmetry), and nothing backstopped the cash leg the
+    // way cashFeeService.ts already does for terminalController.ts's and
+    // posPaymentController.ts's split-tender flows. Before this fix, any organizer/team-member
+    // could set cashAmountCents >= grandTotal on a hold invoice to get a real sale recorded (a
+    // real Purchase row, items marked SOLD) while paying literally zero commission, permanently
+    // -- a live, newly-exploitable fee-avoidance hole (createCombinedInvoice had the same
+    // asymmetry but its fully-cash branch could never actually complete a sale, so it was never
+    // reachable there; sendHoldInvoice's new fully-cash branch is what makes it reachable).
+    // Resolved through the SAME shared, tier-aware resolver every other cash-commission call
+    // site uses, at settlement time (here, inside the same $transaction as the PAID flip and
+    // Purchase-row creation -- NOT at invoice-creation time) so a rolled-back settlement can
+    // never leave an accrued debt behind for a sale that was not actually recorded, matching
+    // cashFeeService.ts's own documented guidance for transactional callers.
+    if (holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0) {
+      try {
+        const cashFeeRate = await resolveCashCommissionRate({
+          subscriptionTier: holdInvoice.organizer.subscriptionTier,
+          referralDiscountExpiry: holdInvoice.organizer.referralDiscountExpiry,
+        });
+        const cashCommission = cashCommissionOn(holdInvoice.cashAmountCents / 100, cashFeeRate);
+        await accrueCashFeeBalance({ organizerId: holdInvoice.organizer.id, commission: cashCommission, tx });
+      } catch (cashFeeErr: any) {
+        // Never let a commission-accrual failure block the actual sale recording -- log +
+        // Sentry, same non-fatal pattern posPaymentController.ts's split-cash accrual uses.
+        console.error(`[hold-invoice/${source}] Failed to accrue cash-leg commission for invoice ${invoiceId}:`, cashFeeErr);
+        try {
+          Sentry.captureException(cashFeeErr instanceof Error ? cashFeeErr : new Error(String(cashFeeErr)), {
+            tags: { area: 'hold-invoice-cash-commission-accrual', source },
+            extra: {
+              invoiceId,
+              organizerId: holdInvoice.organizer.id,
+              cashAmountCents: holdInvoice.cashAmountCents,
+            },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
         }
       }
     }
