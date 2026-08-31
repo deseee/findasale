@@ -1188,7 +1188,7 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 // platforms. Patrick-directed: widen Craigslist specifically (now 45-60s, bumped 2026-08-31 after a live
 // "posting too rapidly" hit at 25-45s) rather than raising the
 // shared range (which would needlessly slow every other platform that wasn't hitting a limit).
-const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 45000, MAX: 60000 }; // widened again 2026-08-31 -- Patrick hit "posting too rapidly" at 25-45s live, bumped to 45-60s
+const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 60000, MAX: 75000 }; // widened AGAIN 2026-08-31 -- 45-60s still wasn't enough per Patrick live report, bumped to 60-75s
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 // FIX (2026-08-31, S-EXT-CRAIGSLIST-COUNTDOWN-VISIBILITY, Patrick live report -- "still no
