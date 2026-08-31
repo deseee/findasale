@@ -1185,9 +1185,10 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 // platform gets. Confirmed the delay itself WAS firing (Patrick: "the delay between listings
 // appeared to be working") -- this isn't a repeat of the missing-pacing bug, it's that Craigslist's
 // own anti-spam throttle is simply stricter than the shared 10-25s range tuned against the other 6
-// platforms. Patrick-directed: widen Craigslist specifically to 25-45s rather than raising the
+// platforms. Patrick-directed: widen Craigslist specifically (now 45-60s, bumped 2026-08-31 after a live
+// "posting too rapidly" hit at 25-45s) rather than raising the
 // shared range (which would needlessly slow every other platform that wasn't hitting a limit).
-const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 25000, MAX: 45000 };
+const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 45000, MAX: 60000 }; // widened again 2026-08-31 -- Patrick hit "posting too rapidly" at 25-45s live, bumped to 45-60s
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 // 2026-08-30 addition (Patrick live report -- watching a real run, couldn't tell if it had
 // stalled or was just in this pause): the comment above ("no on-page waiting indicator yet")
