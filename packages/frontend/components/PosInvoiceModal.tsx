@@ -26,13 +26,12 @@ interface CartItem {
 interface PosInvoiceModalProps {
   hold: HoldItem;
   miscItems?: CartItem[];
-  sessionId?: string;
   cashAmountCents?: number;
   onClose: () => void;
   onSent: (reservationId: string) => void;
 }
 
-export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashAmountCents = 0, onClose, onSent }: PosInvoiceModalProps) {
+export default function PosInvoiceModal({ hold, miscItems = [], cashAmountCents = 0, onClose, onSent }: PosInvoiceModalProps) {
   const { showToast } = useToast();
   const [deliverVia, setDeliverVia] = useState<'EMAIL' | 'SMS' | 'BOTH'>('EMAIL');
   const [invoiceMode, setInvoiceMode] = useState<'QUICK' | 'TRUST'>('QUICK');
@@ -57,11 +56,12 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashA
         expiresAt.setTime(expiresAt.getTime() + expiryHours * 60 * 60 * 1000);
       }
 
-      const endpoint = sessionId
-        ? `/pos/sessions/${sessionId}/create-invoice`
-        : `/pos/holds/${hold.reservationId}/invoice`;
-
-      const response = await api.post(endpoint, {
+      // ADR-114 (2026-08-31): sendHoldInvoice is now the sole invoice-creation path
+      // (createCombinedInvoice / the sessionId-keyed endpoint this used to branch to has
+      // been removed -- it was never actually reachable, since no caller of this modal
+      // ever supplied a sessionId prop). It now handles cash/card splits itself, including
+      // a fully-cash invoice that skips Stripe and records PAID immediately.
+      const response = await api.post(`/pos/holds/${hold.reservationId}/invoice`, {
         shopperId: hold.shopperId,
         invoiceMode,
         expiresAt: expiresAt.toISOString(),

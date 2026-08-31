@@ -904,14 +904,22 @@ export default function POSPage() {
   useEffect(() => {
     if (!selectedSaleId) return;
 
-    const interval = setInterval(async () => {
+    const fetchLinkedCarts = async () => {
       try {
         const res = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}&_t=${Date.now()}`);
         setLinkedCarts(res.data.sessions || []);
       } catch (err) {
         console.error('[pos] Linked carts poll error:', err);
       }
-    }, 10000);
+    };
+
+    // ADR-114 (2026-08-31): fire once immediately instead of waiting for the first 10s
+    // tick -- an organizer landing here via "Add to POS cart" (holds.tsx navigates
+    // straight to /organizer/pos?saleId=... the moment that response comes back) would
+    // otherwise stare at an empty cart list for up to 10 seconds even though the session
+    // already exists server-side.
+    fetchLinkedCarts();
+    const interval = setInterval(fetchLinkedCarts, 10000);
 
     setLinkedCartsPollInterval(interval);
     return () => clearInterval(interval);

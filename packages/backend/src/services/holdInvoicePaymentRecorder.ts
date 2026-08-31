@@ -84,7 +84,10 @@ export interface MarkHoldInvoicePaidOpts {
   // ADR-111 (2026-08-28): 'webhook-fallback' added for the stripeController.ts charge.succeeded
   // self-healing branch (stripeSessionId lookup when paymentIntent.metadata.invoiceId is missing) --
   // kept distinguishable from plain 'webhook' in logs/Sentry so fallback usage stays visible/monitorable.
-  source: 'webhook' | 'reconcile' | 'webhook-fallback';
+  // ADR-114 (2026-08-31): 'pos-cash' added for sendHoldInvoice's fully-cash-at-register
+  // path -- cash was already physically collected, so there is no Stripe payment to wait
+  // for; this call records the sale immediately with paymentIntentId=null.
+  source: 'webhook' | 'reconcile' | 'webhook-fallback' | 'pos-cash';
   chargeId?: string;
   /** Estimated Stripe processing fee, in cents. Defaults to 0 if not supplied. */
   stripeFeeAmountCents?: number;
@@ -164,7 +167,12 @@ function reportDeadInvoicePayment(params: {
 
 export async function markHoldInvoicePaid(
   invoiceId: string,
-  paymentIntentId: string,
+  // ADR-114 (2026-08-31): nullable to support the 'pos-cash' source above -- a fully-cash
+  // invoice has no Stripe PaymentIntent at all. Every use of this parameter below already
+  // tolerates null (stored as-is on HoldInvoice.stripePaymentIntentId and
+  // Purchase.stripePaymentIntentId, both nullable columns; only used in log/Sentry text
+  // otherwise) -- confirmed by reading the full function body before this change.
+  paymentIntentId: string | null,
   opts: MarkHoldInvoicePaidOpts
 ): Promise<MarkHoldInvoicePaidResult> {
   const { source, chargeId, stripeFeeAmountCents = 0 } = opts;
@@ -436,7 +444,13 @@ export async function markHoldInvoicePaid(
             commissionRate: null,
             organizerAbsorbedPremium: false,
             status: 'PAID',
-            source: 'ONLINE',
+            // ADR-114 (2026-08-31): this Purchase row previously hardcoded 'ONLINE' for
+            // every caller of this function -- correct for the Stripe webhook/reconcile/
+            // webhook-fallback sources (a real online card payment), but wrong for the new
+            // 'pos-cash' source (an in-person cash sale, matching Purchase.source's other
+            // established value 'POS' -- see terminalController.ts's own cash/card Purchase
+            // rows, which already use 'POS').
+            source: source === 'pos-cash' ? 'POS' : 'ONLINE',
             stripePaymentIntentId: paymentIntentId,
             chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
             ...(useDirect && chargeAccountId ? { stripeAccountId: chargeAccountId } : {}),
@@ -484,7 +498,13 @@ export async function markHoldInvoicePaid(
             commissionRate: null,
             organizerAbsorbedPremium: false,
             status: 'PAID',
-            source: 'ONLINE',
+            // ADR-114 (2026-08-31): this Purchase row previously hardcoded 'ONLINE' for
+            // every caller of this function -- correct for the Stripe webhook/reconcile/
+            // webhook-fallback sources (a real online card payment), but wrong for the new
+            // 'pos-cash' source (an in-person cash sale, matching Purchase.source's other
+            // established value 'POS' -- see terminalController.ts's own cash/card Purchase
+            // rows, which already use 'POS').
+            source: source === 'pos-cash' ? 'POS' : 'ONLINE',
             stripePaymentIntentId: paymentIntentId,
             chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
             ...(useDirect && chargeAccountId ? { stripeAccountId: chargeAccountId } : {}),

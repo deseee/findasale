@@ -243,6 +243,14 @@ const OrganizerHoldsPage = () => {
       } else if (data.settlementMode === 'POS_CART' || data.cartCount != null) {
         const cartCount = data.cartCount ?? count;
         showToast(`Added to POS cart (${cartCount} item${cartCount === 1 ? '' : 's'}). Finish at checkout.`, 'success');
+        // ADR-114 (2026-08-31): previously just a toast -- the organizer still had to
+        // manually navigate to /organizer/pos and find the linked cart themselves. The
+        // items are already visible there the moment this response comes back (the
+        // POSSession this just wrote/merged into is picked up by pos.tsx's existing
+        // GET /pos/sessions poll), so take them straight there instead.
+        if (data.saleId) {
+          router.push(`/organizer/pos?saleId=${data.saleId}`);
+        }
       } else if (data.updated === 0) {
         // Server found nothing left to act on (already settled, released, or expired).
         // Say so plainly rather than reporting a success that did not happen.

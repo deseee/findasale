@@ -5,7 +5,8 @@
  * Animated slide-in from right with backdrop overlay. Full dark mode support.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
@@ -226,7 +227,25 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     e.stopPropagation();
   };
 
-  return (
+  // Payment-popup-behind-cart fix (2026-08-31, confirmed live on a real "Send to Phone"
+  // split-tender transaction): Layout.tsx's root wrapper has `overflow-x-hidden`
+  // (needed elsewhere to stop horizontal scroll bleed), and this drawer was rendered as
+  // a plain child of it. iOS Safari treats ANY `overflow` value other than `visible` on
+  // an ancestor as a new containing block for `position: fixed` descendants -- this
+  // drawer's fixed panel got trapped inside that ancestor instead of the true viewport,
+  // so PosPaymentRequestAlert's fixed z-[9999] overlay (rendered as a true top-level
+  // sibling in _app.tsx, outside Layout entirely) could end up painted BEHIND this
+  // trapped drawer once it was open. Confirmed: closing the cart made the payment
+  // request visible, exactly the trapped-containing-block symptom. Fix: portal this
+  // drawer straight to document.body, same escape-hatch already used by
+  // FeedbackMenu.tsx in this codebase, so it always shares the true top-level
+  // stacking context no matter what Layout wraps it in.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const drawerContent = (
     <>
       {/* Backdrop overlay: click to close */}
       {isOpen && (
@@ -607,6 +626,9 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       </div>
     </>
   );
+
+  if (!mounted) return null;
+  return ReactDOM.createPortal(drawerContent, document.body);
 };
 
 export default CartDrawer;

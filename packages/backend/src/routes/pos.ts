@@ -15,8 +15,6 @@ import {
   requestCartShare,
   deleteSession,
   searchShopperHolds,
-  pullHoldsToCart,
-  createCombinedInvoice,
 } from '../controllers/posController';
 import {
   createPaymentRequest,
@@ -52,9 +50,12 @@ router.post('/holds/:reservationId/invoice', authenticate, sendHoldInvoice);
 router.post('/holds/:reservationId/request-cart', authenticate, requireOrganizerOrTeamMember, requestCartShare);
 
 // POS Cart + Invoice endpoints (multi-source holds)
+// ADR-114 (2026-08-31): '/pull-holds' (pullHoldsToCart) and '/create-invoice'
+// (createCombinedInvoice) removed -- dead subsystem, never reachable from the frontend
+// (PosInvoiceModal's sessionId-branch that would have targeted create-invoice was never
+// supplied a sessionId by its only caller, pos.tsx). sendHoldInvoice is now the sole
+// invoice-creation path, including for cash/card splits (see posController.ts).
 router.get('/sessions/:sessionId/shopper-holds', authenticate, searchShopperHolds);
-router.post('/sessions/:sessionId/pull-holds', authenticate, pullHoldsToCart);
-router.post('/sessions/:sessionId/create-invoice', authenticate, createCombinedInvoice);
 
 // POS Payment Request endpoints
 router.post('/payment-request', authenticate, requireOrganizerOrTeamMember, paymentLimiter, createPaymentRequest);

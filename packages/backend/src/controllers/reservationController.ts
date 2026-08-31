@@ -878,8 +878,21 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       const settlementMode: SettlementMode =
         requestedMode ?? resolveDefaultSettlementMode(validRouted[0].item.sale);
 
-      // ── POS_CART: do NOT finalize. Add items to the active POS cart (HOLD_IN_CART). ──
-      // Item status is unchanged until POS checkout completes. Never flips to SOLD here.
+      // ── POS_CART: do NOT finalize AND do NOT touch hold state. ──────────────────────
+      // ADR-114 (2026-08-31): this used to flip these reservations to HOLD_IN_CART and
+      // create/reuse a POSSession with an EMPTY cartItems array -- nothing in
+      // packages/frontend ever read HOLD_IN_CART reservations back out of that session, so
+      // the items were silently stranded (visible neither in the organizer's POS cart nor
+      // recoverable from the holds list, since isInvoicedOrClaimed / the batch's own
+      // ['PENDING','CONFIRMED'] status filter above no longer match a HOLD_IN_CART row).
+      // Fixed to mirror RECORD/CHECKOUT_LINK exactly: no ItemReservation write of any kind.
+      // Instead, the resolved item data is written directly into POSSession.cartItems
+      // (same shape + same cents convention shareCart already writes -- see
+      // posController.ts's shareCart/getLinkedCarts), so the EXISTING "linked carts" UI on
+      // /organizer/pos (pos.tsx's GET /pos/sessions poll -> PosOpenCarts -> onPullCart ->
+      // handleAddLinkedCart) picks this session up and adds the items to the cart with zero
+      // new frontend plumbing. Item status is unchanged; holds remain PENDING/CONFIRMED
+      // until the organizer actually settles them at checkout.
       if (settlementMode === 'POS_CART') {
         const saleId = validRouted[0].item.saleId;
         if (!saleId) return res.status(400).json({ message: 'Holds are not attached to a sale' });
@@ -896,8 +909,20 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           return res.status(409).json({ message: 'One or more holds already have an invoice' });
         }
 
-        // Find (or create) the active OPEN POS session for this sale + shopper.
         const shopperId = validRouted[0].userId;
+
+        // cartItems price is stored in CENTS -- matches shareCart's convention exactly
+        // (getLinkedCarts divides by 100 for organizer display, unconditionally, for every
+        // session regardless of how it was created).
+        const newCartItems = validRouted.map((h) => ({
+          id: h.item.id,
+          title: h.item.title,
+          price: Math.round((h.item.price || 0) * 100),
+          photoUrl: h.item.photoUrls && h.item.photoUrls.length > 0 ? h.item.photoUrls[0] : undefined,
+          saleId,
+        }));
+
+        // Find (or create) the active OPEN POS session for this sale + shopper.
         let posSession = await prisma.pOSSession.findFirst({
           where: {
             saleId,
@@ -907,38 +932,39 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           },
           orderBy: { createdAt: 'desc' },
         });
+
+        let cartItemsResult: typeof newCartItems;
         if (!posSession) {
           posSession = await prisma.pOSSession.create({
             data: {
               organizerId: organizer.id,
               saleId,
               shopperId,
-              cartItems: [],
+              cartItems: newCartItems,
               status: 'OPEN',
               expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
             },
           });
+          cartItemsResult = newCartItems;
+        } else {
+          // Merge into the existing session rather than overwrite -- a second "Add to POS
+          // cart" click (e.g. more holds selected) must accumulate, not replace, and must
+          // never duplicate an item id already present.
+          const existingItems = Array.isArray(posSession.cartItems) ? (posSession.cartItems as any[]) : [];
+          const existingIds = new Set(existingItems.map((it) => it?.id));
+          const mergedItems = [...existingItems, ...newCartItems.filter((it) => !existingIds.has(it.id))];
+          posSession = await prisma.pOSSession.update({
+            where: { id: posSession.id },
+            data: { cartItems: mergedItems },
+          });
+          cartItemsResult = mergedItems as typeof newCartItems;
         }
-
-        // Transition reservations to HOLD_IN_CART (reuses pullHoldsToCart semantics).
-        const validIds = validRouted.map((h) => h.id);
-        await prisma.itemReservation.updateMany({
-          where: { id: { in: validIds } },
-          data: { status: 'HOLD_IN_CART' },
-        });
-
-        const cartCount = await prisma.itemReservation.count({
-          where: {
-            item: { saleId },
-            userId: shopperId,
-            status: 'HOLD_IN_CART',
-          },
-        });
 
         return res.json({
           settlementMode,
           sessionId: posSession.id,
-          cartCount,
+          saleId,
+          cartCount: cartItemsResult.length,
           updated: validRouted.length,
           failed: ids.length - validRouted.length,
         });
