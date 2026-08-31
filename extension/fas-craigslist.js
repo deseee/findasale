@@ -82,6 +82,31 @@
   }
   function overlay(html) { ensureBar().innerHTML = html; }
   function overlayInfo(text) { overlay('<b>FindA.Sale</b><div style="margin-top:6px;font-size:13px;color:#cfe3d6">' + text + '</div>'); }
+
+  // ---- queue-advance countdown (2026-08-31, parity with fas-content.js's FB countdown) ----
+  // Purely cosmetic -- background.js's own CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS pacing pause runs
+  // regardless of this; it only reflects that same countdown via humanQueueDelay()'s one-way
+  // 'fasQueueDelayStarted' notification, same pattern fas-content.js already ships for Facebook.
+  let queueDelayInterval = null;
+  function clearQueueDelayCountdown() {
+    if (queueDelayInterval) { clearInterval(queueDelayInterval); queueDelayInterval = null; }
+  }
+  function startQueueDelayCountdown(totalMs) {
+    clearQueueDelayCountdown();
+    const deadline = Date.now() + Math.max(0, Number(totalMs) || 0);
+    const renderTick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      overlayInfo('Pacing pause before the next item: ' + remaining + 's (this is normal, not a stall)\u2026');
+      if (remaining <= 0) clearQueueDelayCountdown();
+    };
+    renderTick();
+    queueDelayInterval = setInterval(renderTick, 1000);
+  }
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.type === 'fasQueueDelayStarted' && typeof msg.ms === 'number') {
+      startQueueDelayCountdown(msg.ms);
+    }
+  });
   function overlayError(step, msg) {
     overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Stopped on the <b>' + escapeHtml(step) +
       '</b> step: ' + escapeHtml(msg || 'something did not match.') +
