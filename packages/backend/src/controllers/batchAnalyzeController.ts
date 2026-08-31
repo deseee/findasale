@@ -24,7 +24,7 @@ import { prisma } from '../lib/prisma';
 import axios from 'axios';
 import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
-import { getEbayAccessToken, suggestEbayCategoryForTitle } from './ebayController';
+import { getEbayAccessToken, suggestEbayCategoryForTitle, computeEffectivePackageWeight } from './ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
 import { lookupByBarcode } from '../services/ebayCatalogLookup';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
@@ -567,6 +567,38 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             });
           } catch (err) {
             console.error(`Failed to update Item ${itemId}:`, err);
+          }
+
+          // ADR-package-profile-autoconfirm-2026-08-31: best-effort, non-blocking attempt to
+          // pick up a curated PackageProfile match (source CATEGORY/KEYWORD, confidence >=
+          // 0.55) the moment this item's category is first known, so a NEW record/CD/comic/etc.
+          // shows weight/dims immediately rather than only after an organizer later hits the
+          // FB-export path or the "Get AI estimate" endpoint. Re-reads the item fresh since the
+          // update above may have changed category/other fields used by the cascade. Never
+          // throws into the batch response -- computeEffectivePackageWeight() itself is a no-op
+          // for items that already have a usable weight or resolve to source AI/SEED (those
+          // still require the organizer's manual confirm, unchanged by this ADR).
+          try {
+            const freshForEstimate = await prisma.item.findUnique({
+              where: { id: itemId },
+              select: {
+                id: true, title: true, description: true, category: true, ebayCategoryId: true,
+                ebayShippingOverride: true, packageConfirmedByOrganizer: true, packageWeightOz: true,
+                packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true,
+                aiPackageWeightOz: true, aiPackageDimsJson: true, aiPackageConfidence: true,
+              },
+            });
+            if (freshForEstimate) {
+              await computeEffectivePackageWeight({
+                ...freshForEstimate,
+                packageLengthIn: freshForEstimate.packageLengthIn != null ? Number(freshForEstimate.packageLengthIn) : null,
+                packageWidthIn: freshForEstimate.packageWidthIn != null ? Number(freshForEstimate.packageWidthIn) : null,
+                packageHeightIn: freshForEstimate.packageHeightIn != null ? Number(freshForEstimate.packageHeightIn) : null,
+                aiPackageConfidence: freshForEstimate.aiPackageConfidence != null ? Number(freshForEstimate.aiPackageConfidence) : null,
+              });
+            }
+          } catch (packageEstErr) {
+            console.warn(`[batchAnalyze] curated package-estimate auto-confirm failed for item ${itemId}:`, packageEstErr);
           }
 
           // PRODUCTION grounded identity (ADR grounded-identification-production-2026-07-02).

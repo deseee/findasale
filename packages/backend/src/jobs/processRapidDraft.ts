@@ -4,7 +4,7 @@ import { analyzeItemImage, analyzeItemImages, suggestPrice, AITagResult } from '
 import { checkAITagLimit } from '../lib/tierEnforcement';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { suggestCategories } from '../services/ebayTaxonomyService';
-import { getEbayAccessToken } from '../controllers/ebayController';
+import { getEbayAccessToken, computeEffectivePackageWeight } from '../controllers/ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
 import { lookupByBarcode } from '../services/ebayCatalogLookup';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
@@ -493,6 +493,38 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         }
       } else {
         console.log(`[rapidfire] Item ${itemId} processed successfully. Status: PENDING_REVIEW`);
+      }
+
+      // ADR-package-profile-autoconfirm-2026-08-31: best-effort, non-blocking attempt to
+      // pick up a curated PackageProfile match (source CATEGORY/KEYWORD, confidence >= 0.55)
+      // the moment this item's category is first known via the rapidfire AI-tagging path --
+      // whichever branch above ran (optimistic-lock success or the race-condition merge), the
+      // item's category may have just changed, so re-read fresh rather than tracking which
+      // local variable ended up winning. Never throws into the job's error handling --
+      // computeEffectivePackageWeight() itself is a no-op for items that already have a usable
+      // weight or resolve to source AI/SEED (those still require the organizer's manual
+      // "Get AI estimate" + Save, unchanged by this ADR).
+      try {
+        const freshForEstimate = await prisma.item.findUnique({
+          where: { id: itemId },
+          select: {
+            id: true, title: true, description: true, category: true, ebayCategoryId: true,
+            ebayShippingOverride: true, packageConfirmedByOrganizer: true, packageWeightOz: true,
+            packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true,
+            aiPackageWeightOz: true, aiPackageDimsJson: true, aiPackageConfidence: true,
+          },
+        });
+        if (freshForEstimate) {
+          await computeEffectivePackageWeight({
+            ...freshForEstimate,
+            packageLengthIn: freshForEstimate.packageLengthIn != null ? Number(freshForEstimate.packageLengthIn) : null,
+            packageWidthIn: freshForEstimate.packageWidthIn != null ? Number(freshForEstimate.packageWidthIn) : null,
+            packageHeightIn: freshForEstimate.packageHeightIn != null ? Number(freshForEstimate.packageHeightIn) : null,
+            aiPackageConfidence: freshForEstimate.aiPackageConfidence != null ? Number(freshForEstimate.aiPackageConfidence) : null,
+          });
+        }
+      } catch (packageEstErr) {
+        console.warn(`[rapidfire] curated package-estimate auto-confirm failed for item ${itemId}:`, packageEstErr);
       }
 
       // PRODUCTION grounded identity (ADR grounded-identification-production-2026-07-02).

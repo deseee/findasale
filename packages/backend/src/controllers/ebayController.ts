@@ -2031,21 +2031,24 @@ export async function applyNeverShippableOverride(item: {
 }
 
 /**
- * Compute an item's effective shipping package (weight + optional dims) WITHOUT
- * persisting anything to the Item row. Pure compute: given an item snapshot, runs the
+ * Compute an item's effective shipping package (weight + optional dims), and -- as of
+ * ADR-package-profile-autoconfirm-2026-08-31 -- conditionally PERSIST it when the match
+ * is a curated PackageProfile hit (source CATEGORY/KEYWORD, confidence >= 0.55). Runs the
  * same category/keyword/AI/seed cascade (estimatePackageProfile) the old combined
- * resolvePublishPackageWeight() used, and returns the resolved value for the caller's
- * own in-memory/request-scoped use only.
+ * resolvePublishPackageWeight() used.
  *
- * package-estimation isolation ADR (2026-08-05): an unconfirmed estimate must never
- * silently land in the organizer-facing packageWeightOz/packageLengthIn/WidthIn/HeightIn
- * fields -- those fields may only be written by the organizer's own explicit save (see
- * itemController's package-estimate endpoints + edit-item/review "Get AI estimate"
- * button) or by the measured-fact exceptions (barcode/catalog enrichment, voice
- * dictation) that are out of scope for this function. Callers that need a resolved
- * number for their own request (e.g. building a Facebook Marketplace payload) should
- * call this function and use the return value locally -- never write it back via
- * prisma.item.update.
+ * package-estimation isolation ADR (2026-08-05), NARROWED 2026-08-31: an unconfirmed
+ * AI-vision guess (source AI) or generic fallback (source SEED) must still never silently
+ * land in the organizer-facing packageWeightOz/packageLengthIn/WidthIn/HeightIn fields --
+ * those two tiers still require the organizer's own explicit save (see itemController's
+ * package-estimate endpoints + edit-item/review "Get AI estimate" button). BUT a curated
+ * PackageProfile match (source CATEGORY or KEYWORD -- tiers 1-3 of estimatePackageProfile's
+ * waterfall) is now treated as a measured-fact exception, the same tier barcode/catalog
+ * enrichment already gets (see AUTHORITATIVE_SOURCES in productEnrichment.ts) -- see
+ * claude_docs/architecture/ADR-package-profile-autoconfirm-2026-08-31.md for the full
+ * rationale. Callers that only want the resolved number for their own request (e.g.
+ * building a Facebook Marketplace payload) can still just use the return value locally --
+ * the persist (when it fires) is a side effect on top of, not instead of, the return value.
  *
  * Returns null when nothing needs resolving (already has a usable weight, or the item
  * is LOCAL_PICKUP_ONLY) or when no usable weight could be produced (should not happen,
@@ -2086,6 +2089,10 @@ export async function computeEffectivePackageWeight(item: {
   let dims: { length?: number | null; width?: number | null; height?: number | null } | null = null;
   let packageType: string | null = item.packageType ?? null;
   let source = 'AI';
+  // Hoisted out of the try block below (was a `const` scoped inside it) so the
+  // ADR-package-profile-autoconfirm-2026-08-31 auto-write check further down can read
+  // est.confidence -- see that block for why.
+  let est: Awaited<ReturnType<typeof estimatePackageProfile>> | null = null;
 
   // a. JIT full estimate first — category/keyword/AI/seed cascade. Curated PackageProfile
   //    data (CATEGORY/KEYWORD, with the ADR-092 plausibility guard) is preferred over an
@@ -2093,7 +2100,7 @@ export async function computeEffectivePackageWeight(item: {
   //    decision to never trust an AI-only weight (commit b0af249a). Always returns a usable
   //    value (falls through to its own gated AI tier, then a SEED default).
   try {
-    const est = await estimatePackageProfile({
+    est = await estimatePackageProfile({
       id: item.id,
       title: item.title,
       description: item.description,
@@ -2140,12 +2147,55 @@ export async function computeEffectivePackageWeight(item: {
   const widthIn = dims && dims.width != null ? Number(dims.width) : null;
   const heightIn = dims && dims.height != null ? Number(dims.height) : null;
 
-  // No persist — package-estimation isolation ADR (2026-08-05): this compute-only
-  // function must never write packageWeightOz/dims/packageType/packageEstimateSource to
-  // the Item row. Callers use the return value for their own request-scoped purpose only.
-  console.log(
-    `[eBay AutoWeight] item=${item.id} computed (no persist) weightOz=${weightOz} dims=${lengthIn ?? '?'}x${widthIn ?? '?'}x${heightIn ?? '?'} source=${source}`
-  );
+  // ADR-package-profile-autoconfirm-2026-08-31: a curated PackageProfile match (source
+  // CATEGORY or KEYWORD -- NEVER source AI or SEED) above a confidence floor is treated as
+  // a measured-fact exception, same tier as barcode/catalog enrichment (AUTHORITATIVE_SOURCES
+  // in productEnrichment.ts) -- it may auto-write to the organizer-facing fields AND set
+  // packageConfirmedByOrganizer=true, satisfying every existing Guard-2-style publish check
+  // (this file's own Guard 2, ebayListingQueueCron.ts, ebayStuckOfferRetryCron.ts) without
+  // touching any of them. AI-vision (source AI) and the generic fallback (source SEED)
+  // deliberately do NOT get this exception -- those still require the organizer's own
+  // explicit "Get AI estimate" + Save. item.packageConfirmedByOrganizer !== true guards
+  // against re-writing an item the organizer (or a prior run of this same block) already
+  // confirmed; the weightOz/weightOz>0 checks mirror the guard already used above.
+  const CURATED_AUTOCONFIRM_SOURCES = new Set(['CATEGORY', 'KEYWORD']);
+  const CURATED_AUTOCONFIRM_MIN_CONFIDENCE = 0.55;
+  if (
+    weightOz != null &&
+    weightOz > 0 &&
+    CURATED_AUTOCONFIRM_SOURCES.has(source) &&
+    est?.confidence != null &&
+    est.confidence >= CURATED_AUTOCONFIRM_MIN_CONFIDENCE &&
+    item.packageConfirmedByOrganizer !== true
+  ) {
+    try {
+      await prisma.item.update({
+        where: { id: item.id },
+        data: {
+          packageWeightOz: weightOz,
+          packageLengthIn: lengthIn,
+          packageWidthIn: widthIn,
+          packageHeightIn: heightIn,
+          packageType: packageType,
+          packageEstimateSource: source,
+          packageEstimateConfidence: est.confidence,
+          packageConfirmedByOrganizer: true,
+        },
+      });
+      console.log(
+        `[eBay AutoWeight] item=${item.id} curated match auto-confirmed source=${source} confidence=${est.confidence} weightOz=${weightOz} dims=${lengthIn ?? '?'}x${widthIn ?? '?'}x${heightIn ?? '?'}`
+      );
+    } catch (e: any) {
+      console.warn('[eBay AutoWeight] failed to persist curated auto-confirm for item', item.id, e?.message || e);
+    }
+  } else {
+    // No persist for this tier (AI/SEED source, low confidence, or already confirmed) --
+    // compute-only, exactly as before this ADR. Callers use the return value for their own
+    // request-scoped purpose only.
+    console.log(
+      `[eBay AutoWeight] item=${item.id} computed (no persist) weightOz=${weightOz} dims=${lengthIn ?? '?'}x${widthIn ?? '?'}x${heightIn ?? '?'} source=${source}`
+    );
+  }
   return { weightOz, lengthIn, widthIn, heightIn, packageType, source };
 }
 
