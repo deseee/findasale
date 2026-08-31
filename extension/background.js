@@ -298,7 +298,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         // rate-limit, not an unrelated Craigslist-side coincidence. Fix: apply the same
         // humanQueueDelay() every other platform already gets, right before the re-navigation --
         // does not change the 700ms settle-pause above (a separate, shorter DOM-render concern).
-        await craigslistDelayWithOverlay(tabId, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS); // 2026-08-31: was humanQueueDelay() -- see injectCraigslistCountdownOverlay comment above for why sendMessage never worked here
+        // 2026-08-31: batch-cooldown check -- (index + 1) is the item we're about to resume on.
+        const clBatchBoundary1 = craigslistIsBatchBoundary(index + 1);
+        await craigslistDelayWithOverlay(
+          tabId,
+          clBatchBoundary1 ? CRAIGSLIST_BATCH_COOLDOWN_MS : CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
+          clBatchBoundary1
+        ); // 2026-08-31: was humanQueueDelay() -- see injectCraigslistCountdownOverlay comment above for why sendMessage never worked here
         chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
           // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-STALL round 3): this used to be
           // `void chrome.runtime.lastError` -- read-then-discarded, so a failed re-navigation
@@ -1191,6 +1197,18 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 60000, MAX: 75000 }; // widened AGAIN 2026-08-31 -- 45-60s still wasn't enough per Patrick live report, bumped to 60-75s
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
+// BATCH COOLDOWN (2026-08-31, Patrick live report -- 60-75s per-item still tripped Craigslist's
+// "You are posting too rapidly" throttle, the THIRD widening attempt to fail. Patrick's own
+// observation: it trips roughly every 6 items regardless of per-item spacing, which points at
+// Craigslist counting total posts within some window rather than purely spacing between them.
+// Additive fix, not a replacement: keep the existing per-item delay AND add a much longer pause
+// after every batch of CRAIGSLIST_BATCH_SIZE items.
+const CRAIGSLIST_BATCH_SIZE = 5;
+const CRAIGSLIST_BATCH_COOLDOWN_MS = { MIN: 300000, MAX: 420000 }; // 5-7 minutes between batches
+function craigslistIsBatchBoundary(nextIndex) {
+  return nextIndex > 0 && nextIndex % CRAIGSLIST_BATCH_SIZE === 0;
+}
+
 // FIX (2026-08-31, S-EXT-CRAIGSLIST-COUNTDOWN-VISIBILITY, Patrick live report -- "still no
 // countdown timer for craigslist visible although the delay does seem to be working"): the
 // humanQueueDelay() 'fasQueueDelayStarted' chrome.tabs.sendMessage approach (added earlier this
@@ -1206,12 +1224,12 @@ function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 // host permission (used elsewhere in this file), so this works on ANY craigslist.org origin the
 // tab happens to be on, confirmation page included. Self-contained: the injected function must
 // not close over anything in this file's scope (it runs in the page's own isolated world).
-async function injectCraigslistCountdownOverlay(tabId, ms) {
+async function injectCraigslistCountdownOverlay(tabId, ms, isBatchCooldown) {
   if (tabId == null) return;
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      func: (totalMs) => {
+      func: (totalMs, isBatch, batchSize) => {
         try {
           const ID = 'fas-cl-queue-delay-overlay';
           let el = document.getElementById(ID);
@@ -1228,7 +1246,12 @@ async function injectCraigslistCountdownOverlay(tabId, ms) {
           if (window.__fasClOverlayInterval) clearInterval(window.__fasClOverlayInterval);
           const render = () => {
             const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-            el.textContent = 'Pacing pause before the next item: ' + remaining + 's (this is normal, not a stall)\u2026';
+            const mins = Math.floor(remaining / 60);
+            const secs = remaining % 60;
+            const timeLabel = isBatch ? (mins + 'm ' + secs + 's') : (remaining + 's');
+            el.textContent = isBatch
+              ? 'Batch cooldown: waiting ' + timeLabel + ' before starting the next batch of ' + batchSize + ' (this is normal, not a stall)\u2026'
+              : 'Pacing pause before the next item: ' + timeLabel + ' (this is normal, not a stall)\u2026';
             if (remaining <= 0) {
               clearInterval(window.__fasClOverlayInterval);
               window.__fasClOverlayInterval = null;
@@ -1239,7 +1262,7 @@ async function injectCraigslistCountdownOverlay(tabId, ms) {
           window.__fasClOverlayInterval = setInterval(render, 1000);
         } catch (e) { /* best-effort visual only -- never let this break the real pacing pause */ }
       },
-      args: [ms],
+      args: [ms, !!isBatchCooldown, CRAIGSLIST_BATCH_SIZE],
     });
   } catch (e) {
     // Injection can legitimately fail (tab closed, mid-navigation, chrome:// page, etc.) -- this
@@ -1252,9 +1275,9 @@ async function injectCraigslistCountdownOverlay(tabId, ms) {
 // itself (instead of letting humanQueueDelay() pick internally) so the SAME ms value can drive
 // both the visible overlay above and the real sleep -- kept separate from humanQueueDelay() so
 // the other 3 platforms' behavior is untouched.
-async function craigslistDelayWithOverlay(tabId, range) {
+async function craigslistDelayWithOverlay(tabId, range, isBatchCooldown) {
   const ms = range.MIN + Math.random() * (range.MAX - range.MIN);
-  injectCraigslistCountdownOverlay(tabId, ms); // fire-and-forget, cosmetic only
+  injectCraigslistCountdownOverlay(tabId, ms, isBatchCooldown); // fire-and-forget, cosmetic only
   await sleep(ms);
 }
 
@@ -1433,7 +1456,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // header comment above ("never runs after a REAL publish") for why the onUpdated
           // branch's craigslistDelayWithOverlay() call is the one that matters in practice.
           const clAdvanceTabId = sender && sender.tab && sender.tab.id != null ? sender.tab.id : undefined;
-          await craigslistDelayWithOverlay(clAdvanceTabId, CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
+          const clBatchBoundary2 = craigslistIsBatchBoundary(next);
+          await craigslistDelayWithOverlay(
+            clAdvanceTabId,
+            clBatchBoundary2 ? CRAIGSLIST_BATCH_COOLDOWN_MS : CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
+            clBatchBoundary2
+          ); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'craigslistLoginStateObserved') {
