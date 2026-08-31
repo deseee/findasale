@@ -586,6 +586,38 @@
     if (!body) throw hardError('Details', 'Couldn\'t find the posting Description field.');
     setInputValue(body, item.description || '');
 
+    // BUG FIX (2026-08-31, live-reproduced -- Patrick stuck on "Please supply a value for the
+    // 'condition' field" posting furniture): this field was never filled at all. Only EXISTS
+    // for categories that require it (furniture confirmed live; others too) -- categories that
+    // don't need it simply have no select[name="condition"] on the page, so the existence check
+    // below correctly no-ops for those, not an error. Selector/values live-verified by direct
+    // DOM inspection against a real post.craigslist.org furniture posting form: id is a
+    // dynamically-generated jQuery UI selectmenu id ("ui-id-1"-style, NOT stable) -- must select
+    // by name, not id. Real <option> values: 10=new, 20=like new, 30=excellent, 40=good,
+    // 50=fair, 60=salvage. item.condition arrives pre-formatted by the SAME
+    // toFacebookCondition() the Facebook channel uses (extensionController.ts:14-21, shared
+    // across every platform's queue payload, not Craigslist-specific) -- always exactly one of
+    // 'New' / 'Used - Like New' / 'Used - Good' / 'Used - Fair' (that function's own default
+    // case covers null/unknown as 'Used - Good', so this should always match in practice; the
+    // hardError below is defensive, not expected to fire). Facebook's 4-tier scale doesn't map
+    // 1:1 onto Craigslist's 6-tier scale -- "Used - Good" intentionally maps to Craigslist's
+    // "good" (not "excellent"), the more conservative/literal match.
+    const CL_CONDITION_MAP = {
+      'new': '10',
+      'used - like new': '20',
+      'used - good': '40',
+      'used - fair': '50',
+    };
+    const conditionSelect = q('select[name="condition"]');
+    if (conditionSelect) {
+      const mapped = item.condition ? CL_CONDITION_MAP[String(item.condition).toLowerCase().trim()] : null;
+      if (mapped) {
+        setInputValue(conditionSelect, mapped);
+      } else {
+        throw hardError('Details', 'This item needs a condition to post to this Craigslist category, but its condition ("' + (item.condition || 'not set') + '") could not be matched. Set the item\'s condition in FindA.Sale, then try again.');
+      }
+    }
+
     await humanPause(700, 1200);
     clickContinueOrThrow('Details');
   }
