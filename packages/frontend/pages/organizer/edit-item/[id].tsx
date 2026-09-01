@@ -15,6 +15,7 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useEbayConnection } from '../../../lib/useEbayConnection';
 import { useDiscogsConnection } from '../../../lib/useDiscogsConnection';
+import { useReverbConnection } from '../../../lib/useReverbConnection';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
@@ -64,6 +65,7 @@ const EditItemPage = () => {
   const queryClient = useQueryClient();
   const { isConnected: ebayConnected } = useEbayConnection();
   const { isConnected: discogsConnected } = useDiscogsConnection();
+  const { isConnected: reverbConnected } = useReverbConnection();
   const { tier } = useOrganizerTier();
 
   const [formData, setFormData] = useState({
@@ -705,6 +707,59 @@ const EditItemPage = () => {
       return;
     }
     discogsPushMutation.mutate({ publish });
+  };
+
+  // Reverb Push Section (2026-09-01). Unlike Discogs/eBay, Reverb has no persisted
+  // remote-listing-id field on Item yet (reverbMarketplaceController.ts's DELETE route
+  // doc comment: "FindA.Sale does not yet persist the remote Reverb listing id anywhere").
+  // So "already pushed" state is tracked in local component state only for this page
+  // session -- it resets on reload, unlike the Discogs section's item?.discogsListingId
+  // check. A follow-up pass should add a persisted field the same way MarketplaceListingJob
+  // does for the content-script tier.
+  const [reverbPushPending, setReverbPushPending] = useState(false);
+  const [reverbPushedListing, setReverbPushedListing] = useState<{ id?: string; url?: string } | null>(null);
+
+  const reverbPushMutation = useMutation({
+    mutationFn: async ({ publish }: { publish: boolean }) => {
+      return api.post(`/reverb/items/${id}/listing`, { publish });
+    },
+    onSuccess: (response, variables) => {
+      if (response.data?.success) {
+        const listing = response.data.listing || {};
+        const listingId = listing.id != null ? String(listing.id) : undefined;
+        // Reverb's response shape is UNTESTED end-to-end (reverbConnector.ts file header) --
+        // defensively probe a couple of plausible HAL link locations for a viewable URL
+        // rather than assuming one exists.
+        const listingUrl =
+          listing?._links?.web?.href || listing?._links?.self?.href || listing?.web_url || undefined;
+        setReverbPushedListing({ id: listingId, url: listingUrl });
+        showToast(variables.publish ? 'Published to Reverb' : 'Pushed to Reverb', 'success');
+      } else {
+        showToast('Reverb push failed', 'error');
+      }
+      setReverbPushPending(false);
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to push item to Reverb';
+      showToast(msg, 'error');
+      setReverbPushPending(false);
+    },
+  });
+
+  const handlePushToReverb = async (publish: boolean) => {
+    setReverbPushPending(true);
+    try {
+      // Same reasoning as handlePushToDiscogs/handlePushToEbay: the Reverb payload is built
+      // server-side from the persisted Item row (price/condition/description/photos), so
+      // save current form state first or a push could send stale data if the organizer
+      // edited but hasn't saved yet.
+      await saveFormState();
+    } catch (err) {
+      setReverbPushPending(false);
+      showToast('Save failed. Fix errors before pushing to Reverb', 'error');
+      return;
+    }
+    reverbPushMutation.mutate({ publish });
   };
 
   useEffect(() => {
@@ -2548,6 +2603,66 @@ const EditItemPage = () => {
                   <p className="text-sm text-warm-500 dark:text-gray-400">
                     No matching Discogs catalog release found for this item.
                   </p>
+                )}
+              </div>
+            )}
+
+            {/* Reverb Push Section (2026-09-01) -- gated entirely on connection status,
+                same pattern as the Discogs section above. No catalog-eligibility concept for
+                Reverb (unlike Discogs' release matching), so this renders a direct push/publish
+                choice once connected. "Pushed" state is local-only for this page session --
+                see the reverbPushedListing state comment above for why. */}
+            {reverbConnected && (
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
+                {reverbPushedListing ? (
+                  <div className="space-y-2">
+                    <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
+                      Pushed to Reverb
+                    </div>
+                    <div className="flex gap-2">
+                      {reverbPushedListing.url && (
+                        <a
+                          href={reverbPushedListing.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                        >
+                          View listing
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handlePushToReverb(true)}
+                        disabled={reverbPushPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {reverbPushPending ? 'Publishing...' : 'Re-push to Reverb'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-warm-600 dark:text-gray-400">Push this item to Reverb as a draft, or publish it live now.</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePushToReverb(false)}
+                        disabled={reverbPushPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {reverbPushPending ? 'Pushing...' : 'Push to Reverb'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePushToReverb(true)}
+                        disabled={reverbPushPending}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {reverbPushPending ? 'Publishing...' : 'Publish to Reverb now'}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}

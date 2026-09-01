@@ -27,7 +27,11 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
+import {
+  computeCheapestForOrigin,
+  ShippingHardBlockError,
+  MIN_CALCULATED_HANDLING_CHARGE,
+} from './ebayRateEstimateService';
 import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
 
 const CALCULATED_POLICY_NAME = 'FindA.Sale Calculated Domestic';
@@ -51,7 +55,16 @@ export function computeCalculatedWithHandling(
   // computeFvfFlatRate(bucketedRate) = bucketedRate / 0.864 (rounded up to the cent).
   // Subtracting bucketedRate leaves only the markup, applied as a handling charge on
   // top of the REAL calculated rate instead of replacing it outright.
-  const handlingCost = round2(computeFvfFlatRate(bucketedRate) - bucketedRate);
+  //
+  // Floored at MIN_CALCULATED_HANDLING_CHARGE (Patrick decision 2026-09-01): on a cheap
+  // package this FVF-offset alone can round to pennies or $0 -- this is the SAME gap
+  // ebayShippingPresetService.ts's estimatePresetRate/createPreset had for the
+  // organizer-driven preset flow, fixed here identically since this auto-provisioned
+  // flow uses the identical formula and always attaches packageHandlingCost below.
+  const handlingCost = Math.max(
+    round2(computeFvfFlatRate(bucketedRate) - bucketedRate),
+    MIN_CALCULATED_HANDLING_CHARGE
+  );
   return { bucketedRate, handlingCost };
 }
 

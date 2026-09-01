@@ -134,7 +134,15 @@ export default function WebsiteEmbedTab({ organizerSlug }: WebsiteEmbedTabProps)
   });
 
   const snippetSlug = organizerSlug || 'your-slug';
-  const snippet = `<div data-findasale-widget data-organizer="${snippetSlug}" data-limit="${selectedLimit}" data-theme="light"></div>\n<script src="https://finda.sale/api/embed/widget.js" async defer></script>`;
+  // NOTE: The "Powered by FindA.Sale" backlink below is included as static, literal
+  // HTML text inside the copy-paste snippet itself (not injected via innerHTML by
+  // widget.js at runtime). The widget's live inventory grid IS rendered client-side
+  // (it has to be — it fetches an organizer's current listings), but a link built via
+  // innerHTML after the page loads is invisible to crawlers/tools that don't execute
+  // JS and isn't reliably counted as a real backlink even by ones that do. Keeping this
+  // <a> tag as plain static text in the pasted snippet ensures it exists in the actual
+  // HTML source of the organizer's page, independent of whether the widget script runs.
+  const snippet = `<div data-findasale-widget data-organizer="${snippetSlug}" data-limit="${selectedLimit}" data-theme="light"></div>\n<script src="https://finda.sale/api/embed/widget.js" async defer></script>\n<p style="font-size:11px;text-align:center;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#9ca3af;"><a href="https://finda.sale" rel="noopener">Powered by FindA.Sale</a></p>`;
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(snippet).then(() => {

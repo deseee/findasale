@@ -45,6 +45,7 @@ import {
   estimateCheapestRate,
   resolveCoverageZone,
   EBAY_SHIPPING_FVF_RATE,
+  MIN_CALCULATED_HANDLING_CHARGE,
   ShippingHardBlockError,
   ZoneKey,
 } from './ebayRateEstimateService';
@@ -824,7 +825,15 @@ export async function estimatePresetRate(
 
     const bucketedRate = roundUpToBucket(cheapest.rate);
     const suggestedBuyerPrice = applyCharmPricing(roundUpToBucket(computeFvfFlatRate(cheapest.rate)));
-    const suggestedHandlingCharge = round2(computeFvfFlatRate(bucketedRate) - bucketedRate);
+    // Floor at MIN_CALCULATED_HANDLING_CHARGE: on a cheap package (Media Mail books,
+    // padded envelopes) the FVF-offset alone can round to pennies or $0, which used to
+    // reach the buyer as an effectively-zero handling charge. Patrick decision
+    // 2026-09-01 -- never suggest below the floor, even though the FVF-offset is still
+    // used verbatim once it clears $1.
+    const suggestedHandlingCharge = Math.max(
+      round2(computeFvfFlatRate(bucketedRate) - bucketedRate),
+      MIN_CALCULATED_HANDLING_CHARGE
+    );
 
     return {
       available: true,
@@ -1089,10 +1098,15 @@ export async function createPreset(organizerId: string, input: PresetInput): Pro
     // packageHandlingCost is a sibling of costType at the shippingOptions level, NOT
     // nested inside a shippingService — see ebayCalculatedPolicyService.ts. eBay does
     // not accept it together with free shipping, which validatePresetConfig blocks.
-    const handlingCharge = Number(input.handlingCharge ?? 0);
-    if (handlingCharge > 0) {
-      shippingOption.packageHandlingCost = { value: handlingCharge.toFixed(2), currency: 'USD' };
-    }
+    //
+    // Server-side floor (defense in depth -- Patrick decision 2026-09-01): the frontend
+    // auto-fills a floored suggestion (see estimatePresetRate above), but this is the
+    // path that actually reaches eBay, so it cannot trust the client submitted a
+    // floored value. Every CALCULATED preset gets AT LEAST MIN_CALCULATED_HANDLING_CHARGE
+    // of handling -- unlike the old `if (handlingCharge > 0)` gate, packageHandlingCost is
+    // now always set (the floor guarantees it's always > 0).
+    const handlingCharge = Math.max(Number(input.handlingCharge ?? 0), MIN_CALCULATED_HANDLING_CHARGE);
+    shippingOption.packageHandlingCost = { value: handlingCharge.toFixed(2), currency: 'USD' };
   }
 
   const body: Record<string, any> = {

@@ -1732,6 +1732,13 @@
       if (nextBtn) {
         overlay('<b>FindA.Sale</b> - advancing to the review step...');
         await humanPause(400, 800);
+        // BUG FIX 2026-09-01 (S-EXT-POSHMARK-PRICE-EMPTY-ROUND-3) -- one last re-check-and-refill
+        // right before leaving the fill-form page, closing the gap described in
+        // ensurePoshmarkPriceHolds()'s own comment above (async photo-processing / any other
+        // in-page effect that runs after fillListing()'s own end-of-fill check already passed).
+        // Still on the same page/DOM as that check, so this reuses the exact same confirmed-real
+        // selector -- no new selector risk introduced.
+        await ensurePoshmarkPriceHolds(item, fillResult.fieldNotes, 'right before advancing past Next');
         realClick(nextBtn);
         // A real security/verification screen can appear after advancing, same as everywhere else
         // in this file -- never attempt to click through one.
@@ -1848,6 +1855,47 @@
     return (lastSpace > MAX - 15 ? cut.slice(0, lastSpace) : cut).trimEnd();
   }
 
+  // BUG FIX 2026-09-01 (S-EXT-POSHMARK-PRICE-EMPTY-ROUND-3, findasale-dev BUG MODE dispatch):
+  // Shared helper extracted from the 2026-08-31 end-of-fill Price safety-check below (see that call
+  // site's own comment for the original incident). Root-caused as far as the code can confirm
+  // without a live account this dispatch: fillListing()'s prior end-of-fill check only guards
+  // against Price being cleared by something that runs SYNCHRONOUSLY inside fillListing itself
+  // (Category/Brand/Size/Color/Condition/injectPhotos). Reading doPoshmarkAutoPublish (below) shows
+  // a second, code-confirmed gap with NO price re-check at all: injectPhotos() only hands photo
+  // files/URLs to Poshmark's own upload pipeline -- it cannot wait for Poshmark's own async
+  // upload/thumbnail/Smart-Sell-photo-pricing pass to fully finish server-side -- and
+  // doPoshmarkAutoPublish() clicks the "Next" button only ~400-800ms after fillListing() returns,
+  // with nothing re-verifying Price in that window. This matches the "Missing Price" dialog already
+  // caught once live (see showReviewOverlay's own 2026-08-31 comment above) and this dispatch's
+  // brief (a still-unexplained 3rd price-empty failure): Price can read correctly at the exact
+  // moment fillListing()'s own check runs, then genuinely go empty afterward, with nothing catching
+  // it before Poshmark itself validates the form.
+  // NOT independently live-confirmed this dispatch -- no way to run the real installed extension
+  // against a live Poshmark tab from this environment, and per this project's own standing rule,
+  // injecting an equivalent script into an ordinary browser tab does not count as verification for
+  // this exact isolated/MAIN-world-sensitive file (see S-EXT-POSHMARK-ISOLATED-WORLD's own history
+  // above for why that class of test already produced false confidence here once). This is a strong,
+  // code-grounded hypothesis about WHEN the gap exists, not a confirmed root cause of WHY Poshmark
+  // clears the field. Extending the same already-shipped, already-proven-safe re-check+refill
+  // pattern to the one additional point this dispatch found with zero coverage (immediately before
+  // the Next click, see call site below) is a low-risk, purely defensive mitigation of the
+  // documented symptom either way -- it only ever re-reads the SAME confirmed-real
+  // input[data-vv-name="listingPrice"] selector already proven correct on the fill-form page, never
+  // a new or guessed selector, and never invents a price value.
+  async function ensurePoshmarkPriceHolds(item, fieldNotes, whenLabel) {
+    if (item.price == null || !isFinite(Number(item.price))) return;
+    const priceEl = document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price');
+    const priceNowEmpty = !priceEl || priceEl.value == null || priceEl.value === '';
+    if (!priceNowEmpty) return;
+    console.warn('[FAS Poshmark] Price was found empty ' + whenLabel + ' (cause still unconfirmed) -- re-filling once more.');
+    const recovered = await fillPoshmarkPrice(String(Math.max(1, Math.round(Number(item.price)))));
+    if (recovered) {
+      fieldNotes.push('Price was cleared by something else (' + whenLabel + ') -- caught and re-set to $' + item.price + ' automatically. Double-check it before publishing.');
+    } else {
+      fieldNotes.push('Price could not be set (technical glitch, not a guess -- value $' + item.price + ' is correct) -- set it yourself and publish.');
+    }
+  }
+
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Poshmark listing form...');
     // fieldNotes declared here (moved up from right before the Price block) so the Title
@@ -1961,19 +2009,14 @@
     // re-fill it once more. This is NOT a fix for the underlying cause (still unknown) -- it's a
     // safety net for the observed symptom, and it pushes a fieldNote when it fires so the run summary
     // shows how often this is actually happening (useful signal for chasing the real cause later).
-    if (item.price != null && isFinite(Number(item.price))) {
-      const priceEl = document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price');
-      const priceNowEmpty = !priceEl || priceEl.value == null || priceEl.value === '';
-      if (priceNowEmpty) {
-        console.warn('[FAS Poshmark] Price was found empty at end-of-fill (cause still unconfirmed) -- re-filling once more.');
-        const recovered = await fillPoshmarkPrice(String(Math.max(1, Math.round(Number(item.price)))));
-        if (recovered) {
-          fieldNotes.push('Price was cleared by something else during the fill (cause not yet confirmed) -- caught and re-set to $' + item.price + ' automatically. Double-check it before publishing.');
-        } else {
-          fieldNotes.push('Price could not be set (technical glitch, not a guess -- value $' + item.price + ' is correct) -- set it yourself and publish.');
-        }
-      }
-    }
+    // BUG FIX 2026-09-01 (S-EXT-POSHMARK-PRICE-EMPTY-ROUND-3, findasale-dev BUG MODE dispatch,
+    // Poshmark-only, this file only): extracted into the shared ensurePoshmarkPriceHolds() helper
+    // (defined above, right before fillListing) so the SAME re-check-and-refill safety net can also
+    // run at the one additional point this dispatch found with no price guard at all: immediately
+    // before doPoshmarkAutoPublish() clicks the "Next" button (see its own call site and comment).
+    // Logic is unchanged from the prior inline version -- this is a pure extraction, not a behavior
+    // change, at this call site.
+    await ensurePoshmarkPriceHolds(item, fieldNotes, 'at end-of-fill (after photos)');
     return { photosOk, categoryCommitted, categoryConfident, fieldNotes };
   }
 

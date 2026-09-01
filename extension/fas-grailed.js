@@ -1142,11 +1142,30 @@
 
   // *** UNVERIFIED -- HIGH PRIORITY to confirm live (see file header). Commonly-cited wording,
   // not confirmed against any primary Grailed source. ***
+  // BUG FIX 2026-09-01 (findasale-dev, BUG MODE dispatch -- confirmed-from-code, not a guessed
+  // selector): Item.condition is a fixed enum -- schema.prisma:1153, "NEW | USED | REFURBISHED |
+  // PARTS_OR_REPAIR" -- not free text. norm() only collapses whitespace (see norm()'s own
+  // definition above); it does NOT strip underscores, so the real raw value "PARTS_OR_REPAIR"
+  // normalizes to the literal string "parts_or_repair", which contains none of "poor" / "damaged" /
+  // "used" / "fair" as a substring ("repair" is not "fair") and matched NONE of the free-text
+  // patterns below -- it silently fell through to the 'Gently Used' default, mislabeling a
+  // for-parts/broken item as good condition on a real listing. Checked first now, against the
+  // literal enum values, before the pre-existing free-text heuristics (kept below, unchanged, as a
+  // defensive fallback for any pre-formatted/legacy condition string that isn't the raw enum).
+  // Mirrors fas-content.js's own NEW/USED/REFURBISHED/PARTS_OR_REPAIR -> platform-condition map
+  // (same schema enum, same worst-to-best 4-tier shape: PARTS_OR_REPAIR is that platform's worst
+  // tier too) for consistency across this extension's platform files.
   function mapGrailedCondition(condition) {
     const c = norm(condition);
     if (!c) return 'Gently Used';
+    switch (c) {
+      case 'new': return 'New/Never Worn';
+      case 'refurbished': return 'Gently Used';
+      case 'used': return 'Used';
+      case 'parts_or_repair': return 'Very Worn';
+    }
     if (/^new$|brand new|nwt|never worn|new,/.test(c)) return 'New/Never Worn';
-    if (/very worn|poor|heavily used|damaged/.test(c)) return 'Very Worn';
+    if (/very worn|poor|heavily used|damaged|parts.or.repair|for parts|not working/.test(c)) return 'Very Worn';
     if (/used|fair/.test(c) && !/gently/.test(c)) return 'Used';
     return 'Gently Used';
   }
@@ -1253,7 +1272,15 @@
       countryLine = '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Country of Origin field not found (UNVERIFIED selector) -- set it manually before publishing.</div>';
     }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field &mdash; category/Market tier/size/condition are all UNVERIFIED guesses (condition especially, see the code comment). ' +
+      // BUG FIX 2026-09-01 (findasale-dev, BUG MODE dispatch): dropped the stale "Market tier"
+      // mention -- that concept was removed from this file on 2026-08-19 (S-EXT-BATCH-2, see
+      // pickCategory's own comment above) once live DOM evidence confirmed Grailed's real form has
+      // no separate Market-tier field at all; this overlay text was never updated to match and was
+      // telling the organizer to double-check a field that doesn't exist on the page they're
+      // looking at. Added "style" instead -- Style is a real field this file fills with a heuristic
+      // guess (see inferGrailedStyle's own comment), so it belongs in this same "please double
+      // check" list.
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field &mdash; category/style/size/condition are all UNVERIFIED guesses (condition especially, see the code comment). ' +
       '<b>Measurements were left blank</b> &mdash; Grailed listings perform much better with them, add them yourself before publishing. Then click Grailed\'s own <b>List item</b> yourself.</div>' +
       intlLine +
       countryLine +

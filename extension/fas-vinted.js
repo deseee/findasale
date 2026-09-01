@@ -1433,11 +1433,34 @@
     if (lbMatch) return Number(lbMatch[1]) * 0.453592;
     return null;
   }
+  // BUG FIX 2026-09-01 (S-EXT-VINTED-PACKAGE-SIZE-DIALOG-CRASH, live console evidence this
+  // session): openVintedSizingDetailsText() was called unconditionally here to try to read real
+  // per-tier weight numbers out of the "sizing and compensation details" dialog before falling
+  // back to the hardcoded size table below. Live re-test this session confirmed two things at
+  // once: (1) the dialog captured only 109 chars of text and STILL yielded no parseable weight
+  // number for any tier -- consistent with every prior round (2, 3, 6, 11) that also never
+  // confirmed a real number came out of this dialog, it has NEVER been live-confirmed to add any
+  // value over the hardcoded fallback table; and (2) all three close attempts (close button /
+  // Escape / outside click) failed to close it, and the "real outside click" fallback
+  // (realOutsideClick -> dispatches pointerdown/mousedown/pointerup/mouseup/click at a fixed
+  // clientX:5, clientY:5) immediately triggered Vinted's own generic client-side error modal
+  // ("Sorry, something went wrong") with no JS error logged -- i.e. that coordinate-based
+  // synthetic click landed on something in Vinted's own React app it didn't expect and knocked
+  // their app into an error state, actively worse than just not opening the dialog at all.
+  // Given the dialog has no confirmed upside and a live-reproduced crash-adjacent downside, the
+  // dialog is no longer opened at all -- pickVintedSizeCardByRealWeight now goes straight from
+  // the size cards' own text (which also never had a number on the real page -- see round-2
+  // comment on parseVintedCardWeightLimitKg above) to the hardcoded fallback table further down.
+  // openVintedSizingDetailsText/findVintedSizingDetailsOpener/findDialogCloseButton/
+  // parseWeightLimitForLabelFromText are left defined (unused by this path) rather than deleted,
+  // in case a future session finds a safer way to read the panel -- but nothing calls them now.
   async function pickVintedSizeCardByRealWeight(item) {
     const ounces = item.packageWeightOz != null ? Number(item.packageWeightOz) : (item.aiPackageWeightOz != null ? Number(item.aiPackageWeightOz) : null);
     if (ounces == null || !isFinite(ounces) || ounces <= 0) return null; // no real weight data -- caller keeps existing Medium-default behavior
     const itemKg = ounces * 0.0283495;
-    const detailsText = await openVintedSizingDetailsText();
+    // Dialog is intentionally NOT opened -- see BUG FIX 2026-09-01 comment above. detailsText
+    // stays null, so parseVintedCardWeightLimitKg falls through to the card's own text only.
+    const detailsText = null;
     for (const label of ['Small', 'Medium', 'Large']) {
       const card = clickableOptionByExactText(label);
       const limitKg = parseVintedCardWeightLimitKg(card, label, detailsText);

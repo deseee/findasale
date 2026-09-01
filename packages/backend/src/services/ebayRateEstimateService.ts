@@ -27,6 +27,19 @@ import { prisma } from '../lib/prisma';
 export const EBAY_SHIPPING_FVF_RATE = 0.136;
 
 /**
+ * Minimum handling charge (in USD) FindA.Sale will ever attach to a CALCULATED-cost
+ * eBay shipping option (e.g. "Media Mail Calculated"). Without a floor, a cheap
+ * package (Media Mail books, small padded envelopes) can compute an FVF-offset
+ * handling charge that rounds to a few cents or $0 -- Patrick decision 2026-09-01:
+ * every calculated-cost preset/policy charges at least this much handling, full stop,
+ * even when the FVF-offset math alone would land lower. Shared by
+ * ebayShippingPresetService.ts (organizer-driven preset flow) and
+ * ebayCalculatedPolicyService.ts (auto-provisioned CALCULATED-with-handling flow) so
+ * the floor can never drift between the two.
+ */
+export const MIN_CALCULATED_HANDLING_CHARGE = 1.0;
+
+/**
  * Thrown by estimateCheapestRate/computeCheapestForOrigin (ADR-103 Phase 4) when an
  * item's declared dims/weight exceed the absolute carrier max for EVERY modeled
  * carrier (USPS 130in length+girth/70lb; UPS+FedEx 108in length OR 165in

@@ -121,6 +121,17 @@ export default function HubManagePage() {
 
           <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-8">Manage Hub</h1>
 
+          {data?.hub?.slug && data.hub.isActive !== false && (
+            <Link
+              href={`/hubs/${data.hub.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mb-6 text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400"
+            >
+              View public page →
+            </Link>
+          )}
+
           {/* deleteHub is a soft close (isActive: false) and this page still loads a closed
               hub perfectly happily, so say so up front rather than letting somebody edit a
               market shoppers can no longer see. */}
