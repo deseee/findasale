@@ -542,7 +542,18 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <ThemeInitializer />
               <CartProvider>
               <FeedbackProvider>
-              <ErrorBoundary key={router.asPath}>
+              {/* ADR-114 hold-load remount fix (2026-08-31): was keyed on router.asPath
+                  (path + query string). Any router.replace() that changes only the query
+                  string (e.g. pos.tsx clearing ?holdReservationIds= after loading a hold
+                  into the cart) changed this key, which forces React to fully UNMOUNT and
+                  REMOUNT the page component underneath -- wiping cart/loadedHold/paymentMode
+                  state that had just been set synchronously moments earlier. ToastProvider
+                  sits above this boundary so the success toast still fired, masking the
+                  reset. Reuse `rawPath` (already computed above, strips query/hash) so the
+                  boundary still remounts on a real page-to-page or dynamic-segment change
+                  (error-state reset -- the original intent) but no longer remounts on a
+                  same-page query-string-only change. */}
+              <ErrorBoundary key={rawPath}>
                 {getLayout(<Component {...pageProps} />)}
               </ErrorBoundary>
               <FeedbackSurvey />
