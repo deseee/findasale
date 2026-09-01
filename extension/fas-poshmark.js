@@ -243,6 +243,21 @@
   }
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+  // Polls for an element to actually exist instead of a single synchronous lookup -- ported from
+  // fas-mercari.js's own waitForSelector (2026-08-31, Patrick live report: Poshmark's own Price
+  // field lookup was a single querySelector with zero retry, and a live DOM check on Patrick's
+  // shared tab moments after a "selector not found" failure confirmed the field DID exist by
+  // then -- a genuine SPA-hydration race, same class of bug already handled elsewhere in this file
+  // via waitForMenuItems/waitForFormReady, just missing here specifically).
+  async function waitForSelector(getEl, maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      const el = getEl();
+      if (el) return el;
+      await sleep(300);
+    }
+    return null;
+  }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): openerByLabel/fieldByLabel/
@@ -741,7 +756,10 @@
   }
 
   async function fillPoshmarkPrice(value) {
-    const el = document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price');
+    // BUG FIX 2026-08-31 (Patrick live report, live-DOM-confirmed): was a single synchronous
+    // lookup -- see waitForSelector's own comment above for the full root cause. Now polls up to
+    // 3s, same headroom class as this file's other per-field waits.
+    const el = await waitForSelector(() => document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price'), 3000);
     if (!el) return false;
     el.focus();
     // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION): this used to ignore
@@ -1311,6 +1329,16 @@
       remaining.push({ seg: 'Accents', i: remaining.length });
       remaining.push({ seg: 'Decor', i: remaining.length });
     }
+    // BUG FIX 2026-08-31 (Patrick live report: a Martha Stewart Christmas tree also fell back to
+    // "Home > Other" -- confirmed live this same session that "Holiday" is one of Home's real 14
+    // subcategories, via a direct walk of Poshmark's own picker, same reconnaissance method as the
+    // lamp fix above). Unlike the lamp case, Holiday's own leaf names were NOT verified live this
+    // session -- only add "Holiday" itself as a candidate (one level, not a guessed leaf under it)
+    // so this never invents a subcategory name that hasn't actually been confirmed to exist. Still
+    // lands with confident=false, still surfaced for review.
+    if (bestDept && /home/.test(norm(bestDept.textContent)) && /\b(christmas|xmas|holiday|ornament|wreath)\b/i.test(categoryText)) {
+      remaining.push({ seg: 'Holiday', i: remaining.length });
+    }
     // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): tracks whether a REAL
     // subcategory-level match was ever clicked in this loop, separate from `pickedAny` (which is
     // also true just from the department click above). Needed below to decide whether to fall back
@@ -1803,13 +1831,35 @@
     closeBtnHandler();
   }
 
+  // BUG FIX 2026-08-31 (Patrick live report: run stuck on Poshmark's own "title field may not be
+  // greater than 80 characters" validation error, tab shared directly -- confirmed live via DB
+  // query, title was genuinely 85 characters, no guessing): this file never capped Title length at
+  // all before typing it in, so any item whose real title exceeds Poshmark's real 80-char hard
+  // limit silently blocked Next with zero warning, same "silent required-field block" shape as the
+  // Price bug fixed earlier this session. Poshmark's own limit confirmed live via the exact error
+  // text and character counter shown on the real form. Truncates at a clean word boundary when one
+  // falls within the last 15 characters (avoids an ugly mid-word cut); otherwise hard-cuts at 80.
+  function truncatePoshmarkTitle(title) {
+    const MAX = 80;
+    const t = String(title == null ? '' : title);
+    if (t.length <= MAX) return t;
+    const cut = t.slice(0, MAX);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > MAX - 15 ? cut.slice(0, lastSpace) : cut).trimEnd();
+  }
+
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Poshmark listing form...');
-    await tryFill('Title', item.title, (v) => fillText('Title', v));
-    await tryFill('Description', item.description, (v) => fillText('Description', v));
-    // fieldNotes declared early so the Price check below can push to it -- the rest of this
-    // function's own fieldNotes-collection block (Category/Size/Color) appears further down.
+    // fieldNotes declared here (moved up from right before the Price block) so the Title
+    // truncation note below can push to it too -- the rest of this function's own fieldNotes-
+    // collection block (Category/Size/Color) appears further down.
     const fieldNotes = [];
+    const poshTitle = truncatePoshmarkTitle(item.title);
+    if (poshTitle !== (item.title || '')) {
+      fieldNotes.push('Title was ' + (item.title || '').length + ' characters -- Poshmark\'s real limit is 80, so it was trimmed to fit. Double-check the trimmed title reads OK.');
+    }
+    await tryFill('Title', poshTitle, (v) => fillText('Title', v));
+    await tryFill('Description', item.description, (v) => fillText('Description', v));
     if (item.price != null && isFinite(Number(item.price))) {
       const priceOk = await tryFill('Price', item.price, (v) => fillPoshmarkPrice(String(Math.max(1, Math.round(Number(v))))));
       // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION, Patrick live-console-report):
@@ -1897,6 +1947,33 @@
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);
+    // BUG FIX 2026-08-31 (Patrick live report, 3rd distinct Price-empty item after the polling fix
+    // above in fillPoshmarkPrice() -- Saturn telescope tab, extension confirmed freshly reloaded so
+    // NOT stale code): the polling fix made fillPoshmarkPrice() find the field and set it
+    // successfully (no fieldNote was generated for this item -- priceOk read true at the time), yet
+    // the field was later found empty. Live-tested three specific suspects directly on the stuck tab
+    // -- Smart Sell modal close via el.__vue__.closeModal(), reopening/closing the Category dropdown,
+    // and Brand field blur -- none reset Price, and Category itself committed correctly ("Men
+    // Other"), which also rules out the Smart Sell modal having blocked Category's own interaction.
+    // Root cause of what actually clears it is still UNCONFIRMED. Rather than keep guessing at which
+    // later step (Size/Color/Condition/Photos) is responsible, this adds a final defensive re-check:
+    // verify Price still holds its value right before returning, and if it was silently cleared,
+    // re-fill it once more. This is NOT a fix for the underlying cause (still unknown) -- it's a
+    // safety net for the observed symptom, and it pushes a fieldNote when it fires so the run summary
+    // shows how often this is actually happening (useful signal for chasing the real cause later).
+    if (item.price != null && isFinite(Number(item.price))) {
+      const priceEl = document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price');
+      const priceNowEmpty = !priceEl || priceEl.value == null || priceEl.value === '';
+      if (priceNowEmpty) {
+        console.warn('[FAS Poshmark] Price was found empty at end-of-fill (cause still unconfirmed) -- re-filling once more.');
+        const recovered = await fillPoshmarkPrice(String(Math.max(1, Math.round(Number(item.price)))));
+        if (recovered) {
+          fieldNotes.push('Price was cleared by something else during the fill (cause not yet confirmed) -- caught and re-set to $' + item.price + ' automatically. Double-check it before publishing.');
+        } else {
+          fieldNotes.push('Price could not be set (technical glitch, not a guess -- value $' + item.price + ' is correct) -- set it yourself and publish.');
+        }
+      }
+    }
     return { photosOk, categoryCommitted, categoryConfident, fieldNotes };
   }
 
