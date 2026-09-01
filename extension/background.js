@@ -1623,7 +1623,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const next = (st.fasVintedIndex || 0) + 1;
         await chrome.storage.local.set({ fasVintedIndex: next });
         const item = (st.fasVintedQueue || [])[next] || null;
-        await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        // BUG FIX 2026-09-01, same root cause as the Poshmark/Mercari branches above: no tabId
+        // was passed, so the countdown notification never reliably reached the right tab.
+        // 'advanceVintedQueue' always comes from fas-vinted.js's own tab.
+        await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
         sendResponse({ ok: true, item, index: next, total: (st.fasVintedQueue || []).length });
       } else if (msg.type === 'setGrailedQueue') {
         // 2026-08-18 dispatch (fas-grailed.js): same queue-storage shape as
