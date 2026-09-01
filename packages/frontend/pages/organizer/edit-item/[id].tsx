@@ -187,7 +187,7 @@ const EditItemPage = () => {
   // eBay fulfillment policies for the per-item shipping-policy override select.
   // Fetched from /ebay/setup-data; empty (select hidden) if not eBay-connected or fetch fails.
   const [ebayFulfillmentPolicies, setEbayFulfillmentPolicies] = useState<
-    Array<{ fulfillmentPolicyId: string; name: string; classification?: string }>
+    Array<{ fulfillmentPolicyId: string; name: string; classification?: string; description?: string }>
   >([]);
 
   const openDiscountModal = (xpToSpend: number) => {
@@ -2104,6 +2104,20 @@ const EditItemPage = () => {
                       <p className="text-xs text-gray-500 mt-1">
                         Auto uses your eBay Settings default. Pick a specific policy to set shipping for just this item.
                       </p>
+                      {/* 2026-09-01 (Patrick-directed): policies like the Golf Club / Guitar ones carry
+                          their real max weight/dimensions in eBay's own policy description (e.g. "Up to
+                          22 lb 4 oz, box 48 x 16 x 4 in") -- previously only visible by leaving FindA.Sale
+                          and checking eBay Seller Hub directly. Surface it here so an organizer can see
+                          at a glance whether the auto-picked policy still fits before switching manually. */}
+                      {formData.ebayFulfillmentPolicyOverrideId &&
+                        (() => {
+                          const selected = ebayFulfillmentPolicies.find(
+                            (p) => p.fulfillmentPolicyId === formData.ebayFulfillmentPolicyOverrideId
+                          );
+                          return selected?.description ? (
+                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{selected.description}</p>
+                          ) : null;
+                        })()}
                     </div>
                   )}
                   <div>
