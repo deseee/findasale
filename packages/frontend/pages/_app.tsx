@@ -290,16 +290,21 @@ function OAuthBridge() {
               } catch (e) {
                 console.error('[claim-oauth] failed:', e);
               }
+              await signOut({ redirect: false }).catch(err =>
+                console.error('[OAuthBridge] signOut failed after claim:', err)
+              );
               if (claimOk) {
                 router.replace('/organizer/dashboard?claimed=true');
               } else {
                 showToast("Your account was created, but claiming this listing didn't go through. Contact support@finda.sale and we'll sort it out.", 'error');
                 router.replace('/organizer/dashboard');
               }
-              signOut({ redirect: false });
               return;
             }
             // Redirect to role-based dashboard after OAuth login
+            await signOut({ redirect: false }).catch(err =>
+              console.error('[OAuthBridge] signOut failed:', err)
+            );
             try {
               const payload = JSON.parse(atob(data.token.split('.')[1]));
               const isOrganizer = payload.roles?.includes('ORGANIZER') || payload.role === 'ORGANIZER';
@@ -308,6 +313,7 @@ function OAuthBridge() {
             } catch (_e) {
               // Token decode failed: stay on current page
             }
+            return;
           }
           // Sign out of NextAuth session (no longer needed)
           signOut({ redirect: false });
