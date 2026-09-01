@@ -1673,6 +1673,19 @@ model Purchase {
   /// precedent ("what was ACTUALLY charged, pinned at charge time") applied to shipping.
   shippingFedexSurchargeTier String?
 
+  // ── DELIVERY METHOD (ADR-115, added 2026-09-01) — explicit, first-class discriminator
+  // for whether this Purchase was a local-pickup sale or a native-checkout ship-it order.
+  // Follows this exact model's own established convention of plain String discriminators
+  // over a Prisma enum (chargeType, discountType, shippingPriceSource, refundInitiatedBy
+  // are all String?/String with default, none are a Prisma `enum` -- no exception invented
+  // here). Values: 'LOCAL_PICKUP' | 'SHIP'. NULL means "unknown" (every pre-ADR-115 row,
+  // same NULLABLE/NO-BACKFILL posture as the FEE SNAPSHOT and SHIPPING DESTINATION blocks
+  // above) -- backward-compatible callers should treat NULL the same as 'LOCAL_PICKUP',
+  // since the presence/absence of shippingZip was the only signal before this field
+  // existed. Written explicitly at charge-creation time by stripeController.createPaymentIntent
+  // going forward: 'SHIP' when shippingApplicable, 'LOCAL_PICKUP' otherwise.
+  deliveryMethod             String?
+
   // Compound partial UNIQUE index on (stripePaymentIntentId, itemId) (WHERE
   // stripePaymentIntentId IS NOT NULL), created via raw SQL migration
   // 20260723000000_purchase_pi_itemid_compound_unique. Blocks a duplicate Purchase row for

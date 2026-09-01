@@ -116,6 +116,53 @@
   }
   function closeBtnHandler() { const c = document.getElementById('fas-vin-close'); if (c) c.onclick = () => bar && bar.remove(); }
 
+  // ---- queue-advance countdown (2026-09-01, S-EXT-VINTED-CONTINUE-UX, Patrick live report:
+  // "doesn't seem to react to button presses ... doesn't seem to have the queue paused while
+  // waiting for clicks ... it's just awkward when the popup doesn't show up on the next screen") --
+  // background.js's humanQueueDelay() (S-EXT-QUEUE-PACING) already pauses 10-25s between items and,
+  // as of the SAME-SESSION tabId fix on 'advanceVintedQueue' just above it in background.js, now
+  // reliably notifies this tab via a one-way 'fasQueueDelayStarted' {ms} message the instant the
+  // pause starts -- exactly the mechanism fas-content.js (Facebook) already uses for its own
+  // queue-advance countdown (see fas-content.js's "queue-advance countdown (2026-08-30)" block,
+  // copied here for consistency). But relying on that message ALONE would leave the exact gap
+  // Patrick reported: the click produces zero visible change until the round-trip
+  // markListed -> advanceVintedQueue -> humanQueueDelay -> fasQueueDelayStarted chain completes,
+  // which is itself message-passing-timing-dependent (service worker wake latency, etc). So the
+  // click handlers below start a LOCAL countdown SYNCHRONOUSLY, before awaiting anything, seeded
+  // with a random guess in the same 10-25s range background.js actually uses (QUEUE_ADVANCE_DELAY_MS
+  // = {MIN:10000,MAX:25000} in background.js -- matched here, not invented) -- this guarantees
+  // instant "something is happening" feedback no matter how the message timing shakes out. If/when
+  // the real 'fasQueueDelayStarted' message arrives (which carries the ACTUAL ms humanQueueDelay is
+  // using), the listener below simply restarts the countdown with the true value, so the display
+  // self-corrects to be accurate rather than just reassuring. Purely cosmetic either way -- never
+  // changes the underlying pacing, exactly like fas-content.js's version.
+  let queueDelayInterval = null;
+  function clearQueueDelayCountdown() {
+    if (queueDelayInterval) { clearInterval(queueDelayInterval); queueDelayInterval = null; }
+  }
+  function startQueueDelayCountdown(totalMs, doneLabel) {
+    clearQueueDelayCountdown();
+    const deadline = Date.now() + Math.max(0, Number(totalMs) || 0);
+    const renderTick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      ensureBar().innerHTML = '<b>FindA.Sale</b><div style="margin-top:6px">Please wait ' + remaining +
+        's before ' + (doneLabel || 'the next item') + ' (this is normal, not a stall)&#8230;</div>';
+      if (remaining <= 0) clearQueueDelayCountdown();
+    };
+    renderTick();
+    queueDelayInterval = setInterval(renderTick, 1000);
+  }
+  // Guessed local duration, used ONLY until the real 'fasQueueDelayStarted' message (if any)
+  // corrects it -- matches background.js's QUEUE_ADVANCE_DELAY_MS = {MIN:10000,MAX:25000} exactly.
+  function guessedQueueDelayMs() { return 10000 + Math.random() * 15000; }
+  try {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.type === 'fasQueueDelayStarted' && typeof msg.ms === 'number') {
+        startQueueDelayCountdown(msg.ms);
+      }
+    });
+  } catch (e) { /* non-fatal -- local guessed countdown above still covers the click feedback */ }
+
   // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): fieldByLabel/openerByLabel below only recognize a
   // real <label> tag (for=/wrapping) or an aria-label attribute. Live-confirmed 2026-08-19
   // (Patrick's real Grailed test): Item Name/Color/Condition/Description/Category all failed to
@@ -1642,10 +1689,19 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-vin-next');
     if (next) next.onclick = async () => {
+      // FIX 2026-09-01 (S-EXT-VINTED-CONTINUE-UX): immediate, synchronous click feedback --
+      // BEFORE awaiting anything below -- so Patrick sees an instant reaction instead of a dead
+      // button while markListed/advanceVintedQueue/humanQueueDelay's 10-25s pause run in the
+      // background. See the queue-advance countdown block above for why this can't just wait on
+      // the 'fasQueueDelayStarted' message alone.
+      next.disabled = true;
+      next.textContent = 'Please wait…';
+      startQueueDelayCountdown(guessedQueueDelayMs(), more ? 'the next item' : 'we finish up');
       // Records this as a single, human-confirmed listing post -- this is NOT a relist/bump call
       // and must never be reused as one. See the file-header constraint.
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) {}
       try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
+      clearQueueDelayCountdown();
       if (more) { location.href = LISTING_URL_HINT; } else { bar && bar.remove(); }
     };
     closeBtnHandler();
@@ -1984,8 +2040,17 @@
     const cont = document.getElementById('fas-vin-continue');
     if (cont) cont.onclick = async () => {
       console.log('[FAS Vinted] continue-prompt: Continue clicked for item ' + queued.item.id);
+      // FIX 2026-09-01 (S-EXT-VINTED-CONTINUE-UX): same immediate synchronous feedback as
+      // showReviewOverlay()'s "I posted -- next item" handler above -- this is the button Patrick
+      // actually ends up clicking most often per the round-3/4 comments (Vinted's real Upload
+      // navigates the tab away before the review overlay's own button can ever be clicked), so it
+      // needs the same instant "something happened" reaction, not a dead button for up to 25s.
+      cont.disabled = true;
+      cont.textContent = 'Please wait…';
+      startQueueDelayCountdown(guessedQueueDelayMs(), 'the next item');
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
       try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: advanceVintedQueue failed:', e && e.message); }
+      clearQueueDelayCountdown();
       location.href = LISTING_URL_HINT;
     };
     closeBtnHandler();
@@ -2020,6 +2085,14 @@
   // shows once per pending item) the moment we're off the listing page. If round 4's on-load path
   // was in fact the real gap, this covers it too -- redundant but harmless, never fires twice for
   // the same item.
+  // TUNING 2026-09-01 (S-EXT-VINTED-CONTINUE-UX, minor, reversible): shortened the poll from
+  // 1500ms to 800ms. Per-tick cost is just a location.pathname regex test plus, only when off the
+  // listing page, a sessionStorage read already gated by maybeShowVintedContinuePrompt()'s own
+  // dedup guard (untouched here) -- cheap enough that halving the interval is not meaningful CPU
+  // churn, and it tightens the worst-case detection lag for whichever of the two paths (this
+  // watcher vs. start()'s on-load check) ends up being the one that actually fires, since it's
+  // still genuinely unconfirmed (see round 5 comment above) whether Vinted's post-Upload
+  // transition is a full reload or a same-document SPA route change.
   function watchForVintedNavigationAway() {
     console.log('[FAS Vinted] navigation watcher started on ' + location.pathname);
     setInterval(() => {
@@ -2028,7 +2101,7 @@
       } catch (e) {
         console.warn('[FAS Vinted] navigation watcher tick threw:', e && e.message);
       }
-    }, 1500);
+    }, 800);
   }
 
 (async () => {

@@ -402,6 +402,15 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   const [shipToMe, setShipToMe] = useState(false);
   const [shippingZipInput, setShippingZipInput] = useState('');
   const [shippingZipError, setShippingZipError] = useState<string | null>(null);
+  // ADR-115 Phase 1: full street address, collected alongside the ZIP so an organizer can
+  // actually ship to a real address -- the ZIP alone (ADR-110) is enough to PRICE shipping
+  // but not enough to address a label. Same conditional-spread-into-POST-body pattern as
+  // shippingZip; line1/city/state required when shipToMe is checked, line2 optional.
+  const [shippingAddressLine1Input, setShippingAddressLine1Input] = useState('');
+  const [shippingAddressLine2Input, setShippingAddressLine2Input] = useState('');
+  const [shippingCityInput, setShippingCityInput] = useState('');
+  const [shippingStateInput, setShippingStateInput] = useState('');
+  const [shippingAddressError, setShippingAddressError] = useState<string | null>(null);
   const [shippingCost, setShippingCost] = useState(0);
 
   // Guest checkout idempotency fix (2026-08-04): a stable per-mount token so that any
@@ -496,7 +505,19 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint, clientToken: clientTokenRef.current } : {}),
             // ADR-110 Track 1: real destination-ZIP shipping. shippingCost is never sent --
             // the backend recomputes it server-side from shippingZip and returns it below.
-            ...(shipToMe ? { shippingRequested: true, shippingZip: shippingZipInput.trim() } : {}),
+            // ADR-115 Phase 1: full street address sent alongside the ZIP -- pricing still
+            // only ever trusts the ZIP (unaffected by this change), the address fields are
+            // stored for the organizer to actually ship the package to.
+            ...(shipToMe
+              ? {
+                  shippingRequested: true,
+                  shippingZip: shippingZipInput.trim(),
+                  shippingAddressLine1: shippingAddressLine1Input.trim(),
+                  ...(shippingAddressLine2Input.trim() ? { shippingAddressLine2: shippingAddressLine2Input.trim() } : {}),
+                  shippingCity: shippingCityInput.trim(),
+                  shippingState: shippingStateInput.trim(),
+                }
+              : {}),
           });
           data = response.data;
           if (data.discountApplied > 0) {
@@ -579,27 +600,96 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 <span className="text-sm font-medium text-warm-700">Ship this to me</span>
               </label>
               {shipToMe && (
-                <div className="mt-2">
-                  <label className="block text-sm font-medium text-warm-700 mb-1">
-                    Shipping ZIP code <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={shippingZipInput}
-                    onChange={(e) => { setShippingZipInput(e.target.value); setShippingZipError(null); }}
-                    placeholder="49503"
-                    maxLength={10}
-                    className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    aria-label="Shipping ZIP code"
-                    autoComplete="postal-code"
-                  />
-                  {shippingZipError && (
-                    <p className="text-xs text-red-600 mt-1" role="alert">{shippingZipError}</p>
+                <div className="mt-2 space-y-2">
+                  {/* ADR-115 Phase 1: full street address, collected alongside the ZIP so the
+                      organizer actually receives an address to ship the package to. */}
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 mb-1">
+                      Street address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={shippingAddressLine1Input}
+                      onChange={(e) => { setShippingAddressLine1Input(e.target.value); setShippingAddressError(null); }}
+                      placeholder="123 Main St"
+                      maxLength={200}
+                      className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      aria-label="Street address"
+                      autoComplete="address-line1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 mb-1">
+                      Apt, suite, etc. (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={shippingAddressLine2Input}
+                      onChange={(e) => setShippingAddressLine2Input(e.target.value)}
+                      placeholder="Apt 4B"
+                      maxLength={200}
+                      className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      aria-label="Apartment, suite, or unit"
+                      autoComplete="address-line2"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-warm-700 mb-1">
+                        City <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={shippingCityInput}
+                        onChange={(e) => { setShippingCityInput(e.target.value); setShippingAddressError(null); }}
+                        placeholder="Grand Rapids"
+                        maxLength={100}
+                        className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        aria-label="City"
+                        autoComplete="address-level2"
+                      />
+                    </div>
+                    <div className="w-20">
+                      <label className="block text-sm font-medium text-warm-700 mb-1">
+                        State <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={shippingStateInput}
+                        onChange={(e) => { setShippingStateInput(e.target.value.toUpperCase()); setShippingAddressError(null); }}
+                        placeholder="MI"
+                        maxLength={2}
+                        className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
+                        aria-label="State"
+                        autoComplete="address-level1"
+                      />
+                    </div>
+                  </div>
+                  {shippingAddressError && (
+                    <p className="text-xs text-red-600 mt-1" role="alert">{shippingAddressError}</p>
                   )}
-                  <p className="text-xs text-warm-400 mt-1">
-                    We'll show your exact shipping cost before you pay.
-                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 mb-1">
+                      Shipping ZIP code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={shippingZipInput}
+                      onChange={(e) => { setShippingZipInput(e.target.value); setShippingZipError(null); }}
+                      placeholder="49503"
+                      maxLength={10}
+                      className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      aria-label="Shipping ZIP code"
+                      autoComplete="postal-code"
+                    />
+                    {shippingZipError && (
+                      <p className="text-xs text-red-600 mt-1" role="alert">{shippingZipError}</p>
+                    )}
+                    <p className="text-xs text-warm-400 mt-1">
+                      We'll show your exact shipping cost before you pay.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -686,6 +776,20 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                   }
                 }
                 if (shipToMe) {
+                  // ADR-115 Phase 1: full address required before advancing, same "block on
+                  // Continue, not on submit" posture as the existing ZIP check below.
+                  if (!shippingAddressLine1Input.trim()) {
+                    setShippingAddressError('Enter your street address.');
+                    return;
+                  }
+                  if (!shippingCityInput.trim()) {
+                    setShippingAddressError('Enter your city.');
+                    return;
+                  }
+                  if (!shippingStateInput.trim()) {
+                    setShippingAddressError('Enter your state.');
+                    return;
+                  }
                   const zipTrimmed = shippingZipInput.trim();
                   if (!/^\d{5}(-\d{4})?$/.test(zipTrimmed)) {
                     setShippingZipError('Enter a valid ZIP code to see your shipping total.');

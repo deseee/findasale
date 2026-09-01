@@ -993,6 +993,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           // set once here at charge-creation time.
           chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
           ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
+          // ADR-115 Phase 1: explicit delivery-method discriminator, written unconditionally
+          // for every Purchase this controller creates (mirrors chargeType's own "always set,
+          // never inferred after the fact" posture) -- 'SHIP' exactly when this purchase used
+          // the shippingApplicable path above, 'LOCAL_PICKUP' otherwise. Turns "is shippingZip
+          // non-null" from an implicit proxy into a first-class, directly-queryable field.
+          deliveryMethod: shippingApplicable ? 'SHIP' : 'LOCAL_PICKUP',
           ...(affiliateLinkId ? { affiliateLinkId } : {}),
           ...(normalizedGuestEmail ? { buyerEmail: normalizedGuestEmail, guestName: normalizedGuestName } : {}),
           // ADR-110 Track 1: buyer's real ship-to address, gated on shippingApplicable (the

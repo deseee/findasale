@@ -197,7 +197,16 @@ describe('ADR-110 Track 1 — native checkout destination-ZIP shipping', () => {
 
     const req: any = {
       user: { id: shopper.id, role: 'USER' },
-      body: { itemId: item.id, shippingRequested: true, shippingZip: '90210' },
+      body: {
+        itemId: item.id,
+        shippingRequested: true,
+        shippingZip: '90210',
+        // ADR-115 Phase 1: full address sent alongside the ZIP.
+        shippingAddressLine1: '123 Rodeo Dr',
+        shippingAddressLine2: 'Suite 5',
+        shippingCity: 'Beverly Hills',
+        shippingState: 'CA',
+      },
     };
     const res = makeMockRes();
     await createPaymentIntent(req, res);
@@ -219,6 +228,12 @@ describe('ADR-110 Track 1 — native checkout destination-ZIP shipping', () => {
     expect(purchase).not.toBeNull();
     expect(purchase!.shippingZip).toBe('90210');
     expect(purchase!.shippingFedexSurchargeTier).toBe('clean');
+    // ADR-115 Phase 1 additions.
+    expect(purchase!.shippingAddressLine1).toBe('123 Rodeo Dr');
+    expect(purchase!.shippingAddressLine2).toBe('Suite 5');
+    expect(purchase!.shippingCity).toBe('Beverly Hills');
+    expect(purchase!.shippingState).toBe('CA');
+    expect(purchase!.deliveryMethod).toBe('SHIP');
   });
 
   it('(b) missing/invalid ZIP: 400 with a buyer-facing message, no PaymentIntent, no Purchase row', async () => {
@@ -276,6 +291,9 @@ describe('ADR-110 Track 1 — native checkout destination-ZIP shipping', () => {
     expect(purchase!.shippingZip).toBeNull();
     expect(purchase!.shippingAddressLine1).toBeNull();
     expect(purchase!.shippingFedexSurchargeTier).toBeNull();
+    // ADR-115 Phase 1: a purchase that never asked for shipping is explicitly LOCAL_PICKUP,
+    // not left null -- deliveryMethod is written unconditionally, unlike the shipping* fields.
+    expect(purchase!.deliveryMethod).toBe('LOCAL_PICKUP');
   });
 
   it('(d) ShippingHardBlockError from the repricer: falls back to item.shippingPrice without failing checkout', async () => {
