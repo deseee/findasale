@@ -73,6 +73,28 @@
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // BUG FIX 2026-09-02 (Vinted title rejected for "too many capital letters", Patrick-reported live
+  // repro): fillListing() below used to type item.title into Vinted's Title field completely
+  // verbatim -- zero capitalization normalization anywhere in this file. Live repro Patrick hit:
+  // title "JUBILEE! Vinyl LP Record, Sisters' Concert Chorus, Grace Note Recordings, 1960s" was
+  // rejected by Vinted's own inline validation ("Title contains too many capital letters, try using
+  // lowercase letters"). Root cause confirmed via code read (fas-vinted.js line ~1713 pre-fix): no
+  // capitalization handling existed at all before typing into Vinted's Title field.
+  // Scope, deliberately narrow: only whole standalone words of 4+ consecutive uppercase Latin
+  // letters get Title-Cased (first letter kept upper, rest lowered) -- e.g. "JUBILEE!" -> "Jubilee!".
+  // Short (<=3 letter) all-caps tokens are left untouched on purpose -- they read as legitimate
+  // abbreviations in this marketplace's real inventory (LP, CD, XL, US, UK, MCM, USA, etc.), and the
+  // same source title's own "LP" in "Vinyl LP Record" apparently did NOT trigger Vinted's rejection,
+  // only the longer all-caps word did -- consistent with a per-word-length signal, not a blanket
+  // all-caps ban. This is Vinted-specific: it only transforms the string passed into Vinted's own
+  // Title input, never touches the shared item.title object or any other marketplace's fill logic.
+  // NOT YET LIVE-VERIFIED against Vinted's actual validation rule (STATE.md Next Session: "needs live
+  // confirmation, not assumption") -- flagged for Skill('findasale-qa') / Patrick's next real Vinted
+  // post before this can be marked closed.
+  function normalizeVintedTitleCaps(title) {
+    return String(title || '').replace(/\b[A-Z]{4,}\b/g, (w) => w.charAt(0) + w.slice(1).toLowerCase());
+  }
+
   function looksLikeInterstitial() {
     if (q('iframe[src*="captcha" i]') || q('iframe[title*="captcha" i]') || q('iframe[src*="hcaptcha" i]') || q('iframe[src*="recaptcha" i]')) return true;
     const lower = bodyText().toLowerCase();
@@ -1710,7 +1732,7 @@
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Vinted listing form...');
     const warnings = [];
-    await tryFill('Title', item.title, (v) => fillText('Title', v), warnings);
+    await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
     await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
     // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the

@@ -131,8 +131,15 @@ export const useHub = (slug: string, options?: Partial<UseQueryOptions<HubDetail
       });
 
       if (!response.ok) {
+        // BUG FIX 2026-09-02 (found live-QA'ing the public Sale Hub page): hubController.getHub
+        // returns { message: 'Hub not found' } on a 404 (see hubController.ts:146 et al), but this
+        // read `error.error` (always undefined) and silently fell back to the generic
+        // 'Failed to fetch hub' string -- so [slug].tsx's `notFound` check (which matches on
+        // error.message === 'Hub not found') never matched, and a genuinely closed/nonexistent hub
+        // always rendered the misleading "Something went wrong / try again" copy instead of the
+        // correct "Market not found" copy. Fixed to read the real field.
         const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch hub');
+        throw new Error(error.message || 'Failed to fetch hub');
       }
 
       return response.json();
