@@ -621,18 +621,25 @@
     const priceNum = filledPriceValue != null && isFinite(filledPriceValue) ? filledPriceValue : Number(item.price);
     const wantOffers = item.allowBestOffer === true;
 
-    // Compute a valid minimum (dollars) or null when offers should be off / no valid min exists.
+    // Compute a valid minimum (WHOLE DOLLARS) or null when offers should be off / no valid min
+    // exists. BUG FIX 2026-09-01 round 2 (Patrick's live observation): the minimum-price input is
+    // almost certainly the same whole-dollar-only currency-masked field as Price itself (same bug
+    // class already fixed there) -- so the range must be computed and clamped in WHOLE DOLLARS,
+    // never cents/decimals, or the field gets sent a decimal string it can't parse and reverts to
+    // FB's own bad default (minimum = listing price). For a whole-dollar price, this can mean NO
+    // valid whole-dollar minimum exists at all (e.g. price=$1: 50% floor rounds up to $1, which
+    // is not strictly below $1) -- in that case offers are turned off for the item, same as any
+    // other "no valid minimum" case below. Confirmed price=$2 and $3 DO have a valid whole-dollar
+    // minimum ($1 and $2 respectively); only price=$1 has none.
     let minValue = null;
     if (wantOffers && isFinite(priceNum) && priceNum > 0) {
-      const priceCents = Math.round(priceNum * 100);
-      const lowerCents = Math.ceil(priceCents * 0.5); // >= 50% of price
-      const upperCents = priceCents - 1;              // strictly below price
-      if (lowerCents <= upperCents) {
+      const lowerWhole = Math.ceil(priceNum * 0.5); // >= 50% of price, whole dollars
+      const upperWhole = priceNum - 1;               // strictly below price, whole dollars
+      if (lowerWhole <= upperWhole) {
         const raw = item.bestOfferMinimumAmt;
-        const desiredCents = raw != null && isFinite(Number(raw)) ? Math.round(Number(raw) * 100) : null;
-        const pick = desiredCents != null ? desiredCents : lowerCents;
-        const clamped = Math.min(Math.max(pick, lowerCents), upperCents);
-        minValue = clamped / 100;
+        const desiredWhole = raw != null && isFinite(Number(raw)) ? Math.round(Number(raw)) : null;
+        const pick = desiredWhole != null ? desiredWhole : lowerWhole;
+        minValue = Math.min(Math.max(pick, lowerWhole), upperWhole);
       }
     }
 
@@ -648,12 +655,26 @@
     // The minimum input only renders while offers are on -- wait for it, then set it like any other
     // React-controlled text field (setNativeValue) so FB registers the change and clears its error.
     try { minInput = await waitFor(() => SEL.fieldByLabel(LABELS.offerMinimum), 4000); }
-    catch (e) { return; } // input never appeared -- leave FB's default; audience guard catches a real block
-    minInput.focus();
-    // Whole dollars -> integer string; otherwise a 2-decimal string (e.g. "0.50") so FB parses it.
-    const minStr = Number.isInteger(minValue) ? String(minValue) : minValue.toFixed(2);
-    setNativeValue(minInput, minStr);
-    await sleep(200);
+    catch (e) { console.warn('[FAS offer] minimum input never appeared -- leaving FB default.'); return; }
+    // BUG FIX 2026-09-01 round 2 (Patrick live report: minimum still showed the LISTING price
+    // itself, red, after the whole-dollar price fix above -- e.g. price=$2, min stayed $2 instead
+    // of the computed $1). Diagnostics + a verify-and-reset pass, mirroring the same class of "FB
+    // silently reverts our set value" bug already fought on Poshmark (ensurePoshmarkPriceHolds):
+    // always send a 2-decimal string (a bare "1" may not parse the same as this masked input
+    // expects), dispatch blur (FB's own revert/validate logic is commonly blur-triggered, and we
+    // never blurred before), then re-read the field and retry once if it didn't hold.
+    const minStr = String(minValue); // whole-dollar integer string -- same format as the Price fix above
+    console.log('[FAS offer] price=' + priceNum + ' computed minimum=' + minStr + ' bestOfferMinimumAmt(raw)=' + item.bestOfferMinimumAmt);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      minInput.focus();
+      setNativeValue(minInput, minStr);
+      minInput.dispatchEvent(new Event('blur', { bubbles: true }));
+      await sleep(300);
+      const held = String(minInput.value || '').trim();
+      console.log('[FAS offer] attempt ' + attempt + ' -- field now reads "' + held + '" (wanted "' + minStr + '")');
+      if (held.replace(/[^0-9.]/g, '') === minStr || held.replace(/[^0-9.]/g, '') === String(minValue)) break;
+      if (attempt === 0) console.warn('[FAS offer] minimum did not hold -- retrying once.');
+    }
   }
 
   // Fills item details, then auto-advances through every remaining Facebook step (Delivery,
