@@ -2066,15 +2066,31 @@
       console.log('[FAS Vinted] continue-prompt: no queue item pending -- nothing to show.');
       return;
     }
+    // BUG FIX 2026-09-02 (S-EXT-VINTED-CONTINUE-UX round 3, Patrick live report: "did a couple
+    // items but then after a third item the modal didn't pop up... even though there were plenty
+    // more items in queue"). Root-caused live via read_console_messages on Patrick's real tab: 123
+    // consecutive identical "already shown ... not re-showing" lines for the SAME item id, spanning
+    // 9:59:04-10:00:54 (nearly 2 minutes, one per 800ms poll tick) -- proof the queue never advanced
+    // past that item (a different item id would appear in the log the instant it did). The dedup
+    // guard below was a permanent, forever-per-tab-session flag: once shown ONCE for an item, it
+    // NEVER shows again for that item in this tab, no matter what happens next -- whether Patrick
+    // missed it (same class of bug as the prior round), clicked "Not yet" meaning "ask me again,"
+    // or anything else short of the queue actually advancing. There was no way back except manually
+    // navigating to a fresh listing page himself. Replaced the permanent boolean with a cooldown
+    // timestamp: still stops the SAME render from spamming every 800ms tick while the queue is
+    // legitimately stuck on one item, but automatically re-offers the prompt after a bounded wait
+    // instead of blocking it forever.
     const seenKey = 'fasVintedContinuePromptShown_' + queued.item.id;
-    let alreadyShown = false;
-    try { alreadyShown = !!sessionStorage.getItem(seenKey); } catch (e) { console.warn('[FAS Vinted] continue-prompt: sessionStorage read failed:', e && e.message); }
-    if (alreadyShown) {
-      console.log('[FAS Vinted] continue-prompt: already shown this tab session for item ' + queued.item.id + ' -- not re-showing.');
+    const REPROMPT_COOLDOWN_MS = 20000;
+    let lastShownAt = 0;
+    try { lastShownAt = Number(sessionStorage.getItem(seenKey)) || 0; } catch (e) { console.warn('[FAS Vinted] continue-prompt: sessionStorage read failed:', e && e.message); }
+    if (lastShownAt && (Date.now() - lastShownAt) < REPROMPT_COOLDOWN_MS) {
+      console.log('[FAS Vinted] continue-prompt: shown ' + Math.round((Date.now() - lastShownAt) / 1000) + 's ago for item ' + queued.item.id + ' -- within cooldown, not re-showing yet.');
       return;
     }
-    console.log('[FAS Vinted] continue-prompt: showing for item ' + queued.item.id + ' ("' + queued.item.title + '") on ' + location.pathname);
-    try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* non-fatal -- worst case it re-shows once more */ }
+    console.log('[FAS Vinted] continue-prompt: showing for item ' + queued.item.id + ' ("' + queued.item.title + '") on ' + location.pathname +
+      (lastShownAt ? ' (re-prompt after cooldown -- queue never advanced past this item, likely missed or dismissed earlier)' : ''));
+    try { sessionStorage.setItem(seenKey, String(Date.now())); } catch (e) { /* non-fatal -- worst case it re-shows more often than intended */ }
     // ADDED 2026-09-02 (S-EXT-VINTED-CONTINUE-UX round 2): also ask background.js to fire a native
     // OS notification, since this on-page toast alone is easy to miss (small, bottom-right corner,
     // often competing with Vinted's own centered "Item listed" dialog for attention -- confirmed
