@@ -171,6 +171,25 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // BUG FIX 2026-09-02 (Patrick live report: the frontend edit-item page was showing "Push to
+    // Reverb" on items with nothing to do with musical instruments/gear -- confirmed there was no
+    // category gate anywhere, frontend OR backend). Server-side guard added as defense in depth
+    // alongside the new frontend gate (packages/frontend/pages/organizer/edit-item/[id].tsx) --
+    // without this, a stale page, a race before formData loads, or a direct API call could still
+    // push an ineligible item. 'Musical Instruments & Gear' is the exact eBay L1 category name
+    // item.category gets AI-tagged into for actual instruments/gear (see EBAY_L1_CATEGORIES in
+    // config/ebayCategories.ts -- 'Music' is the separate L1 bucket for records/CDs, Discogs
+    // territory, not this). Matches the same 422 { message, eligible: false } shape Discogs'
+    // eligibility check already uses (discogsMarketplaceController.ts) for frontend consistency.
+    const REVERB_ELIGIBLE_CATEGORY = 'Musical Instruments & Gear';
+    if ((item.category || '').trim().toLowerCase() !== REVERB_ELIGIBLE_CATEGORY.toLowerCase()) {
+      res.status(422).json({
+        message: "Reverb is for musical instruments & gear only -- this item's category isn't eligible.",
+        eligible: false,
+      });
+      return;
+    }
+
     const publish = req.body?.publish === true;
     const reverbCategoryUuid = typeof req.body?.reverbCategoryUuid === 'string' ? req.body.reverbCategoryUuid : undefined;
 

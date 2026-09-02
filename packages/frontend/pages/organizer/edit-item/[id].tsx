@@ -719,6 +719,19 @@ const EditItemPage = () => {
   const [reverbPushPending, setReverbPushPending] = useState(false);
   const [reverbPushedListing, setReverbPushedListing] = useState<{ id?: string; url?: string } | null>(null);
 
+  // BUG FIX 2026-09-02 (Patrick live report: "with reverb connected it now shows push to it on
+  // categories that have nothing to do with musical instruments and gear"). The Reverb section
+  // below was gated ENTIRELY on reverbConnected -- confirmed no category-eligibility concept
+  // existed at all (unlike Discogs' catalog-release check above), so once an organizer connects
+  // Reverb, the push buttons rendered on every single item regardless of category. Reverb only
+  // sells musical instruments & gear -- pushing anything else creates a nonsense listing on their
+  // platform. item.category is populated from cloudAIService's EBAY_L1_CATEGORIES classification
+  // (see packages/backend/src/config/ebayCategories.ts) -- 'Musical Instruments & Gear' is the
+  // exact L1 bucket a guitar, amp, keyboard, etc. gets AI-tagged into. Case/whitespace-tolerant
+  // compare since formData.category is separately title-cased for the FindA.Sale category select.
+  const REVERB_ELIGIBLE_CATEGORY = 'Musical Instruments & Gear';
+  const reverbCategoryEligible = formData.category?.trim().toLowerCase() === REVERB_ELIGIBLE_CATEGORY.toLowerCase();
+
   const reverbPushMutation = useMutation({
     mutationFn: async ({ publish }: { publish: boolean }) => {
       return api.post(`/reverb/items/${id}/listing`, { publish });
@@ -2621,12 +2634,22 @@ const EditItemPage = () => {
               </div>
             )}
 
-            {/* Reverb Push Section (2026-09-01) -- gated entirely on connection status,
-                same pattern as the Discogs section above. No catalog-eligibility concept for
-                Reverb (unlike Discogs' release matching), so this renders a direct push/publish
-                choice once connected. "Pushed" state is local-only for this page session --
-                see the reverbPushedListing state comment above for why. */}
-            {reverbConnected && (
+            {/* Reverb Push Section (2026-09-01, category gate added 2026-09-02) -- gated on
+                connection status AND reverbCategoryEligible (see that constant's comment above).
+                Unlike Discogs' per-item catalog-release matching, Reverb's eligibility is just a
+                category check, so no backend round-trip is needed here -- a direct push/publish
+                choice once connected AND eligible. "Pushed" state is local-only for this page
+                session -- see the reverbPushedListing state comment above for why. */}
+            {reverbConnected && !reverbCategoryEligible && (
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
+                <p className="text-sm text-warm-600 dark:text-gray-400">
+                  Reverb is for musical instruments &amp; gear only -- this item&apos;s category
+                  {formData.category ? ` ("${formData.category}")` : ''} isn&apos;t eligible.
+                </p>
+              </div>
+            )}
+            {reverbConnected && reverbCategoryEligible && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
                 {reverbPushedListing ? (
