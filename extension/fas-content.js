@@ -608,11 +608,17 @@
   // clamp is computed against the exact value FB validates. This never throws its own hard error --
   // it leaves the step in a valid state and lets the existing waitForStep('audience') guard below stay
   // the real check (keeps the fail-loud behavior if FB still blocks for some other reason).
-  async function configureOfferStep(item) {
+  // filledPriceValue is the WHOLE-DOLLAR price actually typed into FB's Price field (see
+  // fillItem's price fill below, 2026-09-01 fix) -- the minimum-offer clamp must be computed
+  // against that same value, not the raw 2-decimal item.price, or a valid-looking minimum can
+  // still be >= FB's own displayed price and get rejected (confirmed live: $2.49 item typed as
+  // $2 on FB, offer minimum computed off $2.49 landed at $2.00, which FB then flagged as "must
+  // be lower than listing price" since its own field only ever held $2).
+  async function configureOfferStep(item, filledPriceValue) {
     const sw = SEL.switchByLabel(LABELS.offerToggle);
     if (!sw) return; // Offer step has no such control for this listing type -- nothing to do
 
-    const priceNum = Number(item.price);
+    const priceNum = filledPriceValue != null && isFinite(filledPriceValue) ? filledPriceValue : Number(item.price);
     const wantOffers = item.allowBestOffer === true;
 
     // Compute a valid minimum (dollars) or null when offers should be off / no valid min exists.
@@ -658,8 +664,17 @@
   // instead of blocking.
   async function fillItem(item, index, total, autoPublish) {
     overlay('<b>FindA.Sale</b> — filling listing ' + (index + 1) + ' of ' + total + '…');
+    // BUG FIX 2026-09-01 (Patrick live report: $2.49 item listed on Facebook as $2, and its
+    // Allow-offers minimum then showed red/invalid): Facebook's Price field is the same kind of
+    // currency-masked input already fixed on Vinted/Mercari/Grailed/Craigslist/Poshmark -- setting
+    // it in one bulk write with a decimal point ("2.49") corrupts it (digits dropped/reflowed).
+    // Round to a whole dollar before typing, same proven fix as those five files (see e.g.
+    // fas-grailed.js's Price fill and its 2026-08-xx comment for the same root cause).
+    const filledPriceValue = item.price != null && isFinite(Number(item.price))
+      ? Math.max(1, Math.round(Number(item.price)))
+      : null;
     const results = { title: await fillText(LABELS.title, item.title),
-                      price: await fillText(LABELS.price, item.price),
+                      price: await fillText(LABELS.price, filledPriceValue != null ? String(filledPriceValue) : item.price),
                       description: await fillText(LABELS.description, item.description) };
     if (!results.title) throw hardError('Item details', 'Couldn\'t find the Title field.');
     if (!results.price) throw hardError('Item details', 'Couldn\'t find the Price field.');
@@ -730,7 +745,7 @@
       console.info('[FAS offer] Offer step present -- configuring offer settings.');
       overlay('<b>FindA.Sale</b> — reviewing offer settings…');
       await humanPause(400, 800);
-      await configureOfferStep(item); // set a VALID Allow-offers state so FB's Next isn't blocked (2026-07-16)
+      await configureOfferStep(item, filledPriceValue); // set a VALID Allow-offers state so FB's Next isn't blocked (2026-07-16)
       await clickButton('Next', 'Offer'); // -> Audience (groups left unchecked by design, see ADR-084 amendment)
     } else {
       console.info('[FAS offer] Offer step skipped by Facebook (went straight to Audience/Publish) -- skipping offer config.');
