@@ -619,6 +619,38 @@
     const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
     return opts.find((o) => optionPrimaryText(o) === want) || opts.find((o) => wordBoundaryHas(optionPrimaryText(o), want) && optionPrimaryText(o).length < 60) || null;
   }
+
+  // BUG FIX 2026-09-02 (Patrick live-shared tab, real item stuck on "Size Required"): Poshmark's
+  // Standard size grid for apparel categories (live-confirmed on Men Shirts: XS/S/M/L/XL + Neck
+  // sizes) renders letter-abbreviated buttons, but FindA.Sale's Item.size holds the organizer's
+  // spelled-out word (e.g. "Large"). optionElByText('large') can never match a button whose whole
+  // text is just "L" -- neither the exact-match branch nor the wordBoundaryHas fallback (which
+  // checks whether the WANTED text appears as a whole word inside the option, backwards for a
+  // want-is-longer-than-option case like this) can bridge that gap. Root cause confirmed live:
+  // clicking the real Size dropdown showed exactly XS/S/M/L/XL, "Large" was never going to match
+  // any of them as typed. Fix: try the value as-is first (covers numeric sizes, shoe sizes, and any
+  // category where Poshmark already spells it out), and only if that fails, retry with the mapped
+  // letter abbreviation for the common spelled-out apparel scale. Best-effort only -- if a given
+  // category's real grid doesn't use these exact letters, this still correctly falls through to the
+  // existing "could not be set, please set yourself" warning rather than guessing further.
+  var POSHMARK_SIZE_ALIASES = {
+    'xx small': 'XXS', 'xxsmall': 'XXS', 'x-small': 'XS', 'xsmall': 'XS', 'extra small': 'XS',
+    small: 'S',
+    medium: 'M',
+    large: 'L',
+    'x-large': 'XL', 'xlarge': 'XL', 'extra large': 'XL',
+    'xx-large': 'XXL', 'xxlarge': 'XXL', 'extra extra large': 'XXL', '2x large': 'XXL', '2xl': 'XXL',
+    'xxx-large': 'XXXL', 'xxxlarge': 'XXXL', 'extra extra extra large': 'XXXL', '3x large': 'XXXL', '3xl': 'XXXL',
+  };
+  async function fillPoshmarkSize(value) {
+    if (await fillSelectLike('Size', value)) return true;
+    const alias = POSHMARK_SIZE_ALIASES[norm(value)];
+    if (alias) {
+      console.warn('[FAS Poshmark] Size "' + value + '" did not match directly -- retrying as Poshmark\'s letter size "' + alias + '".');
+      if (await fillSelectLike('Size', alias)) return true;
+    }
+    return false;
+  }
   // React-controlled inputs ignore a plain .value=x; use the native setter then dispatch input
   // (same pattern as fas-content.js's setNativeValue).
   // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION, P0, Patrick live-console-report):
@@ -1961,7 +1993,7 @@
     // Patrick's report) -- kept unconditional.
     await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v));
     if (categoryCommitted) {
-      const sizeOk = await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
+      const sizeOk = await tryFill('Size', item.size, (v) => fillPoshmarkSize(v));
       if (item.size && !sizeOk) fieldNotes.push('Size "' + item.size + '" could not be set (UNVERIFIED selector) -- set it yourself.');
       // BUG FIX 2026-08-22 (S-EXT-POSHMARK-COLOR-DOUBLE-LOG, Patrick-flagged): fillPoshmarkColor
       // already logs its own specific reason ("no matching swatch found") when a value like "Neon"

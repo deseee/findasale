@@ -163,16 +163,20 @@
     if (queueDelayInterval) { clearInterval(queueDelayInterval); queueDelayInterval = null; }
   }
   function startQueueDelayCountdown(totalMs, doneLabel) {
+    // BUG FIX 2026-09-02 (S-EXT-VINTED-NO-COUNTDOWN, Patrick live report: "probably don't need the
+    // countdown since it's a manual process for vinted"). Vinted posting is fully human-paced --
+    // Patrick clicks Vinted's own real Upload button himself for every item -- unlike the automated
+    // platforms this ticking "please wait Ns" display was modeled on (Facebook/eBay), where it
+    // reassures during an UNATTENDED wait. On an already-manual step it's just noise. Neutered here
+    // at the single shared definition (rather than patching each call site) so every caller --
+    // both button click handlers below AND the real 'fasQueueDelayStarted' listener a few lines
+    // down -- automatically stops ticking, with no risk of missing one. background.js's actual
+    // humanQueueDelay() pacing between tab opens is completely untouched by this -- this file's own
+    // prior comment already established the countdown display is "purely cosmetic either way --
+    // never changes the underlying pacing," so removing the ticking text changes nothing functional.
     clearQueueDelayCountdown();
-    const deadline = Date.now() + Math.max(0, Number(totalMs) || 0);
-    const renderTick = () => {
-      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-      ensureBar().innerHTML = '<b>FindA.Sale</b><div style="margin-top:6px">Please wait ' + remaining +
-        's before ' + (doneLabel || 'the next item') + ' (this is normal, not a stall)&#8230;</div>';
-      if (remaining <= 0) clearQueueDelayCountdown();
-    };
-    renderTick();
-    queueDelayInterval = setInterval(renderTick, 1000);
+    const label = doneLabel === 'we finish up' ? "That's the last item -- wrapping up" : 'Moving to ' + (doneLabel || 'the next item');
+    ensureBar().innerHTML = '<b>FindA.Sale</b><div style="margin-top:6px">' + label + '&#8230;</div>';
   }
   // Guessed local duration, used ONLY until the real 'fasQueueDelayStarted' message (if any)
   // corrects it -- matches background.js's QUEUE_ADVANCE_DELAY_MS = {MIN:10000,MAX:25000} exactly.
@@ -1839,11 +1843,27 @@
     // AFTER package size, instantly cleared it again on the real page. Final guard: re-check right
     // before finishing and re-apply the fix once more if anything after Price knocked it back into
     // this state, whatever the exact trigger turns out to be.
-    if (item.price != null && isFinite(Number(item.price)) && vintedErrorStillShown()) {
-      console.warn('[FAS Vinted] Price -- stale validation error reappeared after a later field (likely Package Size) touched the page -- re-clearing.');
-      const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.min(VINTED_MAX_PRICE, Math.round(Number(item.price))));
-      await fillVintedPrice(String(rePriceVal));
-      if (vintedErrorStillShown()) warnings.push('Price shows a validation error that would not clear -- please check it manually before publishing.');
+    if (item.price != null && isFinite(Number(item.price))) {
+      // BUG FIX 2026-09-02 (live-observed on a real batch run, item 3 of 18, via a Claude session
+      // watching Patrick's actual open tab): this same-turn re-check (added 2026-08-30 round 10)
+      // still had a live gap -- confirmed no '[FAS Vinted] Price -- stale validation error
+      // reappeared' warning was logged for this item (meaning vintedErrorStillShown() read false
+      // the instant it ran, right after fillPackageSize() resolved), yet the stale "must be greater
+      // than or equal to 1.0" banner was visibly showing moments later once the review overlay was
+      // already on screen -- live-confirmed by manually clearing+retyping the field, which
+      // instantly fixed it (same mechanism as the original round-3/round-10 fixes). Manually
+      // clearing/retyping proves the VALUE was never the problem; the re-check here was just
+      // reading the DOM before Vinted's own re-validation (apparently debounced after the
+      // package-size interaction) had actually fired, so it saw "clear" a beat too early. Added a
+      // short wait before checking -- lets that debounce settle BEFORE this looks, instead of only
+      // ever reacting after the fact once the error is already visible to the organizer.
+      await sleep(600);
+      if (vintedErrorStillShown()) {
+        console.warn('[FAS Vinted] Price -- stale validation error reappeared after a later field (likely Package Size) touched the page -- re-clearing.');
+        const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.min(VINTED_MAX_PRICE, Math.round(Number(item.price))));
+        await fillVintedPrice(String(rePriceVal));
+        if (vintedErrorStillShown()) warnings.push('Price shows a validation error that would not clear -- please check it manually before publishing.');
+      }
     }
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): photosOk/injectPhotos() moved up to
     // right after Category (see comment there) -- no longer computed here.
@@ -2055,6 +2075,12 @@
     }
     console.log('[FAS Vinted] continue-prompt: showing for item ' + queued.item.id + ' ("' + queued.item.title + '") on ' + location.pathname);
     try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* non-fatal -- worst case it re-shows once more */ }
+    // ADDED 2026-09-02 (S-EXT-VINTED-CONTINUE-UX round 2): also ask background.js to fire a native
+    // OS notification, since this on-page toast alone is easy to miss (small, bottom-right corner,
+    // often competing with Vinted's own centered "Item listed" dialog for attention -- confirmed
+    // live via screenshot). Fire-and-forget -- the on-page toast below is the primary UI regardless
+    // of whether the notification succeeds (e.g. OS notifications disabled for Chrome).
+    try { chrome.runtime.sendMessage({ type: 'showVintedContinueNotification', itemId: queued.item.id, itemTitle: queued.item.title }); } catch (e) { /* non-fatal */ }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Finished with <b>' + escapeHtml(queued.item.title) + '</b>?</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Vinted took you away from the review screen before you could confirm. If you already clicked Vinted\'s own Upload for this item, continue to the next one below -- if not, just close this.</div>' +
       button('fas-vin-continue', 'Continue to next item &#9654;', true) +

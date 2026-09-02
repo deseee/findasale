@@ -1164,6 +1164,13 @@ chrome.notifications.onClicked.addListener((notifId) => {
     chrome.storage.local.get([key], (st) => {
       chrome.tabs.create({ url: st[key] || 'https://finda.sale/organizer/marketplace-extension', active: true });
     });
+    return;
+  }
+  // ADDED 2026-09-02 (S-EXT-VINTED-CONTINUE-UX round 2) -- see showVintedContinueNotification
+  // above. Just dismiss on click; the Vinted tab itself is where the real action (the on-page
+  // continue-prompt toast) already lives.
+  if (notifId.indexOf('fasVintedContinue_') === 0) {
+    chrome.notifications.clear(notifId);
   }
 });
 
@@ -1612,7 +1619,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // retry-by-resubmitting. Vinted has an active enforcement wave against automated
         // relist/bump behavior.
         await chrome.storage.local.set({ fasVintedQueue: msg.queue || [], fasVintedIndex: 0 });
-        chrome.tabs.create({ url: CFG.VINTED_POST_URL });
+        // BUG FIX 2026-09-02 (Patrick-reported: left a Vinted listing sitting filled-but-unpublished
+        // for ~30min, came back, clicked Vinted's own Upload, and the continue-prompt never showed).
+        // Vinted's flow is inherently the most idle-prone of all 7 platforms -- it's the one where
+        // FindA.Sale deliberately never auto-clicks Publish (see this file's own legal constraint),
+        // so the organizer is expected to sit on a filled, reviewed listing for as long as it takes
+        // them to look it over before manually uploading. Chrome's own tab-discarding (Memory Saver /
+        // memory-pressure eviction) can silently reload an inactive tab to free memory -- if that
+        // happens while this tab is sitting idle, it kills watchForVintedNavigationAway()'s polling
+        // interval outright and can wipe the in-page review overlay before Patrick ever gets to Vinted's
+        // real Upload button, a plausible contributor to exactly this symptom (the mechanism itself is
+        // navigation-triggered, not time-based -- see maybeShowVintedContinuePrompt()'s own comment --
+        // so a discard-and-reload, not the elapsed time itself, is the most likely way it could be
+        // skipped). chrome.tabs.update's autoDiscardable flag tells Chrome not to auto-discard this
+        // specific tab -- best-effort only (Chrome can still discard on severe memory pressure; this
+        // is not a hard guarantee), and non-fatal if the call fails for any reason.
+        const vintedTab = await chrome.tabs.create({ url: CFG.VINTED_POST_URL });
+        try {
+          await chrome.tabs.update(vintedTab.id, { autoDiscardable: false });
+        } catch (e) {
+          console.warn('[FAS] Vinted tab autoDiscardable=false failed (non-fatal):', e && e.message);
+        }
         sendResponse({ ok: true });
       } else if (msg.type === 'getVintedQueueItem') {
         const { fasVintedQueue = [], fasVintedIndex = 0 } =
@@ -1623,11 +1650,46 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const next = (st.fasVintedIndex || 0) + 1;
         await chrome.storage.local.set({ fasVintedIndex: next });
         const item = (st.fasVintedQueue || [])[next] || null;
-        // BUG FIX 2026-09-01, same root cause as the Poshmark/Mercari branches above: no tabId
-        // was passed, so the countdown notification never reliably reached the right tab.
-        // 'advanceVintedQueue' always comes from fas-vinted.js's own tab.
-        await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        // BUG FIX 2026-09-02 (S-EXT-VINTED-NO-COUNTDOWN round 2, Patrick correction: "why would you
+        // only remove the cosmetic part?" -- correctly called out that the first pass at this only
+        // hid the ticking countdown TEXT and left the actual humanQueueDelay() sleep(10-25s) running
+        // underneath, which is worse, not better: the wait is still there but now with less visible
+        // reassurance that it's expected. REMOVED the real delay here, not just its display. Per
+        // this file's own S-EXT-QUEUE-PACING header comment above (2026-08-30): the shared
+        // QUEUE_ADVANCE_DELAY_MS pacing exists to avoid an "obviously-instant machine-gun" listing-
+        // creation pattern reading as automated/bannable, and that SAME comment explicitly says
+        // "the one CONFIRMED real risk... is Vinted's active enforcement wave against automated
+        // relist/bump behavior... already mitigated there by Vinted's manual-publish-only design
+        // (fillListing() fills and stops; the organizer always clicks Upload themselves)." In other
+        // words: the file's own prior reasoning already establishes Vinted needs no pacing delay
+        // here -- every single Vinted listing is gated behind Patrick physically clicking Vinted's
+        // real Upload button, so there is no rapid-fire automated listing-creation risk this could
+        // ever be protecting against. Advancing the queue is now instant.
         sendResponse({ ok: true, item, index: next, total: (st.fasVintedQueue || []).length });
+      } else if (msg.type === 'showVintedContinueNotification') {
+        // ADDED 2026-09-02 (S-EXT-VINTED-CONTINUE-UX round 2, Patrick live report: "re shared
+        // vinted, same issue no modal on the page after clicking upload"). Root-caused live via
+        // read_console_messages on Patrick's actual open Vinted tabs: the on-page continue-prompt
+        // toast (fas-vinted.js maybeShowVintedContinuePrompt) WAS firing correctly -- console
+        // evidence showed "continue-prompt: showing for item ..." logged exactly once, and a
+        // screenshot confirmed the toast was actually rendered, bottom-right -- but it's a small
+        // 360px corner toast that's easy to miss, especially with Vinted's own centered "Item
+        // listed" dialog often on screen at the same moment competing for attention. A native OS
+        // notification can't be missed the same way (survives outside the tab, stays until
+        // dismissed/clicked). Content scripts have no direct chrome.notifications access, hence
+        // this message-relay from fas-vinted.js. Non-fatal by design -- the on-page toast is the
+        // primary UI either way; this is a belt-and-suspenders addition, not a replacement.
+        const notifId = 'fasVintedContinue_' + msg.itemId;
+        try {
+          chrome.notifications.create(notifId, {
+            type: 'basic',
+            iconUrl: 'icon128.png',
+            title: 'FindA.Sale -- ready for the next item?',
+            message: 'Finished with "' + (msg.itemTitle || 'this item') + '" on Vinted? Switch back to the tab to continue.',
+            priority: 2
+          });
+        } catch (e) { console.warn('[FAS] showVintedContinueNotification failed (non-fatal):', e && e.message); }
+        sendResponse({ ok: true });
       } else if (msg.type === 'setGrailedQueue') {
         // 2026-08-18 dispatch (fas-grailed.js): same queue-storage shape as
         // setGumtreeAuQueue above. Not wired into autoRenewDueItems()/checkRenewals() above --
