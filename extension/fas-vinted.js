@@ -1771,6 +1771,20 @@
     const warnings = [];
     await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
     await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
+    // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
+    // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the
+    // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up
+    // persistently on the review screen below instead of vanishing.
+    await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
+    // BUG FIX 2026-09-03 (Patrick live-reported, root cause found live via javascript_tool on
+    // his actual open tab: ISBN kept failing to stick no matter how it was typed): moved this
+    // whole ISBN block to AFTER Category on purpose. Confirmed live -- Vinted's ISBN/Author/
+    // Language fields are CATEGORY-CONDITIONAL: with Category still unset (or set to a non-book
+    // leaf), #isbn does not exist in the DOM at all (getElementById('isbn') -> null), so every
+    // previous ISBN fill attempt was silently failing on fieldByLabel('ISBN') finding nothing --
+    // not a typing/validation bug at all, a field-doesn't-exist-yet ordering bug. This is exactly
+    // the same lesson as Brand/Size/Condition already being ordered after Category below; ISBN
+    // was the one field still running too early.
     // ADR-090 Addendum 3 (2026-09-03): Vinted HARD-BLOCKS submission with "Enter an ISBN to
     // continue" on every Books & Media > Books subcategory (live-tested: both "Comics, manga &
     // graphic novels" AND an unrelated "Fiction" subcategory show the identical block -- this is
@@ -1837,11 +1851,6 @@
         }
       }
     }
-    // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
-    // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the
-    // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up
-    // persistently on the review screen below instead of vanishing.
-    await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
     // color/brand null-value fallback behavior across runs -- worked once earlier tonight, then
     // apparently did nothing on a fresh run). injectPhotos() used to run dead LAST in this function,
