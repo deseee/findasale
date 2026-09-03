@@ -8,6 +8,9 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { createNotification } from '../lib/notificationService';
 import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charges migration (2026-08-08)
+import { getStripe } from '../utils/stripe'; // S-POS-QR-DOUBLE-CHARGE (2026-09-02): deactivate the Payment Link post-completion
+
+const stripe = () => getStripe();
 
 /**
  * posPaymentLinkRecorder.ts — ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
@@ -94,6 +97,12 @@ export async function recordPosPaymentLinkSale(
   const oversoldItemIds: string[] = [];
   let purchaseIds: string[] = [];
   let didRecord = false;
+  // S-POS-QR-DOUBLE-CHARGE (2026-09-02): captured inside the tx below so the
+  // post-tx Payment Link deactivation call (outside the tx, fire-and-forget) uses
+  // the SAME Direct-vs-Destination routing decision this recording pass already made,
+  // rather than recomputing it a second time.
+  let recordedStripeAccountId: string | null = null;
+  let recordedUseDirect = false;
 
   await prisma.$transaction(async (tx) => {
     // Guarded atomic flip: the WHERE clause + UPDATE row lock is what actually
@@ -149,6 +158,8 @@ export async function recordPosPaymentLinkSale(
         ? await shouldUseDirectCharge(posOrganizerLookup.organizerId, posStripeConnectId)
         : false);
     }
+    recordedStripeAccountId = posStripeConnectId;
+    recordedUseDirect = posUseDirect;
 
     // Defensive fallback: real PaymentIntent id should always be present from both current
     // callers (see docblock above). If it's ever missing, fall back to the synthetic
@@ -275,6 +286,26 @@ export async function recordPosPaymentLinkSale(
       }
     }
   });
+
+  // S-POS-QR-DOUBLE-CHARGE (2026-09-02) defense-in-depth: deactivate the Stripe Payment
+  // Link itself right after we record the first completion, so it can never be paid a
+  // second time even in a narrow race the Stripe-side completed_sessions.limit:1
+  // restriction (set at creation, posController.ts createPaymentLinkInternal) doesn't
+  // fully close. Fire-and-forget / non-fatal: a Stripe hiccup here must never block
+  // recording a real sale that already happened.
+  if (didRecord) {
+    setImmediate(() => {
+      stripe()
+        .paymentLinks.update(
+          posPaymentLink.stripePaymentLinkId,
+          { active: false },
+          recordedUseDirect && recordedStripeAccountId ? { stripeAccount: recordedStripeAccountId } : undefined
+        )
+        .catch((err: any) => {
+          console.warn(`[pos-record/${source}] Failed to deactivate Stripe Payment Link ${posPaymentLink.stripePaymentLinkId} after recording sale (link ${posPaymentLink.id}) -- link may still be technically payable a second time until it expires:`, err?.message ?? err);
+        });
+    });
+  }
 
   // Fire-and-forget cross-channel removal hooks — OUTSIDE the tx.
   if (fullySoldOutIds.length) {

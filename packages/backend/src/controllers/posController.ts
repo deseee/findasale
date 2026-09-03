@@ -145,6 +145,16 @@ export async function createPaymentLinkInternal(opts: {
         : validConnectId
           ? ({ application_fee_amount: platformFeeAmount, transfer_data: { destination: stripeConnectId } } as any)
           : {}),
+      // Single-use fix (S-POS-QR-DOUBLE-CHARGE, 2026-09-02): Stripe Payment Links are
+      // reusable by default -- with no restriction, the same QR code / URL can be paid
+      // again by a second checkout session, producing a second real charge Stripe
+      // processes fine but that FindA.Sale's own idempotency (posPaymentLinkRecorder.ts)
+      // silently no-ops on, since that idempotency only protects OUR database from a
+      // duplicate Purchase row, not Stripe from actually capturing a second payment.
+      // completed_sessions.limit: 1 makes Stripe itself refuse a second session against
+      // this link once the first completes. Defense-in-depth: posPaymentLinkRecorder.ts
+      // also deactivates the link server-side right after recording the first sale.
+      restrictions: { completed_sessions: { limit: 1 } },
     },
     stripeRequestOptions
   );
