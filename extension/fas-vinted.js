@@ -1900,11 +1900,29 @@
       // Regardless of cause, this guard is safe and correct on its own merits: never touch the
       // field at all if it's already showing a real (non-placeholder) value -- most obviously
       // relevant if this run is a retry after an earlier attempt already set it correctly.
-      const existingLangOpener = openerByLabel('Language');
-      const existingLangText = existingLangOpener ? norm(existingLangOpener.textContent) : '';
+      // BUG FIX 2026-09-03 round 2 (Patrick: "the fill didn't finish... stop assuming" -- live-
+      // traced this exact bug on his real tab, not guessed): the guard above used
+      // openerByLabel('Language').textContent, but openerByLabel's FIRST-priority check is
+      // `[aria-label="Language"]` -- confirmed live this attribute exists ONLY on the OPEN
+      // radio-group panel (`<div role="group" aria-label="Language">` wrapping all ~42 language
+      // radios), never on the real closed-state control. Confirmed live: once the panel is closed,
+      // `document.querySelectorAll('[aria-label="Language"]').length === 0`. So whenever the panel
+      // happened to already be open at the moment this guard ran (observed: Vinted appears to
+      // sometimes auto-open it once Category resolves to a book-eligible leaf), the guard read the
+      // OPEN GROUP's mashed-together option text (every radio's label concatenated with no
+      // separator) instead of the real field state, misread that as "already a real value", and
+      // skipped filling it entirely -- while the actual field was still sitting on the unfilled
+      // "Select a language" placeholder the whole time. Also: even in the normal closed-state case
+      // this fell through to a `<label for="language_book">` match resolving to a real
+      // `<input id="language_book">` -- but inputs hold their displayed text in `.value`, never
+      // `.textContent` (confirmed live: `.textContent` on that input is always ''), so the "already
+      // set" check could never fire correctly for the actual real control either way. Fixed by
+      // reading the one precise, confirmed-stable control directly: `#language_book`'s `.value`.
+      const languageInput = document.getElementById('language_book');
+      const existingLangText = languageInput ? norm(languageInput.value) : '';
       const langAlreadySet = existingLangText && existingLangText !== norm('Select a language');
       if (langAlreadySet) {
-        console.log('[FAS Vinted] Language already shows "' + existingLangOpener.textContent.trim() + '" -- leaving it untouched.');
+        console.log('[FAS Vinted] Language already shows "' + languageInput.value.trim() + '" -- leaving it untouched.');
       } else {
         const langOk = await pickFromPanel('language', 'Language', 'English');
         if (langOk) {
