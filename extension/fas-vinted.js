@@ -2296,12 +2296,69 @@
     closeBtnHandler();
   }
 
+  // BUG FIX 2026-09-03 (S-EXT-VINTED-PROHIBITED-ITEMS-GATE): pre-submit prohibited-items safety
+  // gate, parity with fas-craigslist.js's own gate added after this same-day marketplace audit.
+  // A dagger was previously auto-submitted to Facebook Marketplace (zero weapon-keyword check
+  // before submitting) and got the organizer's Facebook account restricted. Checks the queued
+  // item's category+title against Vinted's own two "Items Not Allowed" rules (mirrored from
+  // packages/backend/src/services/marketplaceEligibilityRules.ts VINTED entries) BEFORE any DOM
+  // interaction -- no field filling, no clicking -- and, if either matches, skips the item
+  // (advances the queue without marking it listed, so it stays available for other marketplaces)
+  // instead of proceeding into run()/fillListing(). Vinted is unusually strict on rule 2: it bans
+  // even ordinary kitchen knives, unlike every other marketplace in this codebase.
+  const VINTED_NOT_ALLOWED_NAME_KEYWORDS = [
+    'hazmat', 'food', 'drink', 'beverage',
+    'medicine', 'medicinal', 'supplement', 'cosmetic', 'sanitary', 'tampon', 'recalled',
+    'counterfeit', 'replica', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
+    'fur', 'ivory', 'reptile skin', 'vape', 'e-cigarette', 'fetish', 'furniture',
+    'musical instrument', 'cycling helmet', 'safety harness', 'heated tobacco',
+  ];
+  const VINTED_NOT_ALLOWED_EXCLUDE_KEYWORDS = ['sealed', 'unopened', 'unused', 'new,', 'album', 'holder', 'case', 'sleeve'];
+  const VINTED_NOT_ALLOWED_REASON = "This category isn't allowed on Vinted (Items Not Allowed policy).";
+  const VINTED_WEAPONS_NAME_KEYWORDS = [
+    'knife', 'blade', 'dagger', 'sword', 'bayonet', 'machete', 'axe', 'chainsaw',
+    'straight razor', 'razor blade', 'scissors', 'throwing star', 'stiletto',
+    'switchblade', 'butterfly knife',
+    'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'explosive',
+    'taser', 'stun gun', 'nunchuck', 'nunchaku', 'baton', 'brass knuckle', 'pepper spray',
+  ];
+  const VINTED_WEAPONS_EXCLUDE_KEYWORDS = ['butter knife', 'table knife', 'electric razor', 'cartridge razor'];
+  const VINTED_WEAPONS_REASON = 'Vinted prohibits all sharp knives and bladed tools with a pointed tip (including kitchen knives), plus firearms, ammunition, and other weapons (Items Not Allowed policy). Only dull/rounded table knives and sealed electric or cartridge razors are allowed.';
+  function vintedRestrictionReason(category, title) {
+    const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
+    if (!haystack.trim()) return null;
+    const rules = [
+      { nameKeywords: VINTED_NOT_ALLOWED_NAME_KEYWORDS, excludeKeywords: VINTED_NOT_ALLOWED_EXCLUDE_KEYWORDS, reason: VINTED_NOT_ALLOWED_REASON },
+      { nameKeywords: VINTED_WEAPONS_NAME_KEYWORDS, excludeKeywords: VINTED_WEAPONS_EXCLUDE_KEYWORDS, reason: VINTED_WEAPONS_REASON },
+    ];
+    for (const rule of rules) {
+      const nameHit = rule.nameKeywords.some((kw) => haystack.indexOf(kw) !== -1);
+      if (!nameHit) continue;
+      const excludeHit = rule.excludeKeywords.some((kw) => haystack.indexOf(kw) !== -1);
+      if (excludeHit) continue;
+      return rule.reason;
+    }
+    return null;
+  }
+
   async function start() {
     if (!looksLikeVintedListingPage()) { await maybeShowVintedContinuePrompt(); return; }
     await sleep(600);
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+
+    const vintedReason = vintedRestrictionReason(queued.item.category, queued.item.title);
+    if (vintedReason) {
+      console.warn('[FAS Vinted] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, vintedReason);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(vintedReason) + '</div>');
+      await humanPause(1200, 1800);
+      try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
+      const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return null; } })();
+      if (next && next.ok && next.item) { location.href = LISTING_URL_HINT; } else { overlay('<b>FindA.Sale</b> \u2014 all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      return;
+    }
+
     try {
       await run(queued.item, queued.index, queued.total);
     } catch (e) {

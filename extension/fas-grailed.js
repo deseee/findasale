@@ -80,6 +80,35 @@
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // SAFETY GATE 2026-09-03 -- Grailed fashion-only allowlist pre-submit check (mirrors the
+  // Craigslist prohibited-items pre-submit check in fas-craigslist.js, but INVERTED: Grailed is a
+  // fashion/streetwear-only marketplace with no "prohibited items" blocklist -- instead the backend
+  // registry (packages/backend/src/services/marketplaceEligibilityRules.ts, GRAILED rule,
+  // CATEGORY_ALLOWLIST type) only lets an item through when its category/title contains at least
+  // one fashion-related keyword. So this checks the OPPOSITE condition from every other platform
+  // file in this extension: skip when NONE of the keywords below match (not when any DOES match).
+  // Empty/blank category+title is ALSO treated as a non-match and skipped -- matches the backend
+  // registry's own "can't confirm -> hidden by default" behavior for this specific allowlist rule,
+  // the opposite default from the other platforms' blocklists (which pass through on empty data).
+  // Runs as early as possible in start(), before any DOM interaction (no field filling, no
+  // clicking) -- see start()'s own call site below.
+  const GRAILED_FASHION_KEYWORDS = [
+    'clothing', 'apparel', 'shirt', 't-shirt', 'tee', 'pant', 'trouser', 'jean', 'denim',
+    'jacket', 'coat', 'outerwear', 'dress', 'skirt', 'suit', 'sportswear', 'activewear',
+    'streetwear', 'sweatshirt', 'sweater', 'hoodie', 'shoe', 'sneaker', 'footwear', 'boot',
+    'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessor', 'jewelry', 'jewellery', 'watch',
+    'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'glove', 'sock', 'underwear', 'swimwear',
+    'romper', 'jumpsuit', 'tracksuit', 'sweatpant',
+  ];
+  function grailedFashionMismatchReason(category, title) {
+    const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
+    const NOT_FASHION_REASON = "Grailed is a fashion/streetwear-only marketplace — this item's category doesn't look like apparel, footwear, or accessories.";
+    if (!haystack.trim()) return NOT_FASHION_REASON;
+    const isFashion = GRAILED_FASHION_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1);
+    if (!isFashion) return NOT_FASHION_REASON;
+    return null;
+  }
+
   // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed): Grailed enforces a hard 60-char
   // cap on Item Name ("Must be 60 characters or less", confirmed verbatim on the live page) and
   // this file never truncated -- a 78-char real title was rejected outright. Truncates at the
@@ -1732,6 +1761,33 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getGrailedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+
+    // SAFETY GATE 2026-09-03 -- fashion-only allowlist check, run as early as possible: right after
+    // we know a real queued item exists, before the duplicate-listing-guard check and before any
+    // DOM interaction (run()/fillListing() never gets called for a non-match). See
+    // grailedFashionMismatchReason's own comment above for the allowlist (not blocklist) polarity.
+    const grReason = grailedFashionMismatchReason(queued.item.category, queued.item.title);
+    if (grReason) {
+      console.warn('[FAS Grailed] skipping listing (fashion-only allowlist):', queued.item.id, queued.item.title, grReason);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(grReason) + '</div>');
+      await humanPause(1200, 1800);
+      // Never marks the item listed -- it genuinely was not posted, so it stays available for
+      // other marketplaces. Just advances the local queue, same mechanism used everywhere else in
+      // this file for a skip (see showDesignerNotFoundOverlay above).
+      try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue', itemId: queued.item.id }); } catch (e) {}
+      let next = null;
+      try { next = await chrome.runtime.sendMessage({ type: 'getGrailedQueueItem' }); } catch (e) {}
+      if (next && next.ok && next.item) {
+        // Fresh tab via background.js, not location.href -- see reopenGrailedTab's other call
+        // sites in this file for why an in-page reassignment doesn't reliably reset Grailed's SPA.
+        try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
+      } else {
+        overlay('<b>FindA.Sale</b> — all done. Happy selling!');
+        setTimeout(() => bar && bar.remove(), 4000);
+      }
+      return;
+    }
+
     // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD) -- see fas-poshmark.js's start() for the
     // full incident writeup (a resumed Poshmark queue entry produced a real duplicate live
     // listing this session). Applied here for consistency across all auto-publish-capable

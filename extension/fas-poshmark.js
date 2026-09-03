@@ -344,6 +344,58 @@
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // ---- Prohibited Items pre-submit safety gate (SAFETY, added S-EXT-POSHMARK-PROHIBITED-GATE-
+  // 2026-09-03 -- parity with fas-craigslist.js's craigslistRestrictionReason/CL_PROHIBITED_NAME_
+  // KEYWORDS). Background: a dagger was auto-submitted to Facebook Marketplace because that
+  // platform's content script had zero weapon-keyword check before submitting, which got the
+  // organizer's Facebook account restricted. Every marketplace content script was audited in
+  // response; this is Poshmark's version of the same fix. Mirrors
+  // packages/backend/src/services/marketplaceEligibilityRules.ts's two POSHMARK CATEGORY_BLOCKLIST
+  // rules and its checkEligibility()/buildHaystack() logic exactly: haystack = normalized
+  // "category title" (lowercased, whitespace-collapsed -- norm() here is the same transform as that
+  // file's normText()), a rule blocks on any nameKeywords substring match unless an excludeKeywords
+  // substring also matches, and every rule is evaluated in order (first blocking rule wins). Kept
+  // as a local copy (not imported) because this is a browser content script with no access to the
+  // backend package -- if the backend registry's POSHMARK rules ever change, this list must be
+  // updated to match by hand.
+  const POSHMARK_PROHIBITED_RULES = [
+    {
+      // Prohibited categories / unvetted electronics (backend rule, added S-CROSS-MARKETPLACE-
+      // AUDIT): Poshmark's Electronics is a curated/vetted catalog per Poshmark's own 2021 policy
+      // post, not a general secondhand-electronics marketplace.
+      nameKeywords: [
+        'food', 'opened beauty', 'used beauty', 'opened cosmetic', 'used cosmetic',
+        'used personal care', 'used underwear', 'counterfeit', 'replica', 'recalled',
+        'electronics', 'computer', 'laptop', 'television', 'appliance', 'printer', 'camera',
+      ],
+      excludeKeywords: ['sealed', 'unopened', 'new,', 'nwt', 'nwot'],
+      reason: 'This category isn\'t supported on Poshmark (prohibited item, or electronics outside Poshmark\'s curated catalog).',
+    },
+    {
+      // Weapons/alcohol (backend rule, added S-CROSS-MARKETPLACE-AUDIT-2026-09-03): confirmed via
+      // Poshmark's own Prohibited Items Policy (poshmark.com/prohibited_items_policy) -- firearms,
+      // weapons, knives, ammunition, and alcohol are prohibited.
+      nameKeywords: [
+        'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'switchblade',
+        'alcohol', 'liquor', 'wine', 'beer',
+      ],
+      excludeKeywords: ['kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife'],
+      reason: 'Poshmark prohibits firearms, weapons, knives, ammunition, and alcohol (Prohibited Items Policy).',
+    },
+  ];
+  function poshmarkRestrictionReason(category, title) {
+    const haystack = norm(String(category || '') + ' ' + String(title || ''));
+    if (!haystack.trim()) return null;
+    for (const rule of POSHMARK_PROHIBITED_RULES) {
+      const isBlocked = rule.nameKeywords.some((kw) => haystack.indexOf(kw) !== -1);
+      if (!isBlocked) continue;
+      const isExcluded = rule.excludeKeywords.some((kw) => haystack.indexOf(kw) !== -1);
+      if (isExcluded) continue;
+      return rule.reason;
+    }
+    return null;
+  }
+
   // ---- CAPTCHA / interstitial hard-stop (non-negotiable product/legal requirement, same
   // boundary as fas-craigslist.js's phone/email verification handling and fas-gumtree-au.js's
   // sign-in wall) -- broad, best-effort text/DOM scan. False positives (pausing when nothing was
@@ -2138,6 +2190,38 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) { clearPoshNavRetryState(); clearPoshPublishAttemptState(); return; } // nothing queued -- stay silent, also clean up any stale bounce-retry/publish-attempt markers
+
+    // SAFETY 2026-09-03 (S-EXT-POSHMARK-PROHIBITED-GATE, parity with fas-craigslist.js's call site
+    // for craigslistRestrictionReason): checked as early as possible -- right after we know an item
+    // is actually queued (queued.item confirmed present above), and BEFORE the publish-attempt/
+    // duplicate-listing checks below and before ANY DOM interaction (no field filling, no
+    // clicking). If either Poshmark prohibited-items rule matches, skip this item without ever
+    // touching the form: advance the queue WITHOUT calling markListed (same "stays available for
+    // other marketplaces" behavior as the already-listed skip path further below, which also omits
+    // markListed), then continue to the next item.
+    const poshRestrictionReason = poshmarkRestrictionReason(queued.item.category, queued.item.title);
+    if (poshRestrictionReason) {
+      console.warn('[FAS Poshmark] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, poshRestrictionReason);
+      const more = (queued.index + 1) < queued.total;
+      try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue', itemId: queued.item.id }); } catch (e) {}
+      clearPoshNavRetryState();
+      clearPoshPublishAttemptState();
+      if (more && queued.autoPublish !== false) {
+        overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(poshRestrictionReason) + '</div>' +
+          '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+        await humanPause(600, 1200);
+        await navigateToPoshmarkCreateListing();
+        return;
+      }
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(poshRestrictionReason) + '</div>' +
+        (more ? button('fas-posh-next', 'Next item &#9654;', true) : '') +
+        button('fas-posh-close', 'Close', false));
+      const next = document.getElementById('fas-posh-next');
+      if (next) next.onclick = async () => { await navigateToPoshmarkCreateListing(); };
+      closeBtnHandler();
+      return;
+    }
+
     // BUG FIX 2026-08-29 (S-EXT-POSHMARK-DUPLICATE-PUBLISH-CLICK, Patrick live-photographic-proof
     // of a real 4x duplicate listing AFTER the round-13 CAS fix already shipped): checked BEFORE the
     // existing checkItemListedStatus() network check below, not instead of it -- this is a same-tab,

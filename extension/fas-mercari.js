@@ -2224,12 +2224,73 @@
     const path = location.pathname.replace(/\/+$/, '');
     return path === '/sell';
   }
+
+  // ---- Prohibited Items pre-submit gate (S-EXT-MERCARI-PROHIBITED-GATE, added 2026-09-03) --
+  // same pattern as fas-craigslist.js's craigslistRestrictionReason(): a dagger was previously
+  // auto-submitted to Facebook Marketplace (which bans weapons) because that platform's content
+  // script had zero weapon-keyword check before submitting -- this got the organizer's Facebook
+  // account restricted. Checked in start(), immediately after the queued item is confirmed and
+  // BEFORE any DOM interaction (dismissWelcomePopup/waitForFormReady/fillListing all live inside
+  // run(), further below -- none of them have run yet at the point this is checked). Keyword and
+  // exclude lists sourced verbatim from packages/backend/src/services/marketplaceEligibilityRules.ts
+  // MERCARI rule (itself sourced from Mercari's own official Prohibited Items page).
+  const MERCARI_PROHIBITED_NAME_KEYWORDS = [
+    'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'blade', 'explosive',
+    'taser', 'stun gun', 'self defense',
+    'narcotic', 'drug', 'prescription', 'alcohol', 'liquor', 'wine', 'beer', 'tobacco',
+    'cigarette', 'cigar', 'vape', 'e-cigarette', 'cbd', 'supplement', 'vitamin', 'food',
+    'gold', 'silver', 'platinum', 'precious metal', 'bullion', 'loose gem', 'loose diamond',
+    'unset diamond', 'gemstone', 'cryptocurrency', 'crypto', 'gift card', 'prepaid card',
+    'counterfeit', 'replica', 'taxidermy', 'ivory', 'adult', 'pornographic', 'sex toy',
+    'fetish', 'lottery ticket', 'pull tab', 'raffle',
+  ];
+  // Any of these present anywhere in the haystack means the match is a false positive (e.g. a
+  // 'kitchen knife' matches 'knife' but is not a weapon; a 'gold ring' matches 'gold' but is
+  // ordinary jewelry) -- checked FIRST, before the prohibited-keyword scan below.
+  const MERCARI_PROHIBITED_EXCLUDE_KEYWORDS = [
+    'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
+    'ring', 'necklace', 'bracelet', 'earring', 'pendant', 'jewelry', 'jewellery', 'mounted',
+  ];
+  function mercariRestrictionReason(category, title) {
+    const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
+    if (!haystack.trim()) return null;
+    if (MERCARI_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) return null;
+    if (MERCARI_PROHIBITED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return "This category isn't allowed on Mercari (Prohibited Items policy).";
+    }
+    return null;
+  }
+
   async function start() {
     if (!isNewListingPage()) return; // e.g. /sell/draft/<id>/ -- an existing draft being reviewed/edited, never auto-fill
     await sleep(600);
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getMercariQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+
+    // Prohibited Items check -- runs before the duplicate-listing check and before any DOM
+    // interaction. See mercariRestrictionReason()'s comment above for the full incident writeup.
+    const restrictionReason = mercariRestrictionReason(queued.item.category, queued.item.title);
+    if (restrictionReason) {
+      console.warn('[FAS Mercari] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, restrictionReason);
+      const restrictionMore = (queued.index + 1) < queued.total;
+      try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: queued.item.id }); } catch (e) {}
+      if (restrictionMore && queued.autoPublish !== false) {
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- ' + escapeHtml(restrictionReason) + '</div>' +
+          '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+        await humanPause(600, 1200);
+        location.href = SELL_URL_HINT;
+        return;
+      }
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- ' + escapeHtml(restrictionReason) + '</div>' +
+        (restrictionMore ? button('fas-merc-next', 'Next item &#9654;', true) : '') +
+        button('fas-merc-close', 'Close', false));
+      const restrictionNext = document.getElementById('fas-merc-next');
+      if (restrictionNext) restrictionNext.onclick = () => { location.href = SELL_URL_HINT; };
+      closeBtnHandler();
+      return;
+    }
+
     // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD) -- see fas-poshmark.js's start() for the
     // full incident writeup (a resumed Poshmark queue entry produced a real duplicate live
     // listing this session). Applied here for consistency across all auto-publish-capable

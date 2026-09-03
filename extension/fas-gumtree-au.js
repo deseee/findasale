@@ -31,6 +31,43 @@
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // Gumtree Australia Prohibited Items gate (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- mirrors
+  // craigslistRestrictionReason() in fas-craigslist.js, part of the same cross-marketplace audit
+  // prompted by the Facebook dagger incident (fas-content.js's own pre-submit check had zero weapon
+  // keywords at the time, and the item auto-published to Facebook Marketplace, which bans weapons,
+  // getting the organizer's account restricted). This file's flow is manual-assist, not
+  // auto-publish -- the organizer copies details into Gumtree's own form and confirms themselves
+  // (see file header for why nothing here auto-fills/auto-submits) -- but the same prohibited-
+  // category risk still applies: without this check, a prohibited item would still be shown to the
+  // organizer as "ready to post" with copy-paste details and a photo-link list, same as any other
+  // item. Mirrors the GUMTREE_AU rule in marketplaceEligibilityRules.ts (kept in sync manually, same
+  // pattern as fas-craigslist.js's own CRAIGSLIST rule) -- keyword list sourced directly from
+  // Gumtree's own official "General posting rules" page, help.gumtree.com.au, Restricted Categories
+  // list, Nov 2024. Unlike the Craigslist list, this one deliberately bans 'knife'/'switchblade'
+  // outright with NO kitchen/culinary exclusion -- Gumtree's own policy text states no exception for
+  // knives.
+  const GT_PROHIBITED_NAME_KEYWORDS = [
+    'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'paintball gun', 'gel blaster',
+    'spear gun', 'tear gas', 'taser', 'stun gun', 'knife', 'switchblade',
+    'martial arts', 'archery', 'bow and arrow',
+    'firework', 'explosive',
+    'alcohol', 'tobacco', 'cigarette', 'vape', 'e-cigarette',
+    'ivory', 'rhino horn',
+    'counterfeit', 'replica',
+    'stolen',
+    'hazmat', 'narcotic', 'prescription',
+    'used cosmetic', 'used underwear',
+    'nitrous oxide',
+  ];
+  function gumtreeAuRestrictionReason(category, title) {
+    const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
+    if (!haystack.trim()) return null;
+    if (GT_PROHIBITED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Gumtree Australia does not allow this category of item (weapons including knives, alcohol/tobacco, drugs, counterfeit/replica goods, and several other restricted categories are prohibited).';
+    }
+    return null;
+  }
+
   // ---- sign-in wall detection (best-effort, DOM-based; informational only, NEVER a hard block --
   // if this misreads, the "I'm logged in, show me the details" button below lets the organizer
   // push past it manually). Requires a password field PLUS a sign-in-shaped heading/button before
@@ -215,6 +252,28 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getGumtreeAuQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+
+    // Gumtree Australia Prohibited Items gate (S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- checked
+    // BEFORE run()/doAssistStep() ever displays the item's details for copy-paste, and before
+    // looksLikeSignInWall() even reads the DOM for this item -- the earliest point in this file
+    // that knows what item is queued and hasn't touched the DOM for it yet. Skips straight to the
+    // next queued item -- markListed is NEVER called, so it stays available to push on other
+    // channels, same as fas-craigslist.js's identical gate. advanceGumtreeAuQueue is this file's
+    // own existing "move the queue pointer forward" message (already used at the end of
+    // doAssistStep's "I posted" handler, always paired there with markListed for a real post --
+    // here it's called alone, without markListed, which is exactly the skip-without-marking-listed
+    // behavior this gate needs).
+    const gtReason = gumtreeAuRestrictionReason(queued.item.category, queued.item.title);
+    if (gtReason) {
+      console.warn('[FAS Gumtree AU] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, gtReason);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(gtReason) + '</div>');
+      await sleep(1500);
+      try { await chrome.runtime.sendMessage({ type: 'advanceGumtreeAuQueue' }); } catch (e) {}
+      const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getGumtreeAuQueueItem' }); } catch (e) { return null; } })();
+      if (next && next.ok && next.item) { location.href = POST_URL; } else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      return;
+    }
+
     run(queued.item, queued.index, queued.total);
   }
 
