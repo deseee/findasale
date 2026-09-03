@@ -30,6 +30,7 @@ import { Router } from 'express';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { runVideoJobPipeline, GUIDE_TOPIC_FACTS } from '../services/video/videoJobOrchestrator';
+import { runBuildInPublicVideoJob } from '../services/video/buildInPublicVideo';
 import { classifyBatch } from '../services/video/footageClassifyService';
 import { ALL_TEMPLATES } from '../services/video/templates';
 import { FootageRole } from '@prisma/client';
@@ -49,6 +50,51 @@ router.use(authenticate, requireAdmin);
  * status=QUEUED), then runs the orchestrator synchronously to completion (or
  * real failure) before responding with the final VideoJob state.
  */
+/**
+ * POST /api/admin/video-pipeline/build-in-public
+ * Body: { headline: string, longBody: string, sourceFile: string } — exact
+ * whitelist, no other fields accepted (NO-MASS-ASSIGNMENT).
+ *
+ * ADR-118: turns already-Patrick-approved build-in-public copy into a real
+ * text-card + voiceover "press release" video. Runs SYNCHRONOUSLY, same
+ * reasoning as /dry-run above -- real wall-clock pipeline work, no async job
+ * queue built here on purpose. Creates its own VideoJob (inside
+ * runBuildInPublicVideoJob) rather than here, since that function owns the
+ * full create-through-stage lifecycle including the wrapping FootageBatch.
+ */
+router.post('/build-in-public', async (req, res) => {
+  const headline = req.body?.headline;
+  const longBody = req.body?.longBody;
+  const sourceFile = req.body?.sourceFile;
+
+  if (typeof headline !== 'string' || !headline.trim()) {
+    return res.status(400).json({ message: 'headline is required and must be a non-empty string' });
+  }
+  if (typeof longBody !== 'string' || !longBody.trim()) {
+    return res.status(400).json({ message: 'longBody is required and must be a non-empty string' });
+  }
+  if (typeof sourceFile !== 'string' || !sourceFile.trim()) {
+    return res.status(400).json({ message: 'sourceFile is required and must be a non-empty string' });
+  }
+
+  try {
+    const result = await runBuildInPublicVideoJob({ headline, longBody, sourceFile });
+    const finalJob = await prisma.videoJob.findUnique({ where: { id: result.videoJobId } });
+    return res.status(200).json({
+      jobId: result.videoJobId,
+      status: finalJob?.status ?? result.status,
+      stagedFile: finalJob?.stagedFile ?? result.stagedFile,
+      costCents: finalJob?.costCents ?? null,
+      reviewNotes: finalJob?.reviewNotes ?? null,
+    });
+  } catch (err: any) {
+    console.error('[videoPipelineAdmin] build-in-public pipeline run failed:', err);
+    return res.status(500).json({
+      message: err?.errorCode ? `${err.errorCode}: ${err.message}` : err?.message ?? 'Unknown pipeline failure',
+    });
+  }
+});
+
 router.post('/dry-run', async (req, res) => {
   const validTopics = Object.keys(GUIDE_TOPIC_FACTS);
   const guideTopic = req.body?.guideTopic;
