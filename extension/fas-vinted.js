@@ -1888,11 +1888,30 @@
       // filtered list shows a real "English" radio option, and clicking it sets the field and closes
       // the panel -- confirmed via screenshot before writing this, not assumed from Category/Brand's
       // pattern alone.
-      const langOk = await pickFromPanel('language', 'Language', 'English');
-      if (langOk) {
-        warnings.push('Language: no per-item language on file -- defaulted to "English" (FindA.Sale catalog is virtually all English-language items). Correct if this item is actually in a different language.');
+      // BUG FIX 2026-09-03 (Patrick live-reported: "now it's on a refresh loop with the modal"
+      // immediately after the Save-button fix shipped): could not get a clean look at the live
+      // cause -- Patrick's tab was genuinely mid-navigation on every check attempt (screenshot/
+      // network tools both timed out with "page is busy or mid-navigation"), so this is a
+      // mitigation, not a confirmed root-cause fix -- flagged as such, not dressed up as more
+      // certain than it is. Ruled OUT one real candidate directly: Vinted's site-wide nav-bar
+      // language switcher (`data-testid="language-selector-button"`, confirmed live on a fresh
+      // vinted.com load) has no `aria-label` at all, so it can't be what openerByLabel('Language')
+      // is matching via the aria-label path. Root cause of the actual reload is still unconfirmed.
+      // Regardless of cause, this guard is safe and correct on its own merits: never touch the
+      // field at all if it's already showing a real (non-placeholder) value -- most obviously
+      // relevant if this run is a retry after an earlier attempt already set it correctly.
+      const existingLangOpener = openerByLabel('Language');
+      const existingLangText = existingLangOpener ? norm(existingLangOpener.textContent) : '';
+      const langAlreadySet = existingLangText && existingLangText !== norm('Select a language');
+      if (langAlreadySet) {
+        console.log('[FAS Vinted] Language already shows "' + existingLangOpener.textContent.trim() + '" -- leaving it untouched.');
       } else {
-        warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
+        const langOk = await pickFromPanel('language', 'Language', 'English');
+        if (langOk) {
+          warnings.push('Language: no per-item language on file -- defaulted to "English" (FindA.Sale catalog is virtually all English-language items). Correct if this item is actually in a different language.');
+        } else {
+          warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
+        }
       }
     }
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
