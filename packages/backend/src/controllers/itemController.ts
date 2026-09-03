@@ -706,6 +706,12 @@ const ITEM_DETAIL_SELECT = {
         material: true,
         mpn: true,
         upc: true,
+        // BUG FIX 2026-09-03 (ADR-090 follow-up, Patrick-reported "still don't see the isbn on
+        // the edit item page"): isbn was never in this shared select at all -- mpn/upc (same
+        // identifier category, same public-shopper-select precedent below) were, isbn just got
+        // missed. Without this, getItemForEdit could never return isbn to the frontend no matter
+        // what the edit-item page itself does with it.
+        isbn: true,
         catalogSuggestions: true,
         tags: true,
         qrEmbedEnabled: true,

@@ -117,6 +117,11 @@ const EditItemPage = () => {
     material: '',
     upc: '',
     mpn: '',
+    // BUG FIX 2026-09-03 (ADR-090 follow-up, Patrick-reported "still don't see the isbn on
+    // the edit item page"): isbn existed on Item and in PostSaleEbayPanel.tsx (the separate
+    // post-sale eBay push panel), but was never in this form at all -- Vinted (and eBay Books)
+    // require it, and there was no way for an organizer to see or type it here.
+    isbn: '',
     // eBay Best Offers
     allowBestOffer: false,
     bestOfferAcceptPct: '' as number | '',
@@ -851,6 +856,7 @@ const EditItemPage = () => {
         material: item.material || '',
         upc: item.upc || '',
         mpn: item.mpn || '',
+        isbn: item.isbn || '',
         // eBay Best Offers: reverse-compute percentages from stored dollar amounts
         allowBestOffer: item.allowBestOffer === true,
         bestOfferAcceptPct: (() => {
@@ -1453,6 +1459,21 @@ const EditItemPage = () => {
                   placeholder="Barcode number"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  ISBN <span className="text-warm-400 font-normal">(books/comics only)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.isbn}
+                  onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
+                  placeholder="Book/comic ISBN"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+                {formData.isbn && ![10, 13].includes(formData.isbn.replace(/[-\s]/g, '').length) && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">ISBN is typically 10 or 13 characters</p>
+                )}
               </div>
             </div>
 

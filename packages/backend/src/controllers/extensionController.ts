@@ -111,6 +111,12 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // this select, so those autofill lines were silent no-ops even for brand (which the
       // organizer-facing edit-item page has captured all along via a separate, unrelated select).
       brand: true, size: true, color: true, material: true,
+      // BUG FIX 2026-09-03 (ADR-090 follow-up, Patrick-reported the Vinted ISBN fill "didn't
+      // work" after reloading the extension): same silent-no-op class as the brand/size/color/
+      // material bug fixed 2026-08-18 above -- fas-vinted.js's ISBN tryFill call always saw
+      // item.isbn === undefined because isbn was never in this select either, regardless of
+      // what's actually stored on the item.
+      isbn: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
       // 2026-08-27: organizer's per-item crosslister free-shipping toggle -- see the `shaped`
       // payload build below (crosslisterFreeShipping field) for why this exists.
@@ -378,6 +384,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     size: it.size,
     color: it.color,
     material: it.material,
+    // BUG FIX 2026-09-03 (ADR-090 follow-up): same field-by-field-drop bug documented in the
+    // comment above for brand/size/color/material -- isbn was in the Prisma select (now) but
+    // never listed in this hand-built `shaped` object, so fas-vinted.js's ISBN tryFill always
+    // received undefined regardless of what's actually stored on the item.
+    isbn: it.isbn,
     // FB shipping eligibility. Force LOCAL_PICKUP_ONLY when the item is not actually shippable:
     // an explicit LOCAL_PICKUP_ONLY override, OR no usable package weight (FB cannot issue a
     // prepaid label without a weight, so the extension would otherwise stall on the Delivery
