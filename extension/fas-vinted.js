@@ -776,6 +776,29 @@
       }
       clickTarget.click();
       await sleep(350);
+      // BUG FIX 2026-09-03 (Patrick live-reported: "a new modal popped up for language" and stayed
+      // open, blocking the rest of the run): live-confirmed via console trace this run used a
+      // DIFFERENT UI shape than the one tested when this Language fix was written -- a real modal
+      // dialog (title "Language", two radio options, explicit "Save"/"Cancel" buttons) instead of
+      // the inline auto-apply dropdown panel every other field here uses (Category/Brand/Size/
+      // Color/Material/Condition all commit and self-close the instant you click a leaf -- no Save
+      // step). closePanel()'s Escape-key-then-outside-click approach does not commit a modal like
+      // this (Escape/outside-click on a real dialog conventionally CANCELS, not saves) -- so the
+      // click landed on the already-selected "English, US" radio (a no-op selection-wise) and the
+      // modal was simply left open, which is exactly what Patrick saw. Generalized, not Language-
+      // specific: click an explicit Save/Confirm/Apply/Done button INSIDE the panel first if one
+      // exists (only ever needed for a real modal; auto-apply panels have no such button so this is
+      // a no-op for them), THEN fall through to the existing closePanel() as a second-pass safety
+      // net either way.
+      const saveBtn = Array.from(panel.querySelectorAll('button, [role="button"]')).find((el) => {
+        if (el.offsetParent === null) return false;
+        const t = norm(el.textContent);
+        return t === 'save' || t === 'confirm' || t === 'apply' || t === 'done';
+      });
+      if (saveBtn) {
+        saveBtn.click();
+        await sleep(300);
+      }
       await closePanel(fieldId);
       return true;
     }

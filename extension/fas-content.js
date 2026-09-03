@@ -12,21 +12,59 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-  // Facebook Commerce Policy: coins/currency items cannot be listed on Facebook Marketplace.
-  // Mirrors isFacebookRestrictedCoinOrCurrencyItem() in extensionController.ts (kept in sync
-  // manually; same "trivial pure map -- not worth a shared import" pattern as
-  // toFacebookCondition's mirror comment in that file). Text-only here -- queue entries carry
-  // item.category but not ebayCategoryId, so this is the free-text fallback slice of the
-  // backend check, not the ID-based primary check. This is DEFENSE-IN-DEPTH ONLY: popup.js
-  // already disables selection and background.js already skips queueing these items for
-  // Facebook, and the backend's markItemListed call is the real authoritative reject. This
-  // guard exists purely in case an item was queued before this fix shipped (a stale cached
-  // fasQueue) or some other path slips one through.
+  // Facebook Commerce Policy: coins/currency AND weapons/ammunition/explosives cannot be listed
+  // on Facebook Marketplace. Mirrors isFacebookRestrictedItem()/facebookRestrictionReason() in
+  // extensionController.ts (kept in sync manually; same "trivial pure map -- not worth a shared
+  // import" pattern as toFacebookCondition's mirror comment in that file). Text-only here --
+  // queue entries carry item.category and item.title but not ebayCategoryId, so this is the
+  // free-text fallback slice of the backend check, not the ID-based primary check. This is
+  // DEFENSE-IN-DEPTH ONLY: popup.js already disables selection and background.js already skips
+  // queueing these items for Facebook, and the backend's markItemListed call is the real
+  // authoritative reject. This guard exists purely in case an item was queued before a fix
+  // shipped (a stale cached fasQueue) or some other path slips one through.
+  //
+  // FIXED S-FB-WEAPON-COIN-FIX-2026-09-03 (live incident): this fallback previously had ZERO
+  // weapons keywords at all (only coin/currency), so it did nothing to stop a dagger from being
+  // auto-filled and auto-SUBMITTED to Facebook -- this is the one gate in the whole pipeline that
+  // runs immediately before Facebook's own form is filled in, so its gap here is what actually let
+  // the dagger through and got the account restricted. Also FIXED: this check previously had NO
+  // excludeKeywords carve-out at all (unlike the backend's), so it would have wrongly skipped
+  // legitimate coin accessories (tubes, slab inserts, holders) too -- it never got the chance to
+  // fire wrong in practice only because popup.js's badge (driven by the backend's correct
+  // exclude-aware check) already prevented those items from being queued for Facebook in the
+  // first place; this fallback was simply stale/wrong the whole time. Keyword lists below are kept
+  // literally in sync with marketplaceEligibilityRules.ts's two FACEBOOK rules -- if either
+  // changes there, update here too.
   const FB_COIN_CURRENCY_NAME_KEYWORDS = ['coin', 'currency', 'paper money'];
-  function isFacebookRestrictedCoinOrCurrencyItem(category) {
-    if (!category) return false;
-    const lower = String(category).toLowerCase();
-    return FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => lower.indexOf(kw) !== -1);
+  const FB_COIN_CURRENCY_EXCLUDE_KEYWORDS = [
+    'tube', 'holder', 'capsule', 'flip', 'album', 'slab', 'sleeve', 'case', 'display',
+    'book', 'page', 'mount', 'folder', 'box', 'organizer', 'storage',
+  ];
+  const FB_WEAPON_NAME_KEYWORDS = [
+    'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'explosive',
+    'dagger', 'sword', 'bayonet', 'blade', 'knife',
+    'taser', 'stun gun', 'nunchuck', 'nunchaku', 'baton', 'brass knuckle',
+    'pepper spray', 'switchblade', 'butterfly knife',
+  ];
+  const FB_WEAPON_EXCLUDE_KEYWORDS = [
+    'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
+    'chef knife', 'paring knife', 'bread knife', 'steak knife',
+  ];
+  function facebookRestrictionReason(category, title) {
+    const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
+    if (!haystack.trim()) return null;
+    if (FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)
+        && !FB_COIN_CURRENCY_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing coins or currency (Commerce Policy).';
+    }
+    if (FB_WEAPON_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)
+        && !FB_WEAPON_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing weapons, ammunition, or explosives (Commerce Policy).';
+    }
+    return null;
+  }
+  function isFacebookRestrictedItem(category, title) {
+    return facebookRestrictionReason(category, title) !== null;
   }
 
   const realClick = SEL.realClick; // shared with fas-remove.js -- see fas-selectors.js
@@ -896,13 +934,15 @@
     let q;
     try { q = await chrome.runtime.sendMessage({ type: 'getQueueItem' }); } catch (e) { return; }
     if (!q || !q.ok || !q.item) return; // nothing queued -- stay silent
-    // Facebook Commerce Policy gate (coins/currency) -- see isFacebookRestrictedCoinOrCurrencyItem
-    // above. Defense-in-depth: skip straight to the next queued item rather than filling out
-    // Facebook's form for it. This item is NOT marked listed (mark() is never called), so it
-    // stays available to push on eBay/other channels.
-    if (isFacebookRestrictedCoinOrCurrencyItem(q.item.category)) {
-      console.warn('[FAS] skipping Facebook listing for coin/currency item (Commerce Policy):', q.item.id, q.item.title);
-      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(q.item.title || 'this item') + '</b> -- Facebook Marketplace does not allow listing coins or currency (Commerce Policy).</div>');
+    // Facebook Commerce Policy gate (coins/currency AND weapons/ammunition/explosives as of
+    // S-FB-WEAPON-COIN-FIX-2026-09-03) -- see facebookRestrictionReason above. Defense-in-depth:
+    // skip straight to the next queued item rather than filling out Facebook's form for it. This
+    // item is NOT marked listed (mark() is never called), so it stays available to push on
+    // eBay/other channels.
+    const fbReason = facebookRestrictionReason(q.item.category, q.item.title);
+    if (fbReason) {
+      console.warn('[FAS] skipping Facebook listing (Commerce Policy):', q.item.id, q.item.title, fbReason);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(q.item.title || 'this item') + '</b> -- ' + escapeHtml(fbReason) + '</div>');
       await humanPause(1200, 1800);
       await advanceAuto();
       return;

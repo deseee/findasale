@@ -28,17 +28,32 @@ function buildDescription(description: string | null | undefined, saleId: string
   return base ? `${base}\n\n${link}` : link;
 }
 
-// Facebook Commerce Policy (coins/currency) + the other 4 platforms' category eligibility now
-// live in a single shared registry (marketplaceEligibilityRules.ts, S-EXT-BATCH-2026-08-19) --
-// this function is kept as a thin wrapper so none of its existing call sites below need to
-// change. FACEBOOK-SPECIFIC ONLY -- must never affect eBay, native checkout, Craigslist, or
-// Gumtree AU's pushability (those platforms have no rule in the registry -- checkEligibility
-// returns eligible:true for any platform with no rule defined).
-function isFacebookRestrictedCoinOrCurrencyItem(
+// Facebook Commerce Policy (coins/currency, and as of S-FB-WEAPON-COIN-FIX-2026-09-03, weapons/
+// ammunition/explosives too) + the other 4 platforms' category eligibility now live in a single
+// shared registry (marketplaceEligibilityRules.ts, S-EXT-BATCH-2026-08-19). Renamed from the old
+// coin/currency-only function name 2026-09-03 -- it stopped being coin/currency-only the moment
+// the weapons rule was added to the registry; every call site below updated to match.
+// FACEBOOK-SPECIFIC ONLY -- must never affect eBay, native checkout, Craigslist, or Gumtree AU's
+// pushability (those platforms have no rule in the registry -- checkEligibility returns
+// eligible:true for any platform with no rule defined). `title` added 2026-09-03 (see
+// EligibilityCheckItem.title comment, marketplaceEligibilityRules.ts) -- required for the
+// exclude-keyword carve-out to see accessory words that only appear in the title, not category.
+function isFacebookRestrictedItem(
   category: string | null | undefined,
-  ebayCategoryId: string | null | undefined
+  ebayCategoryId: string | null | undefined,
+  title: string | null | undefined
 ): boolean {
-  return !checkEligibility('FACEBOOK', { category, ebayCategoryId }).eligible;
+  return !checkEligibility('FACEBOOK', { category, ebayCategoryId, title }).eligible;
+}
+
+// Returns the actual blocking reason (weapons vs coin/currency vs none) instead of a boolean --
+// used wherever the caller needs to surface WHY an item is blocked, not just that it is.
+function facebookRestrictionReason(
+  category: string | null | undefined,
+  ebayCategoryId: string | null | undefined,
+  title: string | null | undefined
+): string | null {
+  return checkEligibility('FACEBOOK', { category, ebayCategoryId, title }).reason;
 }
 
 // GET /api/extension/items — the organizer's listable items + Marketplace status.
@@ -325,14 +340,15 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // department/gender-level signal (e.g. Grailed's Menswear/Womenswear picker) can still use it --
     // never a straight replacement, since ebayCategoryName alone drops that signal entirely.
     categoryBreadcrumb: it.category || null,
-    // Facebook Commerce Policy gate (coins/currency) -- see isFacebookRestrictedCoinOrCurrencyItem
-    // above. FB-specific only; does not affect eBay/craigslist/gumtree/native-checkout fields
-    // elsewhere in this same payload. Surfaced so popup.js can disable/badge the item on the
-    // Facebook channel specifically while leaving it selectable for every other channel.
-    facebookRestricted: isFacebookRestrictedCoinOrCurrencyItem(it.category, it.ebayCategoryId),
-    facebookRestrictedReason: isFacebookRestrictedCoinOrCurrencyItem(it.category, it.ebayCategoryId)
-      ? 'Facebook Marketplace does not allow listing coins or currency (Commerce Policy).'
-      : null,
+    // Facebook Commerce Policy gate (coins/currency AND weapons/ammunition/explosives as of
+    // S-FB-WEAPON-COIN-FIX-2026-09-03) -- see isFacebookRestrictedItem above. FB-specific only;
+    // does not affect eBay/craigslist/gumtree/native-checkout fields elsewhere in this same
+    // payload. Surfaced so popup.js can disable/badge the item on the Facebook channel
+    // specifically while leaving it selectable for every other channel. Reason now comes directly
+    // from the registry's own per-rule reason string instead of a hardcoded coin/currency-only
+    // message, so a blocked weapon shows the correct weapons reason, not a misleading coins one.
+    facebookRestricted: isFacebookRestrictedItem(it.category, it.ebayCategoryId, it.title),
+    facebookRestrictedReason: facebookRestrictionReason(it.category, it.ebayCategoryId, it.title),
     // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19, marketplaceEligibilityRules.ts)
     // -- Grailed/Poshmark/Mercari/Vinted only; Craigslist/Gumtree AU/Facebook have no entry here
     // (Facebook keeps its own dedicated facebookRestricted/-Reason fields above for backward
@@ -353,11 +369,15 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // scale, not just this one item. Fixed by using the exact same `ebayCategoryName || category`
     // fallback the extension-facing `category` field above already uses, so the eligibility check
     // reasons about the SAME resolved category value the organizer will actually see filled in.
+    // `title: it.title` added S-FB-WEAPON-COIN-FIX-2026-09-03 -- same category+title combined
+    // haystack fix as the FACEBOOK checks above, applied here too since these 4 platforms share
+    // the exact same excludeKeywords carve-out mechanism (e.g. Mercari's kitchen/cutlery carve-out
+    // has the identical category-vs-title gap the coin-accessory bug had).
     eligibility: {
-      GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
-      POSHMARK: checkEligibility('POSHMARK', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
-      MERCARI: checkEligibility('MERCARI', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
-      VINTED: checkEligibility('VINTED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId }),
+      GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
+      POSHMARK: checkEligibility('POSHMARK', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
+      MERCARI: checkEligibility('MERCARI', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
+      VINTED: checkEligibility('VINTED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
@@ -598,11 +618,19 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   if (platform === 'FACEBOOK') {
     const fbItem = await prisma.item.findUnique({
       where: { id: itemId },
-      select: { category: true, ebayCategoryId: true },
+      select: { category: true, ebayCategoryId: true, title: true },
     });
-    if (fbItem && isFacebookRestrictedCoinOrCurrencyItem(fbItem.category, fbItem.ebayCategoryId)) {
-      res.status(400).json({ message: 'Coins and currency items cannot be listed on Facebook Marketplace (Facebook Commerce Policy).' });
-      return;
+    // S-FB-WEAPON-COIN-FIX-2026-09-03: message now comes from the registry's own reason string
+    // (covers weapons/ammunition/explosives, not just coins/currency) instead of a hardcoded
+    // coin-only message -- a blocked dagger used to get no server-side reject message at all
+    // (no weapons rule existed), and would have shown a misleading "coins and currency" message
+    // even after the rule existed, if the message string hadn't been generalized too.
+    if (fbItem) {
+      const reason = facebookRestrictionReason(fbItem.category, fbItem.ebayCategoryId, fbItem.title);
+      if (reason) {
+        res.status(400).json({ message: reason });
+        return;
+      }
     }
   }
 
@@ -1014,7 +1042,7 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
     .filter((i) => {
       if (i.platform !== 'FACEBOOK') return true;
       const full = availableItemById.get(i.id);
-      return !full || !isFacebookRestrictedCoinOrCurrencyItem(full.category, full.ebayCategoryId);
+      return !full || !isFacebookRestrictedItem(full.category, full.ebayCategoryId, full.title);
     })
     .map((i) => ({ id: i.id, title: i.title, saleId: i.saleId, platform: i.platform, renewDueAt: (i.renewDueAt as Date).toISOString() }));
 
@@ -1103,9 +1131,10 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
 // IDOR: ownership verified via assertItemOwned before any mutation, same pattern as
 // markItemListed/markItemRemoved/markItemSoldOnFacebook above.
 //
-// Facebook Commerce Policy gate (coins/currency) -- reuses isFacebookRestrictedCoinOrCurrencyItem,
+// Facebook Commerce Policy gate (coins/currency AND weapons/ammunition/explosives as of
+// S-FB-WEAPON-COIN-FIX-2026-09-03) -- reuses isFacebookRestrictedItem/facebookRestrictionReason,
 // the same authoritative reject markItemListed applies for platform === 'FACEBOOK'. A
-// coin/currency item can't be auto-posted to Facebook for policy reasons, so it must not be
+// blocked item can't be auto-posted to Facebook for policy reasons, so it must not be
 // manually markable as Facebook-posted either -- same restriction, same reasoning.
 //
 // Idempotent: mirrors the "most-recent-row-per-item+platform wins" idiom used by
@@ -1138,11 +1167,16 @@ export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Respo
   if (platform === 'FACEBOOK') {
     const fbItem = await prisma.item.findUnique({
       where: { id: itemId },
-      select: { category: true, ebayCategoryId: true },
+      select: { category: true, ebayCategoryId: true, title: true },
     });
-    if (fbItem && isFacebookRestrictedCoinOrCurrencyItem(fbItem.category, fbItem.ebayCategoryId)) {
-      res.status(400).json({ message: 'Coins and currency items cannot be listed on Facebook Marketplace (Facebook Commerce Policy).' });
-      return;
+    // See markItemListed's identical gate above for why this reads the registry's own reason
+    // string now instead of a hardcoded coin/currency-only message (S-FB-WEAPON-COIN-FIX-2026-09-03).
+    if (fbItem) {
+      const reason = facebookRestrictionReason(fbItem.category, fbItem.ebayCategoryId, fbItem.title);
+      if (reason) {
+        res.status(400).json({ message: reason });
+        return;
+      }
     }
   }
 

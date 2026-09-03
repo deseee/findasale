@@ -33,6 +33,15 @@ export type EligibilityPlatform = 'FACEBOOK' | 'GRAILED' | 'POSHMARK' | 'MERCARI
 export interface EligibilityCheckItem {
   category: string | null | undefined;
   ebayCategoryId: string | null | undefined;
+  /** Added S-FB-WEAPON-COIN-FIX-2026-09-03: excludeKeywords/nameKeywords matching now checks
+   * category + title combined (see buildHaystack below), not category alone. Root-caused via a
+   * live production query this session: real coin-accessory items (e.g. "BCW Quarter Coin Tubes,
+   * Each, Crystal Clear Storage") carry category="Coins & Paper Money" (no "tube"/"slab"/"holder"
+   * substring anywhere in the category text) while the accessory word only appears in the TITLE --
+   * so the existing exclude carve-out (which only tested category) could never fire and these
+   * always-allowed items were wrongly blocked. Optional -- omitting it just means less signal for
+   * the exclude-keyword carve-out to work with, not a hard failure. */
+  title?: string | null | undefined;
 }
 
 export interface EligibilityResult {
@@ -105,6 +114,34 @@ const RULES: EligibilityRule[] = [
     ],
     ebayCategoryIds: FB_COIN_CURRENCY_CATEGORY_IDS,
     reason: 'Facebook Marketplace does not allow listing coins or currency (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK WEAPONS (added S-FB-WEAPON-COIN-FIX-2026-09-03) -- live incident: a dagger was
+  // pushed to Facebook Marketplace because NO weapons rule existed anywhere in this registry for
+  // platform FACEBOOK -- confirmed via grep, zero matches for weapon/firearm/gun/dagger/knife/
+  // blade/ammo in extensionController.ts or this file prior to this fix. Facebook resulted in an
+  // account-level restriction, not just a listing removal. Keyword scope sourced from Meta's
+  // Commerce Policy / Restricted Goods pages (checked this session): firearms and firearm parts,
+  // ammunition and reloading components, paintball/BB/pellet guns, explosives, non-culinary
+  // knives/blades/spears (the policy language specifically carves out CULINARY knives), tasers,
+  // stun guns, nunchucks, batons, brass knuckles, pepper spray, and other self-defense weapons.
+  // excludeKeywords mirrors MERCARI's existing culinary carve-out below (kitchen cutlery IS
+  // allowed) -- deliberately does NOT carve out generic "pocket knife"/"utility knife" since those
+  // are not culinary and Facebook does remove them in practice.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: [
+      'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'explosive',
+      'dagger', 'sword', 'bayonet', 'blade', 'knife',
+      'taser', 'stun gun', 'nunchuck', 'nunchaku', 'baton', 'brass knuckle',
+      'pepper spray', 'switchblade', 'butterfly knife',
+    ],
+    excludeKeywords: [
+      'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
+      'chef knife', 'paring knife', 'bread knife', 'steak knife',
+    ],
+    reason: 'Facebook Marketplace does not allow listing weapons, ammunition, or explosives (Commerce Policy).',
   },
 
   // ---- GRAILED -- fashion/streetwear/designer-apparel ONLY. Confirmed 2026-08-19: site's own
@@ -199,39 +236,61 @@ const RULES: EligibilityRule[] = [
   },
 ];
 
-function normCategory(category: string | null | undefined): string {
-  return (category || '').toLowerCase();
+function normText(text: string | null | undefined): string {
+  return (text || '').toLowerCase();
+}
+
+/**
+ * S-FB-WEAPON-COIN-FIX-2026-09-03: category-only text is what caused the coin-tube/coin-slab
+ * false-positive (see EligibilityCheckItem.title comment) -- a coin accessory's category is
+ * typically the generic "Coins & Paper Money" while the word that actually identifies it as an
+ * ALLOWED accessory (tube/slab/holder/etc.) only ever appears in the item's title. Combining both
+ * fields gives every nameKeywords/excludeKeywords match real signal from both. Category is listed
+ * first so a bare category match still counts as a match with no title at all (title is optional).
+ */
+function buildHaystack(item: EligibilityCheckItem): string {
+  return `${normText(item.category)} ${normText(item.title)}`.trim();
 }
 
 /**
  * Checks whether an item is eligible to be listed on the given marketplace, per this registry.
  * Returns { eligible: true, reason: null } for any platform with no rule defined here
  * (e.g. CRAIGSLIST, GUMTREE_AU -- general marketplaces this registry doesn't gate at all).
+ *
+ * S-FB-WEAPON-COIN-FIX-2026-09-03: previously used RULES.find(), so only the FIRST rule for a
+ * platform was ever consulted -- a real latent bug once a platform needed more than one rule
+ * (exactly what adding the FACEBOOK weapons rule alongside the existing coin/currency rule hit).
+ * Now evaluates EVERY rule for the platform: any blocking CATEGORY_BLOCKLIST match, or any failed
+ * CATEGORY_ALLOWLIST match, makes the item ineligible (first blocking rule's reason wins).
  */
 export function checkEligibility(platform: EligibilityPlatform, item: EligibilityCheckItem): EligibilityResult {
-  const rule = RULES.find((r) => r.platform === platform);
-  if (!rule) return { eligible: true, reason: null };
+  const rules = RULES.filter((r) => r.platform === platform);
+  if (rules.length === 0) return { eligible: true, reason: null };
 
-  if (rule.type === 'CATEGORY_BLOCKLIST') {
-    if (rule.ebayCategoryIds && item.ebayCategoryId && rule.ebayCategoryIds.includes(item.ebayCategoryId)) {
+  for (const rule of rules) {
+    if (rule.type === 'CATEGORY_BLOCKLIST') {
+      if (rule.ebayCategoryIds && item.ebayCategoryId && rule.ebayCategoryIds.includes(item.ebayCategoryId)) {
+        return { eligible: false, reason: rule.reason };
+      }
+      const haystack = buildHaystack(item);
+      if (!haystack) continue; // no data -> no reason to block on this rule, see file header
+      const isBlocked = rule.nameKeywords.some((kw) => haystack.includes(kw));
+      if (!isBlocked) continue;
+      const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
+      if (isExcluded) continue;
       return { eligible: false, reason: rule.reason };
     }
-    const category = normCategory(item.category);
-    if (!category) return { eligible: true, reason: null }; // no data -> no reason to block, see file header
-    const isBlocked = rule.nameKeywords.some((kw) => category.includes(kw));
-    if (!isBlocked) return { eligible: true, reason: null };
-    const isExcluded = (rule.excludeKeywords || []).some((kw) => category.includes(kw));
-    if (isExcluded) return { eligible: true, reason: null };
-    return { eligible: false, reason: rule.reason };
+
+    if (rule.type === 'CATEGORY_ALLOWLIST') {
+      const haystack = buildHaystack(item);
+      if (!haystack) return { eligible: false, reason: rule.reason }; // can't confirm -> hidden by default, see file header
+      const isAllowed = rule.nameKeywords.some((kw) => haystack.includes(kw));
+      if (!isAllowed) return { eligible: false, reason: rule.reason };
+    }
+
+    // ATTRIBUTE_AGE_ALLOWLIST / PREREQUISITE_LOOKUP: reserved, no rules of these shapes exist yet
+    // -- no-op, neither blocks nor requires anything.
   }
 
-  if (rule.type === 'CATEGORY_ALLOWLIST') {
-    const category = normCategory(item.category);
-    if (!category) return { eligible: false, reason: rule.reason }; // can't confirm -> hidden by default, see file header
-    const isAllowed = rule.nameKeywords.some((kw) => category.includes(kw));
-    return isAllowed ? { eligible: true, reason: null } : { eligible: false, reason: rule.reason };
-  }
-
-  // ATTRIBUTE_AGE_ALLOWLIST / PREREQUISITE_LOOKUP: reserved, no rules of these shapes exist yet.
   return { eligible: true, reason: null };
 }
