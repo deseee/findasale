@@ -25,6 +25,36 @@
   function q(sel) { return document.querySelector(sel); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // Craigslist Prohibited Items gate (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- this platform
+  // auto-publishes BY DEFAULT (see file header above), the exact same risk profile as the Facebook
+  // incident that triggered this cross-marketplace audit (a dagger was auto-submitted to Facebook
+  // because fas-content.js's own pre-submit check had zero weapon keywords at the time). Craigslist
+  // had NO check anywhere before this fix -- confirmed via grep, this file never referenced
+  // weapon/firearm/gun/alcohol/counterfeit in any form prior to this session. Mirrors
+  // isFacebookRestrictedItem()/facebookRestrictionReason() in extensionController.ts and the
+  // CRAIGSLIST rule in marketplaceEligibilityRules.ts (kept in sync manually, same pattern as
+  // fas-content.js's own coin/weapon check) -- keyword lists sourced directly from
+  // craigslist.org/about/prohibited, fetched live this session. Deliberately does NOT ban generic
+  // knives/swords -- see the backend rule's own comment for why.
+  const CL_PROHIBITED_NAME_KEYWORDS = [
+    'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'gunpowder', 'firework', 'explosive',
+    'stun gun', 'spear gun', 'taser',
+    'prescription', 'narcotic',
+    'alcohol', 'liquor', 'wine', 'beer', 'tobacco', 'cigarette', 'cigar',
+    'recalled', 'hazmat',
+    'ivory',
+    'counterfeit', 'replica', 'pirated',
+    'stolen',
+  ];
+  function craigslistRestrictionReason(category, title) {
+    const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
+    if (!haystack.trim()) return null;
+    if (CL_PROHIBITED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Craigslist does not allow this category of item (weapons, alcohol/tobacco, drugs, counterfeit/replica goods, and several other restricted categories are prohibited).';
+    }
+    return null;
+  }
+
   function hardError(step, detail) {
     const e = new Error(detail || ('Could not find what I expected on the ' + step + ' step.'));
     e.fasStep = step;
@@ -1079,6 +1109,25 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent (page also loads for normal use)
+
+    // Craigslist Prohibited Items gate (S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- checked BEFORE any
+    // DOM interaction, same placement as fas-content.js's identical Facebook check. Defense-in-depth:
+    // popup.js's PLATFORM_ELIGIBILITY_KEY/isIneligibleOnCurrentChannel already hides/disables these
+    // items by default, but "Show all items" can override that, and this is the earliest point in
+    // this file that can still stop a genuinely-prohibited item before it's ever filled+published.
+    // Skips straight to the next queued item -- markListed is NEVER called, so it stays available to
+    // push on other channels.
+    const clReason = craigslistRestrictionReason(queued.item.category, queued.item.title);
+    if (clReason) {
+      console.warn('[FAS Craigslist] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, clReason);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(clReason) + '</div>');
+      await humanPause(1200, 1800);
+      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: queued.item.id }); } catch (e) {}
+      const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return null; } })();
+      if (next && next.ok && next.item) { location.href = POST_URL; } else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      return;
+    }
+
     currentRunArgs = { item: queued.item, index: queued.index, total: queued.total, autoPublish: queued.autoPublish !== false };
     // Watch for client-side content changes (round 8 fix -- see setupReRunObserver() above) BEFORE
     // the first run so a transition that happens mid-run() (e.g. verification wall clearing while

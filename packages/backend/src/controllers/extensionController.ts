@@ -370,10 +370,18 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // fallback the extension-facing `category` field above already uses, so the eligibility check
     // reasons about the SAME resolved category value the organizer will actually see filled in.
     // `title: it.title` added S-FB-WEAPON-COIN-FIX-2026-09-03 -- same category+title combined
-    // haystack fix as the FACEBOOK checks above, applied here too since these 4 platforms share
+    // haystack fix as the FACEBOOK checks above, applied here too since these platforms share
     // the exact same excludeKeywords carve-out mechanism (e.g. Mercari's kitchen/cutlery carve-out
     // has the identical category-vs-title gap the coin-accessory bug had).
+    // CRAIGSLIST/GUMTREE_AU added S-CROSS-MARKETPLACE-AUDIT-2026-09-03 -- both previously had NO
+    // entry here at all (not even a comment explaining why, unlike Facebook's deliberate omission
+    // for backward-compat reasons) despite fas-craigslist.js supporting full auto-publish CHECKED
+    // BY DEFAULT. This is what lets popup.js's PLATFORM_ELIGIBILITY_KEY map (see popup.js, updated
+    // same session) hide/badge ineligible items on those two tabs the same way it already does for
+    // Grailed/Poshmark/Mercari/Vinted.
     eligibility: {
+      CRAIGSLIST: checkEligibility('CRAIGSLIST', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
+      GUMTREE_AU: checkEligibility('GUMTREE_AU', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       POSHMARK: checkEligibility('POSHMARK', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       MERCARI: checkEligibility('MERCARI', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
@@ -611,10 +619,21 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   // whole point of that toggle is letting the organizer list an item the category filter got
   // wrong -- see PLATFORM_ELIGIBILITY_KEY/checkResumeableQueue in popup.js). The category registry
   // (checkEligibility, marketplaceEligibilityRules.ts) stays a client-side UX filter (hide by
-  // default + override) for these 4 platforms, not a server-side hard gate. Facebook is different
-  // in kind, not just degree -- its flow is fully automated (fas-content.js fills AND submits),
-  // so its policy check genuinely prevents an attempted auto-publish, which is why it keeps its
-  // authoritative reject unchanged below.
+  // default + override) for these platforms, not a server-side hard gate here.
+  // CORRECTED S-CROSS-MARKETPLACE-AUDIT-2026-09-03: this comment used to justify Facebook's special
+  // treatment as "fully automated... Facebook is different in kind, not just degree" -- that premise
+  // is now STALE. Craigslist ALSO auto-publishes by default (2026-07-17 locked decision, confirmed
+  // this session), and Grailed/Poshmark/Mercari/Vinted support auto-publish as a PRO/TEAMS opt-in
+  // too -- Facebook is no longer uniquely automated. The REAL reason this endpoint's hard reject
+  // stays Facebook-only: mark()/markItemListed always fires AFTER a successful publish click (a
+  // post-hoc "record what happened" call, confirmed by reading fas-content.js's own call site), so
+  // it was never actually a pre-submit gate for ANY platform including Facebook -- the real pre-
+  // submit protection lives in each platform's own content script (fas-content.js's
+  // facebookRestrictionReason check for Facebook; fas-craigslist.js gained an equivalent check this
+  // same session; Gumtree AU/Grailed/Poshmark/Mercari/Vinted do not yet have one, flagged as a
+  // follow-up). Generalizing this endpoint's reject to every platform would only risk breaking the
+  // "Show all items" override for a legitimate miscategorized item, for no real preventive gain --
+  // left Facebook-only on purpose, not by oversight.
   if (platform === 'FACEBOOK') {
     const fbItem = await prisma.item.findUnique({
       where: { id: itemId },
@@ -1133,9 +1152,11 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
 //
 // Facebook Commerce Policy gate (coins/currency AND weapons/ammunition/explosives as of
 // S-FB-WEAPON-COIN-FIX-2026-09-03) -- reuses isFacebookRestrictedItem/facebookRestrictionReason,
-// the same authoritative reject markItemListed applies for platform === 'FACEBOOK'. A
-// blocked item can't be auto-posted to Facebook for policy reasons, so it must not be
-// manually markable as Facebook-posted either -- same restriction, same reasoning.
+// the same reject markItemListed applies for platform === 'FACEBOOK'. Deliberately still
+// Facebook-only, not generalized to the other 6 platforms -- see markItemListed's own comment
+// (S-CROSS-MARKETPLACE-AUDIT-2026-09-03) for why: this is post-hoc bookkeeping, not a real
+// pre-submit gate for any platform, so generalizing it would only risk breaking the "Show all
+// items" override with no real preventive benefit.
 //
 // Idempotent: mirrors the "most-recent-row-per-item+platform wins" idiom used by
 // getExtensionItems' latestByItemPlatform / getPendingRenewals' renewalInfoByItem (first-seen
@@ -1150,7 +1171,7 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
 // marketplaceListedPoshmark (etc.) stuck false forever. Now follows markItemListed's exact
 // established pattern: platform from req.body, validated against VALID_LISTING_PLATFORMS,
 // Facebook Commerce Policy gate scoped to platform === 'FACEBOOK' only (see markItemListed's own
-// comment for why this is deliberately NOT extended to the other 4 platforms), and renewDueAt
+// comment for why this is deliberately NOT extended to the other 6 platforms), and renewDueAt
 // gated by isRenewalEligiblePlatform instead of unconditionally reading
 // RENEWAL_LAPSE_WINDOW_DAYS.FACEBOOK (which has no entry for Grailed/Poshmark/Mercari/Vinted).
 export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Response): Promise<void> => {

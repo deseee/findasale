@@ -27,10 +27,18 @@ const GUILD_RANK_META = {
 // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19) -- maps popup.js's lowercase
 // channel value to the uppercase key used in getExtensionItems' `eligibility` object
 // (extensionController.ts, marketplaceEligibilityRules.ts). Only channels with a real rule in
-// that registry appear here; facebook/craigslist/gumtree_au are intentionally absent (Facebook
-// keeps its own dedicated facebookRestricted/-Reason handling in row() below; Craigslist/Gumtree
-// AU have no eligibility rule at all).
-const PLATFORM_ELIGIBILITY_KEY = { poshmark: 'POSHMARK', mercari: 'MERCARI', vinted: 'VINTED', grailed: 'GRAILED' };
+// that registry appear here; facebook is intentionally still absent (keeps its own dedicated
+// facebookRestricted/-Reason handling in row() below, for backward-compat with existing code
+// there -- not because it lacks a rule).
+// craigslist/gumtree_au ADDED S-CROSS-MARKETPLACE-AUDIT-2026-09-03 -- both previously had NO
+// eligibility rule in the registry at all (a real gap: fas-craigslist.js auto-publishes by
+// default), so they were correctly absent from this map before. Now that both have real rules
+// (marketplaceEligibilityRules.ts), they belong here so "Show all items" / the disabled-checkbox
+// badge work the same way they already do for Poshmark/Mercari/Vinted/Grailed.
+const PLATFORM_ELIGIBILITY_KEY = {
+  poshmark: 'POSHMARK', mercari: 'MERCARI', vinted: 'VINTED', grailed: 'GRAILED',
+  craigslist: 'CRAIGSLIST', gumtree_au: 'GUMTREE_AU',
+};
 
 // Background.js's per-platform queue storage keys (setXQueue/getXQueueItem/advanceXQueue), used
 // by checkResumeableQueue() below to detect an in-progress run and offer to resume it instead of
@@ -319,9 +327,11 @@ async function renderGumtreeAuLoginNote() {
 }
 
 // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19): true when `it` is INELIGIBLE
-// for the current channel per getExtensionItems' `eligibility` object -- false for channels with
-// no rule (facebook/craigslist/gumtree_au) or when the item has no eligibility data at all
-// (fails open, same posture as fbBlocked below never crashing on missing data).
+// for the current channel per getExtensionItems' `eligibility` object -- false for facebook (its
+// own dedicated fbBlocked handling below) or when the item has no eligibility data at all (fails
+// open, same posture as fbBlocked below never crashing on missing data). craigslist/gumtree_au now
+// DO have real rules (S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- this comment previously said they
+// didn't, which was true when written but is stale now.
 function isIneligibleOnCurrentChannel(it) {
   const key = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
   if (!key || !it.eligibility || !it.eligibility[key]) return false;
@@ -489,11 +499,19 @@ function updateCount() {
 async function startQueue() {
   // Facebook Commerce Policy defense-in-depth: row() already disables the checkbox and
   // prunes `selected`, but re-filter here too in case of a stale selection (e.g. selection
-  // made before an item's facebookRestricted flag was known). Backend markItemListed is the
-  // real gate -- this only avoids uselessly opening a Facebook tab for a blocked item.
+  // made before an item's facebookRestricted flag was known). fas-content.js's own pre-submit
+  // check is the real gate for Facebook -- this only avoids uselessly opening a Facebook tab
+  // for a blocked item.
+  // GENERALIZED S-CROSS-MARKETPLACE-AUDIT-2026-09-03: the same stale-selection re-filter now also
+  // applies to every OTHER channel with a real eligibility rule (Craigslist/Gumtree AU/Grailed/
+  // Poshmark/Mercari/Vinted), using the generic isIneligibleOnCurrentChannel() helper -- previously
+  // only Facebook got this defense-in-depth re-check here, so a stale selection on any other
+  // platform (e.g. selected before "Show all items" was toggled off again) could still queue an
+  // item its own tab was supposed to hide.
   const ch = currentChannel();
   const queue = ITEMS.filter((it) => selected.has(it.id))
     .filter((it) => !(ch === 'facebook' && it.facebookRestricted === true))
+    .filter((it) => !isIneligibleOnCurrentChannel(it))
     .map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     description: it.description, category: it.category,
