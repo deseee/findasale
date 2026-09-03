@@ -1850,6 +1850,27 @@
           warnings.push('ISBN: Vinted requires this for Books/Comics and this item has no ISBN or UPC/EAN on file -- Vinted will block publishing until you enter one manually (try the barcode printed on the item itself).');
         }
       }
+      // BUG FIX 2026-09-03 (Patrick live-reported: ISBN/Category now work but "no language get
+      // selected"): live-confirmed this is the SAME category-conditional-field pattern as ISBN --
+      // Vinted's Books/Comics category shows a Language field (real testid confirmed live:
+      // "isbn-language_book-single-list-content", a searchable radio panel identical in shape to
+      // Category/Brand/Condition) that this file never had any code for at all -- not a regression
+      // from the ISBN/ordering fix, a pre-existing gap that only became visible once ISBN/Category
+      // started working. No Item.language field exists in the schema (confirmed:
+      // `grep -i language packages/database/prisma/schema.prisma` returns nothing) -- FindA.Sale's
+      // catalog is overwhelmingly English-language US goods, so default to "English" here, the same
+      // "no per-item signal -> most-defensible single real-option default" reasoning already used
+      // for Material's Cotton fallback above. Live-verified end-to-end on Patrick's own real tab:
+      // pickFromPanel('language', 'Language', 'English') opens the panel, types "English", the
+      // filtered list shows a real "English" radio option, and clicking it sets the field and closes
+      // the panel -- confirmed via screenshot before writing this, not assumed from Category/Brand's
+      // pattern alone.
+      const langOk = await pickFromPanel('language', 'Language', 'English');
+      if (langOk) {
+        warnings.push('Language: no per-item language on file -- defaulted to "English" (FindA.Sale catalog is virtually all English-language items). Correct if this item is actually in a different language.');
+      } else {
+        warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
+      }
     }
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
     // color/brand null-value fallback behavior across runs -- worked once earlier tonight, then
