@@ -170,9 +170,9 @@ export default function HoldTimer({
   // is second-person and urgent, because it is their hold and their clock.
   const displayText = isOrganizer
     ? isCritical
-      ? `${holderPrefix} hold ends in ${clock} — ending now`
+      ? `${holderPrefix} hold ends in ${clock}. Ending now`
       : isUrgent
-      ? `${holderPrefix} hold ends in ${clock} — ending soon`
+      ? `${holderPrefix} hold ends in ${clock}. Ending soon`
       : `${holderPrefix} hold ends in ${clock}`
     : isCritical
     ? `Hold expiring NOW! ${clock}`

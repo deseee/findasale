@@ -92,11 +92,11 @@ function buildWinBackHtml(opts: {
   const metroModule = metro
     ? buildTextBlockModule({
         headline: `Shoppers are still browsing in ${metro.city}`,
-        body: `Right now there ${metro.activeNearby === 1 ? 'is' : 'are'} <strong>${metro.activeNearby.toLocaleString()}</strong> active sale${metro.activeNearby === 1 ? '' : 's'} near you on FindA.Sale &mdash; and the people who saved ${businessName} are still looking. Posting your next sale puts you back in front of them.`,
+        body: `Right now there ${metro.activeNearby === 1 ? 'is' : 'are'} <strong>${metro.activeNearby.toLocaleString()}</strong> active sale${metro.activeNearby === 1 ? '' : 's'} near you on FindA.Sale, and the people who saved ${businessName} are still looking. Posting your next sale puts you back in front of them.`,
       })
     : buildTextBlockModule({
         headline: 'Your shoppers are still here',
-        body: `The people who favorited ${businessName} haven&rsquo;t gone anywhere. The moment you post your next sale, it shows up on the map and in the discovery feed for shoppers in your area &mdash; no new following required.`,
+        body: `The people who favorited ${businessName} haven&rsquo;t gone anywhere. The moment you post your next sale, it shows up on the map and in the discovery feed for shoppers in your area. No new following required.`,
       });
 
   const content = `
@@ -108,10 +108,10 @@ function buildWinBackHtml(opts: {
     ${buildSpacer(8)}
     ${metroModule}
     ${buildTextBlockModule({
-      body: `Reuse the details and items from a past sale to get a new one live fast &mdash; nothing has to be built from scratch.`,
+      body: `Reuse the details and items from a past sale to get a new one live fast: nothing has to be built from scratch.`,
     })}
     ${buildSpacer(8)}
-    ${buildCTARow('List your next sale →', newSaleUrl, `Start from a past sale or a blank slate &mdash; your call.`)}
+    ${buildCTARow('List your next sale →', newSaleUrl, `Start from a past sale or a blank slate. Your call.`)}
   `;
 
   return baseWrapper({

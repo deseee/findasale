@@ -55,7 +55,7 @@ export async function sendSaleLiveEmail(
     ${buildHero({
       eyebrow: 'Sale published',
       title:   `${sale.title} is live on FindA.Sale.`,
-      sub:     `Share it now &mdash; sales shared in the first hour average 2&times; more views than ones shared later.`,
+      sub:     `Share it now: sales shared in the first hour average 2&times; more views than ones shared later.`,
     })}
 
     <!-- Sale link display -->

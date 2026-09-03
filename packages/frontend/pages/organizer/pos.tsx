@@ -3745,7 +3745,7 @@ export default function POSPage() {
                   old unconditional "will be deducted" copy was misleading here. */}
               {lastCashFee.isTestTransaction ? (
                 <p className="text-xs text-amber-700 dark:text-amber-400 italic">
-                  🧪 Test transaction — this fee was calculated but NOT charged or added to your balance.
+                  🧪 Test transaction. This fee was calculated but NOT charged or added to your balance.
                 </p>
               ) : (
                 <p className="text-xs text-emerald-700 dark:text-emerald-400 italic">This fee will be deducted from your next payout.</p>
@@ -3803,7 +3803,7 @@ export default function POSPage() {
         (paymentMode === 'cash' || paymentMode === 'venmo' || paymentMode === 'zelle') && (
         <div className="mb-3 p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 text-center">
           <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wide">
-            ⚠️ Test mode active — this sale will not count as real
+            ⚠️ Test mode active. This sale will not count as real
           </p>
         </div>
       )}
@@ -3903,7 +3903,7 @@ export default function POSPage() {
               >
                 {paymentStatus === 'creating' && 'Recording…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
-                  `${isTestTransaction ? '🧪 TEST — ' : ''}Record Cash Sale $${cartTotal.toFixed(2)}`}
+                  `${isTestTransaction ? '🧪 TEST: ' : ''}Record Cash Sale $${cartTotal.toFixed(2)}`}
               </button>
             </>
           )}
@@ -3953,7 +3953,7 @@ export default function POSPage() {
               >
                 {paymentStatus === 'creating' && 'Recording…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
-                  `${isTestTransaction ? '🧪 TEST — ' : ''}Record Venmo Sale $${cartTotal.toFixed(2)}`}
+                  `${isTestTransaction ? '🧪 TEST: ' : ''}Record Venmo Sale $${cartTotal.toFixed(2)}`}
               </button>
             </>
           )}
@@ -3996,7 +3996,7 @@ export default function POSPage() {
               >
                 {paymentStatus === 'creating' && 'Recording…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
-                  `${isTestTransaction ? '🧪 TEST — ' : ''}Record Zelle Sale $${cartTotal.toFixed(2)}`}
+                  `${isTestTransaction ? '🧪 TEST: ' : ''}Record Zelle Sale $${cartTotal.toFixed(2)}`}
               </button>
             </>
           )}

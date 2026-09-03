@@ -70,7 +70,7 @@ const money = (n: number) =>
 function validateRows(rows: EditRow[]): string | null {
   if (rows.length === 0) return 'Add at least one price band.';
   if (rows[rows.length - 1].maxPrice !== '') {
-    return 'The highest band must be open-ended — leave its "up to" blank.';
+    return 'The highest band must be open-ended. Leave its "up to" field blank.';
   }
 
   for (let i = 0; i < rows.length; i++) {
@@ -276,7 +276,7 @@ const CommissionTiersPage: React.FC = () => {
               <p className="text-sm font-bold text-warm-900 dark:text-white">
                 {isTop
                   ? `${money(row.minPrice)} and up`
-                  : `${money(row.minPrice)} to ${row.maxPrice.trim() === '' ? '—' : money(Number(row.maxPrice))}`}
+                  : `${money(row.minPrice)} to ${row.maxPrice.trim() === '' ? 'and up' : money(Number(row.maxPrice))}`}
               </p>
               {rows.length > 1 && (
                 <button
@@ -381,7 +381,7 @@ const CommissionTiersPage: React.FC = () => {
             <h1 className="text-3xl font-bold text-warm-900 dark:text-white">Commission Rates</h1>
             <p className="text-warm-600 dark:text-warm-400 mt-1">
               Higher-priced items usually earn the consignor a bigger share. Set what they keep at
-              each price level here — it applies to every consignor with tiered commission turned on.
+              each price level here. It applies to every consignor with tiered commission turned on.
             </p>
           </div>
 

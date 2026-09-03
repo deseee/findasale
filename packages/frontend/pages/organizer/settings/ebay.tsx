@@ -286,7 +286,7 @@ const FALLBACK_OPTIONS: Array<{
   },
   {
     value: 'BLOCK',
-    label: "Don't list it — flag it for me to review",
+    label: "Don't list it. Flag it for me to review",
     help: "The item isn't listed until you set its shipping yourself. Safest, but it needs you.",
   },
 ];
@@ -871,7 +871,7 @@ const EbayPolicySetupPage = () => {
         { categoryId: '', policyId: policy.fulfillmentPolicyId, policyName: policy.name },
       ],
     });
-    showToast('Added below under Category-Specific Overrides — pick the category there.', 'info');
+    showToast('Added below under Category-Specific Overrides. Pick the category there.', 'info');
   };
 
   const searchItemsForPreset = React.useCallback(async (query: string) => {
@@ -1628,7 +1628,7 @@ const EbayPolicySetupPage = () => {
                               className="mt-0.5 w-4 h-4 rounded"
                             />
                             <span className="text-sm text-amber-800 dark:text-amber-300">
-                              I meant to do this — create it anyway
+                              I meant to do this. Create it anyway
                             </span>
                           </label>
                         </div>
@@ -1716,7 +1716,7 @@ const EbayPolicySetupPage = () => {
                           className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          The name is not just a label — FindA.Sale reads it to decide which items go to this
+                          The name isn't only a label. FindA.Sale reads it to decide which items go to this
                           preset, and your Google Shopping listings quote the price in it. We check it as you type.
                         </p>
                         {presetCheck.suggestedName &&
@@ -1897,7 +1897,7 @@ const EbayPolicySetupPage = () => {
                     When nothing else matches
                   </h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Some items won&apos;t match any of your rules — a missing weight, an unusual
+                    Some items won&apos;t match any of your rules: a missing weight, an unusual
                     category. Choose what should happen to those instead of leaving it to chance.
                   </p>
 
@@ -1905,7 +1905,7 @@ const EbayPolicySetupPage = () => {
                     <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-4">
                       <p className="text-sm text-amber-800 dark:text-amber-300">
                         Right now these items fall back to whichever shipping policy your eBay
-                        account had set as its default when you connected — which can be a free
+                        account had set as its default when you connected, which can be a free
                         shipping policy. Choosing your own is coming with the next update; this
                         panel is switched off until then so a choice can&apos;t quietly go missing.
                       </p>
@@ -1973,8 +1973,8 @@ const EbayPolicySetupPage = () => {
                               </p>
                             ) : (
                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                This is the same policy as your Default Fulfillment Policy above —
-                                changing it here changes it there too.
+                                This is the same policy as your Default Fulfillment Policy above.
+                                Changing it here changes it there too.
                               </p>
                             )}
                           </div>

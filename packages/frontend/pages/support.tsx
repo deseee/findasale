@@ -230,7 +230,7 @@ const FAQ_DATA = [
     category: 'Analytics & Command Center',
     question: 'What is the Command Center?',
     answer:
-      'The Command Center is a real-time operations dashboard available to TEAMS subscribers. It gives you a live view across all your active sales. Track items, holds, messages, purchases, and performance metrics in one place. Useful for estate sale companies running multiple concurrent sales or teams managing large inventories together.',
+      'The Command Center is a real-time operations dashboard available to TEAMS subscribers. It gives you a live view across all your active sales. Track items, holds, messages, purchases, and performance metrics in one place. Useful for organizers running multiple concurrent sales, whether estate, auction, or consignment, or teams managing large inventories together.',
   },
   {
     id: 'analytics-3',

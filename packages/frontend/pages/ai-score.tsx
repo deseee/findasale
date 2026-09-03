@@ -56,7 +56,7 @@ const DEMO_DATA: AiScoreResult = {
     title: { present: false, points: 0 },
     imgAlt: { ratio: 0.6, points: 0 },
   },
-  summary: 'Good foundation. Adding og:description and alt text on all images would improve AI visibility.',
+  summary: 'Good foundation. Adding og:description and alt text on all images would improve search visibility.',
 };
 
 // --- Helpers ---
@@ -152,7 +152,7 @@ export default function AiScorePage() {
         <meta property="og:title" content="Search Visibility Score | FindA.Sale" />
         <meta
           property="og:description"
-          content="Check how visible any FindA.Sale page is to AI search assistants. Free GEO analysis tool."
+          content="Check how visible any FindA.Sale page is to answer engines like ChatGPT and Perplexity. Free GEO analysis tool."
         />
         <meta property="og:url" content="https://finda.sale/ai-score" />
         <link rel="canonical" href="https://finda.sale/ai-score" key="canonical" />
@@ -334,7 +334,7 @@ export default function AiScorePage() {
               <tbody>
                 <CheckRow
                   label="JSON-LD Structured Data"
-                  description="AI assistants extract facts from structured data first"
+                  description="Answer engines extract facts from structured data first"
                   detail={
                     display.checks.jsonLd.present && display.checks.jsonLd.types.length > 0
                       ? `Types: ${display.checks.jsonLd.types.join(', ')} (${display.checks.jsonLd.count} block${display.checks.jsonLd.count !== 1 ? 's' : ''})`
@@ -346,35 +346,35 @@ export default function AiScorePage() {
                 />
                 <CheckRow
                   label="Meta Description"
-                  description="Displayed in AI search summaries and previews"
+                  description="Displayed in generative search summaries and previews"
                   points={display.checks.metaDescription.points}
                   maxPoints={10}
                   isDemo={isDemo}
                 />
                 <CheckRow
                   label="Open Graph Title"
-                  description="Used when AI tools cite or share your page"
+                  description="Used when answer engines cite or share your page"
                   points={display.checks.ogTitle.points}
                   maxPoints={8}
                   isDemo={isDemo}
                 />
                 <CheckRow
                   label="Open Graph Description"
-                  description="Secondary description used by AI citation engines"
+                  description="Secondary description used by generative citation engines"
                   points={display.checks.ogDescription.points}
                   maxPoints={7}
                   isDemo={isDemo}
                 />
                 <CheckRow
                   label="Canonical URL"
-                  description="Prevents duplicate content confusion in AI indexes"
+                  description="Prevents duplicate content confusion in generative search indexes"
                   points={display.checks.canonical.points}
                   maxPoints={8}
                   isDemo={isDemo}
                 />
                 <CheckRow
                   label="H1 Heading"
-                  description="Primary topic signal for AI content understanding"
+                  description="Primary topic signal for generative content understanding"
                   points={display.checks.h1.points}
                   maxPoints={7}
                   isDemo={isDemo}
@@ -417,13 +417,13 @@ export default function AiScorePage() {
             <h2 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>What this measures</h2>
             <p style={{ margin: '0 0 12px', fontSize: '14px', color: '#9ca3af', lineHeight: 1.7 }}>
               This tool measures <strong style={{ color: '#f3f4f6' }}>Generative Engine Optimization (GEO)</strong>. How well a
-              page communicates its content to AI-powered search tools. Unlike traditional search engines that rank pages
+              page communicates its content to generative search tools. Unlike traditional search engines that rank pages
               by links and keywords, AI assistants like ChatGPT, Perplexity, and Google AI Overviews extract structured
               facts from your page to generate direct answers.
             </p>
             <p style={{ margin: 0, fontSize: '14px', color: '#9ca3af', lineHeight: 1.7 }}>
               A higher score means more of your sale's details Dates, location, categories, pricing will appear when
-              someone asks an AI assistant about sales in your area.
+              someone asks a generative search tool about sales in your area.
             </p>
           </div>
 

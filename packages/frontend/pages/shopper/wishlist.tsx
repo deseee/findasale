@@ -192,7 +192,7 @@ const WishlistPage = () => {
   return (
     <>
       <Head>
-        <title>My Wishlist. FindA.Sale</title>
+        <title>My Wishlist | FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">

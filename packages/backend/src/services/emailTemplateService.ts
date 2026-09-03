@@ -547,7 +547,7 @@ export function buildNewSaleAlertEmail(opts: {
     : '';
 
   const content = `
-    ${buildHero({ eyebrow: 'From an organizer you follow', title: `${organizerName} just posted something near you.`, sub: `Here are the details &mdash; and a few items worth a look.` })}
+    ${buildHero({ eyebrow: 'From an organizer you follow', title: `${organizerName} just posted something near you.`, sub: `Here are the details, plus a few items worth a look.` })}
     ${buildSaleCardModule({ title: sale.title, dateRange: sale.dateRange, address: sale.address, photoUrl: sale.photoUrl, ctaUrl: sale.saleUrl, ctaLabel: 'View the sale', saleType: sale.saleType, hours: sale.hours })}
     ${itemsSection}
     ${buildCTARow('View the sale →', sale.saleUrl, referralLine)}

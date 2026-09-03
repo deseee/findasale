@@ -53,7 +53,7 @@ function buildReferralModule(referralCode: string | null): string {
     <tr><td style="padding:16px 18px;">
       <div style="font-size:14px; font-weight:600; color:${T.ink}; margin-bottom:4px;">Know another organizer?</div>
       <div style="font-size:13.5px; color:${T.inkDim}; line-height:1.55; margin-bottom:10px;">
-        Invite them to FindA.Sale &mdash; when they run their first sale, you both earn a reward.
+        Invite them to FindA.Sale. When they run their first sale, you both earn a reward.
       </div>
       <a href="${referralUrl}" style="color:${T.accent}; font-weight:600; font-size:14px; text-decoration:none;">Share your invite link &rarr;</a>
     </td></tr>
@@ -85,7 +85,7 @@ function buildRecapHtml(opts: {
   const gentleNote = !hadActivity
     ? buildTextBlockModule({
         headline: 'Every sale is a head start on the next one',
-        body: `This one stayed quiet, but the listing did its job &mdash; it put ${businessName} in front of shoppers searching nearby. Posting your next sale a little earlier usually gives items more time to be found.`,
+        body: `This one stayed quiet, but the listing did its job: it put ${businessName} in front of shoppers searching nearby. Posting your next sale a little earlier usually gives items more time to be found.`,
       })
     : '';
 

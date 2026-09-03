@@ -8,7 +8,7 @@ const ReturnPolicyPage = () => {
   return (
     <>
       <Head>
-        <title>Return &amp; Refund Policy. FindA.Sale</title>
+        <title>Return &amp; Refund Policy | FindA.Sale</title>
         <meta
           name="description"
           content="Return and refund policy for FindA.Sale. A marketplace for estate sales, yard sales, auctions, and flea markets. Each seller sets their own return policy."
@@ -98,7 +98,7 @@ const ReturnPolicyPage = () => {
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">5. Fees &amp; Refunds</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               <strong>The auction buyer&apos;s premium is refunded with the item.</strong> When an auction purchase is
-              refunded, you are refunded the full amount you were charged — the winning bid and the buyer&apos;s
+              refunded, you are refunded the full amount you were charged: the winning bid and the buyer&apos;s
               premium together. The premium is not held back. If you won at $200 with a 5% premium and paid $210.00,
               a refund returns $210.00.
             </p>

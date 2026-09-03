@@ -123,7 +123,7 @@ const LineQueuePage = () => {
   return (
     <>
       <Head>
-        <title>Virtual Line Manager. FindA.Sale</title>
+        <title>Virtual Line Manager | FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">

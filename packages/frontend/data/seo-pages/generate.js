@@ -140,7 +140,7 @@ function generate() {
             },
             {
               heading: `Furniture Pricing in ${loc.city}`,
-              body: `Furniture is often the revenue driver at ${type}s. Dining tables: $50–$200. Sofas/sectionals: $100–$400. Bedroom sets: $150–$500. Vintage/antique pieces: $200–$1000+. Condition matters—expect to price worn items 20–40% lower than excellent condition. High-quality brands (Ethan Allen, Baker) attract serious ${loc.city} buyers.`
+              body: `Furniture is often the revenue driver at ${type}s. Dining tables: $50–$200. Sofas/sectionals: $100–$400. Bedroom sets: $150–$500. Vintage/antique pieces: $200–$1000+. Condition matters. Expect to price worn items 20–40% lower than excellent condition. High-quality brands (Ethan Allen, Baker) attract serious ${loc.city} buyers.`
             },
             {
               heading: `Pricing Household Items and Decor`,
@@ -152,10 +152,10 @@ function generate() {
             },
             {
               heading: `Clothing and Fashion Pricing`,
-              body: `Clothing pricing varies by era and brand. Vintage 1950s–80s pieces: $3–$25. Contemporary department store: $1–$5. Designer handbags: $10–$200+. Shoes: $1–$10. Coats: $5–$30. Quality and condition are key—well-presented vintage fashion attracts niche {{city}} buyers willing to pay premium prices.`
+              body: `Clothing pricing varies by era and brand. Vintage 1950s–80s pieces: $3–$25. Contemporary department store: $1–$5. Designer handbags: $10–$200+. Shoes: $1–$10. Coats: $5–$30. Quality and condition are key. Well-presented vintage fashion attracts niche {{city}} buyers willing to pay premium prices.`
             }
           ],
-          cta: `List your ${type} on FindA.Sale — free to post, no commission.`
+          cta: `List your ${type} on FindA.Sale. Free to post, no commission.`
         },
         metaTitle: `${loc.city} ${cap} Pricing Guide 2026 | FindA.Sale`,
         metaDescription: `${cap} pricing benchmarks for ${loc.city}, ${loc.state}. What furniture, collectibles, and household items sell for in the ${loc.city} market.`,

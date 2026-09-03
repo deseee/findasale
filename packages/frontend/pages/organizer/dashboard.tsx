@@ -731,7 +731,7 @@ const OrganizerDashboard = () => {
                   Check your inbox to verify your email
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                  We sent a verification link to <strong>{user.email}</strong>. Verify your email to publish sales and unlock your full account.
+                  We sent a verification link to <strong>{user.email}</strong>. Verify your email to publish sales and use your full account.
                 </p>
               </div>
             </div>
@@ -930,7 +930,7 @@ const OrganizerDashboard = () => {
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: SIMPLE</h3>
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Unlock more features. PRO is just $29/mo</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Get 500+ items per sale, advanced analytics, and Brand Kit with PRO, just $29/mo</p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
                     <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit
                   </p>

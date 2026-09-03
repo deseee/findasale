@@ -264,7 +264,7 @@ const OrganizerHoldsPage = () => {
       } else if (data.updated === 0) {
         // Server found nothing left to act on (already settled, released, or expired).
         // Say so plainly rather than reporting a success that did not happen.
-        showToast('Nothing to update — those holds have already been handled.', 'error');
+        showToast('Nothing to update. Those holds have already been handled.', 'error');
       } else if (data.settlementMode === 'RECORD') {
         // Report the commission the SERVER actually accrued (data.platformFee) and the running
         // balance it now sits in, not a client-side recomputation — those are the numbers the
@@ -276,7 +276,7 @@ const OrganizerHoldsPage = () => {
           fee && fee > 0
             ? `${base} $${fee.toFixed(2)} commission added to your fee balance${
                 balance != null ? ` (now $${balance.toFixed(2)})` : ''
-              } — it comes out of your next payout.`
+              }. It comes out of your next payout.`
             : base,
           'success'
         );
@@ -416,7 +416,7 @@ const OrganizerHoldsPage = () => {
       case 'RECORD':
         return {
           title: 'Record a cash sale?',
-          message: `This marks ${count} item${plural} sold and records a cash sale of ${money}. You keep the ${money} in cash. Your ${commissionLabel} commission on it — ${commissionMoney(total)} — is added to your fee balance and comes out of your next payout. Your stock goes down, the shopper is notified, and it cannot be undone from this page.`,
+          message: `This marks ${count} item${plural} sold and records a cash sale of ${money}. You keep the ${money} in cash. Your ${commissionLabel} commission on it (${commissionMoney(total)}) is added to your fee balance and comes out of your next payout. Your stock goes down, the shopper is notified, and it cannot be undone from this page.`,
           confirmLabel: 'Record cash sale',
           variant: 'danger' as const,
         };
@@ -595,7 +595,7 @@ const OrganizerHoldsPage = () => {
                     className="w-4 h-4 accent-amber-600"
                   />
                   <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-                    🧪 Test transaction — no real inventory or fee
+                    🧪 Test transaction: no real inventory or fee
                   </span>
                 </label>
               )}
@@ -760,7 +760,7 @@ const OrganizerHoldsPage = () => {
                                 return (
                                   <p className="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-1 mt-1.5">
                                     Invoices together with {others} other item{others === 1 ? '' : 's'} {hold.user.name} is
-                                    holding at this sale — {bundle.length} items, ${bundleTotal.toFixed(2)} on one payment request.
+                                    holding at this sale: {bundle.length} items, ${bundleTotal.toFixed(2)} total.
                                   </p>
                                 );
                               })()}
@@ -818,12 +818,12 @@ const OrganizerHoldsPage = () => {
         // inventory or money -- appended here rather than in ConfirmDialog so the shared
         // component stays untouched.
         const testTxnMessage = pendingSettlement.isTestTransaction
-          ? `${copy.message}\n\n🧪 TEST TRANSACTION — stock will not be reduced, no fee will be accrued, and the shopper will not be notified.`
+          ? `${copy.message}\n\n🧪 TEST TRANSACTION. Stock will not be reduced, no fee will be accrued, and the shopper will not be notified.`
           : copy.message;
         return (
           <ConfirmDialog
             isOpen
-            title={pendingSettlement.isTestTransaction ? `🧪 TEST — ${copy.title}` : copy.title}
+            title={pendingSettlement.isTestTransaction ? `🧪 TEST: ${copy.title}` : copy.title}
             message={testTxnMessage}
             confirmLabel={copy.confirmLabel}
             cancelLabel="Not yet"

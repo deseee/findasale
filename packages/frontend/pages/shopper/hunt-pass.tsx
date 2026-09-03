@@ -102,7 +102,7 @@ const HuntPassPage = () => {
                       1.5x XP on Everything
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Earn 1.5x XP on every action. Visits, purchases, treasure hunts, and more. Build your ranks faster and unlock rewards sooner.
+                      Earn 1.5x XP on every action. Visits, purchases, treasure hunts, and more. Build your ranks faster.
                     </p>
                   </div>
                 </div>
@@ -132,7 +132,7 @@ const HuntPassPage = () => {
                       Treasure Hunt Pro
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Increase your daily item scan limit from 100 to 150 scans per day. More scans, more finds. Unlock premium hunting capacity.
+                      Increase your daily item scan limit from 100 to 150 scans per day. More scans, more finds.
                     </p>
                     <p className="text-warm-600 dark:text-warm-400 mt-2">
                       +10% XP bonus on every QR scan, stacked on top of your rank multiplier.

@@ -131,7 +131,7 @@ const ExplorerGuildOnboardingCard: React.FC<ExplorerGuildOnboardingCardProps> = 
 
       {/* Info text */}
       <p className="text-xs text-gray-600 dark:text-gray-400 text-center mt-4">
-        Ranks unlock real perks as you climb from Initiate → Grandmaster
+        Climb from Initiate to Grandmaster to earn longer holds, early access, and more.
       </p>
     </div>
   );

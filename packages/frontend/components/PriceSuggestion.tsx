@@ -184,7 +184,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
 
       {noDataYet && !error && (
         <div className="p-3 bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-600 rounded-lg text-sm text-warm-600 dark:text-warm-400">
-          Not enough market data yet for this item — try again once more comps are available.
+          Not enough market data yet for this item. Try again once more comps are available.
         </div>
       )}
 

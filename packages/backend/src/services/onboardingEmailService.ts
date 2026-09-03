@@ -54,7 +54,7 @@ export async function sendOnboardingEmail5a(organizer: {
 
   const content = `
     ${buildStepIndicator(1)}
-    ${buildHero({ title: `You&rsquo;re in. Here&rsquo;s your first step.`, sub: `Just one thing today &mdash; post your first sale. Photos and pricing can come later.` })}
+    ${buildHero({ title: `You&rsquo;re in. Here&rsquo;s your first step.`, sub: `Just one thing today: post your first sale. Photos and pricing can come later.` })}
     <tr><td style="padding:8px 28px 4px;">
       <table cellpadding="0" cellspacing="0" role="presentation">
         ${bulletRows}
@@ -171,19 +171,19 @@ export async function sendOnboardingEmail5c(organizer: {
   }
   const content = `
     ${buildStepIndicator(3)}
-    ${buildHero({ title: `One last nudge &mdash; then we&rsquo;ll leave you alone.`, sub: `We know setting up something new takes time. No guilt. Whenever you&rsquo;re ready, we&rsquo;ll be here.` })}
+    ${buildHero({ title: `One last nudge, then we&rsquo;ll leave you alone.`, sub: `We know setting up something new takes time. No guilt. Whenever you&rsquo;re ready, we&rsquo;ll be here.` })}
     <tr><td style="padding:12px 28px 20px;">
       <div style="padding:20px; border-radius:10px; background:${T.accentSoft}; border:1px solid rgba(200,85,43,0.20);">
         <div style="font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; color:${T.accent}; margin-bottom:8px; font-family:${T.font};">Real example</div>
         <div style="font-size:16px; line-height:1.5; color:${T.ink}; font-weight:500;">
-          &ldquo;An organizer near you posted their first sale last week and got <strong style="color:${T.accent};">34 views in 48 hours</strong> &mdash; without any prior following.&rdquo;
+          &ldquo;An organizer near you posted their first sale last week and got <strong style="color:${T.accent};">34 views in 48 hours</strong>, without any prior following.&rdquo;
         </div>
         <div style="margin-top:12px; font-size:13px; color:${T.inkDim}; line-height:1.5;">
           That&rsquo;s just from the map and discovery feed. With a few photos and a clear title, most first sales pick up momentum quickly.
         </div>
       </div>
     </td></tr>
-    ${buildCTARow('Create your first sale →', `${FRONTEND_URL}/organizer/sales/new`, `Not ready yet? No worries &mdash; your account stays active.`)}
+    ${buildCTARow('Create your first sale →', `${FRONTEND_URL}/organizer/sales/new`, `Not ready yet? No worries. Your account stays active.`)}
   `;
 
   const html = baseWrapper({

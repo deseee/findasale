@@ -51,7 +51,7 @@ function extractHoldErrorMessage(err: any): string {
     case 404:
       return 'This item is no longer listed.';
     case 409:
-      return 'Someone else got there first — this item is no longer available to hold.';
+      return 'Someone else got there first. This item is no longer available to hold.';
     case 429:
       return 'That was a lot of requests at once. Wait a moment and try again.';
     default:

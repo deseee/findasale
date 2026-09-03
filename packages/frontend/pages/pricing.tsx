@@ -591,7 +591,7 @@ const PricingPage = () => {
               <PremiumCTA
                 tier="SIMPLE"
                 title="Ready to Scale Your Sales?"
-                description="Upgrade to PRO to unlock powerful tools, lower fees, and expert support."
+                description="Upgrade to PRO for more capacity, lower fees, and expert support."
                 benefits={[
                   'More Photos, More Tags',
                   'Drop fees from 10% to 8%',

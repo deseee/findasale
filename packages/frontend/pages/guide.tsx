@@ -213,7 +213,7 @@ const sections: Section[] = [
           winning bid at the 10% platform rate: the buyer is charged <strong>$210.00</strong>, your
           platform fee is <strong>$20.00</strong>, and you receive <strong>$180.00</strong> before Stripe
           processing. If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the
-          buyer&apos;s premium&rdquo; on the sale — the 5% then comes out of your payout, so you receive{' '}
+          buyer&apos;s premium&rdquo; on the sale. The 5% then comes out of your payout, so you receive{' '}
           <strong>$170.00</strong> and the buyer is charged <strong>$200.00</strong>.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">

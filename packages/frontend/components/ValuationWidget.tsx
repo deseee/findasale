@@ -38,7 +38,7 @@ export default function ValuationWidget({
           📊 Compare Against FindA.Sale Sales Data
         </p>
         <p className="text-xs text-amber-800 dark:text-amber-300 mb-3">
-          See price ranges from recent sales on the platform. Upgrade to PRO to unlock.
+          See price ranges from recent sales on the platform. Upgrade to PRO to see them.
         </p>
         <a
           href="/pricing"

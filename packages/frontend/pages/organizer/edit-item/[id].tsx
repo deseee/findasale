@@ -2601,7 +2601,7 @@ const EditItemPage = () => {
                   <div className="space-y-2">
                     {discogsEligibility?.matchConfidence === 'fuzzy' ? (
                       <p className="text-sm text-amber-600 dark:text-amber-400">
-                        Possible Discogs match: &quot;{discogsEligibility?.matchedTitle}&quot; — double-check this is
+                        Possible Discogs match: &quot;{discogsEligibility?.matchedTitle}&quot;. Double-check this is
                         the right release before pushing.
                       </p>
                     ) : (

@@ -83,12 +83,12 @@ function buildSignup1hHtml(opts: {
     ${buildHero({
       eyebrow: 'Picking up where you left off',
       title: `Still there, ${firstName}?`,
-      sub: `You created your FindA.Sale account &mdash; the last step is posting your first sale, and it takes most people under 7 minutes.`,
+      sub: `You created your FindA.Sale account. The last step is posting your first sale, and it takes most people under 7 minutes.`,
     })}
     ${buildSpacer(8)}
     ${buildTextBlockModule({
       headline: 'You can start with just the basics',
-      body: `Pick a sale type, drop in an address, and you&rsquo;re live on the map. Photos and pricing can come later &mdash; nothing has to be final, and you can save a draft anytime.`,
+      body: `Pick a sale type, drop in an address, and you&rsquo;re live on the map. Photos and pricing can come later: nothing has to be final, and you can save a draft anytime.`,
     })}
     ${buildSpacer(8)}
     ${buildCTARow('Post your first sale →', newSaleUrl, `Organizers who post within 24 hours get 4&times; more first-week views.`)}

@@ -262,7 +262,7 @@ function RanksPage() {
             Explorer Rank Benefits
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
-            Sign in to view your rank and unlock exclusive perks.
+            Sign in to view your rank and see what it unlocks.
           </p>
           <Link
             href="/login"
@@ -306,7 +306,7 @@ function RanksPage() {
               Explorer Rank Benefits
             </h1>
             <p className="text-lg text-gray-600 dark:text-gray-400">
-              Climb the ranks and unlock exclusive perks
+              Climb the ranks to earn more holds, early access, and bonus XP.
             </p>
           </div>
 

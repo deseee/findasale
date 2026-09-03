@@ -76,7 +76,7 @@ function buildOrganizerTestimonialHtml(opts: {
       sub: `Now that <strong>${saleTitle}</strong> has wrapped up, we&rsquo;d love to hear how it went.`,
     })}
     ${buildTextBlockModule({
-      body: `A sentence or two about your experience helps other organizers decide to give FindA.Sale a try &mdash; and helps us keep making it better for you.`,
+      body: `A sentence or two about your experience helps other organizers decide to give FindA.Sale a try, and helps us keep making it better for you.`,
     })}
     ${buildSpacer(8)}
     ${buildCTARow('Share a testimonial →', testimonialUrl)}
@@ -168,7 +168,7 @@ function buildShopperReviewHtml(opts: {
       sub: `Your rating helps other shoppers know who to trust on FindA.Sale.`,
     })}
     ${buildTextBlockModule({
-      body: `It only takes a moment &mdash; a star rating and a sentence is plenty.`,
+      body: `It only takes a moment: a star rating and a sentence is plenty.`,
     })}
     ${buildSpacer(8)}
     ${buildCTARow('Rate this organizer →', reviewUrl)}

@@ -83,7 +83,7 @@ const SaleLockCard: React.FC<SaleLockCardProps> = ({
         {showRankUpCta && userRank === 'INITIATE' && (
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 mb-6 border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-900 dark:text-blue-200 mb-4">
-              Rank up to access sales early and unlock exclusive features
+              Rank up to access sales early and earn perks like longer holds and Scout Reveal.
             </p>
             <Link
               href="/shopper/guild-primer"
