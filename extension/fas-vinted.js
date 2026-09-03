@@ -1785,10 +1785,22 @@
           warnings.push('ISBN could not be filled automatically -- please set it yourself.');
         }
       } else {
-        // Truly nothing on file. Do not invent a value (ADR-089/090 rule) -- surface a specific,
-        // actionable warning instead of the generic tryFill one, since "no ISBN/UPC/EAN at all"
-        // is a real blocker for this platform, not just a nice-to-have missing field.
-        warnings.push('ISBN: Vinted requires this for Books/Comics and this item has no ISBN or UPC/EAN on file -- Vinted will block publishing until you enter one manually (try the barcode printed on the item itself).');
+        // Truly nothing on file (no isbn/upc/ean). ADR-090 Addendum 4 (2026-09-03, Patrick-directed):
+        // for single-issue back-catalog comics with no printed barcode at all, fill the placeholder
+        // '0000000000000'. Live-tested twice on a real listing -- Vinted's ISBN field validates
+        // checksum/format only (never real registry membership, see Addendum 3 above), and an
+        // all-zero digit string trivially satisfies any mod-10/mod-11 checksum, so it passes the
+        // same way a real barcode does. This is NOT the same as the item.upc/item.ean branch above:
+        // those are real, item-specific values already captured by the AI pipeline; this is a last-
+        // resort platform-required placeholder for items that genuinely have no printed number at
+        // all. Still flagged clearly in the warning (never silently invented) so Patrick can swap in
+        // the real barcode if he later finds one legible on the physical item.
+        const ok = await fillText('ISBN', '0000000000000');
+        if (ok) {
+          warnings.push('ISBN: no ISBN/UPC/EAN on file for this item -- filled placeholder 0000000000000 (Vinted requires some value here for Books/Comics and only validates checksum, not a real registry match). Swap in the real barcode if one is legible on the item, otherwise safe to publish as-is.');
+        } else {
+          warnings.push('ISBN: Vinted requires this for Books/Comics and this item has no ISBN or UPC/EAN on file -- Vinted will block publishing until you enter one manually (try the barcode printed on the item itself).');
+        }
       }
     }
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
