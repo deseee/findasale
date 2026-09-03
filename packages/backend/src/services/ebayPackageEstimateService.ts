@@ -35,7 +35,31 @@ const NEVER_SHIPPABLE_KEYWORDS = [
   // are not standard-parcel items regardless of what weight number is entered).
   'christmas tree',
   'charcoal grill',
+  // Added 2026-09-03 (ADR-103 Phase 5 seed-data pass) -- flagged as DECISION NEEDED in that
+  // session's dev handoff, now resolved: these four are not standard-parcel-shippable at any
+  // real-world size, so a package-estimate guess for them would always be wrong, not just
+  // sometimes wrong. Deliberately NOT adding "area rug" here -- unlike these four, rug size is
+  // genuinely bimodal (a small rug ships fine in a box; a large one rolls to 90in+), so a
+  // blanket keyword would wrongly block legitimate small-rug listings from ever getting an
+  // estimate. That one stays a real DECISION NEEDED, not resolved by this pass.
+  'kayak',
+  'canoe',
+  'ladder',
+  'mattress',
 ];
+
+// Accessories/variants of a NEVER_SHIPPABLE_KEYWORDS entry that ARE genuinely parcel-shippable
+// on their own -- matching one of these overrides that specific keyword's block. Caught before
+// shipping: 'canoe paddle' is a real shippable PackageProfile row added this same session
+// (seedPackageProfiles.ts) that a bare 'canoe' keyword would otherwise silently defeat; 'kayak
+// paddle' is the same real item under the other name. Mattress topper/pad/protector are thin,
+// compressible items genuinely shipped in a box, unlike a full mattress. Keyed by the blocking
+// keyword it exempts, not global -- 'topper' only exempts 'mattress', not every entry.
+const NEVER_SHIPPABLE_EXCEPTIONS: Record<string, string[]> = {
+  kayak: ['paddle'],
+  canoe: ['paddle'],
+  mattress: ['topper', 'pad', 'protector'],
+};
 
 /**
  * True when an item's title/description/category matches a known never-shippable
@@ -48,7 +72,11 @@ export function isNeverShippableItem(
 ): boolean {
   const text = `${title || ''} ${description || ''} ${category || ''}`.toLowerCase();
   if (!text.trim()) return false;
-  return NEVER_SHIPPABLE_KEYWORDS.some((kw) => text.includes(kw));
+  return NEVER_SHIPPABLE_KEYWORDS.some((kw) => {
+    if (!text.includes(kw)) return false;
+    const exceptions = NEVER_SHIPPABLE_EXCEPTIONS[kw];
+    return !(exceptions && exceptions.some((ex) => text.includes(ex)));
+  });
 }
 
 export interface PackageEstimateItem {

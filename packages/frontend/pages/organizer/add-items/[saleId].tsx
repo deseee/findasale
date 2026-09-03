@@ -62,6 +62,7 @@ import { decodeHtmlEntities } from '../../../utils/textUtils';
 import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
 import BountyMatchModal from '../../../components/BountyMatchModal';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
+import { ShippingNetPreview } from '../../../components/ShippingNetPreview'; // ADR-103 Phase 5 (2026-09-03)
 
 // Feature flag: hides "Enhance All" button until backend endpoint exists.
 // Set NEXT_PUBLIC_ENABLE_ENHANCE_ALL=true to enable.
@@ -2970,6 +2971,21 @@ const AddItemsDetailPage = () => {
                               </div>
                             </div>
                           </div>
+                          {/* ADR-103 Phase 5 (2026-09-03): same live oversize-surcharge warning
+                              edit-item already shows, surfaced here too so an organizer sees it
+                              at initial listing creation, not only when they later go back to
+                              edit. Silent (renders nothing) until a real weight is entered. */}
+                          <ShippingNetPreview
+                            itemId={item.id}
+                            weightOz={editState.packageWeightOz ? parseInt(editState.packageWeightOz, 10) : undefined}
+                            dims={{
+                              length: editState.packageLengthIn ? parseFloat(editState.packageLengthIn) : undefined,
+                              width: editState.packageWidthIn ? parseFloat(editState.packageWidthIn) : undefined,
+                              height: editState.packageHeightIn ? parseFloat(editState.packageHeightIn) : undefined,
+                            }}
+                            itemPrice={editState.price ? parseFloat(editState.price) : undefined}
+                            ebayCategoryId={editState.ebayCategoryId || null}
+                          />
                           {item.listingType === 'AUCTION' && (
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
