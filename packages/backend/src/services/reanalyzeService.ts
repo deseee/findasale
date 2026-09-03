@@ -208,7 +208,14 @@ export async function reanalyzeItem(
         isbn: item.isbn ?? null,
         tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
       },
-      { aiResult: result, categoryHint: { id: item.ebayCategoryId, name: item.ebayCategoryName } },
+      // ADR-090 (2026-09-02): fall back to the eBay category just re-resolved above (`cat`)
+      // when the item has no stored eBayCategoryId/Name yet -- matches the same
+      // existing-or-fresh pattern batchAnalyzeController.ts and processRapidDraft.ts already
+      // use. Without this, an item with no prior eBay category got a null categoryHint on its
+      // very first reanalyze even though a fresh category was just computed a few lines above --
+      // the title/tags text signal still covers most real cases, but the category signal was
+      // silently going unused for exactly the items most likely to need it (never-categorized).
+      { aiResult: result, categoryHint: { id: item.ebayCategoryId ?? cat?.categoryId ?? null, name: item.ebayCategoryName ?? cat?.categoryName ?? null } },
     );
     merged = out.merged;
   } catch (err: any) {
