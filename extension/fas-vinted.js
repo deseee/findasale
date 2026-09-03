@@ -1035,7 +1035,7 @@
   // other three new scripts -- FindA.Sale's item.category is a single flat string, not Vinted's
   // real taxonomy tree, so this clicks the closest text match at each level and stops once a
   // level has no confident match.
-  async function pickCategory(categoryText) {
+  async function pickCategory(categoryText, item) {
     if (!categoryText) return false;
     // Try the shared panel picker first with the most-specific segment (Vinted's "Suggested" search
     // results are full resolved leaf paths, e.g. "Shorts" -> Men > Clothing > Activewear, live-
@@ -1050,6 +1050,22 @@
     // meaningfully distinct from broad, unlikely-to-match middle segments.
     const quickSegments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     const quickCandidates = [];
+    // BUG FIX 2026-09-03 (Patrick live-reported: a single-issue comic landed in Vinted's "Magazines"
+    // leaf instead of Comics): root cause traced upstream of this file -- item.ebayCategoryId/Name
+    // for this item is eBay's own generic "Books" category (261186), because Haiku's free-text
+    // category field and eBay's real get_category_suggestions(title) both returned a generic
+    // Books/Magazines match for a title that doesn't say "comic book" explicitly. Searching Vinted's
+    // tree for just "Books" scored "Magazines" as the best match -- a real Vinted leaf, just the
+    // wrong one. Same class of comic-vs-generic-book conflation already fixed for the ISBN signal
+    // above (looksLikeVintedBookOrComicItem) -- applying the same idea here: when the item's own
+    // title/description carries an unambiguous comic-specific signal (narrower than the general
+    // book/comic regex used for ISBN, deliberately -- a real novel or textbook should NOT get
+    // redirected into Comics), try "Comics" FIRST, ahead of whatever generic category text eBay/AI
+    // handed us, since it's a real Vinted leaf name (confirmed live: "Comics, manga & graphic
+    // novels" matched cleanly off a "Comics & Graphic Novels" query).
+    if (item && /\b(comic|comics|manga|graphic novel|tpb|trade paperback)\b/i.test(norm((item.title || '') + ' ' + (item.description || '')))) {
+      quickCandidates.push('Comics');
+    }
     if (quickSegments.length) quickCandidates.push(quickSegments[quickSegments.length - 1]);
     if (categoryText && quickCandidates.indexOf(categoryText) === -1) quickCandidates.push(categoryText);
     for (const seg of quickCandidates) {
@@ -1769,16 +1785,37 @@
     // on file for the item (see productEnrichment.ts's own "evidence-only, never invented" rule
     // for how upc/isbn get there in the first place).
     if (looksLikeVintedBookOrComicItem(item)) {
+      // BUG FIX 2026-09-03 (Patrick live-reported: the "filled placeholder 0000000000000" warning
+      // showed on the review screen but the ISBN field itself was left empty): ISBN runs live,
+      // per-keystroke validation the same way Price does (Vinted shows a "checking.../this ISBN is
+      // correct" message as you type) -- and the plain fillText()/setNativeValue() used below only
+      // dispatches a bare Event('input'), which does NOT trigger that validation path the way a
+      // real keystroke does. This is the exact same root cause already diagnosed and fixed for
+      // Price on 2026-08-30 (see vintedTypeLikePrice above): fillText() always returns true once it
+      // finds the element, so it looked like success while the value never actually stuck. Reused
+      // vintedTypeLikePrice's clear+retype+real-InputEvent sequence here (with a text stuck-check
+      // instead of Price's numeric one) for all three ISBN branches below, with one retry, matching
+      // fillVintedPrice's own pattern.
+      const fillIsbn = async (value) => {
+        const el = fieldByLabel('ISBN');
+        if (!el) return false;
+        const want = String(value).trim();
+        const stuck = () => String(el.value || '').trim() === want;
+        await vintedTypeLikePrice(el, value);
+        if (stuck()) return true;
+        await vintedTypeLikePrice(el, value);
+        return stuck();
+      };
       if (item.isbn) {
-        // Real ISBN on file -- original, unchanged behavior. tryFill's own success/selector-miss
-        // messaging is correct here and not duplicated below.
-        await tryFill('ISBN', item.isbn, (v) => fillText('ISBN', v), warnings);
+        // Real ISBN on file.
+        const ok = await fillIsbn(item.isbn);
+        if (!ok) warnings.push('ISBN could not be filled automatically -- please set it yourself.');
       } else if (item.upc || item.ean) {
         // No real ISBN, but a real barcode IS on file -- use it directly (not via tryFill, to
         // avoid stacking tryFill's own generic "no value set" warning on top of this more useful,
         // specific one).
         const fallbackValue = item.upc || item.ean;
-        const ok = await fillText('ISBN', fallbackValue);
+        const ok = await fillIsbn(fallbackValue);
         if (ok) {
           warnings.push("ISBN: no verified ISBN found -- used the item's UPC/EAN barcode instead (Vinted requires some value here for Books/Comics; double-check before publishing).");
         } else {
@@ -1790,12 +1827,9 @@
         // '0000000000000'. Live-tested twice on a real listing -- Vinted's ISBN field validates
         // checksum/format only (never real registry membership, see Addendum 3 above), and an
         // all-zero digit string trivially satisfies any mod-10/mod-11 checksum, so it passes the
-        // same way a real barcode does. This is NOT the same as the item.upc/item.ean branch above:
-        // those are real, item-specific values already captured by the AI pipeline; this is a last-
-        // resort platform-required placeholder for items that genuinely have no printed number at
-        // all. Still flagged clearly in the warning (never silently invented) so Patrick can swap in
-        // the real barcode if he later finds one legible on the physical item.
-        const ok = await fillText('ISBN', '0000000000000');
+        // same way a real barcode does. Still flagged clearly in the warning (never silently
+        // invented) so Patrick can swap in the real barcode if he later finds one legible on the item.
+        const ok = await fillIsbn('0000000000000');
         if (ok) {
           warnings.push('ISBN: no ISBN/UPC/EAN on file for this item -- filled placeholder 0000000000000 (Vinted requires some value here for Books/Comics and only validates checksum, not a real registry match). Swap in the real barcode if one is legible on the item, otherwise safe to publish as-is.');
         } else {
@@ -1807,7 +1841,7 @@
     // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the
     // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up
     // persistently on the review screen below instead of vanishing.
-    await tryFill('Category', item.category, (v) => pickCategory(v), warnings);
+    await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
     // color/brand null-value fallback behavior across runs -- worked once earlier tonight, then
     // apparently did nothing on a fresh run). injectPhotos() used to run dead LAST in this function,
