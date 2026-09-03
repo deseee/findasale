@@ -229,12 +229,20 @@ function looksLikePerson(sName: string): boolean {
 }
 
 /** Extract an author from the item title ("... by Jane Doe") or a person-like brand. */
+/** True when a string looks like a publisher/company name rather than a person (e.g. "Image
+ *  Comics", "Dark Horse Books", "IDW Publishing") -- guards extractAuthor's brand-as-author
+ *  fallback below. ADR-090 addendum: "Image Comics" (2 capitalized tokens) was passing
+ *  looksLikePerson() and getting reported as a comic's author. */
+function looksLikePublisherOrBrand(sName: string): boolean {
+  return /\b(comics?|press|publishing|publishers?|books?|studios?|entertainment|media|games?|productions?)\b/i.test(sName);
+}
+
 function extractAuthor(item: EnrichItemInput): string | null {
   const title = item.title || '';
   const m = title.match(/\bby\s+([A-Za-z.'\u2019-]+(?:\s+[A-Za-z.'\u2019-]+){0,3})\s*$/i);
-  if (m && m[1] && looksLikePerson(m[1].trim())) return m[1].trim();
+  if (m && m[1] && looksLikePerson(m[1].trim()) && !looksLikePublisherOrBrand(m[1].trim())) return m[1].trim();
   const brand = (item.brand || '').trim();
-  if (brand && looksLikePerson(brand)) return brand;
+  if (brand && looksLikePerson(brand) && !looksLikePublisherOrBrand(brand)) return brand;
   return null;
 }
 
