@@ -31,6 +31,8 @@ import {
   createPost,
   cancelPost,
   confirmPost,
+  setSecurityClearance,
+  stageWeeklyContent,
 } from '../controllers/socialPublisherController';
 
 const router = Router();
@@ -59,5 +61,11 @@ router.post('/posts', createPost);
 router.post('/posts/:id/cancel', cancelPost);
 // Second human gate for a STAGED (DRAFT) fan-out post — the ONLY publish-promotion path.
 router.post('/posts/:id/confirm', confirmPost);
+
+// ADR-116 -- security-clearance toggle (admin-only, whitelisted to platform+cleared)
+// and the build-in-public auto-staging entrypoint (creates SCHEDULED posts across
+// every isActive+securityCleared platform, excluding X/YouTube/TikTok).
+router.post('/accounts/security-clearance', setSecurityClearance);
+router.post('/stage-weekly-content', stageWeeklyContent);
 
 export default router;

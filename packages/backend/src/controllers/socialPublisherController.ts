@@ -25,6 +25,7 @@ import type { SocialPlatform } from '@prisma/client';
 import { getPublisher, isPlatformSupported } from '../services/social/platforms';
 import { upsertAccount, scrubTokens } from '../services/social/tokenStore';
 import { loginWithAppPassword } from '../services/social/platforms/bluesky';
+import { stageApprovedContent } from '../services/social/socialPublisherService';
 
 // Account fields safe to return to an admin client — NEVER accessToken/refreshToken.
 const ACCOUNT_PUBLIC_SELECT = {
@@ -34,6 +35,7 @@ const ACCOUNT_PUBLIC_SELECT = {
   platformUserId: true,
   pageId: true,
   isActive: true,
+  securityCleared: true, // ADR-116 -- visible to admin, never client-settable via this select
   connectedAt: true,
   lastRefreshedAt: true,
   lastErrorAt: true,
@@ -315,6 +317,45 @@ export const disconnectAccount = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * POST /api/social-publisher/accounts/security-clearance — ADR-116.
+ * Flips SocialAccount.securityCleared for one platform. This is the ONLY way that
+ * flag can change (never set by any client-controlled field on any other route --
+ * NO-MASS-ASSIGNMENT). Body is whitelisted to exactly { platform, cleared }: no other
+ * field can be set through this endpoint. Intended to be flipped to true only after
+ * findasale-hacker's applicable-feature adversarial pass has genuinely cleared that
+ * platform for real/auto-sent posts -- this endpoint does not verify that itself, it
+ * only records the decision an admin makes.
+ */
+export const setSecurityClearance = async (req: AuthRequest, res: Response) => {
+  try {
+    const platform = req.body?.platform;
+    const cleared = req.body?.cleared;
+    if (!isValidPlatform(platform)) {
+      return res.status(400).json({ message: 'Invalid or missing platform' });
+    }
+    if (typeof cleared !== 'boolean') {
+      return res.status(400).json({ message: '"cleared" must be a boolean' });
+    }
+    const existing = await prisma.socialAccount.findUnique({ where: { platform } });
+    if (!existing) {
+      return res.status(404).json({ message: 'No connected account for that platform' });
+    }
+    const updated = await prisma.socialAccount.update({
+      where: { platform },
+      data: { securityCleared: cleared }, // ONLY field this route can ever write
+      select: ACCOUNT_PUBLIC_SELECT,
+    });
+    return res.json({ account: updated });
+  } catch (err) {
+    console.error(
+      '[socialPublisher] setSecurityClearance error:',
+      err instanceof Error ? scrubTokens(err.message) : err
+    );
+    return res.status(500).json({ message: 'Failed to update security clearance' });
+  }
+};
+
+/**
  * GET /api/social-publisher/posts — list the publish queue (filterable by status/platform).
  */
 export const listPosts = async (req: AuthRequest, res: Response) => {
@@ -508,5 +549,60 @@ export const confirmPost = async (req: AuthRequest, res: Response) => {
   } catch (err) {
     console.error('[socialPublisher] confirmPost error:', err instanceof Error ? scrubTokens(err.message) : err);
     return res.status(500).json({ message: 'Failed to confirm post' });
+  }
+};
+
+/**
+ * POST /api/social-publisher/stage-weekly-content — ADR-116.
+ * Called by the findasale-build-in-public scheduled task once Patrick has approved a
+ * week's copy. Body is whitelisted to exactly { headline, longBody, imageUrl?,
+ * sourceFile } -- forwarded as-is to stageApprovedContent(), which computes platform
+ * eligibility itself (isActive && securityCleared, X/YouTube/TikTok excluded) and
+ * generates a branded card for media-requiring platforms when no imageUrl is given.
+ * No status/platform/accountId/token field can be set through this endpoint --
+ * everything about WHERE it posts is derived server-side, never from the request body.
+ */
+export const stageWeeklyContent = async (req: AuthRequest, res: Response) => {
+  try {
+    const headline = req.body?.headline;
+    const longBody = req.body?.longBody;
+    const imageUrl = req.body?.imageUrl;
+    const sourceFile = req.body?.sourceFile;
+
+    if (typeof headline !== 'string' || !headline.trim()) {
+      return res.status(400).json({ message: '"headline" is required' });
+    }
+    if (typeof longBody !== 'string' || !longBody.trim()) {
+      return res.status(400).json({ message: '"longBody" is required' });
+    }
+    if (typeof sourceFile !== 'string' || !sourceFile.trim()) {
+      return res.status(400).json({ message: '"sourceFile" is required (unique per week)' });
+    }
+    if (imageUrl !== undefined && imageUrl !== null && typeof imageUrl !== 'string') {
+      return res.status(400).json({ message: '"imageUrl" must be a string if provided' });
+    }
+
+    const result = await stageApprovedContent({
+      headline,
+      longBody,
+      imageUrl: imageUrl ?? null,
+      sourceFile,
+    });
+
+    return res.json({
+      created: result.created.map((p) => ({
+        id: p.id,
+        platform: p.platform,
+        status: p.status,
+        scheduledFor: p.scheduledFor,
+      })),
+      skipped: result.skipped,
+    });
+  } catch (err) {
+    console.error(
+      '[socialPublisher] stageWeeklyContent error:',
+      err instanceof Error ? scrubTokens(err.message) : err
+    );
+    return res.status(500).json({ message: 'Failed to stage weekly content' });
   }
 };

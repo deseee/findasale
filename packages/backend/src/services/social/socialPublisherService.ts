@@ -28,6 +28,7 @@ import { prisma } from '../../lib/prisma';
 import type { SocialAccount, SocialPost, SocialPlatform } from '@prisma/client';
 import { getPublisher } from './platforms';
 import { getValidToken, recordAccountError, scrubTokens } from './tokenStore';
+import { generateWeeklyCardUrl } from '../../utils/socialCardGenerator';
 
 // After this many failed attempts, a post is marked FAILED (stops retrying).
 const MAX_ATTEMPTS = 3;
@@ -294,4 +295,137 @@ async function handlePublishError(
     await recordAccountError(account.id, `Publish auth error: ${message}`).catch(() => {});
   }
   return 0;
+}
+
+
+/**
+ * ---------------------------------------------------------------------------
+ * stageApprovedContent — ADR-116
+ * ---------------------------------------------------------------------------
+ * The staging half of ADR-077 §3 that was planned but never built. Called by
+ * the findasale-build-in-public scheduled task once Patrick approves a week's
+ * copy. Creates one SocialPost per eligible platform, SCHEDULED immediately
+ * (scheduledFor = now) — Patrick's explicit "auto-send, no extra confirm
+ * click" decision. The next publishDuePosts() cron run (every ~10 min) sends
+ * them; this function never calls a platform API itself.
+ *
+ * Eligibility is computed at CALL TIME against live SocialAccount rows, never
+ * hardcoded — connection/security-review status changes week to week:
+ *   - X is excluded permanently (Patrick's standing decision: paid API, no
+ *     free tier, ADR-105) — the one hardcoded exclusion.
+ *   - YOUTUBE and TIKTOK are excluded here: YouTube belongs to the separate
+ *     video-pipeline staging flow (S1117), and TikTok posts are forced
+ *     SELF_ONLY until its own API audit clears (a public push there would be
+ *     silent and pointless).
+ *   - Every other platform is eligible ONLY if isActive AND securityCleared —
+ *     securityCleared is a new, explicit flag (ADR-116) set by hand only after
+ *     findasale-hacker's applicable-feature adversarial pass genuinely clears
+ *     that platform. This is deliberately stricter than isActive alone, which
+ *     only means "token healthy," so auto-send can never reach a platform
+ *     nobody has security-reviewed.
+ *
+ * Instagram and Pinterest hard-require media (see their own publish() guards).
+ * When the week has no real screenshot, a branded card is generated via
+ * socialCardGenerator.ts; if that generator isn't configured yet (Patrick
+ * hasn't uploaded the one-time template), those two platforms are skipped
+ * with a clear reason rather than risking a broken image URL.
+ *
+ * Per-platform text length is NOT re-truncated here — every platform leaf
+ * module already defensively truncates to its own real limit at publish time
+ * (bluesky.ts/threads.ts/instagram.ts/pinterest.ts each do this already), so
+ * duplicating that logic here would just be a second place for the limits to
+ * drift out of sync.
+ *
+ * Idempotency reuses the existing @@unique([sourceFile, platform, body])
+ * constraint on SocialPost (ADR-077 §3) — re-running this for the same week
+ * is a safe no-op per platform (the create() throws, caught below and
+ * reported as a skip, not an error).
+ */
+
+const AUTO_STAGING_EXCLUDED_PLATFORMS: SocialPlatform[] = ['X', 'YOUTUBE', 'TIKTOK'];
+const PLATFORMS_REQUIRING_MEDIA: SocialPlatform[] = ['INSTAGRAM', 'PINTEREST'];
+
+export interface WeeklyContentInput {
+  /** Short headline — also used as the generated card's overlay text. */
+  headline: string;
+  /** Full drafted paragraph. Each platform leaf module truncates this to its own limit. */
+  longBody: string;
+  /** A real screenshot/photo for the week's shipped work, if one exists. */
+  imageUrl?: string | null;
+  /** Traceability id for this week's run, e.g. "build-in-public-2026-09-08". Must be
+   *  unique per week — reused as SocialPost.sourceFile for the idempotency guard. */
+  sourceFile: string;
+}
+
+export interface StageApprovedContentResult {
+  created: SocialPost[];
+  skipped: { platform: SocialPlatform; reason: string }[];
+}
+
+export async function stageApprovedContent(
+  input: WeeklyContentInput
+): Promise<StageApprovedContentResult> {
+  const created: SocialPost[] = [];
+  const skipped: { platform: SocialPlatform; reason: string }[] = [];
+
+  const eligibleAccounts = await prisma.socialAccount.findMany({
+    where: {
+      isActive: true,
+      securityCleared: true,
+      platform: { notIn: AUTO_STAGING_EXCLUDED_PLATFORMS },
+    },
+  });
+
+  const crypto = require('crypto') as typeof import('crypto');
+  const sourceHash = crypto.createHash('sha256').update(input.longBody).digest('hex');
+
+  for (const account of eligibleAccounts) {
+    const needsMedia = PLATFORMS_REQUIRING_MEDIA.includes(account.platform);
+    let mediaUrls: string[] = input.imageUrl ? [input.imageUrl] : [];
+
+    if (needsMedia && mediaUrls.length === 0) {
+      try {
+        mediaUrls = [generateWeeklyCardUrl(input.headline)];
+      } catch (err) {
+        skipped.push({
+          platform: account.platform,
+          reason: err instanceof Error ? err.message : String(err),
+        });
+        continue;
+      }
+    }
+
+    try {
+      const post = await prisma.socialPost.create({
+        data: {
+          accountId: account.id,
+          platform: account.platform,
+          sourceFile: input.sourceFile,
+          sourceHash,
+          body: input.longBody,
+          mediaUrls,
+          status: 'SCHEDULED',
+          scheduledFor: new Date(),
+        },
+      });
+      created.push(post);
+    } catch (err) {
+      // Most likely the @@unique([sourceFile, platform, body]) idempotency guard
+      // rejecting a duplicate re-run for this exact week/platform/body — not a
+      // real failure, so this is reported as a skip, not thrown.
+      skipped.push({
+        platform: account.platform,
+        reason: `not staged (likely already staged for this week): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+    }
+  }
+
+  console.log(
+    `[socialPublisher] stageApprovedContent sourceFile=${input.sourceFile} ` +
+      `created=${created.length} skipped=${skipped.length}`
+  );
+
+  return { created, skipped };
 }

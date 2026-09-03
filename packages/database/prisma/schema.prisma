@@ -5670,6 +5670,11 @@ model SocialAccount {
   lastErrorAt      DateTime?
   lastErrorMessage String? // NEVER write a raw token here — scrub before storing
   isActive         Boolean   @default(true)
+  // ADR-116: gate for AUTOMATED/auto-send posting. isActive means "token healthy";
+  // this means "findasale-hacker's applicable-feature adversarial pass has actually
+  // cleared this platform for real posts." Default false. Set ONLY by hand/admin
+  // action after that pass genuinely passes -- never set programmatically.
+  securityCleared  Boolean   @default(false)
 
   posts     SocialPost[]
   createdAt DateTime     @default(now())
