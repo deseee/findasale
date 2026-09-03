@@ -22,6 +22,7 @@ import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { triggerRevalidation, citySlugFromCityState } from '../services/revalidationService';
+import { syncGlobalConfigExactSet } from '../lib/vercelGlobalConfig';
 
 const CUTOFF_DAYS = 15;
 const BATCH_SIZE = 500;
@@ -39,6 +40,14 @@ const SLEEP_MS = 100;
 // pattern: accumulate touch counts for the whole run, fire once at the end,
 // capped at the highest-value (most sales pruned) cities.
 const PRUNE_MAX_REVALIDATION_CITY_PATHS = 25;
+
+// Automated 410 tombstones (ADR-2026-09-02-automated-410-tombstones-and-cost-snapshots).
+// Bounded rolling window synced to Vercel Global Config — see that ADR for why
+// this is capped rather than syncing the full (unbounded, growing) table: the
+// exact Global Config size ceiling per plan tier was not confirmed, so this
+// starts conservative. IDs outside the window simply fall through to the
+// existing plain-404 behavior — not a regression, just not improved.
+const TOMBSTONE_SYNC_WINDOW = 5000;
 
 export interface PruneScrapedSalesOptions {
   dryRun: boolean;
@@ -127,6 +136,14 @@ export async function pruneScrapedSales(
       // Only onDelete:Restrict relation on Sale — clear first so the delete never blocks.
       await tx.affiliateLink.deleteMany({ where: { saleId: { in: ids } } });
       await tx.sale.deleteMany({ where: { id: { in: ids } } });
+      // Automated-410 tombstone: record every pruned id permanently (no relation to
+      // Sale on purpose — the row is already gone). skipDuplicates guards a re-run
+      // of the same batch (e.g. after a transient failure) from erroring on the
+      // unique id constraint.
+      await tx.prunedSaleTombstone.createMany({
+        data: ids.map((id) => ({ id })),
+        skipDuplicates: true,
+      });
     });
 
     // On-demand revalidation (ADR 2026-07-11, fixed 2026-07-16): pruned sales' own
@@ -161,6 +178,22 @@ export async function pruneScrapedSales(
     triggerRevalidation(citySlugs.map((slug) => `/city/${slug}`)).catch((err) => {
       console.error('[prune-scraped-sales] revalidation trigger failed:', err);
     });
+  }
+
+  // Automated-410 tombstone sync: keep Global Config holding exactly the most
+  // recently pruned TOMBSTONE_SYNC_WINDOW ids, regardless of how many (if any)
+  // were deleted THIS run — self-correcting every run, no drift. Fire-and-forget
+  // relative to the job's own return value; failures are logged inside
+  // syncGlobalConfigExactSet and must never fail the prune job itself.
+  try {
+    const recentTombstones = await prisma.prunedSaleTombstone.findMany({
+      select: { id: true },
+      orderBy: { prunedAt: 'desc' },
+      take: TOMBSTONE_SYNC_WINDOW,
+    });
+    await syncGlobalConfigExactSet(recentTombstones.map((t) => t.id));
+  } catch (err) {
+    console.error('[prune-scraped-sales] tombstone sync failed (non-fatal):', err);
   }
 
   const durationMs = Date.now() - startedAt;

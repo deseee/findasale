@@ -201,8 +201,39 @@ function isCrawlerPage(pathname: string): boolean {
   return CRAWLER_PAGE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+// ── Automated 410 tombstone lookup (Global Config) ─────────────────────────────
+// See the "Permanently deleted sale IDs" block above for full context. Reads
+// Vercel Global Config's fast-read endpoint directly via fetch() -- no new npm
+// dependency needed (this middleware already uses raw fetch() for crawler-log
+// tracking below), so this ships without touching package.json/pnpm-lock.yaml.
+// Fails open on any error/timeout/missing-config: returns false, never throws,
+// so a Global Config outage can only ever under-tombstone (falls back to the
+// existing plain-404 path), never break or slow down a real sale page.
+const GLOBAL_CONFIG_FETCH_TIMEOUT_MS = 200;
+
+async function isTombstonedSaleId(saleId: string): Promise<boolean> {
+  const configId = process.env.VERCEL_GLOBAL_CONFIG_ID;
+  const readToken = process.env.VERCEL_GLOBAL_CONFIG_READ_TOKEN;
+  if (!configId || !readToken) return false; // not provisioned yet -- fail open, not an error
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GLOBAL_CONFIG_FETCH_TIMEOUT_MS);
+    const res = await fetch(
+      `https://global-config.vercel.com/${configId}/items?token=${readToken}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timer);
+    if (!res.ok) return false;
+    const items = (await res.json()) as Array<{ key: string }>;
+    return items.some((item) => item.key === saleId);
+  } catch {
+    return false; // timeout, network error, malformed response -- fail open
+  }
+}
+
 // ── Main middleware ────────────────────────────────────────────────────────────
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { searchParams, pathname } = request.nextUrl;
   const ua = request.headers.get('user-agent') ?? '';
 
@@ -216,19 +247,42 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL('/api/sitemap-index', request.url));
   }
 
-  // ── Permanently deleted sale IDs (GSC 404 cleanup, 2026-07-21) ─────────────
-  // These 14 Sale IDs were confirmed (psycopg2 against production DB) to be
-  // genuinely and permanently deleted from the Sale table — no soft-delete
-  // field exists on the model, so this is a known-finite historical list from
-  // one purge event, not something that needs to be DB-driven. GSC reported
-  // repeated "Not found (404)" validation failures for these URLs because
-  // pages/sales/[id].tsx uses getStaticProps (ISR), which cannot return a
-  // custom status code from the page component itself. Middleware already
-  // runs on every /sales/:id request (crawler tracking, above/below) at zero
-  // added network cost, so it handles the 410 instead. A 410 Gone (vs 404)
-  // tells Google the removal is intentional and permanent, which is the
-  // correct signal for content that will never come back.
-  const DELETED_SALE_IDS = new Set([
+  // ── Permanently deleted sale IDs -- automated (2026-09-02) ─────────────────
+  // ADR: claude_docs/feature-notes/ADR-2026-09-02-automated-410-tombstones-and-cost-snapshots.md
+  //
+  // History: originally a 16-id hand-curated list (GSC 404 cleanup,
+  // 2026-07-21/07-29), confirmed working and kept as the SEED_DELETED_SALE_IDS
+  // fallback below. This is now populated automatically by
+  // packages/backend/src/jobs/pruneScrapedSales.ts, which syncs a bounded
+  // rolling window (most recent 5,000) of hard-deleted Sale ids to Vercel
+  // Global Config every daily run. Middleware reads that window here instead
+  // of relying on a static array that would require a code deploy to update.
+  //
+  // Why 410 (not plain 404): pages/sales/[id].tsx uses getStaticProps (ISR),
+  // which cannot return a custom status code from the page component itself --
+  // a `notFound: true` result always serves a plain 404. Middleware runs before
+  // ISR/getStaticProps and CAN construct an arbitrary response, so it is the
+  // only place a real 410 can be emitted. This also means a tombstoned id never
+  // reaches getStaticProps at all -- it skips the ISR write and the function
+  // invocation entirely (the actual 2026-09-02 cost/root-cause finding this
+  // fix addresses), not just returning a different status code.
+  //
+  // Why a network read here is acceptable (unlike a backend/Postgres call):
+  // Global Config's fast-read endpoint is purpose-built for low-latency edge
+  // lookups during the request lifecycle (Vercel's own framing) -- this is a
+  // fundamentally different cost/latency profile than a Railway Postgres round
+  // trip, which is exactly why Global Config (not a live DB check) was chosen.
+  // A short timeout + fail-open below ensures a Global Config hiccup can never
+  // slow down or break a real sale page.
+  //
+  // Scale note: this window is BOUNDED (5,000 most recent), not the full
+  // pruned-sale history -- the exact per-plan Global Config size ceiling was
+  // not confirmed as of this fix, so the sync job deliberately stays
+  // conservative. IDs outside the window fall through to the pre-existing
+  // notFound:true / plain-404 behavior below -- not a regression, just not
+  // improved for the oldest tail of the backlog (see ADR for detail, including
+  // why the July 2026 mass-prune's ~51K ids can't be backfilled).
+  const SEED_DELETED_SALE_IDS = new Set([
     'cmqf14g6x00t9bo1nibst4yk7',
     'cmqf14aag001hbo1nkd6lqcs7',
     'cmqf14g6v00t7bo1npyinumlm',
@@ -243,16 +297,16 @@ export function middleware(request: NextRequest) {
     'cmqf14af4002bbo1nu7kw6v4a',
     'cmr7fwc6y006rzjpwt5k8lsdf',
     'cmr7g5csm00obzjpwgdn4jg3j',
-    // Added 2026-07-29 (GSC audit 2026-07-28 follow-up): two more Sale IDs from
-    // the same "Not found (404)" bucket, re-confirmed live 404 via
-    // `curl -sI https://finda.sale/sales/<id>` immediately before this change.
     'cmrjfli9v000n8tv0hcw0s2fo',
     'cmqq49tbh00ejvg736nkqlowq',
   ]);
 
   if (pathname.startsWith('/sales/')) {
     const saleId = pathname.slice('/sales/'.length).split('/')[0];
-    if (DELETED_SALE_IDS.has(saleId)) {
+    if (SEED_DELETED_SALE_IDS.has(saleId)) {
+      return new NextResponse(null, { status: 410 });
+    }
+    if (await isTombstonedSaleId(saleId)) {
       return new NextResponse(null, { status: 410 });
     }
   }

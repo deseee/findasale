@@ -6424,3 +6424,36 @@ model AdminImpersonationLog {
   @@index([adminUserId])
   @@index([targetUserId])
 }
+
+// PrunedSaleTombstone -- ADR-2026-09-02-automated-410-tombstones-and-cost-snapshots.
+// Permanent record of every Sale ID hard-deleted by pruneScrapedSales.ts, going
+// forward from this migration (no relation to Sale -- the whole point is the Sale
+// row is gone; cuid IDs are never reused so a tombstoned id is permanently valid).
+// Source of truth for the automated 410 (vs plain 404) response on /sales/[id] --
+// a bounded recent window of these rows is synced to Vercel Global Config and read
+// by packages/frontend/middleware.ts. Cron-only writes -- never accept a
+// client-supplied id into this table from any request path.
+model PrunedSaleTombstone {
+  id       String   @id // same cuid as the original Sale.id
+  prunedAt DateTime @default(now())
+
+  @@index([prunedAt])
+}
+
+// PlatformCostSnapshot -- ADR-2026-09-02-automated-410-tombstones-and-cost-snapshots.
+// Daily persisted history of external platform cost/usage line items (Vercel,
+// Railway) so cost investigations query a table instead of re-deriving trend data
+// from STATE.md prose each time. Purely informational/internal -- no relation to
+// any other model, safe to write from a scheduled task via direct upsert.
+model PlatformCostSnapshot {
+  id        String   @id @default(cuid())
+  date      DateTime // day this snapshot represents (UTC midnight)
+  provider  String   // "vercel" | "railway"
+  metric    String   // e.g. "isr_writes", "observability_events", "railway_memory_gb_hrs"
+  quantity  Decimal
+  costUsd   Decimal
+  createdAt DateTime @default(now())
+
+  @@unique([date, provider, metric])
+  @@index([provider, metric, date])
+}
