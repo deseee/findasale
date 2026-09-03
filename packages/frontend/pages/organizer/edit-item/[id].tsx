@@ -660,6 +660,10 @@ const EditItemPage = () => {
   // suggestion already on this page. Skipped entirely once item.discogsListingId is persisted
   // (already pushed) or if Discogs isn't connected (section doesn't render at all -- see JSX gate).
   const [discogsPushPending, setDiscogsPushPending] = useState(false);
+  // 2026-09-03: Discogs's own "Allow offers" toggle (real, documented allow_offers API param
+  // -- see discogsListingConnector.ts). Organizer opt-in per push, defaults off (matches
+  // Discogs's own API default).
+  const [discogsAllowOffers, setDiscogsAllowOffers] = useState(false);
   const {
     data: discogsEligibility,
     isLoading: discogsEligibilityLoading,
@@ -680,8 +684,8 @@ const EditItemPage = () => {
   });
 
   const discogsPushMutation = useMutation({
-    mutationFn: async ({ publish }: { publish: boolean }) => {
-      return api.post(`/discogs/items/${id}/listing`, { publish });
+    mutationFn: async ({ publish, allowOffers }: { publish: boolean; allowOffers: boolean }) => {
+      return api.post(`/discogs/items/${id}/listing`, { publish, allowOffers });
     },
     onSuccess: (response, variables) => {
       if (response.data?.success) {
@@ -711,7 +715,7 @@ const EditItemPage = () => {
       showToast('Save failed. Fix errors before pushing to Discogs', 'error');
       return;
     }
-    discogsPushMutation.mutate({ publish });
+    discogsPushMutation.mutate({ publish, allowOffers: discogsAllowOffers });
   };
 
   // Reverb Push Section (2026-09-01). Unlike Discogs/eBay, Reverb has no persisted
@@ -2581,6 +2585,18 @@ const EditItemPage = () => {
             {discogsConnected && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
+                {/* 2026-09-03: Discogs's own "Allow offers" toggle (real, documented allow_offers
+                    API param). Read at push-time by handlePushToDiscogs -- applies to whichever
+                    button below is clicked (Push/Publish/Re-push all go through the same handler). */}
+                <label className="flex items-center gap-2 mb-2 text-sm text-warm-600 dark:text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={discogsAllowOffers}
+                    onChange={(e) => setDiscogsAllowOffers(e.target.checked)}
+                    className="rounded border-warm-300 dark:border-gray-600"
+                  />
+                  Allow buyers to make offers
+                </label>
                 {item?.discogsListingId ? (
                   <div className="space-y-2">
                     <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">

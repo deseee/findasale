@@ -169,7 +169,7 @@ export const getDiscogsEligibility = async (req: AuthRequest, res: Response) => 
 
 /**
  * POST /api/discogs/items/:id/listing
- * Body: { publish?: boolean }
+ * Body: { publish?: boolean, allowOffers?: boolean }
  */
 export const pushItemToDiscogs = async (req: AuthRequest, res: Response) => {
   try {
@@ -189,7 +189,10 @@ export const pushItemToDiscogs = async (req: AuthRequest, res: Response) => {
       return;
     }
     const publish = req.body?.publish === true;
-    const listing = await createDiscogsListing(organizer.id, item, { publish });
+    // 2026-09-03: Discogs's own "Allow offers" toggle -- a real, documented API param
+    // (allow_offers), organizer opt-in per push, same pattern as `publish` just above.
+    const allowOffers = req.body?.allowOffers === true;
+    const listing = await createDiscogsListing(organizer.id, item, { publish, allowOffers });
     // 2026-08-27: persist the real Discogs listing id so the frontend can show "already
     // pushed" on a later page load instead of forgetting the moment the organizer refreshes.
     // listing_id is Discogs' own documented Marketplace API field name (POST

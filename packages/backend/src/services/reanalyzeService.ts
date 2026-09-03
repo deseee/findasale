@@ -203,7 +203,11 @@ export async function reanalyzeItem(
         title: result.title || item.title,
         brand: item.brand ?? result.brand ?? null,
         mpn: item.mpn ?? result.mpn ?? null,
-        upc: item.upc ?? null,
+        // FIX (2026-09-03): was missing the result.upc fallback that brand/mpn already have --
+        // Haiku's own freshly-read UPC (evidence-only, never invented per its own prompt) never
+        // reached the enrichment cascade, so providers like ebayCatalogProvider (gated on having
+        // ANY identifier) could never fire off a freshly-scanned UPC with no prior stored value.
+        upc: item.upc ?? result.upc ?? null,
         ean: item.ean ?? null,
         isbn: item.isbn ?? null,
         tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
@@ -274,6 +278,20 @@ export async function reanalyzeItem(
     appliedData.ebayCategoryName = cat.categoryName;
   }
   Object.assign(appliedData, catalogApply);
+  // FIX (2026-09-03): direct-apply Haiku's own vision-read UPC as a last-resort fallback, same
+  // tier as the `color` direct-apply above -- only when the cascade didn't already resolve one,
+  // the item has no stored UPC, and the organizer hasn't manually edited the field. Confirmed via
+  // `grep -rn "result.upc" packages/backend/src` returning zero matches before this fix: the AI
+  // was extracting a real, visible UPC on every tagging/reanalyze pass and it was silently
+  // discarded every time.
+  if (
+    !appliedData.upc &&
+    !item.upc &&
+    !(item.userEditedFields || []).includes('upc') &&
+    result.upc
+  ) {
+    appliedData.upc = result.upc;
+  }
   if (typeof result.confidence === 'number') appliedData.aiConfidence = result.confidence;
   // Mark tagged so the review card renders the confidence chip after re-analysis.
   appliedData.isAiTagged = true;
@@ -293,7 +311,7 @@ export async function reanalyzeItem(
     brand: (catalogApply.brand as string) ?? item.brand ?? result.brand ?? null,
     color: (appliedData.color as string) ?? item.color ?? result.color ?? null,
     mpn: (catalogApply.mpn as string) ?? item.mpn ?? result.mpn ?? null,
-    upc: (catalogApply.upc as string) ?? item.upc ?? null,
+    upc: (catalogApply.upc as string) ?? item.upc ?? result.upc ?? null,
     catalogEnrichment: Object.keys(merged).length > 0
       ? {
           sources: enrichmentSources,

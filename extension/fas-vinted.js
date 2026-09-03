@@ -1755,13 +1755,41 @@
     const warnings = [];
     await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
     await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
-    // ADR-090 (2026-09-02): Vinted requires ISBN for Books/Comics -- fill from Item.isbn when
-    // this looks like a book/comic listing; tryFill's existing no-value branch already produces
-    // the correct 'please set it manually' warning when isbn is empty, and its selector-miss
-    // branch covers an unconfirmed field label -- no new warning logic needed here. Never invents
-    // a fake ISBN (no safe default exists for an identifier, same reasoning as ADR-089).
+    // ADR-090 Addendum 3 (2026-09-03): Vinted HARD-BLOCKS submission with "Enter an ISBN to
+    // continue" on every Books & Media > Books subcategory (live-tested: both "Comics, manga &
+    // graphic novels" AND an unrelated "Fiction" subcategory show the identical block -- this is
+    // a Books-tree-wide requirement, not comics-specific), so leaving it blank is not a safe
+    // no-op the way it is for optional fields elsewhere in this file. Also live-tested what
+    // Vinted's field actually validates: a real, checksum-valid 13-digit UPC/EAN with no 978/979
+    // prefix (i.e. NOT a genuine registered ISBN) was accepted -- Vinted validates format/
+    // checksum only, never real registry membership. So when Item.isbn is genuinely empty (e.g.
+    // single-issue back-catalog comics predate per-issue ISBN assignment -- only later collected
+    // trade paperbacks get one), fall back to the item's own real UPC/EAN barcode instead of
+    // leaving the field empty. STILL never invents a value: only ever a real isbn/upc/ean already
+    // on file for the item (see productEnrichment.ts's own "evidence-only, never invented" rule
+    // for how upc/isbn get there in the first place).
     if (looksLikeVintedBookOrComicItem(item)) {
-      await tryFill('ISBN', item.isbn, (v) => fillText('ISBN', v), warnings);
+      if (item.isbn) {
+        // Real ISBN on file -- original, unchanged behavior. tryFill's own success/selector-miss
+        // messaging is correct here and not duplicated below.
+        await tryFill('ISBN', item.isbn, (v) => fillText('ISBN', v), warnings);
+      } else if (item.upc || item.ean) {
+        // No real ISBN, but a real barcode IS on file -- use it directly (not via tryFill, to
+        // avoid stacking tryFill's own generic "no value set" warning on top of this more useful,
+        // specific one).
+        const fallbackValue = item.upc || item.ean;
+        const ok = await fillText('ISBN', fallbackValue);
+        if (ok) {
+          warnings.push("ISBN: no verified ISBN found -- used the item's UPC/EAN barcode instead (Vinted requires some value here for Books/Comics; double-check before publishing).");
+        } else {
+          warnings.push('ISBN could not be filled automatically -- please set it yourself.');
+        }
+      } else {
+        // Truly nothing on file. Do not invent a value (ADR-089/090 rule) -- surface a specific,
+        // actionable warning instead of the generic tryFill one, since "no ISBN/UPC/EAN at all"
+        // is a real blocker for this platform, not just a nice-to-have missing field.
+        warnings.push('ISBN: Vinted requires this for Books/Comics and this item has no ISBN or UPC/EAN on file -- Vinted will block publishing until you enter one manually (try the barcode printed on the item itself).');
+      }
     }
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
     // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the

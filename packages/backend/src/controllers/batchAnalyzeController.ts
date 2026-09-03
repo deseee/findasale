@@ -485,7 +485,10 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 title: summary.suggestedTitle,
                 brand: existing?.brand ?? analysis?.brand ?? null,
                 mpn: existing?.mpn ?? analysis?.mpn ?? null,
-                upc: existing?.upc ?? null,
+                // FIX (2026-09-03): was missing the analysis?.upc fallback that brand/mpn already
+                // have -- Haiku's own freshly-read UPC (evidence-only, never invented per its own
+                // prompt) never reached the enrichment cascade on this ingestion path either.
+                upc: existing?.upc ?? analysis?.upc ?? null,
                 ean: existing?.ean ?? null,
                 isbn: existing?.isbn ?? null,
                 tags: summary.suggestedTags ?? null,
@@ -555,6 +558,14 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 } : {}),
                 // Catalog enrichment: HIGH-confidence auto-fills + suggestion write.
                 ...catalogApply,
+                // FIX (2026-09-03): direct-apply Haiku's own vision-read UPC as a last-resort
+                // fallback when the cascade itself didn't resolve one, matching the existing
+                // barcode-enrichment upc block's guard style above. Confirmed via
+                // `grep -rn "result.upc\|analysis?.upc" packages/backend/src` returning zero
+                // consuming matches before this fix -- the AI's own visible-barcode read was
+                // extracted every batch-tag pass and silently discarded every time.
+                ...(!catalogApply.upc && !userEdited.includes('upc') && !(existing as any)?.upc && analysis?.upc
+                  ? { upc: analysis.upc } : {}),
                 ...(catalogSuggestionWrite !== undefined ? { catalogSuggestions: catalogSuggestionWrite } : {}),
                 // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
                 // cloudAIService already gates these at packageConfidence >= 0.5 before returning.

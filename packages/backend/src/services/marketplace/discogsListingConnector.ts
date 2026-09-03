@@ -21,11 +21,24 @@
  * TWO REAL, PERMANENT PRODUCT LIMITS (not bugs — surface these in any future UI):
  *   1. Discogs's create/edit-listing API has NO photo field at all. A Discogs
  *      listing shows only the catalog release's own stock thumbnail — never the
- *      organizer's own photos.
+ *      organizer's own photos. RE-VERIFIED 2026-09-03 against the current live
+ *      official docs (discogs.com/developers/resources/marketplace/listing.html,
+ *      POST /marketplace/listings) after Patrick reported Discogs's own WEBSITE now
+ *      supports photo uploads on manually-created listings -- confirmed that is a
+ *      website-only UI feature, NOT exposed anywhere in the public REST API this
+ *      connector uses (full documented param list: release_id, condition,
+ *      sleeve_condition, price, comments, allow_offers, status, external_id,
+ *      location, weight, format_quantity -- no image/photo field of any kind).
+ *      Still a real, permanent ceiling for anything built on this API.
  *   2. Listing creation requires an existing Discogs catalog `release_id` — there
  *      is no API path to submit a new release. An obscure/uncatalogued record
  *      cannot be auto-listed. findDiscogsReleaseId() below is the required
  *      pre-check; callers must treat a null result as "not eligible," not an error.
+ *
+ * BEST OFFER (2026-09-03): Discogs's own "Allow offers" toggle IS a real, documented
+ * API parameter (`allow_offers`, boolean, default false) on the same Create Listing
+ * endpoint re-verified above -- added as `DiscogsListingOptions.allowOffers` below,
+ * same organizer-opt-in-per-push pattern as the existing `publish` option.
  *
  * LIVE-VERIFIED (2026-08-27): connect + eligibility exercised end-to-end against
  * the real Discogs API with a real organizer personal access token (ArtifactM
@@ -401,6 +414,10 @@ function resolveDiscogsCondition(itemCondition: string | null): string {
 export interface DiscogsListingOptions {
   /** Default false — create as a Draft. Mirrors Reverb's non-auto-publish safety posture. */
   publish?: boolean;
+  /** Discogs's own "Allow offers" toggle -- lets buyers submit an offer below the listing
+   * price. Real, documented API param (`allow_offers`, boolean, default false) -- see file
+   * header. Defaults to false/omitted here too, matching Discogs's own default exactly. */
+  allowOffers?: boolean;
 }
 
 /**
@@ -435,6 +452,10 @@ export async function createDiscogsListing(
     status: options.publish === true ? 'For Sale' : 'Draft',
     comments: item.description || undefined,
     external_id: item.id,
+    // 2026-09-03: only send allow_offers when explicitly true -- omitting it entirely when
+    // false/undefined matches Discogs's own documented default rather than redundantly
+    // asserting it.
+    ...(options.allowOffers === true ? { allow_offers: true } : {}),
   };
 
   const { status, text } = await discogsRequest('/marketplace/listings', accessToken, {

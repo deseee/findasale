@@ -345,7 +345,10 @@ export async function processRapidDraft(itemId: string): Promise<void> {
             title: aiResult.title || item.title,
             brand: item.brand ?? aiResult.brand ?? null,
             mpn: item.mpn ?? aiResult.mpn ?? null,
-            upc: item.upc ?? null,
+            // FIX (2026-09-03): was missing the aiResult.upc fallback that brand/mpn already
+            // have -- Haiku's own freshly-read UPC (evidence-only, never invented per its own
+            // prompt) never reached the enrichment cascade on this ingestion path either.
+            upc: item.upc ?? aiResult.upc ?? null,
             ean: item.ean ?? null,
             isbn: item.isbn ?? null,
             tags: aiResult.tags ?? null,
@@ -425,6 +428,13 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         } : {}),
         // Catalog enrichment: HIGH-confidence auto-fills + suggestion write.
         ...rapidCatalogApply,
+        // FIX (2026-09-03): direct-apply Haiku's own vision-read UPC as a last-resort fallback
+        // when the cascade itself didn't resolve one, matching the existing barcode-enrichment
+        // upc block's guard style above. Confirmed via `grep -rn "aiResult.upc\|aiResult?.upc"
+        // packages/backend/src` returning zero consuming matches before this fix -- the AI's own
+        // visible-barcode read was extracted every rapidfire pass and silently discarded.
+        ...(!rapidCatalogApply.upc && !userEdited.includes('upc') && !item.upc && aiResult?.upc
+          ? { upc: aiResult.upc } : {}),
         ...(rapidCatalogSuggestion !== undefined ? { catalogSuggestions: rapidCatalogSuggestion } : {}),
         // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
         // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
