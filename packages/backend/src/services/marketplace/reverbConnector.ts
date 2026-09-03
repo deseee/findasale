@@ -245,6 +245,96 @@ async function resolveReverbConditionUuid(accessToken: string, itemCondition: st
 }
 
 // ============================================================================
+// Category mapping
+// ============================================================================
+
+// Real Reverb top-level category UUIDs -- pulled LIVE 2026-09-02 directly from Reverb's own
+// production listing-edit page (reverb.com/my/selling/listings/101338060/edit?section=info,
+// the Category <select> element's option values) while diagnosing the Samick guitar-amp draft
+// that shipped with Brand="Unknown" and Category empty. This is the actual, current, complete
+// top-level category list Reverb's own UI offers as of that date -- not reconstructed from
+// docs (reverb-api.com was unreachable this session; this table supersedes any docs-derived
+// guess). resolveReverbCategoryUuid() below still prefers a live GET /api/categories/flat call
+// first, same fetch-live-then-fallback shape as resolveReverbConditionUuid() above, and only
+// falls back to this table if that call fails or its response shape doesn't match what's
+// expected -- so a subcategory-level UUID from a real live response is still preferred when
+// available; this table only guarantees a top-level bucket.
+const REVERB_TOP_LEVEL_CATEGORY_UUID_FALLBACK: Record<string, string> = {
+  Accessories: '62835d2e-ac92-41fc-9b8d-4aba8c1c25d5',
+  'Acoustic Guitars': '3ca3eb03-7eac-477d-b253-15ce603d2550',
+  Amps: '09055aa7-ed49-459d-9452-aa959f288dc2',
+  'Band and Orchestra': '032c74d0-b0e2-4442-877f-e1a22438a7fa',
+  'Bass Guitars': '53a9c7d7-d73d-4e7f-905c-553503e50a90',
+  'DJ and Lighting Gear': '58d889f7-0aa1-4689-a9d3-da16dd225e8d',
+  'Drums and Percussion': 'b3cb9f8e-4cb6-4325-8215-1efcd9999daf',
+  'Effects and Pedals': 'fa10f97c-dd98-4a8f-933b-8cb55eb653dd',
+  'Electric Guitars': 'dfd39027-d134-4353-b9e4-57dc6be791b9',
+  'Folk Instruments': 'fb60628c-be4b-4be2-9c0f-bc5d31e3996c',
+  'Home Audio': '40e8bfd0-3021-43f7-b104-9d7b19af5c2b',
+  'Keyboards and Synths': 'd002db05-ab63-4c79-999c-d49bbe8d7739',
+  Parts: '1f99c852-9d20-4fd3-a903-91da9c805a5e',
+  'Pro Audio': 'b021203f-1ed8-476c-a8fc-32d4e3b0ef9e',
+};
+
+// Ordered keyword rules -- FIRST match wins, so more specific terms (e.g. "bass guitar") must
+// come before broader ones that could also match them (e.g. a bare "guitar" rule would need to
+// sit after both "bass guitar" and "acoustic/electric guitar" or it would misclassify basses).
+// Matched against `${item.title} ${item.tags.join(' ')}`.toLowerCase(). This only runs for
+// items that already passed the Reverb-eligibility gate (item.category === 'Musical
+// Instruments & Gear', see edit-item/[id].tsx / reverbMarketplaceController.ts), so the
+// question here is never "is this a musical instrument" -- only "which Reverb bucket". Falls
+// back to 'Accessories' (the most defensible generic bucket for gated-eligible items) rather
+// than leaving category unset entirely, since an unset required field is the exact bug this
+// exists to fix -- a top-level miss is still far better than the empty state Reverb showed for
+// the Samick amp.
+const REVERB_CATEGORY_KEYWORD_RULES: Array<{ pattern: RegExp; name: string }> = [
+  // "bass amp" must be checked before the standalone "bass guitar" rule below, or an item
+  // titled e.g. "Bass Guitar Amp Head" would hit "bass guitar" first and land in Bass Guitars
+  // instead of Amps.
+  { pattern: /\bbass amp\b/, name: 'Amps' },
+  { pattern: /\bbass guitar\b/, name: 'Bass Guitars' },
+  { pattern: /\b(amp|amplifier|combo amp|head|cabinet|cab)\b/, name: 'Amps' },
+  { pattern: /\b(pedal|effects? (pedal|unit)|distortion|overdrive|fuzz|looper|reverb pedal|delay pedal|wah)\b/, name: 'Effects and Pedals' },
+  { pattern: /\b(drum|cymbal|snare|hi-?hat|percussion|djembe|cajon)\b/, name: 'Drums and Percussion' },
+  { pattern: /\b(keyboard|synth|synthesizer|midi controller|electric piano|organ)\b/, name: 'Keyboards and Synths' },
+  { pattern: /\b(violin|fiddle|banjo|mandolin|ukulele|uke|harmonica|accordion|dulcimer|autoharp)\b/, name: 'Folk Instruments' },
+  { pattern: /\b(trumpet|trombone|saxophone|sax|clarinet|flute|tuba|french horn|cornet|oboe|bassoon)\b/, name: 'Band and Orchestra' },
+  { pattern: /\b(dj mixer|turntable|dj controller|stage light|lighting rig)\b/, name: 'DJ and Lighting Gear' },
+  { pattern: /\b(microphone|mic|mixing console|audio interface|pa system|studio monitor|preamp)\b/, name: 'Pro Audio' },
+  { pattern: /\b(receiver|home stereo|hi-?fi)\b/, name: 'Home Audio' },
+  { pattern: /\b(pickup|bridge|tuning peg|tuner key|nut|fretboard|replacement part)\b/, name: 'Parts' },
+  { pattern: /\bacoustic guitar\b/, name: 'Acoustic Guitars' },
+  { pattern: /\belectric guitar\b/, name: 'Electric Guitars' },
+  { pattern: /\bguitar\b/, name: 'Electric Guitars' }, // bare "guitar" with no acoustic/bass qualifier -- electric is the more common estate-sale find
+];
+const DEFAULT_REVERB_CATEGORY_NAME = 'Accessories';
+
+function guessReverbCategoryName(item: Item): string {
+  const haystack = `${item.title || ''} ${(item.tags || []).join(' ')}`.toLowerCase();
+  for (const rule of REVERB_CATEGORY_KEYWORD_RULES) {
+    if (rule.pattern.test(haystack)) return rule.name;
+  }
+  return DEFAULT_REVERB_CATEGORY_NAME;
+}
+
+async function resolveReverbCategoryUuid(accessToken: string, item: Item): Promise<string> {
+  const targetName = guessReverbCategoryName(item);
+  try {
+    const resp = await fetch(`${REVERB_API_BASE}/categories/flat`, { headers: reverbHeaders(accessToken) });
+    if (resp.ok) {
+      const data = (await resp.json()) as any;
+      const list: Array<{ uuid: string; full_name?: string; name?: string }> =
+        data?.categories || data?._embedded?.categories || [];
+      const match = list.find(c => (c.full_name || c.name || '').toLowerCase() === targetName.toLowerCase());
+      if (match?.uuid) return match.uuid;
+    }
+  } catch (e) {
+    console.warn('[Reverb] categories/flat live fetch failed, using fallback table', e);
+  }
+  return REVERB_TOP_LEVEL_CATEGORY_UUID_FALLBACK[targetName] || REVERB_TOP_LEVEL_CATEGORY_UUID_FALLBACK[DEFAULT_REVERB_CATEGORY_NAME];
+}
+
+// ============================================================================
 // Listing create / end-or-delete
 // ============================================================================
 
@@ -255,9 +345,12 @@ export interface ReverbListingOptions {
    * own site. Defaulting to draft (not auto-publish) means that gap is caught before the
    * listing goes live, not after. */
   publish?: boolean;
-  /** Optional Reverb category UUID (from GET /api/categories/flat). No FindA.Sale -> Reverb
-   * category taxonomy crosswalk exists yet — omit to skip category assignment entirely
-   * (category is not in Reverb's required-field list). */
+  /** Optional Reverb category UUID (from GET /api/categories/flat) to use INSTEAD of
+   * automatic resolution. createReverbListing() now always auto-resolves a category via
+   * resolveReverbCategoryUuid() (keyword match against title/tags -> REVERB_CATEGORY_KEYWORD_RULES)
+   * when this is omitted -- added 2026-09-02 after the Samick guitar-amp draft shipped with an
+   * empty Category because nothing ever supplied this value. Pass this explicitly only to
+   * override the auto-guess (e.g. a future "confirm category" UI step). */
   reverbCategoryUuid?: string;
 }
 
@@ -284,10 +377,26 @@ export async function createReverbListing(
 
   const accessToken = decryptAccessToken(account);
   const conditionUuid = await resolveReverbConditionUuid(accessToken, item.condition ?? null);
+  // BUG FIX 2026-09-02 (Patrick live report -- Samick guitar-amp draft listing shipped with
+  // Category empty on Reverb's own edit page): resolve up front, same await-before-body pattern
+  // already used for conditionUuid above, so it's available for the categories/category_uuids
+  // block below regardless of whether the caller passed an explicit override.
+  const categoryUuid = options.reverbCategoryUuid || await resolveReverbCategoryUuid(accessToken, item);
 
   const body: Record<string, any> = {
     title: item.title,
     description: item.description || item.title,
+    // BUG FIX 2026-09-02 (Patrick live report -- same Samick amp listing: Reverb's own edit
+    // page showed Brand as the literal string "Unknown"). Root cause: this body never sent a
+    // make/model field at all, and Reverb's docs (quoted in ReverbListingOptions.publish's own
+    // comment above) say plainly it "will attempt to guess them from the title if omitted; if
+    // the guesser fails it sets them to 'Unknown'" -- exactly what was observed live. item.brand
+    // is FindA.Sale's own AI-tagged brand field (same field eBay's BrandMPN listing spec uses),
+    // and item.mpn (manufacturer part/model number, e.g. "LA15R") is the closest existing field
+    // to Reverb's "model" -- both undefined when not set, which keeps today's guess-from-title
+    // fallback behavior for items that genuinely have neither (no regression for that case).
+    make: item.brand || undefined,
+    model: item.mpn || undefined,
     condition: { uuid: conditionUuid },
     price: {
       amount: (item.price ?? 0).toFixed(2),
@@ -307,18 +416,18 @@ export async function createReverbListing(
 
   // Reverb's own docs self-contradict on the category field name (`categories:[{uuid}]` in
   // the create-listings curl example vs `category_uuids` in that same page's "Categories"
-  // section prose) — re-confirmed still contradictory via a live fetch 2026-08-18. No
-  // FindA.Sale -> Reverb category taxonomy crosswalk exists yet, so this only fires when a
-  // caller explicitly supplies a UUID. Sending BOTH spellings is a deliberate hedge against
-  // the documented ambiguity, not a guess dressed up as certainty — Rails APIs following
-  // strong-params conventions (which Reverb's Rails-shaped doc style strongly suggests)
-  // silently ignore unrecognized params rather than reject the request, so this is safe.
+  // section prose) — re-confirmed still contradictory via a live fetch 2026-08-18. Sending
+  // BOTH spellings is a deliberate hedge against the documented ambiguity, not a guess dressed
+  // up as certainty — Rails APIs following strong-params conventions (which Reverb's
+  // Rails-shaped doc style strongly suggests) silently ignore unrecognized params rather than
+  // reject the request, so this is safe.
+  // BUG FIX 2026-09-02: this used to only fire when a caller explicitly supplied a UUID, which
+  // NO caller ever did -- category was always omitted. categoryUuid is now always resolved
+  // above (auto-guessed or explicit override), so this always fires.
   // TODO: once a real listing can be created against sandbox.reverb.com, verify which field
   // name Reverb actually reads and drop the other.
-  if (options.reverbCategoryUuid) {
-    body.categories = [{ uuid: options.reverbCategoryUuid }];
-    body.category_uuids = [options.reverbCategoryUuid];
-  }
+  body.categories = [{ uuid: categoryUuid }];
+  body.category_uuids = [categoryUuid];
 
   const resp = await fetch(`${REVERB_API_BASE}/listings`, {
     method: 'POST',
