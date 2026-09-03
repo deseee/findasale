@@ -61,7 +61,21 @@ export const DOMAIN_KEYWORD_MAP: Array<{ pattern: RegExp; l1: string }> = [
   { pattern: /guitar|amp|drum|keyboard|piano|violin|instrument|microphone|dj/i, l1: 'Musical Instruments & Gear' },
   { pattern: /jewelry|watch|ring|necklace|bracelet|earring|pendant/i, l1: 'Jewelry & Watches' },
   { pattern: /clothing|apparel|shirt|dress|pants|shoes|jacket|coat|sweater|handbag|purse/i, l1: 'Clothing, Shoes & Accessories' },
-  { pattern: /book|magazine|novel|textbook|comic/i, l1: 'Books & Magazines' },
+  // FIX (2026-09-03, Patrick-reported): single-issue comic books were folded into the generic
+  // book/magazine pattern below -> 'Books & Magazines', but eBay's REAL taxonomy places comics
+  // under Collectibles (confirmed real path, see extractL1's own docstring above:
+  // "Collectibles:Comic Books & Memorabilia:Comics:Comics & Graphic Novels"). This one shared
+  // keyword map feeds BOTH the AI category prompt's domain examples (see cloudAIService.ts,
+  // which now also calls this out explicitly) and this file's own suggestEbayCategoryForTitle
+  // domain-hint resolver -- so a comic's expectedL1 was 'Books & Magazines', which then steered
+  // the resolver toward eBay's generic Books category (261186) instead of the real Collectibles/
+  // Comics tree, which in turn triggered eBay's Books-category ISBN requirement (ADR-089) for an
+  // item that isn't really an eBay "Books" item, AND propagated the same generic "Books" text
+  // into item.category/ebayCategoryName -- which the Vinted crosslister then searched literally,
+  // landing on the wrong leaf ("Magazines"). Listed BEFORE the book/magazine pattern below so the
+  // more specific comic match wins (map order matters, see this array's own doc comment).
+  { pattern: /\bcomic(s)?\b|graphic novel|manga|\btpb\b|trade paperback/i, l1: 'Collectibles' },
+  { pattern: /book|magazine|novel|textbook/i, l1: 'Books & Magazines' },
   { pattern: /baby|infant|toddler|nursery|stroller/i, l1: 'Baby' },
   { pattern: /makeup|cosmetic|skincare|fragrance|beauty|perfume/i, l1: 'Health & Beauty' },
   { pattern: /car part|auto|automotive|motorcycle|vehicle|tire/i, l1: 'eBay Motors' },

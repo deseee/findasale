@@ -328,7 +328,13 @@ function getL1CategoryName(leafCategoryName: string): string {
     { pattern: /furniture|chair|table|sofa|dresser|cabinet|shelf|desk|couch|ottoman/i, l1: 'Home & Garden' },
     { pattern: /jewelry|watch|ring|necklace|bracelet|earring|pendant|brooch/i, l1: 'Jewelry & Watches' },
     { pattern: /clothing|shirt|dress|pants|shoes|jacket|coat|sweater|blouse|shorts/i, l1: 'Clothing, Shoes & Accessories' },
-    { pattern: /book|magazine|novel|textbook|comic|poetry/i, l1: 'Books & Magazines' },
+    // FIX (2026-09-03): split comics out -- eBay's real taxonomy places them under
+    // Collectibles, not Books & Magazines. See config/ebayCategories.ts DOMAIN_KEYWORD_MAP
+    // for the canonical, actually-consumed version of this same fix (this table is currently
+    // unused dead code -- l1CategoryName has no callers -- kept in sync anyway in case it's
+    // revived).
+    { pattern: /\bcomic(s)?\b|graphic novel|manga/i, l1: 'Collectibles' },
+    { pattern: /book|magazine|novel|textbook|poetry/i, l1: 'Books & Magazines' },
     { pattern: /electronics|tv|stereo|radio|camera|phone|laptop|computer|tablet|headphone/i, l1: 'Consumer Electronics' },
     { pattern: /antique|vintage|collectible|coin|stamp|memorabilia|rare|old|retro/i, l1: 'Collectibles' },
     { pattern: /art|painting|print|sculpture|photograph|drawing|watercolor|canvas/i, l1: 'Art' },
