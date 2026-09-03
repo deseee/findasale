@@ -174,12 +174,23 @@ function wrapHeadline(text: string, maxCharsPerLine = 20, maxLines = 3): string[
   return lines.slice(0, maxLines);
 }
 
-/** Renders the opening title card as a real JPEG "shot" — full-bleed brand-dark
- *  background, orange accent bar, centered white headline. Verified this
+/** Renders a full-bleed brand-dark text card "shot" — orange accent bar,
+ *  centered white text, wrapped and vertically centered. Verified this
  *  session: `sharp(Buffer.from(svgString)).jpeg().toFile(...)` produces a real
- *  1080x1920 JPEG. */
-export async function buildTitleCardImage(headlineText: string, destPath: string): Promise<void> {
-  const lines = wrapHeadline(headlineText);
+ *  1080x1920 JPEG. Generalized (ADR-118) from the original single-purpose
+ *  "opening title card" renderer so any card-sequence caller (e.g. the
+ *  build-in-public press-release video style) can render an arbitrary text
+ *  card, not just one opening title. `maxLines` defaults to 3 to preserve the
+ *  original title-card behavior for existing callers; pass a higher value for
+ *  longer body-text cards. */
+export async function buildTextCardImage(
+  cardText: string,
+  destPath: string,
+  opts?: { maxLines?: number; maxCharsPerLine?: number }
+): Promise<void> {
+  const maxLines = opts?.maxLines ?? 3;
+  const maxCharsPerLine = opts?.maxCharsPerLine ?? 20;
+  const lines = wrapHeadline(cardText, maxCharsPerLine, maxLines);
   const lineHeight = 90;
   const blockHeight = lines.length * lineHeight;
   const centerY = VERTICAL_HEIGHT / 2;
@@ -196,6 +207,13 @@ export async function buildTitleCardImage(headlineText: string, destPath: string
 </svg>`;
 
   await sharp(Buffer.from(svg)).jpeg({ quality: 92 }).toFile(destPath);
+}
+
+/** Thin wrapper kept for existing TUTORIAL/GUIDE_LIBRARY callers (thumbnailGenerator.ts
+ *  callers unaffected -- this is the videoAssembly title-card path only) -- identical
+ *  behavior to before ADR-118's generalization, just delegating to buildTextCardImage(). */
+export async function buildTitleCardImage(headlineText: string, destPath: string): Promise<void> {
+  return buildTextCardImage(headlineText, destPath);
 }
 
 export function uploadFileToCloudinary(filePath: string, folder: string): Promise<string> {

@@ -5760,6 +5760,7 @@ enum VideoTriggerType {
   SALE_ENDING
   GUIDE_LIBRARY
   MANUAL
+  BUILD_IN_PUBLIC // ADR-118 -- press-release text-card + voiceover video for build-in-public content
 }
 
 enum VideoPurpose {
