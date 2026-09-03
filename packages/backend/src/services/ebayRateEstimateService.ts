@@ -3020,7 +3020,7 @@ export type PackageSurchargeTier = 'SAFE' | 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONS
  * boolean checks a few lines down (48/30/130/96/110/17280/50/22/30/2cuft -- ADR-103 §2D).
  * They are duplicated here ONLY as boundary comparisons -- NO dollar amount, rate table,
  * or pass-through constant is duplicated; those stay solely in computeSurchargeForCarrier
- * and the AHS_*/LARGE_PACKAGE_*/USPS_NONSTANDARD_FEE_TABLE constants. This function does
+ * and its AHS/LARGE_PACKAGE/USPS_NONSTANDARD fee-table constants. This function does
  * not need a zone or carrier because none of these specific trigger conditions vary by
  * zone -- only the resulting dollar figure does. If ADR-103 ever revises these threshold
  * numbers, update both this function and computeSurchargeForCarrier in the same pass.
