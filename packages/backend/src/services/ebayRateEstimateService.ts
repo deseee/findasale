@@ -3007,6 +3007,55 @@ function withinAbsoluteMax(carrier: 'USPS' | 'UPS' | 'FEDEX', dims: PackageDims,
   return true;
 }
 
+export type PackageSurchargeTier = 'SAFE' | 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD';
+
+/**
+ * ADR-103 Phase 5 (organizer-facing surcharge warning, 2026-09-03). Zone-independent
+ * classification of whether a package's REAL dims/weight/packageType will trigger a
+ * carrier oversize surcharge on ANY of USPS/UPS/FedEx -- used to persist
+ * Item.shippingMarginRiskTier so "which listings are at risk of eating margin on
+ * shipping" is a queryable fact, not something recomputed per organizer/zone.
+ *
+ * The trigger CONDITIONS below intentionally mirror computeSurchargeForCarrier()'s own
+ * boolean checks a few lines down (48/30/130/96/110/17280/50/22/30/2cuft -- ADR-103 §2D).
+ * They are duplicated here ONLY as boundary comparisons -- NO dollar amount, rate table,
+ * or pass-through constant is duplicated; those stay solely in computeSurchargeForCarrier
+ * and the AHS_*/LARGE_PACKAGE_*/USPS_NONSTANDARD_FEE_TABLE constants. This function does
+ * not need a zone or carrier because none of these specific trigger conditions vary by
+ * zone -- only the resulting dollar figure does. If ADR-103 ever revises these threshold
+ * numbers, update both this function and computeSurchargeForCarrier in the same pass.
+ *
+ * Returns the WORST tier that would fire on any modeled carrier
+ * (LARGE_PACKAGE > AHS > USPS_NONSTANDARD > SAFE) -- deliberately conservative, same
+ * "never be short" principle this file already applies elsewhere.
+ */
+export function classifyPackageSurchargeTrigger(
+  dims: { length?: number | null; width?: number | null; height?: number | null } | null | undefined,
+  weightOz: number | null | undefined,
+  packageType?: string | null
+): PackageSurchargeTier {
+  const weightLb = Math.max(0, weightOz || 0) / 16;
+  const sorted = sortedRealDims(dims ?? null);
+  const lengthPlusGirth = sorted ? sorted[0] + 2 * (sorted[1] + sorted[2]) : 0;
+  const volumeCuIn = sorted ? sorted[0] * sorted[1] * sorted[2] : 0;
+
+  // UPS/FedEx Large Package -- same trigger as computeSurchargeForCarrier below.
+  const largePackageTriggered =
+    lengthPlusGirth > 130 || (!!sorted && sorted[0] > 96) || weightLb > 110 || volumeCuIn > 17280;
+  if (largePackageTriggered) return 'LARGE_PACKAGE';
+
+  // UPS/FedEx Additional Handling Surcharge -- same trigger as computeSurchargeForCarrier below.
+  const dimensionTriggered = !!sorted && (sorted[0] > 48 || sorted[1] > 30);
+  const weightTriggered = weightLb > 50;
+  const packagingTriggered = !!packageType && AHS_PACKAGING_TYPES.has(packageType);
+  if (dimensionTriggered || weightTriggered || packagingTriggered) return 'AHS';
+
+  // USPS Ground Advantage nonstandard -- same trigger as computeSurchargeForCarrier's USPS branch.
+  if (sorted && (sorted[0] > 22 || volumeCuIn > 2 * 1728)) return 'USPS_NONSTANDARD';
+
+  return 'SAFE';
+}
+
 /**
  * Additive oversize surcharge for one carrier candidate (ADR-103 Phase 4). Uses REAL
  * dims/weight (not dimensional/billable weight) for trigger checks, matching how real

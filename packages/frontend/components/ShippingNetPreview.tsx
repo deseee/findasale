@@ -45,6 +45,12 @@ interface PreviewResponse {
     labelCost?: number;
     isEstimate: boolean;
     freeShippingOptIn: boolean;
+    /** ADR-103 Phase 5 (2026-09-03): real additive oversize surcharge already folded into
+     *  `rate`, surfaced separately so the organizer can be warned WHY before it eats their
+     *  margin, not just after. surcharge is the dollar amount; surchargeType is which trigger
+     *  fired. null/0 = no surcharge on the currently-cheapest carrier. */
+    surcharge?: number;
+    surchargeType?: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null;
   };
 }
 
@@ -249,6 +255,30 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
           )}
         </div>
       </div>
+
+      {/* ADR-103 Phase 5 (2026-09-03): warn about a real carrier oversize surcharge BEFORE
+          it silently eats the organizer's margin, instead of only after a sale. Silent for
+          AHS/USPS_NONSTANDARD/DESTINATION-caliber amounts kept out of scope here on purpose --
+          SAFE (no surchargeType) renders nothing; DESTINATION alone is a smaller FedEx-only
+          add-on not worth a loud banner. AHS and LARGE_PACKAGE are the two that matter. */}
+      {!loading && data && data.shippingEstimate.surchargeType === 'LARGE_PACKAGE' && (
+        <div className="text-xs text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded px-2 py-1.5">
+          <strong>Oversize package surcharge:</strong> this item's size/weight triggers a real
+          carrier Large Package surcharge (
+          {data.shippingEstimate.surcharge ? fmt(data.shippingEstimate.surcharge) : 'a large additional fee'}
+          {' '}on top of the base rate) already folded into the shipping price shown above.
+          Consider Local Pickup Only, or a per-item eBay shipping policy override sized for
+          this item (Shipping section below) instead of shipping it at the computed rate.
+        </div>
+      )}
+      {!loading && data && data.shippingEstimate.surchargeType === 'AHS' && (
+        <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">
+          <strong>Oversize handling surcharge:</strong> this item's size/weight/packaging
+          triggers a carrier Additional Handling surcharge (
+          {data.shippingEstimate.surcharge ? fmt(data.shippingEstimate.surcharge) : 'an additional fee'}
+          ) already folded into the shipping price shown above.
+        </div>
+      )}
 
       {/* Error state */}
       {error && (

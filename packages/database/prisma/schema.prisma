@@ -1336,6 +1336,11 @@ model Item {
   packageEstimateSource           String? // SEED | CATEGORY | KEYWORD | AI | ORGANIZER — provenance of package estimate
   packageEstimateConfidence       Decimal?                @db.Decimal(3, 2) // 0.00–1.00 confidence of the package estimate
   packageConfirmedByOrganizer     Boolean                 @default(false) // True once organizer reviews/confirms package details — never overwritten by estimates
+  // ADR-103 Phase 5 (2026-09-03): zone-independent carrier-surcharge risk tier, computed by
+  // classifyPackageSurchargeTrigger() from package dims/weight/type whenever they're set or
+  // estimated. null = safe (no known carrier oversize surcharge risk). Not a dollar amount --
+  // that's computed live per-organizer-zone by computeSurchargeForCarrier and never stored.
+  shippingMarginRiskTier          String? // AHS | LARGE_PACKAGE | USPS_NONSTANDARD | null
   // AI-estimated package profile (from cloudAI tagging pass — not organizer-confirmed)
   // Used by estimatePackageProfile step 4 when no PackageProfile keyword/category match exists.
   aiPackageWeightOz               Int? // packed weight estimate in ounces from cloudAI
@@ -1451,6 +1456,7 @@ model Item {
   @@index([vendorBoothId]) // Vendor Booth Payments 2026-07-07: booth item lookup
   @@index([boothCartTransactionId]) // 2026-07-28: cart-scoped reservation lookup (resolveBoothLegItems / cancelBoothCart)
   @@index([tagColor]) // #310: Discount rule color tag lookup
+  @@index([shippingMarginRiskTier]) // ADR-103 Phase 5: "listings at risk of eating margin on shipping" dashboard query
   @@index([saleId])
   @@index([saleId, status]) // Sentry slow query: SELECT Item WHERE saleId+status (1351ms) — public item browse + POS organizer item search with optional status filter
   @@index([saleId, markdownApplied]) // Sentry slow query: markdownCron findMany WHERE saleId+markdownApplied=false — eliminates per-sale full scans in markdown job

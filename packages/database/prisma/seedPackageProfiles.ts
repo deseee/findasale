@@ -247,6 +247,75 @@ const GAP_FILL_PROFILES: Profile[] = [
   { keyword: 'insulated backpack', weightOz: 28, lengthIn: 14, widthIn: 10, heightIn: 8, packageType: 'MAILING_BOX', confidence: 0.5 },
   { keyword: 'life jacket', weightOz: 24, lengthIn: 16, widthIn: 12, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.55 },
   { keyword: 'pfd', weightOz: 24, lengthIn: 16, widthIn: 12, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.5 },
+
+  // ADR-103 Phase 5 (2026-09-03): oversize-prone categories researched for the carrier
+  // surcharge warning feature -- these give organizers a sane starting box size instead of
+  // hand-measuring, AND will now correctly trigger the new AHS/Large-Package warning where
+  // real packed dims cross those thresholds (that is a FEATURE, not a bug in these rows).
+  // Golf: the existing 'golf' row (40x6x4, 28oz) is sized for a single club or a travel
+  // sleeve, NOT a packed bag with a full set (~46-50in tall, 12-15in diameter is real). Left
+  // untouched (do not guess whether existing listings using it meant a single club) --
+  // 'golf bag'/'golf clubs' below are new, more specific keywords, and the existing
+  // keyword-match confidence-ordering means these will only win when a title actually says
+  // "golf bag"/"golf clubs" rather than just "golf".
+  { keyword: 'golf bag', weightOz: 220, lengthIn: 48, widthIn: 14, heightIn: 14, packageType: 'LARGE_PACKAGE', confidence: 0.5 },
+  { keyword: 'golf clubs', weightOz: 220, lengthIn: 48, widthIn: 14, heightIn: 14, packageType: 'LARGE_PACKAGE', confidence: 0.5 },
+  { keyword: 'snowboard', weightOz: 128, lengthIn: 62, widthIn: 12, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.45 },
+  { keyword: 'ski poles', weightOz: 32, lengthIn: 50, widthIn: 4, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.5 },
+  // Skis vary a lot by discipline/length (~150-200cm) -- 70in is a mid-length adult pair
+  // placeholder, lower confidence deliberately reflects that spread.
+  { keyword: 'skis', weightOz: 240, lengthIn: 70, widthIn: 8, heightIn: 6, packageType: 'LARGE_PACKAGE', confidence: 0.4 },
+  // A 2-piece cased pool cue is genuinely NOT oversize (~32in) -- included as a real
+  // baseline data point, not everything in this batch is a warning case.
+  { keyword: 'pool cue', weightOz: 48, lengthIn: 32, widthIn: 5, heightIn: 5, packageType: 'MAILING_BOX', confidence: 0.5 },
+  { keyword: 'hockey stick', weightOz: 24, lengthIn: 60, widthIn: 5, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.45 },
+  // Lacrosse sticks are bimodal by position (attack ~40-42in vs defense up to 72in) --
+  // sized to the shorter/common case; a defense stick will genuinely exceed this.
+  { keyword: 'lacrosse stick', weightOz: 20, lengthIn: 42, widthIn: 4, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.4 },
+  { keyword: 'patio umbrella', weightOz: 200, lengthIn: 84, widthIn: 8, heightIn: 8, packageType: 'LARGE_PACKAGE', confidence: 0.4 },
+  // Curtain rods vary hugely by fixed length vs adjustable-collapsed length -- sized to a
+  // common adjustable rod's shipped/collapsed length, flagged low-confidence.
+  { keyword: 'curtain rod', weightOz: 32, lengthIn: 48, widthIn: 4, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.35 },
+  // Distinct from the existing 'lamp' (table lamp, 16x12x12) row -- confidence set just
+  // above it (0.5) so "floor lamp" titles correctly out-precision the generic 'lamp' match.
+  { keyword: 'floor lamp', weightOz: 160, lengthIn: 52, widthIn: 10, heightIn: 10, packageType: 'LARGE_PACKAGE', confidence: 0.55 },
+  // Distinct from the existing 'mirror' (wall mirror, 24x18x4) row -- confidence set just
+  // above it (0.45) so "floor mirror" titles correctly out-precision the generic match.
+  { keyword: 'floor mirror', weightOz: 320, lengthIn: 66, widthIn: 20, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.5 },
+  { keyword: 'cello', weightOz: 300, lengthIn: 51, widthIn: 18, heightIn: 10, packageType: 'LARGE_PACKAGE', confidence: 0.4 },
+  // Deliberately NOT a bare 'keyboard' keyword -- would false-match ordinary computer
+  // keyboard listings (same class of bug as the 2026-08-15 coin/doll/racket/ring keyword
+  // collisions this file already documents fixing). 'digital piano' and 'keyboard piano'
+  // are specific enough to avoid that collision.
+  { keyword: 'digital piano', weightOz: 300, lengthIn: 52, widthIn: 14, heightIn: 8, packageType: 'LARGE_PACKAGE', confidence: 0.4 },
+  { keyword: 'keyboard piano', weightOz: 300, lengthIn: 52, widthIn: 14, heightIn: 8, packageType: 'LARGE_PACKAGE', confidence: 0.4 },
+  { keyword: 'longboard', weightOz: 128, lengthIn: 42, widthIn: 10, heightIn: 5, packageType: 'LARGE_PACKAGE', confidence: 0.45 },
+  { keyword: 'skateboard', weightOz: 96, lengthIn: 32, widthIn: 9, heightIn: 5, packageType: 'MAILING_BOX', confidence: 0.5 },
+  { keyword: 'canoe paddle', weightOz: 24, lengthIn: 54, widthIn: 8, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.45 },
+
+  // DECISION NEEDED (Removal/Decision Gate, CLAUDE.md §7) -- deliberately NOT added as
+  // PackageProfile rows this pass. Each of these is either not realistically parcel-
+  // shippable at any box size, or so bimodal (two genuinely different real sizes depending
+  // on sub-type) that a single default would be actively misleading rather than helpful:
+  //   - kayak, canoe (hull) -- not standard-parcel-shippable regardless of box; freight/
+  //     pickup only. Candidate for NEVER_SHIPPABLE_KEYWORDS in ebayPackageEstimateService.ts
+  //     (same list already covering water heaters/water softener/Christmas tree/grill) --
+  //     not added there either, since that list change affects live classification and
+  //     deserves Patrick/Architect sign-off rather than a default guess in a seed-data pass.
+  //   - ladder -- same reasoning as kayak/canoe.
+  //   - rolled area rug -- a small rug rolls short; a large room rug rolls to 90-100in+.
+  //     Too bimodal for one default; likely belongs on NEVER_SHIPPABLE_KEYWORDS too, or a
+  //     size-tiered set of rows (needs real rug-size data this pass didn't gather).
+  //   - mattress -- not standard-parcel-shippable; same NEVER_SHIPPABLE_KEYWORDS candidate.
+  //   - paddleboard (SUP) -- inflatable boards pack to ~40x16x10; hardboards are ~120in+
+  //     and effectively unshippable. One default would be wrong for whichever type it isn't.
+  //   - surfboard -- shortboards run ~72in, longboards 96-108in+; same bimodal problem,
+  //     and unlike paddleboards there's no common "packs small" inflatable variant.
+  //   - upright bass -- soft case runs ~75-80in; not realistically parcel-shippable at all
+  //     via a standard box, only worth a pickup-only/freight-only classification.
+  //   - fishing rod (single-piece, non-telescoping) -- rod tube would need to run
+  //     72-108in+ for a full-length rod; only genuinely telescoping/pack rods pack small,
+  //     and title text alone can't reliably distinguish the two.
 ];
 
 async function seedGapFillProfiles() {

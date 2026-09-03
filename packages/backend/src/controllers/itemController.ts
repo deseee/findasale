@@ -7,6 +7,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ItemRarity } from '@prisma/client';
 import axios from 'axios';
+import { classifyPackageSurchargeTrigger } from '../services/ebayRateEstimateService'; // ADR-103 Phase 5: persisted margin-risk flag
 import FormData from 'form-data';
 import { z } from 'zod';
 import { getIO } from '../lib/socket'; // V1: live bidding broadcast
@@ -1784,6 +1785,26 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (packageHeightIn !== undefined) updateData.packageHeightIn = packageHeightIn === null ? null : Number(packageHeightIn);
     if (packageType !== undefined) updateData.packageType = packageType || null;
     console.log(`[updateItem] id=${id} body.packageType=${JSON.stringify(packageType)} body.packageWeightOz=${JSON.stringify(packageWeightOz)} body.packageLengthIn=${JSON.stringify(packageLengthIn)} updateData.packageType=${JSON.stringify(updateData.packageType)}`);
+
+    // ADR-103 Phase 5 (2026-09-03): keep the persisted margin-risk flag in sync with
+    // whatever package dims/weight/type this save leaves in effect -- zone-independent
+    // classification (see classifyPackageSurchargeTrigger's own comment for why zone
+    // isn't needed here). Computed from the EFFECTIVE post-save values (new value if this
+    // request touched the field, otherwise the item's existing value) so the flag never
+    // goes stale even on a save that only touches unrelated fields.
+    {
+      const riskLengthIn = packageLengthIn !== undefined ? (packageLengthIn === null ? null : Number(packageLengthIn)) : (item.packageLengthIn != null ? Number(item.packageLengthIn) : null);
+      const riskWidthIn = packageWidthIn !== undefined ? (packageWidthIn === null ? null : Number(packageWidthIn)) : (item.packageWidthIn != null ? Number(item.packageWidthIn) : null);
+      const riskHeightIn = packageHeightIn !== undefined ? (packageHeightIn === null ? null : Number(packageHeightIn)) : (item.packageHeightIn != null ? Number(item.packageHeightIn) : null);
+      const riskWeightOz = packageWeightOz !== undefined ? (packageWeightOz === null ? null : Number(packageWeightOz)) : item.packageWeightOz;
+      const riskPackageType = packageType !== undefined ? (packageType || null) : item.packageType;
+      const riskTier = classifyPackageSurchargeTrigger(
+        { length: riskLengthIn, width: riskWidthIn, height: riskHeightIn },
+        riskWeightOz,
+        riskPackageType
+      );
+      updateData.shippingMarginRiskTier = riskTier === 'SAFE' ? null : riskTier;
+    }
     if (upc !== undefined) updateData.upc = upc || null;
     if (ean !== undefined) updateData.ean = ean || null;
     if (isbn !== undefined) updateData.isbn = isbn || null;

@@ -43,6 +43,7 @@ import { ensureCalculatedFulfillmentPolicy, ensureCalculatedPolicyWithHandling }
 import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
 import {
   computeCheapestForOrigin,
+  classifyPackageSurchargeTrigger,
   USPS_RATE_EFFECTIVE_DATE,
   UPS_RATE_EFFECTIVE_DATE,
   FEDEX_RATE_EFFECTIVE_DATE,
@@ -2169,6 +2170,11 @@ export async function computeEffectivePackageWeight(item: {
     item.packageConfirmedByOrganizer !== true
   ) {
     try {
+      const riskTier = classifyPackageSurchargeTrigger(
+        { length: lengthIn, width: widthIn, height: heightIn },
+        weightOz,
+        packageType
+      );
       await prisma.item.update({
         where: { id: item.id },
         data: {
@@ -2180,6 +2186,9 @@ export async function computeEffectivePackageWeight(item: {
           packageEstimateSource: source,
           packageEstimateConfidence: est.confidence,
           packageConfirmedByOrganizer: true,
+          // ADR-103 Phase 5 (2026-09-03): persisted so "listings at risk of eating margin
+          // on shipping" is queryable without recomputing per item.
+          shippingMarginRiskTier: riskTier === 'SAFE' ? null : riskTier,
         },
       });
       console.log(
@@ -7106,6 +7115,10 @@ type PreviewShippingResult = {
   carrier: 'USPS' | 'UPS' | 'FEDEX';
   basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope';
   cheapestRate: number;
+  /** ADR-103 Phase 4 surcharge already folded into cheapestRate -- surfaced separately
+   *  here (ADR-103 Phase 5) so the preview can show organizers WHY a rate is what it is. */
+  surcharge: number;
+  surchargeType: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null;
   flatPolicy: { name: string; amount: number } | null;
   shippingMode: 'FLAT_TIERS' | 'CALCULATED';
   /** ADR-103 Phase 4: set (non-null) when the item exceeds the absolute carrier max
@@ -7158,6 +7171,8 @@ async function resolvePreviewShipping(opts: {
         carrier: 'USPS',
         basis: 'actual',
         cheapestRate: 0,
+        surcharge: 0,
+        surchargeType: null,
         flatPolicy: null,
         shippingMode: mode,
         hardBlockReason: err.message,
@@ -7177,6 +7192,8 @@ async function resolvePreviewShipping(opts: {
     carrier: cheapest.carrier,
     basis: cheapest.basis,
     cheapestRate: cheapest.rate,
+    surcharge: cheapest.surcharge ?? 0,
+    surchargeType: cheapest.surchargeType ?? null,
     flatPolicy: null,
     shippingMode: mode,
     hardBlockReason: null,
@@ -7348,6 +7365,8 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
           netToSeller: null,
           fvfOnShipping: null,
           shippingCovered: null,
+          surcharge: ship.surcharge,
+          surchargeType: ship.surchargeType,
         },
       });
     }
@@ -7384,6 +7403,10 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         service: ship.carrier,
         carrier: ship.carrier,
         isEstimate: true,
+        // ADR-103 Phase 5: surfaced so the frontend can warn organizers BEFORE a surcharge
+        // silently eats their margin, instead of only after the fact.
+        surcharge: ship.surcharge,
+        surchargeType: ship.surchargeType,
         // (roadmap #624 parity, 2026-08-11) A standard-envelope resolution is a FLAT policy
         // regardless of the organizer's shippingMode -- a CALCULATED organizer whose item
         // lands on their own eBay envelope policy must not be labelled 'calculated', or the
@@ -7573,6 +7596,10 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         service: ship.carrier,
         carrier: ship.carrier,
         isEstimate: true,
+        // ADR-103 Phase 5: surfaced so the frontend can warn organizers BEFORE a surcharge
+        // silently eats their margin, instead of only after the fact.
+        surcharge: ship.surcharge,
+        surchargeType: ship.surchargeType,
         // (roadmap #624 parity, 2026-08-11) A standard-envelope resolution is a FLAT policy
         // regardless of the organizer's shippingMode -- a CALCULATED organizer whose item
         // lands on their own eBay envelope policy must not be labelled 'calculated', or the
