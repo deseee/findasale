@@ -1733,11 +1733,36 @@
     closeBtnHandler();
   }
 
+  // ADR-090 (2026-09-02): Vinted hard-requires an ISBN field for Books/Comics-category
+  // listings (same failure class as eBay's 25002 -- see ADR-089). Item.isbn is already
+  // populated at tag-time where derivable (OCR always-on + OpenLibrary title/author
+  // fallback for books/comics, see productEnrichment.ts). This gate mirrors that same
+  // book/comic signal so the ISBN probe below only fires on plausibly-book/comic items --
+  // without it, fieldByLabel('ISBN') finding nothing on every OTHER listing would push a
+  // false 'ISBN could not be filled automatically' warning onto every non-book review
+  // screen. item.category here is ebayCategoryName (see extensionController.ts ~line 317
+  // `category: it.ebayCategoryName || it.category`), so this reads the same signal the
+  // backend gate reads.
+  function looksLikeVintedBookOrComicItem(item) {
+    const cat = norm(item.category || '');
+    const text = norm((item.title || '') + ' ' + (item.description || ''));
+    if (/book|comic/.test(cat)) return true;
+    return /\b(book|hardcover|paperback|novel|isbn|comic|comics|manga|tpb|trade paperback|graphic novel)\b/.test(text);
+  }
+
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Vinted listing form...');
     const warnings = [];
     await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
     await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
+    // ADR-090 (2026-09-02): Vinted requires ISBN for Books/Comics -- fill from Item.isbn when
+    // this looks like a book/comic listing; tryFill's existing no-value branch already produces
+    // the correct 'please set it manually' warning when isbn is empty, and its selector-miss
+    // branch covers an unconfirmed field label -- no new warning logic needed here. Never invents
+    // a fake ISBN (no safe default exists for an identifier, same reasoning as ADR-089).
+    if (looksLikeVintedBookOrComicItem(item)) {
+      await tryFill('ISBN', item.isbn, (v) => fillText('ISBN', v), warnings);
+    }
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
     // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the
     // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up

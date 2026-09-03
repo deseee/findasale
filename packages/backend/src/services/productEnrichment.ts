@@ -308,9 +308,12 @@ const openLibrarySearchProvider: EnrichmentProvider = {
   appliesTo: (item, ctx) => {
     if (firstIsbn(item, ctx) || firstUpc(item, ctx)) return false; // already have an identifier
     const hint = ctx.categoryHint;
-    const catBook = !!(hint && ((hint.id && String(hint.id) === '261186') || (hint.name && /book/i.test(hint.name))));
+    const catBook = !!(hint && ((hint.id && String(hint.id) === '261186') || (hint.name && /book|comic/i.test(hint.name))));
     const text = `${item.title || ''} ${(item.tags || []).join(' ')}`.toLowerCase();
-    const textBook = /\b(book|hardcover|paperback|novel|isbn)\b/.test(text);
+    // ADR-090: widened to catch comics/graphic novels, which carry real ISBNs on trade
+    // paperbacks/graphic novels (single-issue back-magazines generally don't -- Diamond/UPC
+    // instead -- so a miss there is expected, not a bug).
+    const textBook = /\b(book|hardcover|paperback|novel|isbn|comic|comics|manga|tpb|trade paperback|graphic novel)\b/.test(text);
     return catBook || textBook;
   },
   async lookup(item) {
@@ -334,9 +337,10 @@ const googleBooksProvider: EnrichmentProvider = {
   appliesTo: (item, ctx) => {
     if (firstIsbn(item, ctx) || firstUpc(item, ctx)) return false;
     const hint = ctx.categoryHint;
-    const catBook = !!(hint && ((hint.id && String(hint.id) === '261186') || (hint.name && /book/i.test(hint.name))));
+    const catBook = !!(hint && ((hint.id && String(hint.id) === '261186') || (hint.name && /book|comic/i.test(hint.name))));
     const text = `${item.title || ''} ${(item.tags || []).join(' ')}`.toLowerCase();
-    return catBook || /\b(book|hardcover|paperback|novel|isbn)\b/.test(text);
+    // ADR-090: same widened book/comic signal as openLibrarySearchProvider above.
+    return catBook || /\b(book|hardcover|paperback|novel|isbn|comic|comics|manga|tpb|trade paperback|graphic novel)\b/.test(text);
   },
   async lookup(item) {
     try {
