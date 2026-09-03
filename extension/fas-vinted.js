@@ -1873,64 +1873,6 @@
           warnings.push('ISBN: Vinted requires this for Books/Comics and this item has no ISBN or UPC/EAN on file -- Vinted will block publishing until you enter one manually (try the barcode printed on the item itself).');
         }
       }
-      // BUG FIX 2026-09-03 (Patrick live-reported: ISBN/Category now work but "no language get
-      // selected"): live-confirmed this is the SAME category-conditional-field pattern as ISBN --
-      // Vinted's Books/Comics category shows a Language field (real testid confirmed live:
-      // "isbn-language_book-single-list-content", a searchable radio panel identical in shape to
-      // Category/Brand/Condition) that this file never had any code for at all -- not a regression
-      // from the ISBN/ordering fix, a pre-existing gap that only became visible once ISBN/Category
-      // started working. No Item.language field exists in the schema (confirmed:
-      // `grep -i language packages/database/prisma/schema.prisma` returns nothing) -- FindA.Sale's
-      // catalog is overwhelmingly English-language US goods, so default to "English" here, the same
-      // "no per-item signal -> most-defensible single real-option default" reasoning already used
-      // for Material's Cotton fallback above. Live-verified end-to-end on Patrick's own real tab:
-      // pickFromPanel('language', 'Language', 'English') opens the panel, types "English", the
-      // filtered list shows a real "English" radio option, and clicking it sets the field and closes
-      // the panel -- confirmed via screenshot before writing this, not assumed from Category/Brand's
-      // pattern alone.
-      // BUG FIX 2026-09-03 (Patrick live-reported: "now it's on a refresh loop with the modal"
-      // immediately after the Save-button fix shipped): could not get a clean look at the live
-      // cause -- Patrick's tab was genuinely mid-navigation on every check attempt (screenshot/
-      // network tools both timed out with "page is busy or mid-navigation"), so this is a
-      // mitigation, not a confirmed root-cause fix -- flagged as such, not dressed up as more
-      // certain than it is. Ruled OUT one real candidate directly: Vinted's site-wide nav-bar
-      // language switcher (`data-testid="language-selector-button"`, confirmed live on a fresh
-      // vinted.com load) has no `aria-label` at all, so it can't be what openerByLabel('Language')
-      // is matching via the aria-label path. Root cause of the actual reload is still unconfirmed.
-      // Regardless of cause, this guard is safe and correct on its own merits: never touch the
-      // field at all if it's already showing a real (non-placeholder) value -- most obviously
-      // relevant if this run is a retry after an earlier attempt already set it correctly.
-      // BUG FIX 2026-09-03 round 2 (Patrick: "the fill didn't finish... stop assuming" -- live-
-      // traced this exact bug on his real tab, not guessed): the guard above used
-      // openerByLabel('Language').textContent, but openerByLabel's FIRST-priority check is
-      // `[aria-label="Language"]` -- confirmed live this attribute exists ONLY on the OPEN
-      // radio-group panel (`<div role="group" aria-label="Language">` wrapping all ~42 language
-      // radios), never on the real closed-state control. Confirmed live: once the panel is closed,
-      // `document.querySelectorAll('[aria-label="Language"]').length === 0`. So whenever the panel
-      // happened to already be open at the moment this guard ran (observed: Vinted appears to
-      // sometimes auto-open it once Category resolves to a book-eligible leaf), the guard read the
-      // OPEN GROUP's mashed-together option text (every radio's label concatenated with no
-      // separator) instead of the real field state, misread that as "already a real value", and
-      // skipped filling it entirely -- while the actual field was still sitting on the unfilled
-      // "Select a language" placeholder the whole time. Also: even in the normal closed-state case
-      // this fell through to a `<label for="language_book">` match resolving to a real
-      // `<input id="language_book">` -- but inputs hold their displayed text in `.value`, never
-      // `.textContent` (confirmed live: `.textContent` on that input is always ''), so the "already
-      // set" check could never fire correctly for the actual real control either way. Fixed by
-      // reading the one precise, confirmed-stable control directly: `#language_book`'s `.value`.
-      const languageInput = document.getElementById('language_book');
-      const existingLangText = languageInput ? norm(languageInput.value) : '';
-      const langAlreadySet = existingLangText && existingLangText !== norm('Select a language');
-      if (langAlreadySet) {
-        console.log('[FAS Vinted] Language already shows "' + languageInput.value.trim() + '" -- leaving it untouched.');
-      } else {
-        const langOk = await pickFromPanel('language', 'Language', 'English');
-        if (langOk) {
-          warnings.push('Language: no per-item language on file -- defaulted to "English" (FindA.Sale catalog is virtually all English-language items). Correct if this item is actually in a different language.');
-        } else {
-          warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
-        }
-      }
     }
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
     // color/brand null-value fallback behavior across runs -- worked once earlier tonight, then
@@ -2056,6 +1998,51 @@
     }
     // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY): photosOk/injectPhotos() moved up to
     // right after Category (see comment there) -- no longer computed here.
+    // BUG FIX 2026-09-03 round 3 (Patrick live-reported yet again after the #language_book/.value
+    // guard fix shipped: exact same "Language already shows ... -- leaving it untouched" log line
+    // fired, yet a live query of #language_book moments later showed value:"" -- a direct, hard
+    // contradiction). Root cause found live via javascript_tool run directly against Patrick's own
+    // open tab, not guessed: selecting a Language radio DOES set #language_book's value correctly
+    // in the moment (confirmed live -- clicking the "English" radio set .value to "English"
+    // instantly, no Save button needed on this panel variant) -- but simply touching a LATER field
+    // afterward silently resets it back to "". Tested directly and in isolation: re-typing the
+    // exact same already-correct value into #isbn (using this file's own vintedTypeLikePrice
+    // sequence, the identical mechanism fillIsbn already uses above) reset #language_book's value
+    // to "" every time, confirmed twice live, with nothing else touched in between. This is the
+    // same "a later field's DOM interaction knocks an earlier field back to an invalid/empty state"
+    // pattern already fixed for Price below (see the round-10/2026-09-02 Price re-check comment) --
+    // Vinted's Item Details panel evidently re-renders/remounts sibling fields whenever one of them
+    // is interacted with. In the old code, Language was checked/filled right after ISBN, upstream
+    // of Brand/Size/Color/Material/Condition/Price/Package size -- every one of which could
+    // independently be a reset trigger (not narrowed to one; unnecessary, since the fix does not
+    // depend on knowing which). Fix: moved the entire Language check+fill from right after ISBN to
+    // here -- dead last in fillListing, after Package size and after Price's own final re-check --
+    // so nothing later in this function can touch the page and reset it again. Same precedent as
+    // Price's own fix: re-verify the real DOM value at the very end rather than trusting an
+    // earlier-in-the-run snapshot for a field proven to get reset by later interactions.
+    if (looksLikeVintedBookOrComicItem(item)) {
+      await sleep(300);
+      const languageInput = document.getElementById('language_book');
+      const existingLangText = languageInput ? norm(languageInput.value) : '';
+      const langAlreadySet = existingLangText && existingLangText !== norm('Select a language');
+      if (langAlreadySet) {
+        console.log('[FAS Vinted] Language already shows "' + languageInput.value.trim() + '" -- leaving it untouched.');
+      } else {
+        const langOk = await pickFromPanel('language', 'Language', 'English');
+        // Re-verify the value actually stuck -- pickFromPanel resolving true is not itself proof,
+        // given the exact failure mode this fix addresses (a value that was set correctly getting
+        // silently reset by something else). Read the real DOM one more time before trusting it.
+        await sleep(300);
+        const confirmedInput = document.getElementById('language_book');
+        const confirmedText = confirmedInput ? norm(confirmedInput.value) : '';
+        const confirmedSet = confirmedText && confirmedText !== norm('Select a language');
+        if (langOk && confirmedSet) {
+          warnings.push('Language: no per-item language on file -- defaulted to "English" (FindA.Sale catalog is virtually all English-language items). Correct if this item is actually in a different language.');
+        } else {
+          warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
+        }
+      }
+    }
     return { photosOk, warnings };
   }
 
