@@ -74,14 +74,31 @@ export async function assertSaleCanAcceptPayment(params: {
   prisma: PrismaClientLike;
   sale: SaleEligibilityInput;
   organizerStripeConnectId: string | null | undefined;
+  // 2026-09-03 fix (post-mortem on the Aug 27 fix itself): a live acct_ id only proves Connect
+  // onboarding STARTED (Stripe issues the id immediately, before KYC/verification finishes),
+  // not that it COMPLETED. Organizer.stripeOnboarded is the field actually set true by the
+  // account.updated webhook once charges_enabled && payouts_enabled (schema.prisma: "P2-1: Set
+  // true when account.updated webhook confirms charges_enabled && payouts_enabled"). Required
+  // alongside organizerStripeConnectId, not instead of it.
+  organizerStripeOnboarded: boolean | null | undefined;
 }): Promise<PaymentEligibilityResult> {
-  const { prisma, sale, organizerStripeConnectId } = params;
+  const { prisma, sale, organizerStripeConnectId, organizerStripeOnboarded } = params;
 
   // Fix 1 — require live Stripe Connect onboarding. Reuses the exact response shape already
   // used elsewhere in stripeController.ts (createPaymentIntent's sellerAccountUnusable branch /
   // createCartCheckoutSession's connectErr branch) so the frontend's existing SELLER_PAYMENTS_
   // UNAVAILABLE handling covers this path too.
-  if (!organizerStripeConnectId || organizerStripeConnectId.startsWith('acct_test_')) {
+  //
+  // INCIDENT 2026-09-03: this check originally stopped at "does a live account id exist," which
+  // is satisfied the instant Connect onboarding STARTS, not once it COMPLETES. A same-day
+  // signup (Organizer stripeConnectId=acct_1UBhOGPyTEk2SFYk, real/non-test) took 2 real PAID
+  // charges while stripeOnboarded/stripeConnectEnabled were both still false. Added the
+  // stripeOnboarded check below to close that gap — see findasale-hacker re-audit this session.
+  if (
+    !organizerStripeConnectId ||
+    organizerStripeConnectId.startsWith('acct_test_') ||
+    organizerStripeOnboarded !== true
+  ) {
     return {
       blocked: true,
       status: 409,
@@ -108,6 +125,21 @@ export async function assertSaleCanAcceptPayment(params: {
   }
 
   // Fix 3b — velocity/anomaly circuit breaker, keyed on DECLINE RATE, not buyer volume.
+  // 2026-09-03 note (findasale-hacker re-audit): this FAILED-rate check is blind to an abuse
+  // pattern that mostly succeeds/sits PENDING/gets refunded instead of declining -- exactly
+  // today's incident (2 PAID, 1 REFUNDED, 3 PENDING, zero FAILED -- failureRate stayed 0%,
+  // never neared the 3/30% threshold below). Decision: rather than add a second count-based
+  // threshold here (which would repeat the exact buyer-identity-volume mistake this file's own
+  // top comment already warns against -- a busy sale can legitimately see PENDING/refund
+  // volume too), the fix is in checkoutGuard.ts's recordConfirmedSignal(): ANY single CONFIRMED
+  // FraudSignal (of any type, on any sale) now auto-sets Sale.paymentsHeldAt immediately,
+  // independent of this FAILED-count math entirely. That is a stronger, earlier, high-precision
+  // signal (100 confidenceScore, identity-grade match) than a volume/rate threshold could ever
+  // be, and it would have held this sale at 21:21:49 instead of leaving it open until a human
+  // manually intervened ~50 minutes later. This FAILED-rate check remains as a second,
+  // independent backstop for the different failure shape (card-testing via random/stolen
+  // numbers, which the 2026-08-27 incident actually was) that recordConfirmedSignal's
+  // identity-match checks don't cover on their own.
   const recentPurchases = await prisma.purchase.findMany({
     where: { saleId: sale.id, createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) } },
     select: { status: true },

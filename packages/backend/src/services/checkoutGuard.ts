@@ -101,6 +101,45 @@ export async function recordConfirmedSignal(
   } catch {
     // Sentry may not be initialized -- silently continue
   }
+
+  // 2026-09-03 fix (findasale-hacker re-audit): a CONFIRMED signal used to only write the
+  // FraudSignal row + fire a Sentry alert -- nothing actually stopped further checkouts or
+  // flagged the account. Incident: a same-day-signup organizer's sale took a CONFIRMED
+  // SHARED_CARD_FP hit at 21:21:49 and still had a PENDING purchase attempt created at
+  // 21:25:00 (3+ minutes later, untouched) before a human noticed. Every CONFIRMED signal now
+  // also (a) holds the sale going forward and (b) flags whichever userId the signal is
+  // attributed to -- including the organizer-fallback case (both colliding parties are guests
+  // with no User row, so stripeController.ts's webhook attributes the signal to the sale's
+  // organizer; that branch never set fraudSuspect before this fix, only the authenticated-buyer
+  // branch did). Both writes are best-effort/non-fatal, same as the two blocks above -- a
+  // failure here must never surface as an error to the buyer whose checkout already succeeded
+  // or was already blocked.
+  try {
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { paymentsHeldAt: true },
+    });
+    if (sale && !sale.paymentsHeldAt) {
+      await prisma.sale.update({
+        where: { id: saleId },
+        data: {
+          paymentsHeldAt: new Date(),
+          paymentsHeldReason: `CONFIRMED ${signalType} (FraudSignal collusion check) -- see FraudSignal for userId ${userId}.`,
+        },
+      });
+    }
+  } catch (err) {
+    console.error('[checkoutGuard] Failed to auto-hold sale on CONFIRMED signal (non-fatal):', err);
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { fraudSuspect: true },
+    });
+  } catch (err) {
+    console.error('[checkoutGuard] Failed to set fraudSuspect on CONFIRMED signal (non-fatal):', err);
+  }
 }
 
 /**

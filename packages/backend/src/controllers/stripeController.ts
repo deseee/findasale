@@ -582,6 +582,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             organizer: {
               select: {
                 stripeConnectId: true,
+                stripeOnboarded: true, // 2026-09-03 fix: Fix 1 now requires this, not just a live account id
                 userId: true,
                 referralDiscountExpiry: true,
                 subscriptionTier: true,
@@ -618,6 +619,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         paymentsHeldAt: item.sale!.paymentsHeldAt,
       },
       organizerStripeConnectId: item.sale!.organizer.stripeConnectId,
+      organizerStripeOnboarded: item.sale!.organizer.stripeOnboarded,
     });
     if (paymentEligibility.blocked) {
       return res.status(paymentEligibility.status).json(paymentEligibility.body);
@@ -4645,6 +4647,7 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
             organizer: {
               select: {
                 stripeConnectId: true,
+                stripeOnboarded: true, // 2026-09-03 fix: Fix 1 now requires this, not just a live account id
                 subscriptionTier: true,
                 userId: true,
               },
@@ -4702,6 +4705,7 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
         paymentsHeldAt: items[0].sale!.paymentsHeldAt,
       },
       organizerStripeConnectId: organizer?.stripeConnectId,
+      organizerStripeOnboarded: organizer?.stripeOnboarded,
     });
     if (cartPaymentEligibility.blocked) {
       return res.status(cartPaymentEligibility.status).json(cartPaymentEligibility.body);

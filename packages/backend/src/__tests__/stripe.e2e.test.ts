@@ -180,6 +180,9 @@ describe('Stripe Connect + Fee Capture E2E', () => {
         address:        '100 Test Ave',
         userId:         testOrganizerUser.id,
         stripeConnectId: STRIPE_CONNECT_ID,
+        // 2026-09-03 fix: assertSaleCanAcceptPayment now also requires stripeOnboarded
+        // === true (not just a live, non-test account id) -- see paymentEligibilityService.ts.
+        stripeOnboarded: true,
       },
     });
 

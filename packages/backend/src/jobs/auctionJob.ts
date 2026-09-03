@@ -90,7 +90,14 @@ export const endAuctions = async () => {
           include: {
             sale: {
               include: {
-                organizer: { select: { stripeConnectId: true, userId: true, subscriptionTier: true } },
+                // stripeOnboarded added 2026-09-03 (findasale-hacker reverify pass): this job's
+                // own payment-eligibility check below used to accept ANY non-empty
+                // stripeConnectId -- not even excluding an 'acct_test_' placeholder, and never
+                // checking real onboarding completion. Same class of gap as the online-checkout
+                // Fix 1 in paymentEligibilityService.ts, just never routed through that shared
+                // gate because this is a cron job, not an HTTP request. See that file's 2026-09-03
+                // fix comment for the incident this traces back to.
+                organizer: { select: { stripeConnectId: true, stripeOnboarded: true, userId: true, subscriptionTier: true } },
               },
             },
           },
@@ -160,10 +167,21 @@ export const endAuctions = async () => {
         let purchaseChargeType: string = 'DESTINATION';
         let purchaseStripeAccountId: string | null = null;
 
-        if (currentItem.sale!.organizer.stripeConnectId && highestBid) {
+        // 2026-09-03 fix (findasale-hacker reverify pass): require the SAME eligibility bar as
+        // the online-checkout gate (paymentEligibilityService.ts Fix 1) -- a live, non-test
+        // Connect id AND stripeOnboarded === true. Previously this only checked truthiness of
+        // stripeConnectId, so an auction winner could be charged against an organizer who had
+        // merely started (not completed) Connect onboarding, or even against a leftover
+        // 'acct_test_' placeholder.
+        const organizerStripeEligible =
+          !!currentItem.sale!.organizer.stripeConnectId &&
+          !currentItem.sale!.organizer.stripeConnectId.startsWith('acct_test_') &&
+          currentItem.sale!.organizer.stripeOnboarded === true;
+
+        if (organizerStripeEligible && highestBid) {
           try {
             const feeAmount = auctionFees.applicationFeeCents;
-            const stripeConnectId = currentItem.sale!.organizer.stripeConnectId;
+            const stripeConnectId = currentItem.sale!.organizer.stripeConnectId!;
             const useDirect = await shouldUseDirectCharge(currentItem.sale!.organizerId, stripeConnectId);
             const paymentIntent = await stripe().paymentIntents.create(
               useDirect
@@ -189,8 +207,8 @@ export const endAuctions = async () => {
           } catch (err) {
             console.error(`Stripe PaymentIntent creation failed for item ${currentItem.id}:`, err);
           }
-        } else if (!currentItem.sale!.organizer.stripeConnectId) {
-          console.warn(`Organizer for item ${currentItem.id} has no Stripe account — skipping payment intent`);
+        } else if (!organizerStripeEligible) {
+          console.warn(`Organizer for item ${currentItem.id} is not Stripe-eligible (missing/test Connect id, or not fully onboarded) — skipping payment intent`);
         }
 
         // Purchase.amount is what the buyer was CHARGED (premium included, matching

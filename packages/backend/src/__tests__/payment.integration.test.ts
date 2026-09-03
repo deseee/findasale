@@ -81,6 +81,9 @@ describe('Payment Integration Tests', () => {
         // guard and every payment-intent call in this file was silently blocked before reaching
         // Stripe. Same gotcha already documented in stripe.e2e.test.ts.
         stripeConnectId: 'acct_paymentintegrationtest001',
+        // 2026-09-03 fix: assertSaleCanAcceptPayment now also requires stripeOnboarded
+        // === true (not just a live, non-test account id) -- see paymentEligibilityService.ts.
+        stripeOnboarded: true,
       },
     });
 

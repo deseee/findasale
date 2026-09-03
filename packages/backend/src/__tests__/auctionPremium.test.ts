@@ -132,6 +132,9 @@ describe('Auction close — configured premium & reserve parity', () => {
         address: '100 Test Ave',
         userId: organizerUser.id,
         stripeConnectId: STRIPE_CONNECT_ID,
+        // 2026-09-03 fix: assertSaleCanAcceptPayment now also requires stripeOnboarded
+        // === true (not just a live, non-test account id) -- see paymentEligibilityService.ts.
+        stripeOnboarded: true,
         subscriptionTier: 'SIMPLE',
       },
     });

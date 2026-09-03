@@ -98,6 +98,9 @@ describe('ADR-110 Track 1 — native checkout destination-ZIP shipping', () => {
         businessName: 'Ship Destination Estate Sales',
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         stripeConnectId: STRIPE_CONNECT_ID,
+        // 2026-09-03 fix: assertSaleCanAcceptPayment now also requires stripeOnboarded
+        // === true (not just a live, non-test account id) -- see paymentEligibilityService.ts.
+        stripeOnboarded: true,
         lat: 42.1112,
         lng: -85.8886,
       },
