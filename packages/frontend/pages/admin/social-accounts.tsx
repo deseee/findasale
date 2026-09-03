@@ -13,6 +13,7 @@ interface SocialAccount {
   platformUserId: string | null;
   pageId: string | null;
   isActive: boolean;
+  securityCleared: boolean; // ADR-116 -- gates AUTOMATED auto-send eligibility
   connectedAt: string | null;
   lastRefreshedAt: string | null;
   lastErrorAt: string | null;
@@ -195,6 +196,40 @@ const AdminSocialAccounts = () => {
     } catch (err: any) {
       console.error('Disconnect error:', err);
       setError(err?.response?.data?.message || `Failed to disconnect ${PLATFORM_LABEL[platform]}`);
+    } finally {
+      setBusyPlatform(null);
+    }
+  };
+
+  // ADR-116 -- flips SocialAccount.securityCleared for one platform. This is the flag
+  // that lets AUTOMATED/auto-send content (findasale-build-in-public) actually publish
+  // to that platform instead of just staging. Only ever call this after the applicable
+  // -feature adversarial pass (CLAUDE.md §9) has genuinely passed for that platform --
+  // it is a deliberate second, stricter gate above isActive/"Connected".
+  const handleSetSecurityClearance = async (platform: SocialPlatform, cleared: boolean) => {
+    setError('');
+    setNotice('');
+    const verb = cleared ? 'clear' : 'revoke clearance for';
+    if (
+      !window.confirm(
+        cleared
+          ? `Mark ${PLATFORM_LABEL[platform]} as security-cleared? This lets automated weekly ` +
+            `build-in-public posts publish to it for real, with no further manual review. Only ` +
+            `confirm after the adversarial security pass for this platform has actually passed.`
+          : `Revoke security clearance for ${PLATFORM_LABEL[platform]}? Automated posts will stop ` +
+            `going to this platform until it is re-cleared.`
+      )
+    ) {
+      return;
+    }
+    setBusyPlatform(platform);
+    try {
+      await api.post('/social-publisher/accounts/security-clearance', { platform, cleared });
+      setNotice(`${cleared ? 'Cleared' : 'Revoked clearance for'} ${PLATFORM_LABEL[platform]}.`);
+      await loadAccounts();
+    } catch (err: any) {
+      console.error('Security clearance error:', err);
+      setError(err?.response?.data?.message || `Failed to ${verb} ${PLATFORM_LABEL[platform]}`);
     } finally {
       setBusyPlatform(null);
     }
@@ -460,6 +495,7 @@ const AdminSocialAccounts = () => {
                 <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Username</th>
                 <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Active</th>
                 <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Connected</th>
+                <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Security Cleared</th>
                 <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Last Error</th>
               </tr>
             </thead>
@@ -473,6 +509,30 @@ const AdminSocialAccounts = () => {
                   <td className="px-6 py-4 text-sm text-center">{a.isActive ? '✓' : 'N/A'}</td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                     {a.connectedAt ? new Date(a.connectedAt).toLocaleDateString() : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          a.securityCleared
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                            : 'bg-warm-200 dark:bg-gray-700 text-warm-600 dark:text-gray-400'
+                        }`}
+                      >
+                        {a.securityCleared ? 'Cleared' : 'Not cleared'}
+                      </span>
+                      <button
+                        onClick={() => handleSetSecurityClearance(a.platform, !a.securityCleared)}
+                        disabled={busyPlatform === a.platform}
+                        className={`px-2 py-0.5 text-xs rounded transition disabled:opacity-50 ${
+                          a.securityCleared
+                            ? 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {busyPlatform === a.platform ? 'Working…' : a.securityCleared ? 'Revoke' : 'Mark Cleared'}
+                      </button>
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400">{a.lastErrorMessage || 'N/A'}</td>
                 </tr>
