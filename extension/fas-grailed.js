@@ -1850,33 +1850,34 @@
     return qa('[class*="title" i]').find((el) => !/subtitle/i.test(el.className)) || null;
   }
 
-  // UNVERIFIED -- Grailed's "Selling" dashboard lists active listings with links to each
-  // listing's own detail/edit page; exact tile structure not yet confirmed live.
-  function findGrailedListingLinkByTitle(title) {
+  // BUG FIX 2026-09-04 (S-EXT-GRAILED-MATCH-BY-CARD, live-confirmed against Patrick's real
+  // /sell/for-sale page): the previous version read the TEXT of an a[href*="/listings/"] anchor,
+  // but the listing anchor on a real card wraps the thumbnail and its textContent is EMPTY -- so
+  // it could never match anything. The title lives on the CARD (class contains
+  // "ListingForSaleCard"), whose text is a run-on of status + age + brand + title + price, e.g.
+  // "Requires Action11 days agoAdidasmBored Ape Yacht Club Adidas Tracksuit Into the
+  // Metaverse$225Edit Listing...". Group anchors by the numeric listing id (/listings/<id>) and
+  // match on containment of the FULL stored title -- a prefix-anchored match can never fire given
+  // that leading status/brand text. Returns { id, href } so the caller can address the listing by
+  // id. Same never-guess discipline as everywhere else: exactly one match or null.
+  function findGrailedListingMatchByTitle(title) {
     const want = grRemNorm(title);
     if (!want) return null;
-    const links = qa('a[href*="/listings/"]');
-    // S-EXT-REMOVAL-MATCH-TRUNCATION-2026-09-03: same fix as Poshmark's equivalent function --
-    // Grailed's own listing cards can truncate a long title in the DOM itself, so requiring the
-    // card to contain the item's FULL stored title as a substring can false-negative exactly like
-    // it did on Poshmark (live-confirmed there, same one-directional pattern here). Stripping a
-    // trailing "..." and still accepting a truncated card is correct; what is NOT correct is
-    // accepting ANY substring in either direction.
-    // BUG FIX 2026-09-04 (S-EXT-REMOVAL-UNSAFE-TITLE-MATCH, propagated from the live-confirmed
-    // Poshmark fix -- this is a DESTRUCTIVE-ACTION bug, not a cosmetic one): the old unguarded
-    // bidirectional test `want.indexOf(t) !== -1 || t.indexOf(want) !== -1` put NO minimum length
-    // on `t` and never required a truncated card's text to actually START the title, so any short
-    // incidental anchor text appearing anywhere inside the stored title matched. Live-confirmed on
-    // Poshmark: a view-count badge reading "6" matched a title ending in "...1976". If such a
-    // spurious anchor is the ONLY match, this function returns it and the caller navigates to and
-    // DELETES that unrelated listing. A match is now accepted only when the anchor text contains
-    // the full wanted title, or is a genuine length-gated PREFIX of it (anchored at index 0).
-    const MIN_TRUNCATED_PREFIX_LEN = 8; // shorter than this is a badge/label, not a real title prefix
-    const matches = links.filter((a) => {
-      const t = grRemNorm(a.textContent).replace(/\.{3,}$/, '').trim();
-      if (!t) return false;
-      const isPlausibleTruncatedPrefix = t.length >= MIN_TRUNCATED_PREFIX_LEN && want.indexOf(t) === 0;
-      return isPlausibleTruncatedPrefix || t.indexOf(want) !== -1;
+    const byId = new Map();
+    qa('a[href*="/listings/"]').forEach((a) => {
+      const href = a.getAttribute('href') || a.href || '';
+      const m = /\/listings\/(\d+)/.exec(href);
+      if (!m) return;
+      const id = m[1];
+      const card = a.closest('[class*="ListingForSaleCard" i], [class*="listingCard" i]');
+      const text = grRemNorm(card ? card.textContent : a.textContent);
+      if (!text) return;
+      if (!byId.has(id)) byId.set(id, { id, href: a.href, texts: [] });
+      byId.get(id).texts.push(text);
+    });
+    const matches = [];
+    byId.forEach((entry) => {
+      if (entry.texts.some((t) => t.indexOf(want) !== -1)) matches.push(entry);
     });
     return matches.length === 1 ? matches[0] : null;
   }
@@ -1955,28 +1956,42 @@
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: result, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
-    const link = findGrailedListingLinkByTitle(item.title);
-    if (!link) {
-      // BUG FIX 2026-09-04 (S-EXT-GRAILED-MANAGE-URL-IS-CREATE-FORM, live-confirmed this session):
-      // https://www.grailed.com/sell -- the URL this removal flow itself navigated to between items
-      // -- REDIRECTS to https://www.grailed.com/sell/new, which is the CREATE-a-listing form and
-      // contains zero a[href*="/listings/"]. So the flow had nothing at all to search and reported
-      // every real, still-live listing as a confident "skip", permanently consuming it from the
-      // queue. Detecting it here turns a silent, permanent, wrong skip into a loud, retriable
-      // attempt-failure the organizer can actually see and act on.
-      // STILL UNCONFIRMED: the correct Grailed seller-listings URL. It needs a live check on a
-      // logged-in Grailed account before it can be wired up -- do NOT guess a replacement here.
-      const onGrailedCreateForm = location.pathname.indexOf('/sell') === 0 && qa('a[href*="/listings/"]').length === 0;
+    // LIVE FINDING 2026-09-04 (S-EXT-GRAILED-DELETE-CONTROL-NOT-FOUND): Grailed's delete control
+    // was searched for on BOTH https://www.grailed.com/listings/<id>/edit and the listing card on
+    // https://www.grailed.com/sell/for-sale, and found on NEITHER. The edit page has zero elements
+    // whose text or aria-label matches /delete|remove/i and the word "delete" does not appear
+    // anywhere in its body; the card exposes only two anchors (the thumbnail link, whose text is
+    // empty, and "Edit Listing") with no kebab or overflow menu. Caveat worth preserving: the one
+    // listing available to inspect was in a "Requires Action" moderation state, which may suppress
+    // controls a normal listing would show -- so this is "NOT FOUND", not "proven absent". Either
+    // way Grailed's delete path is UNCONFIRMED and must not be guessed. This is the remaining
+    // blocker for Grailed removal being end-to-end.
+    const match = findGrailedListingMatchByTitle(item.title);
+    if (!match) {
+      // BUG FIX 2026-09-04 (S-EXT-GRAILED-WRONG-PAGE-GUARD-TOO-BROAD): the previous guard tested
+      // location.pathname.indexOf('/sell') === 0, which now ALSO matches the CORRECT listings page
+      // '/sell/for-sale' -- it would have reported the real listings page as "this is the create
+      // form". Detect the create form narrowly instead: exactly '/sell' (live-confirmed to redirect
+      // to '/sell/new') or anything under '/sell/new'.
+      const path = location.pathname.replace(/\/+$/, '') || '/';
+      const onGrailedCreateForm = path === '/sell' || path.indexOf('/sell/new') === 0;
       if (onGrailedCreateForm) {
-        overlayWarn('FindA.Sale can\'t find your Grailed listings page -- this page is Grailed\'s create-a-listing form, not your listings. Please remove "' + escapeHtml(item.title) + '" from Grailed yourself. This item has NOT been marked removed and will be retried.' + button('fas-gr-close', 'Close', false));
-        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: 'grailed_manage_url_is_create_form', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        overlayWarn('FindA.Sale landed on Grailed\'s create-a-listing form instead of your listings page, so there was nothing to search. Please remove "' + escapeHtml(item.title) + '" from Grailed yourself. This item has NOT been marked removed and will be retried.' + button('fas-gr-close', 'Close', false));
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: 'grailed_on_create_form_not_listings', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
         return;
       }
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Grailed listings (zero or more than one found) -- skipped, not guessed.' + button('fas-gr-close', 'Close', false));
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'no_confident_listing_match', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
-    location.href = link.href;
+    // The listing was matched, but there is no confirmed way to delete it (see the note above), so
+    // be honest about it: name the listing, link the organizer straight to it, and say plainly that
+    // FindA.Sale has NOT marked it removed. Reported as a RETRIABLE attempt-failure -- never as a
+    // removal (that would be a false "removed" on a still-live listing) and never as a skip (that
+    // would permanently consume it from the queue). After background.js's 3-attempt cap this
+    // surfaces to the organizer as manual review, which is the honest outcome for an unbuilt path.
+    overlayWarn('Found <b>' + escapeHtml(item.title) + '</b> in your Grailed listings, but FindA.Sale does not yet have a confirmed way to delete a Grailed listing. Please remove it on Grailed yourself: <a href="' + escapeHtml(match.href) + '" target="_blank" rel="noopener" style="color:#9ad9b0">' + escapeHtml(match.href) + '</a> -- this item has NOT been marked removed on FindA.Sale.' + button('fas-gr-close', 'Close', false));
+    try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: 'grailed_delete_control_unconfirmed', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
   }
 
   async function maybeRunGrailedRemoval() {

@@ -37,12 +37,17 @@ self.FAS_CONFIG = {
   // listings -- so Mercari removal could never find anything from it.
   MERC_MANAGE_URL: 'https://www.mercari.com/mypage/listings/',
   VINTED_MANAGE_URL: 'https://www.vinted.com/',
-  // LIVE FINDING 2026-09-04 (value deliberately UNCHANGED): https://www.grailed.com/sell was
-  // live-confirmed to redirect to https://www.grailed.com/sell/new, which is the CREATE-a-listing
-  // form and contains zero a[href*="/listings/"] -- so Grailed removal cannot currently locate
-  // the organizer's listings from this URL. The real Grailed seller-listings URL is still
-  // unconfirmed and needs a live check on a logged-in Grailed account.
-  GRAILED_MANAGE_URL: 'https://www.grailed.com/sell',
+  // LIVE-CONFIRMED 2026-09-04 (value Patrick-provided, then verified against his real, logged-in
+  // Grailed seller account): https://www.grailed.com/sell/for-sale IS the seller-listings page --
+  // its nav reads MESSAGES / ORDERS / SELLING / FOR SALE / OFFERS / SOLD / DRAFTS and each listing
+  // renders as its own card. Both previously-tried values are dead ends, also live-confirmed:
+  // https://www.grailed.com/sell REDIRECTS to /sell/new (the CREATE-a-listing form), and
+  // https://www.grailed.com/sell/listings is a hard 404.
+  // STILL UNCONFIRMED: the delete control itself. It was not found on the listing edit page
+  // (/listings/<id>/edit) nor on the /sell/for-sale card, so Grailed removal is NOT end-to-end yet
+  // -- fas-grailed.js reports a found-but-undeletable listing as a retriable attempt-failure that
+  // surfaces to the organizer for manual removal, and never as a removal.
+  GRAILED_MANAGE_URL: 'https://www.grailed.com/sell/for-sale',
   GUMTREE_AU_MANAGE_URL: 'https://www.gumtree.com.au/',
   // Patrick-confirmed (2026-08-22, not a guess): this account page lists every one of the
   // organizer's own Craigslist postings, so it doubles as the Craigslist "my listings" page.
