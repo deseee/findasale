@@ -2427,6 +2427,15 @@
   // real minimum length AND true prefix anchoring before treating tile text as a possibly-truncated
   // title (defense in depth against any other stray short badge/label Poshmark's DOM may carry
   // elsewhere, e.g. list view vs grid view).
+  // BUG FIX 2026-09-04 (S-EXT-POSHMARK-CLOSET-SEARCH-DUPLICATE-TILE): resolve a card element
+  // (either the title `<a>` itself, or a wrapper containing it) down to the real Poshmark listing
+  // id, so duplicate DOM tiles for the SAME listing can be collapsed before the ambiguity check
+  // below. See the dedupe comment inside findPoshmarkClosetCardByTitle for the live evidence.
+  function getListingIdFromCardEl(el) {
+    const a = el.tagName === 'A' ? el : el.querySelector('a[href*="/listing/"]');
+    return a ? extractPoshmarkListingId(a.getAttribute('href') || a.href || '') : null;
+  }
+
   function findPoshmarkClosetCardByTitle(title) {
     const want = poshRemNorm(title);
     if (!want) return null;
@@ -2448,23 +2457,24 @@
       const isPlausibleTruncatedPrefix = tileText.length >= MIN_TRUNCATED_PREFIX_LEN && want.indexOf(tileText) === 0;
       return isPlausibleTruncatedPrefix || tileText.indexOf(want) !== -1;
     });
-    return matches.length === 1 ? matches[0] : null;
-  }
-
-  // S-EXT-POSHMARK-CLOSET-SEARCH-2026-09-03 (Patrick-suggested live, screenshot showed a "Search
-  // in closet" box on the closet page): rather than relying solely on whatever tiles happen to be
-  // loaded in the DOM (closet grids can paginate/lazy-load), use Poshmark's own search first to
-  // narrow the grid down to just matching results before scanning for a card. Best-effort --
-  // returns false (never throws) if no search input is found, so the caller's existing DOM-scan
-  // fallback still runs unchanged.
-  async function searchPoshmarkClosetByTitle(title) {
-    const input = document.querySelector('input[placeholder*="Search in closet" i], input[placeholder*="search closet" i]');
-    if (!input) return false;
-    setNativeValue(input, title);
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
-    await sleep(900); // let the (client-side, best-effort-assumed) search results settle
-    return true;
+    // BUG FIX 2026-09-04 (S-EXT-POSHMARK-CLOSET-SEARCH-DUPLICATE-TILE, live-confirmed against
+    // Patrick's real closet, "Time in a Bottle: Jim Croce's Greatest Love Songs Vinyl LP", AFTER
+    // fixing the search-execution bug below): once the "Search in closet" query actually filters
+    // the grid, Poshmark itself can render the SAME listing as two separate DOM tiles (identical
+    // href/listing id, different grid position) -- confirmed live via javascript_tool: exactly 2
+    // tiles, both linking to the identical 24-hex listing id. Two tiles for the same underlying
+    // listing is not ambiguous. Dedupe by listing id before the single-match check, or a search
+    // result Poshmark itself duplicates would keep reporting a real, unambiguous listing as
+    // "zero or more than one found".
+    const seenListingIds = new Set();
+    const uniqueMatches = matches.filter((t) => {
+      const id = getListingIdFromCardEl(t);
+      if (!id) return true; // no id resolvable -- keep as-is, same as before this fix
+      if (seenListingIds.has(id)) return false;
+      seenListingIds.add(id);
+      return true;
+    });
+    return uniqueMatches.length === 1 ? uniqueMatches[0] : null;
   }
 
   // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-WRONG-PAGE, Patrick-directed live investigation --
@@ -2651,11 +2661,36 @@
         location.href = closetLink; // navigate to closet, fresh load will retry the match there
         return;
       }
-      // S-EXT-POSHMARK-CLOSET-SEARCH-2026-09-03: before giving up, try Poshmark's own "Search in
-      // closet" box (Patrick's suggestion, live) -- narrows the grid to matching results, which
-      // also sidesteps any pagination/lazy-load gap in the plain DOM scan above.
-      const searched = await searchPoshmarkClosetByTitle(item.title);
-      if (searched) card = findPoshmarkClosetCardByTitle(item.title);
+      // BUG FIX 2026-09-04, REVISED same day (S-EXT-POSHMARK-CLOSET-SEARCH-NEVER-EXECUTES,
+      // Patrick live report: "the search puts the text in but doesn't execute the search so the
+      // stupid thing never finds it"). Root cause, confirmed live via javascript_tool against
+      // Patrick's real Poshmark closet: the prior same-day fix (searchPoshmarkClosetByTitle, now
+      // removed) filled the "Search in closet" input correctly, then dispatched synthetic
+      // KeyboardEvent keydown/keyup for "Enter" hoping to trigger the search. Polled the live grid
+      // every 300ms for 6 full seconds after that dispatch: tile count never moved off the full
+      // unfiltered 48 and the URL never gained a query param -- confirmed NOT a timing/race issue,
+      // the synthetic Enter simply never triggers anything. Poshmark's closet search is a real
+      // `<form action="">` wrapping the input; live-confirmed the actual trigger is a genuine form
+      // submission -- calling `form.requestSubmit()` on the real live page immediately navigated
+      // the tab to `<closet-url>?query=<title>` and the grid correctly filtered to the matching
+      // listing. A real form submit is a full page navigation (confirmed live -- the JS context
+      // that called requestSubmit() did not survive it), so replicate that navigation directly via
+      // `location.href` instead of trying to keep working in the current context: this matches the
+      // same re-entry pattern already used everywhere else in this queue (the bottom-of-file IIFE
+      // re-runs runPoshmarkRemovalQueue on every fresh page load, so the fresh
+      // /closet/...?query=... load re-scans with the now-filtered grid). Guarded by a
+      // sessionStorage flag keyed on this item's title so a genuinely unmatchable item (still
+      // zero/ambiguous after a real search) falls through to the "no confident match" branch below
+      // on the second pass instead of navigating in a loop.
+      const alreadySearchedFor = sessionStorage.getItem('fasPoshClosetSearchedFor');
+      if (alreadySearchedFor !== item.title) {
+        sessionStorage.setItem('fasPoshClosetSearchedFor', item.title);
+        const searchUrl = location.origin + location.pathname + '?query=' + encodeURIComponent(item.title);
+        await humanPause(1200, 2200);
+        location.href = searchUrl; // fresh load re-runs this function against the filtered grid
+        return;
+      }
+      sessionStorage.removeItem('fasPoshClosetSearchedFor');
     }
     if (!card) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your closet (zero or more than one found) -- skipped, not guessed.' + button('fas-posh-close', 'Close', false));
