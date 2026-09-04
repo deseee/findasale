@@ -1359,7 +1359,22 @@
     // since it's a genuine match, not an arbitrary first-in-list guess. Placed FIRST so it wins
     // ties, but still goes through the normal scoring loop below rather than short-circuiting it.
     const genderHint = detectPoshmarkGenderHint(genderHintText || '');
-    const departmentCandidates = [genderHint, ...breadcrumbSegments, categoryText].filter(Boolean);
+    // BUG FIX 2026-09-04 (S-EXT-POSHMARK-COMICS-MAGAZINES, Patrick-directed, live-Chrome-confirmed
+    // -- corrects a same-session wrong first pass that assumed no real category existed at all).
+    // Live-verified against Poshmark's OWN real listings (not the empty create-listing picker):
+    // opened real, established sellers' actual comic-book and magazine listings
+    // (poshmark.com/listing/Vintage-DC-Comics-1988-Flash-Gordon-1-Comic-Book-..., a 1400+-sale
+    // seller; poshmark.com/listing/Vintage-1991-Simpsons-Illustrated-Magazine-Premiere-Issue-...,
+    // a 300+-sale seller) and both are filed under Home > Accents > Coffee Table Books -- the
+    // real, actively-used category real Poshmark sellers pick for comic books and magazines, not
+    // a narrow "large photography books" niche as assumed from the blog post alone. Comic/
+    // magazine/collectible-print breadcrumb segments (e.g. "Collectibles:Comic Books &
+    // Memorabilia:Comics:Comics & Graphic Novels", "Books & Magazines:Magazines") share no word
+    // with "Home", so the normal department-scoring loop below would never resolve to Home on its
+    // own -- this hint supplies "Home" as a real, evidence-based department candidate (same
+    // mechanism as genderHint above), not a guess, so deptWasGuessed correctly stays false.
+    const mediaHint = /\b(comic|comics|graphic novel|manga|magazine|periodical)\b/i.test(categoryText) ? 'Home' : null;
+    const departmentCandidates = [genderHint, mediaHint, ...breadcrumbSegments, categoryText].filter(Boolean);
     console.log('[FAS Poshmark][catdbg] genderHint=', genderHint, 'departmentCandidates=', departmentCandidates);
     let bestDept = null, bestDeptScore = -1;
     for (const cand of departmentCandidates) {
@@ -1422,6 +1437,14 @@
     // lands with confident=false, still surfaced for review.
     if (bestDept && /home/.test(norm(bestDept.textContent)) && /\b(christmas|xmas|holiday|ornament|wreath)\b/i.test(categoryText)) {
       remaining.push({ seg: 'Holiday', i: remaining.length });
+    }
+    // BUG FIX 2026-09-04 (S-EXT-POSHMARK-COMICS-MAGAZINES, continued -- see mediaHint comment
+    // above for the live-verification evidence). Same extra-scoring-candidate mechanism as the
+    // lamp/Holiday fixes above, but for comics/magazines: pushes Home > Accents > Coffee Table
+    // Books as a real, confirmed-correct destination leaf.
+    if (bestDept && /home/.test(norm(bestDept.textContent)) && /\b(comic|comics|graphic novel|manga|magazine|periodical)\b/i.test(categoryText)) {
+      remaining.push({ seg: 'Accents', i: remaining.length });
+      remaining.push({ seg: 'Coffee Table Books', i: remaining.length });
     }
     // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): tracks whether a REAL
     // subcategory-level match was ever clicked in this loop, separate from `pickedAny` (which is
@@ -1585,8 +1608,19 @@
   // cover selection (first photo, already highlighted) by clicking Apply -- never picks a
   // different photo, just clears the blocking dialog so the rest of the flow can proceed.
   async function dismissCovershotModal() {
-    await sleep(400);
-    const applyBtn = qa('button').find((b) => norm(b.textContent) === 'apply' && b.offsetParent !== null);
+    // BUG FIX 2026-09-03 (S-EXT-POSHMARK-COVERSHOT-TIMING, Patrick live-Chrome-confirmed: a 9-photo
+    // item -- "Brigade #1 Blood Brothers Part 1" -- got stuck on Poshmark's own "Select a
+    // Covershot" dialog, tab shared directly). Root cause: this only waited a single fixed 400ms
+    // then checked ONCE for the Apply button, with no retry -- fine for a couple of photos, but
+    // Poshmark's own image processing for a full batch (9 photos here) can easily take longer than
+    // that before the modal even mounts, so the one-shot check ran before the button existed and
+    // never got a second chance. Switched to the same waitForSelector poll every other wait in this
+    // file already uses, up to 5s -- long enough for a full 16-photo batch, still fast when the
+    // modal (or nothing) appears quickly.
+    const applyBtn = await waitForSelector(
+      () => qa('button').find((b) => norm(b.textContent) === 'apply' && b.offsetParent !== null),
+      5000
+    );
     if (applyBtn) { realClick(applyBtn); await sleep(300); return true; }
     return false;
   }
@@ -2379,8 +2413,34 @@
     const tiles = qa('a[href*="/listing/"]')
       .map((a) => a.closest('[class*="tile" i], [class*="card" i], li, div') || a)
       .filter((el, i, arr) => arr.indexOf(el) === i);
-    const matches = tiles.filter((t) => poshRemNorm(t.textContent).indexOf(want) !== -1);
+    // S-EXT-POSHMARK-CLOSET-SEARCH-2026-09-03 (Patrick live report + screenshot): Poshmark's own
+    // closet tiles can carry a genuinely truncated title in the DOM (real text, e.g. "Jimmy
+    // Buffett Coconut Telegr..."), not just CSS-clipped display -- so requiring the tile to
+    // contain the item's FULL stored title as a substring could never match. Strip a trailing
+    // "..." and check containment BOTH ways: either the tile text is a (possibly truncated)
+    // prefix of the real title, or the real title is fully present in the tile text.
+    const matches = tiles.filter((t) => {
+      const tileText = poshRemNorm(t.textContent).replace(/\.{3,}$/, '').trim();
+      if (!tileText) return false;
+      return want.indexOf(tileText) !== -1 || tileText.indexOf(want) !== -1;
+    });
     return matches.length === 1 ? matches[0] : null;
+  }
+
+  // S-EXT-POSHMARK-CLOSET-SEARCH-2026-09-03 (Patrick-suggested live, screenshot showed a "Search
+  // in closet" box on the closet page): rather than relying solely on whatever tiles happen to be
+  // loaded in the DOM (closet grids can paginate/lazy-load), use Poshmark's own search first to
+  // narrow the grid down to just matching results before scanning for a card. Best-effort --
+  // returns false (never throws) if no search input is found, so the caller's existing DOM-scan
+  // fallback still runs unchanged.
+  async function searchPoshmarkClosetByTitle(title) {
+    const input = document.querySelector('input[placeholder*="Search in closet" i], input[placeholder*="search closet" i]');
+    if (!input) return false;
+    setNativeValue(input, title);
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+    await sleep(900); // let the (client-side, best-effort-assumed) search results settle
+    return true;
   }
 
   // UNVERIFIED -- Poshmark listing-detail pages typically expose a "..." / kebab menu with a
@@ -2406,11 +2466,31 @@
     try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'POSHMARK' }); } catch (e) {}
   }
 
+  // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-WRONG-TITLE-EL, Patrick live report: navigated
+  // correctly to the Jimmy Buffett listing page via the closet-search fix, but the listing was
+  // never actually deleted -- still live on Poshmark afterward, tab shared directly). Root cause,
+  // confirmed live via direct DOM query on the real listing page: `document.querySelector('h1,
+  // [class*="title" i]')` returns the FIRST element in DOCUMENT ORDER matching EITHER half of that
+  // selector -- and Poshmark's own header nav has elements with class "...__subtitle caption" (My
+  // Offers / My Bundles / My Likes / News), which the `[class*="title" i]` attribute selector also
+  // matches, because "title" is a literal substring of "subtitle". Those nav elements sit earlier
+  // in the DOM than the real listing title (class "listing__title--redesign"), so the query
+  // returned "My Offers" instead of the real title -- onRightPage compared "my offers" against the
+  // real title, found no match, and the code concluded (wrongly) that it wasn't on the right page,
+  // skipping the delete attempt entirely and falling through to closet-search again instead.
+  function findPoshmarkListingTitleEl() {
+    const h1 = document.querySelector('h1');
+    if (h1) return h1;
+    // Fallback only if no real <h1> exists at all -- exclude "subtitle" classes explicitly so this
+    // can't repeat the same collision.
+    return qa('[class*="title" i]').find((el) => !/subtitle/i.test(el.className)) || null;
+  }
+
   async function runPoshmarkRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     // On a listing detail page already matching this item's title -- attempt the delete directly.
     if (location.pathname.indexOf('/listing/') === 0 || location.pathname.indexOf('/listing/') > 0) {
-      const pageTitleEl = document.querySelector('h1, [class*="title" i]');
+      const pageTitleEl = findPoshmarkListingTitleEl();
       const onRightPage = pageTitleEl && poshRemNorm(pageTitleEl.textContent).indexOf(poshRemNorm(item.title)) !== -1;
       if (onRightPage) {
         const deleted = await deletePoshmarkListingOnDetailPage();
@@ -2433,12 +2513,19 @@
     }
     // Otherwise: on the closet (or some other page) -- find the matching card and navigate into it.
     const closetLink = findPoshmarkClosetLink();
-    const card = findPoshmarkClosetCardByTitle(item.title);
+    let card = findPoshmarkClosetCardByTitle(item.title);
     if (!card) {
       if (location.href.indexOf('/closet/') === -1 && closetLink) {
         location.href = closetLink; // navigate to closet, fresh load will retry the match there
         return;
       }
+      // S-EXT-POSHMARK-CLOSET-SEARCH-2026-09-03: before giving up, try Poshmark's own "Search in
+      // closet" box (Patrick's suggestion, live) -- narrows the grid to matching results, which
+      // also sidesteps any pagination/lazy-load gap in the plain DOM scan above.
+      const searched = await searchPoshmarkClosetByTitle(item.title);
+      if (searched) card = findPoshmarkClosetCardByTitle(item.title);
+    }
+    if (!card) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your closet (zero or more than one found) -- skipped, not guessed.' + button('fas-posh-close', 'Close', false));
       let next = null;
       try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}

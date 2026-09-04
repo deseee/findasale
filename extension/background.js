@@ -1416,7 +1416,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // 2026-08-30: pass the originating tab id so humanQueueDelay can show a live countdown --
         // see that function's own comment. sender.tab is present here because 'advanceQueue' is
         // always sent from the FB content script's own tab context, never the popup.
-        await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        // BUG FIX 2026-09-04 (S-EXT-QUEUE-PACING-STUCK-ON-DONE, Patrick live report: a finished
+        // 20-item Poshmark run left the overlay stuck reading "Pacing pause before the next item:
+        // 0s" forever): this used to call humanQueueDelay unconditionally, even when `item` is
+        // null (queue exhausted) -- the delay's countdown overlay would count to 0 and then just
+        // sit there, since nothing ever overlays a "done" message afterward when there's no next
+        // item to actually process. Only pace/show the countdown when there's a real next item.
+        if (item) await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
       } else if (msg.type === 'setCraigslistQueue') {
         // Craigslist channel (ADR-084 extension): store the queue and OPEN the posting tab here in
@@ -1569,7 +1575,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // script even listens for it. 'advancePoshmarkQueue' is always sent from fas-poshmark.js's
           // own tab context (same pattern as the FB 'advanceQueue' handler above), so sender.tab.id
           // is the real originating tab.
-          await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          // BUG FIX 2026-09-04 (S-EXT-QUEUE-PACING-STUCK-ON-DONE): same root cause as the FB
+          // 'advanceQueue' fix above -- this fired even when `item` is null (queue exhausted),
+          // leaving the countdown overlay stuck at "...0s" forever after the last item. Only pace
+          // when there's a real next item.
+          if (item) await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'setMercariQueue') {
@@ -1606,7 +1616,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // BUG FIX 2026-08-31 (Patrick live report, same root cause as the Poshmark branch above):
           // no tabId was passed, so humanQueueDelay() never sent its countdown notification for
           // Mercari either. 'advanceMercariQueue' always comes from fas-mercari.js's own tab.
-          await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          // BUG FIX 2026-09-04 (S-EXT-QUEUE-PACING-STUCK-ON-DONE): same root cause as the FB
+          // 'advanceQueue' fix above -- only pace/notify when there's a real next item.
+          if (item) await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'setVintedQueue') {

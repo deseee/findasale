@@ -1843,7 +1843,16 @@
     const want = grRemNorm(title);
     if (!want) return null;
     const links = qa('a[href*="/listings/"]');
-    const matches = links.filter((a) => grRemNorm(a.textContent).indexOf(want) !== -1);
+    // S-EXT-REMOVAL-MATCH-TRUNCATION-2026-09-03: same fix as Poshmark's equivalent function --
+    // Grailed's own listing cards can truncate a long title in the DOM itself, so requiring the
+    // card to contain the item's FULL stored title as a substring can false-negative exactly like
+    // it did on Poshmark (live-confirmed there, same one-directional pattern here). Bidirectional
+    // match after stripping a trailing "..." handles a truncated card either way.
+    const matches = links.filter((a) => {
+      const t = grRemNorm(a.textContent).replace(/\.{3,}$/, '').trim();
+      if (!t) return false;
+      return want.indexOf(t) !== -1 || t.indexOf(want) !== -1;
+    });
     return matches.length === 1 ? matches[0] : null;
   }
 

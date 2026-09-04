@@ -354,8 +354,18 @@ function ineligibleReason(it) {
 // breadcrumb like "Sporting Goods:Golf:Golf Clubs & Equipment:Golf Clubs" or a plain label like
 // "Musical Instruments & Gear") used to group items into collapsible sections within a sale.
 // Falls back to 'Other' for items with no category at all.
+// (2026-09-03, S-EXT-ITEM-SEARCH bugfix -- Patrick-reported live: category header showed literal
+// "&AMP;" text) Some items' category field is stored already HTML-entity-encoded upstream (e.g.
+// "Musical Instruments &amp; Gear" as literal text, not a real ampersand) -- decode the common
+// named entities before display so esc() below doesn't double-escape them.
+function decodeEntities(s) {
+  return String(s || '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&apos;/g, '\'');
+}
+
 function categoryLabel(it) {
-  const raw = (it.category || '').split(':')[0].trim();
+  const raw = decodeEntities((it.category || '').split(':')[0]).trim();
   return raw || 'Other';
 }
 
