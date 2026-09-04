@@ -1067,6 +1067,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Haul Posts</span>
                   </Link>
                   <Link
+                    href="/shopper/curio"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Snap a photo of anything to see what it might be worth"
+                  >
+                    <Sparkles size={16} className="text-indigo-500" />
+                    <span>Curio</span>
+                  </Link>
+                  <Link
                     href="/shopper/early-access-cache"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
