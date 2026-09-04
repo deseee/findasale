@@ -693,6 +693,24 @@ export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<
     ? (platformRaw as MarketplaceListingPlatform)
     : 'FACEBOOK';
 
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-REPORT-NOT-IDEMPOTENT): "removed" is a STATE, not an event
+  // log, but this endpoint appended a row on every call with no dedupe at all. Live incident:
+  // item cmp5iwn0g000f118erlt7mc3w accumulated 695 identical POSHMARK REMOVE/REMOVED rows in five
+  // minutes (2026-09-04 20:10:39Z-20:15:35Z, ~0.4s apart) -- 54% of the entire table -- from a
+  // client-side loop whose exact trigger was never identified. Whatever the client does, the
+  // server must not let a repeated report multiply rows. Scoped to (item, platform) and keyed off
+  // the LATEST row so a genuine relist (a later POST/POSTED) still allows a fresh REMOVE
+  // afterwards -- this only suppresses a duplicate report against an already-removed listing.
+  const latestForPlatform = await prisma.marketplaceListingJob.findFirst({
+    where: { itemId, platform },
+    orderBy: { createdAt: 'desc' },
+    select: { action: true, status: true },
+  });
+  if (latestForPlatform && latestForPlatform.action === 'REMOVE' && latestForPlatform.status === 'REMOVED') {
+    res.json({ ok: true, deduped: true });
+    return;
+  }
+
   await prisma.marketplaceListingJob.create({
     data: { itemId, action: 'REMOVE', status: 'REMOVED', platform },
   });
@@ -1375,37 +1393,83 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   const removalJobs = soldItemIds.length
     ? await prisma.marketplaceListingJob.findMany({
         where: { itemId: { in: soldItemIds } },
-        select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true },
+        select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true },
       })
     : [];
-  const postedByRemovalItem = new Set<string>();
-  const removedByRemovalItem = new Set<string>();
-  const skipCountByItem = new Map<string, number>();
-  const lastSkipReasonByItem = new Map<string, string | null>();
-  const lastSkipAtByItem = new Map<string, Date>();
+  // BUG FIX 2026-09-04 (S-EXT-SYNCHEALTH-CROSS-PLATFORM-MASKING): everything below used to be a
+  // byte-identical copy of getPendingRemovals' pre-fix ITEM-level logic. When that endpoint was
+  // made per-platform earlier the same day (S-EXT-GETPENDINGREMOVALS-CROSS-PLATFORM-MASKING) this
+  // copy was left behind, so the organizer's status card and the removal engine could disagree
+  // outright -- the card saying "nothing needs review" while a platform was in fact dead-lettered,
+  // or the reverse. Now mirrors getPendingRemovals exactly: the LATEST job row per
+  // `${itemId}:${platform}` decides whether that platform's listing is still live (POST/POSTED),
+  // the skip counters are keyed per item+platform, and an item enters the backlog when ANY of its
+  // still-listed platforms has burned MAX_REMOVAL_SKIP_ATTEMPTS on its own -- reporting the
+  // worst-affected platform's skipCount/lastErrorMessage/lastAttemptAt.
+  // DELIBERATE MIRROR of getPendingRemovals above: if that computation changes, change this one in
+  // the same pass, or the card and the engine drift apart again exactly as they just did.
+  // Every pre-existing response field (itemId/title/saleTitle/skipCount/lastErrorMessage/
+  // lastAttemptAt) is unchanged for MarketplaceSyncHealthCard.tsx; `platforms` is purely additive.
+  const latestByRemovalItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
   for (const j of removalJobs) {
-    if (j.action === 'POST' && j.status === 'POSTED') postedByRemovalItem.add(j.itemId);
-    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByRemovalItem.add(j.itemId);
+    const key = j.itemId + ':' + j.platform;
+    const existing = latestByRemovalItemPlatform.get(key);
+    if (!existing || j.createdAt > existing.createdAt) {
+      latestByRemovalItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
+    }
+  }
+  const stillListedPlatformsByRemovalItem = new Map<string, string[]>();
+  for (const [key, latest] of latestByRemovalItemPlatform) {
+    if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
+    // Same split convention as getPendingRemovals -- item ids are cuids and contain no colon.
+    const sepIdx = key.lastIndexOf(':');
+    const rowItemId = key.slice(0, sepIdx);
+    const rowPlatform = key.slice(sepIdx + 1);
+    const arr = stillListedPlatformsByRemovalItem.get(rowItemId) || [];
+    arr.push(rowPlatform);
+    stillListedPlatformsByRemovalItem.set(rowItemId, arr);
+  }
+  const skipCountByItemPlatform = new Map<string, number>();
+  const lastSkipReasonByItemPlatform = new Map<string, string | null>();
+  const lastSkipAtByItemPlatform = new Map<string, Date>();
+  for (const j of removalJobs) {
     if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
-      skipCountByItem.set(j.itemId, (skipCountByItem.get(j.itemId) || 0) + 1);
-      lastSkipReasonByItem.set(j.itemId, j.lastErrorMessage ?? null);
+      const skipKey = j.itemId + ':' + j.platform;
+      skipCountByItemPlatform.set(skipKey, (skipCountByItemPlatform.get(skipKey) || 0) + 1);
+      lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
       const attemptedAt = j.lastAttemptAt;
-      if (attemptedAt && (!lastSkipAtByItem.has(j.itemId) || attemptedAt > lastSkipAtByItem.get(j.itemId)!)) {
-        lastSkipAtByItem.set(j.itemId, attemptedAt);
+      if (attemptedAt && (!lastSkipAtByItemPlatform.has(skipKey) || attemptedAt > lastSkipAtByItemPlatform.get(skipKey)!)) {
+        lastSkipAtByItemPlatform.set(skipKey, attemptedAt);
       }
     }
   }
-  const stillPendingRemoval = soldItems.filter((i) => postedByRemovalItem.has(i.id) && !removedByRemovalItem.has(i.id));
-  const manualReviewBacklog = stillPendingRemoval
-    .filter((i) => (skipCountByItem.get(i.id) || 0) >= MAX_REMOVAL_SKIP_ATTEMPTS)
-    .map((i) => ({
+  const stillPendingRemoval = soldItems.filter((i) => (stillListedPlatformsByRemovalItem.get(i.id) || []).length > 0);
+  const manualReviewBacklog: Array<{
+    itemId: string;
+    title: string;
+    saleTitle: string;
+    skipCount: number;
+    lastErrorMessage: string | null;
+    lastAttemptAt: string | null;
+    platforms: string[];
+  }> = [];
+  for (const i of stillPendingRemoval) {
+    const stuck = (stillListedPlatformsByRemovalItem.get(i.id) || [])
+      .map((p) => ({ platform: p, skipCount: skipCountByItemPlatform.get(i.id + ':' + p) || 0 }))
+      .filter((p) => p.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS)
+      .sort((a, b) => b.skipCount - a.skipCount);
+    if (!stuck.length) continue;
+    const worstKey = i.id + ':' + stuck[0].platform;
+    manualReviewBacklog.push({
       itemId: i.id,
       title: i.title,
       saleTitle: saleTitleById.get(i.saleId || '') || 'Sale',
-      skipCount: skipCountByItem.get(i.id) || 0,
-      lastErrorMessage: lastSkipReasonByItem.get(i.id) || null,
-      lastAttemptAt: lastSkipAtByItem.get(i.id)?.toISOString() || null,
-    }));
+      skipCount: stuck[0].skipCount,
+      lastErrorMessage: lastSkipReasonByItemPlatform.get(worstKey) || null,
+      lastAttemptAt: lastSkipAtByItemPlatform.get(worstKey)?.toISOString() || null,
+      platforms: stuck.map((p) => p.platform),
+    });
+  }
 
   // --- recentFbNativeSold ---
   // Items that sold NATIVELY on Facebook via the reverse-direction cascade

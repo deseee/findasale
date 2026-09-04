@@ -572,6 +572,25 @@ async function clearRemovalAttempt(platform, itemId) {
   await chrome.storage.local.set({ fasRemovalAttempts });
 }
 
+// Second line of defence for S-EXT-REMOVAL-REPORT-NOT-IDEMPOTENT (the backend now dedupes too).
+// A content script that re-fires a delete report in a tight loop must not reach the network at
+// all. Keyed per platform+item, with a short window -- long enough to swallow a runaway loop,
+// far shorter than any legitimate re-removal of the same item after a genuine relist.
+const FAS_REMOVAL_REPORT_DEDUPE_MS = 60 * 1000;
+async function removalReportIsDuplicate(platform, itemId) {
+  const { fasRecentRemovalReports = {} } = await chrome.storage.local.get(['fasRecentRemovalReports']);
+  const key = platform + ':' + itemId;
+  const now = Date.now();
+  if (fasRecentRemovalReports[key] && now - fasRecentRemovalReports[key] < FAS_REMOVAL_REPORT_DEDUPE_MS) return true;
+  // Opportunistically drop entries well past the window so this map cannot grow without bound.
+  for (const k of Object.keys(fasRecentRemovalReports)) {
+    if (now - fasRecentRemovalReports[k] > FAS_REMOVAL_REPORT_DEDUPE_MS * 10) delete fasRecentRemovalReports[k];
+  }
+  fasRecentRemovalReports[key] = now;
+  await chrome.storage.local.set({ fasRecentRemovalReports });
+  return false;
+}
+
 // Called from checkPendingRemovals once per poll, right after the existing Facebook-specific
 // logic (unchanged) has run. `pendingItems` is the SAME array already fetched from
 // /extension/pending-removals -- now platform-aware (each item carries a `platforms` array, see
@@ -1886,6 +1905,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // succeeds, BEFORE the marketplace can navigate the tab away. Everything after that click
         // is owned here. See advanceAndContinueCrossPlatformRemoval's comment for the root cause.
         const tabId = (sender && sender.tab && sender.tab.id) || null;
+        // S-EXT-REMOVAL-REPORT-NOT-IDEMPOTENT: bail before touching the network if this exact
+        // (platform, item) delete report already fired inside the dedupe window. A bare `return`
+        // here exits the enclosing async IIFE -- nothing runs after this if/else-if chain except
+        // its own catch, so no required trailing work is skipped. Deliberately NOT applied to
+        // crossPlatformRemovalSkipped / crossPlatformRemovalAttemptFailed: repeated skip and
+        // attempt reports are meaningful there (they drive the retry cap) and must keep flowing.
+        if (await removalReportIsDuplicate(msg.platform, msg.itemId)) { sendResponse({ ok: true, deduped: true }); return; }
         const removed = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: { platform: msg.platform } });
         await clearRemovalAttempt(msg.platform, msg.itemId);
