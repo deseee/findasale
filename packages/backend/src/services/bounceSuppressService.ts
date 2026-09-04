@@ -1,4 +1,6 @@
 import { google } from 'googleapis';
+import { ImapFlow } from 'imapflow';
+import { simpleParser } from 'mailparser';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -71,6 +73,19 @@ import { prisma } from '../lib/prisma';
  * project number 955070470579) before a working GMAIL_MAILBOX_REFRESH_TOKEN for
  * deseee@gmail.com can be minted. This is a Patrick action (security-setting
  * change) -- see STATE.md Blocked Queue for current status.
+ *
+ * UPDATE 2026-09-04 -- the OAuth path above is no longer the live default. Google
+ * enforces a 7-day refresh-token expiry on External+Testing-status OAuth apps
+ * requesting Gmail's restricted scopes (confirmed live: refresh_token_expires_in
+ * = 604799 seconds), so GMAIL_MAILBOX_REFRESH_TOKEN died on a roughly-weekly
+ * cycle requiring a manual OAuth re-consent every time. Domain-wide delegation
+ * was evaluated and ruled out -- bounces land at deseee@gmail.com, a personal
+ * (non-Workspace) account, so it is not eligible. Replaced with IMAP + a Gmail
+ * App Password (does not expire on a schedule) against the same deseee@gmail.com
+ * mailbox -- see ADR-bounce-polling-imap-app-password-2026-09-04.md in
+ * claude_docs/feature-notes/ for the full decision record. Controlled by
+ * BOUNCE_POLL_METHOD ('imap' default, 'oauth' emergency rollback -- the OAuth
+ * path below is kept intact for exactly this fallback).
  */
 
 // Optional self-documenting expected mailbox (does NOT select the credential —
@@ -85,15 +100,38 @@ interface ProcessResult {
 }
 
 // ---------------------------------------------------------------------------
-// Gmail client factory — prefers GMAIL_MAILBOX_REFRESH_TOKEN (needs gmail.modify
-// scope to list/get/trash messages). Falls back to GMAIL_REFRESH_TOKEN.
-// Same pattern as scripts/outreach-mailbox-ops.js.
+// Bounce mailbox transport switch (added 2026-09-04, see ADR in
+// claude_docs/feature-notes/ADR-bounce-polling-imap-app-password-2026-09-04.md).
+// 'imap' (default): IMAP + Gmail App Password, no OAuth, no expiry.
+// 'oauth': emergency rollback to the legacy Gmail API OAuth path below, in case
+// IMAP proves unreliable in production. GMAIL_MAILBOX_REFRESH_TOKEN must still
+// be a live token for this fallback to work (it expires ~7 days after mint).
+// ---------------------------------------------------------------------------
+const BOUNCE_POLL_METHOD = (process.env.BOUNCE_POLL_METHOD || 'imap').toLowerCase();
+
+interface NormalizedBounceMessage {
+  headers: Array<{ name?: string | null; value?: string | null }>;
+  bodyText: string;
+}
+
+interface BounceMailboxSession {
+  listMessageIds(query: string): Promise<string[]>;
+  getMessage(id: string): Promise<NormalizedBounceMessage>;
+  trashMessage(id: string): Promise<void>;
+  dispose(): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// LEGACY Gmail API OAuth client factory — prefers GMAIL_MAILBOX_REFRESH_TOKEN
+// (needs gmail.modify scope to list/get/trash messages). Falls back to
+// GMAIL_REFRESH_TOKEN. Same pattern as scripts/outreach-mailbox-ops.js.
+// Only used when BOUNCE_POLL_METHOD='oauth' (emergency rollback — see above).
 //
 // IMPORTANT (ADR-bounce-suppression-mailbox-fix): GMAIL_MAILBOX_REFRESH_TOKEN
 // MUST authenticate find@outreach.finda.sale (the mailbox bounce DSNs return to).
 // If it authenticates any other account, processBounces lists 0 messages forever.
 // ---------------------------------------------------------------------------
-function createGmailClient() {
+function createGmailOAuthClient() {
   const token = process.env.GMAIL_MAILBOX_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN;
   if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !token) {
     throw new Error('[bounceSuppressService] Missing GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, or GMAIL_MAILBOX_REFRESH_TOKEN (or GMAIL_REFRESH_TOKEN)');
@@ -110,6 +148,127 @@ function createGmailClient() {
   );
   oauth2Client.setCredentials({ refresh_token: token });
   return google.gmail({ version: 'v1', auth: oauth2Client });
+}
+
+// ---------------------------------------------------------------------------
+// LEGACY session: wraps the OAuth Gmail API client in the same
+// BounceMailboxSession shape the IMAP path below provides, so processBounces()
+// and reclassifyBounces() never need to know which transport is live.
+// ---------------------------------------------------------------------------
+async function createOAuthBounceSession(): Promise<BounceMailboxSession> {
+  const gmail = createGmailOAuthClient();
+  return {
+    async listMessageIds(query: string): Promise<string[]> {
+      return listAllMessageIds(gmail, query);
+    },
+    async getMessage(id: string): Promise<NormalizedBounceMessage> {
+      const msgResp: any = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+      const msg = msgResp.data;
+      const headers: Array<{ name?: string | null; value?: string | null }> = msg.payload?.headers ?? [];
+      const bodyText = extractText(msg.payload ?? {});
+      return { headers, bodyText };
+    },
+    async trashMessage(id: string): Promise<void> {
+      await gmail.users.messages.trash({ userId: 'me', id });
+    },
+    async dispose(): Promise<void> {
+      // REST-based Gmail API client — no persistent connection to close.
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LIVE DEFAULT session: IMAP + Gmail App Password against GMAIL_BOUNCE_IMAP_USER
+// (deseee@gmail.com). No OAuth, no refresh-token expiry. See the 2026-09-04 ADR
+// referenced above for the full rationale.
+// ---------------------------------------------------------------------------
+async function createImapBounceSession(): Promise<BounceMailboxSession> {
+  const user = process.env.GMAIL_BOUNCE_IMAP_USER;
+  const pass = process.env.GMAIL_BOUNCE_IMAP_APP_PASSWORD;
+  if (!user || !pass) {
+    throw new Error('[bounceSuppressService] Missing GMAIL_BOUNCE_IMAP_USER or GMAIL_BOUNCE_IMAP_APP_PASSWORD');
+  }
+
+  const client = new ImapFlow({
+    host: 'imap.gmail.com',
+    port: 993,
+    secure: true,
+    auth: { user, pass },
+    logger: false,
+  });
+
+  await client.connect();
+
+  // "All Mail" is just the connection's home mailbox for SEARCH/FETCH/MOVE below.
+  // The gmraw query strings this service already uses include "in:anywhere",
+  // which — same as it did against the Gmail API's q: param — extends the
+  // actual search past any single mailbox's scope to include Spam and Trash
+  // too. That in:anywhere is what makes the search account-wide, not this
+  // mailbox choice (confirmed necessary by the 2026-08-17 fix: real bounce/DSN
+  // traffic was landing in Spam and the query was blind to it without it).
+  const lock = await client.getMailboxLock('[Gmail]/All Mail');
+
+  // Resolve the real Trash path via the specialUse flag rather than hardcoding
+  // — some accounts/locales use a different label (e.g. "[Gmail]/Bin").
+  let trashPath = '[Gmail]/Trash';
+  try {
+    const mailboxes = await client.list();
+    const trash = mailboxes.find((mb: any) => mb.specialUse === '\\Trash');
+    if (trash) trashPath = trash.path;
+  } catch (err: any) {
+    console.warn('[bounceSuppressService] Could not resolve Trash mailbox via specialUse — falling back to [Gmail]/Trash:', err.message);
+  }
+
+  return {
+    async listMessageIds(query: string): Promise<string[]> {
+      const uids = await client.search({ gmraw: query }, { uid: true });
+      if (uids === false) return [];
+      // Safety cap mirrors the OAuth path's maxPages*100 cap (2,000 msgs/run).
+      const capped = uids.slice(0, 2000);
+      if (uids.length > capped.length) {
+        console.warn(`[bounceSuppressService] IMAP search returned ${uids.length} UIDs — capping at 2000 for this run.`);
+      }
+      return capped.map((uid: number) => String(uid));
+    },
+    async getMessage(id: string): Promise<NormalizedBounceMessage> {
+      const uid = Number(id);
+      const msg: any = await client.fetchOne(uid, { source: true }, { uid: true });
+      if (!msg || !msg.source) {
+        throw new Error(`IMAP fetchOne returned no source for UID ${id}`);
+      }
+      const parsed = await simpleParser(msg.source);
+      const headers = (parsed.headerLines ?? []).map((hl: any) => ({
+        name: hl.key,
+        value: hl.line.slice(hl.line.indexOf(':') + 1).trim(),
+      }));
+      const bodyText = parsed.text ?? '';
+      return { headers, bodyText };
+    },
+    async trashMessage(id: string): Promise<void> {
+      const uid = Number(id);
+      await client.messageMove([uid], trashPath, { uid: true });
+    },
+    async dispose(): Promise<void> {
+      try {
+        lock.release();
+      } catch {
+        // already released or connection gone — non-fatal
+      }
+      try {
+        await client.logout();
+      } catch {
+        client.close();
+      }
+    },
+  };
+}
+
+async function openBounceMailboxSession(): Promise<BounceMailboxSession> {
+  if (BOUNCE_POLL_METHOD === 'oauth') {
+    console.log('[bounceSuppressService] BOUNCE_POLL_METHOD=oauth — using legacy Gmail API OAuth path.');
+    return createOAuthBounceSession();
+  }
+  return createImapBounceSession();
 }
 
 // ---------------------------------------------------------------------------
@@ -409,12 +568,12 @@ export const bounceSuppressService = {
   async processBounces(): Promise<ProcessResult> {
     const result: ProcessResult = { processed: 0, suppressed: 0, errors: [] };
 
-    let gmail: ReturnType<typeof google.gmail>;
+    let session: BounceMailboxSession;
     try {
-      gmail = createGmailClient();
+      session = await openBounceMailboxSession();
     } catch (err: any) {
-      result.errors.push(`Gmail auth failed: ${err.message}`);
-      console.error('[bounceSuppressService] Gmail auth error:', err.message);
+      result.errors.push(`Bounce mailbox auth failed: ${err.message}`);
+      console.error('[bounceSuppressService] Bounce mailbox auth error:', err.message);
       return result;
     }
 
@@ -428,8 +587,7 @@ export const bounceSuppressService = {
     // providers vary the From) are still caught.
     let messageIds: string[] = [];
     try {
-      messageIds = await listAllMessageIds(
-        gmail,
+      messageIds = await session.listMessageIds(
         // in:anywhere (not -in:trash) -- CORRECTION 2026-08-17: without in:anywhere, Gmail's
         // default q search scope silently excludes Spam (and Trash). Confirmed live this
         // session: real bounce/DSN traffic (hold notifications, an NDR, a postmaster notice)
@@ -443,11 +601,13 @@ export const bounceSuppressService = {
     } catch (err: any) {
       result.errors.push(`Gmail list failed: ${err.message}`);
       console.error('[bounceSuppressService] Gmail list error:', err.message);
+      await session.dispose();
       return result;
     }
 
     if (messageIds.length === 0) {
       console.log('[bounceSuppressService] No bounce messages found.');
+      await session.dispose();
       return result;
     }
 
@@ -457,15 +617,8 @@ export const bounceSuppressService = {
       try {
         result.processed++;
 
-        // Fetch full message
-        const msgResp = await gmail.users.messages.get({
-          userId: 'me',
-          id: msgId,
-          format: 'full',
-        });
-        const msg = msgResp.data;
-        const headers: Array<{ name?: string | null; value?: string | null }> = msg.payload?.headers ?? [];
-        const bodyText = extractText(msg.payload ?? {});
+        // Fetch full message (IMAP or OAuth, depending on BOUNCE_POLL_METHOD)
+        const { headers, bodyText } = await session.getMessage(msgId);
 
         // SEND-LIMIT NOTICE GUARD (incident 2026-06-21): Google's daily-send-limit
         // notices ("You have reached a limit for sending mail. Your message was not
@@ -478,7 +631,7 @@ export const bounceSuppressService = {
         if (/reached a limit for sending|sending limit|message was not sent because you have reached/i.test(sendLimitHaystack)) {
           console.log(`[bounceSuppressService] Send-limit notice (no recipient bounce) for message ${msgId} — not suppressing.`);
           try {
-            await gmail.users.messages.trash({ userId: 'me', id: msgId });
+            await session.trashMessage(msgId);
           } catch (trashErr: any) {
             console.warn(`[bounceSuppressService] Could not trash send-limit notice ${msgId} — continuing:`, trashErr.message);
           }
@@ -545,7 +698,7 @@ export const bounceSuppressService = {
         // read-only this throws, but it must NEVER block the suppression upsert
         // above — log and continue.
         try {
-          await gmail.users.messages.trash({ userId: 'me', id: msgId });
+          await session.trashMessage(msgId);
         } catch (trashErr: any) {
           console.warn(`[bounceSuppressService] Could not trash ${msgId} (likely missing gmail.modify scope) — continuing:`, trashErr.message);
         }
@@ -560,6 +713,7 @@ export const bounceSuppressService = {
     console.log(
       `[bounceSuppressService] Done. processed=${result.processed} suppressed=${result.suppressed} errors=${result.errors.length}`
     );
+    await session.dispose();
     return result;
   },
 
@@ -577,29 +731,30 @@ export const bounceSuppressService = {
   async reclassifyBounces(): Promise<ProcessResult> {
     const result: ProcessResult = { processed: 0, suppressed: 0, errors: [] };
 
-    let gmail: ReturnType<typeof google.gmail>;
+    let session: BounceMailboxSession;
     try {
-      gmail = createGmailClient();
+      session = await openBounceMailboxSession();
     } catch (err: any) {
-      result.errors.push(`Gmail auth failed: ${err.message}`);
-      console.error('[bounceSuppressService] reclassify Gmail auth error:', err.message);
+      result.errors.push(`Bounce mailbox auth failed: ${err.message}`);
+      console.error('[bounceSuppressService] reclassify bounce mailbox auth error:', err.message);
       return result;
     }
 
     let messageIds: string[] = [];
     try {
-      messageIds = await listAllMessageIds(
-        gmail,
+      messageIds = await session.listMessageIds(
         '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail")) in:anywhere'
       );
     } catch (err: any) {
       result.errors.push(`Gmail list failed: ${err.message}`);
       console.error('[bounceSuppressService] reclassify Gmail list error:', err.message);
+      await session.dispose();
       return result;
     }
 
     if (messageIds.length === 0) {
       console.log('[bounceSuppressService] reclassify: no bounce messages found.');
+      await session.dispose();
       return result;
     }
 
@@ -609,14 +764,7 @@ export const bounceSuppressService = {
       try {
         result.processed++;
 
-        const msgResp = await gmail.users.messages.get({
-          userId: 'me',
-          id: msgId,
-          format: 'full',
-        });
-        const msg = msgResp.data;
-        const headers: Array<{ name?: string | null; value?: string | null }> = msg.payload?.headers ?? [];
-        const bodyText = extractText(msg.payload ?? {});
+        const { headers, bodyText } = await session.getMessage(msgId);
 
         const bouncedAddress = extractBouncedAddress(headers, bodyText);
         if (!bouncedAddress) {
@@ -665,6 +813,7 @@ export const bounceSuppressService = {
     console.log(
       `[bounceSuppressService] reclassify done. processed=${result.processed} updated=${result.suppressed} errors=${result.errors.length}`
     );
+    await session.dispose();
     return result;
   },
 };
