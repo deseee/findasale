@@ -842,7 +842,19 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     return now - lastSkipAt.getTime() >= RETRY_COOLDOWN_MS;
   };
 
-  const stillPending = soldItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
+  // BUG FIX 2026-09-04 (S-EXT-GETPENDINGREMOVALS-CROSS-PLATFORM-MASKING, Patrick-directed live
+  // investigation -- Poshmark auto-removal "never fires" report). Root cause, confirmed live via
+  // direct DB query against production (MarketplaceListingJob rows for item
+  // cmtad5zdg001lqwgm7b21bfux, "Jimmy Buffett Coconut Telegraph Vinyl LP"): FACEBOOK POST/POSTED,
+  // POSHMARK POST/POSTED, FACEBOOK REMOVE/REMOVED -- no Poshmark REMOVE row exists at all, the
+  // Poshmark listing was never touched. `postedByItem`/`removedByItem` above are ITEM-level, not
+  // platform-scoped: any single platform's successful REMOVE (here, Facebook's) added the item to
+  // `removedByItem`, which excluded the WHOLE item from `stillPending` below -- silently hiding
+  // Poshmark's still-live listing from this endpoint forever, with no error and no signal to the
+  // organizer. `stillListedPlatformsByItem` above already computes the correct, per-platform
+  // "is this platform's latest job still POST/POSTED" answer (used to build the `platforms` array
+  // on each returned item) -- using it here too instead of the broken item-level sets.
+  const stillPending = soldItems.filter((i) => (stillListedPlatformsByItem.get(i.id) || []).length > 0);
   // `platforms` is additive -- fas-remove.js (Facebook's own consumer) only ever read
   // id/title and is unaffected. New per-platform consumers (background.js's generalized
   // multi-platform removal engine) use this to route each item to the right platform's own
