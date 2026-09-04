@@ -676,6 +676,17 @@ async function checkPendingRemovals() {
   // itself. Wrapped so a failure here can never take down the proven, working Facebook flow below.
   try { await checkCrossPlatformRemovals(items); } catch (e) { console.log('[FAS cross-platform removal check FAILED]', e && e.message); }
 
+  // BUG FIX 2026-09-04 (S-EXT-FACEBOOK-QUEUE-FED-OTHER-PLATFORMS-ITEMS): `items` is
+  // platform-agnostic -- each entry now carries a `platforms` array saying which platforms still
+  // have a LIVE listing. fasRemovalQueue is consumed by fas-remove.js, which only knows how to act
+  // on Facebook, so handing it an item whose Facebook listing was already removed guarantees a
+  // "no confident match" skip. Live-confirmed: two items whose Facebook listing was removed days
+  // earlier collected three FACEBOOK REMOVE/SKIPPED rows in four minutes each, which (via the
+  // then item-level skip counter) dead-lettered their still-live POSHMARK listings for 24h.
+  // Older API responses had no `platforms` field -- treat those as Facebook, preserving the
+  // pre-existing behaviour rather than silently dropping them.
+  const facebookItems = items.filter((i) => !Array.isArray(i.platforms) || i.platforms.indexOf('FACEBOOK') !== -1);
+
   // Sold-checks failure is non-fatal to the removal flow above -- a broken/unreachable
   // pending-sold-checks call must never block a genuine pending removal from being processed.
   let soldCheckCount = 0;
@@ -697,12 +708,12 @@ async function checkPendingRemovals() {
   // ~20-min cadence the alarm already runs on, so a routine rescan happens on that cadence
   // regardless of trigger source, while a genuine sold-elsewhere removal is never delayed.
   const SOLD_CHECK_MIN_INTERVAL_MS = 20 * 60 * 1000;
-  if (!items.length && soldCheckCount > 0) {
+  if (!facebookItems.length && soldCheckCount > 0) {
     const { fasLastSoldCheckActionAt = 0 } = await chrome.storage.local.get(['fasLastSoldCheckActionAt']);
     if (Date.now() - fasLastSoldCheckActionAt < SOLD_CHECK_MIN_INTERVAL_MS) return 'skipped_soldcheck_throttled';
   }
 
-  if (!items.length && !soldCheckCount) return 'no_items';
+  if (!facebookItems.length && !soldCheckCount) return 'no_items';
 
   // fasRemovalQueue only ever carries removal-processing candidates -- sold-check candidates
   // are fetched fresh by fas-remove.js itself (getFacebookSoldChecks) once the tab loads there;
@@ -711,14 +722,14 @@ async function checkPendingRemovals() {
   // fasLastSoldCheckActionAt whenever soldCheckCount contributed to this action firing, so the
   // throttle above measures time since the last real action, not time since the last poll.
   await chrome.storage.local.set({
-    fasRemovalQueue: items,
+    fasRemovalQueue: facebookItems,
     fasRemovalIndex: 0,
     ...(soldCheckCount > 0 ? { fasLastSoldCheckActionAt: Date.now() } : {})
   });
 
   if (fasAutoRemoveMode === 'silent') {
     await openSilentRemovalTab();
-    return 'silent_removal_started:' + items.length + '_soldchecks:' + soldCheckCount;
+    return 'silent_removal_started:' + facebookItems.length + '_soldchecks:' + soldCheckCount;
   }
 
   // 'notify' -- Chrome notification; clicking it opens the removal page in an active tab
@@ -729,10 +740,10 @@ async function checkPendingRemovals() {
     type: 'basic',
     iconUrl: 'icon128.png',
     title: 'FindA.Sale',
-    message: buildRemovalNotificationMessage(items.length, soldCheckCount),
+    message: buildRemovalNotificationMessage(facebookItems.length, soldCheckCount),
     priority: 1
   });
-  return 'notified:' + items.length + '_soldchecks:' + soldCheckCount;
+  return 'notified:' + facebookItems.length + '_soldchecks:' + soldCheckCount;
 }
 
 // ---- Independent reverse sold-detection trigger (S-EXT-REVERSE-SOLD-DETECTION-INDEPENDENT,
@@ -1885,8 +1896,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // Reported to the backend so it can stop re-serving it, then the queue moves on -- a
         // permanently unmatchable item must never block the rest of the platform's backlog.
         const tabId = (sender && sender.tab && sender.tab.id) || null;
+        // 2026-09-04: `platform` now sent -- without it the backend files every skip under the
+        // schema default (FACEBOOK), so Poshmark's skips counted against Facebook's budget and
+        // per-platform skip counting in getPendingRemovals was meaningless.
         await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
-          { method: 'POST', body: { reason: msg.reason || null } });
+          { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform } });
         await clearRemovalAttempt(msg.platform, msg.itemId);
         const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
         sendResponse({ ok: true, next: cont.next });
@@ -1898,7 +1912,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const attempts = await bumpRemovalAttempt(msg.platform, msg.itemId);
         if (attempts >= FAS_REMOVAL_MAX_ATTEMPTS) {
           await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
-            { method: 'POST', body: { reason: 'delete_unconfirmed_after_' + attempts + '_attempts: ' + (msg.reason || 'unknown') } });
+            { method: 'POST', body: { reason: 'delete_unconfirmed_after_' + attempts + '_attempts: ' + (msg.reason || 'unknown'), platform: msg.platform } });
           await clearRemovalAttempt(msg.platform, msg.itemId);
           const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
           sendResponse({ ok: true, gaveUp: true, attempts, next: cont.next });
@@ -1917,8 +1931,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // (2026-07-26 fix) Report a genuine removal skip (zero/ambiguous title match) so the
         // backend can eventually stop re-serving an item that keeps failing the same way --
         // see extensionController.ts's getPendingRemovals dead-letter note.
+        // 2026-09-04: msg.platform threaded through, defaulting to 'FACEBOOK' -- fas-remove.js
+        // sends none today, so its behaviour is byte-for-byte unchanged, while a future caller
+        // can scope its skip to the right platform.
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
-          { method: 'POST', body: { reason: msg.reason || null } }));
+          { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform || 'FACEBOOK' } }));
       } else if (msg.type === 'getFacebookSoldChecks') {
         // (2026-08-05) Reverse-direction cross-channel sync (ADR-084 amendment, Part D):
         // fas-remove.js's sold-detection scan asks for the candidate titles to check against

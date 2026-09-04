@@ -716,14 +716,32 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null;
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-SKIP-COUNTER-NOT-PLATFORM-SCOPED): this row was created
+  // WITHOUT a `platform`, so every skip from every platform was filed under the schema default
+  // (FACEBOOK) and `priorSkips` counted them all together as one pool. Combined with
+  // getPendingRemovals' then item-level skip counter, one platform's failures dead-lettered every
+  // OTHER platform's still-live listing. Confirmed live against production on items
+  // cmtad5zdg001lqwgm7b21bfux ("Jimmy Buffett Coconut Telegraph Vinyl LP") and
+  // cmtad6d53001sqwgm4t4eczs7 ("Time in a Bottle: Jim Croce's Greatest Love Songs Vinyl LP"):
+  // three FACEBOOK REMOVE/SKIPPED rows written inside four minutes (against a Facebook listing
+  // that had legitimately been REMOVED days earlier) pushed each ITEM to the cap and hid a
+  // POSHMARK listing that was still live and had ZERO removal attempts of its own on record.
+  // Same validate-against-VALID_LISTING_PLATFORMS, default-'FACEBOOK' pattern as markItemListed /
+  // markItemRemoved above: fas-remove.js sends no platform, so the default preserves its exact
+  // current behaviour, and an unvalidated string can never reach the Prisma enum field.
+  const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : 'FACEBOOK';
+  const platform: MarketplaceListingPlatform = (VALID_LISTING_PLATFORMS as string[]).includes(platformRaw)
+    ? (platformRaw as MarketplaceListingPlatform)
+    : 'FACEBOOK';
   const priorSkips = await prisma.marketplaceListingJob.count({
-    where: { itemId, action: 'REMOVE', status: 'SKIPPED' },
+    where: { itemId, action: 'REMOVE', status: 'SKIPPED', platform },
   });
   await prisma.marketplaceListingJob.create({
     data: {
       itemId,
       action: 'REMOVE',
       status: 'SKIPPED',
+      platform,
       attemptCount: priorSkips + 1,
       lastAttemptAt: new Date(),
       lastErrorMessage: reason,
@@ -782,9 +800,14 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   });
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
-  const skipCountByItem = new Map<string, number>();
-  const lastSkipReasonByItem = new Map<string, string | null>();
-  const lastSkipAtByItem = new Map<string, Date>();
+  // BUG FIX 2026-09-04 (S-EXT-GETPENDINGREMOVALS-CROSS-PLATFORM-MASKING, second half -- see the
+  // full root-cause note above `stillPending` below): these three were keyed by itemId ALONE, so
+  // one platform's skips gated retry eligibility for every other platform on the same item. Now
+  // keyed `${itemId}:${platform}`, the same convention `latestByItemPlatform` just below already
+  // uses (split back apart with lastIndexOf(':') -- item ids are cuids and contain no colon).
+  const skipCountByItemPlatform = new Map<string, number>();
+  const lastSkipReasonByItemPlatform = new Map<string, string | null>();
+  const lastSkipAtByItemPlatform = new Map<string, Date>();
   // FEATURE 2026-08-22 (S-EXT-CROSS-PLATFORM-AUTOREMOVE, Patrick-directed: "it must be built for
   // all of them, that's part of the extension" -- extending Facebook's existing sold-elsewhere
   // auto-removal to every platform). This endpoint's `items` response has always been
@@ -817,27 +840,31 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
-      skipCountByItem.set(j.itemId, (skipCountByItem.get(j.itemId) || 0) + 1);
-      lastSkipReasonByItem.set(j.itemId, j.lastErrorMessage ?? null);
-      // S1179: track the MOST RECENT skip per item (jobs aren't guaranteed ordered) so we can
-      // gate the cooldown off it -- a fresh retry is only offered once RETRY_COOLDOWN_MS has
-      // elapsed since the last actual failure, not since the item first crossed the cap.
+      const skipKey = j.itemId + ':' + j.platform;
+      skipCountByItemPlatform.set(skipKey, (skipCountByItemPlatform.get(skipKey) || 0) + 1);
+      lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
+      // S1179: track the MOST RECENT skip per item+platform (jobs aren't guaranteed ordered) so we
+      // can gate the cooldown off it -- a fresh retry is only offered once RETRY_COOLDOWN_MS has
+      // elapsed since the last actual failure, not since it first crossed the cap.
       const attemptedAt = j.lastAttemptAt;
-      if (attemptedAt && (!lastSkipAtByItem.has(j.itemId) || attemptedAt > lastSkipAtByItem.get(j.itemId)!)) {
-        lastSkipAtByItem.set(j.itemId, attemptedAt);
+      if (attemptedAt && (!lastSkipAtByItemPlatform.has(skipKey) || attemptedAt > lastSkipAtByItemPlatform.get(skipKey)!)) {
+        lastSkipAtByItemPlatform.set(skipKey, attemptedAt);
       }
     }
   }
 
   const now = Date.now();
-  const isRetryEligible = (itemId: string): boolean => {
-    const skipCount = skipCountByItem.get(itemId) || 0;
+  // 2026-09-04: now scoped to ONE platform's own skip history. The internal logic below is
+  // unchanged from S1179 -- only the counters it reads are per-platform instead of per-item.
+  const isRetryEligible = (itemId: string, platform: string): boolean => {
+    const skipKey = itemId + ':' + platform;
+    const skipCount = skipCountByItemPlatform.get(skipKey) || 0;
     if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
     // S1179: past the fast-fail cap, only retry again once the cooldown since the last
     // recorded skip has elapsed -- covers items that were dead-lettered before this fix
     // shipped (their lastAttemptAt is already well past the cooldown, so they're eligible
     // again on the very next poll) as well as future items that hit the cap going forward.
-    const lastSkipAt = lastSkipAtByItem.get(itemId);
+    const lastSkipAt = lastSkipAtByItemPlatform.get(skipKey);
     if (!lastSkipAt) return true; // no timestamp on record -- fail open rather than stuck forever
     return now - lastSkipAt.getTime() >= RETRY_COOLDOWN_MS;
   };
@@ -854,22 +881,70 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // organizer. `stillListedPlatformsByItem` above already computes the correct, per-platform
   // "is this platform's latest job still POST/POSTED" answer (used to build the `platforms` array
   // on each returned item) -- using it here too instead of the broken item-level sets.
+  //
+  // SECOND HALF OF THE SAME MASKING BUG (2026-09-04, same investigation): making `stillPending`
+  // per-platform-correct was necessary but not sufficient -- the skip COUNTER was left item-level
+  // in that same pass, so an item could pass this filter and still be withheld from the response
+  // entirely by another platform's failures. Live evidence, same two items
+  // (cmtad5zdg001lqwgm7b21bfux, cmtad6d53001sqwgm4t4eczs7): FACEBOOK POST/POSTED then FACEBOOK
+  // REMOVE/REMOVED days earlier (Facebook genuinely done), then THREE FACEBOOK REMOVE/SKIPPED rows
+  // created today inside four minutes -- 19:46, 19:48, 19:49 -- each "No confident match for this
+  // listing on the page". Those three hit MAX_REMOVAL_SKIP_ATTEMPTS for the ITEM, so
+  // isRetryEligible returned false and the whole item was dropped from `items` for a full
+  // RETRY_COOLDOWN_MS, taking down POSHMARK POST/POSTED -- still live, and with no POSHMARK REMOVE
+  // row of ANY kind on record, i.e. never attempted even once. Fixed on three fronts: the skip
+  // maps above are keyed itemId:platform, isRetryEligible takes the platform, and each returned
+  // item's `platforms` array is filtered to the still-listed platforms that are individually
+  // retry-eligible (an item with no eligible platform left is omitted rather than returned with an
+  // empty array, which would hand the extension an item with nothing to do). markItemRemovalSkipped
+  // above now stamps `platform` on the SKIPPED row it writes -- without that, every skip still
+  // lands on the FACEBOOK default and per-platform counting here is meaningless.
   const stillPending = soldItems.filter((i) => (stillListedPlatformsByItem.get(i.id) || []).length > 0);
   // `platforms` is additive -- fas-remove.js (Facebook's own consumer) only ever read
   // id/title and is unaffected. New per-platform consumers (background.js's generalized
   // multi-platform removal engine) use this to route each item to the right platform's own
   // removal tab instead of assuming Facebook.
+  // 2026-09-04: retry eligibility is applied PER PLATFORM inside the `platforms` array, not to the
+  // item as a whole. An item is returned only if at least one of its still-listed platforms is
+  // itself eligible -- so Facebook burning its cap can no longer withhold Poshmark's live listing.
   const items = stillPending
-    .filter((i) => isRetryEligible(i.id))
-    .map((i) => ({ id: i.id, title: i.title, platforms: stillListedPlatformsByItem.get(i.id) || [] }));
+    .map((i) => ({
+      id: i.id,
+      title: i.title,
+      platforms: (stillListedPlatformsByItem.get(i.id) || []).filter((p) => isRetryEligible(i.id, p)),
+    }))
+    .filter((i) => i.platforms.length > 0);
   // S1179: still surfaced here for organizer visibility once an item crosses the cap, even
   // during the cooldown windows where it's also (periodically) back in `items` above -- this
   // is now a "heads up, this one's been stubborn" signal rather than "we've given up on this
   // forever". background.js's notifyManualReviewIfNew already dedupes notifications per id, so
   // an item cycling through cooldown retries doesn't re-spam the organizer.
-  const needsManualReview = stillPending
-    .filter((i) => (skipCountByItem.get(i.id) || 0) >= MAX_REMOVAL_SKIP_ATTEMPTS)
-    .map((i) => ({ id: i.id, title: i.title, skipCount: skipCountByItem.get(i.id) || 0, lastErrorMessage: lastSkipReasonByItem.get(i.id) || null }));
+  // 2026-09-04: an item needs manual review when ANY of its still-listed platforms has burned the
+  // cap on its own. Response fields id/title/skipCount/lastErrorMessage are UNCHANGED -- they are
+  // exactly what background.js's notifyManualReviewIfNew consumes -- and skipCount/lastErrorMessage
+  // now report the worst-affected platform (highest skip count) for that item. `platforms` is
+  // purely additive: the names of the platforms that are actually stuck.
+  const needsManualReview: Array<{
+    id: string;
+    title: string;
+    skipCount: number;
+    lastErrorMessage: string | null;
+    platforms: string[];
+  }> = [];
+  for (const i of stillPending) {
+    const stuck = (stillListedPlatformsByItem.get(i.id) || [])
+      .map((p) => ({ platform: p, skipCount: skipCountByItemPlatform.get(i.id + ':' + p) || 0 }))
+      .filter((p) => p.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS)
+      .sort((a, b) => b.skipCount - a.skipCount);
+    if (!stuck.length) continue;
+    needsManualReview.push({
+      id: i.id,
+      title: i.title,
+      skipCount: stuck[0].skipCount,
+      lastErrorMessage: lastSkipReasonByItemPlatform.get(i.id + ':' + stuck[0].platform) || null,
+      platforms: stuck.map((p) => p.platform),
+    });
+  }
 
   res.json({ items, needsManualReview });
 };
