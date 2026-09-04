@@ -1837,6 +1837,19 @@
     return qa('button, [role="button"], a').find((el) => grRemNorm(el.textContent) === want && el.offsetParent !== null) || null;
   }
 
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-WRONG-TITLE-EL, propagated from the live-confirmed Poshmark
+  // fix): document.querySelector('h1, [class*="title" i]') returns the first element matching
+  // EITHER half in document order, and site headers carry classes containing "subtitle" -- and
+  // "title" is a literal substring of "subtitle". Live-confirmed to return a header nav element
+  // reading "My Offers" instead of the listing title, so the detail-page check always failed and
+  // the delete was never attempted. Prefer the real <h1>; only fall back to a class-based lookup
+  // that explicitly excludes "subtitle".
+  function grRemFindListingTitleEl() {
+    const h1 = document.querySelector('h1');
+    if (h1) return h1;
+    return qa('[class*="title" i]').find((el) => !/subtitle/i.test(el.className)) || null;
+  }
+
   // UNVERIFIED -- Grailed's "Selling" dashboard lists active listings with links to each
   // listing's own detail/edit page; exact tile structure not yet confirmed live.
   function findGrailedListingLinkByTitle(title) {
@@ -1846,63 +1859,121 @@
     // S-EXT-REMOVAL-MATCH-TRUNCATION-2026-09-03: same fix as Poshmark's equivalent function --
     // Grailed's own listing cards can truncate a long title in the DOM itself, so requiring the
     // card to contain the item's FULL stored title as a substring can false-negative exactly like
-    // it did on Poshmark (live-confirmed there, same one-directional pattern here). Bidirectional
-    // match after stripping a trailing "..." handles a truncated card either way.
+    // it did on Poshmark (live-confirmed there, same one-directional pattern here). Stripping a
+    // trailing "..." and still accepting a truncated card is correct; what is NOT correct is
+    // accepting ANY substring in either direction.
+    // BUG FIX 2026-09-04 (S-EXT-REMOVAL-UNSAFE-TITLE-MATCH, propagated from the live-confirmed
+    // Poshmark fix -- this is a DESTRUCTIVE-ACTION bug, not a cosmetic one): the old unguarded
+    // bidirectional test `want.indexOf(t) !== -1 || t.indexOf(want) !== -1` put NO minimum length
+    // on `t` and never required a truncated card's text to actually START the title, so any short
+    // incidental anchor text appearing anywhere inside the stored title matched. Live-confirmed on
+    // Poshmark: a view-count badge reading "6" matched a title ending in "...1976". If such a
+    // spurious anchor is the ONLY match, this function returns it and the caller navigates to and
+    // DELETES that unrelated listing. A match is now accepted only when the anchor text contains
+    // the full wanted title, or is a genuine length-gated PREFIX of it (anchored at index 0).
+    const MIN_TRUNCATED_PREFIX_LEN = 8; // shorter than this is a badge/label, not a real title prefix
     const matches = links.filter((a) => {
       const t = grRemNorm(a.textContent).replace(/\.{3,}$/, '').trim();
       if (!t) return false;
-      return want.indexOf(t) !== -1 || t.indexOf(want) !== -1;
+      const isPlausibleTruncatedPrefix = t.length >= MIN_TRUNCATED_PREFIX_LEN && want.indexOf(t) === 0;
+      return isPlausibleTruncatedPrefix || t.indexOf(want) !== -1;
     });
     return matches.length === 1 ? matches[0] : null;
   }
 
-  function deleteGrailedListingOnDetailPage() {
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-FALSE-REMOVED + S-EXT-GRAILED-DELETE-SYNCHRONOUS, propagated
+  // from the live-confirmed Poshmark fix). Two defects, both fixed here:
+  //   1. It returned `true` the moment a delete BUTTON was found and clicked -- whether or not a
+  //      confirmation control ever appeared, and whether or not the listing actually went away. The
+  //      caller then reported the item as REMOVED to the FindA.Sale backend, producing a false
+  //      "removed" record for a listing still live on Grailed -- the worst possible outcome (the
+  //      organizer stops watching it and it can still sell a second time). Now returns 'deleted'
+  //      ONLY when a confirmation control was actually found AND clicked; every other exit returns a
+  //      specific reason string the caller reports as a retriable attempt-failure, not a removal.
+  //   2. It was fully SYNCHRONOUS: it clicked the kebab menu and then looked for the delete item in
+  //      the same tick, with zero wait, so on any real page the menu has not rendered yet and this
+  //      could never succeed. Now async, with a real settle awaited between each step.
+  async function deleteGrailedListingOnDetailPage() {
     const menuBtn = qa('button, [role="button"]').find((el) => {
       const label = (el.getAttribute('aria-label') || '').toLowerCase();
       return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...';
     });
-    if (menuBtn) syntheticClick(menuBtn);
+    if (!menuBtn) return 'no_menu_button';
+    syntheticClick(menuBtn);
+    await sleep(600);
     const deleteBtn = grRemFindButtonByText('Delete listing') || grRemFindButtonByText('Delete') || grRemFindButtonByText('Remove listing');
-    if (!deleteBtn) return false;
+    if (!deleteBtn) return 'no_delete_action';
     syntheticClick(deleteBtn);
+    await sleep(600);
     const confirmBtn = grRemFindButtonByText('Yes') || grRemFindButtonByText('Confirm') || grRemFindButtonByText('Delete');
-    if (confirmBtn) syntheticClick(confirmBtn);
-    return true;
+    if (!confirmBtn) return 'no_confirm_button';
+    syntheticClick(confirmBtn);
+    await sleep(600);
+    return 'deleted';
   }
 
+  // Retained for reference/back-compat only. As of the 2026-09-04 fix below, background.js owns
+  // reporting a removal -- it does so on receiving 'crossPlatformRemovalDeleted', which is only ever
+  // sent after a CONFIRMED delete. This content script no longer reports removals itself.
   async function reportGrailedRemoved(item) {
     try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'GRAILED' }); } catch (e) {}
   }
 
+  // Deliberately null: where the tab should go next after the queue advances is left to
+  // background.js's own configured value, because Grailed's manage URL used here previously
+  // ('https://www.grailed.com/sell') is CONFIRMED WRONG -- see the create-form detection in
+  // runGrailedRemovalQueue below. Sending a known-bad continueUrl would just re-strand the flow on
+  // the create-listing form. (CFG is not injected into this content script's world -- only
+  // background.js imports config.js -- so this file cannot read the configured value itself; that
+  // was BUG FIX 2026-08-22's ReferenceError.)
+  const GRAILED_REMOVAL_CONTINUE_URL = null;
+
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-ADVANCE-ON-FAILURE, propagated from the live-confirmed
+  // Poshmark fix): this used to advance the queue after EVERY attempt, success or failure, and
+  // report the removal off a flag that merely meant "a delete button existed". A failed removal was
+  // therefore never retried while the listing stayed live, and a listing that was never actually
+  // deleted could still be recorded as removed. All three queue transitions are now owned by
+  // background.js and driven by messages that say exactly what happened:
+  //   crossPlatformRemovalDeleted       -- CONFIRMED delete: report, advance, continue.
+  //   crossPlatformRemovalSkipped       -- PERMANENT failure: report the skip, advance, continue.
+  //   crossPlatformRemovalAttemptFailed -- TRANSIENT failure: do NOT advance until 3 attempts fail.
+  // Every send is fire-and-forget: background navigates this tab onward, so awaiting the reply would
+  // just race the navigation that tears this content script down.
   async function runGrailedRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     await humanPause(400, 800);
-    const pageTitleEl = document.querySelector('h1, [class*="title" i]');
+    const pageTitleEl = grRemFindListingTitleEl();
     const onListingDetailPage = pageTitleEl && grRemNorm(pageTitleEl.textContent).indexOf(grRemNorm(item.title)) !== -1;
     if (onListingDetailPage) {
-      const deleted = deleteGrailedListingOnDetailPage();
-      await sleep(600);
-      if (deleted) {
-        await reportGrailedRemoved(item);
+      const result = await deleteGrailedListingOnDetailPage();
+      if (result === 'deleted') {
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Grailed.</div>');
-      } else {
-        overlayWarn('Found the listing but couldn\'t confirm the delete action (UNVERIFIED selector) -- please remove it yourself.' + button('fas-gr-close', 'Close', false));
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'GRAILED', itemId: item.id, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return;
       }
-      let next = null;
-      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GRAILED' }); } catch (e) {}
-      // BUG FIX 2026-08-22: CFG is not injected into this content script's world (only
-      // background.js imports config.js) -- referencing CFG.Grai_MANAGE_URL directly here
-      // threw a ReferenceError every time this ran. Inlined the literal URL instead.
-      if (next && next.ok && next.item) { await sleep(1200); location.href = 'https://www.grailed.com/sell'; }
-      else { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'GRAILED' }); } catch (e) {} }
+      overlayWarn('Found the listing but couldn\'t confirm the delete action (' + escapeHtml(result) + ') -- please remove it yourself. FindA.Sale will try this item again rather than marking it removed.' + button('fas-gr-close', 'Close', false));
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: result, continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
     const link = findGrailedListingLinkByTitle(item.title);
     if (!link) {
+      // BUG FIX 2026-09-04 (S-EXT-GRAILED-MANAGE-URL-IS-CREATE-FORM, live-confirmed this session):
+      // https://www.grailed.com/sell -- the URL this removal flow itself navigated to between items
+      // -- REDIRECTS to https://www.grailed.com/sell/new, which is the CREATE-a-listing form and
+      // contains zero a[href*="/listings/"]. So the flow had nothing at all to search and reported
+      // every real, still-live listing as a confident "skip", permanently consuming it from the
+      // queue. Detecting it here turns a silent, permanent, wrong skip into a loud, retriable
+      // attempt-failure the organizer can actually see and act on.
+      // STILL UNCONFIRMED: the correct Grailed seller-listings URL. It needs a live check on a
+      // logged-in Grailed account before it can be wired up -- do NOT guess a replacement here.
+      const onGrailedCreateForm = location.pathname.indexOf('/sell') === 0 && qa('a[href*="/listings/"]').length === 0;
+      if (onGrailedCreateForm) {
+        overlayWarn('FindA.Sale can\'t find your Grailed listings page -- this page is Grailed\'s create-a-listing form, not your listings. Please remove "' + escapeHtml(item.title) + '" from Grailed yourself. This item has NOT been marked removed and will be retried.' + button('fas-gr-close', 'Close', false));
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'GRAILED', itemId: item.id, reason: 'grailed_manage_url_is_create_form', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return;
+      }
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Grailed listings (zero or more than one found) -- skipped, not guessed.' + button('fas-gr-close', 'Close', false));
-      let next = null;
-      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GRAILED' }); } catch (e) {}
-      if (!(next && next.ok && next.item)) { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'GRAILED' }); } catch (e) {} }
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'GRAILED', itemId: item.id, reason: 'no_confident_listing_match', continueUrl: GRAILED_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
     location.href = link.href;

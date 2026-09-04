@@ -2338,6 +2338,19 @@
     return qa('button, [role="button"], a').find((el) => mercRemNorm(el.textContent) === want && el.offsetParent !== null) || null;
   }
 
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-WRONG-TITLE-EL, propagated from the live-confirmed Poshmark
+  // fix): document.querySelector('h1, [class*="title" i]') returns the first element matching
+  // EITHER half in document order, and site headers carry classes containing "subtitle" -- and
+  // "title" is a literal substring of "subtitle". Live-confirmed to return a header nav element
+  // reading "My Offers" instead of the listing title, so the detail-page check always failed and
+  // the delete was never attempted. Prefer the real <h1>; only fall back to a class-based lookup
+  // that explicitly excludes "subtitle".
+  function mercRemFindListingTitleEl() {
+    const h1 = document.querySelector('h1');
+    if (h1) return h1;
+    return qa('[class*="title" i]').find((el) => !/subtitle/i.test(el.className)) || null;
+  }
+
   // UNVERIFIED -- Mercari's "Selling" tab under My Page typically lists active listings with an
   // edit/delete affordance per item; the exact tile/link structure has not been confirmed live.
   function findMercariListingLinkByTitle(title) {
@@ -2347,62 +2360,100 @@
     // S-EXT-REMOVAL-MATCH-TRUNCATION-2026-09-03: same fix as Poshmark's equivalent function --
     // Mercari's own "my listings" cards can truncate a long title in the DOM itself, so requiring
     // the card to contain the item's FULL stored title as a substring can false-negative exactly
-    // like it did on Poshmark (live-confirmed there, same one-directional pattern here).
-    // Bidirectional match after stripping a trailing "..." handles a truncated card either way.
+    // like it did on Poshmark (live-confirmed there, same one-directional pattern here). Stripping
+    // a trailing "..." and still accepting a truncated card is correct; what is NOT correct is
+    // accepting ANY substring in either direction.
+    // BUG FIX 2026-09-04 (S-EXT-REMOVAL-UNSAFE-TITLE-MATCH, propagated from the live-confirmed
+    // Poshmark fix -- this is a DESTRUCTIVE-ACTION bug, not a cosmetic one): the old unguarded
+    // bidirectional test `want.indexOf(t) !== -1 || t.indexOf(want) !== -1` put NO minimum length
+    // on `t` and never required a truncated card's text to actually START the title, so any short
+    // incidental anchor text appearing anywhere inside the stored title matched. Live-confirmed on
+    // Poshmark: a view-count badge reading "6" matched a title ending in "...1976". If such a
+    // spurious anchor is the ONLY match, this function returns it and the caller navigates to and
+    // DELETES that unrelated listing. A match is now accepted only when the anchor text contains
+    // the full wanted title, or is a genuine length-gated PREFIX of it (anchored at index 0).
+    const MIN_TRUNCATED_PREFIX_LEN = 8; // shorter than this is a badge/label, not a real title prefix
     const matches = links.filter((a) => {
       const t = mercRemNorm(a.textContent).replace(/\.{3,}$/, '').trim();
       if (!t) return false;
-      return want.indexOf(t) !== -1 || t.indexOf(want) !== -1;
+      const isPlausibleTruncatedPrefix = t.length >= MIN_TRUNCATED_PREFIX_LEN && want.indexOf(t) === 0;
+      return isPlausibleTruncatedPrefix || t.indexOf(want) !== -1;
     });
     return matches.length === 1 ? matches[0] : null;
   }
 
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-FALSE-REMOVED, propagated from the live-confirmed Poshmark
+  // fix): this used to return `true` the moment a delete BUTTON was found and clicked -- whether or
+  // not a confirmation control ever appeared, and whether or not the listing actually went away.
+  // The caller then reported the item as REMOVED to the FindA.Sale backend, producing a false
+  // "removed" record for a listing that is still live on Mercari -- the worst possible outcome (the
+  // organizer stops watching it and it can still sell a second time). Now returns 'deleted' ONLY
+  // when a confirmation control was actually found AND clicked; every other exit returns a specific
+  // reason string the caller reports as a retriable attempt-failure instead of as a removal.
   async function deleteMercariListingOnDetailPage() {
     const menuBtn = qa('button, [role="button"]').find((el) => {
       const label = (el.getAttribute('aria-label') || '').toLowerCase();
       return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...';
     });
-    if (menuBtn) { await realClick(menuBtn); await sleep(400); }
+    if (!menuBtn) return 'no_menu_button';
+    await realClick(menuBtn);
+    await sleep(400);
     const deleteBtn = mercRemFindButtonByText('Delete listing') || mercRemFindButtonByText('Delete') || mercRemFindButtonByText('Remove listing');
-    if (!deleteBtn) return false;
+    if (!deleteBtn) return 'no_delete_action';
     await realClick(deleteBtn);
     await sleep(400);
     const confirmBtn = mercRemFindButtonByText('Yes') || mercRemFindButtonByText('Confirm') || mercRemFindButtonByText('Delete');
-    if (confirmBtn) { await realClick(confirmBtn); await sleep(600); }
-    return true;
+    if (!confirmBtn) return 'no_confirm_button';
+    await realClick(confirmBtn);
+    await sleep(600);
+    return 'deleted';
   }
 
+  // Retained for reference/back-compat only. As of the 2026-09-04 fix below, background.js owns
+  // reporting a removal -- it does so on receiving 'crossPlatformRemovalDeleted', which is only ever
+  // sent after a CONFIRMED delete. This content script no longer reports removals itself.
   async function reportMercariRemoved(item) {
     try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'MERCARI' }); } catch (e) {}
   }
 
+  // Where background.js should send this tab next once it has advanced the queue. Live-confirmed
+  // 2026-09-04 that https://www.mercari.com/mypage/listings/ resolves to the real "My listings"
+  // page -- the previous flow navigated to the bare homepage 'https://www.mercari.com/', which has
+  // no listings on it to search at all. Kept as an inlined literal because CFG is not injected into
+  // this content script's world (only background.js imports config.js) -- referencing
+  // CFG.Merc_MANAGE_URL directly here threw a ReferenceError every time (BUG FIX 2026-08-22).
+  const MERCARI_REMOVAL_CONTINUE_URL = 'https://www.mercari.com/mypage/listings/';
+
+  // BUG FIX 2026-09-04 (S-EXT-REMOVAL-ADVANCE-ON-FAILURE, propagated from the live-confirmed
+  // Poshmark fix): this used to advance the queue after EVERY attempt, success or failure, and
+  // report the removal off a flag that merely meant "a delete button existed". A failed removal was
+  // therefore never retried while the listing stayed live, and a listing that was never actually
+  // deleted could still be recorded as removed. All three queue transitions are now owned by
+  // background.js and driven by messages that say exactly what happened:
+  //   crossPlatformRemovalDeleted       -- CONFIRMED delete: report, advance, continue.
+  //   crossPlatformRemovalSkipped       -- PERMANENT failure: report the skip, advance, continue.
+  //   crossPlatformRemovalAttemptFailed -- TRANSIENT failure: do NOT advance until 3 attempts fail.
+  // Every send is fire-and-forget: background navigates this tab onward, so awaiting the reply would
+  // just race the navigation that tears this content script down.
   async function runMercariRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
-    const pageTitleEl = document.querySelector('h1, [class*="title" i]');
+    const pageTitleEl = mercRemFindListingTitleEl();
     const onListingDetailPage = pageTitleEl && mercRemNorm(pageTitleEl.textContent).indexOf(mercRemNorm(item.title)) !== -1;
     if (onListingDetailPage) {
-      const deleted = await deleteMercariListingOnDetailPage();
-      if (deleted) {
-        await reportMercariRemoved(item);
+      const result = await deleteMercariListingOnDetailPage();
+      if (result === 'deleted') {
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Mercari.</div>');
-      } else {
-        overlayWarn('Found the listing but couldn\'t confirm the delete action (UNVERIFIED selector) -- please remove it yourself.' + button('fas-merc-close', 'Close', false));
+        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'MERCARI', itemId: item.id, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return;
       }
-      let next = null;
-      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'MERCARI' }); } catch (e) {}
-      // BUG FIX 2026-08-22: CFG is not injected into this content script's world (only
-      // background.js imports config.js) -- referencing CFG.Merc_MANAGE_URL directly here
-      // threw a ReferenceError every time this ran. Inlined the literal URL instead.
-      if (next && next.ok && next.item) { await sleep(1200); location.href = 'https://www.mercari.com/'; }
-      else { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'MERCARI' }); } catch (e) {} }
+      overlayWarn('Found the listing but couldn\'t confirm the delete action (' + escapeHtml(result) + ') -- please remove it yourself. FindA.Sale will try this item again rather than marking it removed.' + button('fas-merc-close', 'Close', false));
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'MERCARI', itemId: item.id, reason: result, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
     const link = findMercariListingLinkByTitle(item.title);
     if (!link) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Mercari listings (zero or more than one found) -- skipped, not guessed.' + button('fas-merc-close', 'Close', false));
-      let next = null;
-      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'MERCARI' }); } catch (e) {}
-      if (!(next && next.ok && next.item)) { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'MERCARI' }); } catch (e) {} }
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'no_confident_listing_match', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
     location.href = link.href;

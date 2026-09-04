@@ -2100,10 +2100,18 @@
     return true;
   }
 
+  // HARDENED 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION): matches the element's exact
+  // trimmed/normalised text, not .includes(). A substring match for 'Delete' also matches
+  // "Delete account", "Deleted items", and anything else whose label merely contains the word --
+  // and whatever this returns then gets a synthetic click, so a loose match on a page full of
+  // destructive actions is a real hazard, not a cosmetic one. The bare 'a' selector is dropped for
+  // the same reason (any anchor containing the word qualified); only genuine controls count now,
+  // and only visible ones -- an offscreen or display:none control is never what the organizer
+  // themselves would have clicked.
   function vintRemFindButtonByText(text) {
     const wanted = vintRemNorm(text);
-    const candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="menuitem"], a'));
-    return candidates.find((el) => vintRemNorm(el.textContent).includes(wanted)) || null;
+    const candidates = Array.from(document.querySelectorAll('button, [role="button"], [role="menuitem"]'));
+    return candidates.find((el) => vintRemNorm(el.textContent) === wanted && el.offsetParent !== null) || null;
   }
 
   // UNVERIFIED -- Vinted's own listing pages are typically /items/<id>-<slug>; closet/wardrobe
@@ -2116,7 +2124,12 @@
       .filter((x) => x.t.length > 0);
     const exact = scored.filter((x) => x.t === wanted);
     if (exact.length === 1) return exact[0].a;
-    const contains = scored.filter((x) => x.t.includes(wanted) || wanted.includes(x.t));
+    // MIN-LENGTH GUARD 2026-09-04: an anchor whose own text is under 8 characters is never
+    // accepted as a truncated title. Live-confirmed false-match class: a "6" view-count badge
+    // anchor satisfied wanted.includes(x.t) against a title ending in "...1976" and was treated as
+    // a confident match. Short anchor text on a Vinted listing card is a badge or counter, never
+    // a title. The "exactly one match or null -- never guess" discipline below is unchanged.
+    const contains = scored.filter((x) => x.t.length >= 8 && (x.t.includes(wanted) || wanted.includes(x.t)));
     if (contains.length === 1) return contains[0].a;
     return null; // zero or ambiguous matches -- never guess
   }
@@ -2132,16 +2145,39 @@
     const deleteBtn = vintRemFindButtonByText('Delete');
     if (!deleteBtn) return 'no_delete_action';
     vintRemSyntheticClick(deleteBtn);
+    await sleep(600);
+    // HONESTY FIX 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION): this lookup used to be
+    // vintRemFindButtonByText('Delete') || ... -- which re-found the SAME delete control just
+    // clicked (still in the DOM), clicked it a second time, and reported success regardless -- the
+    // caller took that as a completed removal and told FindA.Sale so. That is the worst
+    // outcome this feature has: FindA.Sale records the item as gone and stops trying while the
+    // listing is still live and still selling. A confirmation control must therefore be a
+    // DIFFERENT node from the one already clicked -- and with no distinct confirmation there is no
+    // confirmation at all, so nothing may be reported as removed.
+    const confirmBtn = ['Delete', 'Yes', 'Confirm']
+      .map((label) => vintRemFindButtonByText(label))
+      .find((el) => el && el !== deleteBtn) || null;
+    if (!confirmBtn) return 'no_confirm_button';
+    vintRemSyntheticClick(confirmBtn);
     await sleep(400);
-    // Vinted may show a confirmation step -- look for a second explicit confirm control.
-    const confirmBtn = vintRemFindButtonByText('Delete') || vintRemFindButtonByText('Yes') || vintRemFindButtonByText('Confirm');
-    if (confirmBtn) { vintRemSyntheticClick(confirmBtn); await sleep(400); }
-    return 'attempted';
+    return 'deleted';
   }
 
-  async function reportVintedRemoved(item) {
-    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'VINTED' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'VINTED' }); } catch (e) {}
+  // TRANSITION OWNERSHIP 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION): the removal-report
+  // helper that used to live here did two things at once -- reported the removal AND advanced the
+  // queue -- from a content script whose execution context Vinted tears down the instant the delete
+  // navigates the tab away. background.js is a persistent worker and now owns both halves of every
+  // terminal outcome (report + advance + continue/finish), so each branch below just fires one
+  // message describing what actually happened and returns.
+  // fire-and-forget: never awaited (the tab may be navigated away mid-send) and the lastError read
+  // keeps a closed message channel from surfacing as an unhandled rejection.
+  function vintRemSignalBackground(type, item, reason) {
+    try {
+      chrome.runtime.sendMessage(
+        { type, platform: 'VINTED', itemId: item.id, reason: reason || null, continueUrl: null },
+        () => { void chrome.runtime.lastError; }
+      );
+    } catch (e) { /* non-fatal -- background self-heals a stalled removal run on its own timeout */ }
   }
 
   async function runVintedRemovalQueue(item, index, total) {
@@ -2155,29 +2191,41 @@
       if (!link) {
         overlayWarn('Could not find a Vinted listing matching "' + escapeHtml(item.title) + '" on this page (UNVERIFIED selectors) -- please delete it yourself, then use "Mark removed" if the extension offers it.' + button('fas-vin-close', 'Close', false));
         closeBtnHandler();
-        try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'VINTED' }); } catch (e) {}
+        // PERMANENT failure -- zero or ambiguous title match after a real look at the page. The
+        // background reports the skip so the backend stops re-serving it, then advances and
+        // continues: an unmatchable item must never wedge the rest of the platform's backlog.
+        vintRemSignalBackground('crossPlatformRemovalSkipped', item, 'no_confident_listing_match');
         return;
       }
       link.click();
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Vinted listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
       return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
     }
-    if (result === 'attempted') {
-      await reportVintedRemoved(item);
-      const more = (index + 1) < total;
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed the Vinted listing for <b>' + escapeHtml(item.title) + '</b> (please double-check it\'s gone -- this was not live-verified).</div>' +
-        (more ? button('fas-vin-next', 'Next item &#9654;', true) : '') +
+    if (result === 'deleted') {
+      // Only reachable once a DISTINCT confirmation control was found and clicked, so the hedge
+      // this overlay used to carry ("please double-check it's gone -- this was not live-verified")
+      // no longer applies: nothing reaches this branch on a click that was merely attempted.
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed the Vinted listing for <b>' + escapeHtml(item.title) + '</b>.</div>' +
         button('fas-vin-close', 'Close', false));
-      const next = document.getElementById('fas-vin-next');
-      if (next) next.onclick = () => location.reload();
       closeBtnHandler();
+      // Sent the instant the delete is genuinely confirmed, before Vinted can navigate this tab
+      // away. Background reports the removal, advances the queue, and either continues to the next
+      // item or finishes and closes the tab -- no local advance, no local navigation from here.
+      vintRemSignalBackground('crossPlatformRemovalDeleted', item, null);
+      return;
     } else if (result === 'interstitial') {
       overlayWarn('Vinted is showing a verification/security screen -- please complete it yourself, then remove this listing manually.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
+      // TRANSIENT, not permanent: a security screen clears once the organizer completes it, so the
+      // background retries this same item rather than reporting it permanently skipped.
+      vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'interstitial');
     } else {
       overlayWarn('Could not find the delete action on this Vinted listing page (UNVERIFIED selectors -- reason: ' + result + ') -- please delete it yourself.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
-      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'VINTED' }); } catch (e) {}
+      // TRANSIENT too (missing menu / delete action / confirmation control on this render). The
+      // background holds the item and retries; only after FAS_REMOVAL_MAX_ATTEMPTS does it treat
+      // the failure as permanent, so a genuinely broken selector still cannot wedge the queue.
+      vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, result);
     }
   }
 
