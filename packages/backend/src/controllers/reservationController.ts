@@ -28,6 +28,7 @@ import { createPaymentLinkInternal } from './posController'; // markSold settlem
 import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim; P0 (2026-08-17): dead-anchor release
 import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // Hold-to-Pay P1 (2026-08-17): released invoices left PAYABLE Stripe sessions live
+import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // P1 fix (2026-09-04, S-CARDING-INCIDENT-2026-09-03 follow-up): Hold-to-Pay invoicing never ran the shared Stripe-onboarding/sale-state gate
 
 // markSold settlement router (Decision A): settlement modes
 type SettlementMode = 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
@@ -1787,6 +1788,29 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     const organizer = reservation.item.sale!.organizer;
     if (organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
+    }
+
+    // P1 fix (2026-09-04, S-CARDING-INCIDENT-2026-09-03 follow-up): Hold-to-Pay invoicing
+    // (this function) created a real Stripe Checkout Session with no Stripe-onboarding/
+    // sale-state check at all -- the same carding-class gap already closed at
+    // createPaymentIntent and createCartCheckoutSession via the shared
+    // assertSaleCanAcceptPayment gate (see services/paymentEligibilityService.ts). Placed
+    // here, immediately after the ownership check and before the invoice claim/Stripe call
+    // below, so a blocked request never takes the invoiceClaimToken CAS or creates a Stripe
+    // session. reservation.item.sale and organizer are already fully hydrated via Prisma
+    // `include` (no `select` restricting scalar fields), so no additional query is needed.
+    const invoiceEligibility = await assertSaleCanAcceptPayment({
+      prisma,
+      sale: {
+        id: reservation.item.sale!.id,
+        status: reservation.item.sale!.status,
+        paymentsHeldAt: reservation.item.sale!.paymentsHeldAt,
+      },
+      organizerStripeConnectId: organizer.stripeConnectId,
+      organizerStripeOnboarded: organizer.stripeOnboarded,
+    });
+    if (invoiceEligibility.blocked) {
+      return res.status(invoiceEligibility.status).json(invoiceEligibility.body);
     }
 
     // Query ALL active reservations for this shopper at this sale
