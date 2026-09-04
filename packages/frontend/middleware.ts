@@ -225,8 +225,20 @@ async function isTombstonedSaleId(saleId: string): Promise<boolean> {
     );
     clearTimeout(timer);
     if (!res.ok) return false;
-    const items = (await res.json()) as Array<{ key: string }>;
-    return items.some((item) => item.key === saleId);
+    // Fast-read endpoint (global-config.vercel.com) returns a flat
+    // { key: value } object, NOT an array of { key, value } objects --
+    // confirmed via Vercel's own docs 2026-09-04. That array shape is the
+    // separate management-API GET /v1/global-config/{id}/items response,
+    // which this middleware does not call. The prior `items.some(...)` call
+    // threw a TypeError on this real response shape every time, silently
+    // swallowed by the catch block below -- so every dynamically-tombstoned
+    // sale ID fell through to the plain 404 path and only the hardcoded
+    // SEED_DELETED_SALE_IDS (no network call) ever actually returned 410.
+    // Root-caused live 2026-09-04: curl against 3 real synced tombstone IDs
+    // returned 404 (cached page body), while all 3 seed IDs correctly
+    // returned 410 same session.
+    const items = (await res.json()) as Record<string, unknown>;
+    return Object.prototype.hasOwnProperty.call(items, saleId);
   } catch {
     return false; // timeout, network error, malformed response -- fail open
   }
