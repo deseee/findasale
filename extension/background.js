@@ -547,6 +547,19 @@ async function checkCrossPlatformRemovals(pendingItems) {
     }
     await chrome.storage.local.set({ [cfg.queueKey]: itemsForPlatform, [cfg.indexKey]: 0 });
     if (fasAutoRemoveMode === 'silent') {
+      // SAFETY FIX 2026-09-04 (S-EXT-CROSSPLATFORM-REMOVAL-TAB-BURST, precautionary -- Patrick
+      // live report of a runaway burst of background.js console activity, several messages/sec,
+      // sustained even while idle; exact trigger not confirmed live since the console cleared
+      // before it could be captured, but this loop is the strongest concrete candidate found on
+      // code review: it iterates every platform in ONE call with zero delay between iterations,
+      // and in silent mode opens a brand-new active tab per platform that has pending items --
+      // today's getPendingRemovals fix (S-EXT-GETPENDINGREMOVALS-CROSS-PLATFORM-MASKING) likely
+      // unmasked a real backlog across MULTIPLE platforms at once, not just Poshmark, so this loop
+      // could open several tabs within about a second of each other, each then running its own
+      // removal flow independently and concurrently -- consistent with what was observed. Added
+      // defensively regardless of exact root cause, since opening several automated tabs back to
+      // back with zero pacing is a real risk on its own (marketplace bot-detection).
+      if (outcomes.length) await sleep(3000 + Math.random() * 2000);
       await openSilentCrossPlatformRemovalTab(platform);
       outcomes.push(platform + ':silent_removal_started:' + itemsForPlatform.length);
     } else {
