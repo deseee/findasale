@@ -2405,24 +2405,48 @@
     return link ? link.href : null;
   }
 
-  // UNVERIFIED -- best-effort guess at Poshmark's closet-tile structure (a tile containing a link
-  // to its own /listing/ detail page), not yet confirmed against a real sold item.
+  // BUG FIX 2026-09-04 (S-EXT-POSHMARK-CLOSET-CARD-COVERSHOT-FALSE-MATCH, Patrick live report +
+  // direct live DOM evidence against his real closet: "Eagles Their Greatest Hits Vinyl Record,
+  // 1976" was genuinely present as a single, unambiguous closet card, yet this function reported
+  // "zero or more than one found"). Root cause, live-confirmed via javascript_tool query against
+  // poshmark.com/closet/artifactm?query=eagles: each closet listing renders TWO separate
+  // `a[href*="/listing/"]` anchors -- a small thumbnail/covershot link (class
+  // `tile__covershot tile-grid-redesign__covershot ...`, textContent is JUST the view-count badge
+  // digit, e.g. "6") and the real title link (class `tile-grid-redesign__meta-link`, textContent
+  // is the actual title+price+tag). The old `.closest('[class*="tile" i], ...')` call never
+  // merged these into one card, because BOTH anchors' OWN class names already contain the
+  // substring "tile" (covershot AND meta-link), so `.closest()` (which matches the starting
+  // element itself first) just returned each anchor to itself -- they were never deduped into a
+  // shared parent card at all. That left the single-digit covershot badge ("6") as its own
+  // candidate "tile", and the old truncated-prefix match branch (`want.indexOf(tileText)`) had no
+  // minimum-length guard, so "6" spuriously matched because the real title's year ("...1976")
+  // literally contains a 6 -- two candidates "matched" (the badge and the real title link), so the
+  // function treated it as ambiguous and gave up on an otherwise perfectly clean single match.
+  // Fix: (1) exclude covershot/thumbnail links from the candidate set entirely -- they can never
+  // meaningfully carry title text, this is the direct fix for the confirmed failure; (2) require a
+  // real minimum length AND true prefix anchoring before treating tile text as a possibly-truncated
+  // title (defense in depth against any other stray short badge/label Poshmark's DOM may carry
+  // elsewhere, e.g. list view vs grid view).
   function findPoshmarkClosetCardByTitle(title) {
     const want = poshRemNorm(title);
     if (!want) return null;
+    const MIN_TRUNCATED_PREFIX_LEN = 8; // shorter than this is a badge/label, not a real title prefix
     const tiles = qa('a[href*="/listing/"]')
+      .filter((a) => !/covershot/i.test(a.className))
       .map((a) => a.closest('[class*="tile" i], [class*="card" i], li, div') || a)
       .filter((el, i, arr) => arr.indexOf(el) === i);
     // S-EXT-POSHMARK-CLOSET-SEARCH-2026-09-03 (Patrick live report + screenshot): Poshmark's own
     // closet tiles can carry a genuinely truncated title in the DOM (real text, e.g. "Jimmy
     // Buffett Coconut Telegr..."), not just CSS-clipped display -- so requiring the tile to
     // contain the item's FULL stored title as a substring could never match. Strip a trailing
-    // "..." and check containment BOTH ways: either the tile text is a (possibly truncated)
-    // prefix of the real title, or the real title is fully present in the tile text.
+    // "..." and check containment: either the tile text is a genuine (possibly truncated) PREFIX
+    // of the real title (length-gated per MIN_TRUNCATED_PREFIX_LEN above), or the real title is
+    // fully present in the tile text.
     const matches = tiles.filter((t) => {
       const tileText = poshRemNorm(t.textContent).replace(/\.{3,}$/, '').trim();
       if (!tileText) return false;
-      return want.indexOf(tileText) !== -1 || tileText.indexOf(want) !== -1;
+      const isPlausibleTruncatedPrefix = tileText.length >= MIN_TRUNCATED_PREFIX_LEN && want.indexOf(tileText) === 0;
+      return isPlausibleTruncatedPrefix || tileText.indexOf(want) !== -1;
     });
     return matches.length === 1 ? matches[0] : null;
   }
@@ -2464,21 +2488,61 @@
     return m ? m[1] : null;
   }
 
-  async function deletePoshmarkListingOnEditPage() {
-    const deleteLink = document.querySelector('a[data-et-name="delete"]');
-    if (!deleteLink) return false;
-    realClick(deleteLink);
-    await sleep(700);
-    const modal = qa('.modal.simple-modal').find((m) => {
+  function findVisiblePoshmarkDeleteConfirmModal() {
+    return qa('.modal.simple-modal').find((m) => {
       if (m.hidden) return false;
       const style = getComputedStyle(m);
       if (style.display === 'none' || style.visibility === 'hidden') return false;
       return /delete listing/i.test(m.textContent) || /are you sure you want to delete this item/i.test(m.textContent);
     });
+  }
+
+  // BUG FIX 2026-09-04 (S-EXT-POSHMARK-DELETE-CONFIRM-HYDRATION-RACE, Patrick live report on a
+  // SECOND real item, "Eagles Their Greatest Hits Vinyl Record": navigated to the correct
+  // edit-listing page (closet-match + navigation fix above both confirmed working), but the
+  // extension reported "couldn't confirm the delete action" and nothing happened. Diagnosed live
+  // against Patrick's real, already-settled edit page (Claude-in-Chrome MCP): the exact same
+  // click-delete-link -> find-modal -> find-Yes-button -> click-Yes logic this function already
+  // used, replicated step by step, worked perfectly on the settled page -- realClick's synthetic
+  // event dispatch DOES open the real confirm modal, and the "Yes" button IS found correctly. That
+  // narrows the real difference to TIMING: this function ran immediately on the fresh
+  // /edit-listing/ page load (content script fires at document_idle, which does not guarantee
+  // Poshmark's React app has finished hydrating its click handlers yet) -- the exact same class of
+  // SPA-hydration race this file already root-caused and fixed elsewhere via waitForFormReady /
+  // waitForSelector (see those functions' own comments), just not yet applied to this newer delete
+  // flow. Fixed by polling for BOTH the delete link and the confirm modal via the file's own
+  // existing waitForSelector() helper instead of fixed sleeps, so a slow-to-hydrate page gets a
+  // real chance to catch up instead of being checked exactly once.
+  async function deletePoshmarkListingOnEditPage(item) {
+    const deleteLink = await waitForSelector(() => document.querySelector('a[data-et-name="delete"]'), 6000);
+    if (!deleteLink) return false;
+    realClick(deleteLink);
+    const modal = await waitForSelector(() => findVisiblePoshmarkDeleteConfirmModal(), 4000);
     if (!modal) return false;
-    const yesBtn = Array.from(modal.querySelectorAll('button')).find((b) => b.className.indexOf('btn--primary') !== -1 && b.textContent.trim() === 'Yes');
+    const yesBtn = await waitForSelector(
+      () => Array.from(modal.querySelectorAll('button')).find((b) => b.className.indexOf('btn--primary') !== -1 && b.textContent.trim() === 'Yes'),
+      2000
+    );
     if (!yesBtn) return false;
     realClick(yesBtn);
+    // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-REPORT-RACE, Patrick live report on the SAME real
+    // Eagles item, second failure mode: "it deleted the eagles but then it went back to the closet
+    // then this modal popped up" -- the SAME "no confident match" overlay reappeared afterward,
+    // for the SAME title). DB-confirmed live: the Poshmark listing WAS genuinely deleted (a fresh
+    // closet search now correctly finds zero matches, not an ambiguous one), but NO
+    // MarketplaceListingJob REMOVE row was ever created for it on the backend -- direct query
+    // showed only the original POST/POSTED row, nothing else. Root cause: the caller only reported
+    // removal AFTER this whole function returned (following an extra 900ms sleep) -- Poshmark's
+    // own app redirects away from the edit page shortly after a successful delete, tearing down
+    // this content script's execution context before that later, awaited report call ever ran, so
+    // the backend never learned this item was actually gone -- it kept re-queuing the same
+    // already-deleted item on every subsequent poll, forever "no match" from then on. Fix: fire
+    // the removal report HERE, immediately after the Yes click succeeds -- deliberately NOT
+    // awaited, so the actual chrome.runtime.sendMessage dispatch to the background script (a
+    // separate, persistent process, unlike this page) is initiated right away regardless of
+    // whatever the page does next, instead of being queued behind more of this function's own
+    // code that might never get to run.
+    reportPoshmarkRemoved(item);
     await sleep(900);
     return true;
   }
@@ -2538,7 +2602,7 @@
       const pageId = extractPoshmarkListingId(location.pathname);
       const targetId = sessionStorage.getItem('fasPoshDeleteTargetId');
       if (pageId && targetId && pageId === targetId) {
-        const deleted = await deletePoshmarkListingOnEditPage();
+        const deleted = await deletePoshmarkListingOnEditPage(item);
         if (deleted) {
           sessionStorage.removeItem('fasPoshDeleteTargetId');
           await advancePoshmarkRemovalQueueAndContinue(item);
@@ -2560,6 +2624,16 @@
         const listingId = extractPoshmarkListingId(location.href);
         if (listingId) {
           sessionStorage.setItem('fasPoshDeleteTargetId', listingId);
+          // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING, precautionary -- Patrick live
+          // report of a runaway burst of activity in background.js's own console, several
+          // messages/sec, exact trigger not confirmed since the console cleared before it could be
+          // captured). This file's own navigation points in the removal flow had zero pacing
+          // between them, unlike every other queue-advance flow in this file (see humanQueueDelay/
+          // humanPause used elsewhere) -- added defensively here and at the two navigation points
+          // below regardless of the exact root cause, since rapid unpaced automated navigation is a
+          // real risk on its own (Poshmark bot-detection) independent of what caused this specific
+          // incident.
+          await humanPause(1200, 2200);
           location.href = 'https://poshmark.com/edit-listing/' + listingId; // fresh load lands in the /edit-listing/ branch above
           return;
         }
@@ -2573,6 +2647,7 @@
     let card = findPoshmarkClosetCardByTitle(item.title);
     if (!card) {
       if (location.href.indexOf('/closet/') === -1 && closetLink) {
+        await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING) -- see comment above
         location.href = closetLink; // navigate to closet, fresh load will retry the match there
         return;
       }
@@ -2584,13 +2659,41 @@
     }
     if (!card) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your closet (zero or more than one found) -- skipped, not guessed.' + button('fas-posh-close', 'Close', false));
-      // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-ADVANCE-ON-FAILURE): this used to advance the
-      // queue here too, silently dropping the item forever if the closet page just hadn't finished
-      // lazy-loading yet. Deliberately NOT advancing -- next poll/reload retries instead.
+      // BUG FIX 2026-09-04, REVISED same day (S-EXT-POSHMARK-REMOVAL-ADVANCE-ON-FAILURE): the
+      // first version of this fix left the queue un-advanced here too, matching the edit-page
+      // delete-failure fix above -- but live-confirmed same session (Patrick's real queue) that
+      // this is the WRONG call for this specific branch: a genuinely unmatchable historical item
+      // (title doesn't resolve to any closet card at all, not a transient lazy-load gap) now
+      // blocked the ENTIRE rest of the queue forever, including other real items behind it (e.g.
+      // an "Eagles..." item with no closet match blocked the Jimmy Buffett item queued after it).
+      // Restored the original advance-on-skip behavior for THIS branch specifically -- a confirmed
+      // "zero or more than one match" is a permanent, not transient, failure, so retrying it
+      // forever helps nobody and actively hides every other queued item. The edit-page
+      // delete-confirm-failure branch above (deletePoshmarkListingOnEditPage returning false)
+      // correctly stays non-advancing -- that one IS a plausibly transient failure (page/modal
+      // not fully loaded yet) for the exact item currently mid-flow, not a backlog-wide blocker.
+      let next = null;
+      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}
+      if (!(next && next.ok && next.item)) { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'POSHMARK' }); } catch (e) {} }
       return;
     }
-    const link = card.querySelector('a[href*="/listing/"]');
-    if (link) location.href = link.href; // navigate into the listing; fresh load handles the delete
+    // BUG FIX 2026-09-04 (S-EXT-POSHMARK-CLOSET-CARD-COVERSHOT-FALSE-MATCH, continued -- same
+    // session, live-confirmed on the real Eagles listing card): `card` is now correctly the real
+    // title-link `<a>` itself in the confirmed-common case (its own class contains "tile", so
+    // `.closest()` above returns the anchor to itself rather than a wrapping div -- live-confirmed:
+    // `tile-grid-redesign__meta-link` tag === "A"). The old `card.querySelector(...)` searched for
+    // a NESTED anchor inside `card`, which can never exist when `card` IS the anchor -- silently
+    // returning null and leaving the whole removal stuck on the closet page doing nothing (Patrick
+    // live report: "it's just stuck here now.. nothing happening on the page", overlay stuck on
+    // "removing sold item 1 of 3"). Handle both shapes: use `card` directly when it's already a
+    // matching link, otherwise fall back to searching its descendants (covers any other tile
+    // structure -- e.g. list view -- where `.closest()` DOES land on a real wrapper div).
+    const isDirectListingLink = card.tagName === 'A' && /\/listing\//.test(card.getAttribute('href') || '');
+    const link = isDirectListingLink ? card : card.querySelector('a[href*="/listing/"]');
+    if (link) {
+      await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING) -- see comment above
+      location.href = link.href; // navigate into the listing; fresh load handles the delete
+    }
   }
 
   async function maybeRunPoshmarkRemoval() {
