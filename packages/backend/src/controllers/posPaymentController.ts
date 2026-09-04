@@ -1152,30 +1152,45 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           data: { status: 'COMPLETED' },
         });
       } catch (err: any) {
-        // P0 fix (2026-08-08, Terminal readiness audit): this is the same failure class
-        // already fixed with a Sentry alert in stripeController.ts's POS-payment-request
-        // webhook fulfillment (search "P0 fix (2026-08-07)" in that file) -- by this point
-        // Stripe has confirmed the PaymentIntent succeeded (verified via
-        // paymentIntents.retrieve above) and posRequest.status is already PAID, so a
-        // failure creating this item's Purchase row or decrementing its stock means money
-        // was captured but the item was never recorded as sold. The catch here already
-        // correctly avoided aborting the rest of the cart (unlike terminalController.ts's
-        // sibling bug, also fixed this pass) -- but it only logged to console, so the
-        // failure had zero record anywhere once server logs rotated. Sentry closes that gap.
-        console.error(`[pos-payment] Failed to mark item ${item.id} as sold (payment already captured, request already PAID):`, err);
-        try {
-          Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
-            tags: { area: 'pos-payment-request-confirm-post-payment-item-fulfillment' },
-            extra: {
-              requestId,
-              itemId: item.id,
-              organizerUserId: posRequest.organizerUserId,
-              shopperUserId: posRequest.shopperUserId,
-              stripePaymentIntentId: paymentIntent.id,
-            },
-          });
-        } catch {
-          // Sentry may not be initialized -- silently continue
+        // Sentry FINDASALE-NODEJS-7M fix (2026-09-03, S-BQ-QA-ROADMAP): a P2002 here means
+        // the client retried/double-submitted this exact confirm request (same paymentIntent
+        // + same item) -- the Purchase row for this item was already created successfully by
+        // the FIRST attempt, and this second attempt's create() is correctly rejected by the
+        // compound partial unique index on (stripePaymentIntentId, itemId) (see schema.prisma
+        // comment on the Purchase model). Nothing is broken: the item is already sold, stock
+        // already decremented, notifications already sent -- this branch is a benign no-op,
+        // not a fulfillment failure. Downgraded to a quiet warn (no Sentry alert) so real
+        // failures below aren't drowned out by expected-duplicate noise. Every OTHER error in
+        // this catch (stock-decrement failure, DB blip, etc.) still gets the full P0
+        // console.error + Sentry treatment from the 2026-08-08 fix this replaces in part.
+        if (err?.code === 'P2002') {
+          console.warn(`[pos-payment] Duplicate confirm for item ${item.id} (paymentIntent ${paymentIntent.id}) -- Purchase already exists from an earlier attempt, skipping.`);
+        } else {
+          // P0 fix (2026-08-08, Terminal readiness audit): this is the same failure class
+          // already fixed with a Sentry alert in stripeController.ts's POS-payment-request
+          // webhook fulfillment (search "P0 fix (2026-08-07)" in that file) -- by this point
+          // Stripe has confirmed the PaymentIntent succeeded (verified via
+          // paymentIntents.retrieve above) and posRequest.status is already PAID, so a
+          // failure creating this item's Purchase row or decrementing its stock means money
+          // was captured but the item was never recorded as sold. The catch here already
+          // correctly avoided aborting the rest of the cart (unlike terminalController.ts's
+          // sibling bug, also fixed this pass) -- but it only logged to console, so the
+          // failure had zero record anywhere once server logs rotated. Sentry closes that gap.
+          console.error(`[pos-payment] Failed to mark item ${item.id} as sold (payment already captured, request already PAID):`, err);
+          try {
+            Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+              tags: { area: 'pos-payment-request-confirm-post-payment-item-fulfillment' },
+              extra: {
+                requestId,
+                itemId: item.id,
+                organizerUserId: posRequest.organizerUserId,
+                shopperUserId: posRequest.shopperUserId,
+                stripePaymentIntentId: paymentIntent.id,
+              },
+            });
+          } catch {
+            // Sentry may not be initialized -- silently continue
+          }
         }
       }
     }

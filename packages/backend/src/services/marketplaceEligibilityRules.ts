@@ -140,6 +140,13 @@ const RULES: EligibilityRule[] = [
     excludeKeywords: [
       'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
       'chef knife', 'paring knife', 'bread knife', 'steak knife',
+      // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: bare 'gun'/'blade' keywords above are
+      // substring-matched (see checkEligibility), so compound words that merely CONTAIN them were
+      // false-blocked -- confirmed live via real Artifact-sale items: "...Gunmetal Black" golf club
+      // and "Bladerunner Inline Skates" (brand name). Neither is a weapon. Excluding the specific
+      // false-positive words rather than rewriting the matcher to word-boundary regex, which would
+      // also stop matching real compound weapon terms like "shotgun"/"handgun"/"airgun".
+      'gunmetal', 'bladerunner',
     ],
     reason: 'Facebook Marketplace does not allow listing weapons, ammunition, or explosives (Commerce Policy).',
   },
@@ -188,6 +195,9 @@ const RULES: EligibilityRule[] = [
       'counterfeit', 'replica', 'pirated',
       'stolen',
     ],
+    // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
+    // same bare-'gun'-substring false positive applies here (e.g. "...Gunmetal..." golf clubs).
+    excludeKeywords: ['gunmetal'],
     reason: 'Craigslist prohibits weapons, ammunition/explosives, alcohol/tobacco, controlled substances, counterfeit/replica items, and several other restricted categories (Prohibited Items policy).',
   },
 
@@ -219,6 +229,9 @@ const RULES: EligibilityRule[] = [
       'used cosmetic', 'used underwear',
       'nitrous oxide',
     ],
+    // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
+    // same bare-'gun'-substring false positive applies here.
+    excludeKeywords: ['gunmetal'],
     reason: 'Gumtree Australia prohibits weapons (including all knives), alcohol, tobacco, drugs, counterfeit/replica goods, and several other restricted categories (General Posting Policy).',
   },
 
@@ -285,6 +298,8 @@ const RULES: EligibilityRule[] = [
     ],
     excludeKeywords: [
       'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
+      // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above.
+      'gunmetal',
     ],
     reason: 'Poshmark prohibits firearms, weapons, knives, ammunition, and alcohol (Prohibited Items Policy).',
   },
@@ -314,6 +329,8 @@ const RULES: EligibilityRule[] = [
     excludeKeywords: [
       'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
       'ring', 'necklace', 'bracelet', 'earring', 'pendant', 'jewelry', 'jewellery', 'mounted',
+      // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above.
+      'gunmetal', 'bladerunner',
     ],
     reason: 'This category isn’t allowed on Mercari (Prohibited Items policy).',
   },
@@ -338,10 +355,52 @@ const RULES: EligibilityRule[] = [
       'counterfeit', 'replica', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
       'fur', 'ivory', 'reptile skin', 'vape', 'e-cigarette', 'fetish', 'furniture',
       // Confirmed on Vinted's own page this session, not previously covered:
-      'musical instrument', 'cycling helmet', 'safety harness', 'heated tobacco',
+      'cycling helmet', 'safety harness', 'heated tobacco',
+      // 'musical instrument' REMOVED S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 -- it matched
+      // FindA.Sale's own umbrella category label "Musical Instruments & Gear" as a substring
+      // ("instrument" inside "instruments"), so it blocked the ENTIRE category including gear/
+      // accessories (guitar straps, cables, tuners, pickups, amps, cases, effects pedals -- 11 of
+      // 13 real items live-queried this session were gear, not instruments). Vinted's real policy
+      // (vinted.com/help/52-items-not-allowed-on-vinted, fetched live this session) says "Musical
+      // instruments for adults" -- actual instruments only. Replaced with a dedicated, narrower
+      // rule below that targets real instrument words and excludes gear/accessory terms.
     ],
-    excludeKeywords: ['sealed', 'unopened', 'unused', 'new,', 'album', 'holder', 'case', 'sleeve'],
+    excludeKeywords: [
+      'sealed', 'unopened', 'unused', 'new,', 'album', 'holder', 'case', 'sleeve',
+      // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: Vinted's coin/currency excludeKeywords was
+      // missing several accessory words the FACEBOOK coin rule already carries (see that rule) --
+      // confirmed live: "BCW Dime Coin Tubes" (ebayCategoryName "Coin Tubes") was wrongly blocked
+      // because 'tube' wasn't excluded (its "Quarter" sibling escaped only by luck, via a
+      // differently-mapped category "Holders" that happened to hit the existing 'holder' exclude).
+      'tube', 'capsule', 'slab', 'flip', 'display', 'mount', 'folder', 'box', 'organizer', 'storage',
+    ],
     reason: 'This category isn’t allowed on Vinted (Items Not Allowed policy).',
+  },
+
+  // ---- VINTED MUSICAL INSTRUMENTS (added S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03) -- split out
+  // of the general VINTED rule above, which used a single overbroad 'musical instrument' keyword
+  // that matched FindA.Sale's own "Musical Instruments & Gear" category label itself (see that
+  // rule's comment). Vinted's real policy (fetched live this session) bans "Musical instruments for
+  // adults" -- actual playable instruments, not gear/accessories. nameKeywords below list real
+  // instrument-family words (word-anchored where practical); excludeKeywords carves out the
+  // accessory/gear terms confirmed live in Artifact's real "Musical Instruments & Gear" items this
+  // session (speaker, pickup, cable, strap, tuner, amplifier, case, effects pedal) so those stay
+  // listable -- only the actual instruments (e.g. "Fanned Frets 6 Strings Headless Electric
+  // Guitar", "Yamaha F-325 Acoustic Guitar") are blocked, per policy.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'VINTED',
+    nameKeywords: [
+      'guitar', 'piano', 'violin', 'viola', 'cello', 'double bass', 'upright bass',
+      'drum kit', 'drum set', 'saxophone', 'trumpet', 'trombone', 'clarinet', 'flute',
+      'banjo', 'ukulele', 'mandolin', 'harmonica', 'accordion', 'synthesizer', 'keyboard piano',
+      'harp', 'bagpipe', 'cornet', 'french horn', 'tuba', 'oboe', 'bassoon', 'xylophone',
+    ],
+    excludeKeywords: [
+      'strap', 'amplifier', 'combo amplifier', 'speaker', 'pickup', 'cable', 'tuner', 'case',
+      'pedal', 'effects', 'stand', 'string set', 'capo', 'gig bag', 'pedalboard', 'pedal board',
+    ],
+    reason: 'Vinted does not allow listing musical instruments (Items Not Allowed policy).',
   },
 
   // ---- VINTED SHARP KNIVES, BLADED TOOLS & WEAPONS (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) --
@@ -369,6 +428,10 @@ const RULES: EligibilityRule[] = [
     ],
     excludeKeywords: [
       'butter knife', 'table knife', 'electric razor', 'cartridge razor',
+      // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
+      // same bare-'gun'/'blade'-substring false positives apply here (confirmed live: a golf club
+      // titled "...Gunmetal Black" and "Bladerunner Inline Skates", a brand name).
+      'gunmetal', 'bladerunner',
     ],
     reason: 'Vinted prohibits all sharp knives and bladed tools with a pointed tip (including kitchen knives), plus firearms, ammunition, and other weapons (Items Not Allowed policy). Only dull/rounded table knives and sealed electric or cartridge razors are allowed.',
   },
