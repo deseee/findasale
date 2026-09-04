@@ -2443,22 +2443,43 @@
     return true;
   }
 
-  // UNVERIFIED -- Poshmark listing-detail pages typically expose a "..." / kebab menu with a
-  // Delete/Remove Listing action once you own the listing; the exact selector has not been
-  // confirmed live. Matches by visible text within any open menu/dialog, consistent with this
-  // file's own findPoshmarkVisibleButtonByText pattern used elsewhere.
-  async function deletePoshmarkListingOnDetailPage() {
-    const kebab = qa('button, [role="button"]').find((el) => {
-      const label = (el.getAttribute('aria-label') || '').toLowerCase();
-      return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...' || el.textContent.trim() === '\u2022\u2022\u2022';
+  // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-WRONG-PAGE, Patrick-directed live investigation --
+  // the Jimmy Buffett listing 6a980d157fd46a9d294f562d never actually got removed, and the queue
+  // silently advanced past it anyway leaving nothing to retry). Root cause, confirmed live via
+  // Claude-in-Chrome MCP DOM inspection against Patrick's real, logged-in Poshmark tab (not
+  // assumed): the LISTING DETAIL page (poshmark.com/listing/...) has NO delete control at all --
+  // the "UNVERIFIED kebab menu" this function used to look for there doesn't exist on that page.
+  // The real delete control lives ONLY on the EDIT page (poshmark.com/edit-listing/<id> -- the
+  // detail-page URL and the edit URL were confirmed live to end in the same 24-hex-char id), as a
+  // real, live-confirmed link: `<a data-et-name="delete" data-et-prop-listing_id="..."><h4> Delete
+  // Listing</h4></a>`. Clicking it opens a confirm modal already present in the DOM (hidden until
+  // triggered): a `.modal.simple-modal` whose text reads "Confirm Delete Listing Are you sure you
+  // want to delete this item? No Yes" -- the confirm button is that SAME modal's own
+  // `.btn--primary` "Yes" button. The edit page has several other `.modal.simple-modal` elements
+  // with generic Yes/No buttons too (e.g. a brand-edit-3-times warning) -- MUST scope the query to
+  // the modal whose own text contains "Delete Listing", never a page-wide "Yes" lookup, or this
+  // could confirm the wrong dialog.
+  function extractPoshmarkListingId(href) {
+    const m = /([0-9a-f]{24})(?:[/?#]|$)/i.exec(href || '');
+    return m ? m[1] : null;
+  }
+
+  async function deletePoshmarkListingOnEditPage() {
+    const deleteLink = document.querySelector('a[data-et-name="delete"]');
+    if (!deleteLink) return false;
+    realClick(deleteLink);
+    await sleep(700);
+    const modal = qa('.modal.simple-modal').find((m) => {
+      if (m.hidden) return false;
+      const style = getComputedStyle(m);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      return /delete listing/i.test(m.textContent) || /are you sure you want to delete this item/i.test(m.textContent);
     });
-    if (kebab) { realClick(kebab); await sleep(400); }
-    const deleteBtn = findPoshmarkVisibleButtonByText('delete listing') || findPoshmarkVisibleButtonByText('delete') || findPoshmarkVisibleButtonByText('remove listing');
-    if (!deleteBtn) return false;
-    realClick(deleteBtn);
-    await sleep(400);
-    const confirmBtn = findPoshmarkVisibleButtonByText('yes') || findPoshmarkVisibleButtonByText('confirm') || findPoshmarkVisibleButtonByText('delete');
-    if (confirmBtn) { realClick(confirmBtn); await sleep(600); }
+    if (!modal) return false;
+    const yesBtn = Array.from(modal.querySelectorAll('button')).find((b) => b.className.indexOf('btn--primary') !== -1 && b.textContent.trim() === 'Yes');
+    if (!yesBtn) return false;
+    realClick(yesBtn);
+    await sleep(900);
     return true;
   }
 
@@ -2486,31 +2507,67 @@
     return qa('[class*="title" i]').find((el) => !/subtitle/i.test(el.className)) || null;
   }
 
+  // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-ADVANCE-ON-FAILURE): factored out so the queue is
+  // ONLY ever advanced after a CONFIRMED successful delete (see deletePoshmarkListingOnEditPage's
+  // return value). The old code advanced the queue unconditionally after every attempt, success or
+  // failure -- that's the exact mechanism that stranded Patrick's real queue at
+  // {index:1, total:1, item:null} while the Jimmy Buffett listing stayed live: one failed attempt
+  // (on the wrong page) silently consumed the only queued item and nothing ever retried.
+  async function advancePoshmarkRemovalQueueAndContinue(item) {
+    await reportPoshmarkRemoved(item);
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Poshmark.</div>');
+    let next = null;
+    try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}
+    if (next && next.ok && next.item) {
+      await sleep(1200);
+      location.href = findPoshmarkClosetLink() || 'https://poshmark.com/feed'; // BUG FIX 2026-08-22: CFG is not injected into this content script's world (only background.js imports config.js) -- referencing it here threw a ReferenceError whenever findPoshmarkClosetLink() returned null. Inlined the same URL config.js holds for POSH_MANAGE_URL.
+    } else {
+      try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'POSHMARK' }); } catch (e) {}
+    }
+  }
+
   async function runPoshmarkRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
-    // On a listing detail page already matching this item's title -- attempt the delete directly.
-    if (location.pathname.indexOf('/listing/') === 0 || location.pathname.indexOf('/listing/') > 0) {
-      const pageTitleEl = findPoshmarkListingTitleEl();
-      const onRightPage = pageTitleEl && poshRemNorm(pageTitleEl.textContent).indexOf(poshRemNorm(item.title)) !== -1;
-      if (onRightPage) {
-        const deleted = await deletePoshmarkListingOnDetailPage();
+
+    // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-WRONG-PAGE): on the edit page for the SAME item
+    // this queue entry navigated here for (sessionStorage flag set below, right before navigating
+    // away from the listing detail page) -- run the real delete flow confirmed live against
+    // poshmark.com/edit-listing/6a980d157fd46a9d294f562d. See deletePoshmarkListingOnEditPage's
+    // comment above for the full evidence. A failed attempt here never advances the queue.
+    if (location.pathname.indexOf('/edit-listing/') !== -1) {
+      const pageId = extractPoshmarkListingId(location.pathname);
+      const targetId = sessionStorage.getItem('fasPoshDeleteTargetId');
+      if (pageId && targetId && pageId === targetId) {
+        const deleted = await deletePoshmarkListingOnEditPage();
         if (deleted) {
-          await reportPoshmarkRemoved(item);
-          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Poshmark.</div>');
+          sessionStorage.removeItem('fasPoshDeleteTargetId');
+          await advancePoshmarkRemovalQueueAndContinue(item);
         } else {
-          overlayWarn('Found the listing but couldn\'t confirm the delete action (UNVERIFIED selector) -- please remove it yourself.' + button('fas-posh-close', 'Close', false));
-        }
-        let next = null;
-        try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}
-        if (next && next.ok && next.item) {
-          await sleep(1200);
-          location.href = findPoshmarkClosetLink() || 'https://poshmark.com/feed'; // BUG FIX 2026-08-22: CFG is not injected into this content script's world (only background.js imports config.js) -- referencing it here threw a ReferenceError whenever findPoshmarkClosetLink() returned null. Inlined the same URL config.js holds for POSH_MANAGE_URL.
-        } else {
-          try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'POSHMARK' }); } catch (e) {}
+          overlayWarn('Found the edit page but couldn\'t confirm the delete action -- please remove it yourself.' + button('fas-posh-close', 'Close', false));
+          // Deliberately NOT advancing the queue -- next poll/reload retries this same item instead
+          // of silently dropping it (see BUG FIX 2026-09-04 comment above).
         }
         return;
       }
     }
+
+    // On a listing detail page matching this item's title -- navigate to the real edit page where
+    // the delete control actually lives (BUG FIX 2026-09-04, see comment block above).
+    if (location.pathname.indexOf('/listing/') === 0 || location.pathname.indexOf('/listing/') > 0) {
+      const pageTitleEl = findPoshmarkListingTitleEl();
+      const onRightPage = pageTitleEl && poshRemNorm(pageTitleEl.textContent).indexOf(poshRemNorm(item.title)) !== -1;
+      if (onRightPage) {
+        const listingId = extractPoshmarkListingId(location.href);
+        if (listingId) {
+          sessionStorage.setItem('fasPoshDeleteTargetId', listingId);
+          location.href = 'https://poshmark.com/edit-listing/' + listingId; // fresh load lands in the /edit-listing/ branch above
+          return;
+        }
+        // Couldn't extract an id -- fall through to the closet-search retry path below rather than
+        // getting stuck (same non-advancing, retry-friendly behavior as the other failure paths).
+      }
+    }
+
     // Otherwise: on the closet (or some other page) -- find the matching card and navigate into it.
     const closetLink = findPoshmarkClosetLink();
     let card = findPoshmarkClosetCardByTitle(item.title);
@@ -2527,9 +2584,9 @@
     }
     if (!card) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your closet (zero or more than one found) -- skipped, not guessed.' + button('fas-posh-close', 'Close', false));
-      let next = null;
-      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}
-      if (!(next && next.ok && next.item)) { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'POSHMARK' }); } catch (e) {} }
+      // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-ADVANCE-ON-FAILURE): this used to advance the
+      // queue here too, silently dropping the item forever if the closet page just hadn't finished
+      // lazy-loading yet. Deliberately NOT advancing -- next poll/reload retries instead.
       return;
     }
     const link = card.querySelector('a[href*="/listing/"]');
