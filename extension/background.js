@@ -528,6 +528,50 @@ async function finishSilentCrossPlatformRemoval(platform) {
   }
 }
 
+// S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION (2026-09-04): shared terminal transition for every
+// cross-platform removal outcome (deleted / permanently skipped / gave up after N failed
+// attempts). Lives here rather than in each content script because the marketplace navigates the
+// tab away immediately after a successful delete, tearing down the content script's execution
+// context before it can advance the queue -- the confirmed root cause of a deleted listing being
+// re-served on the next load and then reported as "no confident match" (live user report).
+// background.js is a persistent worker, so it can always finish the transition.
+async function advanceAndContinueCrossPlatformRemoval(platform, tabId, continueUrl) {
+  const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
+  if (!cfg) return { ok: false, error: 'unknown_platform' };
+  const st = await chrome.storage.local.get([cfg.queueKey, cfg.indexKey]);
+  const next = (st[cfg.indexKey] || 0) + 1;
+  await chrome.storage.local.set({ [cfg.indexKey]: next });
+  const queue = st[cfg.queueKey] || [];
+  const nextItem = queue[next] || null;
+  if (nextItem && tabId != null) {
+    // Pacing between automated navigations -- marketplace bot-detection risk, same rationale as
+    // the humanPause calls the content scripts already use.
+    await sleep(1500 + Math.random() * 1500);
+    await new Promise((resolve) => chrome.tabs.update(tabId, { url: continueUrl || CFG[cfg.manageUrlKey] }, () => { void chrome.runtime.lastError; resolve(); }));
+  } else if (!nextItem) {
+    await finishSilentCrossPlatformRemoval(platform);
+  }
+  return { ok: true, next: !!nextItem, index: next, total: queue.length };
+}
+
+// Bounded retry accounting for TRANSIENT removal failures (e.g. the confirm modal never
+// hydrated). Without a cap, a deterministically-failing item blocks its whole platform queue
+// forever, because the transient-failure path deliberately does not advance.
+const FAS_REMOVAL_MAX_ATTEMPTS = 3;
+async function bumpRemovalAttempt(platform, itemId) {
+  const { fasRemovalAttempts = {} } = await chrome.storage.local.get(['fasRemovalAttempts']);
+  const key = platform + ':' + itemId;
+  const n = (fasRemovalAttempts[key] || 0) + 1;
+  fasRemovalAttempts[key] = n;
+  await chrome.storage.local.set({ fasRemovalAttempts });
+  return n;
+}
+async function clearRemovalAttempt(platform, itemId) {
+  const { fasRemovalAttempts = {} } = await chrome.storage.local.get(['fasRemovalAttempts']);
+  delete fasRemovalAttempts[platform + ':' + itemId];
+  await chrome.storage.local.set({ fasRemovalAttempts });
+}
+
 // Called from checkPendingRemovals once per poll, right after the existing Facebook-specific
 // logic (unchanged) has run. `pendingItems` is the SAME array already fetched from
 // /extension/pending-removals -- now platform-aware (each item carries a `platforms` array, see
@@ -1826,6 +1870,41 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // mode never sets a tracked tab id).
         if (FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform]) await finishSilentCrossPlatformRemoval(msg.platform);
         sendResponse({ ok: true });
+      } else if (msg.type === 'crossPlatformRemovalDeleted') {
+        // Sent fire-and-forget by a content script the instant its final delete-confirm click
+        // succeeds, BEFORE the marketplace can navigate the tab away. Everything after that click
+        // is owned here. See advanceAndContinueCrossPlatformRemoval's comment for the root cause.
+        const tabId = (sender && sender.tab && sender.tab.id) || null;
+        const removed = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
+          { method: 'POST', body: { platform: msg.platform } });
+        await clearRemovalAttempt(msg.platform, msg.itemId);
+        const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
+        sendResponse({ ok: true, removed: !!(removed && removed.ok), next: cont.next });
+      } else if (msg.type === 'crossPlatformRemovalSkipped') {
+        // PERMANENT failure for this item (zero or ambiguous title match after a real search).
+        // Reported to the backend so it can stop re-serving it, then the queue moves on -- a
+        // permanently unmatchable item must never block the rest of the platform's backlog.
+        const tabId = (sender && sender.tab && sender.tab.id) || null;
+        await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
+          { method: 'POST', body: { reason: msg.reason || null } });
+        await clearRemovalAttempt(msg.platform, msg.itemId);
+        const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
+        sendResponse({ ok: true, next: cont.next });
+      } else if (msg.type === 'crossPlatformRemovalAttemptFailed') {
+        // TRANSIENT failure (delete control or confirm modal not found/confirmable). Does NOT
+        // advance the queue -- the next poll retries the same item -- until FAS_REMOVAL_MAX_ATTEMPTS
+        // is reached, at which point it is treated as permanent so it cannot wedge the queue.
+        const tabId = (sender && sender.tab && sender.tab.id) || null;
+        const attempts = await bumpRemovalAttempt(msg.platform, msg.itemId);
+        if (attempts >= FAS_REMOVAL_MAX_ATTEMPTS) {
+          await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
+            { method: 'POST', body: { reason: 'delete_unconfirmed_after_' + attempts + '_attempts: ' + (msg.reason || 'unknown') } });
+          await clearRemovalAttempt(msg.platform, msg.itemId);
+          const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
+          sendResponse({ ok: true, gaveUp: true, attempts, next: cont.next });
+        } else {
+          sendResponse({ ok: true, gaveUp: false, attempts });
+        }
       } else if (msg.type === 'markItemRemovedByRemoval') {
         // BUG FIX 2026-08-22 (S-EXT-CROSS-PLATFORM-AUTOREMOVE): now threads msg.platform through
         // (default 'FACEBOOK' preserves fas-remove.js's own exact existing behavior, which never

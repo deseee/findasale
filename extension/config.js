@@ -31,8 +31,17 @@ self.FAS_CONFIG = {
   // safe, let the content script find its own way from there) rather than trusting a guessed URL
   // that could easily 404 and silently strand the whole flow.
   POSH_MANAGE_URL: 'https://poshmark.com/feed',
-  MERC_MANAGE_URL: 'https://www.mercari.com/',
+  // LIVE-CONFIRMED 2026-09-04: https://www.mercari.com/mypage/listings/ resolves (redirects to
+  // /mypage/listings/active/, document title "My listings | Mercari"). Replaces the previous
+  // marketplace-home guess ('https://www.mercari.com/'), which lists none of the organizer's own
+  // listings -- so Mercari removal could never find anything from it.
+  MERC_MANAGE_URL: 'https://www.mercari.com/mypage/listings/',
   VINTED_MANAGE_URL: 'https://www.vinted.com/',
+  // LIVE FINDING 2026-09-04 (value deliberately UNCHANGED): https://www.grailed.com/sell was
+  // live-confirmed to redirect to https://www.grailed.com/sell/new, which is the CREATE-a-listing
+  // form and contains zero a[href*="/listings/"] -- so Grailed removal cannot currently locate
+  // the organizer's listings from this URL. The real Grailed seller-listings URL is still
+  // unconfirmed and needs a live check on a logged-in Grailed account.
   GRAILED_MANAGE_URL: 'https://www.grailed.com/sell',
   GUMTREE_AU_MANAGE_URL: 'https://www.gumtree.com.au/',
   // Patrick-confirmed (2026-08-22, not a guess): this account page lists every one of the
