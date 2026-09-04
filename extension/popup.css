@@ -32,12 +32,21 @@ header { padding: 8px 10px; border-bottom: 1px solid #26362d; display: flex; ali
 .item .meta { flex: 1; min-width: 0; }
 .item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .p { color: #9fb6a8; font-size: 12px; }
-.item .badge { font-size: 10px; color: #14201a; background: #6fd08c; border-radius: 4px; padding: 1px 5px; font-weight: 700; }
+.item .badge { font-size: 10px; color: #14201a; background: #6fd08c; border-radius: 4px; padding: 1px 5px; font-weight: 700; white-space: nowrap; flex: 0 0 auto; }
 .item .badge-blocked { color: #2a1414; background: #e08a7a; margin-left: 4px; }
 .item .cb:disabled { opacity: .35; cursor: not-allowed; }
 .item .markPostedBtn { flex: 0 0 auto; font-size: 10px; color: #6fd08c; background: none; border: 1px solid #3c8c5a; border-radius: 4px; padding: 2px 6px; cursor: pointer; white-space: nowrap; }
 .item .markPostedBtn:hover { background: #1d2a22; }
 .item .markPostedBtn:disabled { opacity: .5; cursor: default; }
+.searchRow { padding: 6px 10px; border-bottom: 1px solid #26362d; }
+.searchInput { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid #26362d; background: #1a2620; color: #eef3ee; font: inherit; }
+.searchInput::placeholder { color: #7f9b8a; }
+.category-group { border-bottom: 1px solid #1d2a22; }
+.category-group summary { padding: 4px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7f9b8a; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.category-group summary::-webkit-details-marker { display: none; }
+.category-group summary::after { content: '\25B8'; color: #6fd08c; }
+.category-group[open] summary::after { content: '\25BE'; }
+.category-group .item:last-child { border-bottom: none; }
 footer { padding: 8px 10px; border-top: 1px solid #26362d; }
 button.primary { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #3c8c5a; color: #fff; font-weight: 700; cursor: pointer; }
 button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; }

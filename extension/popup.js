@@ -9,6 +9,10 @@ const selected = new Set();
 // never gives those a checkbox at all -- see fbBlocked in row()). Select All operates on exactly
 // this set so it never tries to select something that isn't actually checkable on screen.
 let visibleSelectableIds = [];
+// (2026-09-03, S-EXT-ITEM-SEARCH -- Patrick-reported live: "hard to find things when you have
+// more than a few items to list") Free-text filter applied in render() against title + category
+// before grouping. Lives outside #list so it survives render()'s full innerHTML rebuild.
+let searchQuery = '';
 
 // (#596 Guild/XP Toolbar Tie-In) Canonical rank emoji/labels + XP floors, mirrored from
 // packages/frontend/pages/shopper/guild-primer.tsx (RANK_THRESHOLDS) and
@@ -84,6 +88,10 @@ async function load() {
   $('status').hidden = true;
   $('controls').hidden = false;
   $('footer').hidden = false;
+  const searchRow = $('searchRow');
+  if (searchRow) searchRow.hidden = false;
+  const searchInput = $('itemSearch');
+  if (searchInput) searchInput.oninput = () => { searchQuery = searchInput.value.trim().toLowerCase(); render(); };
   $('hideListed').onchange = render;
   $('showAllItems').onchange = render;
   $('listBtn').onclick = startQueue;
@@ -342,17 +350,34 @@ function ineligibleReason(it) {
   return (key && it.eligibility && it.eligibility[key] && it.eligibility[key].reason) || 'Not eligible for this marketplace.';
 }
 
+// (2026-09-03, S-EXT-ITEM-SEARCH) Top-level segment of item.category (which can be a full
+// breadcrumb like "Sporting Goods:Golf:Golf Clubs & Equipment:Golf Clubs" or a plain label like
+// "Musical Instruments & Gear") used to group items into collapsible sections within a sale.
+// Falls back to 'Other' for items with no category at all.
+function categoryLabel(it) {
+  const raw = (it.category || '').split(':')[0].trim();
+  return raw || 'Other';
+}
+
 function render() {
   const hideListed = $('hideListed').checked;
   const showAllEl = $('showAllItems');
   const showAll = !!(showAllEl && showAllEl.checked);
   const list = $('list'); list.innerHTML = '';
+  const q = searchQuery;
   const groups = {};
   let hiddenIneligibleCount = 0;
+  let hiddenBySearchCount = 0;
   ITEMS.forEach((it) => {
     if (hideListed && currentListedFlag(it)) return;
     if (!showAll && isIneligibleOnCurrentChannel(it)) { hiddenIneligibleCount++; return; }
-    (groups[it.saleTitle] = groups[it.saleTitle] || []).push(it);
+    if (q) {
+      const haystack = ((it.title || '') + ' ' + (it.category || '')).toLowerCase();
+      if (!haystack.includes(q)) { hiddenBySearchCount++; return; }
+    }
+    const bySale = (groups[it.saleTitle] = groups[it.saleTitle] || {});
+    const cat = categoryLabel(it);
+    (bySale[cat] = bySale[cat] || []).push(it);
   });
   const eligNote = $('eligibilityNote');
   if (eligNote) {
@@ -365,26 +390,44 @@ function render() {
       eligNote.hidden = true;
     }
   }
-  const keys = Object.keys(groups);
-  if (!keys.length) {
-    if (hiddenIneligibleCount > 0 && !showAll) {
+  const saleTitles = Object.keys(groups);
+  if (!saleTitles.length) {
+    if (q && hiddenBySearchCount > 0) {
+      list.innerHTML = '<div class="status">No items match &ldquo;' + esc(searchInputValue()) + '&rdquo;.</div>';
+    } else if (hiddenIneligibleCount > 0 && !showAll) {
       list.innerHTML = '<div class="status">All items on this sale are hidden as not eligible for this marketplace. Check "Show all items" above to see them.</div>';
     } else {
       list.innerHTML = '<div class="status">All items are already listed. Uncheck "Hide items already listed" to see them.</div>';
     }
   }
-  keys.forEach((saleTitle) => {
+  // Collapsible category sections (2026-09-03, S-EXT-ITEM-SEARCH -- Patrick-reported live: "hard
+  // to find things when you have more than a few items to list"). Sale header stays a plain div
+  // (usually just one sale); each category within it is a <details> (open by default, so nothing
+  // that was visible before this change becomes hidden by default -- collapsing is opt-in).
+  saleTitles.forEach((saleTitle) => {
     const h = document.createElement('div'); h.className = 'sale-group'; h.textContent = saleTitle; list.appendChild(h);
-    groups[saleTitle].forEach((it) => list.appendChild(row(it)));
+    const bySale = groups[saleTitle];
+    Object.keys(bySale).sort().forEach((cat) => {
+      const items = bySale[cat];
+      const det = document.createElement('details'); det.className = 'category-group'; det.open = true;
+      const sum = document.createElement('summary');
+      sum.innerHTML = '<span>' + esc(cat) + '</span><span>' + items.length + '</span>';
+      det.appendChild(sum);
+      items.forEach((it) => det.appendChild(row(it)));
+      list.appendChild(det);
+    });
   });
   // (2026-08-30, S-EXT-SELECT-ALL) Recompute the selectable-id set from exactly what's on
   // screen right now (same fbBlocked exclusion row() itself applies), then sync the button's
   // label to whether everything currently visible is already selected.
   visibleSelectableIds = [];
-  keys.forEach((saleTitle) => {
-    groups[saleTitle].forEach((it) => {
-      const blocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
-      if (!blocked) visibleSelectableIds.push(it.id);
+  saleTitles.forEach((saleTitle) => {
+    const bySale = groups[saleTitle];
+    Object.keys(bySale).forEach((cat) => {
+      bySale[cat].forEach((it) => {
+        const blocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
+        if (!blocked) visibleSelectableIds.push(it.id);
+      });
     });
   });
   const selectAllBtn = $('selectAllBtn');
@@ -394,6 +437,11 @@ function render() {
     selectAllBtn.disabled = visibleSelectableIds.length === 0;
   }
   updateCount();
+}
+
+function searchInputValue() {
+  const el = $('itemSearch');
+  return el ? el.value.trim() : '';
 }
 
 function row(it) {
@@ -427,7 +475,7 @@ function row(it) {
     ' · ' + esc(it.condition || '') + '</div></div>' +
     (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
     (fbBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
-    (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT THIS MARKETPLACE</span>' : '') +
+    (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT</span>' : '') +
     (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to ' + esc(channelName(currentChannel())) + ' myself, outside the extension">Already posted?</button>' : '') +
     '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '"' : '') + '>';
   const cb = d.querySelector('.cb');
