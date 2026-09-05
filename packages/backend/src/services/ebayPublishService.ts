@@ -965,7 +965,11 @@ const heal25064: Healer = async (ctx, errorBody) => {
 
   const missingNames = parseMissingRequiredAspectNames(errorBody, 25064);
   if (missingNames.length === 0) {
-    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — could not parse a missing aspect name out of the 25064 error body`);
+    // 2026-09-05 diagnostic: first deploy of this healer bailed here on the Eisenhower
+    // dollar coin -- logging the raw body (previously only truncated to 200 chars in the
+    // generic "no healer" path, which this errorId no longer reaches) to see the real
+    // parameters[] shape and fix the parser instead of guessing again.
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — could not parse a missing aspect name out of the 25064 error body. Raw body: ${errorBody.slice(0, 800)}`);
     return { published: false, retry: false };
   }
 
