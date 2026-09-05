@@ -447,9 +447,28 @@
     return best;
   }
   function setNativeValue(el, value) {
-    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    // BUG FIX 2026-09-04 (findasale-dev, BUG MODE dispatch, live-Chrome-confirmed): console showed
+    // "[FAS Grailed] Field \"Price\" -- error while filling, skipped: Illegal invocation" followed by
+    // a top-level "Something went wrong filling this listing (Illegal invocation)" modal that
+    // aborted the whole run(). Root cause: the branded native value-setter grabbed from
+    // HTMLInputElement.prototype/HTMLTextAreaElement.prototype throws "Illegal invocation" (a
+    // TypeError) when .call()'d against ANY element that isn't actually an instance of that exact
+    // class -- e.g. a <select>, a Radix custom control, or any other node fieldByLabel's broad
+    // label/substring fallback (or nearestControlAfter's loose CONTROL_SELECTOR match) can hand back
+    // on a not-yet-fully-hydrated Grailed page. This function never verified el was actually the
+    // matching type before calling the setter. Guarded with instanceof (checked against THIS
+    // content script's own window.HTMLInputElement/HTMLTextAreaElement, which is the same branded
+    // interface the setter itself is read from, so the check and the call agree) and falls back to
+    // a plain assignment -- works on any real form control -- instead of letting the branded setter
+    // throw.
+    const isTextarea = el instanceof window.HTMLTextAreaElement;
+    const proto = isTextarea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
-    if (setter) setter.call(el, value); else el.value = value;
+    if (setter && (isTextarea || el instanceof window.HTMLInputElement)) {
+      setter.call(el, value);
+    } else {
+      el.value = value;
+    }
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
@@ -1630,7 +1649,16 @@
     // as if $1.6874 had somehow become $16,874 cents-first. Rounding to a WHOLE DOLLAR before
     // filling -- mirroring the exact pattern already proven safe on the Price field -- avoids this
     // entirely. Floor prices don't need cent precision anyway.
-    floor = Math.round(floor);
+    // BUG FIX 2026-09-05 (findasale-dev, BUG MODE dispatch, live-Chrome-confirmed via Patrick's
+    // real re-test screenshot): Math.round() here rounds UP as often as down, and Grailed enforces
+    // its OWN floor-price ceiling as a strict less-than against the real underlying value, not the
+    // rounded one -- live-confirmed on this exact item: bestOfferAutoAcceptAmt = $103.50,
+    // Math.round(103.50) = 104, Grailed rejected it with "Floor price must be below $104" (i.e.
+    // Grailed's real comparison is against the un-rounded $103.50, which 104 fails). A "floor"
+    // value rounding UP past its own true minimum is backwards regardless of Grailed's specific
+    // validation -- Math.floor() is both semantically correct for a floor price and avoids this
+    // exact rejection, since it can only ever land at or below the real computed value.
+    floor = Math.floor(floor);
     const el = document.querySelector('input[name="smartPricing.minimumPrice"]')
       || document.querySelector('input[placeholder="Floor Price (USD)"]')
       || fieldByLabel('Floor Price');
@@ -1701,7 +1729,17 @@
     // is (fas-content.js's Offer-minimum logic), not a blank field or a silently-disabled toggle.
     // Never disables Smart Pricing here -- that's Grailed's own default and not this extension's
     // call to override; it only ensures a real number backs it when it's on.
-    await fillSmartPricingFloor(item);
+    // BUG FIX 2026-09-04 (findasale-dev, BUG MODE dispatch): this was the ONE call in fillListing()
+    // not routed through tryFill()'s own try/catch -- every other field silently skips-and-warns on
+    // failure; this one, uniquely, could crash the entire run() (see the top-level "Something went
+    // wrong filling this listing (Illegal invocation)" modal Patrick hit) and abort every field that
+    // would have been filled after it. Wrapped to match the same skip-and-warn behavior as
+    // everything else in this function.
+    try {
+      await fillSmartPricingFloor(item);
+    } catch (e) {
+      console.warn('[FAS Grailed] Smart Pricing floor price -- error while filling, skipped:', e && e.message);
+    }
     const intlShipping = await disableInternationalShipping();
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);
