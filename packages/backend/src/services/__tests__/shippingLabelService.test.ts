@@ -113,7 +113,12 @@ describe('shippingLabelService (ADR-115 Phase 2)', () => {
   });
 
   describe('buyLabelForRate', () => {
-    it('parses a successful transaction into a label result', async () => {
+    // Live-verified 2026-09-05 (first real Chrome QA pass on ADR-115 Phase 2, a real
+    // production label purchase): Shippo's real /transactions/ response returns `rate` as a
+    // plain object_id STRING, not the expanded {provider, amount} object this suite originally
+    // mocked -- that wrong mock shape is exactly how the carrier:'Unknown'/costCents:0 bug
+    // shipped with green tests. Every case below now mocks `rate` as the real string shape.
+    it('parses a successful transaction into a label result, using knownRate for carrier/cost', async () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -122,11 +127,12 @@ describe('shippingLabelService (ADR-115 Phase 2)', () => {
           tracking_number: '9334620845500001339632',
           tracking_url_provider: 'https://tools.usps.com/go/TrackConfirmAction_input?origTrackNum=9334620845500001339632',
           label_url: 'https://deliver.goshippo.com/txn_1.pdf',
-          rate: { provider: 'USPS', amount: '10.01' },
+          rate: 'rate_ground', // real API shape: plain id string, not an object
         }),
       });
 
-      const label = await buyLabelForRate('rate_ground');
+      const knownRate = { rateId: 'rate_ground', provider: 'USPS', serviceName: 'Ground Advantage', amountCents: 1001, currency: 'USD', estimatedDays: 5 };
+      const label = await buyLabelForRate('rate_ground', knownRate);
 
       expect(label).toEqual({
         transactionId: 'txn_1',
@@ -136,6 +142,28 @@ describe('shippingLabelService (ADR-115 Phase 2)', () => {
         carrier: 'USPS',
         costCents: 1001,
       });
+    });
+
+    // Regression coverage for the bug itself: without knownRate, and with the real string-shaped
+    // `rate` field, carrier/cost cannot be recovered from the transaction response alone -- this
+    // documents that real constraint rather than silently re-hiding it.
+    it('falls back to Unknown/0 when no knownRate is given and Shippo returns rate as a plain id string', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          object_id: 'txn_1b',
+          object_state: 'VALID',
+          tracking_number: '9334620845500001339633',
+          tracking_url_provider: null,
+          label_url: 'https://deliver.goshippo.com/txn_1b.pdf',
+          rate: 'rate_ground',
+        }),
+      });
+
+      const label = await buyLabelForRate('rate_ground');
+
+      expect(label.carrier).toBe('Unknown');
+      expect(label.costCents).toBe(0);
     });
 
     // Live-verified failure mode this session: buying a label without phone+email on both
@@ -179,7 +207,7 @@ describe('shippingLabelService (ADR-115 Phase 2)', () => {
             tracking_number: 'TRACK123',
             tracking_url_provider: null,
             label_url: 'https://deliver.goshippo.com/txn_cheapest.pdf',
-            rate: { provider: 'USPS', amount: '10.01' },
+            rate: 'rate_ground', // real API shape: plain id string, not an object
           }),
         });
 
@@ -189,7 +217,10 @@ describe('shippingLabelService (ADR-115 Phase 2)', () => {
       // The transactions/ call (2nd fetch) must have been made against the cheapest rate id.
       const secondCallBody = JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
       expect(secondCallBody.rate).toBe('rate_ground');
+      // costCents/carrier must come from the rate-shopping step (knownRate), not the
+      // transaction response -- this is the ADR-115 Phase 2 carrier/cost bug fix.
       expect(label.costCents).toBe(1001);
+      expect(label.carrier).toBe('USPS');
     });
 
     it('throws when Shippo returns zero rates', async () => {

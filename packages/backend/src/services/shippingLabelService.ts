@@ -151,8 +151,14 @@ export async function getShippingRates(
   }));
 }
 
-/** Step 2: buy a real (or, on a test token, test-mode) label for one specific rate. */
-export async function buyLabelForRate(rateId: string): Promise<ShippoLabelResult> {
+/** Step 2: buy a real (or, on a test token, test-mode) label for one specific rate.
+ *  `knownRate` is optional context from a prior getShippingRates() call for this same rate --
+ *  pass it when available. Live-verified 2026-09-05 (first real Chrome QA pass, ADR-115
+ *  Phase 2): Shippo's real /transactions/ response returns `rate` as a plain object_id
+ *  STRING, never the expanded object this function originally assumed -- so
+ *  `data.rate?.provider`/`data.rate.amount` always missed, silently producing
+ *  carrier:'Unknown' / costCents:0 on every real label purchase. `knownRate` is the fix. */
+export async function buyLabelForRate(rateId: string, knownRate?: ShippoRate): Promise<ShippoLabelResult> {
   const token = getToken();
 
   const res = await fetch(`${SHIPPO_API_BASE}/transactions/`, {
@@ -178,6 +184,9 @@ export async function buyLabelForRate(rateId: string): Promise<ShippoLabelResult
     );
   }
 
+  // Prefer the caller-supplied rate details from the rate-shopping step -- `data.rate` on the
+  // real API is just the id string (see comment above), so this is the only reliable source.
+  // The `typeof data.rate === 'object'` branch is defensive only; live Shippo never takes it.
   const rateAmount = data.rate && typeof data.rate === 'object' ? parseFloat(data.rate.amount) : NaN;
 
   return {
@@ -185,8 +194,8 @@ export async function buyLabelForRate(rateId: string): Promise<ShippoLabelResult
     trackingNumber: data.tracking_number,
     trackingUrl: data.tracking_url_provider || null,
     labelUrl: data.label_url,
-    carrier: data.rate?.provider || 'Unknown',
-    costCents: Number.isFinite(rateAmount) ? Math.round(rateAmount * 100) : 0,
+    carrier: knownRate?.provider || data.rate?.provider || 'Unknown',
+    costCents: knownRate?.amountCents ?? (Number.isFinite(rateAmount) ? Math.round(rateAmount * 100) : 0),
   };
 }
 
@@ -203,6 +212,6 @@ export async function buyCheapestLabel(
     throw new ShippingLabelPurchaseError('Shippo returned no valid rates for this shipment');
   }
   const cheapest = rates.reduce((min, r) => (r.amountCents < min.amountCents ? r : min), rates[0]);
-  const label = await buyLabelForRate(cheapest.rateId);
+  const label = await buyLabelForRate(cheapest.rateId, cheapest);
   return { rates, label };
 }
