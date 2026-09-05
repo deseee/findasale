@@ -1987,15 +1987,19 @@ function Step5({
             </button>
           </div>
 
-          {/* Preview link */}
+          {/* Preview -- disabled until a real sale id exists (2026-09-05 weekly audit M2: this
+              link had no onClick and never worked; no id-less preview route exists in this codebase,
+              and creating a throwaway draft sale as a side effect would clutter the organizer's
+              dashboard since DRAFT sales count as an active sale there -- so this is deliberately
+              a disabled state, not a dead link, until after Save as Draft / Publish produces an id) */}
           <div style={{
             padding: '14px', borderRadius: 10,
             border: `1px dashed ${c.borderStrong}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            fontSize: 13, fontWeight: 500, color: c.text,
-            cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+            fontSize: 13, fontWeight: 500, color: c.textFaint,
+            cursor: 'default', fontFamily: 'Inter, sans-serif',
           }}>
-            👁 See how your sale page looks →
+            👁 Preview available after you save as draft or publish
           </div>
 
           {photoCount === 0 && (
