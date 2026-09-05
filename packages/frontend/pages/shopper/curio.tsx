@@ -27,12 +27,25 @@ function formatDollars(dollars: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(dollars);
 }
 
+/** Humanize a rate-limit wait duration -- never show a shopper a raw "1353s" (findasale-dev fix,
+ * 2026-09-04, from QA finding on roadmap #636). Daily-cap waits are commonly 20+ hours, so those
+ * collapse to "tomorrow" rather than "about 23 hours". */
+function formatWaitTime(totalSeconds: number): string {
+  if (totalSeconds <= 0) return 'a moment';
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.ceil(totalSeconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 20) return `about ${hours} hour${hours !== 1 ? 's' : ''}`;
+  return 'tomorrow';
+}
+
 /**
  * Honest, non-"sold"-implying value estimate line. Never say "sold for" / "worth" as fact --
  * this is always framed as similar active listings, per ADR Constraint (permanent, not a
  * Phase-1 caveat -- Curio's comps are active eBay listings, never real sold-price data).
  */
-function ValueEstimate({ value, degraded, message }: { value: CurioValue | null; degraded?: boolean; message?: string }) {
+function ValueEstimate({ value, degraded, message, confidence }: { value: CurioValue | null; degraded?: boolean; message?: string; confidence: number }) {
   if (degraded && message) {
     return (
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
@@ -47,12 +60,30 @@ function ValueEstimate({ value, degraded, message }: { value: CurioValue | null;
       </div>
     );
   }
+  // Confidence gate (findasale-dev fix, 2026-09-04, from QA finding on roadmap #636): below the
+  // same 0.5 threshold IdentificationCard's own headline uses for "we're not sure", the
+  // title/category guess feeding this comps lookup is itself unreliable -- a blank test photo
+  // was hallucinated as "Apple iPhone" and still rendered a confident-looking "$199.99" value
+  // box. De-emphasize (gray, caveated) rather than fully hide -- the comps can still be a useful
+  // rough signal once the shopper knows to discount it.
+  const lowConfidence = confidence < 0.5;
   return (
-    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
-      <p className="text-sm text-amber-900 dark:text-amber-100">
+    <div
+      className={
+        lowConfidence
+          ? 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-3'
+          : 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3'
+      }
+    >
+      {lowConfidence && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+          We're not confident about what this is, so treat this as a rough guess:
+        </p>
+      )}
+      <p className={lowConfidence ? 'text-sm text-gray-700 dark:text-gray-300' : 'text-sm text-amber-900 dark:text-amber-100'}>
         Similar listings are currently priced around{' '}
         <span className="font-bold">{formatCents(value.median)}</span>{' '}
-        <span className="text-xs text-amber-700 dark:text-amber-300">
+        <span className={lowConfidence ? 'text-xs text-gray-500 dark:text-gray-400' : 'text-xs text-amber-700 dark:text-amber-300'}>
           (range {formatCents(value.low)}–{formatCents(value.high)}, from {value.compsFound} comparable listing{value.compsFound !== 1 ? 's' : ''})
         </span>
       </p>
@@ -118,7 +149,7 @@ function IdentificationCard({ result }: { result: CurioScanResult }) {
         </div>
       )}
 
-      <ValueEstimate value={result.value} degraded={result.degraded} message={result.message} />
+      <ValueEstimate value={result.value} degraded={result.degraded} message={result.message} confidence={identification.confidence} />
 
       {result.comparableListings.length > 0 && (
         <div>
@@ -231,7 +262,7 @@ function CurioPage() {
     }
     if (rateLimitedUntil && Date.now() < rateLimitedUntil) {
       const secondsLeft = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
-      showToast(`Please wait ${secondsLeft}s before scanning again`, 'error');
+      showToast(`Please wait ${formatWaitTime(secondsLeft)} before scanning again`, 'error');
       return;
     }
     try {
@@ -250,7 +281,7 @@ function CurioPage() {
         const retryAfterSeconds = err?.response?.data?.retryAfterSeconds;
         if (typeof retryAfterSeconds === 'number') {
           setRateLimitedUntil(Date.now() + retryAfterSeconds * 1000);
-          showToast(`Scan limit reached — try again in ${retryAfterSeconds}s`, 'error');
+          showToast(`Scan limit reached — try again in ${formatWaitTime(retryAfterSeconds)}`, 'error');
         } else {
           showToast("You've hit today's scan limit — try again tomorrow", 'error');
         }

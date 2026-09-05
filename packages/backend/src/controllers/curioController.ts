@@ -24,7 +24,7 @@ import {
   getVisionLabelsDegraded,
   isCloudAIAvailable,
 } from '../services/cloudAIService';
-import { fetchEbayPriceComps } from './ebayController';
+import { fetchEbayPriceComps, suggestEbayCategoryForTitle } from './ebayController';
 import { uploadToCloudinaryWithRetry } from './uploadController';
 import {
   isCurioCostCeilingExceeded,
@@ -616,6 +616,24 @@ export const convertScanToListing = async (req: AuthRequest, res: Response): Pro
       return res.status(500).json({ message: 'Failed to resolve organizer profile' });
     }
 
+    // Resolve a real eBay leaf category up front so the Edit Item page's Category picker
+    // doesn't render blank for Curio-converted listings (findasale-dev fix, 2026-09-04, QA
+    // finding on roadmap #636). Reuses the same app-token-authenticated Taxonomy API resolver
+    // ebayController.ts already calls for regular AI-tagged items (ADR 2026-06-14) -- no
+    // organizer eBay connection is required, this is a platform-level app token, not per-user.
+    // Best-effort: a failed/empty suggestion must never block the listing from being created.
+    let ebayCategoryId: string | null = null;
+    let ebayCategoryName: string | null = null;
+    try {
+      const suggested = await suggestEbayCategoryForTitle(scan.title, scan.category);
+      if (suggested) {
+        ebayCategoryId = suggested.categoryId;
+        ebayCategoryName = suggested.categoryName;
+      }
+    } catch (categoryErr) {
+      console.warn('[curioController] eBay category suggestion failed (non-blocking):', categoryErr);
+    }
+
     const item = await prisma.item.create({
       data: {
         title: scan.title,
@@ -635,6 +653,8 @@ export const convertScanToListing = async (req: AuthRequest, res: Response): Pro
         embedding: [],
         isAiTagged: true,
         aiConfidence: scan.aiConfidence,
+        ebayCategoryId,
+        ebayCategoryName,
       },
     });
 
