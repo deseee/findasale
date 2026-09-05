@@ -66,6 +66,11 @@ interface CategoryAllowlistRule {
   platform: EligibilityPlatform;
   /** Case-insensitive substring match against Item.category. Eligible ONLY if one of these matches. */
   nameKeywords: readonly string[];
+  /** If a nameKeywords match is ALSO explained by one of these (e.g. "tee" matching a plumbing
+   * "Union TEE" fitting, or "clothing" matching a "Clothing Rack" retail fixture), the match doesn't
+   * count -- same carve-out pattern as CategoryBlocklistRule.excludeKeywords, just inverted: here it
+   * takes an item OUT of "eligible" instead of OUT of "blocked". */
+  excludeKeywords?: readonly string[];
   reason: string;
 }
 
@@ -258,6 +263,30 @@ const RULES: EligibilityRule[] = [
       // no other keyword match. Added the missing term plus its common sibling, both obviously
       // fashion/apparel and equally likely to be missed the same way.
       'tracksuit', 'sweatpant',
+    ],
+    // BUG FIX 2026-09-05 (Patrick-reported live: "Titleist...Golf Hat" listed under "Balls", plus
+    // several clearly non-fashion items selectable for Grailed): plain substring matching let several
+    // nameKeywords above false-positive on unrelated products whose title/category text happens to
+    // contain the same letters. DB-confirmed same session: "John Guest...Union TEE" (a plumbing
+    // push-fit fitting, ebayCategoryId 63900) matched 'tee'; "H-Rack Grid Hanger Brackets" (a retail
+    // clothing-RACK fixture, ebayCategoryName "Clothing Racks") matched 'clothing'; "TCL Cool Carry
+    // Insulated Backpack Cooler" matched 'backpack'; "Foam Swim Cuffs with Belts" matched 'belt' -- the
+    // exact same bug class as the VINTED "musical instrument"/"Musical Instruments & Gear" collision
+    // fixed 2026-09-03 (see that rule's own comment) and the FACEBOOK/CRAIGSLIST/VINTED 'gunmetal'/
+    // 'bladerunner' collisions above. Excluded here the same way, scoped to the exact confirmed
+    // false positives (not a blanket word-boundary rewrite -- 'accessor' above is a DELIBERATE
+    // prefix match for accessory/accessories/accessorize and must keep matching as a substring).
+    // NOTE: 'hat' matching a golf tournament/memorabilia hat (ebayCategoryName "Balls",
+    // ebayCategoryId 27280 -- itself a separate, isolated AI category-suggestion miss, not this
+    // file's bug) was deliberately NOT excluded here -- real fashion hats/caps are common, legitimate
+    // Grailed listings, and there's no reliable keyword to separate "golf memorabilia hat" from
+    // "streetwear cap" without risking hiding genuine fashion items. That one stays a known
+    // soft-heuristic gap, not silently patched over.
+    excludeKeywords: [
+      'push-fit', 'push to connect', // plumbing fittings (e.g. "Union TEE") -- not a t-shirt
+      'clothing rack', 'garment rack', // retail fixtures -- not clothing itself
+      'cooler', // "Backpack Cooler" -- a cooler, not a fashion backpack
+      'training aid', // "Swim Cuffs with Belts" -- swim gear, not a fashion belt
     ],
     reason: 'Grailed is a fashion/streetwear-only marketplace -- this item’s category doesn’t look like apparel, footwear, or accessories.',
   },
@@ -486,7 +515,8 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
       const haystack = buildHaystack(item);
       if (!haystack) return { eligible: false, reason: rule.reason }; // can't confirm -> hidden by default, see file header
       const isAllowed = rule.nameKeywords.some((kw) => haystack.includes(kw));
-      if (!isAllowed) return { eligible: false, reason: rule.reason };
+      const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
+      if (!isAllowed || isExcluded) return { eligible: false, reason: rule.reason };
     }
 
     // ATTRIBUTE_AGE_ALLOWLIST / PREREQUISITE_LOOKUP: reserved, no rules of these shapes exist yet
