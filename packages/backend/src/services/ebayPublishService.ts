@@ -330,6 +330,7 @@ export interface EbayPublishItem {
   ebayOfferId?: string | null;
   category?: string | null;
   isbn?: string | null; // ADR-089: real ISBN for the Books item-specific aspect (heal25002)
+  tags?: string[] | null; // needed by heal25064 to derive a Coin Condition-style aspect value
 }
 
 /**
@@ -502,39 +503,48 @@ const heal25021: Healer = async (ctx) => {
 };
 
 /**
- * Parse the specific missing-aspect name(s) out of a 25002 error body's
- * `errors[].parameters[].value` (P2 fix, S1050 BQ). eBay reports "BrandMPN" for the
- * Brand/MPN pair requirement, or a literal aspect name (e.g. "Form Factor", confirmed
- * via raw API test on category 29946) for any other missing required aspect.
+ * Parse the specific missing-aspect name(s) out of an eBay publish error body's
+ * `errors[].parameters[].value` for a given errorId (P2 fix, S1050 BQ; generalized
+ * 2026-09-05 for heal25064 — same parameters[] shape, different errorId). eBay
+ * reports "BrandMPN" for the Brand/MPN pair requirement (25002), or a literal aspect
+ * name (e.g. "Form Factor" on category 29946; "Coin Condition (2)" on category 11981
+ * via 25064) for any other missing required aspect.
  */
-function parseMissing25002AspectNames(errorBody: string): string[] {
+function parseMissingRequiredAspectNames(errorBody: string, errorId: number): string[] {
   try {
     const parsed = JSON.parse(errorBody) as {
       errors?: Array<{ errorId?: number; parameters?: Array<{ name?: string; value?: string }> }>;
     };
     const names = new Set<string>();
     for (const err of parsed.errors || []) {
-      if (err.errorId !== 25002) continue;
+      if (err.errorId !== errorId) continue;
       for (const p of err.parameters || []) {
         const value = p?.value ? String(p.value).trim() : '';
         if (!value) continue;
-        // Garbage filter (S1122 fix): eBay's 25002 `parameters[]` entries are not
-        // reliably keyed by a semantic `name` like "aspectName" -- the real aspect
-        // name can arrive under a purely positional/numeric `name` (confirmed via
-        // the 07-14 camel-jacket fix, where the real aspect "Size Type" arrived
-        // paired with a numeric-index parameter). Some responses also carry the
-        // error's own full-sentence message duplicated into a parameter value
-        // (e.g. "Add at least 1 photo. More photos are better!"). A real aspect
-        // name is always a short label, never a bare number and never a sentence.
+        // Garbage filter (S1122 fix): eBay's parameters[] entries are not reliably
+        // keyed by a semantic `name` like "aspectName" -- the real aspect name can
+        // arrive under a purely positional/numeric `name` (confirmed via the 07-14
+        // camel-jacket fix, where the real aspect "Size Type" arrived paired with a
+        // numeric-index parameter). Some responses also carry the error's own
+        // full-sentence message duplicated into a parameter value (e.g. "Add at
+        // least 1 photo. More photos are better!"). A real aspect name is always a
+        // short label, never a bare number and never a sentence.
         if (/^\d+$/.test(value)) continue; // numeric index leaked in as a value
-        const wordCount = value.split(/\s+/).filter(Boolean).length;
+        // 2026-09-05 (errorId 25064, Coin Condition incident): eBay can suffix a
+        // legacy/duplicate-named specific with a parenthesized disambiguator, e.g.
+        // "Coin Condition (2)". Strip it ONLY for the sentence-vs-label word-count
+        // classification below — the real key still gets stored/injected verbatim
+        // (with the suffix), since that's the exact label eBay's own error demands.
+        const normalized = value.replace(/\s*\(\d+\)\s*$/, '');
+        const wordCount = normalized.split(/\s+/).filter(Boolean).length;
         if (wordCount > 6 || value.length > 50 || /[.!?]/.test(value)) continue; // sentence-form message
         // ADR-089 tighten: eBay does NOT guarantee terminal punctuation, so a sentence like
         // "The ISBN field is missing" (5 words, no period) passed the filters above and would be
-        // injected as a bogus aspect name. A real aspect label is <=2 words with no article/verb
-        // token — reject anything longer or containing one so only true labels survive.
+        // injected as a bogus aspect name. A real aspect label is <=2 words (after stripping any
+        // "(N)" suffix) with no article/verb token — reject anything longer or containing one so
+        // only true labels survive.
         if (wordCount > 2) continue;
-        if (/\b(the|a|an|is|are|was|were|field|missing|value|add)\b/.test(value)) continue;
+        if (/\b(the|a|an|is|are|was|were|field|missing|value|add)\b/.test(normalized)) continue;
         names.add(value);
       }
     }
@@ -609,7 +619,7 @@ const heal25002: Healer = async (ctx, errorBody) => {
 
   // Dynamic fallback (P2 fix): inject any missing aspect eBay actually named that
   // Brand/MPN/Model injection above didn't already cover.
-  const missingNames = parseMissing25002AspectNames(errorBody);
+  const missingNames = parseMissingRequiredAspectNames(errorBody, 25002);
   const dynamicNames = missingNames.filter((name) => !/^brand ?mpn$/i.test(name) && !hasKey(name));
   // ADR-089: ISBN is a REAL identifier aspect for Books — no safe default exists ("Does Not
   // Apply" is rejected by eBay for ISBN). Inject the item's real ISBN when present; SKIP entirely
@@ -910,6 +920,94 @@ const heal25007: Healer = async (ctx) => {
 };
 
 /**
+ * Resolve a value for a Coin Condition-style aspect (name contains "circulated",
+ * "uncirculated", or "coin condition") from the item's own organizer-set tags.
+ * Coins & Paper Money categories commonly use exactly this Circulated/Uncirculated/
+ * Proof vocabulary as the aspect's SELECTION_ONLY enum (confirmed 2026-09-05 via two
+ * live comparable eBay listings in the same category, both carrying a "Circulated/
+ * Uncirculated" item specific with value "Circulated"). Returns null when the aspect
+ * name doesn't look condition-related, or no matching tag exists, so the caller can
+ * fall back to a generic safe default rather than fabricate a coin-specific value for
+ * an unrelated aspect.
+ */
+function resolveConditionAspectValue(aspectName: string, tags: string[] | null | undefined): string | null {
+  if (!/circulated|uncirculated|coin\s*condition/i.test(aspectName)) return null;
+  const candidates = ['Circulated', 'Uncirculated', 'Proof'];
+  for (const tag of tags || []) {
+    const tagTrimmed = tag.trim();
+    const match = candidates.find((c) => c.toLowerCase() === tagTrimmed.toLowerCase());
+    if (match) return match;
+  }
+  return null;
+}
+
+/**
+ * 25064 — a required item-specific missing that the eBay Taxonomy API's
+ * get_item_aspects_for_category never reports as required in the first place (unlike
+ * 25002's aspects, which normally DO show up in that spec). Confirmed 2026-09-05
+ * (Eisenhower dollar coin, category 11981, "Coins & Paper Money"): `getRequiredAspectsForCategory`
+ * logged "0 required (none)" for this category, yet the live publish call rejected with
+ * `errorId 25064 message="Coin Condition (2) is a required field."` — this is a known
+ * eBay platform gap for some legacy/Collectibles category trees (the modern Taxonomy
+ * REST API and the actual publish-time validation draw from different specs). Since
+ * getRequiredAspectsForCategory can never resolve this aspect's real enum, this healer
+ * cannot use pickSafeAspectDefault's enum-aware logic the way heal25002 does for a
+ * normal aspect — it derives a value from the item's own data (organizer tags) first,
+ * and only falls back to a generic placeholder as a last resort (logged loudly, since
+ * an unverified placeholder on a SELECTION_ONLY aspect may itself be rejected).
+ */
+const heal25064: Healer = async (ctx, errorBody) => {
+  await refreshCanonicalSku(ctx);
+  if (!ctx.sku) {
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} offer ${ctx.offerId}: bailing — SKU could not be resolved from eBay offer GET`);
+    return { published: false, retry: false };
+  }
+
+  const missingNames = parseMissingRequiredAspectNames(errorBody, 25064);
+  if (missingNames.length === 0) {
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — could not parse a missing aspect name out of the 25064 error body`);
+    return { published: false, retry: false };
+  }
+
+  const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
+  if (!invGet.ok) {
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
+    return { published: false, retry: false };
+  }
+  const invBody = (await invGet.json()) as any;
+  if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
+  const aspectsObj: Record<string, string[]> =
+    invBody.product.aspects && typeof invBody.product.aspects === 'object' ? invBody.product.aspects : {};
+  const hasKey = (key: string): boolean =>
+    Object.keys(aspectsObj).some((k) => k.toLowerCase() === key.toLowerCase());
+
+  for (const name of missingNames) {
+    if (hasKey(name)) continue;
+    const tagDerived = resolveConditionAspectValue(name, ctx.item.tags);
+    const value = tagDerived ?? pickSafeAspectDefault(undefined);
+    aspectsObj[name] = [value];
+    if (tagDerived) {
+      console.log(`[eBay SelfHeal 25064] ${ctx.sku}: injecting "${name}"="${value}" (derived from item tag)`);
+    } else {
+      console.warn(`[eBay SelfHeal 25064] ${ctx.sku}: injecting "${name}"="${value}" (generic fallback — no matching item tag; may still be rejected if this is a SELECTION_ONLY aspect)`);
+    }
+  }
+
+  invBody.product.aspects = aspectsObj;
+  const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, {
+    method: 'PUT',
+    body: invBody,
+  });
+  if (!retryInvRes.ok && retryInvRes.status !== 204) {
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item PUT (aspect injection) failed (HTTP ${retryInvRes.status})`);
+    return { published: false, retry: false };
+  }
+  const pub = await attemptPublish(ctx);
+  if (pub.ok) return { published: true, listingId: pub.listingId, retry: false };
+  return { published: false, retry: true };
+};
+
+/**
  * Registry mapping eBay errorId → healer. New eBay error codes are added here in
  * exactly one place (ADR constraint). Heal order is emergent: the loop reads the
  * returned errorId and dispatches to the matching entry.
@@ -920,6 +1018,7 @@ const HEALERS: Record<string, Healer> = {
   '25101': heal25101,
   '25002': heal25002,
   '25007': heal25007,
+  '25064': heal25064,
 };
 
 /** Ordered errorIds to probe in an error body (registry order). */

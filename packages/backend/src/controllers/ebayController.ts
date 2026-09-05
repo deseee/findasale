@@ -3017,6 +3017,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayCategoryName: item.ebayCategoryName,
             ebayOfferId: offerId,
             category: item.category,
+            tags: item.tags,
           },
           accessToken,
           sku,
@@ -3320,6 +3321,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         aiPackageConfidence: true,
         ebayShippingOverride: true,
         ebayFulfillmentPolicyOverrideId: true,
+        tags: true,
         sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
       },
     });
@@ -3649,6 +3651,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayOfferId: item.ebayOfferId,
         category: item.category,
         isbn: item.isbn,
+        tags: item.tags,
       },
       accessToken,
       sku,

@@ -2343,6 +2343,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
                 ebayCategoryName: updatedItem.ebayCategoryName,
                 ebayOfferId: updatedItem.ebayOfferId,
                 category: updatedItem.category,
+                tags: updatedItem.tags,
               },
               accessToken,
             });

@@ -75,6 +75,7 @@ interface StuckItem {
   packageHeightIn: number | null;
   packageConfirmedByOrganizer: boolean | null;
   ebayShippingOverride: string | null;
+  tags: string[];
 }
 
 async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<boolean> {
@@ -120,6 +121,7 @@ async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<bo
         ebayOfferId: item.ebayOfferId,
         category: item.category,
         isbn: item.isbn,
+        tags: item.tags,
       },
       accessToken,
     });
@@ -199,6 +201,7 @@ async function runEbayStuckOfferRetryCron(): Promise<void> {
       packageWidthIn: true,
       packageHeightIn: true,
       packageConfirmedByOrganizer: true,
+      tags: true,
       ebayShippingOverride: true,
     },
     take: MAX_ITEMS_PER_RUN,
