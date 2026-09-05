@@ -128,10 +128,19 @@ export async function sendAbandonedSignup1h(organizerId: string): Promise<boolea
   }
   if (await alreadySent(userId)) return false;
 
+  // Real per-user unsubscribe token (same UnsubscribeToken scheme as the rest of
+  // the app) instead of the generic, non-functional `${FRONTEND_URL}/settings/notifications`
+  // default -- that page has no server-side unsubscribe handling at all. Type 'all'
+  // since this is a one-time nudge (idempotent via EmailAutomationLog, never resent
+  // to this organizer again) with no dedicated notificationPrefs field of its own --
+  // "all" is the correct scope for a recipient asking a marketing-style email to stop.
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(userId, 'all');
+
   const html = buildSignup1hHtml({
     firstName: firstNameOf(organizer.user?.name),
     newSaleUrl: `${FRONTEND_URL}/organizer/sales/new`,
-    unsubUrl: `${FRONTEND_URL}/settings/notifications`,
+    unsubUrl,
   });
 
   try {
@@ -141,6 +150,7 @@ export async function sendAbandonedSignup1h(organizerId: string): Promise<boolea
       subject: `You're one step from going live`,
       html,
       jobName: 'abandonedSignup1h',
+      listUnsubscribe: listUnsubscribeHeader,
     });
     await logSent(userId);
     console.log(`[abandonedSignup] Sent 1h nudge to organizer ${organizerId} (${email})`);

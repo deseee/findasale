@@ -293,7 +293,7 @@ async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<vo
 
   const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
   const unsubToken = stats.userId
-    ? await generateUnsubscribeToken(stats.userId, 'emailWeeklyDigest')
+    ? await generateUnsubscribeToken(stats.userId, 'weekly') // FIX (findasale-hacker 2026-09-05): 'emailWeeklyDigest' is a TYPE_TO_PREF_MAP *value*, not a key -- always 400'd on click. 'weekly' is the correct key.
     : null;
   const html = buildOrganizerDigestHtml(stats, unsubToken);
 

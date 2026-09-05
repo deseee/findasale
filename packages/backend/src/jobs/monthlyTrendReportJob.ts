@@ -87,7 +87,7 @@ export async function runMonthlyTrendReport(): Promise<void> {
       id: true,
       businessName: true,
       user: {
-        select: { email: true, name: true },
+        select: { id: true, email: true, name: true },
       },
       sales: {
         where: {
@@ -233,12 +233,19 @@ export async function runMonthlyTrendReport(): Promise<void> {
     }
 
     try {
-      const { subject, html } = buildMonthlyTrendReportEmail(reportData, FRONTEND_URL);
+      // Real per-user unsubscribe token -- this report previously had NO
+      // unsubscribe link in the footer at all. Type 'all' -- no dedicated
+      // notificationPrefs field exists for the monthly trend report specifically.
+      const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+      const unsubToken = await generateUnsubscribeToken(org.user.id, 'all');
+      const unsubUrl = `${FRONTEND_URL}/unsubscribe?token=${unsubToken}`;
+      const { subject, html } = buildMonthlyTrendReportEmail(reportData, FRONTEND_URL, unsubUrl);
       await emailService.emails.send({
         from: `The FindA.Sale Team <${FROM_EMAIL}>`,
         to: email,
         subject,
         html,
+        listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`,
       });
       sentCount++;
       console.log(`[monthlyTrendReport] Sent to ${email} (orgId: ${org.id})`);

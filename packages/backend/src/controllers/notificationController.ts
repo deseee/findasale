@@ -271,6 +271,7 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, un
         <a href="${frontendUrl}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
       </p>
       <p style="font-size:12px;color:#9ca3af;margin-top:8px;">Don't want these? <a href="${unsubUrl}" style="color:#6b7280;">Unsubscribe</a></p>
+      <p style="font-size:11px;color:#9ca3af;margin-top:8px;">${process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079'}</p>
     </div>
   </div>
 </body>
@@ -377,7 +378,7 @@ export const sendWeeklyDigest = async () => {
     let failed = 0;
 
     const { suppressionService } = await import('../services/suppressionService');
-    const { generateUnsubscribeToken } = await import('./unsubscribeController');
+    const { buildUnsubscribeLinks } = await import('./unsubscribeController');
 
     for (const user of users) {
       try {
@@ -389,14 +390,9 @@ export const sendWeeklyDigest = async () => {
         const suppressed = await suppressionService.isSuppressed(user.email);
         if (suppressed) continue;
 
-        // Per-user unsubscribe URL
-        let unsubUrl: string;
-        try {
-          const token = await generateUnsubscribeToken(user.id, 'emailWeeklyDigest');
-          unsubUrl = `${frontendUrl}/unsubscribe?token=${token}`;
-        } catch {
-          unsubUrl = `${frontendUrl}/unsubscribe?email=${encodeURIComponent(user.email)}`;
-        }
+        // Per-user unsubscribe URL + RFC 8058 List-Unsubscribe header (same
+        // UnsubscribeToken scheme, one token used for both).
+        const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(user.id, 'weekly'); // FIX (findasale-hacker 2026-09-05): 'emailWeeklyDigest' is a TYPE_TO_PREF_MAP *value*, not a key -- handleUnsubscribe looked it up as a key and always 400'd "Invalid unsubscribe type". 'weekly' is the correct key.
 
         // Location-relevant selection: filter the sale superset to the user's
         // saved-search location (bounding box). Falls back to the global list
@@ -421,6 +417,7 @@ export const sendWeeklyDigest = async () => {
           subject: `🏷️ ${salesForUser.length} sale${salesForUser.length > 1 ? 's' : ''}${nearYou ? ' near you' : ''} this weekend`,
           html,
           jobName: 'notificationController-weeklyDigest',
+          listUnsubscribe: listUnsubscribeHeader,
         });
 
         sent++;

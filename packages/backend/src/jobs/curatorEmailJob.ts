@@ -108,6 +108,9 @@ const buildDigestHtml = (
                 <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}"
                    style="color:#9e8f82;">Unsubscribe</a>
               </p>
+              <p style="font-size:11px; color:#c4b8ab; margin:8px 0 0;">
+                ${process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079'}
+              </p>
             </td>
           </tr>
 
@@ -197,7 +200,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
 
       try {
         const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
-        const unsubToken = await generateUnsubscribeToken(recipientId, 'emailNewSalesFromFollowed');
+        const unsubToken = await generateUnsubscribeToken(recipientId, 'newSales'); // FIX (findasale-hacker 2026-09-05): 'emailNewSalesFromFollowed' is a TYPE_TO_PREF_MAP *value*, not a key -- always 400'd on click. 'newSales' is the correct key.
         const html = buildDigestHtml(organizerName, organizer.sales as UpcomingSale[], unsubToken);
 
         await emailService.emails.send({
@@ -206,6 +209,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
           subject: `This week from ${organizerName} on FindA.Sale`,
           html,
           jobName: 'curatorEmailJob',
+          listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`,
         });
         sentCount++;
       } catch (err) {

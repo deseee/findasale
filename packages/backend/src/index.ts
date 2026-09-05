@@ -562,6 +562,19 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
     if (/^\/api\/organizer\/hubs\/[^/]+\/cart(\/|$)/.test(req.path) && hasBoothToken) {
       return next();
     }
+    // RFC 8058 one-click unsubscribe (List-Unsubscribe-Post: List-Unsubscribe=One-Click)
+    // requires mail clients to fire an unauthenticated POST with no session/cookie at
+    // all -- that's the entire point of the standard. The global CSRF check would 403
+    // every one of those POSTs (no CSRF cookie exists on a mail client's HTTP request),
+    // making the one-click handler unreachable in the one scenario it exists for. Same
+    // reasoning as the Bearer/booth-token carve-outs above: the single-use, per-user
+    // UnsubscribeToken query param IS this route's authentication, deleted on first use
+    // (controllers/unsubscribeController.ts handleUnsubscribe), and the only action a
+    // forged cross-site POST could trigger is opting the token's own owner out of some
+    // emails -- no data exposure, no value transfer, no privilege change.
+    if (req.path === '/api/unsubscribe') {
+      return next();
+    }
     return validateCsrfToken(req, res, next);
   }
   next();

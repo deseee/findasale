@@ -223,6 +223,20 @@ export const suppressionService = {
     });
   },
 
+  /**
+   * Counterpart to processOptOut() -- clears ONLY the opted-out flag, used when
+   * a user re-enables notifications via POST /unsubscribe/resubscribe (type
+   * 'all'). Deliberately does not touch bounceHard/complaintEmail/bounceSoftCount
+   * -- a user re-subscribing should never silently undo a real bounce/complaint
+   * suppression. No-op if no suppression row exists.
+   */
+  async clearOptOut(email: string): Promise<void> {
+    await prisma.emailSuppression.updateMany({
+      where: { emailAddress: email.toLowerCase() },
+      data: { optedOut: null },
+    });
+  },
+
   async checkMultiple(emails: string[]): Promise<Map<string, boolean>> {
     const emailsLower = emails.map(e => e.toLowerCase());
 

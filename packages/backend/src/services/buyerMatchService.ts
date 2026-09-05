@@ -287,6 +287,9 @@ const buildMatchNotificationHtml = (
                 <a href="${FRONTEND_URL}/profile" style="color:#9ca3af; text-decoration:none;">Manage notification preferences</a> ·
                 <a href="${FRONTEND_URL}/unsubscribe?token=${unsubToken}" style="color:#9ca3af; text-decoration:none;">Unsubscribe</a>
               </p>
+              <p style="font-size:11px; color:#c2c8ce; margin:8px 0 0;">
+                ${process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079'}
+              </p>
             </td>
           </tr>
 
@@ -349,10 +352,18 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
 
     for (const buyer of matched) {
       try {
-        // Opt-out check: notificationPrefs.emailNewSales === false means explicit opt-out.
+        // Opt-out check: notificationPrefs.emailNewSalesFromFollowed === false means explicit
+        // opt-out. FIX (findasale-hacker 2026-09-05): this previously read the non-existent key
+        // 'emailNewSales' (no such field is ever written anywhere -- schema.prisma:86 documents
+        // the real shape as { emailNewSalesFromFollowed, emailFlashDeals, emailWeeklyDigest,
+        // pushSalesNearMe }, and the frontend settings toggle at
+        // components/NotificationPreferences.tsx reads/writes emailNewSalesFromFollowed only) --
+        // so this opt-out check could never fire and the new unsubscribe link wired in below
+        // (type 'newSales' -> TYPE_TO_PREF_MAP -> emailNewSalesFromFollowed) would have had zero
+        // effect on this sender. Reads the same canonical field the unsubscribe link now sets.
         // null/undefined/true all mean opted-in (conservative default — same as weeklyEmailService).
         const prefs = buyer.notificationPrefs ?? {};
-        if (prefs['emailNewSales'] === false) {
+        if (prefs['emailNewSalesFromFollowed'] === false) {
           console.log(`[buyerMatch] Skipped ${buyer.email} — opted out of new sale notifications`);
           continue;
         }
@@ -374,6 +385,7 @@ export async function notifyMatchedBuyers(saleId: string): Promise<void> {
           subject: `New sale you might like: ${sale.title}`,
           html,
           jobName: 'buyerMatchService',
+          listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`,
         });
 
         // Create in-app notification for matched sale (fire-and-forget)

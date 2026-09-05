@@ -236,6 +236,15 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
           console.log(`[wishlistAlert] Suppressed: ${alert.user.email}`);
         } else {
           try {
+            // Real per-user unsubscribe token -- this email previously had NO
+            // unsubscribe mechanism at all (not even the generic broken default)
+            // and no CAN-SPAM physical address. Type 'all' -- no dedicated
+            // notificationPrefs field exists for wishlist alerts specifically.
+            const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+            const unsubToken = await generateUnsubscribeToken(alert.user.id, 'all');
+            const unsubUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}`;
+            const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079';
+
             await emailService.emails.send({
               from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
               to: alert.user.email,
@@ -258,11 +267,14 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
                     </a>
                   </p>
                   <p style="font-size: 14px; color: #999; margin-top: 30px;">
-                    You're receiving this because you set up a wishlist alert for "${alert.name}" on FindA.Sale.
+                    You're receiving this because you set up a wishlist alert for "${alert.name}" on FindA.Sale.<br/>
+                    <a href="${unsubUrl}" style="color: #999;">Unsubscribe</a>
                   </p>
+                  <p style="font-size: 11px; color: #bbb; margin-top: 8px;">${physicalAddress}</p>
                 </div>
               `,
               jobName: 'wishlistAlertService',
+              listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${process.env.FRONTEND_URL || 'https://finda.sale'}/api/unsubscribe?token=${unsubToken}>`,
             });
           } catch (err: any) {
             console.error(`✗ Wishlist alert email failed for user ${alert.user.id}:`, err?.message);

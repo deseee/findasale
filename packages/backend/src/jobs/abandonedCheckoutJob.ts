@@ -12,6 +12,7 @@ const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL ||
 // Send abandoned checkout recovery email to a single user
 const sendAbandonedCheckoutEmail = async (
   email: string,
+  userId: string | null,
   name: string,
   itemTitle: string,
   itemPrice: number,
@@ -25,6 +26,20 @@ const sendAbandonedCheckoutEmail = async (
     return;
   }
 
+  // Real per-user unsubscribe token when we have a userId (guest checkouts may
+  // not). Type 'all' -- no dedicated notificationPrefs field exists for
+  // abandoned-checkout recovery emails specifically. Falls back to the old
+  // generic default only for the guest-checkout case, where no User row exists
+  // to key a token off of.
+  let unsubUrl = `${FRONTEND_URL}/settings/notifications`;
+  let listUnsubscribeHeader: string | undefined;
+  if (userId) {
+    const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+    const unsubToken = await generateUnsubscribeToken(userId, 'all');
+    unsubUrl = `${FRONTEND_URL}/unsubscribe?token=${unsubToken}`;
+    listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`;
+  }
+
   const html = buildEmail({
     preheader: `Complete your purchase: ${itemTitle}`,
     headline: 'You left something behind 👀',
@@ -32,6 +47,7 @@ const sendAbandonedCheckoutEmail = async (
     ctaText: 'Complete Your Purchase',
     ctaUrl: checkoutUrl,
     footerNote: `Or copy and paste: ${checkoutUrl}`,
+    unsubUrl,
   });
 
   try {
@@ -40,6 +56,7 @@ const sendAbandonedCheckoutEmail = async (
       to: email,
       subject: 'You left something behind at FindA.Sale 👀',
       html,
+      listUnsubscribe: listUnsubscribeHeader,
     });
     console.log(`✓ Abandoned checkout recovery email sent to ${email}`);
   } catch (err) {
@@ -64,7 +81,7 @@ export const processAbandonedCheckouts = async (): Promise<void> => {
         createdAt: { lte: twoHoursAgo },
       },
       include: {
-        user: { select: { email: true, name: true } },
+        user: { select: { id: true, email: true, name: true } },
         item: { select: { id: true, title: true, price: true, sale: { select: { title: true } } } },
       },
     });
@@ -89,6 +106,7 @@ export const processAbandonedCheckouts = async (): Promise<void> => {
 
         await sendAbandonedCheckoutEmail(
           checkout.user.email,
+          checkout.user.id || null,
           checkout.user.name || 'Shopper',
           checkout.item.title,
           itemPrice * 100, // Convert to cents

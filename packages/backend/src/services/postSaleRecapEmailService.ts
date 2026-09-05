@@ -204,6 +204,13 @@ export async function sendPostSaleRecap(saleId: string): Promise<boolean> {
     console.error(`[postSaleRecap] Could not resolve referral code for ${userId}:`, err);
   }
 
+  // Real per-user unsubscribe token instead of the generic, non-functional
+  // `${FRONTEND_URL}/settings/notifications` default. Type 'all' -- no
+  // dedicated notificationPrefs field exists for post-sale recaps specifically.
+  const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+  const unsubToken = await generateUnsubscribeToken(userId, 'all');
+  const unsubUrl = `${FRONTEND_URL}/unsubscribe?token=${unsubToken}`;
+
   const html = buildRecapHtml({
     businessName: sale.organizer?.businessName || 'your business',
     saleTitle: sale.title,
@@ -211,7 +218,7 @@ export async function sendPostSaleRecap(saleId: string): Promise<boolean> {
     newSaleUrl: `${FRONTEND_URL}/organizer/sales/new`,
     testimonialUrl: `${FRONTEND_URL}/testimonial?saleId=${sale.id}`,
     referralCode,
-    unsubUrl: `${FRONTEND_URL}/settings/notifications`,
+    unsubUrl,
   });
 
   try {
@@ -221,6 +228,7 @@ export async function sendPostSaleRecap(saleId: string): Promise<boolean> {
       subject: `Your sale recap: ${sale.title}`,
       html,
       jobName: 'postSaleRecap',
+      listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`,
     });
     await prisma.sale.update({ where: { id: saleId }, data: { recapSentAt: new Date() } });
     console.log(`[postSaleRecap] Sent recap for sale ${saleId} to ${email}`);

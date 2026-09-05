@@ -155,6 +155,10 @@ const sendWeeklyPicksEmail = async (email: string, userId: string, name: string,
       subject: `${picks.length} New Sale Finds This Week (New Arrivals)`,
       html,
       jobName: 'weeklyEmailService',
+      // Reuse the token already generated above for the in-body link -- the
+      // RFC 8058 header previously had no listUnsubscribe passed at all here,
+      // so it fell back to emailService's generic, non-functional default.
+      listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`,
     });
     console.log(`✓ Weekly picks email sent to ${email}`);
   } catch (err) {

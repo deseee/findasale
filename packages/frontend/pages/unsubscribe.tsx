@@ -27,9 +27,13 @@ const UnsubscribePage = () => {
 
   const unsubscribe = async () => {
     try {
-      await api.post('/notifications/unsubscribe-link', { token });
+      // Was posting to /api/notifications/unsubscribe-link, a route that does not
+      // exist anywhere in the backend (confirmed via a full-repo grep) -- every
+      // click through this page 404'd and showed the generic error message below.
+      // The real handler is GET/POST /api/unsubscribe?token=... (routes/unsubscribe.ts).
+      const res = await api.get(`/unsubscribe?token=${encodeURIComponent(String(token))}`);
       setStatus('success');
-      setMessage('You have been unsubscribed from notifications.');
+      setMessage(res.data?.message || 'You have been unsubscribed from notifications.');
     } catch (error: any) {
       setStatus('error');
       setMessage(error.response?.data?.message || 'Failed to unsubscribe. Please try again.');

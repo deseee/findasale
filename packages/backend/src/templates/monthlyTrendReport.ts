@@ -56,7 +56,8 @@ function cityCoverageSection(saleCities: string[], frontendUrl: string): string 
 
 export function buildMonthlyTrendReportEmail(
   data: OrganizerTrendData,
-  frontendUrl: string
+  frontendUrl: string,
+  unsubUrl?: string
 ): { subject: string; html: string } {
   const {
     organizerName,
@@ -174,7 +175,8 @@ export function buildMonthlyTrendReportEmail(
           <tr>
             <td style="background-color:#f9fafb; border-top:1px solid #e5e7eb; padding:20px 32px;">
               <p style="margin:0; font-size:13px; color:#9ca3af; line-height:1.6;">
-                The FindA.Sale Team &middot; <a href="${frontendUrl}" style="color:#9ca3af;">finda.sale</a><br>
+                The FindA.Sale Team &middot; <a href="${frontendUrl}" style="color:#9ca3af;">finda.sale</a>
+                ${unsubUrl ? ` &middot; <a href="${unsubUrl}" style="color:#9ca3af;">Unsubscribe</a>` : ''}<br>
                 219 E Michigan Ave, Suite F, Paw Paw, MI 49079
               </p>
             </td>

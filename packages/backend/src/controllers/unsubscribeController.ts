@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 // Same singleton as '../index' (index.ts:291 re-exports './lib/prisma'), but importing it
 // from '../index' drags in the Express entry point -- which process.exit(1)s at
 // index.ts:47 when JWT_SECRET is unset. notificationController.sendWeeklyDigest
 // dynamic-imports this file, so that killed the weeklyDigest e2e jest worker.
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { suppressionService } from '../services/suppressionService';
 
 /**
  * Unsubscribe type to notification preference field mapping.
@@ -55,15 +57,64 @@ export async function generateUnsubscribeToken(
     return existingToken.token;
   }
 
-  // Create new token
+  // Create new token. Explicit crypto.randomBytes hex value -- NOT the Prisma schema's
+  // cuid() default. cuid() is an ID-generation scheme (timestamp + monotonic counter +
+  // machine fingerprint + a short random suffix) designed for collision-resistant
+  // primary/foreign keys, not as a bearer/capability secret -- the counter and
+  // fingerprint components are not secret and narrow the guessable space. Every other
+  // single-use security token in this codebase (password reset: routes/auth.ts,
+  // email verification: authController.ts, OAuth state/nonce, webhook secrets,
+  // tracking tokens) uses crypto.randomBytes(N).toString('hex'). This token is the
+  // SOLE authentication for handleUnsubscribe (no password, no session) so it should
+  // meet the same bar. Findasale-hacker security pass, 2026-09-05.
   const token = await prisma.unsubscribeToken.create({
     data: {
       userId,
       type,
+      token: crypto.randomBytes(32).toString('hex'),
     },
   });
 
   return token.token;
+}
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
+
+/**
+ * Build both unsubscribe links for a user + notification type, reusing the
+ * existing UnsubscribeToken scheme above (generateUnsubscribeToken) instead of
+ * inventing a second token format.
+ *
+ * - webUrl: the human-facing rendered frontend page (pages/unsubscribe.tsx) --
+ *   safe to put in visible email body copy ("Unsubscribe" link in the footer).
+ * - listUnsubscribeHeader: RFC 8058 header value. Points at the BACKEND route
+ *   directly (via Vercel's /api/:path* -> Railway fallback proxy in
+ *   next.config.js, so finda.sale/api/unsubscribe resolves without a second
+ *   domain) so a mail client's automated one-click POST completes with no page
+ *   render, no auth and no JS -- the exact thing the old default
+ *   (`${FRONTEND_URL}/settings/notifications`, a plain frontend page with zero
+ *   server-side POST handling) could never do.
+ *
+ * Falls back to a mailto-only header + the generic settings page if token
+ * generation fails, rather than silently reusing the broken default.
+ */
+export async function buildUnsubscribeLinks(
+  userId: string,
+  type: string
+): Promise<{ webUrl: string; listUnsubscribeHeader: string }> {
+  try {
+    const token = await generateUnsubscribeToken(userId, type);
+    return {
+      webUrl: `${FRONTEND_URL}/unsubscribe?token=${token}`,
+      listUnsubscribeHeader: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${token}>`,
+    };
+  } catch (err) {
+    console.error('[unsubscribeController] Failed to generate unsubscribe token for', userId, type, err);
+    return {
+      webUrl: `${FRONTEND_URL}/settings/notifications`,
+      listUnsubscribeHeader: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>`,
+    };
+  }
 }
 
 /**
@@ -103,7 +154,14 @@ export async function handleUnsubscribe(
     const user = unsubToken.user;
     const type = unsubToken.type;
 
-    // Handle "all" type: disable all notification preferences
+    // Handle "all" type: disable all notification preferences AND add a general
+    // opt-out suppression record. The notificationPrefs flip alone only ever
+    // affected the one sender that reads it (weeklyDigest) -- every other bulk/
+    // marketing sender (winBack, wishlist alerts, curator digest, buyer match,
+    // collector passport, monthly trend report, etc.) gates on
+    // suppressionService.isSuppressed(), which only processOptOut() sets. Without
+    // this, clicking "unsubscribe from all" looked successful but left every one
+    // of those senders unaffected.
     if (type === 'all') {
       await prisma.user.update({
         where: { id: user.id },
@@ -117,6 +175,7 @@ export async function handleUnsubscribe(
           },
         },
       });
+      await suppressionService.processOptOut(user.email);
     } else {
       // Handle type-specific unsubscribe
       const prefKey = TYPE_TO_PREF_MAP[type];
@@ -200,8 +259,15 @@ export async function resubscribe(
       });
     }
 
-    // Handle "all" type: enable all notification preferences
+    // Handle "all" type: enable all notification preferences AND clear the
+    // general opt-out suppression set by handleUnsubscribe's type='all' path
+    // (see processOptOut there) -- otherwise a resubscribed user stays
+    // permanently suppressed from every marketing sender that gates on
+    // suppressionService.isSuppressed() despite their prefs now reading true.
+    // Only the opted-out flag is cleared -- a real hard-bounce/complaint
+    // suppression is never undone by a user action.
     if (type === 'all') {
+      const userForResub = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
       await prisma.user.update({
         where: { id: userId },
         data: {
@@ -214,6 +280,9 @@ export async function resubscribe(
           },
         },
       });
+      if (userForResub?.email) {
+        await suppressionService.clearOptOut(userForResub.email);
+      }
     } else {
       // Handle type-specific re-subscribe
       const user = await prisma.user.findUnique({

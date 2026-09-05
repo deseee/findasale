@@ -266,6 +266,23 @@ const sendMatchNotificationEmail = async (
 
   const saleUrl = `${process.env.FRONTEND_URL || 'https://findasale.com'}/sales/${sale.id}`;
 
+  // Suppression check
+  const suppressed = await suppressionService.isSuppressed(email);
+  if (suppressed) {
+    console.log(`[collectorPassport] Suppressed: ${email}`);
+    return;
+  }
+
+  // Real per-user unsubscribe token -- this email previously had NO unsubscribe
+  // mechanism at all (not even the generic broken default) and no CAN-SPAM
+  // physical address. Type 'all' -- no dedicated notificationPrefs field exists
+  // for collector-passport match alerts specifically.
+  const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+  const unsubToken = await generateUnsubscribeToken(userId, 'all');
+  const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+  const unsubUrl = `${frontendUrl}/unsubscribe?token=${unsubToken}`;
+  const physicalAddress = process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079';
+
   const html = `
     <h2>Your Collection Matched! 🏺</h2>
     <p>Hi,</p>
@@ -278,14 +295,9 @@ const sendMatchNotificationEmail = async (
 
     <p><a href="${saleUrl}">View the Sale</a></p>
     <p>Happy collecting!</p>
+    <p style="font-size:12px;color:#999;margin-top:24px;"><a href="${unsubUrl}">Unsubscribe</a></p>
+    <p style="font-size:11px;color:#bbb;">${physicalAddress}</p>
   `;
-
-  // Suppression check
-  const suppressed = await suppressionService.isSuppressed(email);
-  if (suppressed) {
-    console.log(`[collectorPassport] Suppressed: ${email}`);
-    return;
-  }
 
   await emailService.emails.send({
     from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'FindA.Sale <find@outreach.finda.sale>',
@@ -293,6 +305,7 @@ const sendMatchNotificationEmail = async (
     subject: `${matchedItems.length} item${matchedItems.length !== 1 ? 's' : ''} match your collection!`,
     html,
     jobName: 'collectorPassportService',
+    listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${frontendUrl}/api/unsubscribe?token=${unsubToken}>`,
   });
 };
 

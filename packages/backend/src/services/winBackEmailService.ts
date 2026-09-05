@@ -169,11 +169,18 @@ export async function sendOrganizerWinBack(organizerId: string): Promise<boolean
     organizer.id
   );
 
+  // Real per-user unsubscribe token instead of the generic, non-functional
+  // `${FRONTEND_URL}/settings/notifications` default. Type 'all' -- no
+  // dedicated notificationPrefs field exists for win-back nudges specifically.
+  const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
+  const unsubToken = await generateUnsubscribeToken(userId, 'all');
+  const unsubUrl = `${FRONTEND_URL}/unsubscribe?token=${unsubToken}`;
+
   const html = buildWinBackHtml({
     businessName: organizer.businessName || 'your business',
     metro,
     newSaleUrl: `${FRONTEND_URL}/organizer/sales/new`,
-    unsubUrl: `${FRONTEND_URL}/settings/notifications`,
+    unsubUrl,
   });
 
   try {
@@ -183,6 +190,7 @@ export async function sendOrganizerWinBack(organizerId: string): Promise<boolean
       subject: `Your shoppers miss you`,
       html,
       jobName: 'organizerWinBack',
+      listUnsubscribe: `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${FRONTEND_URL}/api/unsubscribe?token=${unsubToken}>`,
     });
     await logSent(userId);
     console.log(`[winBack] Sent win-back to organizer ${organizerId} (${email})`);
