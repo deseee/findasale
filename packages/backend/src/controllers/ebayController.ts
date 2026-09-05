@@ -12,6 +12,7 @@ import {
   getAcceptedConditionsForCategory,
   ensureConditionValidForCategory,
   getRequiredAspectsForCategory,
+  getConditionDescriptorsForCategory,
   ebayPublishWithSelfHeal,
   type RequiredAspect,
 } from '../services/ebayPublishService';
@@ -2521,6 +2522,17 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         console.log(
           `[eBay Push] ${item.title.slice(0, 40)} → category=${categoryId} condition=${ebayCondition} (grade=${item.conditionGrade || 'none'})`
         );
+        // eBay Coin/Card Condition Requirements (2026-09-05): categories like Coins &
+        // Paper Money require a structured `conditionDescriptors` field alongside
+        // `condition` for ungraded items — a separate mechanism from item-specific
+        // aspects (errorId 25064 otherwise). Returns undefined (no-op) for every
+        // category without this requirement. See ebayPublishService.ts for the
+        // live-confirmed schema and evidence.
+        const conditionDescriptors = await getConditionDescriptorsForCategory(
+          categoryId ?? '99',
+          ebayCondition,
+          item.tags
+        );
 
         // Determine price — organizer-set price always wins.
         // AI suggestions (aiSuggestedPrice, estimatedValue) are fallbacks only
@@ -2701,6 +2713,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ...(item.ebaySubtitle ? { subtitle: item.ebaySubtitle } : {}),
           },
           condition: ebayCondition,
+          ...(conditionDescriptors ? { conditionDescriptors } : {}),
           ...(buildConditionDescription(item) ? { conditionDescription: buildConditionDescription(item) } : {}),
           availability: {
             shipToLocationAvailability: {

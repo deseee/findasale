@@ -166,6 +166,226 @@ export async function ensureConditionValidForCategory(
   return desired;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// eBay Coin/Card Condition Requirements (conditionDescriptors) — added 2026-09-05
+// ────────────────────────────────────────────────────────────────────────────
+//
+// CONFIRMED live 2026-09-05 (real GET https://api.ebay.com/sell/metadata/v1/
+// marketplace/EBAY_US/get_item_condition_policies?filter=categoryIds:{11981},
+// "Coins & Paper Money"/coins subtree): eBay's Coin/Card Condition Requirements
+// policy (Inventory API release notes v1.18.5, phased through July 2026, now
+// mandatory) requires a `conditionDescriptors` array on the INVENTORY ITEM
+// itself — a field entirely separate from `product.aspects` and never surfaced
+// by the Taxonomy API's getItemAspectsForCategory (which is why
+// getRequiredAspectsForCategory / heal25002's generic aspect-injection path can
+// never see or satisfy this). errorId 25064 ("Coin Condition (2) is a required
+// field") is eBay's rejection when conditionDescriptors is missing/incomplete,
+// despite the wording reading like a normal item-specific aspect.
+//
+// eBay's own field docs for InventoryItem.conditionDescriptors state plainly:
+// "For trading card and coin listings in applicable categories, sellers must
+// use either LIKE_NEW (2750) or USED_VERY_GOOD (4000) item condition to
+// specify the item as Graded or Ungraded, respectively." This CONFIRMS the
+// existing idToEnum mapping above (2750→LIKE_NEW, 4000→USED_VERY_GOOD) was
+// already correct — no condition-enum change was needed, only this missing
+// conditionDescriptors field.
+//
+// ConditionDescriptor schema (confirmed via eBay Inventory API type docs,
+// slr:ConditionDescriptor, 2026-09-05): { name: string (the numeric
+// conditionDescriptorId as a string), values: string[] (conditionDescriptorValueId
+// strings), additionalInfo?: string }. Retrieved per-category via the same
+// get_item_condition_policies Metadata API call used above, reading the
+// `conditionDescriptors` block nested under the matching itemConditions[] entry
+// (keyed by legacy conditionId, not the Inventory API's condition enum).
+
+interface EbayConditionDescriptorSpec {
+  conditionDescriptorId: string;
+  conditionDescriptorName: string;
+  usage: string; // 'REQUIRED' | 'OPTIONAL' — from conditionDescriptorConstraint.usage
+  values: Array<{ conditionDescriptorValueId: string; conditionDescriptorValueName: string }>;
+}
+
+// Reverse of the idToEnum map inside getAcceptedConditionsForCategory above — needed
+// to find which itemConditions[] entry in the Metadata API response corresponds to
+// the condition enum a publish attempt already resolved via ensureConditionValidForCategory.
+const ENUM_TO_LEGACY_CONDITION_ID: Record<string, string> = {
+  'NEW': '1000',
+  'NEW_OTHER': '1500',
+  'NEW_WITH_DEFECTS': '1750',
+  'CERTIFIED_REFURBISHED': '2000',
+  'EXCELLENT_REFURBISHED': '2010',
+  'VERY_GOOD_REFURBISHED': '2020',
+  'GOOD_REFURBISHED': '2030',
+  'SELLER_REFURBISHED': '2500',
+  'LIKE_NEW': '2750',
+  'USED_EXCELLENT': '3000',
+  'USED_VERY_GOOD': '4000',
+  'USED_GOOD': '5000',
+  'USED_ACCEPTABLE': '6000',
+  'FOR_PARTS_OR_NOT_WORKING': '7000',
+};
+
+/**
+ * Cache of per-category+conditionId descriptor requirements. Key = `${categoryId}:${conditionId}`.
+ * One live call fills every conditionId entry for that category (see below), so a
+ * later lookup for the same category's OTHER condition never re-fetches.
+ */
+const CATEGORY_CONDITION_DESCRIPTOR_CACHE = new Map<string, EbayConditionDescriptorSpec[]>();
+
+async function getConditionDescriptorSpecs(
+  categoryId: string,
+  conditionEnum: string
+): Promise<EbayConditionDescriptorSpec[]> {
+  const conditionId = ENUM_TO_LEGACY_CONDITION_ID[conditionEnum];
+  if (!conditionId) return [];
+  const cacheKey = `${categoryId}:${conditionId}`;
+  const cached = CATEGORY_CONDITION_DESCRIPTOR_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const appToken = await getEbayAccessToken();
+    if (!appToken) return [];
+    const path = encodeURIComponent(
+      `/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies?filter=categoryIds:%7B${categoryId}%7D`
+    );
+    const res = await fetch(ebayProxyUrl(path), {
+      headers: {
+        'Authorization': `Bearer ${appToken}`,
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US',
+        ...ebayProxyHeaders(),
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[eBay ConditionDescriptors] ${res.status}: ${body.slice(0, 200)}`);
+      return [];
+    }
+    const data = (await res.json()) as {
+      itemConditionPolicies?: Array<{
+        categoryId: string;
+        itemConditions?: Array<{
+          conditionId: string;
+          conditionDescriptors?: Array<{
+            conditionDescriptorId: string;
+            conditionDescriptorName: string;
+            conditionDescriptorConstraint?: { usage?: string };
+            conditionDescriptorValues?: Array<{ conditionDescriptorValueId: string; conditionDescriptorValueName: string }>;
+          }>;
+        }>;
+      }>;
+    };
+    const policy = data.itemConditionPolicies?.[0];
+    for (const c of policy?.itemConditions || []) {
+      const key = `${categoryId}:${c.conditionId}`;
+      if (!CATEGORY_CONDITION_DESCRIPTOR_CACHE.has(key)) {
+        CATEGORY_CONDITION_DESCRIPTOR_CACHE.set(
+          key,
+          (c.conditionDescriptors || []).map((d) => ({
+            conditionDescriptorId: d.conditionDescriptorId,
+            conditionDescriptorName: d.conditionDescriptorName,
+            usage: d.conditionDescriptorConstraint?.usage || 'OPTIONAL',
+            values: (d.conditionDescriptorValues || []).map((v) => ({
+              conditionDescriptorValueId: v.conditionDescriptorValueId,
+              conditionDescriptorValueName: v.conditionDescriptorValueName,
+            })),
+          }))
+        );
+      }
+    }
+    const specs = CATEGORY_CONDITION_DESCRIPTOR_CACHE.get(cacheKey) || [];
+    console.log(
+      `[eBay ConditionDescriptors] category ${categoryId} condition ${conditionId}: ${specs.length} descriptor(s) (${specs.map((s) => s.conditionDescriptorName).join(', ') || 'none'})`
+    );
+    return specs;
+  } catch (err) {
+    console.error('[eBay ConditionDescriptors] Error:', err);
+    return [];
+  }
+}
+
+/**
+ * Resolve a conditionDescriptorValueId for a "Coin/Card Condition"-style descriptor
+ * from the item's own organizer-set tags. Matches by keyword against the ACTUAL
+ * fetched value names (not hardcoded IDs) so this generalizes across every coin/card
+ * category eBay applies the policy to, not just category 11981.
+ *
+ * Confirmed live 2026-09-05 (category 11981, "Coin Condition" descriptor, id 2):
+ * values are Uncirculated(7), Extremely Fine to About Uncirculated(8), Fine to Very
+ * Fine(9), Below Fine(10) — no numeric ID here is hardcoded; only the name keywords are.
+ */
+function resolveConditionDescriptorValue(
+  spec: EbayConditionDescriptorSpec,
+  tags: string[] | null | undefined
+): { id: string; name: string; matchedBy: 'tag' | 'default' } | null {
+  const haystack = (tags || []).join(' | ').toLowerCase();
+  const findByKeyword = (re: RegExp) => spec.values.find((v) => re.test(v.conditionDescriptorValueName));
+
+  let picked = undefined as { conditionDescriptorValueId: string; conditionDescriptorValueName: string } | undefined;
+  if (/extremely fine|about uncirculated|\bau\b|\bxf\b/.test(haystack)) {
+    picked = findByKeyword(/Extremely Fine/i);
+  } else if (/\buncirculated\b/.test(haystack)) {
+    picked = findByKeyword(/^Uncirculated$/i);
+  } else if (/\bvery fine\b|\bvf\b/.test(haystack)) {
+    picked = findByKeyword(/Fine to Very Fine/i);
+  } else if (/below fine|\bpoor\b|\bfair\b|\bag\b|\bfr\b/.test(haystack)) {
+    picked = findByKeyword(/Below Fine/i);
+  }
+  if (picked) {
+    return { id: picked.conditionDescriptorValueId, name: picked.conditionDescriptorValueName, matchedBy: 'tag' };
+  }
+  // No specific grade tag present (e.g. only a generic "Circulated" tag, no finer
+  // detail) — default to the middle grade "Fine to Very Fine" rather than either
+  // extreme: claiming Uncirculated quality when unverified risks an
+  // item-not-as-described claim, and Below Fine risks under-describing a coin that
+  // may be nicer than that. Falls back to the first available value if this
+  // category's descriptor doesn't happen to offer that exact name.
+  const fallback = findByKeyword(/Fine to Very Fine/i) || spec.values[0];
+  if (!fallback) return null;
+  return { id: fallback.conditionDescriptorValueId, name: fallback.conditionDescriptorValueName, matchedBy: 'default' };
+}
+
+/**
+ * Build the `conditionDescriptors` array eBay's Coin/Card Condition Requirements
+ * policy demands for a category+condition. Returns undefined for any category/
+ * condition with no such requirement (the vast majority of categories) — a fully
+ * backward-compatible no-op everywhere except coin/card categories at Graded/
+ * Ungraded condition.
+ *
+ * Only UNGRADED (USED_VERY_GOOD / legacy conditionId 4000) is auto-resolved here.
+ * GRADED coins/cards (LIKE_NEW / conditionId 2750) still return undefined even when
+ * the category requires descriptors — FindA.Sale has no organizer-facing field yet
+ * to capture a real professional grading service + grade, and fabricating one is
+ * worse than leaving the item flagged for manual review.
+ */
+export async function getConditionDescriptorsForCategory(
+  categoryId: string,
+  conditionEnum: string,
+  tags: string[] | null | undefined
+): Promise<Array<{ name: string; values: string[] }> | undefined> {
+  if (conditionEnum !== 'USED_VERY_GOOD') return undefined; // only the Ungraded path is auto-resolved (see above)
+  const specs = await getConditionDescriptorSpecs(categoryId, conditionEnum);
+  if (specs.length === 0) return undefined;
+
+  const result: Array<{ name: string; values: string[] }> = [];
+  for (const spec of specs) {
+    if (spec.usage !== 'REQUIRED') continue; // skip optional descriptors (e.g. Certification Number) we have no meaningful value for
+    const resolved = resolveConditionDescriptorValue(spec, tags);
+    if (!resolved) {
+      console.warn(
+        `[eBay ConditionDescriptors] category ${categoryId}: could not resolve REQUIRED descriptor "${spec.conditionDescriptorName}" (id ${spec.conditionDescriptorId}) from tags — bailing, will not send a partial conditionDescriptors payload`
+      );
+      return undefined;
+    }
+    console.log(
+      `[eBay ConditionDescriptors] category ${categoryId}: "${spec.conditionDescriptorName}"="${resolved.name}" (${resolved.matchedBy === 'tag' ? 'matched organizer tag' : 'default — no specific grade tag present'})`
+    );
+    result.push({ name: spec.conditionDescriptorId, values: [resolved.id] });
+  }
+  return result.length > 0 ? result : undefined;
+}
+
 /**
  * Per-category required-aspect metadata (eBay Taxonomy getItemAspectsForCategory).
  *   name        - aspect name as eBay returns it (e.g. "Type", "Brand", "Color")
@@ -920,36 +1140,22 @@ const heal25007: Healer = async (ctx) => {
 };
 
 /**
- * Resolve a value for a Coin Condition-style aspect (name contains "circulated",
- * "uncirculated", or "coin condition") from the item's own organizer-set tags.
- * Coins & Paper Money categories commonly use exactly this Circulated/Uncirculated/
- * Proof vocabulary as the aspect's SELECTION_ONLY enum (confirmed 2026-09-05 via two
- * live comparable eBay listings in the same category, both carrying a "Circulated/
- * Uncirculated" item specific with value "Circulated"). Returns null when the aspect
- * name doesn't look condition-related, or no matching tag exists, so the caller can
- * fall back to a generic safe default rather than fabricate a coin-specific value for
- * an unrelated aspect.
- */
-function resolveConditionAspectValue(aspectName: string, tags: string[] | null | undefined): string | null {
-  if (!/circulated|uncirculated|coin\s*condition/i.test(aspectName)) return null;
-  const candidates = ['Circulated', 'Uncirculated', 'Proof'];
-  for (const tag of tags || []) {
-    const tagTrimmed = tag.trim();
-    const match = candidates.find((c) => c.toLowerCase() === tagTrimmed.toLowerCase());
-    if (match) return match;
-  }
-  return null;
-}
-
-/**
- * Parse the missing aspect name directly from a 25064 error's top-level `message`
- * field, which follows the literal pattern "<Aspect Name> is a required field."
- * Confirmed 2026-09-05 via the actual raw error body (Eisenhower dollar coin,
- * category 11981) -- unlike 25002, 25064's `parameters[]` array does NOT carry a
- * clean aspect label here: both parameter values just duplicate the full sentence
- * message verbatim, and a third carries an unrelated bare numeric code ("1007").
- * `parseMissingRequiredAspectNames` correctly rejects all three as garbage (sentence
- * text / bare number), so 25064 needs its own extraction from `message` instead.
+ * heal25064 — eBay's Coin/Card Condition Requirements policy (see the
+ * getConditionDescriptorsForCategory block above). errorId 25064 ("Coin
+ * Condition (2) is a required field.") fires when the inventory item's
+ * `conditionDescriptors` array is missing/incomplete — a top-level inventory
+ * item field, NOT a product.aspects item-specific, despite the error's wording
+ * and despite the Taxonomy API's getRequiredAspectsForCategory never listing it
+ * as a required aspect (confirmed 2026-09-05: it logged "0 required (none)" for
+ * category 11981 while the live publish call still rejected on this).
+ *
+ * SUPERSEDES an earlier same-day version of this healer that injected the
+ * missing aspect name into `product.aspects` instead. That version's PUT
+ * round-tripped cleanly on a verify-GET (`{"Coin Condition (2)":["Circulated"]}`)
+ * but did NOT satisfy the publish validator, because product.aspects was simply
+ * the wrong field. This version writes to `conditionDescriptors` instead, and
+ * also strips out any stray Coin-Condition-shaped key a prior run may have left
+ * behind in product.aspects.
  */
 function parseMissing25064AspectNames(errorBody: string): string[] {
   try {
@@ -966,21 +1172,6 @@ function parseMissing25064AspectNames(errorBody: string): string[] {
   }
 }
 
-/**
- * 25064 — a required item-specific missing that the eBay Taxonomy API's
- * get_item_aspects_for_category never reports as required in the first place (unlike
- * 25002's aspects, which normally DO show up in that spec). Confirmed 2026-09-05
- * (Eisenhower dollar coin, category 11981, "Coins & Paper Money"): `getRequiredAspectsForCategory`
- * logged "0 required (none)" for this category, yet the live publish call rejected with
- * `errorId 25064 message="Coin Condition (2) is a required field."` — this is a known
- * eBay platform gap for some legacy/Collectibles category trees (the modern Taxonomy
- * REST API and the actual publish-time validation draw from different specs). Since
- * getRequiredAspectsForCategory can never resolve this aspect's real enum, this healer
- * cannot use pickSafeAspectDefault's enum-aware logic the way heal25002 does for a
- * normal aspect — it derives a value from the item's own data (organizer tags) first,
- * and only falls back to a generic placeholder as a last resort (logged loudly, since
- * an unverified placeholder on a SELECTION_ONLY aspect may itself be rejected).
- */
 const heal25064: Healer = async (ctx, errorBody) => {
   await refreshCanonicalSku(ctx);
   if (!ctx.sku) {
@@ -988,13 +1179,18 @@ const heal25064: Healer = async (ctx, errorBody) => {
     return { published: false, retry: false };
   }
 
+  // Sanity-check the error is actually the Coin/Card Condition Requirements one
+  // before doing any work — logged loudly if 25064 ever fires for something else
+  // in the future so this isn't silently misapplied.
   const missingNames = parseMissing25064AspectNames(errorBody);
   if (missingNames.length === 0) {
-    // 2026-09-05 diagnostic: first deploy of this healer bailed here on the Eisenhower
-    // dollar coin -- logging the raw body (previously only truncated to 200 chars in the
-    // generic "no healer" path, which this errorId no longer reaches) to see the real
-    // parameters[] shape and fix the parser instead of guessing again.
-    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — could not parse a missing aspect name out of the 25064 error body. Raw body: ${errorBody.slice(0, 800)}`);
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — could not parse a missing field name out of the 25064 error body. Raw body: ${errorBody.slice(0, 800)}`);
+    return { published: false, retry: false };
+  }
+
+  const categoryId = ctx.item.ebayCategoryId;
+  if (!categoryId) {
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — no ebayCategoryId on item, cannot resolve condition descriptors`);
     return { published: false, retry: false };
   }
 
@@ -1004,44 +1200,45 @@ const heal25064: Healer = async (ctx, errorBody) => {
     return { published: false, retry: false };
   }
   const invBody = (await invGet.json()) as any;
-  if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
-  const aspectsObj: Record<string, string[]> =
-    invBody.product.aspects && typeof invBody.product.aspects === 'object' ? invBody.product.aspects : {};
-  const hasKey = (key: string): boolean =>
-    Object.keys(aspectsObj).some((k) => k.toLowerCase() === key.toLowerCase());
+  const currentCondition: string | undefined = invBody.condition;
+  if (!currentCondition) {
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item has no condition field set, cannot resolve condition descriptors`);
+    return { published: false, retry: false };
+  }
 
-  for (const name of missingNames) {
-    if (hasKey(name)) continue;
-    const tagDerived = resolveConditionAspectValue(name, ctx.item.tags);
-    const value = tagDerived ?? pickSafeAspectDefault(undefined);
-    aspectsObj[name] = [value];
-    if (tagDerived) {
-      console.log(`[eBay SelfHeal 25064] ${ctx.sku}: injecting "${name}"="${value}" (derived from item tag)`);
-    } else {
-      console.warn(`[eBay SelfHeal 25064] ${ctx.sku}: injecting "${name}"="${value}" (generic fallback — no matching item tag; may still be rejected if this is a SELECTION_ONLY aspect)`);
+  const descriptors = await getConditionDescriptorsForCategory(categoryId, currentCondition, ctx.item.tags);
+  if (!descriptors) {
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — could not resolve required conditionDescriptors for category ${categoryId} condition ${currentCondition} (see ConditionDescriptors log above for the specific unresolved descriptor)`);
+    return { published: false, retry: false };
+  }
+
+  // Clean up the invalid product.aspects "Coin Condition (2)"-style key a prior,
+  // now-superseded version of this healer injected. Confirmed via live verify-GET
+  // it round-tripped fine but never satisfied the publish validator — the real
+  // requirement lives in conditionDescriptors, a separate top-level field. Left in
+  // place it's inert clutter at best; removing it avoids any future eBay
+  // deprecation-warning noise (code 25126).
+  if (invBody.product && typeof invBody.product === 'object' && invBody.product.aspects && typeof invBody.product.aspects === 'object') {
+    const aspectsObj = invBody.product.aspects as Record<string, unknown>;
+    for (const key of Object.keys(aspectsObj)) {
+      if (/circulated|uncirculated|coin\s*condition/i.test(key)) delete aspectsObj[key];
     }
   }
 
-  invBody.product.aspects = aspectsObj;
+  invBody.conditionDescriptors = descriptors;
   const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, {
     method: 'PUT',
     body: invBody,
   });
   if (!retryInvRes.ok && retryInvRes.status !== 204) {
-    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item PUT (aspect injection) failed (HTTP ${retryInvRes.status})`);
+    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item PUT (conditionDescriptors injection) failed (HTTP ${retryInvRes.status})`);
     return { published: false, retry: false };
   }
-  // 2026-09-05 diagnostic: the first live attempt at this injection got a 200/204 on
-  // the PUT above but eBay STILL rejected the immediately-following publish with the
-  // identical 25064 error -- meaning either the key/value round-tripped differently
-  // than sent, or this aspect isn't actually reachable via product.aspects at all
-  // (possible legacy Trading-API-only Item Specific). Verify-GET + log the aspect
-  // back before re-publishing, instead of guessing at a second injection shape blind.
   try {
     const verifyRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
     if (verifyRes.ok) {
       const verifyData = (await verifyRes.json()) as any;
-      console.log(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: product.aspects after PUT = ${JSON.stringify(verifyData?.product?.aspects ?? null)}`);
+      console.log(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: conditionDescriptors after PUT = ${JSON.stringify(verifyData?.conditionDescriptors ?? null)}`);
     } else {
       console.warn(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: verify GET failed HTTP ${verifyRes.status}`);
     }
@@ -1050,10 +1247,7 @@ const heal25064: Healer = async (ctx, errorBody) => {
   }
   const pub = await attemptPublish(ctx);
   if (pub.ok) return { published: true, listingId: pub.listingId, retry: false };
-  // 2026-09-05 diagnostic: log the FULL next error body (not just the outer loop's
-  // truncated "already healed once" skip) so a second real failure is diagnosable
-  // without yet another blind round trip.
-  console.warn(`[eBay SelfHeal 25064] ${ctx.sku}: re-publish after aspect injection still failed. Raw body: ${pub.errorBody.slice(0, 800)}`);
+  console.warn(`[eBay SelfHeal 25064] ${ctx.sku}: re-publish after conditionDescriptors injection still failed. Raw body: ${pub.errorBody.slice(0, 800)}`);
   return { published: false, retry: true };
 };
 
