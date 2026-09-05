@@ -96,16 +96,33 @@
     'clothing', 'apparel', 'shirt', 't-shirt', 'tee', 'pant', 'trouser', 'jean', 'denim',
     'jacket', 'coat', 'outerwear', 'dress', 'skirt', 'suit', 'sportswear', 'activewear',
     'streetwear', 'sweatshirt', 'sweater', 'hoodie', 'shoe', 'sneaker', 'footwear', 'boot',
-    'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessor', 'jewelry', 'jewellery', 'watch',
-    'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'glove', 'sock', 'underwear', 'swimwear',
+    'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessory', 'accessories', 'jewelry', 'jewellery', 'watch',
+    'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'scarves', 'glove', 'sock', 'underwear', 'swimwear',
     'romper', 'jumpsuit', 'tracksuit', 'sweatpant',
   ];
+  // BUG FIX 2026-09-05 (Patrick-reported live against the popup's own eligibility check, same bug
+  // ported here to keep this content-script gate in sync -- see this function's own header comment,
+  // "mirrors the backend registry"): plain substring matching false-positived two confirmed ways --
+  // whole real words used in an unrelated sense ("clothing" inside "Clothing Rack", 'tee' inside
+  // "Union TEE", 'backpack' inside "Backpack Cooler", 'belt' inside "Swim Cuffs with Belts") and
+  // keywords embedded inside unrelated longer words ('tee' inside "Steel", 'cap' inside "Capitol
+  // Records", 'hat' inside "That Latin Feeling", 'bag' inside "Polybagged"). See
+  // packages/backend/src/services/marketplaceEligibilityRules.ts's identical fix (same session) for
+  // the full DB-confirmed incident list -- ported here verbatim so the two never drift apart again.
+  const GRAILED_FASHION_EXCLUDE_KEYWORDS = [
+    'push-fit', 'push to connect', 'clothing rack', 'garment rack', 'cooler', 'training aid',
+  ];
+  function grailedHasWholeWordMatch(haystack, keyword) {
+    const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('\\b' + escaped + '(e?s)?\\b', 'i').test(haystack);
+  }
   function grailedFashionMismatchReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     const NOT_FASHION_REASON = "Grailed is a fashion/streetwear-only marketplace — this item's category doesn't look like apparel, footwear, or accessories.";
     if (!haystack.trim()) return NOT_FASHION_REASON;
-    const isFashion = GRAILED_FASHION_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1);
-    if (!isFashion) return NOT_FASHION_REASON;
+    const isFashion = GRAILED_FASHION_KEYWORDS.some((kw) => grailedHasWholeWordMatch(haystack, kw));
+    const isExcluded = GRAILED_FASHION_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1);
+    if (!isFashion || isExcluded) return NOT_FASHION_REASON;
     return null;
   }
 

@@ -252,8 +252,8 @@ const RULES: EligibilityRule[] = [
       'clothing', 'apparel', 'shirt', 't-shirt', 'tee', 'pant', 'trouser', 'jean', 'denim',
       'jacket', 'coat', 'outerwear', 'dress', 'skirt', 'suit', 'sportswear', 'activewear',
       'streetwear', 'sweatshirt', 'sweater', 'hoodie', 'shoe', 'sneaker', 'footwear', 'boot',
-      'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessor', 'jewelry', 'jewellery', 'watch',
-      'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'glove', 'sock', 'underwear', 'swimwear',
+      'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessory', 'accessories', 'jewelry', 'jewellery', 'watch',
+      'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'scarves', 'glove', 'sock', 'underwear', 'swimwear',
       'romper', 'jumpsuit',
       // BUG FIX 2026-08-23 (Patrick-reported live: "Bored Ape Yacht Club Adidas Tracksuit" incorrectly
       // flagged "may not fit this marketplace" for Grailed). Root-caused via direct code read: this is
@@ -264,18 +264,24 @@ const RULES: EligibilityRule[] = [
       // fashion/apparel and equally likely to be missed the same way.
       'tracksuit', 'sweatpant',
     ],
-    // BUG FIX 2026-09-05 (Patrick-reported live: "Titleist...Golf Hat" listed under "Balls", plus
-    // several clearly non-fashion items selectable for Grailed): plain substring matching let several
-    // nameKeywords above false-positive on unrelated products whose title/category text happens to
-    // contain the same letters. DB-confirmed same session: "John Guest...Union TEE" (a plumbing
-    // push-fit fitting, ebayCategoryId 63900) matched 'tee'; "H-Rack Grid Hanger Brackets" (a retail
-    // clothing-RACK fixture, ebayCategoryName "Clothing Racks") matched 'clothing'; "TCL Cool Carry
-    // Insulated Backpack Cooler" matched 'backpack'; "Foam Swim Cuffs with Belts" matched 'belt' -- the
-    // exact same bug class as the VINTED "musical instrument"/"Musical Instruments & Gear" collision
-    // fixed 2026-09-03 (see that rule's own comment) and the FACEBOOK/CRAIGSLIST/VINTED 'gunmetal'/
-    // 'bladerunner' collisions above. Excluded here the same way, scoped to the exact confirmed
-    // false positives (not a blanket word-boundary rewrite -- 'accessor' above is a DELIBERATE
-    // prefix match for accessory/accessories/accessorize and must keep matching as a substring).
+    // BUG FIX 2026-09-05, two rounds (Patrick-reported live, re-tested each time against real
+    // items): plain substring matching let several nameKeywords above false-positive on clearly
+    // non-fashion products two DIFFERENT ways.
+    // Round 1 -- WHOLE-WORD conceptual collisions (a real, correctly-spelled word used in an
+    // unrelated sense): "John Guest...Union TEE" (a plumbing push-fit fitting) matched 'tee';
+    // "H-Rack Grid Hanger Brackets" (ebayCategoryName "Clothing Racks") matched 'clothing'; "TCL Cool
+    // Carry Insulated Backpack Cooler" matched 'backpack'; "Foam Swim Cuffs with Belts" matched
+    // 'belt'. Same bug class as the VINTED "musical instrument"/"Musical Instruments & Gear"
+    // collision fixed 2026-09-03. Fixed with the excludeKeywords below -- word-boundary matching
+    // (round 2) does NOT help here since e.g. "clothing" in "Clothing Rack" is the exact same
+    // complete word as "clothing" the fashion keyword, just used in an unrelated sense.
+    // Round 2 -- keywords EMBEDDED inside unrelated longer words, found after round 1 was already
+    // live: 'tee' matched inside "Stainless STEEl"/"...STEEl RH Good Grips"; 'cap' matched inside
+    // "CAPitol Records" (two vinyl LPs); 'hat' matched inside "THAT Latin Feeling" (a third vinyl
+    // LP); 'bag' matched inside "Poly BAGged" (a sealed comic book). Fixed at the matcher level --
+    // see hasWholeWordMatch's own comment above checkEligibility -- which is also why 'accessor'
+    // was replaced with the real complete words 'accessory'/'accessories' just above: a bare
+    // 'accessor' prefix can never satisfy a \b...\b whole-word match against "accessories".
     // NOTE: 'hat' matching a golf tournament/memorabilia hat (ebayCategoryName "Balls",
     // ebayCategoryId 27280 -- itself a separate, isolated AI category-suggestion miss, not this
     // file's bug) was deliberately NOT excluded here -- real fashion hats/caps are common, legitimate
@@ -470,6 +476,30 @@ function normText(text: string | null | undefined): string {
   return (text || '').toLowerCase();
 }
 
+// BUG FIX 2026-09-05 round 2 (Patrick-reported live, re-tested after the round-1 excludeKeywords
+// fix above): round 1 only addressed WHOLE-WORD conceptual collisions (a real word used in an
+// unrelated sense, e.g. "clothing" inside "Clothing Rack"). It did NOT catch a worse, separate class
+// of bug: plain substring matching also fires when a short keyword is merely EMBEDDED inside an
+// unrelated longer word. DB-confirmed this session, after round 1 was already live: 'tee' matched
+// inside "Stainless STEEl" and "...STEEl RH Good Grips" (a homebrewing chiller and a golf club set);
+// 'cap' matched inside "CAPitol Records" (two separate vinyl LPs); 'hat' matched inside "THAT Latin
+// Feeling" (a third vinyl LP); 'bag' matched inside "Poly BAGged" (a sealed comic book) -- none of
+// these five items have anything to do with fashion. Scoped to CATEGORY_ALLOWLIST only (Grailed) --
+// CATEGORY_BLOCKLIST's existing plain-substring behavior is intentionally left untouched, since the
+// FACEBOOK/CRAIGSLIST/GUMTREE_AU/VINTED weapons rules above deliberately rely on 'gun' matching
+// INSIDE compound words like "shotgun"/"handgun"/"airgun" (see that rule's own comment) -- a
+// blanket word-boundary rewrite would silently stop catching those.
+function hasWholeWordMatch(haystack: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Tolerate a common plural suffix (s/es) after the keyword -- e.g. 'shoe' must still match
+  // "Sneakers"/"Shoes"/"Boots", not just the bare singular -- without this, word-boundary matching
+  // (which fixes the steel/capitol/that/polybagged false positives above) would itself introduce a
+  // NEW false-NEGATIVE regression on ordinary plural fashion listings. Does not cover the one true
+  // irregular plural in this file, 'scarf' -> 'scarves' (f -> v); 'scarves' is listed as its own
+  // separate keyword below instead.
+  return new RegExp(`\\b${escaped}(e?s)?\\b`, 'i').test(haystack);
+}
+
 /**
  * S-FB-WEAPON-COIN-FIX-2026-09-03: category-only text is what caused the coin-tube/coin-slab
  * false-positive (see EligibilityCheckItem.title comment) -- a coin accessory's category is
@@ -514,7 +544,10 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
     if (rule.type === 'CATEGORY_ALLOWLIST') {
       const haystack = buildHaystack(item);
       if (!haystack) return { eligible: false, reason: rule.reason }; // can't confirm -> hidden by default, see file header
-      const isAllowed = rule.nameKeywords.some((kw) => haystack.includes(kw));
+      // Whole-word match for nameKeywords (see hasWholeWordMatch's own comment) -- excludeKeywords
+      // stays plain substring since every entry there is already a multi-word phrase or a term that
+      // only ever appears as a genuine standalone token in real data (no embedded-substring risk).
+      const isAllowed = rule.nameKeywords.some((kw) => hasWholeWordMatch(haystack, kw));
       const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
       if (!isAllowed || isExcluded) return { eligible: false, reason: rule.reason };
     }
