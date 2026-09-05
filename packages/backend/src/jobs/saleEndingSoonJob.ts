@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import jwt from 'jsonwebtoken';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
@@ -17,7 +18,8 @@ const getEmailTemplate = (
   endDate: Date,
   city: string,
   saleUrl: string,
-  topCategories: string[]
+  topCategories: string[],
+  unsubUrl: string
 ): EmailTemplate => {
   const formattedDate = endDate.toLocaleString('en-US', {
     weekday: 'short',
@@ -40,6 +42,8 @@ const getEmailTemplate = (
     ctaText: 'View Sale Now',
     ctaUrl: saleUrl,
     accentColor: '#dc2626',
+    unsubLabel: 'Stop sale ending soon alerts',
+    unsubUrl,
   });
 
   return {
@@ -81,6 +85,16 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
           select: {
             email: true,
             userId: true,
+            // SaleSubscriber.userId is nullable (email-only / phone-only follow,
+            // no account) -- see emailReminders.e2e.test.ts's explicit
+            // "invalidSubscriber" cases. Pull the User's own notificationPrefs
+            // here (single JOIN-based select) so the per-recipient unsubscribe-type
+            // opt-out check below doesn't need an N+1 query per subscriber.
+            user: {
+              select: {
+                notificationPrefs: true,
+              },
+            },
           },
         },
         items: {
@@ -111,13 +125,12 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
           .map(([cat]) => cat);
 
         const saleUrl = `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${sale.id}`;
-        const emailTemplate = getEmailTemplate(
-          sale.title,
-          sale.endDate,
-          sale.city,
-          saleUrl,
-          topCategories
-        );
+
+        // NOTE: the email template (and specifically its unsubscribe link) is built
+        // PER RECIPIENT inside the subscriber loop below, not once here -- a single
+        // shared unsubscribe link built at this scope would either point at the
+        // wrong user or have to be omitted entirely. See the loop for both the
+        // real-User (UnsubscribeToken) and email-only (JWT + suppression) paths.
 
         // Nudge the organizer too: how many items are still unsold as this sale
         // heads into its final ~24 hours. Before this, the only "ending soon" signal
@@ -166,6 +179,65 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
               continue;
             }
 
+            // Build a per-recipient unsubscribe link. Two paths:
+            //  - subscriber.userId set: real User row -> same UnsubscribeToken/
+            //    buildUnsubscribeLinks scheme used everywhere else now, type
+            //    'saleEndingSoon' (TYPE_TO_PREF_MAP -> emailSaleEndingSoon).
+            //  - subscriber.userId null: email-only follow, no User row to hang an
+            //    UnsubscribeToken off (its userId FK is required, not nullable).
+            //    Reuse the exact JWT + /api/outreach/unsubscribe pattern
+            //    outreachEmailsCron.ts already uses for its own no-User-row leads
+            //    (organizerId is optional in that route's decoded payload -- it
+            //    just calls suppressionService.processOptOut(email) either way).
+            let unsubUrl: string;
+            let listUnsubscribeHeader: string;
+
+            if (subscriber.userId) {
+              // Respect this subscriber's own opt-out for this alert type before
+              // ever building the email. Without this check, clicking the
+              // unsubscribe link below would flip the notificationPrefs flag but
+              // this job would never read it back -- a fake unsubscribe.
+              const prefs = (subscriber.user?.notificationPrefs as Record<string, unknown> | null) ?? {};
+              if (prefs['emailSaleEndingSoon'] === false) {
+                continue;
+              }
+
+              const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+              const links = await buildUnsubscribeLinks(subscriber.userId, 'saleEndingSoon');
+              unsubUrl = links.webUrl;
+              listUnsubscribeHeader = links.listUnsubscribeHeader;
+            } else {
+              const outreachSecret = process.env.OUTREACH_SECRET;
+              const backendUrl =
+                process.env.RAILWAY_BACKEND_URL ||
+                process.env.BACKEND_URL ||
+                (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : undefined);
+
+              if (!outreachSecret || !backendUrl) {
+                // No working one-click unsubscribe can be built for this email-only
+                // recipient (missing OUTREACH_SECRET or backend URL) -- skip the
+                // send rather than ship a CAN-SPAM-noncompliant email with no
+                // functioning opt-out.
+                console.error(
+                  `[saleEndingSoonJob] Cannot build unsubscribe link for email-only subscriber ${subscriber.email} (sale ${sale.id}) -- ${!outreachSecret ? 'OUTREACH_SECRET' : 'backend URL (RAILWAY_BACKEND_URL/BACKEND_URL/RAILWAY_PUBLIC_DOMAIN)'} not set. Skipping send.`
+                );
+                continue;
+              }
+
+              const token = jwt.sign({ email: subscriber.email }, outreachSecret, { expiresIn: '90d' });
+              unsubUrl = `${backendUrl}/api/outreach/unsubscribe?token=${token}`;
+              listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubUrl}>`;
+            }
+
+            const emailTemplate = getEmailTemplate(
+              sale.title,
+              sale.endDate,
+              sale.city,
+              saleUrl,
+              topCategories,
+              unsubUrl
+            );
+
             try {
               await emailService.emails.send({
                 from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
@@ -173,6 +245,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
                 subject: emailTemplate.subject,
                 html: emailTemplate.html,
                 jobName: 'saleEndingSoonJob',
+                listUnsubscribe: listUnsubscribeHeader,
               });
               console.log(
                 `Sale ending soon email sent to ${subscriber.email} for sale ${sale.id}`

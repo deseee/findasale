@@ -19,6 +19,10 @@ const TYPE_TO_PREF_MAP: Record<string, string> = {
   newSales: 'emailNewSalesFromFollowed',
   priceDrops: 'emailPriceDropAlerts',
   messages: 'pushMessages',
+  // Added 2026-09-05 (saleEndingSoonJob per-recipient unsubscribe fix): no existing
+  // key covers "this specific followed sale is about to end" -- newSales is for a new
+  // sale from a followed ORGANIZER, priceDrops/flash/weekly are unrelated categories.
+  saleEndingSoon: 'emailSaleEndingSoon',
 };
 
 /**
@@ -31,6 +35,7 @@ const TYPE_TO_LABEL_MAP: Record<string, string> = {
   newSales: 'new sale alerts',
   priceDrops: 'price drop alerts',
   messages: 'message notifications',
+  saleEndingSoon: 'sale ending soon alerts',
 };
 
 /**
@@ -172,6 +177,7 @@ export async function handleUnsubscribe(
             emailNewSalesFromFollowed: false,
             emailPriceDropAlerts: false,
             pushMessages: false,
+            emailSaleEndingSoon: false,
           },
         },
       });
@@ -277,6 +283,7 @@ export async function resubscribe(
             emailNewSalesFromFollowed: true,
             emailPriceDropAlerts: true,
             pushMessages: true,
+            emailSaleEndingSoon: true,
           },
         },
       });
