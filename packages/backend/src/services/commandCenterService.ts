@@ -108,7 +108,7 @@ export async function getCommandCenterSummary(
         members: {
           include: {
             organizer: { select: { businessName: true } },
-            user: { select: { id: true } },
+            user: { select: { id: true, name: true } },
           },
         },
       },
@@ -120,7 +120,7 @@ export async function getCommandCenterSummary(
           .filter((m) => m.acceptedAt !== null)
           .map((m) => ({
             id: m.id,
-            businessName: m.organizer?.businessName || 'Unknown Member',
+            businessName: m.organizer?.businessName || m.user?.name || 'Unknown Member',
             role: m.role,
             acceptedAt: m.acceptedAt?.toISOString() || null,
           }))
@@ -299,7 +299,7 @@ export async function getCommandCenterSummary(
       members: {
         include: {
           organizer: { select: { businessName: true } },
-          user: { select: { id: true } },
+          user: { select: { id: true, name: true } },
         },
       },
     },
@@ -311,7 +311,7 @@ export async function getCommandCenterSummary(
         .filter((m) => m.acceptedAt !== null) // Only accepted members
         .map((m) => ({
           id: m.id,
-          businessName: m.organizer?.businessName || 'Unknown Member',
+          businessName: m.organizer?.businessName || m.user?.name || 'Unknown Member',
           role: m.role,
           acceptedAt: m.acceptedAt?.toISOString() || null,
         }))

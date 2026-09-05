@@ -161,7 +161,7 @@ const OrganizerMembersPage = () => {
   // Workspace & staff queries
   const { data: workspace, isLoading: workspaceLoading } = useMyWorkspace();
   const workspaceId = workspace?.id;
-  const { data: staffList, isLoading: staffLoading } = useStaffList(workspaceId);
+  const { data: staffList, isLoading: staffLoading, isError: staffError } = useStaffList(workspaceId);
   const { data: coverageGaps, isLoading: gapsLoading } = useCoverageGaps(workspaceId);
 
   // Mutations
@@ -654,7 +654,14 @@ const OrganizerMembersPage = () => {
               </div>
 
               {/* Member cards */}
-              {members.length === 0 ? (
+              {staffError ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
+                  <div className="text-4xl mb-4">⚠️</div>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    We couldn't load your team right now. Try refreshing the page.
+                  </p>
+                </div>
+              ) : members.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
                   <div className="text-4xl mb-4">👤</div>
                   <p className="text-gray-600 dark:text-gray-400">
