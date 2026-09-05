@@ -61,7 +61,7 @@ export default function ScraperAdminPage() {
 
   // Check admin status — wait for auth to resolve before redirecting
   useEffect(() => {
-    if (!authLoading && user?.role !== 'ADMIN') {
+    if (!authLoading && !user?.roles?.includes('ADMIN')) {
       window.location.href = '/';
       return;
     }

@@ -122,7 +122,7 @@ const AdminSocialAccounts = () => {
   // Admin guard — identical pattern to other admin pages (e.g. demand-signals.tsx).
   useEffect(() => {
     if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
-      router.push('/');
+      router.push('/access-denied');
     }
   }, [user, isLoading, router]);
 

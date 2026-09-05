@@ -95,8 +95,8 @@ const AdminDisputesPage = () => {
     return null;
   }
 
-  if (!isLoading && user?.role !== 'ADMIN') {
-    router.push('/');
+  if (!isLoading && !user?.roles?.includes('ADMIN')) {
+    router.push('/access-denied');
     return null;
   }
 

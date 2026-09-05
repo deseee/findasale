@@ -36,7 +36,7 @@ const AdminSales = () => {
 
   useEffect(() => {
     if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
-      router.push('/');
+      router.push('/access-denied');
     }
   }, [user, isLoading, router]);
 

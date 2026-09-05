@@ -26,7 +26,7 @@ const ABTestsPage = () => {
   // Redirect if not admin
   useEffect(() => {
     if (!userLoading && (!user || !user.roles?.includes('ADMIN'))) {
-      router.push('/');
+      router.push('/access-denied');
     }
   }, [user, userLoading, router]);
 

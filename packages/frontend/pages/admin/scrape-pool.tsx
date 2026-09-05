@@ -53,7 +53,7 @@ export default function ScrapePoolDashboard() {
 
   // Check admin status
   useEffect(() => {
-    if (!authLoading && user?.role !== 'ADMIN') {
+    if (!authLoading && !user?.roles?.includes('ADMIN')) {
       window.location.href = '/';
       return;
     }

@@ -80,7 +80,7 @@ const AdminCreators = () => {
 
   useEffect(() => {
     if (!isLoading && user && !user.roles?.includes('ADMIN')) {
-      router.push('/login');
+      router.push('/access-denied');
     }
   }, [user, isLoading, router]);
 

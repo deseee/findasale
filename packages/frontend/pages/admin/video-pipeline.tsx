@@ -182,7 +182,7 @@ const AdminVideoPipelinePage = () => {
   }
 
   if (!isLoading && user?.role !== 'ADMIN' && !user?.roles?.includes('ADMIN')) {
-    router.push('/');
+    router.push('/access-denied');
     return null;
   }
 

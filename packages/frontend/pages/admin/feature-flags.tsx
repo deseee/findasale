@@ -68,7 +68,7 @@ export default function AdminFeatureFlagsPage() {
 
   useEffect(() => {
     if (!authLoading && (!user || !user.roles?.includes('ADMIN'))) {
-      router.push('/');
+      router.push('/access-denied');
     }
   }, [user, authLoading, router]);
 
