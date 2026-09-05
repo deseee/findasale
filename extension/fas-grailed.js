@@ -747,6 +747,17 @@
   // confirmed -- do not extend this with guesses.
   const GRAILED_CATEGORY_OVERRIDES = {
     'tracksuits & sets': { category: 'Tops', subCategory: 'Sweatshirts & Hoodies' },
+    // BUG FIX 2026-09-04 (findasale-dev, BUG MODE dispatch, live-Chrome-confirmed): "T-Shirts" is
+    // FindA.Sale's clean leaf category name for this garment type, but it does not text-match any
+    // of Grailed's real level-1 Category options (Tops/Bottoms/Outerwear/Footwear/Tailoring/
+    // Accessories under either department -- confirmed live via console: "tried \"menswear\" ->
+    // categories seen=[...]" and "tried \"womenswear\" -> categories seen=[...]" both logged with
+    // no MATCHED line for either). "T-Shirts" is really a Grailed SUB-category under the "Tops"
+    // Category bucket (confirmed live this session: "Short Sleeve T-Shirts" is a real menuitem
+    // under both Menswear/Tops and Womenswear/Tops). Without this override, Category stayed
+    // completely blank (not even a wrong guess) and Designer/Size both cascaded into failure since
+    // they're gated on Category being set first.
+    't-shirts': { category: 'Tops', subCategory: 'Short Sleeve T-Shirts' },
   };
   // categoryText: FindA.Sale's clean leaf category name (post S-EXT-BATCH-12, e.g. "Tracksuits &
   // Sets") -- tried directly against Category/Sub-category options and against
@@ -845,7 +856,24 @@
     // is ALSO removed -- it re-introduces the exact same collision risk (the full string still
     // contains "accessories"), and per this file's own "never fabricate/guess a value" spirit, a
     // level that has no real segment match should stay unset rather than risk a wrong pick.
-    let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
+    // BUG FIX 2026-09-04 (findasale-dev, BUG MODE dispatch, live-Chrome-confirmed via Patrick's
+    // real re-test of THIS fix's own item): the `levelQueries.length > 1 ? slice(1) : levelQueries`
+    // condition above only dropped the umbrella when it was accompanied by at least one other
+    // breadcrumb segment. Live-confirmed this item's breadcrumbText is JUST the bare umbrella
+    // ("Clothing, Shoes & Accessories", a single segment, no gender/subcategory chain at all --
+    // categoryText carries the real leaf "T-Shirts" separately) -- levelQueries.length was 1, the
+    // umbrella was NOT dropped, and it went straight into `remaining` alongside "T-Shirts" pushed
+    // below. Console-confirmed the exact failure this reintroduces: "menswear" MATCHED
+    // "accessories" for segment "Clothing, Shoes & Accessories" -- the identical collision this
+    // whole block exists to prevent, just reached through the single-segment path instead of the
+    // multi-segment path already covered above. Fix: filter the umbrella phrase out by VALUE,
+    // not by array position/length, so it's excluded from `remaining` regardless of how many
+    // other segments are present -- the categoryText push immediately below still adds the real
+    // leaf ("T-Shirts") as a candidate either way.
+    const GRAILED_GENERIC_UMBRELLA_SEGMENTS = ['clothing, shoes & accessories'];
+    let remaining = levelQueries
+      .filter((seg) => !GRAILED_GENERIC_UMBRELLA_SEGMENTS.includes(norm(seg)))
+      .map((seg, i) => ({ seg, i }));
     // Always ALSO offer the clean leaf category name as a candidate -- once Department (level 0)
     // is resolved from the breadcrumb, the clean name is very often the actual best match for
     // Category (level 1) itself (e.g. a clean "Hoodies" would directly match a Grailed "Hoodies"
