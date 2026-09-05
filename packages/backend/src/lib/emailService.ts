@@ -231,7 +231,12 @@ function buildRawMessage(options: {
 }): string {
   const toAddresses = Array.isArray(options.to) ? options.to.join(', ') : options.to;
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const unsubUrl = options.listUnsubscribe || `${FRONTEND_URL}/settings/notifications`;
+  // Callers pass a fully RFC-formatted value (e.g. `<mailto:...>, <https://...>>`) via
+  // buildUnsubscribeLinks() / outreachEmailsCron.ts's own pattern -- used as-is below with NO
+  // extra bracket-wrapping. Only the bare-URL internal fallback needs its own brackets added
+  // here. Wrapping an already-bracketed compound value produced a malformed doubled-bracket
+  // header (`<<mailto:...>, <https://...>>`) for every caller until this fix (2026-09-05).
+  const unsubUrl = options.listUnsubscribe || `<${FRONTEND_URL}/settings/notifications>`;
 
   const headers = [
     `From: ${options.from}`,
@@ -239,7 +244,7 @@ function buildRawMessage(options: {
     `Subject: ${encodeSubject(options.subject)}`,
     `MIME-Version: 1.0`,
     ...(options.replyTo ? [`Reply-To: ${options.replyTo}`] : []),
-    `List-Unsubscribe: <${unsubUrl}>`,
+    `List-Unsubscribe: ${unsubUrl}`,
     `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
