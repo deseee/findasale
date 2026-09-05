@@ -636,7 +636,7 @@ const AddItemsDetailPage = () => {
 
   // CRITICAL: All hooks must be called unconditionally at top of component (before any early returns)
   // React hooks rule: call hooks in the same order on every render
-  const { data: sale } = useQuery({
+  const { data: sale, isLoading: saleLoading } = useQuery({
     queryKey: ['sale', saleId],
     queryFn: async () => {
       if (!saleId) return null;
@@ -681,7 +681,7 @@ const AddItemsDetailPage = () => {
   }, [items, itemSearch, statusFilter]);
 
   // #403: Fetch existing bundles for this sale
-  const { data: bundles = [], refetch: refetchBundles } = useQuery({
+  const { data: bundles = [], isLoading: bundlesLoading, refetch: refetchBundles } = useQuery({
     queryKey: ['bundles', saleId],
     queryFn: async () => {
       if (!saleId) return [];
@@ -1072,6 +1072,7 @@ const AddItemsDetailPage = () => {
     onError: (error: any) => {
       // Silently fail: matching is a bonus feature
       if (process.env.NODE_ENV !== 'production') console.error('Bounty matching error:', error);
+      showToast("Couldn't check for bounty matches on this item", 'warning');
     },
   });
 
@@ -1403,6 +1404,7 @@ const AddItemsDetailPage = () => {
               }
             } catch (addErr) {
               if (process.env.NODE_ENV !== 'production') console.error('[regular] Additional photo upload failed:', addErr);
+              showToast('An additional photo failed to upload', 'error');
             }
           }
         }
@@ -1510,6 +1512,7 @@ const AddItemsDetailPage = () => {
 
     if (!pendingQualityBlob || !pendingQualityTempId) {
       if (process.env.NODE_ENV !== 'production') console.error('Missing quality context for resuming upload');
+      showToast('Upload failed. Please try again.', 'error');
       return;
     }
 
@@ -1623,6 +1626,7 @@ const AddItemsDetailPage = () => {
 
     if (!pendingFaceBlob || !pendingFaceTempId) {
       if (process.env.NODE_ENV !== 'production') console.error('Missing face detection context for resuming upload');
+      showToast('Upload failed. Please try again.', 'error');
       return;
     }
 
@@ -1939,7 +1943,9 @@ const AddItemsDetailPage = () => {
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-1">
               Add Items
             </h1>
-            {sale?.title && (
+            {saleLoading ? (
+              <Skeleton className="h-5 w-48 mb-1" />
+            ) : sale?.title && (
               <p className="text-amber-700 dark:text-amber-400 font-medium text-base mb-1">
                 {sale.title}
               </p>
@@ -1978,7 +1984,7 @@ const AddItemsDetailPage = () => {
             <div className="mt-3 pt-3 border-t border-warm-100 dark:border-gray-700">
               <Link
                 href={`/organizer/dashboard`}
-                className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
+                className="text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 text-sm font-medium inline-flex items-center gap-1"
               >
                 &larr; Back to dashboard
               </Link>
@@ -2294,7 +2300,7 @@ const AddItemsDetailPage = () => {
                                 <button
                                   type="button"
                                   onClick={() => setFormData({ ...formData, tags: formData.tags.filter((t) => t !== tag) })}
-                                  className="text-amber-600 hover:text-amber-900 font-bold"
+                                  className="text-amber-600 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-300 font-bold"
                                   aria-label={`Remove tag ${tag}`}
                                 >
                                   ✕
@@ -2790,7 +2796,7 @@ const AddItemsDetailPage = () => {
                             onClick={(e) => e.stopPropagation()}
                             className="rounded cursor-pointer"
                           />
-                          <span className="text-warm-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
+                          <span className="text-warm-400 dark:text-gray-500 text-sm">{isExpanded ? '▲' : '▼'}</span>
                         </div>
                         {/* Thumbnail: links to public item page (no target="_blank" to preserve PWA back-navigation) */}
                         <a
@@ -2811,7 +2817,7 @@ const AddItemsDetailPage = () => {
                         </a>
                         {/* Title: plain text, no navigation link */}
                         <div className="flex-1 min-w-0">
-                          <span className="font-semibold text-amber-700 truncate inline-block max-w-full text-sm">
+                          <span className="font-semibold text-amber-700 dark:text-amber-400 truncate inline-block max-w-full text-sm">
                             {item.title || 'Untitled'}
                           </span>
                           <p className="text-xs text-warm-500 dark:text-warm-400 truncate">
@@ -2846,7 +2852,7 @@ const AddItemsDetailPage = () => {
                               setDeleteConfirmTitle(item.title || 'this item');
                             }}
                             disabled={deleteMutation.isPending}
-                            className="text-red-400 hover:text-red-600 transition-colors disabled:opacity-50 p-0.5 leading-none"
+                            className="text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-0.5 leading-none"
                             aria-label="Delete item"
                           >
                             🗑️
@@ -3017,7 +3023,7 @@ const AddItemsDetailPage = () => {
                               className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                             >
                               <span>eBay Category{editState.ebayCategoryName ? `. ${editState.ebayCategoryName}` : ''}</span>
-                              <span className="text-warm-400">{itemEbaySectionOpen[item.id] ? '▲' : '▼'}</span>
+                              <span className="text-warm-400 dark:text-gray-500">{itemEbaySectionOpen[item.id] ? '▲' : '▼'}</span>
                             </button>
                             {itemEbaySectionOpen[item.id] && (
                               <div className="px-3 pb-3 space-y-3">
@@ -3143,6 +3149,13 @@ const AddItemsDetailPage = () => {
               <div className="px-6 pb-6 border-t border-warm-100 dark:border-gray-700 pt-4 space-y-6">
                 <p className="text-sm text-warm-600 dark:text-warm-400">Group items together and set a fixed bundle price. Shoppers can reserve the whole bundle at once.</p>
 
+                {bundlesLoading && (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                )}
+
                 {/* Existing bundles list */}
                 {bundles.length > 0 && (
                   <div className="space-y-3">
@@ -3164,7 +3177,7 @@ const AddItemsDetailPage = () => {
                                   await api.delete(`/sales/${saleId}/bundles/${bundle.id}`);
                                   refetchBundles();
                                 } catch {
-                                  // ignore
+                                  showToast('Failed to delete bundle', 'error');
                                 } finally {
                                   setConfirmingBundleId(null);
                                 }
@@ -3209,7 +3222,7 @@ const AddItemsDetailPage = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-warm-700 dark:text-gray-300 mb-1">
-                        Bundle Price <span className="text-red-500">*</span>
+                        Bundle Price <span className="text-red-500 dark:text-red-400">*</span>
                         {bundleItemIds.size > 0 && (() => {
                           const selectedItems = (items as any[]).filter((i: any) => bundleItemIds.has(i.id));
                           const total = selectedItems.reduce((sum: number, i: any) => sum + (Number(i.price) || 0), 0);
@@ -3288,7 +3301,7 @@ const AddItemsDetailPage = () => {
                         setBundleItemIds(new Set());
                         refetchBundles();
                       } catch {
-                        // toast handled by global interceptor
+                        showToast('Failed to create bundle', 'error');
                       } finally {
                         setBundleSaving(false);
                       }
