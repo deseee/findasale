@@ -757,18 +757,18 @@
   // alone, so this file specifically still needs both fields where the other three content scripts
   // (S-EXT-BATCH-12) only need the clean `category` value.
   async function pickCategory(categoryText, breadcrumbText) {
-    if (!categoryText) return false;
+    if (!categoryText) return { ok: false, departmentGuess: null };
     const opener = openerByLabel('Category');
-    if (!opener) return false;
+    if (!opener) return { ok: false, departmentGuess: null };
     if (opener.tagName === 'SELECT') {
       const segments = (breadcrumbText || categoryText).split(':').map((s) => s.trim()).filter(Boolean);
       const candidates = [categoryText, ...segments.slice().reverse()];
       for (const candidate of candidates) {
         const opt = Array.from(opener.options).find((o) => norm(o.textContent) === norm(candidate) || norm(o.textContent).indexOf(norm(candidate)) !== -1);
-        if (opt) { opener.value = opt.value; opener.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+        if (opt) { opener.value = opt.value; opener.dispatchEvent(new Event('change', { bubbles: true })); return { ok: true, departmentGuess: null }; }
       }
       console.warn('[FAS Grailed] Category "' + categoryText + '" -- no option matched the native select (UNVERIFIED taxonomy) -- left for the organizer to choose.');
-      return false;
+      return { ok: false, departmentGuess: null };
     }
     // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the old version searched every
     // level of the picker for the whole, un-split categoryText -- confirmed live that the real
@@ -810,9 +810,16 @@
     }
     if (!opened) {
       console.warn('[FAS Grailed] Category "' + categoryText + '" -- the Department/Category picker never opened after 4 attempts (UNVERIFIED interaction) -- left for the organizer to choose.');
-      return false;
+      return { ok: false, departmentGuess: null };
     }
     let pickedAny = false;
+    // BUG FIX 2026-09-04 (findasale-dev, BUG MODE dispatch): tracks whether the department
+    // (Menswear/Womenswear) below was resolved via the "no gender signal in the source data"
+    // guess-fallback (as opposed to a genuine confident match at level 0) -- see the two set-sites
+    // below and pickCategory's own header comment above for the full incident writeup. Propagated
+    // up through run() to showReviewOverlay() so the organizer sees a specific, highlighted warning
+    // instead of this being buried in a console.warn nobody is watching.
+    let departmentGuess = null;
     // BUG FIX 2026-08-20 (S-EXT-BATCH-8, P0, live-Chrome-confirmed via Patrick's real re-test): TWO
     // stacked problems, both confirmed live against the real failing item ("Clothing, Shoes &
     // Accessories:men:men's Clothing:activewear:tracksuits & Sets", a tracksuit):
@@ -924,6 +931,7 @@
           if (deptBest) {
             console.log('[FAS Grailed DIAG] level0: "' + deptLabel + '" MATCHED "' + norm(deptBest.textContent) + '" for segment "' + remaining[deptBestIdx].seg + '"');
             console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department/gender signal in the source data; tried "' + deptLabel + '" and it resolved a real match for "' + remaining[deptBestIdx].seg + '" -- kept this department (UNVERIFIED gender guess -- please confirm this is correct before publishing).');
+            departmentGuess = deptLabel;
             syntheticClick(deptBest);
             pickedAny = true;
             remaining.splice(deptBestIdx, 1);
@@ -947,6 +955,7 @@
           await sleep(350);
           console.log('[FAS Grailed DIAG] level0: defaulted to "' + finalLabel + '" -- opener text now="' + norm(opener.textContent) + '" ariaExpanded=' + opener.getAttribute('aria-expanded'));
           console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department signal in the source data and neither department resolved a real category match -- defaulted to "' + finalLabel + '" as a guess (UNVERIFIED) -- please confirm Category/Designer/Size before publishing.');
+          departmentGuess = finalLabel;
         } else {
           console.log('[FAS Grailed DIAG] level0: no fresh department items at all for the final default -- picker likely closed/changed unexpectedly.');
         }
@@ -1023,7 +1032,7 @@
     const committed = pickedAny && norm(opener.textContent) !== placeholderText && norm(opener.textContent).length > 0;
     if (!committed) {
       console.warn('[FAS Grailed] Category "' + categoryText + '" -- ' + (pickedAny ? 'a department was matched but the full Department/Category combo never committed' : 'no level matched in the picker') + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
-      return false;
+      return { ok: false, departmentGuess: null };
     }
     // Sub-category is a SEPARATE trigger, gated on Category being set first (confirmed live: it was
     // disabled/placeholder before Category resolved, then enabled). Best-effort: only attempt if the
@@ -1047,7 +1056,7 @@
         }
       }
     }
-    return pickedAny;
+    return { ok: pickedAny, departmentGuess };
   }
 
   // Size: now routed through the shared fillSelectLike (BUG FIX 2026-08-19, S-EXT-BATCH-2) --
@@ -1278,7 +1287,7 @@
     if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed, countryOriginStatus, publishBlocked) {
+  function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed, countryOriginStatus, publishBlocked, departmentGuessLabel) {
     const more = (index + 1) < total;
     scrollToGrailedPublishButton();
     // International shipping status line (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- see
@@ -1300,6 +1309,17 @@
     } else if (countryOriginStatus === 'field_missing') {
       countryLine = '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Country of Origin field not found (UNVERIFIED selector) -- set it manually before publishing.</div>';
     }
+    // BUG FIX 2026-09-04 (findasale-dev, BUG MODE dispatch): see run()'s comment above the
+    // pickCategory() call site for the full incident writeup. This item had no explicit
+    // gender/department word in its title or description, so the department shown in Grailed's
+    // own Department/Category picker was an UNVERIFIED guess, not a confirmed match -- gets the
+    // same specific, highlighted treatment as designerUnconfirmed/countryLine below instead of
+    // being buried in the generic "UNVERIFIED guesses" line further down, which an organizer can
+    // (and did, this session) skim past.
+    let departmentGuessLine = '';
+    if (departmentGuessLabel) {
+      departmentGuessLine = '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">This item has no explicit gender/department signal in its title or description -- guessed <b>' + escapeHtml(departmentGuessLabel) + '</b> for Grailed\'s Department. Check the top-level Menswear/Womenswear picker before publishing; change it if wrong.</div>';
+    }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       // BUG FIX 2026-09-01 (findasale-dev, BUG MODE dispatch): dropped the stale "Market tier"
       // mention -- that concept was removed from this file on 2026-08-19 (S-EXT-BATCH-2, see
@@ -1313,6 +1333,7 @@
       '<b>Measurements were left blank</b> &mdash; Grailed listings perform much better with them, add them yourself before publishing. Then click Grailed\'s own <b>List item</b> yourself.</div>' +
       intlLine +
       countryLine +
+      departmentGuessLine +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       (designerUnconfirmed ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Designer was typed in but not confirmed -- click the correct suggestion in that field before publishing.</div>' : '') +
       (publishBlocked && !designerUnconfirmed ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category, Designer, and/or Size could not be set automatically on this item -- Grailed will block submission until you fill these in yourself. Check for red-bordered required fields before publishing.</div>' : '') +
@@ -1695,15 +1716,26 @@
     // be unsafe (Category no-match, Designer field_missing, Designer typed-unconfirmed, no brand
     // data at all) so run() can gate on the real picture instead of Designer's one specific outcome.
     let publishBlocked = false;
+    // BUG FIX 2026-09-04 (findasale-dev, BUG MODE dispatch): pickCategory() can silently resolve
+    // Grailed's Department (Menswear/Womenswear) via an UNVERIFIED guess when the item has no
+    // explicit gender word (see pickCategory's own comment above the guess-fallback loop). That
+    // used to be visible only as a console.warn and did NOT block auto-publish -- both fixed here.
+    // departmentGuessLabel, when set, names which department was guessed and is surfaced on the
+    // review overlay below with the same specific, highlighted treatment as Designer-unconfirmed
+    // and Country-of-Origin, instead of being buried in the generic "UNVERIFIED guesses" line.
+    let departmentGuessLabel = null;
     if (item.category) {
       // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- Grailed is the
       // only one of the four platforms with its own gender-level Department field, and that
       // signal ("men"/"women") only survives in the original breadcrumb, not in the clean leaf
       // name alone (see pickCategory's own comment above for the full explanation).
-      const categoryOk = await pickCategory(item.category, item.categoryBreadcrumb);
-      if (!categoryOk) {
+      const categoryResult = await pickCategory(item.category, item.categoryBreadcrumb);
+      if (!categoryResult.ok) {
         publishBlocked = true;
         console.warn('[FAS Grailed] Category "' + item.category + '" -- no match found in the picker; Designer field may remain disabled as a result.');
+      } else if (categoryResult.departmentGuess) {
+        departmentGuessLabel = categoryResult.departmentGuess;
+        publishBlocked = true;
       }
     } else {
       publishBlocked = true;
@@ -1753,7 +1785,7 @@
       await doGrailedAutoPublish(item, index, total, fillResult.photosOk, fillResult.intlShipping, fillResult.countryOriginStatus);
       return;
     }
-    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed, fillResult.countryOriginStatus, publishBlocked);
+    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed, fillResult.countryOriginStatus, publishBlocked, departmentGuessLabel);
   }
 
   async function start() {
