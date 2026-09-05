@@ -262,7 +262,11 @@ function CurioPage() {
     }
     if (rateLimitedUntil && Date.now() < rateLimitedUntil) {
       const secondsLeft = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
-      showToast(`Please wait ${formatWaitTime(secondsLeft)} before scanning again`, 'error');
+      const wait = formatWaitTime(secondsLeft);
+      // "Please wait tomorrow before scanning again" reads wrong -- special-case the
+      // "tomorrow" bucket instead of splicing it into the "wait X" template (QA follow-up,
+      // 2026-09-04, found live-testing the formatWaitTime fix itself).
+      showToast(wait === 'tomorrow' ? "You've hit today's scan limit — try again tomorrow" : `Please wait ${wait} before scanning again`, 'error');
       return;
     }
     try {
@@ -281,7 +285,8 @@ function CurioPage() {
         const retryAfterSeconds = err?.response?.data?.retryAfterSeconds;
         if (typeof retryAfterSeconds === 'number') {
           setRateLimitedUntil(Date.now() + retryAfterSeconds * 1000);
-          showToast(`Scan limit reached — try again in ${formatWaitTime(retryAfterSeconds)}`, 'error');
+          const wait = formatWaitTime(retryAfterSeconds);
+          showToast(wait === 'tomorrow' ? "You've hit today's scan limit — try again tomorrow" : `Scan limit reached — try again in ${wait}`, 'error');
         } else {
           showToast("You've hit today's scan limit — try again tomorrow", 'error');
         }
