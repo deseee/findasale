@@ -1031,8 +1031,29 @@ const heal25064: Healer = async (ctx, errorBody) => {
     console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item PUT (aspect injection) failed (HTTP ${retryInvRes.status})`);
     return { published: false, retry: false };
   }
+  // 2026-09-05 diagnostic: the first live attempt at this injection got a 200/204 on
+  // the PUT above but eBay STILL rejected the immediately-following publish with the
+  // identical 25064 error -- meaning either the key/value round-tripped differently
+  // than sent, or this aspect isn't actually reachable via product.aspects at all
+  // (possible legacy Trading-API-only Item Specific). Verify-GET + log the aspect
+  // back before re-publishing, instead of guessing at a second injection shape blind.
+  try {
+    const verifyRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
+    if (verifyRes.ok) {
+      const verifyData = (await verifyRes.json()) as any;
+      console.log(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: product.aspects after PUT = ${JSON.stringify(verifyData?.product?.aspects ?? null)}`);
+    } else {
+      console.warn(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: verify GET failed HTTP ${verifyRes.status}`);
+    }
+  } catch (err) {
+    console.warn(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: verify GET threw:`, (err as Error).message);
+  }
   const pub = await attemptPublish(ctx);
   if (pub.ok) return { published: true, listingId: pub.listingId, retry: false };
+  // 2026-09-05 diagnostic: log the FULL next error body (not just the outer loop's
+  // truncated "already healed once" skip) so a second real failure is diagnosable
+  // without yet another blind round trip.
+  console.warn(`[eBay SelfHeal 25064] ${ctx.sku}: re-publish after aspect injection still failed. Raw body: ${pub.errorBody.slice(0, 800)}`);
   return { published: false, retry: true };
 };
 
