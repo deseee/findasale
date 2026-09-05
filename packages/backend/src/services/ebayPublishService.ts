@@ -942,6 +942,31 @@ function resolveConditionAspectValue(aspectName: string, tags: string[] | null |
 }
 
 /**
+ * Parse the missing aspect name directly from a 25064 error's top-level `message`
+ * field, which follows the literal pattern "<Aspect Name> is a required field."
+ * Confirmed 2026-09-05 via the actual raw error body (Eisenhower dollar coin,
+ * category 11981) -- unlike 25002, 25064's `parameters[]` array does NOT carry a
+ * clean aspect label here: both parameter values just duplicate the full sentence
+ * message verbatim, and a third carries an unrelated bare numeric code ("1007").
+ * `parseMissingRequiredAspectNames` correctly rejects all three as garbage (sentence
+ * text / bare number), so 25064 needs its own extraction from `message` instead.
+ */
+function parseMissing25064AspectNames(errorBody: string): string[] {
+  try {
+    const parsed = JSON.parse(errorBody) as { errors?: Array<{ errorId?: number; message?: string }> };
+    const names = new Set<string>();
+    for (const err of parsed.errors || []) {
+      if (err.errorId !== 25064) continue;
+      const match = /^(.+?)\s+is a required field\.?$/i.exec((err.message || '').trim());
+      if (match && match[1]) names.add(match[1].trim());
+    }
+    return Array.from(names);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 25064 — a required item-specific missing that the eBay Taxonomy API's
  * get_item_aspects_for_category never reports as required in the first place (unlike
  * 25002's aspects, which normally DO show up in that spec). Confirmed 2026-09-05
@@ -963,7 +988,7 @@ const heal25064: Healer = async (ctx, errorBody) => {
     return { published: false, retry: false };
   }
 
-  const missingNames = parseMissingRequiredAspectNames(errorBody, 25064);
+  const missingNames = parseMissing25064AspectNames(errorBody);
   if (missingNames.length === 0) {
     // 2026-09-05 diagnostic: first deploy of this healer bailed here on the Eisenhower
     // dollar coin -- logging the raw body (previously only truncated to 200 chars in the
