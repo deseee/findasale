@@ -1692,6 +1692,20 @@ model Purchase {
   // going forward: 'SHIP' when shippingApplicable, 'LOCAL_PICKUP' otherwise.
   deliveryMethod             String?
 
+  // -- SHIPPING LABEL PURCHASE (ADR-115 Phase 2, added 2026-09-05) -- populated once an
+  // organizer buys a real carrier label via Shippo for a deliveryMethod='SHIP' purchase.
+  // Same additive/nullable/no-backfill posture as every other block on this model (FEE
+  // SNAPSHOT, SHIPPING DESTINATION, DELIVERY METHOD above): NULL means "no label purchased
+  // yet" for every existing row and every LOCAL_PICKUP row, forever. Written once, by
+  // shippingLabelService.ts via the organizer-facing POST /api/stripe/purchases/:id/buy-shipping-label
+  // endpoint -- never overwritten after the first successful purchase (idempotency guard
+  // lives in the controller, not the schema).
+  shippingLabelUrl           String? // Shippo-hosted PDF label URL (time-limited signed URL from Shippo)
+  shippingTrackingNumber     String?
+  shippingCarrier            String? // Shippo `rate.provider`, e.g. "USPS" | "UPS" | "FedEx"
+  shippingLabelCostCents     Int? // real carrier cost actually charged to FindA.Sale's Shippo wallet, in cents
+  shippingLabelPurchasedAt   DateTime?
+
   // Compound partial UNIQUE index on (stripePaymentIntentId, itemId) (WHERE
   // stripePaymentIntentId IS NOT NULL), created via raw SQL migration
   // 20260723000000_purchase_pi_itemid_compound_unique. Blocks a duplicate Purchase row for

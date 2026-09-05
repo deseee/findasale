@@ -73,6 +73,11 @@ const OrganizerPayoutsPage = () => {
     shippingCity?: string | null;
     shippingState?: string | null;
     shippingZip?: string | null;
+    // ADR-115 Phase 2: present once a real Shippo label has been bought for this order.
+    shippingLabelUrl?: string | null;
+    shippingTrackingNumber?: string | null;
+    shippingCarrier?: string | null;
+    shippingLabelPurchasedAt?: string | null;
   }
   interface EarningsTotals {
     grossRevenue: number;
@@ -189,6 +194,18 @@ const OrganizerPayoutsPage = () => {
       const msg = err.response?.data?.message || 'Failed to issue refund';
       setRefundError(msg);
       showToast(msg, 'error');
+    },
+  });
+
+  // ADR-115 Phase 2 (2026-09-05): organizer buys a real Shippo label for a ship-it purchase.
+  const buyLabelMutation = useMutation({
+    mutationFn: (purchaseId: string) => api.post(`/stripe/purchases/${purchaseId}/buy-shipping-label`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
+      showToast('Shipping label purchased', 'success');
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to purchase shipping label', 'error');
     },
   });
 
@@ -578,6 +595,38 @@ const OrganizerPayoutsPage = () => {
                                 <p className="text-xs text-gray-400 dark:text-gray-500">
                                   📦 Ship to: {[item.shippingAddressLine1, item.shippingAddressLine2, item.shippingCity, item.shippingState].filter(Boolean).join(', ')} {item.shippingZip}
                                 </p>
+                                {/* ADR-115 Phase 2 (2026-09-05): buy a real Shippo label, or show
+                                    the one already purchased. */}
+                                {item.shippingLabelPurchasedAt ? (
+                                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                    ✔ Label purchased ({item.shippingCarrier}) -- tracking{' '}
+                                    <span className="font-mono">{item.shippingTrackingNumber}</span>
+                                    {item.shippingLabelUrl && (
+                                      <>
+                                        {' '}
+                                        <a
+                                          href={item.shippingLabelUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="underline hover:text-green-700 dark:hover:text-green-300"
+                                        >
+                                          View label
+                                        </a>
+                                      </>
+                                    )}
+                                  </p>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => buyLabelMutation.mutate(item.purchaseId)}
+                                    disabled={buyLabelMutation.isPending}
+                                    className="mt-1 px-2.5 py-1 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50"
+                                  >
+                                    {buyLabelMutation.isPending && buyLabelMutation.variables === item.purchaseId
+                                      ? 'Buying label…'
+                                      : 'Buy Shipping Label'}
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           )}

@@ -5,6 +5,7 @@ import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getPlatformFeeRate, resolveOrganizerFeeReport } from '../utils/feeCalculator';
+import { buyCheapestLabel, ShippingLabelPurchaseError } from '../services/shippingLabelService';
 
 /** Retrieve the organizer's Stripe Connect account ID, or null if not yet linked */
 const getOrganizerStripeId = async (userId: string): Promise<string | null> => {
@@ -261,6 +262,12 @@ export interface EarningsBreakdownItem {
   shippingCity?: string | null;
   shippingState?: string | null;
   shippingZip?: string | null;
+  // ADR-115 Phase 2: label-purchase result, present only once an organizer has bought a
+  // real Shippo label for this purchase. Absent/undefined until then.
+  shippingLabelUrl?: string | null;
+  shippingTrackingNumber?: string | null;
+  shippingCarrier?: string | null;
+  shippingLabelPurchasedAt?: Date | null;
 }
 
 /**
@@ -361,6 +368,11 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
               shippingCity: p.shippingCity,
               shippingState: p.shippingState,
               shippingZip: p.shippingZip,
+              // ADR-115 Phase 2
+              shippingLabelUrl: p.shippingLabelUrl,
+              shippingTrackingNumber: p.shippingTrackingNumber,
+              shippingCarrier: p.shippingCarrier,
+              shippingLabelPurchasedAt: p.shippingLabelPurchasedAt,
             }
           : {}),
       };
@@ -463,5 +475,192 @@ export const getRefundHistory = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('getRefundHistory error:', error);
     res.status(500).json({ message: 'Failed to retrieve refund history' });
+  }
+};
+
+/**
+ * POST /api/stripe/purchases/:id/buy-shipping-label
+ * ADR-115 Phase 2 -- organizer buys a real Shippo carrier label for a native-checkout
+ * ship-it purchase. Organizer-scoped exactly like getEarningsBreakdown/getRefundHistory
+ * above (AuthRequest -> ORGANIZER role -> Organizer.findUnique -> sale.organizerId match) --
+ * no new auth pattern invented here. 404 (not 403) on a cross-tenant purchase ID, same
+ * "can't distinguish not-yours from doesn't-exist" posture as those two functions.
+ */
+export const buyShippingLabel = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      include: { user: { select: { email: true, phone: true } } },
+    });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const { id } = req.params;
+    const purchase = await prisma.purchase.findUnique({
+      where: { id },
+      include: {
+        sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
+        item: {
+          select: {
+            packageWeightOz: true,
+            aiPackageWeightOz: true,
+            packageLengthIn: true,
+            packageWidthIn: true,
+            packageHeightIn: true,
+          },
+        },
+      },
+    });
+
+    if (!purchase || !purchase.sale || purchase.sale.organizerId !== organizer.id) {
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+    if (purchase.deliveryMethod !== 'SHIP') {
+      return res.status(400).json({ message: 'This purchase was not a ship-it order' });
+    }
+    if (purchase.status !== 'PAID') {
+      return res.status(400).json({ message: 'This purchase has not been paid' });
+    }
+    if (purchase.shippingLabelPurchasedAt) {
+      return res.status(409).json({ message: 'A shipping label has already been purchased for this order' });
+    }
+    if (!purchase.shippingAddressLine1 || !purchase.shippingCity || !purchase.shippingState || !purchase.shippingZip) {
+      return res.status(400).json({ message: 'This order is missing a full shipping address' });
+    }
+
+    // SECURITY FIX (findasale-hacker pass, 2026-09-05): the read-then-later-write check above
+    // is TOCTOU-unsafe on its own -- two concurrent requests (double-click, a client retry, or
+    // a deliberate replay) could both pass the shippingLabelPurchasedAt-is-null read before
+    // either one writes, buying two real labels (two real charges once a live token is ever
+    // used). Atomically claim the row at the database level before calling Shippo: this
+    // updateMany re-verifies EVERY guard (ownership via organizerId, deliveryMethod, status,
+    // not-already-claimed) in one WHERE clause, so only one concurrent request can ever flip
+    // its `count` from 0 to 1. All other requests get a real 409, not a partial write.
+    const claim = await prisma.purchase.updateMany({
+      where: {
+        id,
+        sale: { organizerId: organizer.id },
+        deliveryMethod: 'SHIP',
+        status: 'PAID',
+        shippingLabelPurchasedAt: null,
+      },
+      data: { shippingLabelPurchasedAt: new Date() }, // provisional claim -- overwritten with the real timestamp on success, reset to null on failure below
+    });
+    if (claim.count === 0) {
+      return res.status(409).json({ message: 'A shipping label has already been purchased for this order' });
+    }
+
+    // ADR-115 assumption, flagged (not a silent guess): no package data on file for this item
+    // -- fall back to a documented 1lb / 10x8x4in default rather than crashing or calling
+    // Shippo with a 0-weight parcel. Real items almost always have packageWeightOz set
+    // (AI-estimated at intake) -- this only fires for a manually-priced item with shipping
+    // enabled but no package details ever entered.
+    const weightOz = purchase.item?.packageWeightOz ?? purchase.item?.aiPackageWeightOz ?? 16;
+    const lengthIn = purchase.item?.packageLengthIn != null ? Number(purchase.item.packageLengthIn) : 10;
+    const widthIn = purchase.item?.packageWidthIn != null ? Number(purchase.item.packageWidthIn) : 8;
+    const heightIn = purchase.item?.packageHeightIn != null ? Number(purchase.item.packageHeightIn) : 4;
+
+    // Sender contact decision (flagged in handoff): Organizer.phone falls back to the linked
+    // User.phone, then to shippingLabelService's own platform-fallback phone/email if both are
+    // null -- Shippo/USPS hard-requires a phone+email on file to issue a label at all (live
+    // finding this session), so "no contact info" cannot mean "can't ship."
+    const addressFrom = {
+      name: organizer.businessName,
+      street1: purchase.sale.address,
+      city: purchase.sale.city,
+      state: purchase.sale.state,
+      zip: purchase.sale.zip,
+      country: 'US',
+      phone: organizer.phone || organizer.user.phone || null,
+      email: organizer.user.email || null,
+    };
+    // Recipient phone decision (flagged in handoff): no buyer phone field exists anywhere in
+    // the current checkout data model (confirmed via grep) -- left null here, which means
+    // shippingLabelService's platform-fallback phone is used for the "to" contact. Real
+    // consequence: any carrier SMS delivery notification tied to that phone number goes to
+    // FindA.Sale's line, not the buyer's. Acceptable for Phase 2 (label/tracking mechanics
+    // work correctly regardless), but a real buyer-phone field would be a clean follow-up.
+    const addressTo = {
+      name: purchase.guestName || 'FindA.Sale buyer',
+      // Non-null assertions safe here -- the guard immediately above already returned a 400
+      // if any of these four were null, matching this file's/stripeController's own established
+      // convention of asserting after an explicit null-check rather than relying on control-flow
+      // narrowing to survive the `await buyCheapestLabel(...)` call further down.
+      street1: purchase.shippingAddressLine1!,
+      street2: purchase.shippingAddressLine2 || undefined,
+      city: purchase.shippingCity!,
+      state: purchase.shippingState!,
+      zip: purchase.shippingZip!,
+      country: purchase.shippingCountry || 'US',
+      phone: null,
+      email: purchase.buyerEmail || null,
+    };
+
+    let result: Awaited<ReturnType<typeof buyCheapestLabel>>;
+    try {
+      result = await buyCheapestLabel(addressFrom, addressTo, { lengthIn, widthIn, heightIn, weightOz });
+    } catch (err) {
+      // Release the atomic claim above -- a failed Shippo call must not permanently lock the
+      // order out of a legitimate retry (the claim's whole point is blocking a CONCURRENT
+      // second buyer, not blocking a genuinely failed attempt from being retried).
+      await prisma.purchase.update({ where: { id }, data: { shippingLabelPurchasedAt: null } }).catch((resetErr) => {
+        console.error('buyShippingLabel: failed to release claim after Shippo error', { purchaseId: id, resetErr });
+      });
+
+      if (err instanceof ShippingLabelPurchaseError) {
+        console.error('buyShippingLabel: Shippo rejected the purchase', {
+          purchaseId: id,
+          messages: err.shippoMessages,
+        });
+        return res.status(502).json({
+          message: 'Shippo could not issue a label for this order',
+          shippoMessages: err.shippoMessages,
+        });
+      }
+      throw err;
+    }
+
+    const updated = await prisma.purchase.update({
+      where: { id },
+      data: {
+        shippingLabelUrl: result.label.labelUrl,
+        shippingTrackingNumber: result.label.trackingNumber,
+        shippingCarrier: result.label.carrier,
+        shippingLabelCostCents: result.label.costCents,
+        shippingLabelPurchasedAt: new Date(),
+      },
+    });
+
+    // Reconciliation (ADR-115 Section 3.3): there is no stored "amount charged for shipping"
+    // column on Purchase -- the fee was baked into Purchase.amount at charge time via
+    // repriceNativeShippingForDestination and never persisted separately (confirmed via grep).
+    // Rather than invent a new field to solve this speculatively, the real label cost is
+    // logged here for Patrick's own margin visibility; a byte-exact "charged vs. real cost"
+    // delta is a clean, separate follow-up (would need repriceNativeShippingForDestination
+    // re-run with the same historical inputs, which drift over time as item price/weight
+    // change) rather than something to guess at now.
+    console.log('buyShippingLabel: label purchased', {
+      purchaseId: id,
+      carrier: result.label.carrier,
+      labelCostCents: result.label.costCents,
+      ratesConsidered: result.rates.length,
+    });
+
+    res.json({
+      shippingLabelUrl: updated.shippingLabelUrl,
+      shippingTrackingNumber: updated.shippingTrackingNumber,
+      shippingCarrier: updated.shippingCarrier,
+      shippingLabelCostCents: updated.shippingLabelCostCents,
+      shippingLabelPurchasedAt: updated.shippingLabelPurchasedAt,
+    });
+  } catch (error) {
+    console.error('buyShippingLabel error:', error);
+    res.status(500).json({ message: 'Failed to purchase shipping label' });
   }
 };

@@ -14,7 +14,7 @@ import {
   testInAppIntent,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
-import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown, getRefundHistory } from '../controllers/payoutController';
+import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown, getRefundHistory, buyShippingLabel } from '../controllers/payoutController';
 import {
   createConnectionToken,
   createTerminalPaymentIntent,
@@ -57,6 +57,8 @@ router.post('/payout', authenticate, createPayout);
 router.get('/earnings', authenticate, getEarningsBreakdown);
 // Refund History (2026-07-29): organizer-facing trace of refunds — see payoutController.ts's getRefundHistory
 router.get('/refunds', authenticate, getRefundHistory);
+// ADR-115 Phase 2 (2026-09-05): organizer buys a real Shippo label for a ship-it purchase.
+router.post('/purchases/:id/buy-shipping-label', authenticate, buyShippingLabel);
 
 // Terminal POS — organizer-only in-person card payments
 router.post('/terminal/connection-token', authenticate, createConnectionToken);
