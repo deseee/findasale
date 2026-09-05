@@ -2344,6 +2344,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
                 ebayOfferId: updatedItem.ebayOfferId,
                 category: updatedItem.category,
                 tags: updatedItem.tags,
+                description: updatedItem.description,
               },
               accessToken,
             });

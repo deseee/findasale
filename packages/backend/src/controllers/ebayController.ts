@@ -12,7 +12,7 @@ import {
   getAcceptedConditionsForCategory,
   ensureConditionValidForCategory,
   getRequiredAspectsForCategory,
-  getConditionDescriptorsForCategory,
+  resolveCoinConditionOverride,
   ebayPublishWithSelfHeal,
   type RequiredAspect,
 } from '../services/ebayPublishService';
@@ -2515,7 +2515,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // Resolve condition: grade → inventory enum → remap to category-accepted value
         // Pass item.condition so organizer-set USED/REFURBISHED override S→NEW mapping
         const desiredCondition = mapGradeToInventoryCondition(item.conditionGrade, item.condition);
-        const ebayCondition = await ensureConditionValidForCategory(
+        let ebayCondition = await ensureConditionValidForCategory(
           desiredCondition,
           categoryId ?? '99'
         );
@@ -2524,15 +2524,35 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         );
         // eBay Coin/Card Condition Requirements (2026-09-05): categories like Coins &
         // Paper Money require a structured `conditionDescriptors` field alongside
-        // `condition` for ungraded items — a separate mechanism from item-specific
-        // aspects (errorId 25064 otherwise). Returns undefined (no-op) for every
-        // category without this requirement. See ebayPublishService.ts for the
-        // live-confirmed schema and evidence.
-        const conditionDescriptors = await getConditionDescriptorsForCategory(
-          categoryId ?? '99',
-          ebayCondition,
-          item.tags
-        );
+        // `condition` -- a separate mechanism from item-specific aspects (errorId
+        // 25064 otherwise). Checks BOTH Graded and Ungraded policies and detects real
+        // grading-service text (PCGS/NGC/etc.) in the item's own title/description/
+        // tags first, so a professionally certified coin is never silently force-fit
+        // into the Ungraded bucket -- it OVERRIDES ebayCondition when the item's own
+        // text indicates the other bucket applies. 'not_applicable' means this
+        // category has no such policy at all (the vast majority) -- full no-op.
+        // 'unresolved' means the policy applies but couldn't be confidently satisfied
+        // (e.g. a grading service was named but no parseable grade) -- proceeds with
+        // the original condition/no descriptors, same as before this fix existed;
+        // the item will 25064 and land in ebayNeedsReview for manual review rather
+        // than risk a fabricated or misdescribed condition.
+        let conditionDescriptors: Array<{ name: string; values: string[] }> | undefined;
+        const coinResolution = await resolveCoinConditionOverride(categoryId ?? '99', {
+          title: item.title,
+          description: item.description,
+          tags: item.tags,
+        });
+        if (coinResolution.status === 'resolved') {
+          if (ebayCondition !== coinResolution.condition) {
+            console.log(
+              `[eBay Push] ${item.title.slice(0, 40)} → coin/card condition override: ${ebayCondition} → ${coinResolution.condition}`
+            );
+          }
+          ebayCondition = coinResolution.condition;
+          conditionDescriptors = coinResolution.conditionDescriptors;
+        } else if (coinResolution.status === 'unresolved') {
+          console.warn(`[eBay Push] ${item.title.slice(0, 40)} → coin/card condition policy applies but unresolved: ${coinResolution.reason}`);
+        }
 
         // Determine price — organizer-set price always wins.
         // AI suggestions (aiSuggestedPrice, estimatedValue) are fallbacks only
@@ -3031,6 +3051,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayOfferId: offerId,
             category: item.category,
             tags: item.tags,
+            description: item.description,
           },
           accessToken,
           sku,
@@ -3665,6 +3686,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         category: item.category,
         isbn: item.isbn,
         tags: item.tags,
+        description: item.description,
       },
       accessToken,
       sku,

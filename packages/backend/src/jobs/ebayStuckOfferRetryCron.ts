@@ -76,6 +76,7 @@ interface StuckItem {
   packageConfirmedByOrganizer: boolean | null;
   ebayShippingOverride: string | null;
   tags: string[];
+  description: string | null; // needed by heal25064's graded-coin detection (2026-09-05)
 }
 
 async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<boolean> {
@@ -122,6 +123,7 @@ async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<bo
         category: item.category,
         isbn: item.isbn,
         tags: item.tags,
+        description: item.description,
       },
       accessToken,
     });
@@ -203,6 +205,7 @@ async function runEbayStuckOfferRetryCron(): Promise<void> {
       packageConfirmedByOrganizer: true,
       tags: true,
       ebayShippingOverride: true,
+      description: true,
     },
     take: MAX_ITEMS_PER_RUN,
   });

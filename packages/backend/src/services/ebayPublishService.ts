@@ -44,6 +44,36 @@ import {
 const CATEGORY_CONDITION_CACHE = new Map<string, Set<string>>();
 
 /**
+ * eBay Coin/Card Condition Requirements (conditionDescriptors) — added 2026-09-05,
+ * extended 2026-09-05 to cover GRADED coins/cards too (see resolveCoinConditionOverride
+ * below). CONFIRMED live via get_item_condition_policies (category 11981, "Coins &
+ * Paper Money"): this requires a `conditionDescriptors` array on the INVENTORY ITEM
+ * itself — separate from `product.aspects`, never surfaced by the Taxonomy API. This
+ * is why errorId 25064 ("Coin Condition (2) is a required field") kept firing no
+ * matter what was injected into product.aspects.
+ *
+ * Populated by the SAME get_item_condition_policies call getAcceptedConditionsForCategory
+ * already makes for every push (below) — one live call per category covers both the
+ * accepted-conditions Set and this descriptor cache, no duplicate API usage.
+ */
+interface EbayConditionDescriptorSpec {
+  conditionDescriptorId: string;
+  conditionDescriptorName: string;
+  usage: string; // 'REQUIRED' | 'OPTIONAL' — from conditionDescriptorConstraint.usage
+  values: Array<{
+    conditionDescriptorValueId: string;
+    conditionDescriptorValueName: string;
+    // Numeric-grade values are constrained to specific letter-grade values (e.g. "65"
+    // only applies when letter grade is "MS/PR") — carried through so a graded coin's
+    // numeric grade can be matched against the letter grade already resolved.
+    applicableToConditionDescriptorValueIds?: string[];
+  }>;
+}
+
+/** Key = `${categoryId}:${legacyConditionId}` (e.g. "11981:4000" for Ungraded coins). */
+const CATEGORY_CONDITION_DESCRIPTOR_CACHE = new Map<string, EbayConditionDescriptorSpec[]>();
+
+/**
  * Fetch accepted conditions for a given eBay category via the Metadata API.
  * Uses the app token (client credentials) — the sell.metadata scope is app-level.
  * Returns a Set of valid enum strings, or null if the call fails (caller falls
@@ -77,7 +107,20 @@ export async function getAcceptedConditionsForCategory(categoryId: string): Prom
     const data = (await res.json()) as {
       itemConditionPolicies?: Array<{
         categoryId: string;
-        itemConditions?: Array<{ conditionId: string; conditionDescription?: string }>;
+        itemConditions?: Array<{
+          conditionId: string;
+          conditionDescription?: string;
+          conditionDescriptors?: Array<{
+            conditionDescriptorId: string;
+            conditionDescriptorName: string;
+            conditionDescriptorConstraint?: { usage?: string };
+            conditionDescriptorValues?: Array<{
+              conditionDescriptorValueId: string;
+              conditionDescriptorValueName: string;
+              conditionDescriptorValueConstraints?: Array<{ applicableToConditionDescriptorValueIds?: string[] }>;
+            }>;
+          }>;
+        }>;
       }>;
     };
     const policy = data.itemConditionPolicies?.[0];
@@ -109,6 +152,28 @@ export async function getAcceptedConditionsForCategory(categoryId: string): Prom
     for (const c of policy.itemConditions) {
       const enumName = idToEnum[c.conditionId];
       if (enumName) accepted.add(enumName);
+      // Populate the conditionDescriptors cache from this SAME response — added
+      // 2026-09-05 so coin/card categories (Coin/Card Condition Requirements policy)
+      // don't need a second live call. A conditionId with no conditionDescriptors in
+      // eBay's response caches as an empty array, which downstream code correctly
+      // treats as "no descriptor requirement for this condition".
+      const descKey = `${categoryId}:${c.conditionId}`;
+      if (!CATEGORY_CONDITION_DESCRIPTOR_CACHE.has(descKey)) {
+        CATEGORY_CONDITION_DESCRIPTOR_CACHE.set(
+          descKey,
+          (c.conditionDescriptors || []).map((d) => ({
+            conditionDescriptorId: d.conditionDescriptorId,
+            conditionDescriptorName: d.conditionDescriptorName,
+            usage: d.conditionDescriptorConstraint?.usage || 'OPTIONAL',
+            values: (d.conditionDescriptorValues || []).map((v) => ({
+              conditionDescriptorValueId: v.conditionDescriptorValueId,
+              conditionDescriptorValueName: v.conditionDescriptorValueName,
+              applicableToConditionDescriptorValueIds: (v.conditionDescriptorValueConstraints || [])
+                .flatMap((cons) => cons.applicableToConditionDescriptorValueIds || []),
+            })),
+          }))
+        );
+      }
     }
     CATEGORY_CONDITION_CACHE.set(categoryId, accepted);
     console.log(
@@ -166,43 +231,23 @@ export async function ensureConditionValidForCategory(
   return desired;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// eBay Coin/Card Condition Requirements (conditionDescriptors) — added 2026-09-05
-// ────────────────────────────────────────────────────────────────────────────
-//
-// CONFIRMED live 2026-09-05 (real GET https://api.ebay.com/sell/metadata/v1/
-// marketplace/EBAY_US/get_item_condition_policies?filter=categoryIds:{11981},
-// "Coins & Paper Money"/coins subtree): eBay's Coin/Card Condition Requirements
-// policy (Inventory API release notes v1.18.5, phased through July 2026, now
-// mandatory) requires a `conditionDescriptors` array on the INVENTORY ITEM
-// itself — a field entirely separate from `product.aspects` and never surfaced
-// by the Taxonomy API's getItemAspectsForCategory (which is why
-// getRequiredAspectsForCategory / heal25002's generic aspect-injection path can
-// never see or satisfy this). errorId 25064 ("Coin Condition (2) is a required
-// field") is eBay's rejection when conditionDescriptors is missing/incomplete,
-// despite the wording reading like a normal item-specific aspect.
-//
-// eBay's own field docs for InventoryItem.conditionDescriptors state plainly:
-// "For trading card and coin listings in applicable categories, sellers must
-// use either LIKE_NEW (2750) or USED_VERY_GOOD (4000) item condition to
-// specify the item as Graded or Ungraded, respectively." This CONFIRMS the
-// existing idToEnum mapping above (2750→LIKE_NEW, 4000→USED_VERY_GOOD) was
-// already correct — no condition-enum change was needed, only this missing
-// conditionDescriptors field.
-//
-// ConditionDescriptor schema (confirmed via eBay Inventory API type docs,
-// slr:ConditionDescriptor, 2026-09-05): { name: string (the numeric
-// conditionDescriptorId as a string), values: string[] (conditionDescriptorValueId
-// strings), additionalInfo?: string }. Retrieved per-category via the same
-// get_item_condition_policies Metadata API call used above, reading the
-// `conditionDescriptors` block nested under the matching itemConditions[] entry
-// (keyed by legacy conditionId, not the Inventory API's condition enum).
-
-interface EbayConditionDescriptorSpec {
-  conditionDescriptorId: string;
-  conditionDescriptorName: string;
-  usage: string; // 'REQUIRED' | 'OPTIONAL' — from conditionDescriptorConstraint.usage
-  values: Array<{ conditionDescriptorValueId: string; conditionDescriptorValueName: string }>;
+/**
+ * getConditionDescriptorSpecs — read the descriptor requirements for a category+
+ * condition out of CATEGORY_CONDITION_DESCRIPTOR_CACHE, ensuring the cache is
+ * populated first (triggers getAcceptedConditionsForCategory's live call if this
+ * category hasn't been seen yet — same call, no duplicate API usage).
+ */
+async function getConditionDescriptorSpecs(
+  categoryId: string,
+  conditionEnum: string
+): Promise<EbayConditionDescriptorSpec[]> {
+  const conditionId = ENUM_TO_LEGACY_CONDITION_ID[conditionEnum];
+  if (!conditionId) return [];
+  const cacheKey = `${categoryId}:${conditionId}`;
+  if (!CATEGORY_CONDITION_DESCRIPTOR_CACHE.has(cacheKey)) {
+    await getAcceptedConditionsForCategory(categoryId); // populates both caches from one live call
+  }
+  return CATEGORY_CONDITION_DESCRIPTOR_CACHE.get(cacheKey) || [];
 }
 
 // Reverse of the idToEnum map inside getAcceptedConditionsForCategory above — needed
@@ -226,103 +271,22 @@ const ENUM_TO_LEGACY_CONDITION_ID: Record<string, string> = {
 };
 
 /**
- * Cache of per-category+conditionId descriptor requirements. Key = `${categoryId}:${conditionId}`.
- * One live call fills every conditionId entry for that category (see below), so a
- * later lookup for the same category's OTHER condition never re-fetches.
- */
-const CATEGORY_CONDITION_DESCRIPTOR_CACHE = new Map<string, EbayConditionDescriptorSpec[]>();
-
-async function getConditionDescriptorSpecs(
-  categoryId: string,
-  conditionEnum: string
-): Promise<EbayConditionDescriptorSpec[]> {
-  const conditionId = ENUM_TO_LEGACY_CONDITION_ID[conditionEnum];
-  if (!conditionId) return [];
-  const cacheKey = `${categoryId}:${conditionId}`;
-  const cached = CATEGORY_CONDITION_DESCRIPTOR_CACHE.get(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const appToken = await getEbayAccessToken();
-    if (!appToken) return [];
-    const path = encodeURIComponent(
-      `/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies?filter=categoryIds:%7B${categoryId}%7D`
-    );
-    const res = await fetch(ebayProxyUrl(path), {
-      headers: {
-        'Authorization': `Bearer ${appToken}`,
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US',
-        ...ebayProxyHeaders(),
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[eBay ConditionDescriptors] ${res.status}: ${body.slice(0, 200)}`);
-      return [];
-    }
-    const data = (await res.json()) as {
-      itemConditionPolicies?: Array<{
-        categoryId: string;
-        itemConditions?: Array<{
-          conditionId: string;
-          conditionDescriptors?: Array<{
-            conditionDescriptorId: string;
-            conditionDescriptorName: string;
-            conditionDescriptorConstraint?: { usage?: string };
-            conditionDescriptorValues?: Array<{ conditionDescriptorValueId: string; conditionDescriptorValueName: string }>;
-          }>;
-        }>;
-      }>;
-    };
-    const policy = data.itemConditionPolicies?.[0];
-    for (const c of policy?.itemConditions || []) {
-      const key = `${categoryId}:${c.conditionId}`;
-      if (!CATEGORY_CONDITION_DESCRIPTOR_CACHE.has(key)) {
-        CATEGORY_CONDITION_DESCRIPTOR_CACHE.set(
-          key,
-          (c.conditionDescriptors || []).map((d) => ({
-            conditionDescriptorId: d.conditionDescriptorId,
-            conditionDescriptorName: d.conditionDescriptorName,
-            usage: d.conditionDescriptorConstraint?.usage || 'OPTIONAL',
-            values: (d.conditionDescriptorValues || []).map((v) => ({
-              conditionDescriptorValueId: v.conditionDescriptorValueId,
-              conditionDescriptorValueName: v.conditionDescriptorValueName,
-            })),
-          }))
-        );
-      }
-    }
-    const specs = CATEGORY_CONDITION_DESCRIPTOR_CACHE.get(cacheKey) || [];
-    console.log(
-      `[eBay ConditionDescriptors] category ${categoryId} condition ${conditionId}: ${specs.length} descriptor(s) (${specs.map((s) => s.conditionDescriptorName).join(', ') || 'none'})`
-    );
-    return specs;
-  } catch (err) {
-    console.error('[eBay ConditionDescriptors] Error:', err);
-    return [];
-  }
-}
-
-/**
- * Resolve a conditionDescriptorValueId for a "Coin/Card Condition"-style descriptor
- * from the item's own organizer-set tags. Matches by keyword against the ACTUAL
- * fetched value names (not hardcoded IDs) so this generalizes across every coin/card
- * category eBay applies the policy to, not just category 11981.
+ * Resolve the UNGRADED "Coin/Card Condition" descriptor value from the item's own
+ * organizer-set text. Matches by keyword against the ACTUAL fetched value names (not
+ * hardcoded IDs) so this generalizes across every coin/card category eBay applies the
+ * policy to, not just category 11981.
  *
  * Confirmed live 2026-09-05 (category 11981, "Coin Condition" descriptor, id 2):
  * values are Uncirculated(7), Extremely Fine to About Uncirculated(8), Fine to Very
  * Fine(9), Below Fine(10) — no numeric ID here is hardcoded; only the name keywords are.
  */
-function resolveConditionDescriptorValue(
+function resolveUngradedConditionValue(
   spec: EbayConditionDescriptorSpec,
-  tags: string[] | null | undefined
-): { id: string; name: string; matchedBy: 'tag' | 'default' } | null {
-  const haystack = (tags || []).join(' | ').toLowerCase();
+  haystack: string
+): { id: string; name: string; matchedBy: 'text' | 'default' } | null {
   const findByKeyword = (re: RegExp) => spec.values.find((v) => re.test(v.conditionDescriptorValueName));
 
-  let picked = undefined as { conditionDescriptorValueId: string; conditionDescriptorValueName: string } | undefined;
+  let picked = undefined as EbayConditionDescriptorSpec['values'][number] | undefined;
   if (/extremely fine|about uncirculated|\bau\b|\bxf\b/.test(haystack)) {
     picked = findByKeyword(/Extremely Fine/i);
   } else if (/\buncirculated\b/.test(haystack)) {
@@ -333,57 +297,182 @@ function resolveConditionDescriptorValue(
     picked = findByKeyword(/Below Fine/i);
   }
   if (picked) {
-    return { id: picked.conditionDescriptorValueId, name: picked.conditionDescriptorValueName, matchedBy: 'tag' };
+    return { id: picked.conditionDescriptorValueId, name: picked.conditionDescriptorValueName, matchedBy: 'text' };
   }
-  // No specific grade tag present (e.g. only a generic "Circulated" tag, no finer
-  // detail) — default to the middle grade "Fine to Very Fine" rather than either
-  // extreme: claiming Uncirculated quality when unverified risks an
-  // item-not-as-described claim, and Below Fine risks under-describing a coin that
-  // may be nicer than that. Falls back to the first available value if this
-  // category's descriptor doesn't happen to offer that exact name.
+  // No specific grade language present (e.g. only a generic "Circulated" tag) —
+  // default to the middle grade "Fine to Very Fine" rather than either extreme:
+  // claiming Uncirculated quality when unverified risks an item-not-as-described
+  // claim, and Below Fine risks under-describing a coin that may be nicer than
+  // that. Falls back to the first available value if this category's descriptor
+  // doesn't happen to offer that exact name.
   const fallback = findByKeyword(/Fine to Very Fine/i) || spec.values[0];
   if (!fallback) return null;
   return { id: fallback.conditionDescriptorValueId, name: fallback.conditionDescriptorValueName, matchedBy: 'default' };
 }
 
 /**
- * Build the `conditionDescriptors` array eBay's Coin/Card Condition Requirements
- * policy demands for a category+condition. Returns undefined for any category/
- * condition with no such requirement (the vast majority of categories) — a fully
- * backward-compatible no-op everywhere except coin/card categories at Graded/
- * Ungraded condition.
+ * GRADED coin/card detection — added 2026-09-05 in direct response to Patrick's
+ * correction that resolving only the Ungraded path was an incomplete fix. A coin an
+ * organizer describes as professionally certified (PCGS/NGC/etc. slab) must NOT be
+ * force-fit into the Ungraded "Coin Condition" bucket — that would misdescribe a
+ * graded coin's actual condition. This parses the item's own title/description/tags
+ * for real certification text the organizer typed in (never fabricated) and, only
+ * when a grading service AND letter grade are both confidently identified, resolves
+ * the full Graded descriptor set (Professional grader / Letter grade / Numerical
+ * grade). If no numeric grade can be parsed, "None" is used for the numeric-grade
+ * descriptor where eBay's own value list offers it (confirmed live: id 77, valid for
+ * every letter grade) — a real, eBay-provided answer for "no specific number given",
+ * not a guess.
  *
- * Only UNGRADED (USED_VERY_GOOD / legacy conditionId 4000) is auto-resolved here.
- * GRADED coins/cards (LIKE_NEW / conditionId 2750) still return undefined even when
- * the category requires descriptors — FindA.Sale has no organizer-facing field yet
- * to capture a real professional grading service + grade, and fabricating one is
- * worse than leaving the item flagged for manual review.
+ * Grader detection matches the abbreviation eBay itself prints in parens in each
+ * value's name (e.g. "Professional Coin Grading Service (PCGS)") against the item
+ * text, so this needs no hardcoded grader list — it reads the abbreviation directly
+ * out of whatever eBay returns for a given category.
  */
-export async function getConditionDescriptorsForCategory(
-  categoryId: string,
-  conditionEnum: string,
-  tags: string[] | null | undefined
-): Promise<Array<{ name: string; values: string[] }> | undefined> {
-  if (conditionEnum !== 'USED_VERY_GOOD') return undefined; // only the Ungraded path is auto-resolved (see above)
-  const specs = await getConditionDescriptorSpecs(categoryId, conditionEnum);
-  if (specs.length === 0) return undefined;
+function parseGradedCoinInfo(
+  haystack: string,
+  graderSpec: EbayConditionDescriptorSpec,
+  letterGradeSpec: EbayConditionDescriptorSpec,
+  numericGradeSpec: EbayConditionDescriptorSpec | undefined
+): { graderValueId: string; letterValueId: string; numericValueId: string | null } | null {
+  // 1. Grader — match eBay's own "(ABBR)" convention against the item text.
+  let graderMatch: EbayConditionDescriptorSpec['values'][number] | undefined;
+  for (const v of graderSpec.values) {
+    const abbrevMatch = /\(([A-Z0-9\/\-]{2,10})\)\s*$/.exec(v.conditionDescriptorValueName);
+    if (!abbrevMatch) continue;
+    const abbrevRe = new RegExp(`\\b${abbrevMatch[1].replace(/[/\-]/g, '\\$&')}\\b`, 'i');
+    if (abbrevRe.test(haystack)) {
+      graderMatch = v;
+      break;
+    }
+  }
+  if (!graderMatch) return null; // no recognized grading service named — not confidently graded, don't guess
 
-  const result: Array<{ name: string; values: string[] }> = [];
-  for (const spec of specs) {
-    if (spec.usage !== 'REQUIRED') continue; // skip optional descriptors (e.g. Certification Number) we have no meaningful value for
-    const resolved = resolveConditionDescriptorValue(spec, tags);
-    if (!resolved) {
-      console.warn(
-        `[eBay ConditionDescriptors] category ${categoryId}: could not resolve REQUIRED descriptor "${spec.conditionDescriptorName}" (id ${spec.conditionDescriptorId}) from tags — bailing, will not send a partial conditionDescriptors payload`
+  // 2. Letter grade — strict "LETTERS+DIGITS" numismatic shorthand (MS65, AU58, VF20,
+  // G6, ...) so a stray single letter elsewhere in the description can't false-match.
+  const letterDigitMatch = /\b(MS|PR|AU|EX\/XF|EXF|XF|VF|VG|AG|FR)-?(\d{1,2})\b/i.exec(haystack)
+    || /\b(F|G|P)-?(\d{1,2})\b/.exec(haystack); // single-letter codes only match with attached digits
+  if (!letterDigitMatch) return null; // grader named but no parseable grade — bail, don't guess
+
+  const rawLetter = letterDigitMatch[1].toUpperCase();
+  const normalizedLetter =
+    rawLetter === 'MS' || rawLetter === 'PR' ? 'MS/PR' :
+    rawLetter === 'EX' || rawLetter === 'XF' || rawLetter === 'EXF' || rawLetter === 'EX/XF' ? 'EX/XF' :
+    rawLetter;
+  const letterMatch = letterGradeSpec.values.find(
+    (v) => v.conditionDescriptorValueName.toUpperCase() === normalizedLetter
+  );
+  if (!letterMatch) return null;
+
+  // 3. Numeric grade — constrained to the resolved letter grade; falls back to the
+  // "None" value (a real eBay-offered option) when the number couldn't be parsed or
+  // doesn't match any value actually constrained to this letter grade.
+  let numericValueId: string | null = null;
+  if (numericGradeSpec) {
+    const parsedNumber = letterDigitMatch[2];
+    const numericMatch = numericGradeSpec.values.find(
+      (v) =>
+        v.conditionDescriptorValueName === parsedNumber &&
+        (v.applicableToConditionDescriptorValueIds || []).includes(letterMatch.conditionDescriptorValueId)
+    );
+    if (numericMatch) {
+      numericValueId = numericMatch.conditionDescriptorValueId;
+    } else {
+      const noneMatch = numericGradeSpec.values.find(
+        (v) =>
+          /^none$/i.test(v.conditionDescriptorValueName) &&
+          (v.applicableToConditionDescriptorValueIds || []).includes(letterMatch.conditionDescriptorValueId)
       );
-      return undefined;
+      numericValueId = noneMatch ? noneMatch.conditionDescriptorValueId : null;
+    }
+  }
+
+  return { graderValueId: graderMatch.conditionDescriptorValueId, letterValueId: letterMatch.conditionDescriptorValueId, numericValueId };
+}
+
+type CoinConditionResolution =
+  | { status: 'not_applicable' } // category has no coin/card condition-descriptor policy at all
+  | { status: 'resolved'; condition: string; conditionDescriptors: Array<{ name: string; values: string[] }> }
+  | { status: 'unresolved'; reason: string }; // policy applies but couldn't be confidently satisfied — caller must NOT guess
+
+/**
+ * Single entry point for eBay's Coin/Card Condition Requirements policy. Checks BOTH
+ * the Graded and Ungraded descriptor sets for this category (one cached live call),
+ * tries to detect real grading-service text first (never silently defaults a
+ * certified coin into the Ungraded bucket), and only falls back to Ungraded when no
+ * grading language is present at all.
+ */
+export async function resolveCoinConditionOverride(
+  categoryId: string,
+  item: { title?: string | null; description?: string | null; tags?: string[] | null }
+): Promise<CoinConditionResolution> {
+  const [gradedSpecs, ungradedSpecs] = await Promise.all([
+    getConditionDescriptorSpecs(categoryId, 'LIKE_NEW'),
+    getConditionDescriptorSpecs(categoryId, 'USED_VERY_GOOD'),
+  ]);
+  if (gradedSpecs.length === 0 && ungradedSpecs.length === 0) {
+    return { status: 'not_applicable' };
+  }
+
+  const haystack = [item.title, item.description, ...(item.tags || [])].filter(Boolean).join(' | ');
+
+  // Try Graded first — only when the category actually has a Graded policy AND the
+  // item's own text names a real grading service.
+  if (gradedSpecs.length > 0) {
+    const graderSpec = gradedSpecs.find((s) => /grader/i.test(s.conditionDescriptorName));
+    const letterGradeSpec = gradedSpecs.find((s) => /letter\s*grade/i.test(s.conditionDescriptorName));
+    const numericGradeSpec = gradedSpecs.find((s) => /numer(ic|ical)\s*grade/i.test(s.conditionDescriptorName));
+    if (graderSpec && letterGradeSpec) {
+      const parsed = parseGradedCoinInfo(haystack, graderSpec, letterGradeSpec, numericGradeSpec);
+      if (parsed) {
+        const descriptors: Array<{ name: string; values: string[] }> = [
+          { name: graderSpec.conditionDescriptorId, values: [parsed.graderValueId] },
+          { name: letterGradeSpec.conditionDescriptorId, values: [parsed.letterValueId] },
+        ];
+        if (numericGradeSpec && parsed.numericValueId) {
+          descriptors.push({ name: numericGradeSpec.conditionDescriptorId, values: [parsed.numericValueId] });
+        }
+        console.log(
+          `[eBay ConditionDescriptors] category ${categoryId}: resolved GRADED (grader+letter grade matched in organizer text)`
+        );
+        return { status: 'resolved', condition: 'LIKE_NEW', conditionDescriptors: descriptors };
+      }
+      // A grading service WAS named but we couldn't parse a confident letter grade —
+      // this is a real graded coin we can't safely describe. Do NOT fall through to
+      // Ungraded (that would misdescribe it) — bail explicitly.
+      const graderNamed = gradedSpecs.length > 0 && /\(([A-Z0-9\/\-]{2,10})\)/i.test(
+        graderSpec.values.map((v) => v.conditionDescriptorValueName).join(' ')
+      ) && graderSpec.values.some((v) => {
+        const m = /\(([A-Z0-9\/\-]{2,10})\)\s*$/.exec(v.conditionDescriptorValueName);
+        return m && new RegExp(`\\b${m[1].replace(/[/\-]/g, '\\$&')}\\b`, 'i').test(haystack);
+      });
+      if (graderNamed) {
+        return { status: 'unresolved', reason: 'grading service named in item text but no parseable letter+number grade (e.g. "PCGS MS65") found — will not guess a grade' };
+      }
+      // else: no grading service named at all -- fall through to Ungraded below.
+    }
+  }
+
+  // Ungraded path.
+  if (ungradedSpecs.length === 0) {
+    return { status: 'not_applicable' }; // category only has a Graded policy and this item isn't graded — unusual, treat as no-op
+  }
+  const descriptors: Array<{ name: string; values: string[] }> = [];
+  for (const spec of ungradedSpecs) {
+    if (spec.usage !== 'REQUIRED') continue; // skip optional descriptors (e.g. Certification Number) with no meaningful value
+    const resolved = resolveUngradedConditionValue(spec, haystack);
+    if (!resolved) {
+      return { status: 'unresolved', reason: `could not resolve REQUIRED Ungraded descriptor "${spec.conditionDescriptorName}" (id ${spec.conditionDescriptorId})` };
     }
     console.log(
-      `[eBay ConditionDescriptors] category ${categoryId}: "${spec.conditionDescriptorName}"="${resolved.name}" (${resolved.matchedBy === 'tag' ? 'matched organizer tag' : 'default — no specific grade tag present'})`
+      `[eBay ConditionDescriptors] category ${categoryId}: UNGRADED "${spec.conditionDescriptorName}"="${resolved.name}" (${resolved.matchedBy === 'text' ? 'matched organizer text' : 'default — no specific grade language present'})`
     );
-    result.push({ name: spec.conditionDescriptorId, values: [resolved.id] });
+    descriptors.push({ name: spec.conditionDescriptorId, values: [resolved.id] });
   }
-  return result.length > 0 ? result : undefined;
+  if (descriptors.length === 0) {
+    return { status: 'unresolved', reason: 'Ungraded policy has no REQUIRED descriptors resolvable' };
+  }
+  return { status: 'resolved', condition: 'USED_VERY_GOOD', conditionDescriptors: descriptors };
 }
 
 /**
@@ -550,7 +639,8 @@ export interface EbayPublishItem {
   ebayOfferId?: string | null;
   category?: string | null;
   isbn?: string | null; // ADR-089: real ISBN for the Books item-specific aspect (heal25002)
-  tags?: string[] | null; // needed by heal25064 to derive a Coin Condition-style aspect value
+  tags?: string[] | null; // needed by heal25064 to derive a Coin/Card Condition descriptor value
+  description?: string | null; // needed by heal25064's graded-coin detection (parseGradedCoinInfo reads title+description+tags)
 }
 
 /**
@@ -1141,7 +1231,7 @@ const heal25007: Healer = async (ctx) => {
 
 /**
  * heal25064 — eBay's Coin/Card Condition Requirements policy (see the
- * getConditionDescriptorsForCategory block above). errorId 25064 ("Coin
+ * resolveCoinConditionOverride block above). errorId 25064 ("Coin
  * Condition (2) is a required field.") fires when the inventory item's
  * `conditionDescriptors` array is missing/incomplete — a top-level inventory
  * item field, NOT a product.aspects item-specific, despite the error's wording
@@ -1194,23 +1284,27 @@ const heal25064: Healer = async (ctx, errorBody) => {
     return { published: false, retry: false };
   }
 
+  // Checks BOTH Graded and Ungraded policies and detects real grading-service text in
+  // the item's own title/description/tags first — never silently forces a certified
+  // coin into the Ungraded bucket. See resolveCoinConditionOverride for the full logic.
+  const resolution = await resolveCoinConditionOverride(categoryId, {
+    title: ctx.item.title,
+    description: ctx.item.description,
+    tags: ctx.item.tags,
+  });
+  if (resolution.status !== 'resolved') {
+    console.warn(
+      `[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — ${resolution.status === 'unresolved' ? resolution.reason : 'category has no coin/card condition-descriptor policy (unexpected for a 25064 error)'}`
+    );
+    return { published: false, retry: false };
+  }
+
   const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
   if (!invGet.ok) {
     console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
     return { published: false, retry: false };
   }
   const invBody = (await invGet.json()) as any;
-  const currentCondition: string | undefined = invBody.condition;
-  if (!currentCondition) {
-    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item has no condition field set, cannot resolve condition descriptors`);
-    return { published: false, retry: false };
-  }
-
-  const descriptors = await getConditionDescriptorsForCategory(categoryId, currentCondition, ctx.item.tags);
-  if (!descriptors) {
-    console.warn(`[eBay SelfHeal 25064] item ${ctx.item.id} sku ${ctx.sku}: bailing — could not resolve required conditionDescriptors for category ${categoryId} condition ${currentCondition} (see ConditionDescriptors log above for the specific unresolved descriptor)`);
-    return { published: false, retry: false };
-  }
 
   // Clean up the invalid product.aspects "Coin Condition (2)"-style key a prior,
   // now-superseded version of this healer injected. Confirmed via live verify-GET
@@ -1225,7 +1319,11 @@ const heal25064: Healer = async (ctx, errorBody) => {
     }
   }
 
-  invBody.conditionDescriptors = descriptors;
+  if (invBody.condition !== resolution.condition) {
+    console.log(`[eBay SelfHeal 25064] ${ctx.sku}: overriding condition ${invBody.condition ?? 'unset'} → ${resolution.condition} (organizer text indicates ${resolution.condition === 'LIKE_NEW' ? 'a professionally graded' : 'an ungraded'} coin/card)`);
+  }
+  invBody.condition = resolution.condition;
+  invBody.conditionDescriptors = resolution.conditionDescriptors;
   const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, {
     method: 'PUT',
     body: invBody,
@@ -1238,7 +1336,7 @@ const heal25064: Healer = async (ctx, errorBody) => {
     const verifyRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
     if (verifyRes.ok) {
       const verifyData = (await verifyRes.json()) as any;
-      console.log(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: conditionDescriptors after PUT = ${JSON.stringify(verifyData?.conditionDescriptors ?? null)}`);
+      console.log(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: condition=${verifyData?.condition ?? null} conditionDescriptors after PUT = ${JSON.stringify(verifyData?.conditionDescriptors ?? null)}`);
     } else {
       console.warn(`[eBay SelfHeal 25064 Verify] ${ctx.sku}: verify GET failed HTTP ${verifyRes.status}`);
     }
