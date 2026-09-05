@@ -311,7 +311,7 @@ export const listPasskeys = async (req: AuthRequest, res: Response) => {
  */
 export const authenticateComplete = async (req: Request, res: Response) => {
   try {
-    const { id: credentialIdBase64, response: clientResponse, challengeId } = req.body;
+    const { id: credentialIdBase64, rawId: rawIdBase64, response: clientResponse, type, challengeId } = req.body;
 
     if (!credentialIdBase64 || !clientResponse || !challengeId) {
       return res.status(400).json({ message: 'Missing credential data' });
@@ -353,8 +353,20 @@ export const authenticateComplete = async (req: Request, res: Response) => {
       );
 
       // Verify authentication response (pre-v11 API: uses authenticator object)
+      // FIX 2026-09-05 (P0, live-QA'd): verifyAuthenticationResponse() expects the FULL
+      // AuthenticationResponseJSON shape as `response` (id/rawId/type as siblings of the
+      // inner assertion object) -- passing only the bare clientResponse threw
+      // "Error: Missing credential ID" on every login attempt, for every user, on every
+      // device, since this feature shipped. Mirrors the already-working reconstruction
+      // in registerComplete() above exactly.
       const verified = await verifyAuthenticationResponse({
-        response: clientResponse,
+        response: {
+          id: credentialIdBase64,
+          rawId: rawIdBase64,
+          response: clientResponse,
+          type,
+          clientExtensionResults: {},
+        },
         expectedChallenge: challenge,
         expectedOrigin: WEBAUTHN_ORIGIN,
         expectedRPID: WEBAUTHN_RP_ID,

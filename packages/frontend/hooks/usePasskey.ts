@@ -105,7 +105,9 @@ export const usePasskey = () => {
         '/auth/passkey/authenticate/complete',
         {
           id: assertion.id,
+          rawId: assertion.rawId,
           response: assertion.response,
+          type: assertion.type,
           challengeId,
         }
       );
