@@ -24,7 +24,8 @@ export const getStaffMembers = async (workspaceId: string) => {
                 businessName: true,
                 user: { select: { email: true, name: true } }
               }
-            }
+            },
+            user: { select: { id: true, name: true, email: true } }
           }
         },
         availability: true,
@@ -64,7 +65,8 @@ export const getStaffMember = async (staffId: string) => {
                 businessName: true,
                 user: { select: { email: true, name: true } }
               }
-            }
+            },
+            user: { select: { id: true, name: true, email: true } }
           }
         },
         availability: true,

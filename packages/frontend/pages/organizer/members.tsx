@@ -683,7 +683,7 @@ const OrganizerMembersPage = () => {
                         <div className="flex items-center gap-4 flex-1 text-left">
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-900 dark:text-white">
-                              {member.workspaceMember?.organizer?.businessName || 'Unknown'}
+                              {member.workspaceMember?.organizer?.businessName || member.workspaceMember?.user?.name || 'Unknown'}
                             </h3>
                             <div className="flex items-center gap-3 mt-1">
                               <span
@@ -724,7 +724,7 @@ const OrganizerMembersPage = () => {
                             <div className="space-y-2 text-sm">
                               <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                                 <Mail className="w-4 h-4" />
-                                {member.workspaceMember?.organizer?.user?.email || 'N/A'}
+                                {member.workspaceMember?.organizer?.user?.email || member.workspaceMember?.user?.email || 'N/A'}
                               </div>
                               <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                                 <Phone className="w-4 h-4" />

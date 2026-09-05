@@ -21,6 +21,7 @@ export interface StaffMember {
       profilePhoto?: string;
       user?: { email?: string };
     };
+    user?: { id: string; name?: string; email?: string };
   };
   availability?: StaffAvailability;
   performances?: StaffPerformance[];
