@@ -1706,6 +1706,18 @@ model Purchase {
   shippingLabelCostCents     Int? // real carrier cost actually charged to FindA.Sale's Shippo wallet, in cents
   shippingLabelPurchasedAt   DateTime?
 
+  // -- LOCAL PICKUP CONFIRMATION (ADR-115 Phase 3, added 2026-09-05) -- organizer-confirmed
+  // marker that a deliveryMethod='LOCAL_PICKUP' purchase was physically handed to the buyer.
+  // Same additive/nullable/no-backfill posture as every other block on this model: NULL means
+  // "not yet picked up" for every existing row and every SHIP row, forever. Written once by the
+  // organizer-facing POST /api/stripe/purchases/:id/mark-picked-up endpoint (Orders page) --
+  // never overwritten after the first confirmation (idempotency guard lives in the controller,
+  // same pattern as shippingLabelPurchasedAt above). Deliberately just a timestamp, not a richer
+  // pickup-scheduling model -- Patrick chose the simple checkbox for this build; a real
+  // scheduling feature (appointment windows, buyer notification) is a separate future ADR, not
+  // bundled into this one field.
+  pickedUpAt                 DateTime?
+
   // Compound partial UNIQUE index on (stripePaymentIntentId, itemId) (WHERE
   // stripePaymentIntentId IS NOT NULL), created via raw SQL migration
   // 20260723000000_purchase_pi_itemid_compound_unique. Blocks a duplicate Purchase row for

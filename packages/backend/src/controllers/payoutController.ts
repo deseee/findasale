@@ -268,6 +268,12 @@ export interface EarningsBreakdownItem {
   shippingTrackingNumber?: string | null;
   shippingCarrier?: string | null;
   shippingLabelPurchasedAt?: Date | null;
+  // ADR-115 Phase 3 (Orders page, 2026-09-05): every purchase carries deliveryMethod
+  // regardless of shipping status -- needed so the Orders page can group SHIP vs.
+  // LOCAL_PICKUP purchases and compute a "needs action" count without a second query.
+  // pickedUpAt is the LOCAL_PICKUP equivalent of shippingLabelPurchasedAt above.
+  deliveryMethod?: string | null;
+  pickedUpAt?: Date | null;
 }
 
 /**
@@ -375,6 +381,11 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
               shippingLabelPurchasedAt: p.shippingLabelPurchasedAt,
             }
           : {}),
+        // ADR-115 Phase 3: always present (unlike the shippingZip-gated block above) --
+        // the Orders page needs deliveryMethod on every row, including LOCAL_PICKUP rows
+        // that never had a shippingZip at all.
+        deliveryMethod: p.deliveryMethod,
+        pickedUpAt: p.pickedUpAt,
       };
     });
 
@@ -662,5 +673,64 @@ export const buyShippingLabel = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('buyShippingLabel error:', error);
     res.status(500).json({ message: 'Failed to purchase shipping label' });
+  }
+};
+
+/**
+ * POST /api/stripe/purchases/:id/mark-picked-up
+ * ADR-115 Phase 3 (Orders page, 2026-09-05) -- organizer confirms a
+ * deliveryMethod='LOCAL_PICKUP' purchase was physically handed to the buyer. Exact same
+ * organizer-ownership pattern as buyShippingLabel/getEarningsBreakdown/getRefundHistory
+ * above -- no new auth pattern invented. Same atomic-claim idempotency shape as
+ * buyShippingLabel's updateMany (belt-and-suspenders here too, even though there is no
+ * external API call to race against -- a double-click or client retry must still not be
+ * able to reset pickedUpAt after the fact via two near-simultaneous requests).
+ */
+export const markPickedUp = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const { id } = req.params;
+    const purchase = await prisma.purchase.findUnique({
+      where: { id },
+      include: { sale: { select: { organizerId: true } } },
+    });
+    if (!purchase || !purchase.sale || purchase.sale.organizerId !== organizer.id) {
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+    if (purchase.deliveryMethod !== 'LOCAL_PICKUP') {
+      return res.status(400).json({ message: 'This purchase was not a local-pickup order' });
+    }
+    if (purchase.status !== 'PAID') {
+      return res.status(400).json({ message: 'This purchase has not been paid' });
+    }
+
+    const claim = await prisma.purchase.updateMany({
+      where: {
+        id,
+        sale: { organizerId: organizer.id },
+        deliveryMethod: 'LOCAL_PICKUP',
+        status: 'PAID',
+        pickedUpAt: null,
+      },
+      data: { pickedUpAt: new Date() },
+    });
+    if (claim.count === 0) {
+      return res.status(409).json({ message: 'This order was already marked picked up' });
+    }
+
+    const updated = await prisma.purchase.findUnique({ where: { id }, select: { pickedUpAt: true } });
+    res.json({ pickedUpAt: updated?.pickedUpAt ?? null });
+  } catch (error) {
+    console.error('markPickedUp error:', error);
+    res.status(500).json({ message: 'Failed to mark this order picked up' });
   }
 };

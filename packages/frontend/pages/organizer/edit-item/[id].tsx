@@ -375,6 +375,12 @@ const EditItemPage = () => {
   const [shippingSuggestion, setShippingSuggestion] = useState<{ suggestedPrice: number; basis: string; zone: string } | null>(null);
   const [shippingSuggestionLoading, setShippingSuggestionLoading] = useState(false);
   const shippingSuggestionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ADR-115 Phase 3 (2026-09-05) -- Finding 2, Part B: an on-demand real Shippo quote,
+  // separate from the estimate above. See
+  // claude_docs/ux-spotchecks/order-fulfillment-and-shipping-price-validation-2026-09-05.md
+  const [liveRateCheck, setLiveRateCheck] = useState<{ carrier: string; serviceName: string; amountCents: number; destinationLabel: string } | null>(null);
+  const [liveRateCheckLoading, setLiveRateCheckLoading] = useState(false);
+  const [liveRateCheckError, setLiveRateCheckError] = useState<string | null>(null);
   useEffect(() => {
     if (shippingSuggestionDebounceRef.current) clearTimeout(shippingSuggestionDebounceRef.current);
     if (!id || !formData.shippingAvailable || formData.shippingPrice) {
@@ -2038,7 +2044,7 @@ const EditItemPage = () => {
                 item?.shippingPriceConfirmedByOrganizer !== true &&
                 !shippingTouched && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Auto-priced from real carrier rates. Edit the price below if you want to change it.
+                    Auto-priced from an estimate based on typical rates for this size and weight. Edit the price below if you want to change it.
                   </p>
               )}
               {formData.shippingAvailable && (
@@ -2068,7 +2074,7 @@ const EditItemPage = () => {
                   {!formData.shippingPrice && !shippingSuggestionLoading && shippingSuggestion && (
                     <div className="mt-1 flex items-center gap-2 flex-wrap">
                       <p className="text-xs text-warm-600 dark:text-warm-400">
-                        Suggested: {'$' + shippingSuggestion.suggestedPrice.toFixed(2)} based on real carrier rates
+                        Estimated: {'$' + shippingSuggestion.suggestedPrice.toFixed(2)}, based on typical rates for this size and weight
                       </p>
                       <button
                         type="button"
@@ -2083,8 +2089,43 @@ const EditItemPage = () => {
                     </div>
                   )}
                   <p className="text-xs text-gray-500 mt-1">
-                    Charged to the buyer at checkout. Suggested prices already include our platform fee so you don&apos;t come up short.
+                    Charged to the buyer at checkout. Estimated prices already include our platform fee so you don&apos;t come up short. This is an estimate, not a live carrier quote -- actual cost depends on where the buyer lives.
                   </p>
+                  {/* ADR-115 Phase 3, Part B: one genuine live Shippo quote to sanity-check the
+                      estimate above against. Not the actual future price (that depends on the
+                      real buyer's address, unknown until a sale happens) -- just a real number
+                      from a real carrier, which nothing on this page has ever shown before. */}
+                  {item?.id && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        disabled={liveRateCheckLoading}
+                        onClick={async () => {
+                          setLiveRateCheckLoading(true);
+                          setLiveRateCheckError(null);
+                          try {
+                            const res = await api.get(`/items/${item.id}/live-shipping-check`);
+                            setLiveRateCheck(res.data);
+                          } catch (err: any) {
+                            setLiveRateCheckError(err.response?.data?.message || 'Could not check a live rate right now.');
+                          } finally {
+                            setLiveRateCheckLoading(false);
+                          }
+                        }}
+                        className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                      >
+                        {liveRateCheckLoading ? 'Checking a real rate…' : 'Check a real rate'}
+                      </button>
+                      {liveRateCheck && !liveRateCheckLoading && (
+                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                          Live {liveRateCheck.carrier} quote to {liveRateCheck.destinationLabel} just now: {'$' + (liveRateCheck.amountCents / 100).toFixed(2)} ({liveRateCheck.serviceName})
+                        </p>
+                      )}
+                      {liveRateCheckError && !liveRateCheckLoading && (
+                        <p className="text-xs text-red-500 dark:text-red-400 mt-1">{liveRateCheckError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

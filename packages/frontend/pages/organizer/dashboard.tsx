@@ -49,7 +49,7 @@ import MyTeamsCard from '../../components/MyTeamsCard';
 import MyVendorBoothsCard from '../../components/MyVendorBoothsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 import { OGBuyerCountBadge } from '../../components/OGBuyerBadge'; // Feature #404: OG Buyer
-import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Store } from 'lucide-react';
+import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Store, Package } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
@@ -278,11 +278,27 @@ const OrganizerDashboard = () => {
       return response.data as {
         cashFeeBalance?: number;
         cashFeeBalanceUpdatedAt?: string;
+        // ADR-115 Phase 3 (2026-09-05): reused here (same endpoint payouts.tsx/orders.tsx
+        // already call) purely to compute the "Orders" badge count below -- no new
+        // network call, just reading two fields this endpoint already returns.
+        items?: Array<{
+          deliveryMethod?: string | null;
+          shippingLabelPurchasedAt?: string | null;
+          pickedUpAt?: string | null;
+        }>;
       };
     },
     enabled: !!user?.id && isClient,
     staleTime: 2 * 60_000,
   });
+
+  // ADR-115 Phase 3: count of sold items still needing organizer action (ship it or hand
+  // it over) -- drives the "Orders" pill badge in the Consolidated Action Bar below.
+  const ordersNeedingActionCount = (earnings?.items ?? []).filter(
+    (i) =>
+      (i.deliveryMethod === 'SHIP' && !i.shippingLabelPurchasedAt) ||
+      (i.deliveryMethod === 'LOCAL_PICKUP' && !i.pickedUpAt)
+  ).length;
 
   // #24: Fetch active hold count for dashboard badge
   const { data: holdCountData, isError: holdCountError } = useQuery({
@@ -879,6 +895,16 @@ const OrganizerDashboard = () => {
             <Link href="/organizer/holds" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 transition-colors flex items-center gap-1">
               <Clock className="w-4 h-4" />
               Holds
+            </Link>
+
+            <Link href="/organizer/orders" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-1">
+              <Package className="w-4 h-4" />
+              Orders
+              {ordersNeedingActionCount > 0 && (
+                <span className="ml-1 bg-white text-blue-700 text-xs font-bold rounded-full px-1.5 py-0.5 leading-none">
+                  {ordersNeedingActionCount}
+                </span>
+              )}
             </Link>
 
             {storefrontSlug && (

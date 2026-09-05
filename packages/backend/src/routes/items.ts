@@ -36,6 +36,7 @@ import {
   getPackageEstimateHandler,
   getPackageEstimatesBatchHandler,
   getSuggestedShippingPriceHandler,
+  getLiveShippingRateCheckHandler,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -836,6 +837,7 @@ router.post('/:id/reanalyze', authenticate, reanalyzeItemForOrganizer);
 router.get('/:id/package-estimate', authenticate, getPackageEstimateHandler);
 router.post('/package-estimates', authenticate, getPackageEstimatesBatchHandler);
 router.get('/:id/suggested-shipping-price', authenticate, getSuggestedShippingPriceHandler); // ADR-104 Sec3: native-checkout suggested shipping price
+router.get('/:id/live-shipping-check', authenticate, getLiveShippingRateCheckHandler); // ADR-115 Phase 3: one real Shippo quote to sanity-check the estimate above
 router.post('/:itemId/close-auction', authenticate, closeAuctionEndpoint);
 
 // Phase 16: Photo management

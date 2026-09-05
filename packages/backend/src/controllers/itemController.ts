@@ -41,6 +41,7 @@ import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutG
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
+import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -4740,5 +4741,98 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
   } catch (error) {
     console.error('[getSuggestedShippingPriceHandler] Error:', error);
     res.status(500).json({ message: 'Server error computing suggested shipping price' });
+  }
+};
+
+// ADR-115 Phase 3 (2026-09-05) -- one fixed representative far-distance US metro address per
+// origin region. Not a picker: Patrick's call was "probably a far one," so this is a simple
+// two-branch lookup, not a real destination (there is no buyer yet at listing time -- see
+// claude_docs/ux-spotchecks/order-fulfillment-and-shipping-price-validation-2026-09-05.md).
+// Shippo's rate API needs a full address shape, not just a zip, hence street1/city/state below.
+const WEST_COAST_MOUNTAIN_ORIGIN_STATES = new Set([
+  'CA', 'OR', 'WA', 'NV', 'AZ', 'UT', 'ID', 'MT', 'WY', 'CO', 'NM', 'AK', 'HI',
+]);
+const EAST_COAST_TEST_DESTINATION = { name: 'Live Rate Check', street1: '1 Main St', city: 'New York', state: 'NY', zip: '10001', country: 'US' };
+const WEST_COAST_TEST_DESTINATION = { name: 'Live Rate Check', street1: '1 Main St', city: 'Los Angeles', state: 'CA', zip: '90001', country: 'US' };
+
+/**
+ * GET /api/items/:id/live-shipping-check
+ * ADR-115 Phase 3 -- Finding 2 fix (Part B). The edit-item page's shipping-price suggestion
+ * has never come from a live Shippo quote (see the UX handoff doc above) -- this endpoint
+ * calls the SAME getShippingRates() step shippingLabelService.ts already uses for real label
+ * purchases (confirmed this session to be the free rate-shopping step, separate from the
+ * paid label-purchase step), using the sale's real origin plus one fixed representative
+ * far-distance destination. Ownership pattern mirrors getSuggestedShippingPriceHandler above.
+ */
+export const getLiveShippingRateCheckHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: {
+        packageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
+        sale: {
+          select: {
+            address: true,
+            city: true,
+            state: true,
+            zip: true,
+            organizer: { select: { userId: true, businessName: true } },
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    if (!item.sale || item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+    if (!item.sale.address || !item.sale.city || !item.sale.state || !item.sale.zip) {
+      return res.status(400).json({ message: 'Your sale needs a full address before checking a real rate.' });
+    }
+
+    const weightOz = item.packageWeightOz ?? 16;
+    const lengthIn = item.packageLengthIn != null ? Number(item.packageLengthIn) : 10;
+    const widthIn = item.packageWidthIn != null ? Number(item.packageWidthIn) : 8;
+    const heightIn = item.packageHeightIn != null ? Number(item.packageHeightIn) : 4;
+
+    const addressFrom = {
+      name: item.sale.organizer.businessName || 'FindA.Sale organizer',
+      street1: item.sale.address,
+      city: item.sale.city,
+      state: item.sale.state,
+      zip: item.sale.zip,
+      country: 'US',
+    };
+    const addressTo = WEST_COAST_MOUNTAIN_ORIGIN_STATES.has(item.sale.state.toUpperCase())
+      ? EAST_COAST_TEST_DESTINATION
+      : WEST_COAST_TEST_DESTINATION;
+
+    const rates = await getShippingRates(addressFrom, addressTo, { lengthIn, widthIn, heightIn, weightOz });
+    if (rates.length === 0) {
+      return res.status(502).json({ message: 'Shippo returned no live rates to check against right now.' });
+    }
+    const cheapest = rates.reduce((min, r) => (r.amountCents < min.amountCents ? r : min), rates[0]);
+
+    res.json({
+      carrier: cheapest.provider,
+      serviceName: cheapest.serviceName,
+      amountCents: cheapest.amountCents,
+      destinationLabel: addressTo.city + ', ' + addressTo.state,
+      checkedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[getLiveShippingRateCheckHandler] Error:', error);
+    res.status(500).json({ message: 'Server error checking a live shipping rate' });
   }
 };

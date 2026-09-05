@@ -197,18 +197,6 @@ const OrganizerPayoutsPage = () => {
     },
   });
 
-  // ADR-115 Phase 2 (2026-09-05): organizer buys a real Shippo label for a ship-it purchase.
-  const buyLabelMutation = useMutation({
-    mutationFn: (purchaseId: string) => api.post(`/stripe/purchases/${purchaseId}/buy-shipping-label`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
-      showToast('Shipping label purchased', 'success');
-    },
-    onError: (err: any) => {
-      showToast(err.response?.data?.message || 'Failed to purchase shipping label', 'error');
-    },
-  });
-
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
@@ -595,8 +583,11 @@ const OrganizerPayoutsPage = () => {
                                 <p className="text-xs text-gray-400 dark:text-gray-500">
                                   📦 Ship to: {[item.shippingAddressLine1, item.shippingAddressLine2, item.shippingCity, item.shippingState].filter(Boolean).join(', ')} {item.shippingZip}
                                 </p>
-                                {/* ADR-115 Phase 2 (2026-09-05): buy a real Shippo label, or show
-                                    the one already purchased. */}
+                                {/* ADR-115 Phase 3 (2026-09-05): Buy Shipping Label moved to the
+                                    Orders page -- Payouts stays a financial ledger, Orders is
+                                    where fulfillment actions live now (REPLACE decision, Patrick
+                                    confirmed). Still shown read-only here once purchased, since
+                                    that's genuinely earnings-relevant context. */}
                                 {item.shippingLabelPurchasedAt ? (
                                   <p className="text-xs text-green-600 dark:text-green-400 mt-1">
                                     ✔ Label purchased ({item.shippingCarrier}) -- tracking{' '}
@@ -616,16 +607,12 @@ const OrganizerPayoutsPage = () => {
                                     )}
                                   </p>
                                 ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => buyLabelMutation.mutate(item.purchaseId)}
-                                    disabled={buyLabelMutation.isPending}
-                                    className="mt-1 px-2.5 py-1 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50"
+                                  <Link
+                                    href="/organizer/orders"
+                                    className="inline-block mt-1 text-xs text-blue-600 hover:underline"
                                   >
-                                    {buyLabelMutation.isPending && buyLabelMutation.variables === item.purchaseId
-                                      ? 'Buying label…'
-                                      : 'Buy Shipping Label'}
-                                  </button>
+                                    Manage shipping →
+                                  </Link>
                                 )}
                               </td>
                             </tr>
