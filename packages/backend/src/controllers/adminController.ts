@@ -2163,23 +2163,17 @@ export const listConnectBankFingerprintFlags = async (req: AuthRequest, res: Res
     const boothIds = rows.filter((r) => r.ownerType === 'VENDOR_BOOTH').map((r) => r.ownerId);
 
     const [organizers, consignors, booths] = await Promise.all([
-      organizerIds.length
-        ? prisma.organizer.findMany({
-            where: { id: { in: organizerIds } },
-            select: { id: true, businessName: true, user: { select: { email: true } } },
-          })
-        : [],
-      consignorIds.length
-        ? prisma.consignor.findMany({ where: { id: { in: consignorIds } }, select: { id: true, name: true, email: true } })
-        : [],
-      boothIds.length
-        ? prisma.vendorBooth.findMany({ where: { id: { in: boothIds } }, select: { id: true, vendorName: true, vendorEmail: true } })
-        : [],
+      prisma.organizer.findMany({
+        where: { id: { in: organizerIds } },
+        select: { id: true, businessName: true, user: { select: { email: true } } },
+      }),
+      prisma.consignor.findMany({ where: { id: { in: consignorIds } }, select: { id: true, name: true, email: true } }),
+      prisma.vendorBooth.findMany({ where: { id: { in: boothIds } }, select: { id: true, vendorName: true, vendorEmail: true } }),
     ]);
 
-    const organizerById = new Map(organizers.map((o) => [o.id, o]));
-    const consignorById = new Map(consignors.map((c) => [c.id, c]));
-    const boothById = new Map(booths.map((b) => [b.id, b]));
+    const organizerById = new Map(organizers.map((o) => [o.id, o] as const));
+    const consignorById = new Map(consignors.map((c) => [c.id, c] as const));
+    const boothById = new Map(booths.map((b) => [b.id, b] as const));
 
     const enriched = rows.map((r) => {
       let ownerName: string | null = null;

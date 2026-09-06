@@ -595,8 +595,16 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <CookieConsentBanner />
               {/* GA4: consent-gated, env-var-controlled */}
               <GoogleAnalytics />
-              {/* Vercel Speed Insights only: <Analytics/> removed, Web Analytics isn't a paid feature here */}
-              <SpeedInsights />
+              {/* Vercel Speed Insights: <Analytics/> removed, Web Analytics isn't a paid feature here.
+                  Confirmed 2026-09-06 (Ops & Cost Guard cost-reduction pass): Speed Insights Plus Events
+                  IS billed ($3.25 of the ~$21/cycle Vercel infra cost, cycle-to-date) -- resolves the
+                  "not confirmed unpaid" uncertainty this comment used to carry. sampleRate halves the
+                  billed event volume; beforeSend drops /admin/* entirely since only Patrick visits those
+                  pages and their load performance has zero bearing on real shopper/organizer experience. */}
+              <SpeedInsights
+                sampleRate={0.5}
+                beforeSend={(data) => (data.url.includes('/admin') ? null : data)}
+              />
               </OfflineSyncProvider>
               </QueryClientProvider>
             </LowBandwidthProvider>
