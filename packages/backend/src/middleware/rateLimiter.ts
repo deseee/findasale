@@ -154,6 +154,13 @@ export const bidLimiter = rateLimit({
 
 /**
  * Payment limiter: 5 requests per minute per user/IP (sensitive operations)
+ * Redis-backed (2026-09-06, carding-incident hardening pass) -- this previously used the
+ * in-memory default store like every other limiter in this file except
+ * shopperReservationsLimiter, meaning the 5/min budget reset on every deploy/restart and
+ * was never actually shared across horizontally-scaled instances. Payment-creation
+ * endpoints are exactly the ones where that gap matters most. Falls back to in-memory
+ * automatically if Redis is unavailable (createRateLimitStore()'s own fail-open behavior
+ * — see rateLimitShared.ts), so this is a strict improvement with no new failure mode.
  */
 export const paymentLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -163,6 +170,7 @@ export const paymentLimiter = rateLimit({
   message: 'Too many payment requests, please try again later.',
   standardHeaders: false,
   legacyHeaders: false,
+  store: createRateLimitStore(),
 });
 
 /**

@@ -238,3 +238,57 @@ export const getVerifiedSessionUserId = (req: express.Request): string | null =>
   return result;
 };
 
+// --- Generic velocity/block helpers (2026-09-06 guest-checkout carding incident) ---
+// Thin wrappers around the SAME Redis client the rate limiters above use, for app-level
+// abuse-detection logic that isn't an express-rate-limit middleware (e.g.
+// services/guestCheckoutVelocityGuard.ts's cross-sale guest-checkout failure/volume
+// counters -- see that file's header for the full incident writeup). Same fail-open
+// posture as createRateLimitStore(): every function below returns a "do nothing / not
+// blocked" result when Redis isn't connected, rather than throwing or blocking a real
+// buyer's checkout because Redis had a bad moment. No second Redis connection is opened
+// here -- redisRateLimitClient is the one already managed above.
+
+/**
+ * Atomically increments `key` and sets its TTL to `windowSeconds` the first time it is
+ * created -- a fixed-window counter, not a sliding log; good enough for abuse-threshold
+ * detection and far cheaper than a sorted-set sliding window. Returns the new count, or
+ * `null` if Redis is unavailable (callers must treat null as "don't block, Redis is down").
+ */
+export const redisIncrWithWindow = async (key: string, windowSeconds: number): Promise<number | null> => {
+  const c = redisRateLimitClient;
+  if (!c || !c.isReady) return null;
+  try {
+    const count = await c.incr(key);
+    if (count === 1) {
+      await c.expire(key, windowSeconds);
+    }
+    return count;
+  } catch (err) {
+    console.error('[rateLimit] redisIncrWithWindow failed — failing open:', err instanceof Error ? err.message : err);
+    return null;
+  }
+};
+
+/** Sets a boolean "blocked" flag for `key` that expires after `ttlSeconds`. Fails open (no-op) if Redis is down. */
+export const redisSetBlock = async (key: string, ttlSeconds: number): Promise<void> => {
+  const c = redisRateLimitClient;
+  if (!c || !c.isReady) return;
+  try {
+    await c.set(key, '1', { EX: ttlSeconds });
+  } catch (err) {
+    console.error('[rateLimit] redisSetBlock failed (non-fatal):', err instanceof Error ? err.message : err);
+  }
+};
+
+/** Returns whether `key`'s block flag is currently set. Fails open (false) if Redis is down. */
+export const redisIsBlocked = async (key: string): Promise<boolean> => {
+  const c = redisRateLimitClient;
+  if (!c || !c.isReady) return false;
+  try {
+    const exists = await c.exists(key);
+    return exists === 1;
+  } catch (err) {
+    console.error('[rateLimit] redisIsBlocked failed — failing open:', err instanceof Error ? err.message : err);
+    return false;
+  }
+};

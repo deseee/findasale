@@ -41,6 +41,8 @@ import {
   sendDirectMessageToUser,
   listAllFraudSignals,
   reviewFraudSignalAdmin,
+  listConnectBankFingerprintFlags,
+  reviewConnectBankFingerprintFlag,
   getMarketplaceReviewBacklog,
   getAdminPurchases,
   bulkRefundPurchases,
@@ -141,6 +143,12 @@ router.patch('/referral-fraud-signals/:signalId/review', reviewFraudSignal);
 // cross-sale). Distinct from the ReferralFraudSignal routes above.
 router.get('/fraud-signals', listAllFraudSignals);
 router.patch('/fraud-signals/:id', reviewFraudSignalAdmin);
+
+// S1198 (2026-09-06): Connect bank-account fingerprint collusion review (ConnectBankFingerprint
+// model, connectAccountGuard.ts). Distinct from the buyer-side queues above -- this is the
+// payout/onboarding side.
+router.get('/connect-bank-fingerprints', listConnectBankFingerprintFlags);
+router.patch('/connect-bank-fingerprints/:id', reviewConnectBankFingerprintFlag);
 
 // 2026-08-06: platform-wide Facebook Marketplace extension removal dead-letter backlog --
 // see getMarketplaceReviewBacklog in adminController.ts for full context. Already covered

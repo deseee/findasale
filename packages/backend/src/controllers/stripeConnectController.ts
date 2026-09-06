@@ -12,6 +12,7 @@ import {
   updateConsignorOnboardingStatus,
 } from '../services/stripeConnectService';
 import { sendConsignorPaymentSetupInvite } from '../services/consignorEmailService';
+import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold
 import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe = () => getStripe();
@@ -211,6 +212,18 @@ export const payConsignor = async (req: AuthRequest, res: Response) => {
     if (!consignor) return res.status(404).json({ message: 'Consignor not found.' });
     if (!consignor.stripeOnboarded || !consignor.stripeAccountId) {
       return res.status(400).json({ message: 'Consignor not onboarded for ACH payouts.' });
+    }
+
+    // S1198 (2026-09-06): hold -- never silently drop -- an ACH transfer to a consignor
+    // whose connected account's bank account fingerprint matches another connected
+    // account on the platform (connectAccountGuard.ts). This is the one explicit,
+    // FindA.Sale-controlled "pay consignor" action for Standard accounts (which
+    // otherwise self-manage their own Stripe payout schedule) -- admin must clear the
+    // flag via /api/admin/connect-bank-fingerprints before this can proceed again.
+    if (await isPayoutFlaggedForReview('CONSIGNOR', consignor.id)) {
+      return res.status(403).json({
+        message: 'This payout is on hold pending admin review. Contact support@finda.sale for details.',
+      });
     }
 
     // Verify settlement exists and belongs to this organizer

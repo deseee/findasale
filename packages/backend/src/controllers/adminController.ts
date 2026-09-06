@@ -2111,6 +2111,180 @@ export const reviewFraudSignalAdmin = async (req: AuthRequest, res: Response) =>
   }
 };
 
+// ─── S1198 (2026-09-06): Connect bank-account fingerprint collusion review ─────
+// Admin-only. Distinct from the buyer-side FraudSignal queue above -- this is the
+// payout/onboarding side: an Organizer/Consignor/VendorBooth whose connected account's
+// bank-account fingerprint matches another connected account already on the platform
+// (see connectAccountGuard.ts + ConnectBankFingerprint model for the full incident
+// writeup and architecture rationale).
+
+// GET /api/admin/connect-bank-fingerprints — paginated, optional ?reviewOutcome=&flagged= filters
+export const listConnectBankFingerprintFlags = async (req: AuthRequest, res: Response) => {
+  try {
+    const { reviewOutcome, flagged, page = '1', limit = '50' } = req.query as {
+      reviewOutcome?: string;
+      flagged?: string;
+      page?: string;
+      limit?: string;
+    };
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (reviewOutcome && reviewOutcome !== 'ALL') {
+      where.reviewOutcome = reviewOutcome;
+    }
+    // Default to flagged-only unless the caller explicitly asks for everything -- this
+    // table also holds every non-colliding bank account ever seen (audit trail), which
+    // would otherwise drown out the small number of rows admin actually needs to review.
+    if (flagged === 'false') {
+      where.flagged = false;
+    } else if (flagged !== 'all') {
+      where.flagged = true;
+    }
+
+    const [rows, total] = await Promise.all([
+      prisma.connectBankFingerprint.findMany({
+        where,
+        orderBy: [{ flagged: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limitNum,
+      }),
+      prisma.connectBankFingerprint.count({ where }),
+    ]);
+
+    // Resolve display context per owner (name/email) -- ConnectBankFingerprint only stores
+    // ownerType/ownerId, not a denormalized name, so admin needs the real row to know who
+    // they're looking at. Batched per ownerType rather than N+1'd per row.
+    const organizerIds = rows.filter((r) => r.ownerType === 'ORGANIZER').map((r) => r.ownerId);
+    const consignorIds = rows.filter((r) => r.ownerType === 'CONSIGNOR').map((r) => r.ownerId);
+    const boothIds = rows.filter((r) => r.ownerType === 'VENDOR_BOOTH').map((r) => r.ownerId);
+
+    const [organizers, consignors, booths] = await Promise.all([
+      organizerIds.length
+        ? prisma.organizer.findMany({
+            where: { id: { in: organizerIds } },
+            select: { id: true, businessName: true, user: { select: { email: true } } },
+          })
+        : [],
+      consignorIds.length
+        ? prisma.consignor.findMany({ where: { id: { in: consignorIds } }, select: { id: true, name: true, email: true } })
+        : [],
+      boothIds.length
+        ? prisma.vendorBooth.findMany({ where: { id: { in: boothIds } }, select: { id: true, vendorName: true, vendorEmail: true } })
+        : [],
+    ]);
+
+    const organizerById = new Map(organizers.map((o) => [o.id, o]));
+    const consignorById = new Map(consignors.map((c) => [c.id, c]));
+    const boothById = new Map(booths.map((b) => [b.id, b]));
+
+    const enriched = rows.map((r) => {
+      let ownerName: string | null = null;
+      let ownerEmail: string | null = null;
+      if (r.ownerType === 'ORGANIZER') {
+        const o = organizerById.get(r.ownerId);
+        ownerName = o?.businessName ?? null;
+        ownerEmail = o?.user?.email ?? null;
+      } else if (r.ownerType === 'CONSIGNOR') {
+        const c = consignorById.get(r.ownerId);
+        ownerName = c?.name ?? null;
+        ownerEmail = c?.email ?? null;
+      } else if (r.ownerType === 'VENDOR_BOOTH') {
+        const b = boothById.get(r.ownerId);
+        ownerName = b?.vendorName ?? null;
+        ownerEmail = b?.vendorEmail ?? null;
+      }
+      return { ...r, ownerName, ownerEmail };
+    });
+
+    res.json({
+      flags: enriched,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error('[admin] listConnectBankFingerprintFlags error:', error);
+    Sentry.captureException(error);
+    res.status(500).json({ message: 'Failed to list Connect bank-fingerprint flags' });
+  }
+};
+
+// PATCH /api/admin/connect-bank-fingerprints/:id — set reviewOutcome + notes. CONFIRMED
+// does NOT itself suspend the account -- admin uses the existing suspendOrganizer /
+// suspendUser tooling for that, same separation of concerns as the FraudSignal queue
+// (reviewing a signal and acting on an account are deliberately two different actions).
+// DISMISSED clears payoutsFlaggedForReview on the owner row so held payouts can resume;
+// CONFIRMED and PENDING leave it set.
+export const reviewConnectBankFingerprintFlag = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const { reviewOutcome, notes } = req.body as { reviewOutcome?: string; notes?: string };
+
+    if (!reviewOutcome || !['PENDING', 'DISMISSED', 'CONFIRMED'].includes(reviewOutcome)) {
+      return res.status(400).json({ message: 'reviewOutcome must be one of PENDING, DISMISSED, CONFIRMED' });
+    }
+
+    const existing = await prisma.connectBankFingerprint.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ message: 'Connect bank-fingerprint flag not found' });
+    }
+
+    const updated = await prisma.connectBankFingerprint.update({
+      where: { id },
+      data: {
+        reviewOutcome,
+        notes: notes ?? existing.notes,
+        reviewedByAdminId: req.user.id,
+        reviewedAt: new Date(),
+      },
+    });
+
+    // DISMISSED == admin has confirmed this is a legitimate shared-bank case (e.g. family
+    // co-organizers) -- lift the payout hold on THIS owner row. Does not touch any other
+    // owner row that shared the same fingerprint; each is reviewed and cleared independently
+    // since "this one is legitimate" is not evidence the other one is too.
+    if (reviewOutcome === 'DISMISSED') {
+      try {
+        if (existing.ownerType === 'ORGANIZER') {
+          await prisma.organizer.update({
+            where: { id: existing.ownerId },
+            data: { payoutsFlaggedForReview: false, payoutsFlaggedReason: null },
+          });
+        } else if (existing.ownerType === 'CONSIGNOR') {
+          await prisma.consignor.update({
+            where: { id: existing.ownerId },
+            data: { payoutsFlaggedForReview: false, payoutsFlaggedReason: null },
+          });
+        } else if (existing.ownerType === 'VENDOR_BOOTH') {
+          await prisma.vendorBooth.update({
+            where: { id: existing.ownerId },
+            data: { payoutsFlaggedForReview: false, payoutsFlaggedReason: null },
+          });
+        }
+      } catch (err) {
+        console.error(`[admin] Failed to clear payoutsFlaggedForReview for ${existing.ownerType} ${existing.ownerId} after DISMISSED review (non-fatal):`, err);
+      }
+    }
+
+    res.json({ flag: updated });
+  } catch (error) {
+    console.error('[admin] reviewConnectBankFingerprintFlag error:', error);
+    Sentry.captureException(error);
+    res.status(500).json({ message: 'Failed to update Connect bank-fingerprint flag' });
+  }
+};
+
 // GET /api/admin/marketplace-review-backlog — platform-wide, cross-organizer view of the
 // Facebook Marketplace extension's removal dead-letter queue (2026-08-06). Root cause this
 // closes: extensionController.ts's getPendingRemovals/getSyncHealth compute this exact

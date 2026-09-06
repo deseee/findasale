@@ -1,6 +1,7 @@
 import { getStripe } from '../utils/stripe';
 import { prisma } from '../lib/prisma';
 import Stripe from 'stripe';
+import { isPayoutFlaggedForReview } from './connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold
 
 const stripe = () => getStripe();
 
@@ -280,6 +281,14 @@ export const shouldUseDirectCharge = async (
   stripeConnectId: string | null | undefined
 ): Promise<boolean> => {
   if (!stripeConnectId) return false;
+
+  // S1198 (2026-09-06): never route a Direct charge -- money landing straight on the
+  // connected account -- to an organizer whose bank-account fingerprint matches another
+  // connected account on the platform (connectAccountGuard.ts). Fails open (false) on any
+  // lookup error, same as this function's own existing fail-closed contract just below --
+  // an ineligible/flagged organizer simply falls back to whatever non-Direct charge path
+  // already exists for every other not-yet-eligible organizer today, not a new error state.
+  if (await isPayoutFlaggedForReview('ORGANIZER', organizerId)) return false;
 
   const allowlist = (process.env.STRIPE_DIRECT_CHARGES_ORGANIZER_ALLOWLIST || '')
     .split(',')

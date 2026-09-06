@@ -45,10 +45,12 @@ import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail, disput
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // 2026-08-27 carding incident: shared Connect/sale-status/velocity gate
+import { checkGuestCheckoutVelocity, recordGuestCheckoutFailure, hashForVelocity } from '../services/guestCheckoutVelocityGuard'; // 2026-09-06 carding incident: cross-sale guest-checkout velocity/failure guard
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): shared HoldInvoice-PAID recorder, webhook + reconcile
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
+import { recordAndCheckBankFingerprints } from '../services/connectAccountGuard'; // S1198 (2026-09-06): Connect bank-account fingerprint collusion detection
 import { repriceNativeShippingForDestination, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-110 Track 1: real destination-ZIP shipping repricing at checkout time
 import { notifyVendorBoothSaleRefunded } from '../services/vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): charge.failed left the shopper's Checkout Session OPEN and payable
@@ -540,6 +542,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     // Guests must provide contact info up front — there is no User row to email a receipt to.
     let normalizedGuestEmail: string | null = null;
     let normalizedGuestName: string | null = null;
+    // 2026-09-06 carding incident: hashed IP / device fingerprint for the cross-sale
+    // guest-checkout velocity guard below. Declared here (not inside the if-block) so the
+    // PaymentIntent metadata block further down in this function can still read them.
+    let guestIpHash: string | null = null;
+    let guestFpHash: string | null = null;
     if (!req.user) {
       if (!guestEmail || typeof guestEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) {
         return res.status(400).json({ message: 'A valid email is required to check out as a guest.' });
@@ -549,10 +556,36 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       }
       normalizedGuestEmail = guestEmail.trim().toLowerCase();
       normalizedGuestName = guestName.trim().slice(0, 200);
-      // Basic per-email guest-checkout-attempt logging (Hacker P1 #4) — paymentLimiter
-      // (5 req/min, IP+user keyed via getKeyGenerator) already rate-limits this route;
-      // this is a cheap additional audit trail, not new infra.
       console.log(`[guest-checkout] attempt itemId=${itemId} email=${normalizedGuestEmail}`);
+
+      // 2026-09-06 carding incident (Stripe account acct_1T3kXhLIWHQCHu75 closed for
+      // "unacceptable risk"): a burst of guest checkouts against many different stolen
+      // cards ran for over a week, spread across multiple sales/organizer accounts, so
+      // neither the existing PER-SALE decline-rate circuit breaker
+      // (paymentEligibilityService.ts) nor the blunt 5-req/min paymentLimiter
+      // (routes/stripe.ts) ever tripped for any single one of them. This guard is
+      // cross-sale, keyed on IP + device fingerprint rather than saleId/organizerId, and
+      // reacts to real decline outcomes (via the payment_intent.payment_failed webhook
+      // below) as well as raw attempt volume. See services/guestCheckoutVelocityGuard.ts
+      // for the full design writeup, threshold rationale, and anti-griefing analysis.
+      // getClientIp() falls back to the literal string 'unknown' when it can't resolve a
+      // real address -- never hash that sentinel into the velocity guard (see
+      // guestCheckoutVelocityGuard.ts's GuestVelocityCheckParams comment for why).
+      const clientIp = getClientIp(req);
+      guestIpHash = clientIp && clientIp !== 'unknown' ? hashForVelocity(clientIp) : null;
+      guestFpHash = deviceFingerprint && typeof deviceFingerprint === 'string'
+        ? hashForVelocity(deviceFingerprint)
+        : null;
+      const guestVelocity = await checkGuestCheckoutVelocity({
+        hashedIp: guestIpHash,
+        hashedDeviceFingerprint: guestFpHash,
+      });
+      if (guestVelocity.blocked) {
+        return res.status(429).json({
+          message: "We're temporarily pausing new guest checkouts from this device after a few payment issues in a row. Please wait about 30 minutes and try again, or sign in to your FindA.Sale account to check out without the wait.",
+          code: 'GUEST_CHECKOUT_THROTTLED',
+        });
+      }
     }
 
     const item = await prisma.item.findUnique({
@@ -895,6 +928,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         itemId: item.id,
         saleId: item.sale!.id,
         ...(req.user ? { userId: req.user.id } : { guestCheckout: 'true' }),
+        // 2026-09-06 carding incident: stamped on guest PaymentIntents only, so the
+        // payment_intent.payment_failed webhook can feed a real decline back into
+        // guestCheckoutVelocityGuard's cross-sale counters without needing the original
+        // request's IP/device fingerprint (the webhook never has access to req).
+        ...(!req.user && guestIpHash ? { guestIpHash } : {}),
+        ...(!req.user && guestFpHash ? { guestFpHash } : {}),
         ...(affiliateLinkId ? { affiliateLinkId } : {}),
         ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
         ...(couponId ? { couponId } : {}),
@@ -2371,6 +2410,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
         where: { stripePaymentIntentId: paymentFailedIntent.id },
         data: { status: 'FAILED' },
       });
+      // 2026-09-06 carding incident: feed the cross-sale guest-checkout velocity guard
+      // (services/guestCheckoutVelocityGuard.ts) with the real decline outcome. This is
+      // the only place a decline is observable server-side — confirmation happens
+      // client-side against Stripe directly (Elements + confirmCardPayment), never
+      // touching our API. Metadata is only present on guest PaymentIntents (see
+      // createPaymentIntent above); authenticated buyers are unaffected. Never awaited
+      // into the response — a broken counter must not affect webhook idempotency/ack.
+      if (paymentFailedIntent.metadata?.guestCheckout === 'true') {
+        recordGuestCheckoutFailure({
+          hashedIp: paymentFailedIntent.metadata.guestIpHash ?? null,
+          hashedDeviceFingerprint: paymentFailedIntent.metadata.guestFpHash ?? null,
+        }).catch((err) => console.error('[guestCheckoutVelocityGuard] Failed to record guest checkout failure (non-fatal):', err));
+      }
       break;
     }
     case 'charge.dispute.created': {
@@ -3721,6 +3773,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
       const account = event.data.object as any; // Stripe.Account
 
       if (account.id) {
+        // S1198 (2026-09-06): bank-account fingerprint collusion check -- runs on EVERY
+        // account.updated delivery (Stripe fires this repeatedly through onboarding as
+        // fields fill in), so a bank account added at any point in onboarding is caught,
+        // not just at final charges_enabled/payouts_enabled completion. Self-contained,
+        // never throws (see connectAccountGuard.ts) -- a failure here must never affect
+        // the rest of this handler's stripeOnboarded sync below.
+        try {
+          await recordAndCheckBankFingerprints(account);
+        } catch (err) {
+          console.error(`[stripe-connect] recordAndCheckBankFingerprints failed for account ${account.id}:`, err);
+        }
+
         // Check if this account has completed onboarding (charges and payouts enabled)
         const isOnboarded = account.charges_enabled && account.payouts_enabled;
 

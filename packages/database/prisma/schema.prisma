@@ -320,6 +320,15 @@ model Organizer {
   stripeAccountType               String? // ADR-023: 'express' | 'standard' -- cached display/routing hint only. Money-moving code paths must live-check Stripe directly, never trust this for authorization.
   pendingStripeMigrationAccountId String? // ADR-023: new Standard account id while a Networked Onboarding migration is in flight
   stripeMigrationPromptedAt       DateTime? // ADR-023: last time the migration banner was shown -- remind-later throttling only
+  // Fraud hardening (2026-09-06, S1198 synthetic-identity Connect fraud-ring incident):
+  // set true when this organizer's connected account's bank-account fingerprint matches
+  // another connected account already live on the platform (see ConnectBankFingerprint
+  // model). Flags for admin review only -- never auto-blocks onboarding or existing
+  // functionality. A legitimate shared-bank case is possible (family co-organizers, or
+  // ADR-090's own intentional reuse of one Organizer.stripeConnectId across the
+  // Organizer + hub-owner roles) so this is a human-review flag, not a hard gate.
+  payoutsFlaggedForReview         Boolean                        @default(false)
+  payoutsFlaggedReason            String? // Set by connectAccountGuard.ts; human-readable, never includes raw bank details
   removeWatermarkEnabled          Boolean                        @default(false) // PRO: remove FindA.Sale watermark from exports
   // Feature #603 (2026-08-05): platform-wide default best-offer thresholds. Suggested
   // pre-fill for the per-item eBay best-offer PERCENTAGE fields on the edit-item form
@@ -570,6 +579,7 @@ model Organizer {
   @@index([emailDiscoveryMethod]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryMethod IN (...) seq scan on Organizer
   @@index([emailDiscoveryConfidence]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryConfidence >= 0.5 seq scan on Organizer
   @@index([emailDiscoveredAt]) // Sentry NODEJS-48: outreachEmailsCron WHERE emailDiscoveredAt >= 7d ago — 98 of 83k rows, seq scan 253ms S1046
+  @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering for bank-fingerprint-flagged organizers
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
@@ -3333,6 +3343,91 @@ model FraudSignal {
   @@index([reviewedByAdminId])
 }
 
+// S1198 (2026-09-06): synthetic-identity Connect fraud-ring incident. Two different
+// "vendor/consignor" identities (Sandra Valencia / Kenneth Steele, confirmed via direct
+// read-only Stripe API query) shared one bank account (same routing number + same Stripe
+// bank-account fingerprint) across two different Stripe Connect accounts registered
+// through FindA.Sale's own onboarding. Neither ever reached payouts_enabled -- Stripe's
+// own Connect risk review caught them first -- but FindA.Sale's own onboarding had zero
+// check of its own that would have caught this. This table is that check.
+//
+// Architecture (see connectAccountGuard.ts for the implementation):
+// - Populated from the `account.updated` webhook (stripeController.ts), the ONLY point
+//   FindA.Sale learns about a connected account's external_accounts -- Organizer/
+//   Consignor/VendorBooth all onboard as Stripe STANDARD accounts (ADR-020), meaning the
+//   account holder enters their own bank details on Stripe's own hosted onboarding UI.
+//   FindA.Sale's backend never calls accounts.createExternalAccount directly, so there is
+//   no in-house "add bank account" call site to hook -- the webhook is the only signal.
+// - One row per (stripeAccountId, fingerprint) pair actually seen -- an account can have
+//   multiple external accounts over its lifetime; every one seen is recorded, never just
+//   the current default, so a fraud ring can't rotate through several and go undetected.
+// - Persisted locally (not re-queried from Stripe's List Accounts API on every check):
+//   this table's own @@index([fingerprint]) gives an O(log n) match against every other
+//   connected account on the platform, with zero added Stripe API calls, zero added
+//   rate-limit exposure, and zero added webhook-processing latency (Stripe requires a
+//   <10s response or it retries) -- calling accounts.list() and paginating every
+//   connected account's external_accounts on every single account.updated delivery does
+//   not scale and duplicates data this table already captures for free as a side effect
+//   of the webhook FindA.Sale already receives.
+// - A fingerprint MATCH FLAGS for admin review -- it never hard-blocks onboarding or an
+//   already-connected account. Legitimate shared-bank cases are real and already assumed
+//   elsewhere in this schema (ADR-090 §1 intentionally reuses one Organizer.stripeConnectId
+//   across both the Organizer's own-sale payouts and their hub-owner revenue-share payouts;
+//   family members co-organizing a sale on a joint account is an ordinary real-world case).
+//   A hard block would turn every one of those into a support incident. reviewOutcome
+//   mirrors the existing FraudSignal model's PENDING | DISMISSED | CONFIRMED convention
+//   above for the same admin-review UX.
+model ConnectBankFingerprint {
+  id String @id @default(cuid())
+
+  // The Stripe Connect account (acct_...) this external account belongs to.
+  stripeAccountId String
+
+  // Stripe's own bank-account fingerprint -- stable across different Stripe Connect
+  // accounts that share the identical real-world bank account + routing number. This is
+  // the actual collusion signal; everything else on this row is context for admin review.
+  fingerprint String
+
+  // Denormalized snapshot -- safe, non-sensitive display context only (Stripe always
+  // returns last4 pre-masked; never store a full account/routing number anywhere).
+  last4      String?
+  bankName   String?
+  routingLast4 String?
+
+  // Which FindA.Sale table actually owns stripeAccountId, resolved the same way
+  // stripeController.ts's account.updated handler already resolves it (there is no
+  // single unified "connected account" table -- Organizer/Consignor/VendorBooth are
+  // separate models, matched by their own stripeConnectId/stripeAccountId column).
+  ownerType String // 'ORGANIZER' | 'CONSIGNOR' | 'VENDOR_BOOTH'
+  ownerId   String
+
+  // Set true the moment this fingerprint is found to match a DIFFERENT stripeAccountId
+  // already recorded here. flagReason names the other account(s)/owner(s) it matches --
+  // deliberately never includes the raw fingerprint or any bank number in admin-facing text.
+  flagged     Boolean @default(false)
+  flagReason  String?
+
+  // Admin review workflow -- same convention as FraudSignal above.
+  reviewOutcome     String    @default("PENDING") // PENDING | DISMISSED | CONFIRMED
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Composite (not just stripeAccountId+fingerprint): per stripeController.ts's own
+  // account.updated comment, the SAME physical Stripe account can legitimately match
+  // more than one FindA.Sale owner row (e.g. Artifact operating as both an Organizer
+  // and a VendorBooth) -- ownerType/ownerId must be part of the key or the second
+  // owner's upsert would collide on the first owner's row.
+  @@unique([stripeAccountId, fingerprint, ownerType, ownerId])
+  @@index([fingerprint]) // the collision-lookup index -- this is the whole point of the table
+  @@index([ownerType, ownerId])
+  @@index([flagged])
+  @@index([reviewOutcome])
+}
+
 // Feature #40: Sale Hubs — groups nearby sales into discoverable hubs
 model SaleHub {
   id                String                       @id @default(cuid())
@@ -4904,6 +4999,13 @@ model Consignor {
   // ADR-020: mirrors VendorBooth.stripeAccountType — existing rows default to 'express'
   // (the only type ever created before this migration); new onboarding sets 'standard'.
   stripeAccountType String?            @default("express") // 'express' | 'standard'
+  // Fraud hardening (2026-09-06, S1198): set true when this consignor's connected account's
+  // bank-account fingerprint matches another connected account already on the platform (see
+  // ConnectBankFingerprint). Admin-review flag only -- see Organizer.payoutsFlaggedForReview
+  // for the full rationale (same pattern, mirrored per-model since Organizer/Consignor/
+  // VendorBooth are separate tables with no shared base).
+  payoutsFlaggedForReview Boolean            @default(false)
+  payoutsFlaggedReason    String? // Set by connectAccountGuard.ts
   items             Item[]             @relation("ConsignorItems")
   payouts           ConsignorPayout[]
   createdAt         DateTime           @default(now())
@@ -4911,6 +5013,7 @@ model Consignor {
 
   @@index([workspaceId])
   @@index([portalToken])
+  @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering
 }
 
 // #309: Payout record — created when organizer runs a payout for a consignor
@@ -5997,6 +6100,13 @@ model VendorBooth {
   // controller and cart-charge flow to pick the correct charge/refund shape per booth.
   stripeAccountType String? @default("express") // 'express' | 'standard'
 
+  // Fraud hardening (2026-09-06, S1198): set true when this booth's connected account's
+  // bank-account fingerprint matches another connected account already on the platform (see
+  // ConnectBankFingerprint). Admin-review flag only -- see Organizer.payoutsFlaggedForReview
+  // for full rationale.
+  payoutsFlaggedForReview Boolean @default(false)
+  payoutsFlaggedReason    String? // Set by connectAccountGuard.ts
+
   // ADR-090 Phase 4 (pre-wire only, 2026-07-20): platform-account Stripe Customer +
   // PaymentMethod for the vendor, so the flat boothFee can be charged off-session on a
   // recurring cadence without touching the vendor's Connect balance. NOT the same Stripe
@@ -6082,6 +6192,7 @@ model VendorBooth {
   @@index([boothToken])
   @@index([userId])
   @@index([stripeAccountId])
+  @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering
 }
 
 // Records one roaming/multi-booth cart transaction as a header row. Individual Purchase
