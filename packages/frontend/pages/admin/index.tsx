@@ -782,6 +782,11 @@ const AdminDashboard = () => {
           <p className="text-warm-600 dark:text-warm-400 text-sm">Device abuse, IP velocity, and self-referral signals on the XP referral program</p>
         </Link>
 
+        <Link href="/admin/connect-bank-fingerprints" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-red-50 dark:bg-red-900/20 border border-red-100 transition">
+          <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Connect Bank-Fingerprint Flags</h3>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Shared-bank-account collisions across Organizer/Consignor/Vendor Booth Stripe Connect accounts (S1198)</p>
+        </Link>
+
         <Link href="/admin/xp-velocity" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-red-50 dark:bg-red-900/20 border border-red-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">XP Velocity</h3>
           <p className="text-warm-600 dark:text-warm-400 text-sm">Users with abnormal XP gains (&gt;500/hr) in the last 7 days -- exploit detection</p>
