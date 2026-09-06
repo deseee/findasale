@@ -596,8 +596,7 @@ export default function POSPage() {
     }
   }, [router.isReady, router.query.saleId, venueHubId]);
 
-  // ─── Venue mode: parse ?venue=<hubId> + auto-start booth cart (S1178) ─────────────────
-  const venueAutoStartedRef = useRef<string | null>(null);
+  // ─── Venue mode: parse ?venue=<hubId> ─────────────────────────────────────────────────────
   useEffect(() => {
     // S1179 hard-nav gate fix (2026-07-30): removed the `if (!router.isReady) return;`
     // gate that used to sit here -- it blocked readVenueQueryParams() (see above) from
@@ -612,12 +611,56 @@ export default function POSPage() {
     setVenueBoothToken(t);
   }, [router.isReady, router.asPath, router.query.venue, router.query.boothToken]);
 
-  useEffect(() => {
-    if (!venueHubId || !user) return;
-    if (venueAutoStartedRef.current === venueHubId) return;
-    venueAutoStartedRef.current = venueHubId;
+  // ─── Venue mode: lazily start-or-reuse the booth cart (2026-09-06 fix) ─────────────
+  // REMOVED the eager useEffect that used to POST /cart/start the instant venueHubId (+
+  // user) was known, unconditionally, on every mount/remount. That created a real
+  // workflow trap found in today's QA: "Cancel this cart" (handleCancelVenueCart below)
+  // correctly releases the cart, but ANY reload of this page (or re-mount under some nav
+  // path) before "Close this market" immediately spun up a brand-new EMPTY PENDING cart
+  // via that eager effect -- which re-trips the hub-close blocker (hubController.ts
+  // hubHasCloseBlockers -> openCartCount, counted straight from BoothCartTransaction rows
+  // with status PENDING, surfaced to the organizer as "N register sales are still open"
+  // on /organizer/hubs/[hubId]/manage) even though nothing was ever rung up.
+  //
+  // ensureVenueCart replaces it: cart-start (or find-or-reuse, same backend contract as
+  // before) now only fires the first time the cashier does something that actually needs
+  // a cart. addVenueItemToCart -- the single cart-mutating entry point in venue mode (the
+  // hub-wide search results list, the Enter-key exact-ID lookup, and the QR/barcode scan
+  // handler all funnel through it; quick-add-misc and the custom-amount button don't
+  // render in venue mode at all) -- calls this first. A cashier who never adds anything
+  // never creates a cart, so "no active cart yet" is a normal resting state, not a
+  // loading state or an error.
+  //
+  // venueCartStartRef dedups a fast double-tap / scanner double-fire that could otherwise
+  // race two POST /cart/start calls before the first resolves -- every caller inside that
+  // window awaits the SAME in-flight promise instead of starting a second one.
+  //
+  // Trade-off, stated plainly (in scope for this fix, not silently swallowed): the
+  // "refresh mid-sale" cart rehydration (2026-08-01 fix, preserved below unchanged) now
+  // only runs on the NEXT addVenueItemToCart call after a refresh, not immediately on
+  // page load. A cashier who refreshes mid-sale and tries to charge without adding
+  // anything else first will see an empty cart (charge/cash/QR buttons stay disabled via
+  // the existing cart.length === 0 gate) until they add or re-add an item -- at which
+  // point the server hands back the SAME PENDING cart with its previously-reserved items
+  // and the hydrate step below repopulates them. Nothing is lost server-side either way
+  // (items stay RESERVED against the existing PENDING cart); only the local UI's
+  // visibility of them is delayed until the next add. A true zero-regression fix would
+  // need a backend "peek an existing cart without creating one" endpoint, which does not
+  // exist today and is out of scope for this pass.
+  const venueCartStartRef = useRef<Promise<{
+    cart: { id: string; hubId: string; status: string } | null;
+    failureMessage: string | null;
+  }> | null>(null);
+  const ensureVenueCart = useCallback((): Promise<{
+    cart: { id: string; hubId: string; status: string } | null;
+    failureMessage: string | null;
+  }> => {
+    if (venueCart) return Promise.resolve({ cart: venueCart, failureMessage: null });
+    if (!venueHubId) return Promise.resolve({ cart: null, failureMessage: 'No venue selected.' });
+    if (venueCartStartRef.current) return venueCartStartRef.current;
+
     setVenueStartFailure(null);
-    api.post(
+    const attempt = api.post(
       `/organizer/hubs/${venueHubId}/cart/start`,
       { cashierType: 'TEAM_MEMBER' },
       venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
@@ -632,17 +675,16 @@ export default function POSPage() {
         return api.get(
           `/organizer/hubs/${venueHubId}/cart/${res.data.id}`,
           venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
-        );
-      })
-      .then(res => {
-        if (!res) return;
-        setCart(res.data.items.map((i: any) => ({
-          id: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
-          itemId: i.itemId,
-          title: i.title,
-          amount: i.price ?? 0,
-          photoUrl: i.photoUrl,
-        })));
+        ).then(hydrateRes => {
+          setCart(hydrateRes.data.items.map((i: any) => ({
+            id: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            itemId: i.itemId,
+            title: i.title,
+            amount: i.price ?? 0,
+            photoUrl: i.photoUrl,
+          })));
+          return { cart: res.data as { id: string; hubId: string; status: string }, failureMessage: null };
+        });
       })
       .catch(err => {
         console.error('[pos] Failed to start venue cart:', err);
@@ -650,9 +692,16 @@ export default function POSPage() {
         // clear message already -- this is exactly the "attempt the credential, handle a
         // 403 gracefully" contract the vendor-booth-token path is scoped to. No special
         // casing needed for that code specifically.
-        setVenueStartFailure(err?.response?.data?.error || err?.response?.data?.message || 'Failed to open the venue register.');
+        const message = err?.response?.data?.error || err?.response?.data?.message || 'Failed to open the venue register.';
+        setVenueStartFailure(message);
+        return { cart: null, failureMessage: message };
+      })
+      .finally(() => {
+        venueCartStartRef.current = null;
       });
-  }, [venueHubId, user, venueBoothToken]);
+    venueCartStartRef.current = attempt;
+    return attempt;
+  }, [venueHubId, venueCart, venueBoothToken]);
 
   // ─── Handle price sheet QR code auto-add-misc action ───────────────────────────────
 
@@ -1152,60 +1201,71 @@ export default function POSPage() {
   // race on a fresh page load, camera opened before POST /cart/start resolves) or when
   // the server rejects the item. That produced a false "Item added to cart" toast
   // immediately followed by an empty cart on close -- exactly Pegasus's report.
+  //
+  // Cart-on-load UX trap fix (2026-09-06): this is the SOLE cart-mutating entry point in
+  // venue mode, so it's the natural place to lazily ensure a cart exists instead of
+  // assuming the (now-removed) mount-time auto-start effect already created one. Calls
+  // ensureVenueCart() first -- a no-op if venueCart is already set, otherwise it starts
+  // (or reuses) one. Bug B's still-starting-vs-permanently-failed distinction
+  // (venueStartFailure) is preserved unchanged, just sourced from ensureVenueCart's
+  // return value instead of the venueStartFailure state directly, since a state read
+  // immediately after ensureVenueCart's own setVenueStartFailure call inside the same
+  // tick would still see the PRE-update value (React state closures don't update
+  // mid-callback) -- ensureVenueCart hands back the freshly-computed message instead.
   const addVenueItemToCart = useCallback((item: Item): Promise<{ added: boolean; message?: string }> => {
-    if (!venueCart) {
-      // Bug B fix (POS Venue Mode QA, 2026-09-05): venueCart is null in TWO very
-      // different situations -- a genuine transient race on first load (cart/start
-      // hasn't resolved yet, retrying in a moment fixes it), and a PERMANENT failure
-      // (most commonly the market is closed -- startBoothCart returns 403 "This market
-      // has been closed and can no longer accept payments.", see
-      // vendorBoothCartController.ts) where retrying will never help. venueStartFailure
-      // is only ever set once the cart/start call has actually come back with an error
-      // (see the venue-auto-start effect above), so its presence is exactly the signal
-      // that distinguishes "still starting" from "will not start until reopened" --
-      // same distinction hubs/[hubId]/cart.tsx's describeFailure makes for the old
-      // register page (canRetry: false + the server's own wording for a 403).
-      const message = venueStartFailure
-        ? venueStartFailure
-        : 'Register is still starting -- wait a moment and try again.';
-      setErrorMessage(message);
-      return Promise.resolve({ added: false, message });
-    }
     if (cart.some(c => c.itemId === item.id)) {
       const message = `"${item.title}" is already in the cart.`;
       setErrorMessage(message);
       return Promise.resolve({ added: false, message });
     }
-    return api.post(
-      `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items`,
-      { itemIds: [item.id] },
-      venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
-    )
-      .then(res => {
-        const accepted = res.data?.accepted || [];
-        const rejected = res.data?.rejected || [];
-        let added = false;
-        let message: string | undefined;
-        if (accepted.length > 0) {
-          const a = accepted[0];
-          const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
-          setCart(prev => [...prev, { id: cartId, itemId: a.itemId, title: a.title, amount: a.price ?? 0, photoUrl: item.photoUrls?.[0] }]);
-          setErrorMessage('');
-          added = true;
-        }
-        if (rejected.length > 0) {
-          message = `"${item.title}" could not be added: ${rejected[0].reason}`;
-          setErrorMessage(message);
-        }
-        return { added, message };
-      })
-      .catch(err => {
-        console.error('[pos] Venue add-item error:', err);
-        const message = err?.response?.data?.error || err?.response?.data?.message || `Failed to add "${item.title}".`;
+    return ensureVenueCart().then(({ cart: activeCart, failureMessage }) => {
+      if (!activeCart) {
+        // Bug B fix (POS Venue Mode QA, 2026-09-05), preserved: activeCart is null in TWO
+        // very different situations -- a genuine transient race (the cart/start call is
+        // still in flight; retrying in a moment fixes it), and a PERMANENT failure (most
+        // commonly the market is closed -- startBoothCart returns 403 "This market has
+        // been closed and can no longer accept payments.", see
+        // vendorBoothCartController.ts) where retrying will never help. failureMessage is
+        // only ever set once the cart/start call has actually come back with an error, so
+        // its presence is exactly the signal that distinguishes "still starting" from
+        // "will not start until reopened" -- same distinction hubs/[hubId]/cart.tsx's
+        // describeFailure makes for the old register page (canRetry: false + the server's
+        // own wording for a 403).
+        const message = failureMessage || 'Register is still starting -- wait a moment and try again.';
         setErrorMessage(message);
         return { added: false, message };
-      });
-  }, [venueHubId, venueCart, cart, venueBoothToken, venueStartFailure]);
+      }
+      return api.post(
+        `/organizer/hubs/${venueHubId}/cart/${activeCart.id}/items`,
+        { itemIds: [item.id] },
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      )
+        .then(res => {
+          const accepted = res.data?.accepted || [];
+          const rejected = res.data?.rejected || [];
+          let added = false;
+          let message: string | undefined;
+          if (accepted.length > 0) {
+            const a = accepted[0];
+            const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            setCart(prev => [...prev, { id: cartId, itemId: a.itemId, title: a.title, amount: a.price ?? 0, photoUrl: item.photoUrls?.[0] }]);
+            setErrorMessage('');
+            added = true;
+          }
+          if (rejected.length > 0) {
+            message = `"${item.title}" could not be added: ${rejected[0].reason}`;
+            setErrorMessage(message);
+          }
+          return { added, message };
+        })
+        .catch(err => {
+          console.error('[pos] Venue add-item error:', err);
+          const message = err?.response?.data?.error || err?.response?.data?.message || `Failed to add "${item.title}".`;
+          setErrorMessage(message);
+          return { added: false, message };
+        });
+    });
+  }, [venueHubId, ensureVenueCart, cart, venueBoothToken]);
 
   // ─── Venue mode: sequential per-booth checkout -- ports the proven flow from
   // hubs/[hubId]/cart.tsx (now deprecated, see S1178 ADR). Card/manual-card rail only in
@@ -1325,8 +1385,12 @@ export default function POSPage() {
           setVenueBooths([]);
           setVenueBoothOutcomes({});
           setVenueCart(null);
-          venueAutoStartedRef.current = null;
-          showToast('Cart cancelled. A new cart will open.', 'info');
+          // Cart-on-load UX trap fix (2026-09-06): no more eager auto-start effect to
+          // reset a guard ref for -- leaving venueCart null here is now the entire fix.
+          // Nothing re-opens a cart until the cashier adds the next item (see
+          // ensureVenueCart above), so this is a genuine resting state, not "about to
+          // restart automatically."
+          showToast('Cart cancelled. No cart is open until the next item is added.', 'info');
         } catch (err: any) {
           console.error('[pos] Cancel venue cart error:', err);
           showToast(err?.response?.data?.error || err?.response?.data?.message || 'Failed to cancel the cart.', 'error');
@@ -1353,7 +1417,8 @@ export default function POSPage() {
       clearCart();
       setVenueCheckoutOpen(false);
       setVenueCart(null);
-      venueAutoStartedRef.current = null;
+      // Cart-on-load UX trap fix (2026-09-06): no auto-start effect left to reset a guard
+      // ref for -- the next sale's cart is created lazily on the next add-item call.
     } catch (err: any) {
       console.error('[pos] Venue capture failed:', err);
       setVenueCaptureFailed(true);
@@ -1437,7 +1502,8 @@ export default function POSPage() {
       setSuccessMessage(`✅ Cash sale of $${cartTotal.toFixed(2)} recorded. Change: $${(changeCents / 100).toFixed(2)}.`);
       clearCart();
       setVenueCart(null);
-      venueAutoStartedRef.current = null;
+      // Cart-on-load UX trap fix (2026-09-06): no auto-start effect left to reset a guard
+      // ref for -- the next sale's cart is created lazily on the next add-item call.
     } catch (err: any) {
       console.error('[pos] Venue cash payment failed:', err);
       setPaymentStatus('error');
@@ -1508,7 +1574,8 @@ export default function POSPage() {
       setPaymentStatus('success');
       clearCart();
       setVenueCart(null);
-      venueAutoStartedRef.current = null;
+      // Cart-on-load UX trap fix (2026-09-06): no auto-start effect left to reset a guard
+      // ref for -- the next sale's cart is created lazily on the next add-item call.
     } catch (err: any) {
       console.error('[pos] Venue QR finish failed:', err);
       await cancelVenueCart();
@@ -2626,21 +2693,28 @@ export default function POSPage() {
                 }
               }}
               placeholder="Search by title or SKU, or scan barcode…"
-              disabled={!venueCart}
-              title={!venueCart ? (venueStartFailure || 'Register is still starting -- wait a moment and try again.') : undefined}
+              // Cart-on-load UX trap fix (2026-09-06): used to disable on !venueCart, which
+              // -- now that a cart is no longer auto-started on mount -- would permanently
+              // lock this input on every fresh page load (no cart yet is the NORMAL resting
+              // state, not something to block on). Only disable once we actually KNOW the
+              // register can't open (venueStartFailure, e.g. the market is closed) --
+              // preserves Bug B's closed-market disabling exactly, just no longer keyed off
+              // cart existence.
+              disabled={!!venueStartFailure}
+              title={venueStartFailure || undefined}
               className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500 ${
-                venueCart
-                  ? 'border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100'
-                  : 'border-warm-200 dark:border-gray-700 bg-warm-100 dark:bg-gray-800 text-warm-400 dark:text-gray-600 cursor-not-allowed'
+                venueStartFailure
+                  ? 'border-warm-200 dark:border-gray-700 bg-warm-100 dark:bg-gray-800 text-warm-400 dark:text-gray-600 cursor-not-allowed'
+                  : 'border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100'
               }`}
             />
             <button
               onClick={() => setCameraOpen(true)}
-              disabled={!venueCart}
+              disabled={!!venueStartFailure}
               className={`px-4 py-2 rounded-lg font-semibold transition ${
-                venueCart
-                  ? 'bg-amber-600 text-white hover:bg-amber-700'
-                  : 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                venueStartFailure
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                  : 'bg-amber-600 text-white hover:bg-amber-700'
               }`}
               title="Scan QR code on price label"
             >
@@ -3242,9 +3316,15 @@ export default function POSPage() {
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <button
                   onClick={() => setPaymentMode('card')}
-                  disabled={!venueCart}
+                  // Cart-on-load UX trap fix (2026-09-06): was disabled={!venueCart}, which
+                  // (with the mount-time auto-start now removed) would permanently disable
+                  // mode selection before the cashier ever adds a first item -- switching
+                  // payment mode doesn't touch the cart at all, so it never needed a cart to
+                  // exist. Only disable once venueStartFailure confirms the register can't
+                  // open at all (e.g. market closed).
+                  disabled={!!venueStartFailure}
                   className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
-                    !venueCart
+                    venueStartFailure
                       ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                       : paymentMode === 'card'
                       ? 'bg-sage-700 text-white'
@@ -3259,9 +3339,9 @@ export default function POSPage() {
                     setCashReceived(0);
                     setCashNumpadValue('');
                   }}
-                  disabled={!venueCart}
+                  disabled={!!venueStartFailure}
                   className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
-                    !venueCart
+                    venueStartFailure
                       ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                       : paymentMode === 'cash'
                       ? 'bg-sage-700 text-white'
