@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getPlatformFeeRate, resolveOrganizerFeeReport } from '../utils/feeCalculator';
 import { buyCheapestLabel, ShippingLabelPurchaseError } from '../services/shippingLabelService';
+import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer payout wiring
 
 /** Retrieve the organizer's Stripe Connect account ID, or null if not yet linked */
 const getOrganizerStripeId = async (userId: string): Promise<string | null> => {
@@ -153,7 +154,9 @@ export const createPayout = async (req: AuthRequest, res: Response) => {
     // Fetch organizer's accumulated cash fee balance
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
-      select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
+      // id added (2026-09-06, S1198) so the fraud-hold check below can key off it --
+      // was previously not selected since nothing else in this function needed it.
+      select: { id: true, cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
     });
 
     if (!organizer) {
@@ -179,6 +182,14 @@ export const createPayout = async (req: AuthRequest, res: Response) => {
         cashFeeDeduction: organizer.cashFeeBalance,
         originalAmount: amount,
       });
+    }
+
+    // S1198 (2026-09-06): bank-fingerprint collusion hold. This is the most direct hit
+    // of the whole audit -- a literal stripe.payouts.create call, exactly the action
+    // isPayoutFlaggedForReview exists to gate. Checked unconditionally, mirrors
+    // payConsignor's 403 (stripeConnectController.ts) exactly.
+    if (await isPayoutFlaggedForReview('ORGANIZER', organizer.id)) {
+      return res.status(403).json({ message: 'This payout is on hold pending admin review. Contact support@finda.sale for details.' });
     }
 
     const stripe = getStripe();

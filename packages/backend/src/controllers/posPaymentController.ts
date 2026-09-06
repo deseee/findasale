@@ -19,6 +19,7 @@ import { getAccountStatus } from '../services/stripeConnectService'; // Direct-c
 import { snapshotForCommissionOnly, getPlatformFeeRate } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); getPlatformFeeRate: split-payment commission fix (2026-08-22)
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use
 import { resolvePosDiscount } from '../services/posDiscountService';
+import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
 
 const stripe = () => getStripe();
 
@@ -347,6 +348,17 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
         .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after preflight error:', releaseErr));
       return res.status(502).json({ message: "Could not verify the organizer's payment account status. Please try again." });
+    }
+
+    // S1198 (2026-09-06): bank-fingerprint collusion hold. Checked unconditionally,
+    // mirrors payConsignor's 403 (stripeConnectController.ts) and the VendorBooth/
+    // terminalController fixes of the same shape. Releases the placeholder the same
+    // way every other pre-charge failure path in this function already does.
+    if (await isPayoutFlaggedForReview('ORGANIZER', organizer.id)) {
+      await prisma.pOSPaymentRequest
+        .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
+        .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after fraud-hold check:', releaseErr));
+      return res.status(403).json({ message: 'Your payments are on hold pending admin review. Contact support@finda.sale for details.' });
     }
 
     // Create Stripe Payment Intent (for card amount only) now that the placeholder row

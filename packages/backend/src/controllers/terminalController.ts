@@ -25,6 +25,7 @@ import { resolveOrganizerOrTeamMember, type ResolvedPosActor } from '../utils/po
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Shared cash-commission accrual (2026-08-17) — same mechanism reservationController's RECORD mode uses
 import { resolvePosDiscount } from '../services/posDiscountService';
+import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer terminal wiring
 
 const stripe = () => getStripe();
 
@@ -421,6 +422,14 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
         console.error('[terminal] getAccountStatus preflight failed:', statusErr);
         return res.status(502).json({ message: "Could not verify the organizer's payment account status. Please try again." });
       }
+    }
+
+    // S1198 (2026-09-06): bank-fingerprint collusion hold. Checked unconditionally, same
+    // reasoning as the VendorBooth fix this mirrors -- the flag is about WHO is being
+    // paid, independent of whether this specific call is simulated or real. Mirrors
+    // payConsignor's 403 (stripeConnectController.ts) exactly.
+    if (await isPayoutFlaggedForReview('ORGANIZER', organizer.id)) {
+      return res.status(403).json({ message: 'Your payments are on hold pending admin review. Contact support@finda.sale for details.' });
     }
 
     // Create terminal PaymentIntent — platform account in simulated mode, connected account in production

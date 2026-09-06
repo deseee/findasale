@@ -39,6 +39,7 @@ import { prisma } from '../lib/prisma';
 import { notifyBoothRentChargeFailed, notifyBoothRentCharged } from '../services/vendorBoothLifecycleNotificationService';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
+import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, hub-owner Transfer wiring
 
 const stripe = () => getStripe();
 
@@ -103,6 +104,26 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
       if (!hubOwnerReady) {
         summary.pendingOnboarding += 1;
         await prisma.vendorBoothFeeCharge.update({ where: { id: charge.id }, data: { status: 'PENDING_STRIPE_ONBOARDING' } });
+        continue;
+      }
+
+      // S1198 (2026-09-06): bank-fingerprint collusion hold. Checked here, BEFORE the
+      // vendor's card is ever charged below -- there is no point taking real money from
+      // the vendor if the second leg (Transfer to this hub owner) must not complete, same
+      // early-out reasoning as the hubOwnerReady/vendorPaymentMethodId checks around it.
+      // No dedicated schema status exists for this (would need Architect sign-off for a
+      // new enum value) -- reuses the existing FAILED status with a clear failureReason,
+      // consistent with how every other real failure in this loop is recorded. This path
+      // is currently dormant (PRE-WIRE: no live booth has both vendor Stripe fields set
+      // yet, per this file's own header comment) but is registered in a live monthly cron,
+      // so it is fixed now rather than left to reproduce the moment vendor payment
+      // collection ships.
+      if (await isPayoutFlaggedForReview('ORGANIZER', hubOwnerOrganizer.id)) {
+        summary.failed += 1;
+        await prisma.vendorBoothFeeCharge.update({
+          where: { id: charge.id },
+          data: { status: 'FAILED', failureReason: "Hub owner's payout is on hold pending admin review" },
+        });
         continue;
       }
 
