@@ -15,6 +15,7 @@
 
 import * as Sentry from '@sentry/node';
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { RedisStore } from 'rate-limit-redis';
 import { createClient, RedisClientType } from 'redis';
 
@@ -173,3 +174,67 @@ export const createBurstAlerter = (limiterName: string) => {
     }
   };
 };
+
+// --- Cookie/Bearer session verification for rate-limit tier decisions (2026-09-05) ---
+// globalLimiter (index.ts) grants a higher per-window budget to "authenticated" requests, but
+// it is registered BEFORE app.use(cookieParser()) in index.ts (cookie-parser sits after the
+// raw-body webhook routes + express.json(), and moving it earlier wasn't worth re-auditing that
+// ordering for) -- so req.cookies is not populated when this runs. This is the exact same
+// constraint Socket.io's handshake auth already solves the same way (lib/socket.ts:48-56): read
+// the raw `Cookie` header directly and pull out `accessToken` with a regex, instead of depending
+// on cookie-parser having run.
+//
+// Before this fix, globalLimiter only checked `Authorization: Bearer <token>` for the elevated
+// tier -- and did not even verify that token, just that the header started with "Bearer ".
+// packages/frontend/lib/api.ts (the web app's only real HTTP client, every browser session) never
+// sends that header: it authenticates purely via the httpOnly `accessToken` cookie
+// (`withCredentials: true`). Every real logged-in browser session was therefore silently capped
+// at the anonymous tier. This helper fixes both: it recognizes the cookie AND actually verifies
+// the JWT signature/expiry for both the cookie and Bearer paths (closing the unverified-Bearer
+// gap as a side effect, using one real check instead of trusting header shape alone).
+//
+// Deliberately does NOT do the DB-backed checks `authenticate` (middleware/auth.ts) does --
+// tokenVersion, organizerTokenVersion, account suspension. Those need a Prisma round-trip; this
+// runs on EVERY request the app receives (rate-limited or not, public or not), so a DB call here
+// would meaningfully change this app's per-request cost profile. Proving the request holds a
+// token this server actually issued and that hasn't expired is enough for a DoS-tier decision --
+// it is not an authorization decision. A revoked-but-unexpired token still gets the higher budget
+// here even though `authenticate` would reject it on the actual route; that gap is bounded by the
+// token's own short expiry.
+export const getVerifiedSessionUserId = (req: express.Request): string | null => {
+  // Memoize per-request: express-rate-limit calls both `keyGenerator` and `max` for the same
+  // request, and this would otherwise run jwt.verify twice per request.
+  const cached = (req as any)._rateLimitVerifiedUserId;
+  if (cached !== undefined) return cached;
+
+  const resolve = (): string | null => {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) return null;
+
+    let token: string | null = null;
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+      const match = /(?:^|;\s*)accessToken=([^;]+)/.exec(cookieHeader);
+      if (match) token = decodeURIComponent(match[1]);
+    }
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      }
+    }
+    if (!token) return null;
+
+    try {
+      const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { id?: string };
+      return typeof decoded.id === 'string' && decoded.id.length > 0 ? decoded.id : null;
+    } catch {
+      return null; // expired / malformed / bad signature -- treat as anonymous for rate-limit purposes
+    }
+  };
+
+  const result = resolve();
+  (req as any)._rateLimitVerifiedUserId = result;
+  return result;
+};
+

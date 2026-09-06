@@ -1154,7 +1154,20 @@ export default function POSPage() {
   // immediately followed by an empty cart on close -- exactly Pegasus's report.
   const addVenueItemToCart = useCallback((item: Item): Promise<{ added: boolean; message?: string }> => {
     if (!venueCart) {
-      const message = 'Register is still starting -- wait a moment and try again.';
+      // Bug B fix (POS Venue Mode QA, 2026-09-05): venueCart is null in TWO very
+      // different situations -- a genuine transient race on first load (cart/start
+      // hasn't resolved yet, retrying in a moment fixes it), and a PERMANENT failure
+      // (most commonly the market is closed -- startBoothCart returns 403 "This market
+      // has been closed and can no longer accept payments.", see
+      // vendorBoothCartController.ts) where retrying will never help. venueStartFailure
+      // is only ever set once the cart/start call has actually come back with an error
+      // (see the venue-auto-start effect above), so its presence is exactly the signal
+      // that distinguishes "still starting" from "will not start until reopened" --
+      // same distinction hubs/[hubId]/cart.tsx's describeFailure makes for the old
+      // register page (canRetry: false + the server's own wording for a 403).
+      const message = venueStartFailure
+        ? venueStartFailure
+        : 'Register is still starting -- wait a moment and try again.';
       setErrorMessage(message);
       return Promise.resolve({ added: false, message });
     }
@@ -1192,7 +1205,7 @@ export default function POSPage() {
         setErrorMessage(message);
         return { added: false, message };
       });
-  }, [venueHubId, venueCart, cart, venueBoothToken]);
+  }, [venueHubId, venueCart, cart, venueBoothToken, venueStartFailure]);
 
   // ─── Venue mode: sequential per-booth checkout -- ports the proven flow from
   // hubs/[hubId]/cart.tsx (now deprecated, see S1178 ADR). Card/manual-card rail only in
@@ -1280,6 +1293,49 @@ export default function POSPage() {
       console.error('[pos] Venue cart cancel failed:', err);
     }
   }, [venueHubId, venueCart, venueBoothToken]);
+
+  // ─── Venue mode: explicit "Cancel this cart" (Bug F, POS Venue Mode QA, 2026-09-05) ──
+  // startBoothCart find-or-reuses an existing PENDING cart for this cashier identity
+  // (see vendorBoothCartController.ts), which is correct for a page refresh mid-sale but
+  // leaves no way to actually ABANDON that cart outside of a live checkout attempt --
+  // stranding a cashier whose browser died mid-sale, or leaving a stray empty cart that
+  // blocks hub closure (deleteHub's openCartCount blocker). The /cancel endpoint this
+  // calls already exists (cancelBoothCart, wired to POST
+  // /api/organizer/hubs/:hubId/cart/:cartTransactionId/cancel) and is already used
+  // internally above (cancelVenueCart) -- but only as a silent best-effort cleanup after
+  // a failed checkout leg. This is a deliberate, user-initiated action instead, so unlike
+  // cancelVenueCart it does NOT swallow a failure (e.g. the cart is already CAPTURING) --
+  // it tells the cashier honestly whether the cancel actually happened.
+  const handleCancelVenueCart = useCallback(() => {
+    if (!venueCart) return;
+    const cartId = venueCart.id;
+    setConfirmState({
+      open: true,
+      title: 'Cancel this cart',
+      message: 'This releases every item in this cart back to available. Nothing is charged. Use this to clear a stray or abandoned cart -- for example after a previous cashier session was left open.',
+      onConfirm: async () => {
+        try {
+          await api.post(
+            `/organizer/hubs/${venueHubId}/cart/${cartId}/cancel`,
+            {},
+            venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+          );
+          clearCart();
+          setVenueCheckoutOpen(false);
+          setVenueBooths([]);
+          setVenueBoothOutcomes({});
+          setVenueCart(null);
+          venueAutoStartedRef.current = null;
+          showToast('Cart cancelled. A new cart will open.', 'info');
+        } catch (err: any) {
+          console.error('[pos] Cancel venue cart error:', err);
+          showToast(err?.response?.data?.error || err?.response?.data?.message || 'Failed to cancel the cart.', 'error');
+        } finally {
+          setConfirmState(s => ({ ...s, open: false }));
+        }
+      },
+    });
+  }, [venueHubId, venueCart, venueBoothToken, showToast]);
 
   const captureVenueAll = useCallback(async () => {
     if (!venueCart) return;
@@ -2532,6 +2588,15 @@ export default function POSPage() {
           {venueStartFailure && (
             <p className="mb-2 text-sm text-red-600 dark:text-red-400">{venueStartFailure}</p>
           )}
+          {venueCart && (
+            <button
+              type="button"
+              onClick={handleCancelVenueCart}
+              className="mb-2 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
+            >
+              Cancel this cart
+            </button>
+          )}
           <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Add item</label>
           <div className="flex gap-2">
             <input
@@ -2561,11 +2626,22 @@ export default function POSPage() {
                 }
               }}
               placeholder="Search by title or SKU, or scan barcode…"
-              className="flex-1 border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+              disabled={!venueCart}
+              title={!venueCart ? (venueStartFailure || 'Register is still starting -- wait a moment and try again.') : undefined}
+              className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500 ${
+                venueCart
+                  ? 'border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100'
+                  : 'border-warm-200 dark:border-gray-700 bg-warm-100 dark:bg-gray-800 text-warm-400 dark:text-gray-600 cursor-not-allowed'
+              }`}
             />
             <button
               onClick={() => setCameraOpen(true)}
-              className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 transition"
+              disabled={!venueCart}
+              className={`px-4 py-2 rounded-lg font-semibold transition ${
+                venueCart
+                  ? 'bg-amber-600 text-white hover:bg-amber-700'
+                  : 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+              }`}
               title="Scan QR code on price label"
             >
               📷
@@ -3166,8 +3242,11 @@ export default function POSPage() {
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <button
                   onClick={() => setPaymentMode('card')}
+                  disabled={!venueCart}
                   className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
-                    paymentMode === 'card'
+                    !venueCart
+                      ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                      : paymentMode === 'card'
                       ? 'bg-sage-700 text-white'
                       : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
                   }`}
@@ -3180,8 +3259,11 @@ export default function POSPage() {
                     setCashReceived(0);
                     setCashNumpadValue('');
                   }}
+                  disabled={!venueCart}
                   className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
-                    paymentMode === 'cash'
+                    !venueCart
+                      ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                      : paymentMode === 'cash'
                       ? 'bg-sage-700 text-white'
                       : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
                   }`}

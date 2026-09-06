@@ -59,7 +59,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { createRateLimitStore, resilientLimiter, isWhitelistedIP, createBurstAlerter } from './middleware/rateLimitShared'; // rate-limit hardening (2026-08-27): Redis store/whitelist/burst-alert helpers extracted here so routes/auth.ts and middleware/rateLimiter.ts can reach them without a circular import back to this file
+import { createRateLimitStore, resilientLimiter, isWhitelistedIP, createBurstAlerter, getVerifiedSessionUserId } from './middleware/rateLimitShared'; // rate-limit hardening (2026-08-27): Redis store/whitelist/burst-alert helpers extracted here so routes/auth.ts and middleware/rateLimiter.ts can reach them without a circular import back to this file. getVerifiedSessionUserId added 2026-09-05 -- see its definition for the globalLimiter cookie-session recognition fix.
 import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
@@ -406,18 +406,32 @@ const isQABypassRequest = (req: express.Request): boolean => {
   return req.headers['x-qa-bypass'] === secret;
 };
 
-// Global rate limit — anonymous: 500 req / 15 min per IP, authenticated: 3000 req / 15 min per IP
-// Authenticated users (valid Bearer token present) get 6x headroom — they're real logged-in users,
-// not bots. This prevents polling-heavy pages (POS, dashboard) from self-rate-limiting.
+// Global rate limit — anonymous: 500 req / 15 min per IP, authenticated: 3000 req / 15 min per
+// VERIFIED SESSION (cookie OR Bearer), keyed by user id -- not IP -- so one authenticated user
+// never shares a budget with anyone else on the same IP (a venue with several staff/vendor
+// devices on one WiFi/NAT IP, for example), and one compromised/scripted session can't consume a
+// shared-IP budget meant for a whole venue either.
+// FIXED 2026-09-05 (live-reproduced Chrome QA finding): this used to check ONLY
+// `Authorization: Bearer <token>` presence (and never even verified it) for the elevated tier.
+// packages/frontend/lib/api.ts -- the web app's only real HTTP client -- never sends that header;
+// it authenticates purely via the httpOnly `accessToken` cookie (`withCredentials: true`). Every
+// real logged-in browser session was therefore silently capped at the anonymous 500/15min tier,
+// which surfaced as a 429 masquerading as "Access Denied — you must be an organizer" for a real
+// organizer under normal-but-repeated traffic. getVerifiedSessionUserId() (rateLimitShared.ts)
+// now recognizes and verifies both the cookie and the Bearer path (the Marketplace Autofill
+// extension, ADR-084, still authenticates via Bearer only and is unaffected).
 const globalLimiterBurstAlert = createBurstAlerter('globalLimiter'); // rate-limit hardening Item 3: sustained-429-burst Sentry alerting
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+  keyGenerator: (req) => getVerifiedSessionUserId(req) || (req.ip ?? '0.0.0.0'),
   max: (req) => {
-    // Authenticated requests get 3000/15min (200/min) — enough for dashboard + POS polling
-    if (req.headers.authorization?.startsWith('Bearer ')) return 3000;
-    // Anonymous requests stay at 500/15min (33/min) — protects against scrapers/brute force
+    // Verified session (cookie OR Bearer -- see getVerifiedSessionUserId) gets 3000/15min
+    // (200/min) — enough for dashboard + POS polling — keyed by that user's id, not IP.
+    if (getVerifiedSessionUserId(req)) return 3000;
+    // Anonymous requests stay at 500/15min (33/min) per IP — protects against scrapers/brute force
     return 500;
   },
+  validate: false, // custom keyGenerator (user id, not req.ip) -- same as middleware/rateLimiter.ts's getKeyGenerator and ebayShippingPresetController.ts's keyByUserOrIp, both already used elsewhere in this codebase
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },

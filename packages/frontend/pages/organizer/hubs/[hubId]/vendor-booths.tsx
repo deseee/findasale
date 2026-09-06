@@ -752,7 +752,7 @@ const VendorBoothsPage: React.FC = () => {
             </div>
             <div className="flex gap-3">
               <Link
-                href={`/organizer/hubs/${hubId}/cart`}
+                href={`/organizer/pos?venue=${hubId}`}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
               >
                 Open Register
