@@ -10,6 +10,7 @@ import { emailService } from '../lib/emailService';
 import { createNotification } from '../lib/notificationService';
 import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
 import { executeVerifiedRefund, RefundError } from '../services/refundService';
+import { suppressionService } from '../services/suppressionService';
 
 // BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
 // sync with the canonical `user.roles[]` array. Compute the highest-precedence role
@@ -1987,6 +1988,12 @@ export const sendDirectMessageToUser = async (req: AuthRequest, res: Response) =
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (await suppressionService.isHardSuppressed(user.email)) {
+      return res.status(409).json({
+        message: `Cannot send: ${user.email} is on the suppression list (hard bounce or opt-out).`,
+      });
     }
 
     await emailService.emails.send({
