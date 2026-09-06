@@ -91,3 +91,94 @@ export async function runDeliverabilityMonitor(): Promise<void> {
 
 // Weekly Sunday 19:00 UTC
 cron.schedule('0 19 * * 0', cronGuard({ jobName: 'deliverabilityMonitor' }, runDeliverabilityMonitor));
+
+/**
+ * runSpamBlockTripwire — immediate alert on any explicit provider-side spam-block
+ * signal, independent of the weekly rate check above.
+ *
+ * Added 2026-09-06 after an email-deliverability audit (see
+ * claude_docs/audits/email-deliverability-audit-2026-09-06.md) found that the
+ * weekly check above only measures volume via OutreachAuditLog (the cold-outreach
+ * pipeline) — it has zero visibility into the Resend transactional rail
+ * (refunds/receipts/password-resets/payouts/invoices) or the non-outreach Gmail
+ * bulk jobs. A real Gmail SMTP hard rejection ("550 5.7.1 ... likely unsolicited
+ * mail ... blocked") already happened 2026-08-18 and was not reliably caught by
+ * the weekly rate check. This tripwire runs every 6 hours and fires on ANY new
+ * EmailSuppression row that looks like an explicit spam-block (not just a bounce),
+ * regardless of overall send volume or rate.
+ */
+export async function runSpamBlockTripwire(): Promise<void> {
+  const windowStart = new Date(Date.now() - 6 * 60 * 60 * 1000);
+
+  const flagged = await prisma.emailSuppression.findMany({
+    where: {
+      createdAt: { gte: windowStart },
+      OR: [
+        { suppressionReason: 'POLICY_BLOCK' },
+        { diagnosticCode: { contains: 'unsolicited', mode: 'insensitive' } },
+        { diagnosticCode: { contains: 'spam', mode: 'insensitive' } },
+        { diagnosticCode: { contains: 'blocked', mode: 'insensitive' } },
+      ],
+    },
+    select: {
+      emailAddress: true,
+      suppressionReason: true,
+      diagnosticCode: true,
+      bounceCategory: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 25,
+  });
+
+  if (flagged.length === 0) {
+    console.log('[deliverability:tripwire] 6h check: no spam-block signals found');
+    return;
+  }
+
+  console.warn(`[deliverability:tripwire] ${flagged.length} spam-block signal(s) in the last 6h`);
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const alertRecipient = process.env.QUOTA_ALERT_EMAIL;
+  if (!apiKey) {
+    console.error('[deliverability:tripwire] RESEND_API_KEY not set — cannot send alert');
+    return;
+  }
+  if (!alertRecipient) {
+    console.error('[deliverability:tripwire] QUOTA_ALERT_EMAIL not set — cannot send alert');
+    return;
+  }
+
+  // Domain only in the alert body — avoids putting a full recipient address into an
+  // internal alert email for a signal that's actionable at the domain/reputation level.
+  const domainOf = (addr: string): string => addr.split('@')[1] || addr;
+
+  const rows = flagged
+    .map(f => {
+      const diag = (f.diagnosticCode || '').slice(0, 200).replace(/</g, '&lt;');
+      return `<li><strong>${domainOf(f.emailAddress)}</strong> — ${f.suppressionReason || f.bounceCategory || 'unknown'} @ ${f.createdAt.toISOString()}${diag ? `<br><code style="font-size:11px">${diag}</code>` : ''}</li>`;
+    })
+    .join('');
+
+  try {
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale Alerts <alerts@finda.sale>',
+      to: alertRecipient,
+      subject: `\u{1F6A8} Spam-block signal detected (${flagged.length} in last 6h)`,
+      html: `
+        <p><strong>\u{1F6A8} A mailbox provider explicitly flagged FindA.Sale mail as spam/unsolicited in the last 6 hours.</strong></p>
+        <ul>${rows}</ul>
+        <p>This fires independent of the weekly bounce-rate check, which only tracks outreach-pipeline volume and would not reliably catch this. See claude_docs/audits/email-deliverability-audit-2026-09-06.md for background.</p>
+        <p style="color:#666;font-size:12px">FindA.Sale \u00b7 deliverabilityMonitorJob.ts \u00b7 every 6h</p>
+      `,
+    });
+    console.log(`[deliverability:tripwire] Alert sent to ${alertRecipient}`);
+  } catch (err) {
+    console.error('[deliverability:tripwire] Failed to send alert via Resend:', err);
+  }
+}
+
+// Spam-block tripwire — every 6 hours (independent of the weekly rate check above)
+cron.schedule('0 */6 * * *', cronGuard({ jobName: 'deliverabilitySpamTripwire' }, runSpamBlockTripwire));
+

@@ -30,7 +30,7 @@ import { runOrganizerWebsiteAddressEnrichment } from '../jobs/organizerWebsiteAd
 import { runAutoSeedOutreach } from '../jobs/autoSeedOutreachCron';
 import { runMonthlyTrendReport } from '../jobs/monthlyTrendReportJob';
 import { runGmailOAuthHealthCheck, runDailySendSummary, runSuspensionDetect } from '../jobs/gmailHealthCron';
-import { runDeliverabilityMonitor } from '../jobs/deliverabilityMonitorJob';
+import { runDeliverabilityMonitor, runSpamBlockTripwire } from '../jobs/deliverabilityMonitorJob';
 import { bounceSuppressService } from '../services/bounceSuppressService';
 import { runSmtpPermutationVerify } from '../jobs/smtpPermutationVerifyJob';
 
@@ -62,6 +62,7 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'daily-send-summary': runDailySendSummary,
   'suspension-detect': runSuspensionDetect,
   'deliverability-monitor': runDeliverabilityMonitor,
+  'deliverability-spam-tripwire': runSpamBlockTripwire,
   'process-bounces': () => bounceSuppressService.processBounces(),
   'reclassify-bounces': () => bounceSuppressService.reclassifyBounces(),
   // S1172: re-hosted from packages/backend/scripts/smtpPermutationVerifier.ts
