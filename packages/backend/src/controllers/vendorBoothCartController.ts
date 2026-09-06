@@ -17,6 +17,7 @@ import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 
 import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
 import { Decimal } from '@prisma/client/runtime/library';
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
+import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, VendorBooth wiring
 
 const stripe = () => getStripe();
 
@@ -959,6 +960,21 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
       include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true } } } } },
     });
     if (!booth) return res.status(404).json({ error: 'Booth not found' });
+
+    // S1198 (2026-09-06): bank-fingerprint collusion hold. Checked unconditionally --
+    // NOT inside the isTerminalSimulated() gate below, since that flag only exists to
+    // let QA exercise the card-present reader without real hardware and has nothing to
+    // do with Connect-account fraud review. Mirrors payConsignor's 403 (stripeConnectController.ts)
+    // and shouldUseDirectCharge's block (stripeConnectService.ts) for the other two owner
+    // types -- VendorBooth's real-time Direct Charge architecture has no non-direct-charge
+    // fallback to degrade to, so a flagged booth is blocked outright here rather than routed
+    // around, same as a Consignor payout hold.
+    if (await isPayoutFlaggedForReview('VENDOR_BOOTH', booth.id)) {
+      return res.status(403).json({
+        error: `Booth "${booth.vendorName}"'s payments are on hold pending admin review. Contact support@finda.sale for details.`,
+      });
+    }
+
     if (!isTerminalSimulated()) {
       if (booth.stripeAccountType !== 'standard' || !booth.stripeOnboarded || !booth.stripeAccountId) {
         // Fix 2 (2026-08-01): a house booth failing this gate is the HUB OWNER's own
@@ -1243,6 +1259,20 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
           ? 'Complete your Stripe account upgrade in Settings to sell your own items through this register'
           : `Booth "${booth.vendorName}" has not completed Standard-account onboarding`;
         failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message };
+        break;
+      }
+
+      // S1198 (2026-09-06): bank-fingerprint collusion hold -- same unconditional check
+      // as the Terminal rail above, run per-booth inside this loop since a single QR
+      // authorize call can span multiple booths. A flagged booth's failure uses the same
+      // whole-cart-fail path as every other per-booth failure in this loop (cancels any
+      // legs already created earlier in this same call).
+      if (await isPayoutFlaggedForReview('VENDOR_BOOTH', booth.id)) {
+        failure = {
+          vendorBoothId: booth.id,
+          vendorName: booth.vendorName,
+          message: `Booth "${booth.vendorName}"'s payments are on hold pending admin review. Contact support@finda.sale for details.`,
+        };
         break;
       }
 
