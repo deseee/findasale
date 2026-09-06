@@ -26,15 +26,24 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
  * Fire-and-forget — errors are logged but not thrown.
  */
 export async function sendSaleLiveEmail(
-  organizer: { email: string; businessName?: string },
+  organizer: { email: string; businessName?: string; userId: string },
   sale:       { title: string; id: string }
 ): Promise<void> {
-  if (await suppressionService.isHardSuppressed(organizer.email)) {
+  // isSuppressed (not isHardSuppressed) -- bug fix, 2026-09-06: this is a promotional
+  // "share your sale" nudge, not a strict transactional confirmation, so an opted-out
+  // organizer must not keep receiving it.
+  if (await suppressionService.isSuppressed(organizer.email)) {
     console.log('[saleLive] Skipped suppressed recipient:', organizer.email);
     return;
   }
   const saleUrl     = `${FRONTEND_URL}/sales/${sale.id}`;
   const addItemsUrl = `${FRONTEND_URL}/organizer/sales/${sale.id}/items`;
+  // Real per-user unsubscribe token (bug fix, 2026-09-06): the old static
+  // `${FRONTEND_URL}/settings/notifications` link had no RFC 8058 List-Unsubscribe header
+  // pairing with it. Type 'all' -- no dedicated notificationPrefs field exists for this
+  // one-off organizer nudge.
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(organizer.userId, 'all');
 
   const shareButtons = [
     { label: 'Copy link',  url: saleUrl },
@@ -98,7 +107,7 @@ export async function sendSaleLiveEmail(
     preheader: `2× more views happen in the first hour when you share.`,
     content,
     unsubLabel: 'Manage organizer notifications',
-    unsubUrl: `${FRONTEND_URL}/settings/notifications`,
+    unsubUrl,
   });
 
   try {
@@ -107,6 +116,7 @@ export async function sendSaleLiveEmail(
       to:      organizer.email,
       subject: `Your sale is live! Time to share it`,
       html,
+      listUnsubscribe: listUnsubscribeHeader,
     });
     console.log(`[saleLive] Confirmation email sent to ${organizer.email} for sale ${sale.id}`);
   } catch (err) {

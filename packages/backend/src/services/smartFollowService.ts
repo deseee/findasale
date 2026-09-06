@@ -119,6 +119,13 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
       // Email notification
       if (follow.notifyEmail && follow.user.email && !emailSuppressed) {
         try {
+          // Real per-user unsubscribe token (bug fix, 2026-09-06): this email previously had
+          // NO unsubscribe link at all (only a "manage your follows" settings link) -- adding
+          // one via the same buildUnsubscribeLinks scheme used by followerNotificationService.ts
+          // (the parallel Follow-based alert path). Type 'newSales' matches
+          // TYPE_TO_PREF_MAP's emailNewSalesFromFollowed field.
+          const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+          const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(follow.user.id, 'newSales');
           await emailService.emails.send({
             from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
             to: follow.user.email,
@@ -140,10 +147,12 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
                 </p>
                 <p style="font-size: 14px; color: #999; margin-top: 30px;">
                   You're receiving this because you follow ${organizer.businessName} on FindA.Sale.<br/>
+                  <a href="${unsubUrl}" style="color: #999;">Unsubscribe</a> &middot;
                   <a href="${process.env.FRONTEND_URL || 'https://finda.sale'}/settings/follows" style="color: #999;">Manage your follows</a>
                 </p>
               </div>
             `,
+            listUnsubscribe: listUnsubscribeHeader,
           });
         } catch (err: any) {
           console.error(

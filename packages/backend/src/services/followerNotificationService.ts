@@ -67,7 +67,13 @@ export const notifyFollowersOfNewSale = async (sale: SaleInfo): Promise<void> =>
       // ── Email ──────────────────────────────────────────────────────────────
       if (follow.notifyEmail && follow.user.email && !emailSuppressed) {
         try {
-await emailService.emails.send({
+          // Real per-user unsubscribe token (bug fix, 2026-09-06): the old
+          // `/unsubscribe?reason=follows&org=...` link carried no token -- pages/unsubscribe.tsx
+          // requires one and shows "Invalid unsubscribe link" for every click. Type 'newSales'
+          // matches TYPE_TO_PREF_MAP's emailNewSalesFromFollowed field exactly.
+          const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+          const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(follow.user.id, 'newSales');
+          await emailService.emails.send({
             from:    process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
             to:      follow.user.email,
             subject: `${organizer.businessName} just posted a sale near you`,
@@ -79,8 +85,9 @@ await emailService.emails.send({
                 address:   `${sale.address}, ${sale.city}, ${sale.state}`,
                 saleUrl,
               },
-              unsubUrl: `${process.env.FRONTEND_URL || 'https://finda.sale'}/unsubscribe?reason=follows&org=${sale.organizerId}`,
+              unsubUrl,
             }),
+            listUnsubscribe: listUnsubscribeHeader,
           });
         } catch (err: any) {
           console.error(

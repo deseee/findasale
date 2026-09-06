@@ -114,13 +114,21 @@ const getSMSTemplate = (reminder: ReminderSMS): string => {
 
 export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> => {
   try {
-    if (await suppressionService.isHardSuppressed(reminder.to)) {
-      console.log(`[emailReminder] Skipping hard-suppressed recipient: ${reminder.to}`);
+    // isSuppressed (not isHardSuppressed) -- bug fix, 2026-09-06: a sale-day reminder is a
+    // notification the user can opt out of, not a strict transactional confirmation, so an
+    // opted-out recipient must not keep receiving it.
+    if (await suppressionService.isSuppressed(reminder.to)) {
+      console.log(`[emailReminder] Skipping suppressed recipient: ${reminder.to}`);
       return;
     }
     const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
     const unsubToken = await generateUnsubscribeToken(reminder.userId, 'newSales');
     const { subject, html } = getEmailTemplate(reminder, unsubToken);
+    // RFC 8058 one-click header (bug fix, 2026-09-06) -- this email already generated a real
+    // token above but never passed a List-Unsubscribe header to the send rail. Same bracketed
+    // mailto+URL format buildUnsubscribeLinks() produces, built directly here since the raw
+    // token (not the wrapper) is already in hand.
+    const listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/api/unsubscribe?token=${unsubToken}>`;
     try {
       // EM2: Retry up to 3 times with exponential backoff on transient Resend failures
       await withRetry(() =>
@@ -129,6 +137,7 @@ export const sendReminderEmail = async (reminder: ReminderEmail): Promise<void> 
           to: reminder.to,
           subject,
           html,
+          listUnsubscribe: listUnsubscribeHeader,
         })
       );
       console.log(`✓ Reminder email sent to ${reminder.to} for ${reminder.saleName}`);

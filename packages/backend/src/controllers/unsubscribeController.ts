@@ -23,6 +23,14 @@ const TYPE_TO_PREF_MAP: Record<string, string> = {
   // key covers "this specific followed sale is about to end" -- newSales is for a new
   // sale from a followed ORGANIZER, priceDrops/flash/weekly are unrelated categories.
   saleEndingSoon: 'emailSaleEndingSoon',
+  // Added 2026-09-06 (Gmail-bulk-mail content audit fix): priceDropService.ts's own gate
+  // (priceAlertsEnabledFor) reads notificationPrefs.priceAlerts -- NOT emailPriceDropAlerts
+  // (the field the pre-existing 'priceDrops' type above flips). A price-drop unsubscribe
+  // link built with type 'priceDrops' would report success but never actually stop the
+  // emails, since nothing reads that field. This new type targets the field the sender
+  // actually checks. The 'priceDrops'/emailPriceDropAlerts mapping is left as-is (unknown
+  // whether anything else depends on it) but appears to be dead for this purpose.
+  priceAlerts: 'priceAlerts',
 };
 
 /**
@@ -36,6 +44,7 @@ const TYPE_TO_LABEL_MAP: Record<string, string> = {
   priceDrops: 'price drop alerts',
   messages: 'message notifications',
   saleEndingSoon: 'sale ending soon alerts',
+  priceAlerts: 'price drop alerts',
 };
 
 /**

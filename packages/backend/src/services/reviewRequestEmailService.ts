@@ -126,10 +126,16 @@ export async function sendOrganizerTestimonialAsk(saleId: string): Promise<boole
     return false;
   }
 
+  // Real per-user unsubscribe token + RFC 8058 header (bug fix, 2026-09-06): the old static
+  // `${FRONTEND_URL}/settings/notifications` link had no token and no List-Unsubscribe header.
+  // Type 'all' -- no dedicated notificationPrefs field exists for this one-off review ask.
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(userId, 'all');
+
   const html = buildOrganizerTestimonialHtml({
     saleTitle: sale.title,
     testimonialUrl: `${FRONTEND_URL}/testimonial?saleId=${sale.id}`,
-    unsubUrl: `${FRONTEND_URL}/settings/notifications`,
+    unsubUrl,
   });
 
   try {
@@ -139,6 +145,7 @@ export async function sendOrganizerTestimonialAsk(saleId: string): Promise<boole
       subject: `How was your sale on FindA.Sale?`,
       html,
       jobName: 'organizerTestimonialAsk',
+      listUnsubscribe: listUnsubscribeHeader,
     });
     await stamp();
     await logSent(userId);
@@ -231,10 +238,15 @@ export async function sendShopperReviewAsk(purchaseId: string): Promise<boolean>
     ? `${FRONTEND_URL}/sales/${purchase.sale.id}?review=1`
     : FRONTEND_URL;
 
+  // Real per-user unsubscribe token + RFC 8058 header (bug fix, 2026-09-06) -- same reasoning
+  // as the organizer testimonial-ask above.
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(userId, 'all');
+
   const html = buildShopperReviewHtml({
     organizerName,
     reviewUrl,
-    unsubUrl: `${FRONTEND_URL}/settings/notifications`,
+    unsubUrl,
   });
 
   try {
@@ -244,6 +256,7 @@ export async function sendShopperReviewAsk(purchaseId: string): Promise<boolean>
       subject: `How did it go with ${organizerName}?`,
       html,
       jobName: 'shopperReviewAsk',
+      listUnsubscribe: listUnsubscribeHeader,
     });
     await stamp();
     await logSent(userId);

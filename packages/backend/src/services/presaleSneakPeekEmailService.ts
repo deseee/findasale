@@ -1,4 +1,5 @@
 import { prisma } from '../index';
+import jwt from 'jsonwebtoken';
 import { buildEmail, buildItemCardModule, buildSpacer, buildCTARow, EMAIL_TOKENS as T } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
@@ -23,8 +24,9 @@ function buildSneakPeekHtml(opts: {
   saleAddress: string;
   items: Array<{ title: string; price: number; category?: string }>;
   saleUrl: string;
+  unsubUrl: string;
 }): string {
-  const { saleName, saleDay, saleTime, saleAddress, items, saleUrl } = opts;
+  const { saleName, saleDay, saleTime, saleAddress, items, saleUrl, unsubUrl } = opts;
 
   // Item grid rows (text-only — no image src, avoids spam filters on bulk sends)
   const itemRows = items.slice(0, 6).map(item => {
@@ -73,12 +75,13 @@ function buildSneakPeekHtml(opts: {
     ctaUrl: saleUrl,
     footerNote: `${saleDay} &middot; ${saleAddress}`,
     unsubLabel: 'Unsubscribe from sale alerts',
-    unsubUrl: `${SITE_URL}/unsubscribe`,
+    unsubUrl,
   });
 }
 
 async function sendSneakPeekEmail(opts: {
   to: string;
+  userId: string | null;
   saleName: string;
   saleDay: string;
   saleTime: string;
@@ -86,13 +89,50 @@ async function sendSneakPeekEmail(opts: {
   items: Array<{ title: string; price: number; category?: string }>;
   saleUrl: string;
 }): Promise<void> {
-  const { to, saleName, saleDay } = opts;
+  const { to, userId, saleName, saleDay } = opts;
   if (await suppressionService.isSuppressed(to)) {
     console.log('[presaleSneakPeek] Skipped suppressed recipient:', to);
     return;
   }
+
+  // Real, working per-recipient unsubscribe link (bug fix, 2026-09-06). Previously this email
+  // always linked to the bare, tokenless `${SITE_URL}/unsubscribe` -- pages/unsubscribe.tsx
+  // requires a token and shows "Invalid unsubscribe link" for every click. Same two-path
+  // pattern as saleEndingSoonJob.ts: a registered user (userId set) gets the UnsubscribeToken/
+  // buildUnsubscribeLinks scheme; an email-only subscriber/RSVP with no User row (userId null)
+  // gets a JWT + /api/outreach/unsubscribe link instead (that route's own
+  // suppressionService.processOptOut(email) path).
+  let unsubUrl: string;
+  let listUnsubscribeHeader: string;
+
+  if (userId) {
+    const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+    const links = await buildUnsubscribeLinks(userId, 'all');
+    unsubUrl = links.webUrl;
+    listUnsubscribeHeader = links.listUnsubscribeHeader;
+  } else {
+    const outreachSecret = process.env.OUTREACH_SECRET;
+    const backendUrl =
+      process.env.RAILWAY_BACKEND_URL ||
+      process.env.BACKEND_URL ||
+      (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : undefined);
+
+    if (!outreachSecret || !backendUrl) {
+      // No working one-click unsubscribe can be built for this email-only recipient -- skip
+      // the send rather than ship a CAN-SPAM-noncompliant email with no functioning opt-out.
+      console.error(
+        `[presaleSneakPeek] Cannot build unsubscribe link for email-only recipient ${to} -- ${!outreachSecret ? 'OUTREACH_SECRET' : 'backend URL (RAILWAY_BACKEND_URL/BACKEND_URL/RAILWAY_PUBLIC_DOMAIN)'} not set. Skipping send.`
+      );
+      return;
+    }
+
+    const token = jwt.sign({ email: to }, outreachSecret, { expiresIn: '90d' });
+    unsubUrl = `${backendUrl}/api/outreach/unsubscribe?token=${token}`;
+    listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubUrl}>`;
+  }
+
   const subject = `${saleName} starts ${saleDay}. Here's a sneak peek`;
-  const html = buildSneakPeekHtml(opts);
+  const html = buildSneakPeekHtml({ ...opts, unsubUrl });
 
   try {
     await emailService.emails.send({
@@ -100,6 +140,7 @@ async function sendSneakPeekEmail(opts: {
       to,
       subject,
       html,
+      listUnsubscribe: listUnsubscribeHeader,
     });
     console.log(`✓ Sneak peek sent to ${to} for "${saleName}"`);
   } catch (err) {
@@ -206,6 +247,7 @@ export async function sendPresaleSneakPeekEmails(): Promise<void> {
 
         await sendSneakPeekEmail({
           to: recipient.email,
+          userId: recipient.userId,
           saleName: sale.title,
           saleDay,
           saleTime,

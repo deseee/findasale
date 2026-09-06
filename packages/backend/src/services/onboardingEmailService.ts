@@ -31,6 +31,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 export async function sendOnboardingEmail5a(organizer: {
   email: string;
   firstName?: string;
+  userId: string;
 }): Promise<void> {
   if (await suppressionService.isSuppressed(organizer.email)) {
     console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
@@ -64,11 +65,17 @@ export async function sendOnboardingEmail5a(organizer: {
     ${buildCTARow('Create your first sale →', `${FRONTEND_URL}/organizer/sales/new`)}
   `;
 
+  // Real per-user unsubscribe token (bug fix, 2026-09-06): the old
+  // `${FRONTEND_URL}/unsubscribe?reason=onboarding` link carried no token at all --
+  // pages/unsubscribe.tsx requires one and shows "Invalid unsubscribe link" for every click.
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(organizer.userId, 'all');
+
   const html = baseWrapper({
     preheader: 'One thing to do today: post your first sale.',
     content,
     unsubLabel: 'Pause onboarding emails',
-    unsubUrl: `${FRONTEND_URL}/unsubscribe?reason=onboarding`,
+    unsubUrl,
   });
 
   try {
@@ -77,6 +84,7 @@ export async function sendOnboardingEmail5a(organizer: {
       to:      organizer.email,
       subject: `Welcome in! Here's your first step`,
       html,
+      listUnsubscribe: listUnsubscribeHeader,
     });
     console.log(`[onboarding] Email 5a sent to ${organizer.email}`);
   } catch (err) {
@@ -91,6 +99,7 @@ export async function sendOnboardingEmail5a(organizer: {
 export async function sendOnboardingEmail5b(organizer: {
   email: string;
   firstName?: string;
+  userId: string;
 }): Promise<void> {
   if (await suppressionService.isSuppressed(organizer.email)) {
     console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
@@ -137,11 +146,14 @@ export async function sendOnboardingEmail5b(organizer: {
     ${buildCTARow('Start where you are →', `${FRONTEND_URL}/organizer/sales/new`)}
   `;
 
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(organizer.userId, 'all');
+
   const html = baseWrapper({
     preheader: `Still getting set up? Here's what most people do first.`,
     content,
     unsubLabel: 'Pause onboarding emails',
-    unsubUrl: `${FRONTEND_URL}/unsubscribe?reason=onboarding`,
+    unsubUrl,
   });
 
   try {
@@ -150,6 +162,7 @@ export async function sendOnboardingEmail5b(organizer: {
       to:      organizer.email,
       subject: `Quick question, ${firstName}`,
       html,
+      listUnsubscribe: listUnsubscribeHeader,
     });
     console.log(`[onboarding] Email 5b sent to ${organizer.email}`);
   } catch (err) {
@@ -164,6 +177,7 @@ export async function sendOnboardingEmail5b(organizer: {
 export async function sendOnboardingEmail5c(organizer: {
   email: string;
   firstName?: string;
+  userId: string;
 }): Promise<void> {
   if (await suppressionService.isSuppressed(organizer.email)) {
     console.log('[onboarding] Skipped suppressed recipient:', organizer.email);
@@ -186,11 +200,14 @@ export async function sendOnboardingEmail5c(organizer: {
     ${buildCTARow('Create your first sale →', `${FRONTEND_URL}/organizer/sales/new`, `Not ready yet? No worries. Your account stays active.`)}
   `;
 
+  const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+  const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(organizer.userId, 'all');
+
   const html = baseWrapper({
     preheader: `An organizer near you got 34 views on their first sale last week.`,
     content,
     unsubLabel: 'Pause onboarding emails',
-    unsubUrl: `${FRONTEND_URL}/unsubscribe?reason=onboarding`,
+    unsubUrl,
   });
 
   try {
@@ -199,6 +216,7 @@ export async function sendOnboardingEmail5c(organizer: {
       to:      organizer.email,
       subject: `One last nudge before we leave you alone`,
       html,
+      listUnsubscribe: listUnsubscribeHeader,
     });
     console.log(`[onboarding] Email 5c sent to ${organizer.email}`);
   } catch (err) {

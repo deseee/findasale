@@ -20,8 +20,11 @@ const sendWaitlistNotificationEmail = async (
 ): Promise<void> => {
   
 
-  if (await suppressionService.isHardSuppressed(email)) {
-    console.log(`[Waitlist] Skipping hard-suppressed recipient: ${email}`);
+  // isSuppressed (not isHardSuppressed) -- bug fix, 2026-09-06: a waitlist "item back in
+  // stock" alert is a notification, not a strict transactional confirmation, so an opted-out
+  // recipient must not keep receiving it.
+  if (await suppressionService.isSuppressed(email)) {
+    console.log(`[Waitlist] Skipping suppressed recipient: ${email}`);
     return;
   }
 

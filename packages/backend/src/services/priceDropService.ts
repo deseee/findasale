@@ -54,6 +54,14 @@ async function sendPriceDropEmail(
     const savings = oldPrice - newPrice;
     const savingsPercent = Math.round(((oldPrice - newPrice) / oldPrice) * 100);
 
+    // Real per-user unsubscribe token (bug fix, 2026-09-06): this email previously had no
+    // unsubscribe link/header at all (defaulted to emailTemplateService's tokenless
+    // `${FRONTEND_URL}/unsubscribe}`). Type 'priceAlerts' maps to notificationPrefs.priceAlerts
+    // -- the SAME field priceAlertsEnabledFor() above reads -- not the pre-existing 'priceDrops'
+    // type, which flips a different, unread field (emailPriceDropAlerts).
+    const { buildUnsubscribeLinks } = await import('../controllers/unsubscribeController');
+    const { webUrl: unsubUrl, listUnsubscribeHeader } = await buildUnsubscribeLinks(user.id, 'priceAlerts');
+
     const emailHtml = buildEmail({
       preheader: `${item.title} dropped from $${oldPriceStr} to $${newPriceStr}`,
       headline: 'Price just dropped!',
@@ -76,6 +84,8 @@ async function sendPriceDropEmail(
       ctaText: 'View Item',
       ctaUrl: `${FRONTEND_URL}/items/${item.id}`,
       accentColor: '#10b981', // green for good news
+      unsubLabel: 'Stop price drop alerts',
+      unsubUrl,
     });
 
     await emailService.emails.send({
@@ -83,6 +93,7 @@ async function sendPriceDropEmail(
       to: user.email,
       subject: `💰 Price drop on "${item.title}": now $${newPriceStr}`,
       html: emailHtml,
+      listUnsubscribe: listUnsubscribeHeader,
     });
 
     console.log(`[PriceDrop] Email sent to ${user.email} for item "${item.title}"`);
