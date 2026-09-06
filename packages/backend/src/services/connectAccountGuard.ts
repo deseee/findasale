@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
+import { createNotification } from './notificationService';
 
 /**
  * Connect Account Guard — Bank-Account Fingerprint Collusion Detection
@@ -79,6 +80,51 @@ async function resolveOwners(stripeAccountId: string): Promise<ResolvedOwner[]> 
   for (const c of consignors) owners.push({ ownerType: 'CONSIGNOR', ownerId: c.id });
   for (const b of booths) owners.push({ ownerType: 'VENDOR_BOOTH', ownerId: b.id });
   return owners;
+}
+
+/**
+ * Real-time admin alert companion to the Sentry.captureMessage warning fired on a new
+ * bank-fingerprint match below -- Sentry is for on-call/engineering visibility, this is
+ * for the actual admin fraud-review workflow (matches the existing
+ * notifyAdminsBatchNeedsAttention precedent in services/video/footageClassifyService.ts).
+ * Fire-and-forget, never throws -- a notification failure must never turn a legitimate
+ * account.updated delivery into a failure the webhook then retries.
+ */
+async function notifyAdminsOfBankFingerprintFlag(
+  ownerType: ConnectOwnerType,
+  ownerId: string,
+  stripeAccountId: string,
+  reason: string
+): Promise<void> {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { OR: [{ roles: { has: 'ADMIN' } }, { role: 'ADMIN' }] },
+      select: { id: true },
+    });
+    if (admins.length === 0) {
+      console.warn('[connectAccountGuard] No ADMIN users found -- bank fingerprint flag has no one to notify');
+      return;
+    }
+    const title = 'Payout flagged: shared bank account detected';
+    const body = `${ownerType} ${ownerId} (Stripe acct ${stripeAccountId}) was flagged for review: ${reason}`;
+    const link = '/admin/connect-bank-fingerprints';
+    await Promise.all(
+      admins.map((a) =>
+        createNotification(
+          a.id,
+          'connect_bank_fingerprint_flag',
+          title,
+          body,
+          link,
+          'OPERATIONAL',
+          true,
+          'FindA.Sale: payout flagged for review'
+        )
+      )
+    );
+  } catch (err) {
+    console.warn('[connectAccountGuard] Failed to notify admins of bank fingerprint flag:', err);
+  }
 }
 
 async function setOwnerFlag(owner: ResolvedOwner, reason: string): Promise<void> {
@@ -214,6 +260,7 @@ export async function recordAndCheckBankFingerprints(account: Stripe.Account | R
           } catch {
             // Sentry may not be initialized — silently continue, never let alerting break the webhook
           }
+          await notifyAdminsOfBankFingerprintFlag(owner.ownerType, owner.ownerId, stripeAccountId, flagReason!);
         }
       }
     }
