@@ -235,6 +235,7 @@ import './jobs/xpExpiryCron';      // D-XP-002: XP expiry system — daily at 02
 import './jobs/anniversaryXpJob';  // 30-day account anniversary XP bonus — daily at 02:45 UTC (wires ANNIVERSARY_30DAY into User.createdAt tenure tracking)
 import './jobs/huntPassExpiryCron'; // Hunt Pass: deactivate expired passes daily at 03:00 UTC
 import './jobs/deliverabilityMonitorJob'; // Email deliverability monitoring — Sundays 19:00 UTC
+import './jobs/organizerOnboardingDripJob'; // Organizer onboarding drip (Email 5a/5b/5c) — daily 11:00 UTC
 import './jobs/gmailHealthCron';          // Gmail OAuth health, daily send summary, suspension detect
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements

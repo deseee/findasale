@@ -11,6 +11,7 @@ import { notifyFollowersOfNewSale } from '../services/followerNotificationServic
 import { syncOrganizerTier } from '../services/tierService';
 import { notifyMatchedBuyers } from '../services/buyerMatchService';
 import { markSalePublished } from '../services/mailerliteService';
+import { sendSaleLiveEmail } from '../services/saleLiveEmailService';
 import { pingIndexNowForSale } from '../services/indexNowService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
@@ -1274,6 +1275,15 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
         if (org?.user?.email) {
           markSalePublished(org.user.email).catch((err) => {
             console.error('[mailerlite] markSalePublished failed:', err);
+          });
+
+          // Email 7: "Sale is live" confirmation + share prompt (dormant-email
+          // ADR 2026-09-06 -- was fully built but never wired to the publish flow).
+          sendSaleLiveEmail(
+            { email: org.user.email, businessName: org.businessName, userId: org.userId },
+            { title: updated.title, id: updated.id }
+          ).catch((err) => {
+            console.error('[saleLive] sendSaleLiveEmail failed:', err);
           });
         }
       }).catch(() => {});

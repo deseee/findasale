@@ -17,7 +17,6 @@ const TYPE_TO_PREF_MAP: Record<string, string> = {
   weekly: 'emailWeeklyDigest',
   flash: 'emailFlashDeals',
   newSales: 'emailNewSalesFromFollowed',
-  priceDrops: 'emailPriceDropAlerts',
   messages: 'pushMessages',
   // Added 2026-09-05 (saleEndingSoonJob per-recipient unsubscribe fix): no existing
   // key covers "this specific followed sale is about to end" -- newSales is for a new
@@ -25,11 +24,15 @@ const TYPE_TO_PREF_MAP: Record<string, string> = {
   saleEndingSoon: 'emailSaleEndingSoon',
   // Added 2026-09-06 (Gmail-bulk-mail content audit fix): priceDropService.ts's own gate
   // (priceAlertsEnabledFor) reads notificationPrefs.priceAlerts -- NOT emailPriceDropAlerts
-  // (the field the pre-existing 'priceDrops' type above flips). A price-drop unsubscribe
-  // link built with type 'priceDrops' would report success but never actually stop the
-  // emails, since nothing reads that field. This new type targets the field the sender
-  // actually checks. The 'priceDrops'/emailPriceDropAlerts mapping is left as-is (unknown
-  // whether anything else depends on it) but appears to be dead for this purpose.
+  // (the field the old 'priceDrops' type used to flip). A price-drop unsubscribe link
+  // built with type 'priceDrops' would report success but never actually stop the emails,
+  // since nothing reads that field. This new type targets the field the sender actually
+  // checks. Confirmed same session (repo-wide grep) that no email template or frontend
+  // page ever builds a 'priceDrops' link or reads emailPriceDropAlerts for this purpose --
+  // the dead 'priceDrops'/emailPriceDropAlerts entries were removed from both maps above
+  // (ADR: claude_docs/feature-notes/adr-dormant-email-functions-2026-09-06.md). The
+  // emailPriceDropAlerts field itself is untouched -- it is still written by the shared
+  // 'all' unsubscribe/resubscribe branches below alongside the other legacy pref flags.
   priceAlerts: 'priceAlerts',
 };
 
@@ -41,7 +44,6 @@ const TYPE_TO_LABEL_MAP: Record<string, string> = {
   weekly: 'weekly digest',
   flash: 'flash deal alerts',
   newSales: 'new sale alerts',
-  priceDrops: 'price drop alerts',
   messages: 'message notifications',
   saleEndingSoon: 'sale ending soon alerts',
   priceAlerts: 'price drop alerts',
@@ -52,7 +54,7 @@ const TYPE_TO_LABEL_MAP: Record<string, string> = {
  * Used by email services to include unsubscribe links in emails.
  *
  * @param userId - The user ID
- * @param type - The unsubscribe type (all, weekly, flash, newSales, priceDrops, messages)
+ * @param type - The unsubscribe type (all, weekly, flash, newSales, priceAlerts, saleEndingSoon, messages)
  * @returns The unsubscribe token string
  */
 export async function generateUnsubscribeToken(
