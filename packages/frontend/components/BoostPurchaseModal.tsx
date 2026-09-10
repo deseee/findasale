@@ -24,6 +24,17 @@ import api from '../lib/api';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
 
+// Boost cash-rail stopgap (audit sweep, 2026-09-10): handleStripePurchase below (and the
+// StripePayForm confirm flow) calls purchaseBoost's STRIPE rail (boostService.ts ~204-268),
+// which creates a Stripe PaymentIntent against FindA.Sale's Stripe platform account
+// (acct_1T3kXhLIWHQCHu75) -- permanently closed. Every card-payment boost purchase attempt
+// is guaranteed to 500. The XP rail (handleXpPurchase) is a completely separate code path
+// and is unaffected -- left fully working. Mirrors the ENABLE_STRIPE_TERMINAL_CARD_READER /
+// ENABLE_BOOTH_FEE_AUTOPAY pattern: state/logic kept intact, only the cash-fallback rail is
+// disabled with an honest message, nothing deleted. Do not remove or flip to true without
+// Patrick's explicit approval.
+const ENABLE_BOOST_CASH_RAIL = false;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PaymentRail = 'XP' | 'STRIPE';
@@ -184,7 +195,7 @@ export default function BoostPurchaseModal({
         const q: BoostQuote = res.data;
         setQuote(q);
         // Default to XP if affordable, otherwise Stripe
-        setRail(q.canAffordXp ? 'XP' : q.cashRailAvailable ? 'STRIPE' : 'XP');
+        setRail(q.canAffordXp ? 'XP' : q.cashRailAvailable && ENABLE_BOOST_CASH_RAIL ? 'STRIPE' : 'XP');
       } catch (err: unknown) {
         setError('Unable to load boost pricing. Please try again.');
       } finally {
@@ -229,6 +240,7 @@ export default function BoostPurchaseModal({
 
   const handleStripePurchase = async () => {
     if (!quote) return;
+    if (!ENABLE_BOOST_CASH_RAIL) return;
     setPurchasing(true);
     setError(null);
     try {
@@ -340,17 +352,24 @@ export default function BoostPurchaseModal({
 
               <button
                 onClick={() => setRail('STRIPE')}
-                disabled={!quote.cashRailAvailable}
+                disabled={!quote.cashRailAvailable || !ENABLE_BOOST_CASH_RAIL}
+                title={!ENABLE_BOOST_CASH_RAIL ? "Card payment for boosts isn't available right now" : undefined}
                 className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
                   rail === 'STRIPE'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
                     : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
-                } ${!quote.cashRailAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
+                } ${!quote.cashRailAvailable || !ENABLE_BOOST_CASH_RAIL ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div className="text-lg font-bold">${quote.stripeAmountDollars}</div>
                 <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">Credit card</div>
               </button>
             </div>
+
+            {quote.cashRailAvailable && !ENABLE_BOOST_CASH_RAIL && (
+              <p className="text-xs text-center text-gray-400 dark:text-gray-500">
+                Card payment for boosts isn&apos;t available right now -- earn more XP or check back soon.
+              </p>
+            )}
 
             {/* XP confirm */}
             {rail === 'XP' && (
@@ -364,7 +383,7 @@ export default function BoostPurchaseModal({
             )}
 
             {/* Stripe: click to load PaymentElement */}
-            {rail === 'STRIPE' && (
+            {rail === 'STRIPE' && ENABLE_BOOST_CASH_RAIL && (
               <button
                 onClick={handleStripePurchase}
                 disabled={purchasing || !quote.cashRailAvailable}
@@ -382,7 +401,7 @@ export default function BoostPurchaseModal({
         )}
 
         {/* Stripe PaymentElement flow */}
-        {!loading && !success && clientSecret && quote && (
+        {!loading && !success && clientSecret && quote && ENABLE_BOOST_CASH_RAIL && (
           <Elements
             stripe={getStripePromise()}
             options={{

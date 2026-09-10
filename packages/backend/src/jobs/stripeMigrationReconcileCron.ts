@@ -27,6 +27,18 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { reconcileStripeMigration } from '../services/stripeConnectService';
 
+// Stripe migration reconcile lockdown (audit sweep, 2026-09-10): reconcileStripeMigration
+// (stripeConnectService.ts:470-551) makes a live Stripe API call against FindA.Sale's
+// Stripe platform account (acct_1T3kXhLIWHQCHu75), which is permanently closed -- every
+// call is guaranteed to fail, and failures here were only ever surfaced to console.error
+// with nobody watching (this cron runs unattended at 04:30 daily). Mirrors the
+// GOOGLE_MAPS_BILLING_LOCKED_DOWN pattern in verificationController.ts: a boolean gate
+// checked before the dead external call, short-circuiting cleanly instead of throwing.
+// Do not remove or flip to false without Patrick's explicit approval -- the underlying
+// Stripe migration/cutover feature itself is untouched and can resume once Patrick
+// confirms the platform account situation is resolved.
+const STRIPE_MIGRATION_RECONCILE_DISABLED = true as const;
+
 /**
  * Reconcile every organizer with a Stripe Standard migration currently in flight.
  * Called by both the cron job and (if ever needed) a manual trigger.
@@ -38,6 +50,11 @@ export async function reconcileAllPendingStripeMigrations(): Promise<{
   errored: number;
 }> {
   const summary = { checked: 0, reconciled: 0, stillPending: 0, errored: 0 };
+
+  if (STRIPE_MIGRATION_RECONCILE_DISABLED) {
+    console.log('[stripe-migration-reconcile] skipped -- Stripe platform account closed');
+    return summary;
+  }
 
   // Excludes the 'CLAIMING' sentinel implicitly -- reconcileStripeMigration itself
   // treats it as not-yet-eligible (no real Stripe account id to live-check yet), so

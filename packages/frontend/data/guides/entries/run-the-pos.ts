@@ -23,7 +23,7 @@ Bookmark \`/organizer/pos\` on your phone now so you're not hunting for it at 8 
 ## Before you start
 
 - Your sale must be published and set to Active.
-- Stripe must be connected if you want card or payment-link checkout. (Cash and Venmo/Zelle work without Stripe.)
+- A payment processor must be connected if you want card or payment-link checkout. (Cash and Venmo/Zelle work without one.)
 - Charge your tablet or phone the night before. The POS is the one screen you can't afford to lose.
 
 ---
@@ -59,7 +59,7 @@ You don't need to calculate anything.
 
 **Zelle.** Your Zelle handle appears with a copy button next to it. The shopper sends the amount. Tap Confirm when it arrives.
 
-**Stripe in-person link.** Available if you've connected Stripe. Tap to generate a link or QR code. The shopper pays on their phone. The POS confirms automatically when payment clears.
+**In-person payment link.** Available if you've connected a payment processor. Tap to generate a link or QR code. The shopper pays on their phone. The POS confirms automatically when payment clears.
 
 ### 5. Items are marked sold
 
@@ -90,7 +90,7 @@ One device handles both.
 The POS stays open in offline mode for cash transactions.
 You can still add items and tap Confirm.
 The sale logs locally and syncs when your connection comes back.
-Venmo, Zelle, and Stripe links need a connection: those are on the shopper's device anyway.
+Venmo, Zelle, and payment links need a connection: those are on the shopper's device anyway.
 
 ---
 
@@ -113,7 +113,7 @@ No. The POS can text or email a receipt to the shopper. A printer speeds things 
 Don't tap Confirm until the correct amount shows in your Venmo notifications. Ask them to send the difference or void and re-do the transaction.
 
 **Can I run the POS without internet?**
-Cash transactions only. Venmo, Zelle, and Stripe require a connection on your side or the shopper's. Plan accordingly at sales with poor cell service.
+Cash transactions only. Venmo, Zelle, and payment links require a connection on your side or the shopper's. Plan accordingly at sales with poor cell service.
 
 ---
 
