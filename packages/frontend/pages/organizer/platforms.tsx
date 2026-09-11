@@ -29,6 +29,8 @@ interface EbayStats {
   storeDetected: boolean;
   queueMode: boolean;
   queueRotation: boolean;
+  // ADR-115 tier decision (2026-09-11): Queue Mode is PRO/TEAMS only.
+  subscriptionTier: string;
   queued: number;
   activeSlots: number;
   freeSlots: number;
@@ -530,26 +532,38 @@ export default function PlatformsPage() {
                 <h2 className="text-lg font-bold text-warm-900 dark:text-warm-100">
                   eBay Listing Queue
                 </h2>
-                {/* Queue Mode toggle */}
-                <button
-                  onClick={() => queueSettingsMutation.mutate({ ebayQueueMode: !ebay.queueMode })}
-                  disabled={queueSettingsMutation.isPending}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
-                    ebay.queueMode ? 'bg-[#87A878]' : 'bg-warm-200 dark:bg-gray-600'
-                  }`}
-                  aria-label="Toggle Queue Mode"
-                  role="switch"
-                  aria-checked={ebay.queueMode}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
-                      ebay.queueMode ? 'translate-x-6' : 'translate-x-1'
+                {/* Queue Mode toggle -- PRO/TEAMS only (ADR-115 tier decision) */}
+                {ebay.subscriptionTier !== 'SIMPLE' && (
+                  <button
+                    onClick={() => queueSettingsMutation.mutate({ ebayQueueMode: !ebay.queueMode })}
+                    disabled={queueSettingsMutation.isPending}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                      ebay.queueMode ? 'bg-[#87A878]' : 'bg-warm-200 dark:bg-gray-600'
                     }`}
-                  />
-                </button>
+                    aria-label="Toggle Queue Mode"
+                    role="switch"
+                    aria-checked={ebay.queueMode}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
+                        ebay.queueMode ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                )}
               </div>
 
-              {!ebay.queueMode ? (
+              {ebay.subscriptionTier === 'SIMPLE' ? (
+                /* Queue Mode requires PRO/TEAMS */
+                <div className="space-y-2">
+                  <p className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed">
+                    eBay Listing Queue requires the PRO or TEAMS plan &mdash; it automatically manages your free eBay listing slots so items go live the moment a spot opens, with no manual pushing and no surprise eBay fees.
+                  </p>
+                  <Link href="/organizer/settings" className="mt-2 inline-block text-xs font-medium text-[#6b8f5e] dark:text-[#a8c49a] hover:text-[#87A878]">
+                    Upgrade to PRO or TEAMS &rarr;
+                  </Link>
+                </div>
+              ) : !ebay.queueMode ? (
                 /* Queue Mode OFF */
                 <div className="space-y-4">
                   <p className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed">

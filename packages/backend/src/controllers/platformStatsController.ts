@@ -24,6 +24,18 @@ async function resolveOrganizerId(req: AuthRequest): Promise<string | null> {
   return organizer?.id ?? null;
 }
 
+// ADR-115 tier decision (2026-09-11, Patrick): eBay Queue Mode is PRO/TEAMS only,
+// matching pushSaleToEbay's existing gate (ebayController.ts ~line 2246). Manually-
+// queued items need the same offer-creation logic that push uses, so Queue Mode
+// inherits the same tier restriction rather than duplicating a second free-tier path.
+async function resolveOrganizerTier(organizerId: string): Promise<string | null> {
+  const organizer = await prisma.organizer.findUnique({
+    where: { id: organizerId },
+    select: { subscriptionTier: true },
+  });
+  return organizer?.subscriptionTier ?? null;
+}
+
 function requireOrganizer(req: AuthRequest, res: Response): boolean {
   const hasRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
   if (!req.user || !hasRole) {
@@ -96,6 +108,11 @@ export async function updateEbayQueueSettings(req: AuthRequest, res: Response): 
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
+    const tier = await resolveOrganizerTier(organizerId);
+    if (tier !== 'PRO' && tier !== 'TEAMS') {
+      return res.status(403).json({ message: 'eBay Queue Mode requires PRO or TEAMS tier' });
+    }
+
     const { ebayQueueMode, ebayQueueRotation } = req.body as {
       ebayQueueMode?: boolean;
       ebayQueueRotation?: boolean;
@@ -135,6 +152,11 @@ export async function addToEbayQueue(req: AuthRequest, res: Response): Promise<R
     const organizerId = await resolveOrganizerId(req);
     if (!organizerId) {
       return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const tier = await resolveOrganizerTier(organizerId);
+    if (tier !== 'PRO' && tier !== 'TEAMS') {
+      return res.status(403).json({ message: 'eBay Queue Mode requires PRO or TEAMS tier' });
     }
 
     const { itemIds } = req.body as { itemIds?: unknown };

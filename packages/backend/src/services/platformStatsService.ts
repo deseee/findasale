@@ -85,6 +85,9 @@ export interface EbayPlatformCount extends PlatformCount {
   storeDetected: boolean;
   queueMode: boolean;
   queueRotation: boolean;
+  // ADR-115 tier decision (2026-09-11): Queue Mode is PRO/TEAMS only. Frontend uses
+  // this to show an upgrade prompt instead of the toggle for SIMPLE-tier organizers.
+  subscriptionTier: string;
   queued: number;
   activeSlots: number;
   freeSlots: number;
@@ -182,6 +185,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       fbCatalogEnabled: true,
       ebayQueueMode: true,
       ebayQueueRotation: true,
+      subscriptionTier: true,
       ebayConnection: { select: { id: true, accessToken: true, tokenExpiresAt: true, ebayUserId: true } },
     },
   });
@@ -373,6 +377,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       storeDetected,
       queueMode: org.ebayQueueMode,
       queueRotation: org.ebayQueueRotation,
+      subscriptionTier: org.subscriptionTier,
       queued: ebayQueued,
       activeSlots: ebayListed,
       freeSlots: ebayFreeSlots,

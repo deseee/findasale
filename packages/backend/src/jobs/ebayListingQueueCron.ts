@@ -445,10 +445,16 @@ async function processOrganizer(
 
 async function runEbayListingQueueCron(): Promise<void> {
   // Find organizers with queue mode enabled AND an eBay connection
+  // ADR-115 tier decision (2026-09-11): Queue Mode is PRO/TEAMS only. An organizer
+  // downgraded after enabling Queue Mode must not keep silently auto-publishing in
+  // the background with no UI visibility into it -- excluded here defensively even
+  // though the API-level gate (platformStatsController.ts) already blocks new
+  // enrollment/changes for SIMPLE tier.
   const orgs = await prisma.organizer.findMany({
     where: {
       ebayQueueMode: true,
       ebayConnection: { isNot: null },
+      subscriptionTier: { in: ['PRO', 'TEAMS'] },
     },
     select: {
       id: true,
