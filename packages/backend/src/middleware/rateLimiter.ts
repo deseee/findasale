@@ -170,7 +170,7 @@ export const paymentLimiter = rateLimit({
   message: 'Too many payment requests, please try again later.',
   standardHeaders: false,
   legacyHeaders: false,
-  store: createRateLimitStore(),
+  store: createRateLimitStore('rl:payment:'),
 });
 
 /**
@@ -261,7 +261,7 @@ export const shopperReservationsLimiter = rateLimit({
   validate: false,
   standardHeaders: false,
   legacyHeaders: false,
-  store: createRateLimitStore(),
+  store: createRateLimitStore('rl:shopperRes:'),
   handler: (req, res) => {
     const authReq = req as any;
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip;

@@ -2050,7 +2050,7 @@ export const listAllFraudSignals = async (req: AuthRequest, res: Response) => {
         include: {
           user: { select: { id: true, email: true, name: true } },
           item: { select: { id: true, title: true } },
-          sale: { select: { id: true, title: true } },
+          sale: { select: { id: true, title: true, paymentsHeldAt: true, paymentsHeldReason: true } },
         },
         orderBy: [{ confidenceScore: 'desc' }, { detectedAt: 'desc' }],
         skip,
@@ -2109,6 +2109,65 @@ export const reviewFraudSignalAdmin = async (req: AuthRequest, res: Response) =>
     console.error('[admin] reviewFraudSignalAdmin error:', error);
     Sentry.captureException(error);
     res.status(500).json({ message: 'Failed to update fraud signal' });
+  }
+};
+
+// POST /api/admin/fraud-signals/sale/:saleId/clear-hold — S1072 follow-up (2026-09-11):
+// a CONFIRMED FraudSignal auto-sets Sale.paymentsHeldAt (checkoutGuard.ts recordConfirmedSignal /
+// paymentEligibilityService.ts velocity check) to hard-block ALL future checkouts on that sale,
+// by design (see those files' comments). But nothing anywhere in the codebase ever set it back
+// to null -- confirmed by grepping every reference to paymentsHeldAt in packages/backend/src.
+// The hold was permanent with no admin recovery path once tripped, including for a false
+// positive or an organizer's own test purchase. This is that recovery path: admin-only,
+// requires every CONFIRMED signal on the sale to already be DISMISSED first (via the existing
+// PATCH /api/admin/fraud-signals/:id action above) so a hold is never cleared without an
+// explicit, audited disposition of why it was held.
+export const clearSaleFraudHold = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true, paymentsHeldAt: true },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (!sale.paymentsHeldAt) {
+      return res.status(400).json({ message: 'Sale is not currently held' });
+    }
+
+    const unresolvedSignals = await prisma.fraudSignal.findMany({
+      where: { saleId, reviewOutcome: 'CONFIRMED' },
+      select: { id: true, signalType: true, userId: true },
+    });
+
+    if (unresolvedSignals.length > 0) {
+      return res.status(409).json({
+        message: `${unresolvedSignals.length} confirmed fraud signal(s) on this sale must be dismissed before the hold can be cleared`,
+        unresolvedSignals,
+      });
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: { paymentsHeldAt: null, paymentsHeldReason: null },
+      select: { id: true, paymentsHeldAt: true, paymentsHeldReason: true },
+    });
+
+    console.log(`[admin] Sale ${saleId} payments hold cleared by admin ${req.user.id}`);
+
+    res.json({ message: 'Payments hold cleared', sale: updated });
+  } catch (error) {
+    console.error('[admin] clearSaleFraudHold error:', error);
+    Sentry.captureException(error);
+    res.status(500).json({ message: 'Failed to clear sale hold' });
   }
 };
 

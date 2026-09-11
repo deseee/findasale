@@ -32,7 +32,7 @@ interface FraudSignalRecord {
   itemId: string | null;
   item: { id: string; title: string } | null;
   saleId: string;
-  sale: { id: string; title: string } | null;
+  sale: { id: string; title: string; paymentsHeldAt: string | null; paymentsHeldReason: string | null } | null;
   signalType: SignalType;
   confidenceScore: number;
   detectedAt: string;
@@ -127,6 +127,22 @@ const AdminFraudSignals = () => {
     } catch (err) {
       console.error('Error updating fraud signal:', err);
       setError('Failed to update fraud signal');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleClearHold = async (saleId: string) => {
+    if (!window.confirm('Clear the payments hold on this sale? All CONFIRMED signals for it must already be dismissed.')) {
+      return;
+    }
+    try {
+      setActionLoading(`hold-${saleId}`);
+      await api.post(`/admin/fraud-signals/sale/${saleId}/clear-hold`);
+      await fetchSignals(page);
+    } catch (err: any) {
+      console.error('Error clearing sale hold:', err);
+      setError(err?.response?.data?.message || 'Failed to clear sale hold');
     } finally {
       setActionLoading(null);
     }
@@ -289,6 +305,16 @@ const AdminFraudSignals = () => {
                         >
                           {actionLoading === record.id ? '...' : 'Reopen'}
                         </button>
+                        {record.sale?.paymentsHeldAt && (
+                          <button
+                            onClick={() => handleClearHold(record.sale!.id)}
+                            disabled={actionLoading === `hold-${record.sale!.id}`}
+                            title="Sale is currently blocking ALL purchases -- clears once every CONFIRMED signal on it is dismissed"
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-xs px-2 py-1 rounded"
+                          >
+                            {actionLoading === `hold-${record.sale!.id}` ? '...' : 'Clear Sale Hold'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

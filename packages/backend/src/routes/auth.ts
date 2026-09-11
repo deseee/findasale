@@ -85,7 +85,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many failed login attempts. Please try again in 15 minutes.' },
   skip: (req) => isQABypass(req),
-  store: createRateLimitStore(),
+  store: createRateLimitStore('rl:login:'),
 });
 
 // L2: Register rate limiter
@@ -96,7 +96,7 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many registration attempts.' },
   skip: (req) => isQABypass(req),
-  store: createRateLimitStore(),
+  store: createRateLimitStore('rl:register:'),
 });
 
 const router = Router();

@@ -473,7 +473,7 @@ const globalLimiter = rateLimit({
     (req.path === '/api/crawler-log' &&
       !!process.env.INTERNAL_SCRAPER_KEY &&
       req.headers['x-scraper-key'] === process.env.INTERNAL_SCRAPER_KEY),
-  store: createRateLimitStore(),
+  store: createRateLimitStore('rl:global:'),
 });
 app.use(resilientLimiter(globalLimiter));
 
@@ -515,7 +515,7 @@ const authLimiter = rateLimit({
 
     return false;
   },
-  store: createRateLimitStore(),
+  store: createRateLimitStore('rl:auth:'),
 });
 
 // Contact form limiter — 5 submissions / 15 min per IP (M3: prevents spam campaigns)

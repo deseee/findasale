@@ -30,7 +30,7 @@ export const curioRateLimiter = rateLimit({
   validate: false,
   standardHeaders: false,
   legacyHeaders: false,
-  store: createRateLimitStore(),
+  store: createRateLimitStore('rl:curio:'),
   handler: (req, res) => {
     const authReq = req as AuthRequest;
     console.warn(`[curioRateLimiter] 429 ${req.method} ${req.path} userId=${authReq.user?.id ?? 'unknown'}`);

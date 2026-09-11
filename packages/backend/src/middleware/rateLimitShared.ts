@@ -73,7 +73,25 @@ if (process.env.REDIS_URL) {
 }
 
 // Build store config for rate limiters.
-export const createRateLimitStore = () => {
+//
+// `prefix` is REQUIRED (2026-09-11 fix, S-RATE-LIMIT-PREFIX-COLLISION): every call site used to
+// get RedisStore's own default prefix ("rl:", confirmed by reading the installed
+// rate-limit-redis@4.2.0 source directly). Because every limiter that calls this function keys
+// by the SAME value for a given request (req.ip for anonymous, req.user.id / getVerifiedSessionUserId
+// for authenticated -- see globalLimiter/authLimiter/loginLimiter/registerLimiter/paymentLimiter/
+// shopperReservationsLimiter/curioRateLimiter), a shared default prefix meant every one of those
+// differently-scoped limiters (windows from 1 min to 1 hour, maxes from 5 to 3000) was silently
+// incrementing and reading the exact same Redis counter under the exact same key. Whichever
+// limiter's hit happened to create the key first controlled its TTL for that limiter's own
+// windowMs -- so e.g. registerLimiter's 1-hour window could end up governing a key that
+// globalLimiter's 15-min/500-request budget was also blindly incrementing on every request,
+// never resetting at the 15-minute mark it was supposed to. Confirmed root cause of a real
+// customer's 429 on GET /api/auth/register-challenge despite that customer's own IP making only
+// 5 requests in the preceding 16 minutes -- nowhere near any single limiter's own threshold.
+// Passing a distinct prefix per limiter isolates each one's keyspace so its own windowMs/max
+// actually governs its own counter, with no behavior change to any limiter's own configured
+// window or threshold.
+export const createRateLimitStore = (prefix: string) => {
   // Guard on isReady (not isOpen): rate-limit-redis runs a SCRIPT LOAD inside the
   // RedisStore constructor; when the client is isOpen-but-not-isReady at boot, the
   // guarded sendCommand closure's Promise.reject becomes an unhandled rejection
@@ -81,6 +99,7 @@ export const createRateLimitStore = () => {
   // actually serve — otherwise this returns undefined → in-memory fallback (documented).
   if (redisRateLimitClient && redisRateLimitClient.isReady) {
     return new RedisStore({
+      prefix,
       sendCommand: (...args: string[]) => {
         const c = redisRateLimitClient;
         if (!c || !c.isReady) return Promise.reject(new Error('redis-unavailable'));

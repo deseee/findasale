@@ -41,6 +41,7 @@ import {
   sendDirectMessageToUser,
   listAllFraudSignals,
   reviewFraudSignalAdmin,
+  clearSaleFraudHold,
   listConnectBankFingerprintFlags,
   reviewConnectBankFingerprintFlag,
   getMarketplaceReviewBacklog,
@@ -143,6 +144,7 @@ router.patch('/referral-fraud-signals/:signalId/review', reviewFraudSignal);
 // cross-sale). Distinct from the ReferralFraudSignal routes above.
 router.get('/fraud-signals', listAllFraudSignals);
 router.patch('/fraud-signals/:id', reviewFraudSignalAdmin);
+router.post('/fraud-signals/sale/:saleId/clear-hold', clearSaleFraudHold);
 
 // S1198 (2026-09-06): Connect bank-account fingerprint collusion review (ConnectBankFingerprint
 // model, connectAccountGuard.ts). Distinct from the buyer-side queues above -- this is the
