@@ -3,17 +3,40 @@
  *
  * Runs every 30 minutes for organizers with ebayQueueMode = true.
  *
- * Phase A — Fill empty slots:
- *   If activeListings < limit AND queue has items, push queued items to eBay
- *   ordered by price DESC (highest value first), then ebayQueuedAt ASC (FIFO).
+ * ADR-115 (2026-09-11) redesign — the gate is now a LIVE per-item eBay fee
+ * check (checkEbayListingFee / getListingFees), not a local concurrent-count
+ * guess. eBay's real free-listing constraint is a MONTHLY consumption counter
+ * (Good-Til-Cancelled renewals and relists consume from it too, not just new
+ * listings) — the old `resolveLimit()` binary 250/1000 split conflated
+ * "currently live" with "used this month" and was provably wrong for
+ * Premium/Anchor stores (10,000/mo, not 1,000). resolveLimit() is now a
+ * display-only estimate; it no longer gates whether the cron attempts a
+ * publish. See claude_docs/feature-notes/ADR-115-ebay-queue-fee-awareness-redesign-2026-09-11.md.
+ *
+ * Phase A — Fill from queue:
+ *   Attempt up to MAX_QUEUE_FILLS_PER_RUN queued items, ordered by price DESC
+ *   (highest value first) then ebayQueuedAt ASC (FIFO). Each one is checked
+ *   live against eBay's getListingFees before publish; only a confirmed-$0
+ *   item is actually published. A confirmed-fee or inconclusive result leaves
+ *   the item in queue with ebayFeeBlocked=true (fail-closed).
  *
  * Phase B — Rotation (ebayQueueRotation = true AND at limit AND queue has items):
- *   Withdraw oldest N active listings (≤ 10% of limit), move them back to queue,
- *   then let Phase A fill those freed slots with waiting items.
+ *   Before withdrawing anything, the top-of-queue replacement candidate(s) are
+ *   fee-checked first. Only withdraws as many oldest active listings as have a
+ *   confirmed-free replacement waiting — withdrawing a free listing to make
+ *   room for one that would cost money (or isn't filled at all) is pure waste.
+ *
+ * Known gap (flagged, not fixed by ADR-115): items added via the manual
+ * "add to queue" endpoint (platformStatsController.ts addToEbayQueue) never
+ * have an ebayOfferId — nothing in this codebase creates one for them before
+ * Phase A tries to publish, so they correctly fail closed with a clear log
+ * line but can never actually be fee-checked or published until that's built.
+ * Rotation-requeued items DO have an offerId (ADR-115 fix — see withdrawItem)
+ * and work end-to-end.
  *
  * Safety guards:
  *   - Skip organizer if eBay connection missing or token expired
- *   - Cap: never withdraw more than 25 items in a single cron run
+ *   - Caps: never withdraw or fill more than 25 items in a single cron run
  *   - 200ms delay between eBay API calls to respect rate limits
  *   - Push failures leave item in queue; withdrawal failures abort rotation
  */
@@ -23,9 +46,12 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken } from '../controllers/ebayController';
 import { invalidatePlatformStatsCache } from '../services/platformStatsService';
+import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
+import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
 
 const EBAY_API_DELAY_MS = 200;
 const MAX_WITHDRAWALS_PER_RUN = 25;
+const MAX_QUEUE_FILLS_PER_RUN = 25; // ADR-115: bounds getListingFees + publish call volume per cron tick, independent of the (unreliable) local tier-guess limit
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -99,6 +125,7 @@ async function pushQueuedItem(
         data: {
           ebayQueuedAt: null,
           ebayListedAt: item.ebayListedAt ?? new Date(),
+          ebayFeeBlocked: false,
         },
       });
       return true;
@@ -127,6 +154,25 @@ async function pushQueuedItem(
         );
         return false;
       }
+    }
+
+    // ADR-115: live eBay fee gate — never auto-publish something that would incur
+    // a real insertion fee. Fail-closed: 'unknown' is treated the same as 'fee'
+    // (leave in queue), matching the weight/dims guard's posture above.
+    const feeCheck = await checkEbayListingFee(item.ebayOfferId, accessToken);
+    if (feeCheck.status === 'fee') {
+      console.warn(
+        `[eBay Queue] Item ${itemId} held in queue: would incur a real eBay insertion fee ($${feeCheck.amount} ${feeCheck.currency}) right now — not publishing automatically.`
+      );
+      await prisma.item.update({ where: { id: itemId }, data: { ebayFeeBlocked: true } });
+      return false;
+    }
+    if (feeCheck.status === 'unknown') {
+      console.warn(
+        `[eBay Queue] Item ${itemId} held in queue: could not confirm eBay listing fee (${feeCheck.reason}) — failing closed, not publishing.`
+      );
+      await prisma.item.update({ where: { id: itemId }, data: { ebayFeeBlocked: true } });
+      return false;
     }
 
     const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/publish`);
@@ -163,8 +209,10 @@ async function pushQueuedItem(
         ebayListedAt: item.ebayListedAt ?? new Date(),
         ebayQueuedAt: null,
         ebayNeedsReview: false,
+        ebayFeeBlocked: false,
       },
     });
+    await recordFreeEbayInsertion(organizerId);
 
     console.log(`[eBay Queue] Item ${itemId} published — listingId ${listingId}`);
     return true;
@@ -203,12 +251,17 @@ async function withdrawItem(
       return false;
     }
 
-    // Clear listingId; preserve ebayListedAt as historical record
+    // Clear listingId only. ebayOfferId is intentionally PRESERVED (ADR-115) —
+    // confirmed via eBay's own developer blog ("Withdraw Offers and Manage
+    // Variation Groups in the Inventory API"): the offer object survives
+    // withdrawOffer in an unpublished state, and the SAME offerId can be
+    // republished later via publishOffer. Nulling it here (the pre-ADR-115
+    // behavior) permanently stranded every rotated item, since nothing else in
+    // this codebase recreates an offer for an item once ebayOfferId is null.
     await prisma.item.update({
       where: { id: itemId },
       data: {
         ebayListingId: null,
-        ebayOfferId: null,
         // Re-queue so it goes back to waiting (to the back of the line)
         ebayQueuedAt: new Date(),
       },
@@ -252,9 +305,11 @@ async function processOrganizer(
     where: { ...availableBase, ebayOfferId: { not: null } },
   });
 
-  // Count queued items
+  // Count queued items (ADR-115: includes items with an offerId already set,
+  // e.g. rotation-requeued items — matches the toFill/replacementCandidates
+  // queries below, which no longer filter on ebayOfferId either).
   const queuedCount = await prisma.item.count({
-    where: { ...availableBase, ebayQueuedAt: { not: null }, ebayOfferId: null },
+    where: { ...availableBase, ebayQueuedAt: { not: null } },
   });
 
   console.log(
@@ -262,13 +317,55 @@ async function processOrganizer(
   );
 
   // ── Phase B: Rotation ──────────────────────────────────────────────────────
+  // ADR-115: rotation must not withdraw a stable, already-live listing unless
+  // the queued replacement that would take its place is ITSELF confirmed free
+  // by eBay right now. Withdrawing a free listing to make room for one that
+  // would cost money (or that ends up not filled at all this cycle) is pure
+  // fee/listing waste for zero benefit — check replacement candidates' fees
+  // FIRST, then only rotate as many active listings as have a confirmed-free
+  // replacement waiting.
   if (queueRotation && activeListings >= limit && queuedCount > 0) {
-    const rotateN = Math.min(
+    const candidateCap = Math.min(
       Math.min(Math.floor(limit * 0.1), MAX_WITHDRAWALS_PER_RUN),
       queuedCount
     );
 
-    if (rotateN > 0) {
+    let rotateN = 0;
+    if (candidateCap > 0) {
+      // Same ordering Phase A fills from: highest price first, then FIFO.
+      const replacementCandidates = await prisma.item.findMany({
+        where: { ...availableBase, ebayQueuedAt: { not: null } },
+        select: { id: true, ebayOfferId: true },
+        orderBy: [{ price: 'desc' }, { ebayQueuedAt: 'asc' }],
+        take: candidateCap,
+      });
+
+      // NOTE: queue candidates added via the manual "add to queue" endpoint
+      // currently have ebayOfferId: null (a separate, pre-existing gap — see
+      // ADR-115 Dev Handoff) and getListingFees requires a real offerId, so
+      // they cannot be fee-checked and are skipped here rather than rotated
+      // for blindly. Only candidates that already have an offerId (e.g. a
+      // previously-rotated item now waiting its turn again) can be verified.
+      for (const candidate of replacementCandidates) {
+        if (!candidate.ebayOfferId) continue;
+        const feeCheck = await checkEbayListingFee(candidate.ebayOfferId, accessToken);
+        await sleep(EBAY_API_DELAY_MS);
+        if (feeCheck.status === 'free') {
+          rotateN++;
+        } else {
+          // Queue is price-desc/FIFO ordered — once one candidate isn't
+          // confirmed free, don't keep probing further down the queue this
+          // cycle; only rotate for the confirmed-free prefix found so far.
+          break;
+        }
+      }
+    }
+
+    if (rotateN === 0) {
+      console.log(
+        `[eBay Queue] Organizer ${organizerId}: rotation skipped — no confirmed-free replacement available this cycle`
+      );
+    } else {
       // Oldest active listings first (ebayListedAt ASC, nulls last)
       const oldest = await prisma.item.findMany({
         where: { ...availableBase, ebayOfferId: { not: null } },
@@ -291,24 +388,37 @@ async function processOrganizer(
     }
   }
 
-  // ── Phase A: Fill empty slots ──────────────────────────────────────────────
-  // Re-count after potential rotation
-  const currentActive = await prisma.item.count({
-    where: { ...availableBase, ebayOfferId: { not: null } },
-  });
-
-  const openSlots = Math.max(0, limit - currentActive);
-  if (openSlots === 0) {
-    console.log(`[eBay Queue] Organizer ${organizerId}: no open slots`);
-    return;
-  }
-
-  // Fetch items to fill: highest price first, then FIFO by queue time
+  // ── Phase A: Fill from queue ────────────────────────────────────────────────
+  // ADR-115, two fixes:
+  //
+  // (1) The old `openSlots = limit - currentActive` gate is REMOVED as a hard
+  // stop. resolveLimit()'s binary 250/1000 guess is demoted to a display
+  // estimate only (see platformStatsService.ts) — it must not gate whether the
+  // cron attempts to fill from queue, because eBay's real constraint is a
+  // MONTHLY free-insertion allotment, not a concurrent-active-listing ceiling,
+  // and the local guess is provably wrong for Premium/Anchor stores
+  // (10,000/mo, not 1,000) and Starter stores (some smaller, unpublished
+  // number) alike — an organizer wrongly capped at 1000 would otherwise get
+  // stuck here forever even though eBay would happily list more for free. The
+  // live per-item getListingFees check inside pushQueuedItem() is the real
+  // gate now; MAX_QUEUE_FILLS_PER_RUN below only bounds cron work/API-call
+  // volume per 30-minute tick, same spirit as MAX_WITHDRAWALS_PER_RUN.
+  //
+  // (2) The old query filtered `ebayOfferId: null` — meaning it could ONLY
+  // ever select items that pushQueuedItem() then immediately rejects with
+  // "has no ebayOfferId — cannot publish from queue" (that check is a few
+  // lines below, unchanged). Every item Phase A ever selected was guaranteed
+  // to fail before this fix — Queue Mode's fill phase could never successfully
+  // publish a single item for any organizer, confirmed by reading both sides
+  // of this contradiction directly. Filtering on `ebayQueuedAt: { not: null }`
+  // alone (any status of ebayOfferId) is correct: pushQueuedItem() already
+  // handles both cases properly (already-live shortcut, or requires an
+  // offerId and fails closed with a clear log line if genuinely missing).
   const toFill = await prisma.item.findMany({
-    where: { ...availableBase, ebayQueuedAt: { not: null }, ebayOfferId: null },
+    where: { ...availableBase, ebayQueuedAt: { not: null } },
     select: { id: true },
     orderBy: [{ price: 'desc' }, { ebayQueuedAt: 'asc' }],
-    take: openSlots,
+    take: MAX_QUEUE_FILLS_PER_RUN,
   });
 
   if (toFill.length === 0) {

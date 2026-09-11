@@ -5,6 +5,8 @@ import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
+import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
+import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
 // Re-export the OAuth helpers so existing external importers of these from './ebayController' keep resolving (Phase 1 relocation).
 export { getEbayAccessToken, refreshEbayAccessToken } from '../services/ebayHttp';
 // Phase 2 relocation: category/condition/aspect helpers now live in ebayPublishService.
@@ -2251,13 +2253,32 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     const tier = (organizer.subscriptionTier || 'SIMPLE') as SubscriptionTier;
     const ebayPushLimit = getTierLimit(tier, 'ebayPushesPerMonth');
 
+    // Bug fix (ADR-115 review, 2026-09-11): ebayPushesResetAt was written by the
+    // increment call further down but NOTHING anywhere ever read it back and
+    // compared it to the current month — the counter accumulated forever and
+    // would eventually lock an organizer out of eBay pushes permanently, even
+    // in a brand-new month. Lazy-reset here, mirroring the working
+    // aiTagsQuotaTracker.ts pattern (see ebayInsertionsQuotaTracker.ts, which
+    // uses the identical shape for the new, unrelated ADR-115 counter).
+    const pushQuotaMonthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+    const pushResetAt = organizer.ebayPushesResetAt ? new Date(organizer.ebayPushesResetAt) : null;
+    let ebayPushesThisMonth = organizer.ebayPushesThisMonth;
+    if (!pushResetAt || pushResetAt < pushQuotaMonthStart) {
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: { ebayPushesThisMonth: 0, ebayPushesResetAt: pushQuotaMonthStart },
+      });
+      ebayPushesThisMonth = 0;
+      organizer.ebayPushesResetAt = pushQuotaMonthStart;
+    }
+
     // Check if monthly quota has been exceeded
-    if (organizer.ebayPushesThisMonth >= ebayPushLimit) {
+    if (ebayPushesThisMonth >= ebayPushLimit) {
       return res.status(429).json({
         code: 'EBAY_PUSH_QUOTA_EXCEEDED',
         message: `Monthly eBay push limit reached (${ebayPushLimit} per month for ${tier}). Upgrade to increase limit.`,
         limit: ebayPushLimit,
-        used: organizer.ebayPushesThisMonth,
+        used: ebayPushesThisMonth,
       });
     }
 
@@ -3033,6 +3054,17 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           },
         });
 
+        // ADR-115: check whether publishing this item would incur a real eBay
+        // insertion fee. Per Patrick's decision (2026-09-11), bulk manual pushes
+        // are NOT blocked on this — clearly surfacing the fee in the per-item
+        // result is the requirement, not preventing the push. offerId is typed
+        // `string | null` and every non-`continue` path above sets it to a real
+        // value, but TS doesn't narrow that through the `any`-typed
+        // createData.offerId assignment, so guard explicitly.
+        const manualFeeCheck = offerId
+          ? await checkEbayListingFee(offerId, accessToken)
+          : ({ status: 'unknown', reason: 'offerId missing after create/update' } as const);
+
         // Step 3: Publish offer LIVE via the consolidated self-heal loop.
         // (Phase 3, ADR 2026-06-30) — replaces the inline 25021/25005/25101/25002
         // passes. The loop attempts publish → parses eBay errorId → dispatches to the
@@ -3122,6 +3154,28 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           },
         });
 
+        if (manualFeeCheck.status === 'free') {
+          try {
+            await recordFreeEbayInsertion(organizer.id);
+          } catch (e: any) {
+            console.warn(`[eBay Push] item=${item.id} failed to record free-insertion count (non-fatal):`, e?.message || e);
+          }
+        }
+        const feeWarning =
+          manualFeeCheck.status === 'fee'
+            ? {
+                amount: manualFeeCheck.amount,
+                currency: manualFeeCheck.currency,
+                message: `This listing incurred a $${manualFeeCheck.amount.toFixed(2)} eBay insertion fee — you're outside your free monthly eBay listing allotment.`,
+              }
+            : manualFeeCheck.status === 'unknown'
+            ? {
+                amount: null,
+                currency: null,
+                message: `Could not confirm whether this listing was within your free eBay allotment (${manualFeeCheck.reason}) — it may have incurred a fee.`,
+              }
+            : null;
+
         results.push({
           itemId: item.id,
           sku,
@@ -3129,6 +3183,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           status: 'success',
           ebayUrl: `https://www.ebay.com/itm/${ebayListingId}`,
           publishedAt: new Date(),
+          feeWarning,
         });
       } catch (itemError) {
         // Structured per-item error log — captures saleId/itemId/category/reason
@@ -3668,6 +3723,14 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     } catch (e: any) {
       console.warn('[eBay AutoWeight] live inventory weight backfill threw:', e?.message || e);
     }
+    // ADR-115: check whether this publish would incur a real eBay insertion fee.
+    // Per Patrick's decision (2026-09-11): manual "Publish now" pushes are NOT
+    // blocked on this — it's an explicit, deliberate organizer action, unlike
+    // Queue Mode's automatic fill — but the fee must be clearly surfaced in the
+    // response so the organizer is never silently charged. 'unknown' is reported
+    // to the organizer as a real possibility, not swallowed.
+    const manualFeeCheck = await checkEbayListingFee(item.ebayOfferId, accessToken);
+
     // Publish LIVE via the consolidated self-heal loop (Phase 3, ADR 2026-06-30).
     // Replaces the inline 25021/25002/25101/25005 self-heal blocks. The loop parses
     // eBay's errorId and dispatches to the matching healer (shared mutable ctx),
@@ -3737,9 +3800,34 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // ADR-115: record the free-insertion count for the dashboard, and build the
+    // organizer-facing fee warning from the check made before publish above.
+    if (manualFeeCheck.status === 'free') {
+      try {
+        await recordFreeEbayInsertion(item.sale.organizerId);
+      } catch (e: any) {
+        console.warn(`[eBay PublishNow] item=${item.id} failed to record free-insertion count (non-fatal):`, e?.message || e);
+      }
+    }
+    const feeWarning =
+      manualFeeCheck.status === 'fee'
+        ? {
+            amount: manualFeeCheck.amount,
+            currency: manualFeeCheck.currency,
+            message: `This listing incurred a $${manualFeeCheck.amount.toFixed(2)} eBay insertion fee — you're outside your free monthly eBay listing allotment.`,
+          }
+        : manualFeeCheck.status === 'unknown'
+        ? {
+            amount: null,
+            currency: null,
+            message: `Could not confirm whether this listing was within your free eBay allotment (${manualFeeCheck.reason}) — it may have incurred a fee.`,
+          }
+        : null;
+
     return res.json({
       ebayListingId,
       ebayItemUrl: `https://www.ebay.com/itm/${ebayListingId}`,
+      feeWarning,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

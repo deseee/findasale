@@ -17,6 +17,7 @@ interface GapItem {
   saleTitle: string | null;
   listingType: string;
   ebayQueuedAt: string | null;
+  ebayFeeBlocked?: boolean; // ADR-115: true when waiting on eBay's free-listing quota, not just a slot
   ineligibilityReasons?: string[];
 }
 
@@ -268,6 +269,12 @@ export default function PlatformGapPanel({
                           month: 'short',
                           day: 'numeric',
                         })}
+                      </p>
+                    )}
+                    {/* ADR-115: distinguish "waiting for a slot" from "waiting for free eBay quota" */}
+                    {platform === 'ebay' && item.ebayQueuedAt && item.ebayFeeBlocked && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                        Waiting for free eBay listing quota — publishing now would incur a real eBay fee
                       </p>
                     )}
 

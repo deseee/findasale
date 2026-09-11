@@ -444,6 +444,12 @@ model Organizer {
   // Feature #75: eBay Push Quota Tracking — monthly limit enforcement
   ebayPushesThisMonth             Int                            @default(0) // Count of eBay pushes this calendar month
   ebayPushesResetAt               DateTime? // When the monthly eBay push counter was last reset
+  // ADR-115: eBay Queue Fee-Awareness — monthly free-insertion observability counter
+  // (NOT a gate — the live getListingFees check in ebayListingQueueCron.ts is the gate.
+  // This is for dashboard display only. Uses the same lazy-reset pattern as
+  // aiTagsUsedThisMonth/aiTagsResetAt above — see ebayInsertionsQuotaTracker.ts.)
+  ebayInsertionsThisMonth         Int                            @default(0) // Count of $0 eBay insertions this calendar month (observability only)
+  ebayInsertionsResetAt           DateTime? // When the monthly eBay insertions counter was last reset
   // eBay Push — publish-mode cascade + shipping smart-pick (organizer-level defaults)
   // @deprecated S725 — DRAFT mode removed; field unused, retained to avoid migration.
   // eBay Inventory API unpublished offers cannot be viewed/published from the
@@ -1515,6 +1521,11 @@ model Item {
   bundle                          ItemBundle?             @relation("BundleItems", fields: [bundleId], references: [id])
   // Feature: Facebook Export Tracking — stamped when item is included in FB Marketplace XLSX/JSON export
   ebayQueuedAt                    DateTime? // When item was added to eBay listing queue (null = not queued)
+  // ADR-115: true when the last live eBay fee check found this item would incur a real
+  // insertion fee right now (not free). Queue UI uses this to show "waiting for free eBay
+  // quota" instead of "waiting for a slot". Re-evaluated every cron cycle the item is
+  // actually considered for publish -- not a permanent state.
+  ebayFeeBlocked                   Boolean                 @default(false)
   ebayListedAt                    DateTime? // When item was first listed on eBay (set on first push, never updated on relist)
   fbExportedAt                    DateTime?
   // ADR-085 Track B (2026-07-16): general, cross-channel stock pool. Distinct from

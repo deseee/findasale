@@ -92,6 +92,7 @@ interface GapItem {
   saleTitle: string | null;
   listingType: string;
   ebayQueuedAt: string | null;
+  ebayFeeBlocked?: boolean; // ADR-115: true when waiting on eBay's free-listing quota, not just a slot
   ineligibilityReasons?: string[];
 }
 
@@ -552,7 +553,7 @@ export default function PlatformsPage() {
                 /* Queue Mode OFF */
                 <div className="space-y-4">
                   <p className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed">
-                    Queue Mode automatically manages your {ebay.limit} free eBay listing slots. When you hit the limit, new items wait in line. When a slot opens (item sells or listing rotates out), the next item in queue goes live automatically &mdash; no fees, no manual work.
+                    Queue Mode automatically manages your {ebay.limit} free eBay listing slots. When you hit the limit, new items wait in line. When a slot opens (item sells or listing rotates out) and eBay confirms the next item in queue is still free to list, it goes live automatically &mdash; no manual work, and never a surprise eBay fee.
                   </p>
                   <button
                     onClick={() => queueSettingsMutation.mutate({ ebayQueueMode: true })}
@@ -620,7 +621,7 @@ export default function PlatformsPage() {
                   {ebay.queued === 0 && ebay.freeSlots === 0 && (
                     <div className="text-center py-8 text-warm-500 dark:text-warm-400">
                       <p className="text-sm">
-                        All slots are in use. Add items to the queue and they&apos;ll go live when a slot opens.
+                        All slots are in use. Add items to the queue and they&apos;ll go live automatically once a slot opens and eBay confirms it&apos;s still free to list &mdash; items are never auto-published if it would cost a real eBay fee.
                       </p>
                     </div>
                   )}

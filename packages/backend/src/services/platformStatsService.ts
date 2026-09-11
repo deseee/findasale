@@ -127,6 +127,7 @@ export interface GapItem {
   saleTitle: string | null;
   listingType: string;
   ebayQueuedAt: string | null;
+  ebayFeeBlocked?: boolean; // ADR-115: true when the last live eBay fee check found this item would incur a real fee
   ineligibilityReasons?: GoogleIneligibilityReason[];
 }
 
@@ -457,6 +458,7 @@ export async function computePlatformGap(
     saleId: true,
     listingType: true,
     ebayQueuedAt: true,
+    ebayFeeBlocked: true,
     sale: { select: { title: true } },
   } as const;
 
@@ -524,6 +526,7 @@ export async function computePlatformGap(
         saleTitle: item.sale?.title ?? null,
         listingType: item.listingType,
         ebayQueuedAt: item.ebayQueuedAt ? item.ebayQueuedAt.toISOString() : null,
+        ebayFeeBlocked: item.ebayFeeBlocked ?? false,
         ineligibilityReasons: item.reasons,
       })),
     };
@@ -544,6 +547,7 @@ export async function computePlatformGap(
       saleTitle: item.sale?.title ?? null,
       listingType: item.listingType,
       ebayQueuedAt: item.ebayQueuedAt ? item.ebayQueuedAt.toISOString() : null,
+      ebayFeeBlocked: item.ebayFeeBlocked ?? false,
     })),
   };
 }
