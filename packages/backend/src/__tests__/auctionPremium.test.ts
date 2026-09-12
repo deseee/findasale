@@ -5,7 +5,7 @@
  *
  *   1. THE PREMIUM IS A PLATFORM RATE. `Sale.buyersPremiumPct` was briefly an
  *      organizer-settable 0-50% control; it is RETIRED (Patrick ruling, same day) because the
- *      premium goes into Stripe's application_fee_amount — it is FindA.Sale's own revenue, so
+ *      premium goes into the platform's application fee — it is FindA.Sale's own revenue, so
  *      an organizer setting it was an organizer setting the platform's income. These tests
  *      deliberately WRITE a value into the retired column and assert the charge IGNORES it.
  *      That direction matters: the column still exists in the database (dropping it is
@@ -26,6 +26,25 @@
  *      identical outcome paid a different reward purely because of which mechanism closed the
  *      lot. Both now award, once, with the same amount, multiplier and monthly cap.
  *
+ * Stripe removal (2026-09-12): both auction-winner charge paths (jobs/auctionJob.ts's cron and
+ * services/auctionService.ts's closeAuction, the organizer's manual button) were converted to
+ * Square in an earlier pass this session (Square migration Wave S2 #2, 2026-09-09) — a
+ * Square-onboarded organizer's winner charge now goes through
+ * squareCheckoutLinkService.createSquareCheckoutLink (a Square Payment Link) instead of
+ * Stripe's paymentIntents.create / checkout.sessions.create. This suite's fixture organizer was
+ * still seeded Stripe-only, so every test here was silently hitting the "organizer is not
+ * Square-eligible, skip payment link creation" fallback branch instead of the real charge path
+ * it exists to verify — a stale-fixture false pass, not a real one, caught by the CI break this
+ * session's Square-only enforcement caused. Rewritten to seed a Square-onboarded organizer and
+ * mock createSquareCheckoutLink directly; the fee/premium/reserve/XP arithmetic under test is
+ * unchanged by which processor issues the link, since both paths compute
+ * amountCents/appFeeCents identically before handing them to whichever processor is eligible.
+ * auctionService.ts's Square branch (unlike its old Stripe branch, which deferred Purchase
+ * creation to a checkout.session.completed webhook) creates its own PENDING Purchase row
+ * inline, so several assertions below now read that row directly instead of inspecting a
+ * mocked Stripe call's line-item/metadata shape — a more direct and more accurate check of the
+ * exact same underlying fee split.
+ *
  * MOCKING NOTES (read before editing):
  *   - `services/auctionService.ts` imports `prisma` from `../index`, which is the Express entry
  *     point — importing it boots the HTTP server, Socket.io, Redis, Sentry and ~80 cron jobs.
@@ -33,23 +52,28 @@
  *     exactly what index.ts itself does (index.ts:291). Same object, no server boot.
  *   - `jobs/auctionJob.ts` calls `cron.schedule(...)` at module scope. `node-cron` is mocked so
  *     importing the job does not register a live 5-minute timer inside the test process.
- *   - Stripe, email and notification side effects are mocked; the assertions are about the
- *     Stripe arguments and the resulting DB rows, which are the parts that move money.
+ *   - `createSquareCheckoutLink` is mocked (via `jest.requireActual` + override, so the real
+ *     `getSquareOrderPaymentStatus`/`deleteSquareCheckoutLink` exports stay real/unused rather
+ *     than silently undefined); email and notification side effects are mocked; the assertions
+ *     are about the Square call's arguments and the resulting DB rows, which are the parts that
+ *     move money. `Purchase.squarePaymentLinkId` is NOT `@unique` (unlike HoldInvoice's own
+ *     column of the same name) so, unlike some sibling suites, a single shared mocked
+ *     resolved value is safe to reuse across every test in this file — no per-test-unique id
+ *     is required here.
  */
 
 import { prisma } from '../lib/prisma';
 
 // ── Mocks (hoisted by ts-jest above the var declarations — `var`, not `const`, deliberately) ──
-var mockPaymentIntentsCreate = jest.fn();
-var mockCheckoutSessionsCreate = jest.fn();
+var mockCreateSquareCheckoutLink = jest.fn();
 
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    paymentIntents: { create: mockPaymentIntentsCreate },
-    checkout: { sessions: { create: mockCheckoutSessionsCreate } },
-  })),
-  default: jest.fn(),
-}));
+jest.mock('../services/squareCheckoutLinkService', () => {
+  const actual = jest.requireActual('../services/squareCheckoutLinkService');
+  return {
+    ...actual,
+    createSquareCheckoutLink: (...args: any[]) => mockCreateSquareCheckoutLink(...args),
+  };
+});
 
 // auctionService.ts: `import { prisma } from '../index'` — see MOCKING NOTES above.
 jest.mock('../index', () => ({
@@ -77,12 +101,6 @@ jest.mock('../services/suppressionService', () => ({
   suppressionService: { isHardSuppressed: jest.fn().mockResolvedValue(false) },
 }));
 
-// Direct-charges staged rollout: force the DESTINATION shape so the assertions read one
-// consistent Stripe payload. Which shape is used is orthogonal to premium/reserve.
-jest.mock('../services/stripeConnectService', () => ({
-  shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
-}));
-
 // XP: the cap is PERMISSIVE by default (it used to be mocked at 0, which silently suppressed
 // every award and would have hidden an XP-parity regression entirely). Individual tests
 // override it to assert the exhausted-cap branch.
@@ -99,13 +117,11 @@ jest.mock('../services/marketplaceStockSyncService', () => ({
   syncMarketplaceStock: jest.fn().mockResolvedValue(undefined),
 }));
 
-// ── Imports AFTER the mocks ───────────────────────────────────────────────────────────────
+// ── Imports AFTER the mocks ──────────────────────────────────────────────────────────────
 import { endAuctions } from '../jobs/auctionJob';
 import { closeAuction } from '../services/auctionService';
 import { evaluateAuctionReserve } from '../utils/auctionRules';
 import { AUCTION_BUYER_PREMIUM_RATE, resolveOrganizerFeeReport } from '../utils/feeCalculator';
-
-const STRIPE_CONNECT_ID = 'acct_auctionpremiume2e';
 
 describe('Auction close — configured premium & reserve parity', () => {
   let organizerUser: any;
@@ -113,7 +129,6 @@ describe('Auction close — configured premium & reserve parity', () => {
   let bidder: any;
 
   beforeAll(async () => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_auction_premium';
     process.env.FRONTEND_URL = 'http://localhost:3000';
 
     organizerUser = await prisma.user.create({
@@ -131,11 +146,11 @@ describe('Auction close — configured premium & reserve parity', () => {
         phone: '5551110099',
         address: '100 Test Ave',
         userId: organizerUser.id,
-        stripeConnectId: STRIPE_CONNECT_ID,
-        // 2026-09-03 fix: assertSaleCanAcceptPayment now also requires stripeOnboarded
-        // === true (not just a live, non-test account id) -- see paymentEligibilityService.ts.
-        stripeOnboarded: true,
         subscriptionTier: 'SIMPLE',
+        squareOnboarded: true,
+        squareMerchantId: 'sq-merchant-auction-premium',
+        squareLocationId: 'sq-location-auction-premium',
+        cashFeeBalance: 0,
       },
     });
     bidder = await prisma.user.create({
@@ -162,19 +177,23 @@ describe('Auction close — configured premium & reserve parity', () => {
     if (organizer) await prisma.organizer.delete({ where: { id: organizer.id } }).catch(() => {});
     if (organizerUser) await prisma.user.delete({ where: { id: organizerUser.id } }).catch(() => {});
     if (bidder) await prisma.user.delete({ where: { id: bidder.id } }).catch(() => {});
-    delete process.env.STRIPE_SECRET_KEY;
     delete process.env.FRONTEND_URL;
   });
 
   beforeEach(() => {
-    mockPaymentIntentsCreate.mockReset();
-    mockCheckoutSessionsCreate.mockReset();
+    mockCreateSquareCheckoutLink.mockReset();
     mockAwardXp.mockReset();
     mockAwardXp.mockResolvedValue(undefined);
     mockCheckMonthlyXpCap.mockReset();
     mockCheckMonthlyXpCap.mockResolvedValue(1000); // permissive unless a test says otherwise
-    mockPaymentIntentsCreate.mockResolvedValue({ id: 'pi_auction_mock', client_secret: 'sec' });
-    mockCheckoutSessionsCreate.mockResolvedValue({ id: 'cs_auction_mock', url: 'https://stripe.test/cs' });
+    // Not @unique on Purchase (see file header) -- one shared resolved value for every call.
+    mockCreateSquareCheckoutLink.mockResolvedValue({
+      ok: true,
+      paymentLinkId: 'sqpl_auctionpremium',
+      orderId: 'sqorder_auctionpremium',
+      url: 'https://squareup.com/pay/auctionpremium',
+      longUrl: null,
+    });
   });
 
   /** An auction lot whose end time has already passed, with one bid on it. */
@@ -242,7 +261,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       // THE POINT OF THIS TEST: `Sale.buyersPremiumPct` still exists as a column and can still
       // hold a value (a legacy row, a direct DB write). A prior pass made that value
       // authoritative on the charge path — an organizer could set FindA.Sale's own revenue.
-      // Reversed. A stored 15% must have no effect whatsoever on what the card is run for.
+      // Reversed. A stored 15% must have no effect whatsoever on what the winner is charged.
       const { item } = await makeEndedLot({
         title: 'cron ignores stored 15pct',
         buyersPremiumPct: 15,
@@ -251,17 +270,17 @@ describe('Auction close — configured premium & reserve parity', () => {
 
       await endAuctions();
 
-      const call = mockPaymentIntentsCreate.mock.calls.find(
+      const call = mockCreateSquareCheckoutLink.mock.calls.find(
         (c) => c[0]?.metadata?.itemId === item.id
       );
       expect(call).toBeDefined();
       // $200 hammer + the platform 5% => $210.00. NOT the $230.00 the stored 15% would give.
-      expect(call![0].amount).toBe(21000);
-      expect(call![0].amount).not.toBe(23000);
-      // application_fee = $10.00 premium + $20.00 SIMPLE commission.
-      expect(call![0].application_fee_amount).toBe(1000 + 2000);
+      expect(call![0].amountCents).toBe(21000);
+      expect(call![0].amountCents).not.toBe(23000);
+      // appFeeCents = $10.00 premium + $20.00 SIMPLE commission.
+      expect(call![0].appFeeCents).toBe(1000 + 2000);
       // Organizer still nets $180.00.
-      expect(call![0].amount - call![0].application_fee_amount).toBe(18000);
+      expect(call![0].amountCents - call![0].appFeeCents).toBe(18000);
 
       // The PENDING Purchase must record what the buyer was actually charged.
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
@@ -282,13 +301,13 @@ describe('Auction close — configured premium & reserve parity', () => {
 
       await endAuctions();
 
-      const call = mockPaymentIntentsCreate.mock.calls.find(
+      const call = mockCreateSquareCheckoutLink.mock.calls.find(
         (c) => c[0]?.metadata?.itemId === item.id
       );
       expect(call).toBeDefined();
-      expect(call![0].amount).toBe(21000);                 // premium still charged
-      expect(call![0].amount).not.toBe(20000);             // the "organizer zeroed us out" bug
-      expect(call![0].application_fee_amount).toBe(3000);  // $10 premium + $20 commission
+      expect(call![0].amountCents).toBe(21000);            // premium still charged
+      expect(call![0].amountCents).not.toBe(20000);         // the "organizer zeroed us out" bug
+      expect(call![0].appFeeCents).toBe(3000);              // $10 premium + $20 commission
       console.log('✓ auctionJob: stored 0% ignored, platform still collects its 5%');
     });
 
@@ -301,11 +320,11 @@ describe('Auction close — configured premium & reserve parity', () => {
 
       await endAuctions();
 
-      const call = mockPaymentIntentsCreate.mock.calls.find(
+      const call = mockCreateSquareCheckoutLink.mock.calls.find(
         (c) => c[0]?.metadata?.itemId === item.id
       );
-      expect(call![0].amount).toBe(21000);
-      expect(call![0].application_fee_amount).toBe(1000 + 2000);
+      expect(call![0].amountCents).toBe(21000);
+      expect(call![0].appFeeCents).toBe(1000 + 2000);
       console.log('✓ auctionJob: unset column, 5% charged');
     });
 
@@ -324,7 +343,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       expect(purchase!.commissionAmount).toBe(20);
       expect(purchase!.commissionRate).toBe(0.1);
       expect(purchase!.organizerAbsorbedPremium).toBe(false);
-      // THE INVARIANT: the two components reconstruct the combined application_fee_amount.
+      // THE INVARIANT: the two components reconstruct the combined application fee.
       expect(purchase!.buyerPremiumAmount! + purchase!.commissionAmount!).toBe(
         purchase!.platformFeeAmount
       );
@@ -346,12 +365,12 @@ describe('Auction close — configured premium & reserve parity', () => {
 
       await endAuctions();
 
-      const call = mockPaymentIntentsCreate.mock.calls.find(
+      const call = mockCreateSquareCheckoutLink.mock.calls.find(
         (c) => c[0]?.metadata?.itemId === item.id
       );
       // Buyer pays the bid only; the platform still collects premium + commission.
-      expect(call![0].amount).toBe(20000);
-      expect(call![0].application_fee_amount).toBe(3000);
+      expect(call![0].amountCents).toBe(20000);
+      expect(call![0].appFeeCents).toBe(3000);
 
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
       expect(purchase!.organizerAbsorbedPremium).toBe(true);
@@ -377,7 +396,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       console.log('✓ auctionJob: AUCTION_WIN XP awarded — the baseline the manual close now mirrors');
     });
 
-    it('should NOT charge below reserve, and must create no Purchase and no Stripe object', async () => {
+    it('should NOT charge below reserve, and must create no Purchase and no Square payment link', async () => {
       // The cron's long-standing behaviour, asserted so the shared rule cannot regress it.
       const { item } = await makeEndedLot({
         title: 'cron reserve unmet',
@@ -388,7 +407,7 @@ describe('Auction close — configured premium & reserve parity', () => {
 
       await endAuctions();
 
-      const call = mockPaymentIntentsCreate.mock.calls.find(
+      const call = mockCreateSquareCheckoutLink.mock.calls.find(
         (c) => c[0]?.metadata?.itemId === item.id
       );
       expect(call).toBeUndefined();
@@ -420,9 +439,8 @@ describe('Auction close — configured premium & reserve parity', () => {
       expect(result.outcome).toBe('RESERVE_NOT_MET');
       expect(result.highestBidAmount).toBe(120);
       expect(result.reservePrice).toBe(500);
-      // No money may move: no Checkout Session, no PaymentIntent, no Purchase row.
-      expect(mockCheckoutSessionsCreate).not.toHaveBeenCalled();
-      expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+      // No money may move: no Square payment link, no Purchase row.
+      expect(mockCreateSquareCheckoutLink).not.toHaveBeenCalled();
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
       expect(purchase).toBeNull();
       // Same terminal state the cron leaves a reserve-unmet lot in.
@@ -445,23 +463,27 @@ describe('Auction close — configured premium & reserve parity', () => {
       const result = await closeAuction(item.id);
 
       expect(result.outcome).toBe('SOLD');
-      expect(mockCheckoutSessionsCreate).toHaveBeenCalled();
-      const args = mockCheckoutSessionsCreate.mock.calls.at(-1)![0];
-      // Buyer pays $200 + 5% = $210.00 — same arithmetic as the cron and createPaymentIntent.
-      expect(args.line_items[0].price_data.unit_amount).toBe(21000);
-      expect(args.line_items[0].price_data.unit_amount).not.toBe(23000);
-      expect(args.payment_intent_data.application_fee_amount).toBe(1000 + 2000);
-      // The Stripe line description states the rate actually charged.
-      expect(args.line_items[0].price_data.product_data.description).toContain('+ 5% buyer premium');
-      expect(args.line_items[0].price_data.product_data.description).not.toContain('15%');
-      // The webhook needs the fee stamped in metadata to write the Purchase row later — both
-      // the combined figure and the premium/commission split for the snapshot.
-      expect(args.metadata.platformFeeAmount).toBe('30');
-      expect(args.metadata.feeBuyerPremiumAmount).toBe('10');
-      expect(args.metadata.feeCommissionAmount).toBe('20');
-      expect(args.metadata.feeCommissionRate).toBe('0.1');
-      expect(args.metadata.feeOrganizerAbsorbedPremium).toBe('false');
-      console.log('✓ manual close above reserve: $210.00 session, $30.00 fee, split stamped for the webhook');
+      expect(mockCreateSquareCheckoutLink).toHaveBeenCalled();
+      const call = mockCreateSquareCheckoutLink.mock.calls.at(-1)![0];
+      // Buyer pays $200 + 5% = $210.00 — same arithmetic as the cron.
+      expect(call.amountCents).toBe(21000);
+      expect(call.amountCents).not.toBe(23000);
+      expect(call.appFeeCents).toBe(1000 + 2000);
+
+      // auctionService.ts's Square branch creates its own PENDING Purchase row inline (unlike
+      // the old Stripe branch, which deferred to a webhook) — read the fee split straight off
+      // it rather than off Square-specific call-argument shape.
+      const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
+      expect(purchase).toBeTruthy();
+      expect(purchase!.processor).toBe('SQUARE');
+      expect(purchase!.status).toBe('PENDING');
+      expect(purchase!.amount).toBe(210);
+      expect(purchase!.platformFeeAmount).toBe(30);
+      expect(purchase!.buyerPremiumAmount).toBe(10);
+      expect(purchase!.commissionAmount).toBe(20);
+      expect(purchase!.commissionRate).toBe(0.1);
+      expect(purchase!.organizerAbsorbedPremium).toBe(false);
+      console.log('✓ manual close above reserve: $210.00 payment link, $30.00 fee, split pinned on the Purchase row');
     });
 
     it('should award a lot with NO reserve set, exactly as before', async () => {
@@ -476,8 +498,8 @@ describe('Auction close — configured premium & reserve parity', () => {
       const result = await closeAuction(item.id);
 
       expect(result.outcome).toBe('SOLD');
-      const args = mockCheckoutSessionsCreate.mock.calls.at(-1)![0];
-      expect(args.line_items[0].price_data.unit_amount).toBe(7875); // $75 + 5%
+      const call = mockCreateSquareCheckoutLink.mock.calls.at(-1)![0];
+      expect(call.amountCents).toBe(7875); // $75 + 5%
       console.log('✓ manual close, no reserve: unchanged award at the platform 5%');
     });
 
@@ -537,7 +559,7 @@ describe('Auction close — configured premium & reserve parity', () => {
 
     it('should still close the auction when the XP service throws', async () => {
       // XP is a reward, not part of the transaction. A broken xpService must never fail a close
-      // that has already created a Checkout Session for a real buyer.
+      // that has already created a payment link for a real buyer.
       mockAwardXp.mockRejectedValue(new Error('xp service down'));
       const { item } = await makeEndedLot({
         title: 'manual xp throws',
@@ -548,7 +570,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       const result = await closeAuction(item.id);
 
       expect(result.outcome).toBe('SOLD');
-      expect(mockCheckoutSessionsCreate).toHaveBeenCalled();
+      expect(mockCreateSquareCheckoutLink).toHaveBeenCalled();
       console.log('✓ manual close: XP failure swallowed, auction still closed');
     });
 
@@ -602,7 +624,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       const result = await closeAuction(item.id);
 
       expect(result.outcome).toBe('NO_BIDS');
-      expect(mockCheckoutSessionsCreate).not.toHaveBeenCalled();
+      expect(mockCreateSquareCheckoutLink).not.toHaveBeenCalled();
       console.log('✓ manual close, no bids: nothing charged');
     });
 
@@ -618,12 +640,12 @@ describe('Auction close — configured premium & reserve parity', () => {
 
       expect(first.outcome).toBe('SOLD');
       expect(second.outcome).toBe('ALREADY_CLOSED');
-      expect(mockCheckoutSessionsCreate).toHaveBeenCalledTimes(1);
-      console.log('✓ manual close is idempotent: one session, second call refused');
+      expect(mockCreateSquareCheckoutLink).toHaveBeenCalledTimes(1);
+      console.log('✓ manual close is idempotent: one payment link, second call refused');
     });
   });
 
-  // ── the shared rule itself ──────────────────────────────────────────────────────────────
+  // ── the shared rule itself ───────────────────────────────────────────────────────────
   describe('utils/auctionRules.evaluateAuctionReserve — the one rule both paths use', () => {
     it('treats null and 0 as NO reserve', () => {
       expect(evaluateAuctionReserve({ auctionReservePrice: null }, 0).reserveMet).toBe(true);

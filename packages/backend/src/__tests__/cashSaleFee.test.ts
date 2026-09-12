@@ -4,17 +4,27 @@
  * WHAT THIS SUITE EXISTS FOR (revenue leak found and fixed 2026-08-17):
  *
  *   The markSold settlement router (controllers/reservationController.batchUpdateHolds) has
- *   three modes. POS_CART and CHECKOUT_LINK hand the money to Stripe, which collects the
- *   platform's commission as application_fee_amount. RECORD is the CASH / in-person mode: the
- *   organizer takes the money in hand and FindA.Sale's Stripe account never sees it. RECORD
- *   wrote `platformFeeAmount: 0` on the Purchase and did nothing else, so the platform earned
- *   exactly $0.00 on every cash sale settled from the holds screen.
+ *   three modes. POS_CART and CHECKOUT_LINK hand the money to the processor (Square, since
+ *   Stripe was removed entirely 2026-09-12), which collects the platform's commission as
+ *   appFeeMoney. RECORD is the CASH / in-person mode: the organizer takes the money in hand and
+ *   no processor ever sees it. RECORD wrote `platformFeeAmount: 0` on the Purchase and did
+ *   nothing else, so the platform earned exactly $0.00 on every cash sale settled from the holds
+ *   screen.
  *
  *   The mechanism for charging commission on money we never touch already existed and already
  *   worked for the OTHER cash path (terminalController.processCashSaleCore): accrue it to
- *   `Organizer.cashFeeBalance`, and payoutController nets that balance out of the organizer's
- *   next Stripe payout. RECORD simply never called it. Both paths now go through
+ *   `Organizer.cashFeeBalance`. RECORD simply never called it. Both paths now go through
  *   services/cashFeeService.ts.
+ *
+ *   STRIPE REMOVAL UPDATE (2026-09-12): the accrued balance used to be netted out of an
+ *   organizer-triggered Stripe payout (payoutController.createPayout's stripe.payouts.create
+ *   branch). That branch is gone — Square has no on-demand-payout API for a connected OAuth
+ *   merchant (see payoutController.ts's file header), so createPayout now returns an honest
+ *   "not available, check your Square Dashboard" response for every organizer regardless of
+ *   accrued cashFeeBalance, and touches no balance at all. The real collection mechanism today
+ *   is opportunistic, at the organizer's NEXT SQUARE CARD SALE (services/cashFeeService.ts's
+ *   applyCashDebtToAppFee/settleCashDebtCollection, called from squarePaymentController.ts and
+ *   bountyController.ts) — that flow has its own coverage in those files' test suites, not here.
  *
  * These tests assert the money, not the code shape:
  *   - a $100 cash sale accrues $10.00 at SIMPLE and $8.00 at PRO (tier rate, not a hardcoded 10%)
@@ -23,11 +33,15 @@
  *   - what the organizer is SHOWN (resolveOrganizerFeeReport, the helper every earnings surface
  *     calls) equals what was actually accrued — report and ledger agree
  *   - a repeated settlement of the same holds accrues NOTHING a second time
- *   - the payout path deducts the accrued balance and zeroes it
+ *   - createPayout no longer touches the accrued balance at all — it is a Square-dead-end honest
+ *     response, not a live deduction path (see the "createPayout — Square has no on-demand
+ *     payout, so cash-debt netting moved" tests below)
  *
- * MOCKING NOTES: reservationController pulls in Stripe, Socket.io, email, eBay/Shopify/FB and
- * the POS payment-link builder at import time. All are mocked — none of them are on the RECORD
- * path, whose entire footprint is the database. The assertions are DB rows and response bodies.
+ * MOCKING NOTES: reservationController pulls in Stripe (still needed transitively for
+ * utils/expireCheckoutSession.ts's getStripe import, even though no code path exercised here
+ * calls it), Socket.io, email, eBay/Shopify/FB and the POS payment-link builder at import time.
+ * All are mocked — none of them are on the RECORD path, whose entire footprint is the database.
+ * The assertions are DB rows and response bodies.
  */
 
 import { prisma } from '../lib/prisma';
@@ -128,13 +142,14 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
         businessName: `Cash Fee Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: tier,
-        stripeConnectId: `acct_cashfee${key}`,
-        // stripeOnboarded added (2026-09-09, S-URGENT-PAYOUTS-STRIPE-ONLY fix knock-on): createPayout
-        // now gates on stripeOnboarded===true, not stripeConnectId alone (see payoutController.ts's
-        // resolvePayoutProcessor) -- this fixture predates that fix and would otherwise hit the new
-        // "no processor connected" 400 instead of exercising the cash-fee-deduction logic these
-        // tests are actually about.
-        stripeOnboarded: true,
+        // Stripe removed entirely (2026-09-12): the platform Stripe account is permanently
+        // closed, so every organizer fixture here is Square-onboarded. createPayout no longer
+        // reads stripeConnectId/stripeOnboarded at all (see payoutController.ts's
+        // getOrganizerPayoutProcessorInfo/resolvePayoutProcessor) -- only squareOnboarded
+        // decides the processor branch now.
+        squareOnboarded: true,
+        squareMerchantId: `sq-merchant-cashfee-${key}`,
+        squareLocationId: `sq-location-cashfee-${key}`,
         cashFeeBalance: 0,
       },
     });
@@ -409,55 +424,55 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
   });
 
-  it('deducts the accrued balance from a payout and zeroes it', async () => {
-    const { orgUser, organizer, hold } = await seed('payout', 'SIMPLE', 100);
-    await recordSold(orgUser, [hold.id]);
-    expect((await prisma.organizer.findUnique({ where: { id: organizer.id } }))!.cashFeeBalance)
-      .toBeCloseTo(10, 2);
+  // ── createPayout — Square has no on-demand payout, so cash-debt netting moved ────────────
+  // (2026-09-12, Stripe removal): the old "deduct accrued cashFeeBalance from a manually
+  // requested Stripe payout" branch is gone. createPayout now returns an honest "not available"
+  // response for a Square-onboarded organizer and never touches cashFeeBalance -- the amount
+  // requested is irrelevant, since the function returns before ever looking at req.body.amount.
+  describe('createPayout — Square has no on-demand payout, so cash-debt netting moved', () => {
+    it('returns an honest Square "not available" response and leaves the accrued balance untouched', async () => {
+      const { orgUser, organizer, hold } = await seed('payout', 'SIMPLE', 100);
+      await recordSold(orgUser, [hold.id]);
+      expect((await prisma.organizer.findUnique({ where: { id: organizer.id } }))!.cashFeeBalance)
+        .toBeCloseTo(10, 2);
 
-    mockPayoutsCreate.mockResolvedValueOnce({
-      id: 'po_cashfee',
-      amount: 9000,
-      method: 'standard',
-      status: 'pending',
-      arrival_date: Math.floor(Date.now() / 1000),
+      const req: any = {
+        user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'] },
+        body: { amount: 100, method: 'standard' },
+      };
+      const res = makeMockRes();
+      await createPayout(req, res);
+
+      expect(mockPayoutsCreate).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(400);
+      const body = res.json.mock.calls[0][0];
+      expect(body.processor).toBe('SQUARE');
+      expect(body.message).toMatch(/Square/i);
+
+      // No payout mechanism exists to net the debt against, so nothing changes.
+      const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
+      expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
     });
 
-    const req: any = {
-      user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'] },
-      body: { amount: 100, method: 'standard' },
-    };
-    const res = makeMockRes();
-    await createPayout(req, res);
+    it('gives the same "not available" response no matter what amount is requested', async () => {
+      const { orgUser, organizer, hold } = await seed('refuse', 'SIMPLE', 100);
+      await recordSold(orgUser, [hold.id]);
 
-    // Stripe is asked for the NET amount: $100.00 requested − $10.00 owed = $90.00.
-    expect(mockPayoutsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 9000 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
-    );
-    expect(res.json.mock.calls[0][0].cashFeeDeducted).toBeCloseTo(10, 2);
+      const req: any = {
+        user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'] },
+        body: { amount: 5, method: 'standard' },
+      };
+      const res = makeMockRes();
+      await createPayout(req, res);
 
-    // Debt settled — balance back to zero.
-    const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-    expect(after!.cashFeeBalance).toBeCloseTo(0, 2);
-  });
-
-  it('refuses a payout smaller than the commission owed', async () => {
-    const { orgUser, organizer, hold } = await seed('refuse', 'SIMPLE', 100);
-    await recordSold(orgUser, [hold.id]);
-
-    const req: any = {
-      user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'] },
-      body: { amount: 5, method: 'standard' },
-    };
-    const res = makeMockRes();
-    await createPayout(req, res);
-
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json.mock.calls[0][0].cashFeeDeduction).toBeCloseTo(10, 2);
-    // Nothing paid out, so the debt is untouched.
-    const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-    expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
+      expect(res.status).toHaveBeenCalledWith(400);
+      const body = res.json.mock.calls[0][0];
+      expect(body.processor).toBe('SQUARE');
+      expect(body.message).toMatch(/Square/i);
+      // Debt is untouched either way -- there's no payout to net it against.
+      const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
+      expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
+    });
   });
 
   it('rejects a settlement against another organizer’s hold and accrues nothing', async () => {
