@@ -18,7 +18,6 @@ import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useMyWorkspace } from '../../hooks/useWorkspace';
 import { TierGatedButton } from '../../components/TierGatedNav';
 import WorkspaceInvitationBanner from '../../components/WorkspaceInvitationBanner';
-import StripeMigrationBanner from '../../components/StripeMigrationBanner';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge';
@@ -252,8 +251,6 @@ const OrganizerDashboard = () => {
         subscriptionLapsed: boolean;
         graceEndAt?: string | null;
         graceTierBefore?: string | null;
-        needsStripeMigration?: boolean;
-        migrationPending?: boolean;
       };
     },
     enabled: !!user?.id && isClient,
@@ -733,10 +730,6 @@ const OrganizerDashboard = () => {
 
           {/* Workspace Invitation Banner */}
           <WorkspaceInvitationBanner />
-          <StripeMigrationBanner
-            needsStripeMigration={orgProfile?.needsStripeMigration}
-            migrationPending={orgProfile?.migrationPending}
-          />
 
           {/* Email Verification Banner: S512: show until emailVerified === true */}
           {user?.emailVerified === false && (

@@ -1,12 +1,10 @@
 // V2: Instant payouts — balance, triggered payouts, and payout schedule management
 // Feature #9: getEarningsBreakdown — item-level fee transparency
 import { Response } from 'express';
-import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getPlatformFeeRate, resolveOrganizerFeeReport } from '../utils/feeCalculator';
 import { buyCheapestLabel, ShippingLabelPurchaseError } from '../services/shippingLabelService';
-import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer payout wiring
 
 /**
  * Stripe-to-Square changeover gap fix (2026-09-09, S-URGENT-PAYOUTS-STRIPE-ONLY): this whole
@@ -43,11 +41,9 @@ const SQUARE_ON_DEMAND_PAYOUT_MESSAGE =
 const NO_PROCESSOR_MESSAGE =
   'No payment processor is connected for this account yet. Complete onboarding first.';
 
-type PayoutProcessor = 'STRIPE' | 'SQUARE' | 'NONE';
+type PayoutProcessor = 'SQUARE' | 'NONE';
 
 interface OrganizerPayoutProcessorInfo {
-  stripeConnectId: string | null;
-  stripeOnboarded: boolean;
   squareOnboarded: boolean;
 }
 
@@ -55,19 +51,21 @@ interface OrganizerPayoutProcessorInfo {
 const getOrganizerPayoutProcessorInfo = async (userId: string): Promise<OrganizerPayoutProcessorInfo | null> => {
   const organizer = await prisma.organizer.findUnique({
     where: { userId },
-    select: { stripeConnectId: true, stripeOnboarded: true, squareOnboarded: true },
+    select: { squareOnboarded: true },
   });
   return organizer ?? null;
 };
 
 /**
- * Square wins when an organizer somehow has both flags set (e.g. a legacy stripeOnboarded=true
- * row that never got cleared post-changeover) -- explicit priority call for this dispatch, since
- * Square is the current/live processor going forward.
+ * Stripe removed entirely 2026-09-12 (Patrick-approved full Stripe-removal pass): the Stripe
+ * platform account is permanently closed, so a 'STRIPE' branch here could never succeed even
+ * for an organizer with a legacy stripeConnectId/stripeOnboarded=true row -- any such organizer
+ * now correctly falls through to NONE and is told to connect Square, same as an organizer who
+ * never had a processor at all. The historical stripeConnectId/stripeOnboarded fields on
+ * Organizer are left in the schema as audit trail; this controller simply stops reading them.
  */
 const resolvePayoutProcessor = (info: OrganizerPayoutProcessorInfo): PayoutProcessor => {
   if (info.squareOnboarded) return 'SQUARE';
-  if (info.stripeOnboarded && info.stripeConnectId) return 'STRIPE';
   return 'NONE';
 };
 
@@ -94,21 +92,7 @@ export const getBalance = async (req: AuthRequest, res: Response) => {
     if (processor === 'SQUARE') {
       return res.json({ processor: 'SQUARE', available: null, pending: null, message: SQUARE_BALANCE_MESSAGE });
     }
-    if (processor === 'NONE') {
-      return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
-    }
-
-    const stripe = getStripe();
-    const balance = await stripe.balance.retrieve({ stripeAccount: info.stripeConnectId! });
-
-    const usdAvailable = balance.available.find(b => b.currency === 'usd');
-    const usdPending = balance.pending.find(b => b.currency === 'usd');
-
-    res.json({
-      processor: 'STRIPE',
-      available: (usdAvailable?.amount ?? 0) / 100,
-      pending: (usdPending?.amount ?? 0) / 100,
-    });
+    return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
   } catch (error) {
     console.error('getBalance error:', error);
     res.status(500).json({ message: 'Failed to retrieve balance' });
@@ -143,20 +127,7 @@ export const getPayoutSchedule = async (req: AuthRequest, res: Response) => {
         message: SQUARE_SCHEDULE_MESSAGE,
       });
     }
-    if (processor === 'NONE') {
-      return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
-    }
-
-    const stripe = getStripe();
-    const account = await stripe.accounts.retrieve(info.stripeConnectId!);
-    const schedule = account.settings?.payouts?.schedule;
-
-    res.json({
-      processor: 'STRIPE',
-      interval: schedule?.interval ?? 'daily',
-      weeklyAnchor: (schedule as any)?.weekly_anchor ?? null,
-      monthlyAnchor: (schedule as any)?.monthly_anchor ?? null,
-    });
+    return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
   } catch (error) {
     console.error('getPayoutSchedule error:', error);
     res.status(500).json({ message: 'Failed to retrieve payout schedule' });
@@ -187,31 +158,7 @@ export const updatePayoutSchedule = async (req: AuthRequest, res: Response) => {
     if (processor === 'SQUARE') {
       return res.status(400).json({ message: SQUARE_SCHEDULE_UPDATE_MESSAGE, processor: 'SQUARE' });
     }
-    if (processor === 'NONE') {
-      return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
-    }
-
-    const { interval } = req.body;
-    const validIntervals = ['daily', 'weekly', 'monthly', 'manual'];
-    if (!validIntervals.includes(interval)) {
-      return res.status(400).json({ message: `interval must be one of: ${validIntervals.join(', ')}` });
-    }
-
-    const stripe = getStripe();
-    const account = await stripe.accounts.update(info.stripeConnectId!, {
-      settings: {
-        payouts: {
-          schedule: { interval: interval as any },
-        },
-      },
-    });
-
-    const schedule = account.settings?.payouts?.schedule;
-    res.json({
-      processor: 'STRIPE',
-      interval: schedule?.interval,
-      weeklyAnchor: (schedule as any)?.weekly_anchor ?? null,
-    });
+    return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
   } catch (error) {
     console.error('updatePayoutSchedule error:', error);
     res.status(500).json({ message: 'Failed to update payout schedule' });
@@ -235,124 +182,17 @@ export const createPayout = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer access required' });
     }
 
-    // Single organizer fetch — id/cashFeeBalance for the fee-deduction logic below, plus the
-    // processor-identity fields needed to decide Stripe vs. Square vs. neither (fixes the
-    // stale-stripeConnectId bug: stripeConnectId can be non-null while stripeOnboarded=false,
-    // e.g. a Square-only organizer with a leftover pre-changeover Stripe row -- Maple Lake Mall
-    // is a real, live example).
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId: req.user.id },
-      // id added (2026-09-06, S1198) so the fraud-hold check below can key off it --
-      // was previously not selected since nothing else in this function needed it.
-      select: {
-        id: true,
-        cashFeeBalance: true,
-        cashFeeBalanceUpdatedAt: true,
-        stripeConnectId: true,
-        stripeOnboarded: true,
-        squareOnboarded: true,
-      },
-    });
-
-    if (!organizer) {
+    const info = await getOrganizerPayoutProcessorInfo(req.user.id);
+    if (!info) {
       return res.status(404).json({ message: 'Organizer not found' });
     }
 
-    const processor = resolvePayoutProcessor(organizer);
+    const processor = resolvePayoutProcessor(info);
     if (processor === 'SQUARE') {
       return res.status(400).json({ message: SQUARE_ON_DEMAND_PAYOUT_MESSAGE, processor: 'SQUARE' });
     }
-    if (processor === 'NONE') {
-      return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
-    }
-
-    const { amount, method = 'standard' } = req.body;
-    if (typeof amount !== 'number' || amount <= 0) {
-      return res.status(400).json({ message: 'amount must be a positive number (in dollars)' });
-    }
-    if (!['standard', 'instant'].includes(method)) {
-      return res.status(400).json({ message: "method must be 'standard' or 'instant'" });
-    }
-
-    // Check 30-day guardrail: advisory warning if balance > 0 and > 30 days old
-    let guardrailWarning: string | null = null;
-    if (organizer.cashFeeBalance > 0 && organizer.cashFeeBalanceUpdatedAt) {
-      const daysSinceUpdate = (Date.now() - organizer.cashFeeBalanceUpdatedAt.getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSinceUpdate > 30) {
-        guardrailWarning = `Your cash fee balance of $${organizer.cashFeeBalance.toFixed(2)} has been pending for ${Math.floor(daysSinceUpdate)} days.`;
-      }
-    }
-
-    // Deduct cash fee balance from requested payout amount
-    const payoutAmountAfterFees = amount - organizer.cashFeeBalance;
-
-    if (payoutAmountAfterFees < 0.50) {
-      // Payout would be below Stripe minimum after deducting fees
-      return res.status(400).json({
-        message: `Cash fees ($${organizer.cashFeeBalance.toFixed(2)}) exceed payout amount. Available balance after deduction: $${Math.max(0, payoutAmountAfterFees).toFixed(2)}.`,
-        cashFeeDeduction: organizer.cashFeeBalance,
-        originalAmount: amount,
-      });
-    }
-
-    // S1198 (2026-09-06): bank-fingerprint collusion hold. This is the most direct hit
-    // of the whole audit -- a literal stripe.payouts.create call, exactly the action
-    // isPayoutFlaggedForReview exists to gate. Checked unconditionally, mirrors
-    // payConsignor's 403 (stripeConnectController.ts) exactly.
-    if (await isPayoutFlaggedForReview('ORGANIZER', organizer.id)) {
-      return res.status(403).json({ message: 'This payout is on hold pending admin review. Contact support@finda.sale for details.' });
-    }
-
-    const stripe = getStripe();
-    const payout = await stripe.payouts.create(
-      {
-        amount: Math.round(payoutAmountAfterFees * 100), // convert dollars → cents (net amount only)
-        currency: 'usd',
-        method: method as 'standard' | 'instant',
-        statement_descriptor: 'FindA.Sale Payout',
-      },
-      { stripeAccount: organizer.stripeConnectId! }
-    );
-
-    // After successful payout, reset the cash fee balance
-    await prisma.organizer.update({
-      where: { userId: req.user.id },
-      data: {
-        cashFeeBalance: 0,
-        cashFeeBalanceUpdatedAt: new Date(),
-      },
-    });
-
-    res.json({
-      processor: 'STRIPE',
-      id: payout.id,
-      amount: payout.amount / 100,
-      method: payout.method,
-      status: payout.status,
-      // arrival_date is a Unix timestamp; convert to ISO for the frontend
-      arrivalDate: payout.arrival_date
-        ? new Date(payout.arrival_date * 1000).toISOString()
-        : null,
-      ...(guardrailWarning && { guardrailWarning }),
-      cashFeeDeducted: organizer.cashFeeBalance,
-    });
-  } catch (error: any) {
-    // Stripe specific codes for instant payout eligibility failures
-    const instantUnsupported = [
-      'instant_payouts_unsupported',
-      'instant_payouts_limit_exceeded',
-      'instant_payouts_currency_disabled',
-    ];
-    if (instantUnsupported.includes(error?.code)) {
-      return res.status(400).json({
-        message: 'Instant payouts are not available for this account. Try a standard payout instead.',
-        code: error.code,
-      });
-    }
-    // Insufficient balance
-    if (error?.code === 'balance_insufficient') {
-      return res.status(400).json({ message: 'Insufficient balance for this payout amount.', code: error.code });
-    }
+    return res.status(400).json({ message: NO_PROCESSOR_MESSAGE });
+  } catch (error) {
     console.error('createPayout error:', error);
     res.status(500).json({ message: 'Failed to create payout' });
   }

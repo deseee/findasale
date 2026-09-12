@@ -569,42 +569,14 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           data = response.data;
           if (data.itemTitle) setResolvedTitle(data.itemTitle);
         } else if (itemId) {
-          // Create a new payment intent (include affiliate attribution + coupon if present)
-          const affiliateLinkId = typeof window !== 'undefined'
-            ? sessionStorage.getItem('affiliateRef') ?? undefined
-            : undefined;
-          const trimmedCoupon = couponInput.trim().toUpperCase();
-          const deviceFingerprint = isGuest ? await generateDeviceFingerprint() : undefined;
-          const response = await api.post('/stripe/create-payment-intent', {
-            itemId,
-            ...(affiliateLinkId ? { affiliateLinkId } : {}),
-            ...(trimmedCoupon && !isGuest ? { couponCode: trimmedCoupon } : {}),
-            ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint, clientToken: clientTokenRef.current } : {}),
-            // ADR-110 Track 1: real destination-ZIP shipping. shippingCost is never sent --
-            // the backend recomputes it server-side from shippingZip and returns it below.
-            // ADR-115 Phase 1: full street address sent alongside the ZIP -- pricing still
-            // only ever trusts the ZIP (unaffected by this change), the address fields are
-            // stored for the organizer to actually ship the package to.
-            ...(shipToMe
-              ? {
-                  shippingRequested: true,
-                  shippingZip: shippingZipInput.trim(),
-                  shippingAddressLine1: shippingAddressLine1Input.trim(),
-                  ...(shippingAddressLine2Input.trim() ? { shippingAddressLine2: shippingAddressLine2Input.trim() } : {}),
-                  shippingCity: shippingCityInput.trim(),
-                  shippingState: shippingStateInput.trim(),
-                }
-              : {}),
-          });
-          data = response.data;
-          if (data.discountApplied > 0) {
-            setDiscountApplied(data.discountApplied);
-            setOriginalAmount(data.originalAmount);
-          }
-          // Capture purchaseId from response (created by backend)
-          if (data.purchaseId) {
-            setPurchaseId(data.purchaseId);
-          }
+          // Stripe removal (2026-09-12): this branch only runs for a non-Square-onboarded
+          // organizer -- isItemSquareOnly already returned early above for anyone with a
+          // live Square account (see that guard a few lines up). There is no payment
+          // processor left to route this through, so surface the standard seller-not-ready
+          // message instead of calling the now-deleted /stripe/create-payment-intent
+          // endpoint (removed this pass along with stripeController.ts's createPaymentIntent).
+          setLoadError("This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.");
+          return;
         } else {
           setLoadError('Invalid checkout configuration.');
           return;

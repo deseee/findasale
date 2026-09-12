@@ -173,23 +173,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     setConfirmingClear(false);
   };
 
+  // Stripe removal (2026-09-12): handleCheckout is only reached via handleGoToCheckout's
+  // non-Square fallback below -- an organizer without a live Square account. There is no
+  // payment processor left to route a cart checkout through, so surface the standard
+  // seller-not-ready message instead of calling the now-deleted
+  // /stripe/create-cart-checkout-session endpoint (removed this pass along with
+  // stripeController.ts's createCartCheckoutSession).
   const handleCheckout = async () => {
     if (cart.cartCount === 0) return;
-    setCheckoutLoading(true);
-    try {
-      const itemIds = cart.items.map((item) => item.id);
-      const res = await api.post('/stripe/create-cart-checkout-session', { itemIds });
-      if (res.data?.url) {
-        window.location.href = res.data.url;
-      } else {
-        showToast(res.data?.error || 'Checkout failed. Please try again', 'error');
-      }
-    } catch (err: any) {
-      const message = err?.response?.data?.error || err?.response?.data?.message || 'Checkout failed. Please try again';
-      showToast(message, 'error');
-    } finally {
-      setCheckoutLoading(false);
-    }
+    showToast("This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.", 'error');
   };
 
   // Square-only-organizer cart checkout fix (2026-09-10, findasale-dev, P0): parallel path to
@@ -574,12 +566,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-2">
-              {/* ADR-025 checkout disclosure micro-copy: this cart flow hands off to a
-                  Stripe-hosted Checkout Session (window.location.href below), so this is
-                  the last FindA.Sale-rendered screen before payment; show it here. */}
-              {cart.cartCount > 0 && cartOrganizerName && (
+              {/* ADR-025 checkout disclosure micro-copy. Stripe removal (2026-09-12): Stripe
+                  is gone platform-wide, so only ever name Square here -- a non-Square-onboarded
+                  organizer gets the seller-not-ready message from handleCheckout instead of a
+                  processor name at all. */}
+              {cart.cartCount > 0 && cartOrganizerName && isCartOrgSquareOnly && (
                 <p className="text-xs text-warm-500 dark:text-gray-400 text-center">
-                  Buying from {cartOrganizerName} &middot; Payment processed securely by {isCartOrgSquareOnly ? 'Square' : 'Stripe'}.
+                  Buying from {cartOrganizerName} &middot; Payment processed securely by Square.
                 </p>
               )}
 
@@ -698,7 +691,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
             onClick={() => { if (!squareCartSubmitting) setShowSquareCartCheckout(false); }}
           >
             <div
-              className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-2xl"
+              className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full shadow-2xl max-h-[85vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
@@ -716,10 +709,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
 
               {squareCartSuccess ? (
                 <div className="text-center">
-                  <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <p className="text-3xl mb-2">✅</p>
-                    <p className="text-lg font-bold text-green-900 mb-1">Order Confirmed!</p>
-                    <p className="text-xs text-green-700 mb-3">Your payment has been processed successfully.</p>
+                    <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-1">Order Confirmed!</p>
+                    <p className="text-xs text-green-700 dark:text-green-400 mb-3">Your payment has been processed successfully.</p>
                   </div>
                   <button
                     onClick={() => {
@@ -744,16 +737,16 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                 </div>
               ) : (
                 <>
-                  <div className="mb-4 p-3 bg-warm-50 rounded-lg">
-                    <p className="text-sm text-warm-600">{cart.cartCount} item{cart.cartCount === 1 ? '' : 's'}</p>
-                    <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 pt-2 mt-2 text-sm">
+                  <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                    <p className="text-sm text-warm-600 dark:text-warm-300">{cart.cartCount} item{cart.cartCount === 1 ? '' : 's'}</p>
+                    <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 dark:border-gray-600 pt-2 mt-2 text-sm">
                       <span>Total Due</span>
                       <span>${(cartTotalCents / 100).toFixed(2)}</span>
                     </div>
                   </div>
 
                   {squareCartError && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
                       <p className="mb-2">{squareCartError}</p>
                       <button
                         type="button"

@@ -4,8 +4,6 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
 import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
-import { getStripe } from '../utils/stripe';
-import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // Fee-precedence bug fix (2026-08-24): this file had its OWN local getPlatformFeeRate
 // shadow (hardcoded 0.10 for PRO/TEAMS too) that was never touched by the 2026-08-22 fee-precedence
 // fix applied everywhere else (stripeController.ts, terminalController.ts, jobs/auctionJob.ts,
@@ -18,6 +16,7 @@ import {
   buildSquareIdempotencyKey,
   createSquareCharge,
 } from '../services/squarePaymentService'; // Square migration Wave S2 #1 (2026-09-09): additive Square branch, see completeBountyPurchase
+import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // BUG FIX (2026-09-09, findasale-dev BUG MODE): completeBountyPurchase's Stripe branch was skipping this shared sale-status / Stripe-Connect-onboarding gate that createPaymentIntent/createCartCheckoutSession (stripeController.ts) already enforce (2026-08-27 carding incident). Stripe-specific fields -- used ONLY in the Stripe branch below. Square eligibility is governed separately (organizerHasSquare + resolveOrganizerSquareAccessToken), so this must not run for Square-onboarded organizers who have no live Stripe Connect account at all.
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 collusion/wash-trade guard -- BUG FIX (2026-09-09): was missing from BOTH processor branches here. Identity-based (buyer vs. organizer fingerprints), not Stripe-specific, so added once, shared, before the Square/Stripe branch split.
 import * as Sentry from '@sentry/node';
@@ -34,7 +33,6 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { endEbayListingIfExists } from './ebayController';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 
-const stripe = () => getStripe();
 
 /**
  * POST /api/bounties
@@ -939,12 +937,20 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       // hashed, not the literal `bounty-${submissionId}-${userId}` string the Stripe branch below uses.
       const idempotencyKey = buildSquareIdempotencyKey(['bounty', submissionId, userId]);
 
+      // Cash-fee-debt recoupment (2026-09-12): pad this card sale's appFeeMoney with whatever
+      // room exists to collect outstanding Organizer.cashFeeBalance -- see cashFeeService.ts.
+      const { appFeeCents: squareAppFeeCents, debtAppliedCents: squareDebtAppliedCents } = await applyCashDebtToAppFee({
+        organizerId: submission.item.sale!.organizerId,
+        baseAppFeeCents: squarePlatformFeeAmount,
+        saleAmountCents: priceCents,
+      });
+
       const chargeResult = await createSquareCharge({
         organizerAccessToken,
         idempotencyKey,
         sourceId,
         amountCents: priceCents,
-        appFeeCents: squarePlatformFeeAmount,
+        appFeeCents: squareAppFeeCents,
         locationId: squareLocationId,
         referenceId: submission.itemId,
         note: submission.item.title ? submission.item.title.slice(0, 80) : undefined,
@@ -954,6 +960,11 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       if (!chargeResult.ok) {
         return res.status(402).json({ message: chargeResult.message, code: 'SQUARE_PAYMENT_DECLINED' });
       }
+
+      // Only settle after Square confirms success -- no idempotent-retry double-fire risk on
+      // this path (see the comment on the Purchase.create call below: a retry would fail
+      // Square's own idempotency check before reaching here again).
+      await settleCashDebtCollection({ organizerId: submission.item.sale!.organizerId, debtAppliedCents: squareDebtAppliedCents });
 
       // BUG FIX (Gap 1, 2026-09-09): XP deduct/award now happen HERE -- immediately after the
       // Square charge is confirmed successful -- instead of unconditionally before any charge
@@ -998,7 +1009,8 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
           itemId: submission.itemId,
           saleId: submission.item.sale!.id,
           amount: itemPrice,
-          platformFeeAmount: squarePlatformFeeAmount / 100,
+          platformFeeAmount: squareAppFeeCents / 100,
+          cashDebtCollectedAmount: squareDebtAppliedCents > 0 ? squareDebtAppliedCents / 100 : undefined,
           // FEE SNAPSHOT (2026-08-17): commission-only, same as the Stripe branch below -- a
           // bounty fulfillment is a fixed-price purchase, never an auction lot.
           buyerPremiumAmount: 0,
@@ -1111,143 +1123,20 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       return res.status(bountyPaymentEligibility.status).json(bountyPaymentEligibility.body);
     }
 
-    // Stripe routing: check if organizer has Stripe Connect (unchanged -- Square branch above returns early)
-    const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
-    // Direct-charges migration (2026-08-08): staged-rollout routing decision — live Stripe
-    // eligibility check + allowlist gate, see stripeConnectService.shouldUseDirectCharge.
-    const useDirect = shouldUseConnect
-      ? await shouldUseDirectCharge(submission.item.sale!.organizerId, stripeConnectId)
-      : false;
-
-    // Calculate platform fee -- tier-derived rate via the SHARED resolver (fee-precedence
-    // fix, 2026-08-24). The local shadow helper that used to live here hardcoded 0.10 for
-    // every tier including PRO/TEAMS; see utils/feeCalculator.ts getPlatformFeeRate for the
-    // single source of truth (10% SIMPLE / 8% PRO+TEAMS).
-    const platformFeeAmount = Math.round(priceCents * getPlatformFeeRate(subscriptionTier as SubscriptionTier));
-
-    // Create Stripe PaymentIntent
-    const idempotencyKey = `bounty-${submissionId}-${userId}`;
-    let paymentIntent;
-    const basePaymentIntentData = {
-      amount: priceCents,
-      currency: 'usd',
-      metadata: {
-        submissionId: submission.id,
-        bountyId: submission.bountyId,
-        itemId: submission.itemId,
-        saleId: submission.item.sale!.id,
-        userId,
-        type: 'BOUNTY_SUBMISSION',
-      },
-    };
-    // Direct-charges migration (2026-08-08): a Direct charge lives on the connected account
-    // itself — drop on_behalf_of/transfer_data (there is no platform-side Transfer) and keep
-    // application_fee_amount; the { stripeAccount } request option below routes the create
-    // call to the connected account. Destination-charge shape (else branch) is UNCHANGED.
-    const paymentIntentCreateParams = useDirect
-      ? {
-          ...basePaymentIntentData,
-          application_fee_amount: platformFeeAmount,
-        }
-      : shouldUseConnect
-        ? {
-            ...basePaymentIntentData,
-            application_fee_amount: platformFeeAmount,
-            on_behalf_of: stripeConnectId,
-            transfer_data: { destination: stripeConnectId },
-          }
-        : basePaymentIntentData;
-    const paymentIntentCreateOptions = useDirect
-      ? { idempotencyKey, stripeAccount: stripeConnectId! }
-      : { idempotencyKey };
-    try {
-      paymentIntent = await stripe().paymentIntents.create(paymentIntentCreateParams, paymentIntentCreateOptions);
-    } catch (stripeError: any) {
-      // Direct-charges migration (2026-08-08) -- HIGHEST PRIORITY fix in this migration: the
-      // old fallback here retried with basePaymentIntentData alone (zero Connect params) on
-      // insufficient_capabilities_for_transfer, silently capturing the charge on the PLATFORM
-      // account while the organizer received nothing. REMOVED outright. A Connect-routing
-      // failure now always blocks cleanly with the same 409 pattern used by createPaymentIntent
-      // / createCartCheckoutSession (stripeController.ts) — no platform-absorb path survives
-      // anywhere in this file after this change.
-      if (
-        shouldUseConnect &&
-        (stripeError.code === 'insufficient_capabilities_for_transfer' ||
-          (stripeError.type === 'StripeInvalidRequestError' &&
-            stripeError.message?.includes('insufficient_capabilities_for_transfer')))
-      ) {
-        console.warn(`[bounty-purchase] Seller account ${stripeConnectId} cannot receive funds (${stripeError.code || stripeError.message}); blocking checkout with friendly message`);
-        return res.status(409).json({
-          message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
-          code: 'SELLER_PAYMENTS_UNAVAILABLE',
-        });
-      }
-      throw stripeError;
-    }
-
-    // Step 5 (Stripe): Purchase record created eagerly as PENDING -- same "create now, finalize
-    // in the webhook once payment is confirmed" pattern createPaymentIntent (stripeController.ts)
-    // already uses for single-item purchases (see its own PENDING Purchase.create + the
-    // payment_intent.succeeded "Standard Purchase" handler that later flips it to PAID). This
-    // row is what that webhook's new metadata.type === 'BOUNTY_SUBMISSION' branch looks up by
-    // stripePaymentIntentId to flip to PAID.
-    //
-    // BUG FIX (Gap 1, 2026-09-09): the BountySubmission status flip to PURCHASED, the XP
-    // deduct/award, and the organizer notification used to all happen HERE -- before Stripe
-    // ever confirmed the charge. A cancelled or declined checkout left every one of those
-    // applied with no rollback (the bug this dispatch was opened to fix). All three now happen
-    // in the webhook instead, gated on a confirmed payment_intent.succeeded event for this PI
-    // (stripeController.ts, metadata.type === 'BOUNTY_SUBMISSION' branch) -- matching the "side
-    // effects only after a confirmed charge" timing the Square branch above now also uses (see
-    // Gap 1 fix comment there). The submissionId/bountyId/itemId/saleId/userId/type metadata
-    // already stamped on this PaymentIntent (above) carry everything that webhook branch needs
-    // to resolve and finalize this exact submission -- no new metadata fields were required.
-    const purchase = await prisma.purchase.create({
-      data: {
-        userId,
-        itemId: submission.itemId,
-        saleId: submission.item.sale!.id,
-        amount: itemPrice,
-        platformFeeAmount: platformFeeAmount / 100,
-        // FEE SNAPSHOT (2026-08-17): commission-only — a bounty fulfilment is a fixed-price
-        // purchase, never an auction lot, so the premium fields record a hard 0. The rate is
-        // the one this charge actually used (utils/feeCalculator.ts getPlatformFeeRate), pinned so
-        // a later tier change cannot restate this purchase's fee in earnings reporting.
-        buyerPremiumAmount: 0,
-        buyerPremiumRate: 0,
-        commissionAmount: platformFeeAmount / 100,
-        commissionRate: getPlatformFeeRate(subscriptionTier as SubscriptionTier),
-        organizerAbsorbedPremium: false,
-        stripePaymentIntentId: paymentIntent.id,
-        status: 'PENDING',
-        // Direct-charges migration (2026-08-08): persisted, authoritative charge shape, set
-        // once here at charge-creation time.
-        chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
-        ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
-      },
-    });
-
-    return res.json({
-      clientSecret: paymentIntent.client_secret,
-      amount: priceCents,
-      currency: 'usd',
-      submissionId: submission.id,
-      bountyId: submission.bountyId,
-      purchaseId: purchase.id,
-      // Gap 1 fix: reflects the REAL current status -- still PENDING_REVIEW/APPROVED, not yet
-      // PURCHASED, until the webhook confirms payment. Knock-on check performed (2026-09-09):
-      // the frontend (pages/shopper/bounties/submissions.tsx handleCompletePurchase) never
-      // reads this field to render an optimistic "Purchased" badge -- it opens CheckoutModal
-      // and only reloads submissions from the server (loadSubmissions()) after the checkout
-      // flow's own onSuccess fires, independent of this response body. No frontend change
-      // needed.
-      status: submission.status,
-      // Amounts that WILL be deducted/awarded once the webhook confirms this charge -- not
-      // yet applied at this point (Gap 1 fix). Not read by the frontend today.
-      xpDeducted: XP_BOUNTY_COST,
-      organizerXpAwarded: XP_ORGANIZER_REWARD,
-    });
+    // Stripe removal (2026-09-12): this organizer has no Square account connected, and
+    // the platform's Stripe account is permanently closed -- there is no processor left to
+    // charge this bounty purchase against. The Stripe PaymentIntent path that used to live
+    // here is guaranteed to fail against a dead account, so it is removed rather than left
+    // to hard-fail unpredictably. Fail closed with the same SquareOnboardingIncompleteError/
+    // SELLER_PAYMENTS_UNAVAILABLE shape every other Square-gated endpoint uses.
+    throw new SquareOnboardingIncompleteError(submission.item.sale!.organizerId);
   } catch (error) {
+    if (error instanceof SquareOnboardingIncompleteError) {
+      return res.status(409).json({
+        message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
+        code: 'SELLER_PAYMENTS_UNAVAILABLE',
+      });
+    }
     console.error('completeBountyPurchase error:', error);
     return res.status(500).json({ message: 'Server error.' });
   }

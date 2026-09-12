@@ -70,13 +70,14 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       discountType,
       discountValue,
       discountReasonNote,
-      // S-STRIPE-SQUARE-DEFAULT-FIX (2026-09-09): Stripe's platform account is now
-      // PERMANENTLY closed -- defaulting an un-specified processor to STRIPE meant
-      // every 'Send to Phone' request from a frontend build that doesn't pass
-      // `processor` explicitly would silently attempt a doomed Stripe charge.
-      // Default flipped to SQUARE. STRIPE branch left in place, inert, only for a
-      // caller that explicitly requests it (e.g. servicing an existing in-flight row).
-      processor = 'SQUARE', // Square migration Wave 1 #3 (2026-09-07) -- default corrected 2026-09-09
+      // Stripe removal (2026-09-12): Stripe's platform account is permanently closed,
+      // and this endpoint always creates a BRAND-NEW POSPaymentRequest row -- there is no
+      // "existing in-flight row" for a client-supplied 'STRIPE' value to legitimately
+      // service here (unlike a resume/confirm endpoint reading an already-created row).
+      // Processor is now always SQUARE; a client-supplied value is ignored rather than
+      // trusted, closing the hole where any raw API caller (stale build, curl, an
+      // attacker) could force this endpoint down the guaranteed-to-fail Stripe branch.
+      processor: _requestedProcessor,
     } = req.body as {
       shopperUserId?: string;
       saleId?: string;
@@ -90,9 +91,12 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       discountType?: string;
       discountValue?: number;
       discountReasonNote?: string;
-      // Square migration Wave 1 #3 (2026-09-07): client-supplied, server-validated below.
+      // Stripe removal (2026-09-12): accepted for backward-compatible request shapes but
+      // ignored -- see the const above, processor is always SQUARE now.
       processor?: 'STRIPE' | 'SQUARE';
     };
+    const processor: 'SQUARE' = 'SQUARE';
+    void _requestedProcessor;
 
     // Validation
     if (!shopperUserId || typeof shopperUserId !== 'string') {
@@ -106,18 +110,6 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     }
     if (typeof totalAmountCents !== 'number' || totalAmountCents <= 0) {
       return res.status(400).json({ message: 'totalAmountCents must be > 0' });
-    }
-
-    // Square migration Wave 1 #3 (2026-09-07): processor selection is client-supplied
-    // (mirrors the existing isSplitPayment/discountType client-driven flags already on
-    // this endpoint) because the cross-surface shouldRouteToSquare(organizerId) DB-backed
-    // routing helper described in the Wave 1 scoping doc is explicitly deferred until
-    // AFTER every Square charge path exists -- building it now for a single surface would
-    // be premature. Server-side authorization still gates the actual charge below via
-    // stripePos/squarePos preflightAccountStatus -- the client can REQUEST 'SQUARE' but
-    // cannot bypass onboarding state.
-    if (processor !== 'STRIPE' && processor !== 'SQUARE') {
-      return res.status(400).json({ message: "processor must be 'STRIPE' or 'SQUARE'" });
     }
 
     // Validate split payment amounts if split is enabled
@@ -368,79 +360,28 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Your payments are on hold pending admin review. Contact support@finda.sale for details.' });
     }
 
-    // Square migration Wave 1 #3 (2026-09-07): account-status preflight + payment
-    // creation branch by processor. STRIPE keeps the exact live-capability check +
-    // PaymentIntent creation this project already relies on (Direct-charges migration,
-    // 2026-08-08), unchanged in both logic and timing. SQUARE has no equivalent
-    // "create now, confirm later" object -- charge creation is deferred entirely to
-    // confirmPaymentRequest, once the shopper's device has tokenized a card via the Web
-    // Payments SDK (see squarePosPaymentAdapter.ts file header for the full researched
-    // rationale, including the confirmed 7-day delayed-capture hold window).
-    let stripePaymentIntentId: string | null = null;
-    let stripeClientSecret: string | null = null;
-
-    if (processor === 'STRIPE') {
-      const preflight = await stripePos.preflightAccountStatus({ stripeConnectId: organizer.stripeConnectId ?? null });
-      if (!preflight.ok) {
-        await prisma.pOSPaymentRequest
-          .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
-          .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after Stripe preflight failure:', releaseErr));
-        return res.status(preflight.status).json({ message: preflight.message });
-      }
-
-      // Create Stripe Payment Intent (for card amount only) now that the placeholder row
-      // exists -- idempotencyKey is keyed to the claimed row id so a retry against the SAME
-      // placeholder (e.g. a lost response on our side) can't create a second PaymentIntent.
-      const created = await stripePos.createPayment({
-        cardAmountCents: splitCardAmountCents!,
-        platformFeeCents,
-        posRequestId: posRequest.id,
-        organizerId: organizer.id,
-        organizerUserId,
-        shopperUserId,
-        saleId,
-        isSplitPayment,
-        stripeConnectId: organizer.stripeConnectId!,
-      });
-      if (!created.ok) {
-        await prisma.pOSPaymentRequest
-          .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
-          .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after Stripe error:', releaseErr));
-        return res.status(created.status).json({ message: created.message, error: created.message });
-      }
-
-      stripePaymentIntentId = created.paymentIntentId;
-      stripeClientSecret = created.clientSecret;
-
-      // Backfill the PaymentIntent onto the now-created row.
-      try {
-        posRequest = await prisma.pOSPaymentRequest.update({
-          where: { id: posRequest.id },
-          data: {
-            stripePaymentIntentId,
-            clientSecret: stripeClientSecret,
-          },
-        });
-      } catch (err: any) {
-        console.error('[pos-payment] Failed to backfill PaymentIntent onto POSPaymentRequest:', err);
-        return res.status(500).json({ message: 'Failed to create payment request' });
-      }
-    } else {
-      // SQUARE: preflight only -- confirms the organizer's Square account is fully
-      // connected and its location is live-reported ACTIVE. No Square Payment object
-      // exists yet; that is created at confirm time once a real card token exists.
-      const preflight = await squarePos.preflightAccountStatus({
-        id: organizer.id,
-        squareOnboarded: organizer.squareOnboarded,
-        squareMerchantId: organizer.squareMerchantId,
-        squareLocationId: organizer.squareLocationId,
-      });
-      if (!preflight.ok) {
-        await prisma.pOSPaymentRequest
-          .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
-          .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after Square preflight failure:', releaseErr));
-        return res.status(preflight.status).json({ message: preflight.message });
-      }
+    // Square migration Wave 1 #3 (2026-09-07): account-status preflight.
+    // Stripe removal (2026-09-12): this endpoint's split-payment card leg used to branch
+    // on a client-supplied `processor` and could still attempt a live Stripe PaymentIntent
+    // for a non-Square organizer. Stripe's platform account is permanently closed and
+    // `processor` is now always forced to 'SQUARE' above, so that branch is dead code and
+    // has been removed outright (not converted to a 409 throw) -- there is nothing left
+    // that can ever select it. SQUARE has no "create now, confirm later" object -- charge
+    // creation is deferred entirely to confirmPaymentRequest, once the shopper's device has
+    // tokenized a card via the Web Payments SDK (see squarePosPaymentAdapter.ts file header
+    // for the full researched rationale, including the confirmed 7-day delayed-capture hold
+    // window).
+    const preflight = await squarePos.preflightAccountStatus({
+      id: organizer.id,
+      squareOnboarded: organizer.squareOnboarded,
+      squareMerchantId: organizer.squareMerchantId,
+      squareLocationId: organizer.squareLocationId,
+    });
+    if (!preflight.ok) {
+      await prisma.pOSPaymentRequest
+        .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
+        .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after Square preflight failure:', releaseErr));
+      return res.status(preflight.status).json({ message: preflight.message });
     }
 
     // Emit socket event to shopper
@@ -459,8 +400,10 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         expiresAt: expiresAt.toISOString(),
         expiresIn: expiresInSeconds,
         processor,
-        stripePaymentIntentSecret: stripeClientSecret ?? undefined,
-        squareLocationId: processor === 'SQUARE' ? organizer.squareLocationId ?? undefined : undefined,
+        // Stripe removal (2026-09-12): processor is always SQUARE now; no PaymentIntent
+        // secret is ever created here (deferred to confirmPaymentRequest's Square flow).
+        stripePaymentIntentSecret: undefined,
+        squareLocationId: organizer.squareLocationId ?? undefined,
         deepLink: `/shopper/pay-request/${posRequest.id}`,
         isSplitPayment,
         cashAmountCents: isSplitPayment ? splitCashAmountCents : undefined,
@@ -500,8 +443,10 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       displayAmount: `$${(totalAmountCents / 100).toFixed(2)}`,
       expiresAt: expiresAt.toISOString(),
       processor,
-      stripePaymentIntentId: stripePaymentIntentId ?? undefined,
-      stripePaymentIntentSecret: stripeClientSecret ?? undefined,
+      // Stripe removal (2026-09-12): processor is always SQUARE now; neither field is
+      // ever populated at creation time (Square charge creation is deferred to confirm).
+      stripePaymentIntentId: undefined,
+      stripePaymentIntentSecret: undefined,
       // Square migration Wave 1 #3 (2026-09-07): frontend needs this to init the Web
       // Payments SDK (payments(applicationId, locationId)) -- applicationId itself is a
       // static NEXT_PUBLIC_ env var, not organizer-specific, so it is not sent here.

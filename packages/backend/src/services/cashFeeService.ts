@@ -120,3 +120,100 @@ export async function accrueCashFeeBalance(params: {
   });
   return accrued;
 }
+
+/**
+ * ── CASH-FEE-DEBT COLLECTION (2026-09-12, Stripe removal) ───────────────────────────────────
+ *
+ * Square has no on-demand-payout API, so the old collection mechanism (deduct accrued
+ * `cashFeeBalance` from a manually-requested Stripe payout -- payoutController.ts's removed
+ * `createPayout` stripe.payouts.create branch) has no direct Square equivalent. The
+ * replacement: recoup the debt opportunistically from the SAME organizer's own next Square
+ * CARD sale, by padding that charge's `appFeeMoney` (the platform's own cut) above the sale's
+ * normal commission. Square already routes `appFeeMoney` straight to the platform's own Square
+ * account at charge time (see utils/square.ts / squarePaymentService.ts) -- this is the ONLY
+ * point in the whole Square integration where money the platform is entitled to actually moves
+ * through the platform's hands, so it is the only place a real "collection" can happen.
+ *
+ * Two-phase, mirroring every other charge-then-record pattern in this codebase (compute the
+ * fee, attempt the charge, only mutate the DB once the charge is CONFIRMED to have succeeded):
+ *
+ *   1. `applyCashDebtToAppFee` -- PRE-CHARGE. Pure computation, no DB write. Call this after
+ *      computing a card sale's normal `platformFeeAmount`/appFeeCents, before sending the
+ *      charge to Square. Returns the (possibly larger) appFeeCents to actually request, capped
+ *      so it can never exceed the sale's own total (never push a buyer's charge into "seller
+ *      gets $0 AND platform takes more than the sale is worth").
+ *
+ *   2. `settleCashDebtCollection` -- POST-CHARGE, only once Square has confirmed the payment
+ *      succeeded. Decrements `cashFeeBalance` by exactly the amount actually applied. Guarded
+ *      (`cashFeeBalance: { gte: debtCents/100 }`) the same way refundService.ts /
+ *      squareRefundService.ts guard their own decrements, so a race with a concurrent
+ *      settlement can never drive the balance negative -- worst case is a small under-collection
+ *      corrected on the organizer's next card sale, never an over-collection.
+ *
+ * Callers MUST persist the returned `debtAppliedCents` from step 1 onto the created Purchase
+ * row's `cashDebtCollectedAmount` (dollars) so a later refund of that specific purchase can
+ * reverse exactly this amount back onto `cashFeeBalance` -- see squareRefundService.ts. Do not
+ * fold the debt into `commissionAmount`/`commissionRate`: those must keep reporting this sale's
+ * OWN true rate for organizer-facing fee reporting (utils/feeCalculator.resolveOrganizerFeeReport),
+ * per the FEE SNAPSHOT invariant on the Purchase model.
+ */
+
+/** Cents of outstanding cashFeeBalance that can safely ride on top of `baseAppFeeCents` for a
+ *  card sale of `saleAmountCents`, without exceeding the sale's own total. Never negative. */
+export function computeCashDebtRoomCents(params: {
+  cashFeeBalance: number;
+  baseAppFeeCents: number;
+  saleAmountCents: number;
+}): number {
+  const outstandingCents = Math.round((Number(params.cashFeeBalance) || 0) * 100);
+  if (outstandingCents <= 0) return 0;
+  const room = params.saleAmountCents - params.baseAppFeeCents;
+  if (!(room > 0)) return 0;
+  return Math.min(outstandingCents, room);
+}
+
+/**
+ * PRE-CHARGE. Reads the organizer's current `cashFeeBalance` and returns the appFeeCents to
+ * actually charge (base commission + whatever debt fits). No DB write -- see file-header note.
+ * `debtAppliedCents` is what the caller must pass to `settleCashDebtCollection` AFTER a
+ * confirmed-successful charge, and must persist as `cashDebtCollectedAmount` on the Purchase row.
+ */
+export async function applyCashDebtToAppFee(params: {
+  organizerId: string;
+  baseAppFeeCents: number;
+  saleAmountCents: number;
+  tx?: CashFeeClient;
+}): Promise<{ appFeeCents: number; debtAppliedCents: number }> {
+  const client = (params.tx ?? prisma) as Prisma.TransactionClient;
+  const organizer = await client.organizer.findUnique({
+    where: { id: params.organizerId },
+    select: { cashFeeBalance: true },
+  });
+  const debtAppliedCents = computeCashDebtRoomCents({
+    cashFeeBalance: organizer?.cashFeeBalance ?? 0,
+    baseAppFeeCents: params.baseAppFeeCents,
+    saleAmountCents: params.saleAmountCents,
+  });
+  return { appFeeCents: params.baseAppFeeCents + debtAppliedCents, debtAppliedCents };
+}
+
+/**
+ * POST-CHARGE. Call ONLY after Square has confirmed the charge succeeded, with the exact
+ * `debtAppliedCents` returned by `applyCashDebtToAppFee` for that same charge. No-op when 0.
+ */
+export async function settleCashDebtCollection(params: {
+  organizerId: string;
+  debtAppliedCents: number;
+  tx?: CashFeeClient;
+}): Promise<void> {
+  if (!(params.debtAppliedCents > 0)) return;
+  const collected = roundMoney(params.debtAppliedCents / 100);
+  const client: Prisma.TransactionClient = (params.tx ?? prisma) as Prisma.TransactionClient;
+  await client.organizer.updateMany({
+    where: { id: params.organizerId, cashFeeBalance: { gte: collected } },
+    data: {
+      cashFeeBalance: { decrement: collected },
+      cashFeeBalanceUpdatedAt: new Date(),
+    },
+  });
+}

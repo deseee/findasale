@@ -29,6 +29,23 @@
  * and run in that state: it never silently drops a charge, it logs + persists
  * exactly what's blocked and why, same as the PENDING_STRIPE_ONBOARDING pattern
  * already established elsewhere in the VendorBooth payments system.
+ *
+ * *** STRIPE REMOVAL UPDATE (2026-09-12) ***
+ * The above "PRE-WIRE" state is now PERMANENT, not just "not yet built": the only
+ * endpoint that could ever populate vendorStripeCustomerId/vendorPaymentMethodId
+ * (startVendorBoothFeeBillingSetup, vendorBoothController.ts) has been blocked
+ * unconditionally this session because Stripe's platform account is permanently
+ * closed — no NEW Stripe Customer/SetupIntent can ever be created there again. That
+ * makes this cron's `stripe().paymentIntents.create` branch below provably dead
+ * code from this point forward (every real booth is now guaranteed to hit
+ * PENDING_PAYMENT_METHOD, forever, not just "in practice today"). Left in place
+ * rather than deleted, since ripping out a cron's charge branch mid-sweep without
+ * a replacement risks a worse mistake than an inert function — but recurring
+ * booth-fee billing cannot ship again until a Square equivalent (Card on File +
+ * an off-session-charge scheduler, e.g. via Square's Cards API) is designed.
+ * ARCHITECT-LEVEL OPEN QUESTION, not resolved by this sweep: what should
+ * recurring booth-fee billing look like on Square? Flagging per dispatch
+ * instructions rather than guessing at a new billing architecture.
  */
 
 import cron from 'node-cron';

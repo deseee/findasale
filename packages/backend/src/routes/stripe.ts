@@ -1,41 +1,29 @@
 import { Router } from 'express';
 import {
-  createConnectAccount,
-  createPaymentIntent,
   webhookHandler,
   getPendingPayment,
   createRefund,
   recoverPaymentIntent,
   createCheckoutSession,
-  createCartCheckoutSession,
   testTransaction,
   testCheckoutSession,
   testInAppPayment,
   testInAppIntent,
 } from '../controllers/stripeController';
-import { getAccountStatus } from '../controllers/stripeStatusController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown, getRefundHistory, buyShippingLabel, markPickedUp } from '../controllers/payoutController';
-import {
-  createConnectionToken,
-  createTerminalPaymentIntent,
-  captureTerminalPaymentIntent,
-  cancelTerminalPaymentIntent,
-} from '../controllers/terminalController';
 import { cashPayment } from '../controllers/cashPaymentController'; // moved 2026-09-09 (Square-changeover split-out) -- route path unchanged
-import { authenticate, optionalAuthenticate } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { paymentLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-// Organizer routes
-router.post('/create-connect-account', authenticate, createConnectAccount);
-router.get('/account-status', authenticate, getAccountStatus);
-
 // Buyer routes
-// Guest checkout (single-item Buy It Now, 2026-07-18): optionalAuthenticate lets an
-// unauthenticated shopper create a PaymentIntent for one item. createCartCheckoutSession
-// (multi-item cart) is intentionally UNCHANGED — guest cart checkout is out of scope this pass.
-router.post('/create-payment-intent', optionalAuthenticate, paymentLimiter, createPaymentIntent);
+// Stripe removal (2026-09-12): single-item and cart checkout both moved to Square-only --
+// /create-payment-intent and /create-cart-checkout-session (and their stripeController.ts
+// handlers) are deleted outright. CheckoutModal.tsx and CartDrawer.tsx now show a
+// seller-not-ready message for any organizer without a live Square account instead of
+// calling either endpoint. getPendingPayment (auction-winner resume) and recoverPaymentIntent
+// (webhook failure recovery) still service historical Stripe-era rows and stay live.
 router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
 // P2 Bug 2: Webhook failure recovery endpoint
 router.post('/recover-payment-intent', authenticate, paymentLimiter, recoverPaymentIntent);
@@ -45,9 +33,6 @@ router.post('/refund/:purchaseId', authenticate, createRefund);
 
 // Subscription checkout (#23: Pricing page)
 router.post('/checkout-session', authenticate, paymentLimiter, createCheckoutSession);
-
-// Shopper cart checkout — multi-item purchase via Stripe Checkout
-router.post('/create-cart-checkout-session', authenticate, paymentLimiter, createCartCheckoutSession);
 
 // V2: Instant payouts — balance + on-demand payouts + schedule management
 router.get('/balance', authenticate, getBalance);
@@ -61,11 +46,8 @@ router.get('/refunds', authenticate, getRefundHistory);
 router.post('/purchases/:id/buy-shipping-label', authenticate, buyShippingLabel);
 router.post('/purchases/:id/mark-picked-up', authenticate, markPickedUp); // ADR-115 Phase 3: Orders page local-pickup confirmation
 
-// Terminal POS — organizer-only in-person card payments
-router.post('/terminal/connection-token', authenticate, createConnectionToken);
-router.post('/terminal/payment-intent', authenticate, paymentLimiter, createTerminalPaymentIntent);
-router.post('/terminal/capture', authenticate, captureTerminalPaymentIntent);
-router.post('/terminal/cancel', authenticate, cancelTerminalPaymentIntent);
+// Terminal POS — hardware card-reader endpoints removed with Stripe (2026-09-12, Stripe-removal pass).
+// Cash payment recording is processor-agnostic and stays live.
 router.post('/terminal/cash-payment', authenticate, paymentLimiter, cashPayment);
 
 // Test harness — verify POS + payment flows without real money

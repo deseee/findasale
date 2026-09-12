@@ -60,6 +60,22 @@ export async function purchaseBoost(
     throw new Error(`[boostService] ${boostType} is XP-only. Cash rail not available.`);
   }
 
+  // Stripe removal (2026-09-12): the cash rail here always creates a BRAND-NEW
+  // BoostPurchase row (or reuses one from within the last hour) and then always
+  // attempts a live Stripe PaymentIntent create/retrieve -- there is no historical
+  // object to service for a fresh purchase attempt. Stripe's platform account is
+  // permanently closed, and PaymentMethod (schema.prisma) has only XP/STRIPE --
+  // there is no SQUARE rail built for boosts yet, so unlike the checkout flows this
+  // sweep converted, there is no drop-in Square replacement to route to here.
+  // Blocked before any BoostPurchase row is created (avoids littering the table with
+  // permanently-stuck PENDING rows). ARCHITECT-LEVEL OPEN QUESTION, not resolved by
+  // this sweep: should boosts get a Square cash rail (would need a PaymentMethod
+  // enum addition + migration), or should the cash rail be retired and boosts go
+  // XP-only? Flagging per the standing pattern rather than guessing.
+  if (paymentMethod === 'STRIPE') {
+    throw new Error('STRIPE_UNAVAILABLE: Cash-purchased boosts are temporarily unavailable. Please use XP to purchase this boost.');
+  }
+
   const effectiveDuration = getEffectiveDurationDays(boostType, durationDays);
   const activatedAt = new Date();
   const expiresAt = new Date(activatedAt);

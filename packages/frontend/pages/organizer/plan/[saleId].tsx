@@ -7,7 +7,6 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
-import TestCheckoutModal from '../../../components/TestCheckoutModal';
 import { format } from 'date-fns';
 import {
   CheckCircle2,
@@ -67,7 +66,20 @@ const SalePlanPage = () => {
   const [posTestLoading, setPosTestLoading] = useState(false);
   const [onlineCheckoutLoading, setOnlineCheckoutLoading] = useState(false);
   const [auctionCheckoutLoading, setAuctionCheckoutLoading] = useState(false);
-  const [showTestInAppModal, setShowTestInAppModal] = useState(false);
+
+  // Onboarding-checklist "Run Test" tools — all four (live_pos, pre_online_checkout,
+  // pre_auction_checkout, pre_in_app_payment) call stripeController.ts test endpoints
+  // (testTransaction / testCheckoutSession / testInAppPayment / testInAppIntent) which use
+  // getTestStripe() against FindA.Sale's permanently-closed Stripe platform account -- every
+  // one of them now fails. Discovered during the 2026-09-12 Stripe-removal pass (previously
+  // only pre_in_app_payment's TestCheckoutModal.tsx had been flagged/disabled for this).
+  // stripeController.ts is one of the excluded dual-processor backend files for this pass, so
+  // the dead-account problem there isn't touched here -- only the frontend is stopped from
+  // inviting organizers into a guaranteed failure. Handler logic kept intact (nothing deleted)
+  // so this can be flipped back on if Stripe test mode is ever restored, or replaced with a
+  // real Square sandbox equivalent (no Square test/sandbox payment endpoint exists yet --
+  // that would be new backend work, not a Stripe-removal task).
+  const ENABLE_LEGACY_STRIPE_TEST_TOOLS = false;
 
   const handlePosTest = async () => {
     if (!saleId || typeof saleId !== 'string') return;
@@ -478,8 +490,9 @@ const SalePlanPage = () => {
                                 {!task.completed && task.id === 'live_pos' && (
                                   <button
                                     onClick={handlePosTest}
-                                    disabled={posTestLoading}
-                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition"
+                                    disabled={posTestLoading || !ENABLE_LEGACY_STRIPE_TEST_TOOLS}
+                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated -- check back soon' : undefined}
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     {posTestLoading ? '…' : 'Run Test'}
                                   </button>
@@ -487,8 +500,9 @@ const SalePlanPage = () => {
                                 {!task.completed && task.id === 'pre_online_checkout' && (
                                   <button
                                     onClick={handleOnlineCheckout}
-                                    disabled={onlineCheckoutLoading}
-                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition"
+                                    disabled={onlineCheckoutLoading || !ENABLE_LEGACY_STRIPE_TEST_TOOLS}
+                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated -- check back soon' : undefined}
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     {onlineCheckoutLoading ? '…' : 'Run Test'}
                                   </button>
@@ -496,16 +510,18 @@ const SalePlanPage = () => {
                                 {!task.completed && task.id === 'pre_auction_checkout' && (
                                   <button
                                     onClick={handleAuctionCheckout}
-                                    disabled={auctionCheckoutLoading}
-                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition"
+                                    disabled={auctionCheckoutLoading || !ENABLE_LEGACY_STRIPE_TEST_TOOLS}
+                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated -- check back soon' : undefined}
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     {auctionCheckoutLoading ? '…' : 'Run Test'}
                                   </button>
                                 )}
                                 {!task.completed && task.id === 'pre_in_app_payment' && (
                                   <button
-                                    onClick={() => setShowTestInAppModal(true)}
-                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 text-white transition"
+                                    disabled={!ENABLE_LEGACY_STRIPE_TEST_TOOLS}
+                                    title="Payment testing tools are being updated -- check back soon"
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     Run Test
                                   </button>
@@ -524,16 +540,6 @@ const SalePlanPage = () => {
         </div>
       </div>
 
-      {showTestInAppModal && typeof saleId === 'string' && (
-        <TestCheckoutModal
-          saleId={saleId}
-          onClose={() => setShowTestInAppModal(false)}
-          onDone={() => {
-            setShowTestInAppModal(false);
-            updateTask({ itemId: 'pre_in_app_payment', completed: true });
-          }}
-        />
-      )}
     </>
   );
 };

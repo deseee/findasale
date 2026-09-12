@@ -972,25 +972,23 @@ export const startVendorBoothFeeBillingSetup = async (req: AuthRequest, res: Res
     if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
 
-    let customerId = booth.vendorStripeCustomerId;
-    if (!customerId) {
-      const customer = await stripe().customers.create({
-        email: booth.vendorEmail || req.user.email,
-        name: booth.vendorName,
-        metadata: { source: 'vendor_booth_fee_billing', vendorBoothId: booth.id, hubId: booth.hubId },
-      });
-      customerId = customer.id;
-      await prisma.vendorBooth.update({ where: { id: booth.id }, data: { vendorStripeCustomerId: customerId } });
-    }
-
-    const setupIntent = await stripe().setupIntents.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      usage: 'off_session',
-      metadata: { source: 'vendor_booth_fee_billing', vendorBoothId: booth.id, hubId: booth.hubId },
+    // Stripe removal (2026-09-12): Stripe's platform account is permanently closed --
+    // EVERY live stripe() call now fails, not just brand-new-customer creation, since the
+    // shutdown is at the platform-account level (an existing vendorStripeCustomerId from
+    // before the shutdown does not make a fresh SetupIntent.create call against it work).
+    // This endpoint has no code path that avoids a live create call, so it is blocked
+    // unconditionally rather than only for boothless-of-a-customer-id case. Recurring
+    // booth-fee billing has no built Square equivalent yet (Square Card-on-File + a
+    // subscriptions/off-session-charge scheduler would need to be designed and built --
+    // see vendorBoothFeeBillingCron.ts, flagged separately for Architect sign-off), so
+    // unlike the checkout endpoints this session converted, there is no drop-in Square
+    // replacement to route to. Blocking cleanly here is the safe stopgap until that
+    // design lands.
+    return res.status(503).json({
+      error:
+        "Recurring card billing for booth fees isn't available right now. Please contact support@finda.sale to arrange billing for this booth.",
+      code: 'BOOTH_BILLING_SETUP_UNAVAILABLE',
     });
-
-    return res.status(200).json({ clientSecret: setupIntent.client_secret });
   } catch (error) {
     console.error('[startVendorBoothFeeBillingSetup] Error:', error);
     return res.status(500).json({ error: 'Failed to start booth fee billing setup' });

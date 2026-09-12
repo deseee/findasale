@@ -1,9 +1,7 @@
 import { prisma } from '../index';
-import { getStripe } from '../utils/stripe';
 import { createNotification } from './notificationService';
 import { sellItemUnits, InsufficientStockError } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
-import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { createSquareCheckoutLink } from './squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe Checkout Session below
 import { buildSquareIdempotencyKey } from './squarePaymentService';
 import { calculateApplicationFee, formatBuyerPremiumRate, getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
@@ -203,12 +201,6 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
     const buyerPremium = organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents / 100;
     const amountInCents = hammerPriceCents + (organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents);
 
-    const stripeConnectId = item.sale!.organizer.stripeConnectId;
-    const shouldUseConnect = !!stripeConnectId && !stripeConnectId.startsWith('acct_test_');
-    const useDirect = shouldUseConnect
-      ? await shouldUseDirectCharge(item.sale!.organizerId, stripeConnectId!)
-      : false;
-
     // Square migration Wave S2 #2 (2026-09-09): Square-onboarded organizers route here
     // automatically, not optionally -- Stripe's platform account is permanently closed (see
     // claude_docs/feature-notes/square-changeover-remaining-work-scoping-2026-09-09.md). Same
@@ -251,83 +243,14 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
         console.error(`[auction] Square payment link creation failed for item ${itemId}: ${linkResult.code} -- ${linkResult.message}`);
       }
     } else {
-      try {
-        // P2 idempotency fix: the claim above guarantees only one closeAuction() call
-        // reaches this point per item, so this key is defense-in-depth against a
-        // network-level retry of the same logical request creating a second session.
-        const session = await getStripe().checkout.sessions.create(
-          {
-            payment_method_types: ['card'],
-            mode: 'payment',
-            customer_email: winnerEmail,
-            line_items: [
-              {
-                price_data: {
-                  currency: 'usd',
-                  product_data: {
-                    name: `Auction Winner Payment - ${item.title}`,
-                    // The rate here comes from the same breakdown the charge uses, so the line
-                    // item can never quote a number the card was not run for.
-                    description: organizerCoversPremium
-                      ? `Winning bid: $${bidAmount.toFixed(2)}`
-                      : `Winning bid: $${bidAmount.toFixed(2)} + ${formatBuyerPremiumRate(auctionFees.buyerPremiumRate)} buyer premium ($${buyerPremium.toFixed(2)})`
-                  },
-                  unit_amount: amountInCents
-                },
-                quantity: 1
-              }
-            ],
-            success_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/purchase/success?sessionId={CHECKOUT_SESSION_ID}`,
-            // item.saleId! — auction items always have saleId by domain invariant
-            cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${item.saleId!}`,
-            // payment_intent_data carries the platform's cut. Destination-charge shape mirrors
-            // stripeController.createPaymentIntent; a Direct charge lives on the connected
-            // account, so it drops on_behalf_of/transfer_data and is routed by the
-            // { stripeAccount } request option below.
-            ...(shouldUseConnect
-              ? {
-                  payment_intent_data: useDirect
-                    ? { application_fee_amount: auctionFees.applicationFeeCents }
-                    : {
-                        application_fee_amount: auctionFees.applicationFeeCents,
-                        on_behalf_of: stripeConnectId!,
-                        transfer_data: { destination: stripeConnectId! },
-                      },
-                }
-              : {}),
-            metadata: {
-              itemId: item.id,
-              winnerId: winnerId,
-              saleId: item.saleId!,
-              type: 'AUCTION_WINNER',
-              // Read back by the checkout.session.completed AUCTION_WINNER branch in
-              // controllers/stripeController.ts, which creates the PAID Purchase row. Without
-              // these the webhook cannot record the sale and it is stranded.
-              platformFeeAmount: String(auctionFees.applicationFeeCents / 100),
-              // FEE SNAPSHOT (2026-08-17): the premium/commission split of that combined figure.
-              // The webhook branch is the only thing that ever writes this Purchase row and it
-              // runs whenever the winner gets round to paying — possibly after an organizer tier
-              // change — so the split is pinned HERE, at close time, not re-derived there.
-              feeBuyerPremiumAmount: String(auctionFees.buyerPremiumCents / 100),
-              feeBuyerPremiumRate: String(auctionFees.buyerPremiumRate),
-              feeCommissionAmount: String(auctionFees.organizerCommissionCents / 100),
-              feeCommissionRate: String(commissionRate),
-              feeOrganizerAbsorbedPremium: organizerCoversPremium ? 'true' : 'false',
-              chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
-              ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
-            }
-          },
-          {
-            idempotencyKey: `auction-close-${item.id}`,
-            ...(useDirect ? { stripeAccount: stripeConnectId! } : {}),
-          }
-        );
-
-        checkoutUrl = session.url;
-      } catch (stripeErr) {
-        console.error(`[auction] Stripe checkout creation failed for item ${itemId}:`, stripeErr);
-        // Continue anyway — notify winner of failure
-      }
+      // Stripe removal (2026-09-12): this organizer has no Square account connected, and
+      // the platform's Stripe account is permanently closed -- there is no processor left
+      // to create a checkout session against. The Stripe Checkout Session attempt that
+      // used to live here is guaranteed to fail against a dead account, so it is removed
+      // rather than left to hard-fail unpredictably. checkoutUrl stays null -- the existing
+      // downstream fallback ("Contact the organizer to complete payment.") already handles
+      // that gracefully, same as a failed Stripe attempt always did.
+      console.warn(`[auction] Organizer for item ${itemId} is not Square-eligible (missing/incomplete Square onboarding) -- skipping checkout link creation.`);
     }
 
     // Square migration Wave S2 #2 (2026-09-09): unlike the Stripe branch above (which defers

@@ -29,21 +29,21 @@ interface ReferralData {
   }>;
 }
 
-interface StripeStatus {
-  onboarded: boolean;
-  needsSetup: boolean;
-  chargesEnabled: boolean;
-  detailsSubmitted: boolean;
+interface SquareOrganizerStatus {
+  squareMerchantId: string | null;
+  squareOnboarded: boolean;
+  squareLocationId: string | null;
+  payoutsFlaggedForReview: boolean;
 }
 
-// 2026-09-09: Stripe's platform account is permanently closed for new payment
-// accounts (see backend stripeController.ts createConnectAccount --
-// S-STRIPE-SQUARE-ONBOARDING-GUARD). No Square equivalent exists yet for the
-// Creator/referral payout flow -- that's a separately scoped follow-up, not
-// built here. This message covers both the guaranteed-409 "brand new account"
-// case and any other failure from the "existing incomplete account" path below.
-const STRIPE_UNAVAILABLE_MESSAGE =
-  "Payouts through Stripe aren't available right now. We're switching to a new payment provider for creator payouts \u2014 check back soon.";
+// 2026-09-12 (Stripe-removal pass): the Creator/referral payout flow now reuses the
+// same Square organizer-onboarding endpoints (/square-connect/organizer/*) that
+// regular organizers already use -- "Creator" is just an Organizer accessed via a
+// different dashboard, confirmed via schema (no separate Creator model exists) and
+// stripeStatusController.ts's own getAccountStatus (queried prisma.organizer, not a
+// Creator table). Replaces the 2026-09-09 interim "Stripe unavailable" message.
+const SQUARE_ONBOARDING_FAILED_MESSAGE =
+  "Couldn't start Square onboarding. Please try again.";
 
 const CreatorDashboard = () => {
   const router = useRouter();
@@ -82,17 +82,17 @@ const CreatorDashboard = () => {
     enabled: !!user?.id,
   });
 
-  // Fetch Stripe connection status
+  // Fetch Square connection status
   const {
-    data: stripeStatus,
-    isLoading: stripeLoading,
-    error: stripeError,
-    refetch: refetchStripe
+    data: squareStatus,
+    isLoading: squareLoading,
+    error: squareError,
+    refetch: refetchSquare
   } = useQuery({
-    queryKey: ['stripe-status', user?.id],
+    queryKey: ['square-organizer-status', user?.id],
     queryFn: async () => {
-      const response = await api.get('/stripe/account-status');
-      return response.data as StripeStatus;
+      const response = await api.get('/square-connect/organizer/status');
+      return response.data as SquareOrganizerStatus;
     },
     enabled: !!user?.id,
   });
@@ -111,25 +111,25 @@ const CreatorDashboard = () => {
     );
   }
 
-  // 2026-09-09 fix: this used to be a raw window.location.href GET navigation to
-  // /stripe/create-connect-account -- a POST-only route (see routes/stripe.ts) --
-  // which already 404'd ("Cannot GET") before ever reaching the backend's Stripe
-  // logic, and also bypassed the api client's cookie/CSRF handling. Now calls the
-  // real endpoint correctly and handles both the expected 409 (Stripe closed for
-  // new accounts) and any other failure with an honest inline message instead of
-  // a raw browser error page.
-  const handleConnectStripe = async () => {
+  // 2026-09-12 (Stripe-removal pass): now calls the same Square organizer-onboarding
+  // endpoint regular organizers use. Square's OAuth redirect flow needs a real
+  // navigation (not an API-only round trip), same shape as the old Stripe call.
+  const handleConnectSquare = async () => {
     setConnecting(true);
     setConnectError(null);
     try {
-      const response = await api.post('/stripe/create-connect-account');
-      if (response.data?.url) {
-        window.location.href = response.data.url;
+      const response = await api.post('/square-connect/organizer/onboard');
+      if (response.data?.onboardingUrl) {
+        window.location.href = response.data.onboardingUrl;
         return;
       }
-      setConnectError(STRIPE_UNAVAILABLE_MESSAGE);
+      if (response.data?.alreadyOnboarded) {
+        refetchSquare();
+        return;
+      }
+      setConnectError(SQUARE_ONBOARDING_FAILED_MESSAGE);
     } catch (err: any) {
-      setConnectError(err?.response?.data?.message || STRIPE_UNAVAILABLE_MESSAGE);
+      setConnectError(err?.response?.data?.message || SQUARE_ONBOARDING_FAILED_MESSAGE);
     } finally {
       setConnecting(false);
     }
@@ -278,7 +278,7 @@ const CreatorDashboard = () => {
           {/* Settings Tab */}
           {activeTab === 'settings' && (
             <div>
-              {stripeLoading ? (
+              {squareLoading ? (
                 <div className="space-y-6">
                   <div className="card p-6 animate-pulse">
                     <div className="h-4 bg-warm-200 rounded w-1/3 mb-4" />
@@ -291,20 +291,14 @@ const CreatorDashboard = () => {
                   <div className="card p-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-100">
                     <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Payment & Payouts</h3>
 
-                    {stripeStatus?.needsSetup ? (
-                      <div className="bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded p-4">
-                        <p className="text-warm-700 dark:text-warm-300">
-                          {STRIPE_UNAVAILABLE_MESSAGE}
-                        </p>
-                      </div>
-                    ) : stripeStatus?.onboarded ? (
+                    {squareStatus?.squareOnboarded ? (
                       <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-4">
                         <div className="flex items-center gap-2 mb-3">
                           <span className="text-green-600">✓</span>
-                          <p className="text-green-800 dark:text-green-200 font-semibold">Stripe Connected</p>
+                          <p className="text-green-800 dark:text-green-200 font-semibold">Square Connected</p>
                         </div>
                         <p className="text-green-700 text-sm">
-                          Your Stripe account is fully set up. You can receive payouts automatically.
+                          Your Square account is fully set up. You can receive payouts automatically.
                         </p>
                       </div>
                     ) : (
@@ -314,14 +308,14 @@ const CreatorDashboard = () => {
                           <p className="text-yellow-800 font-semibold">Setup Incomplete</p>
                         </div>
                         <p className="text-yellow-700 text-sm mb-4">
-                          Your Stripe account needs additional information before you can receive payouts.
+                          Connect your Square account to receive creator payouts.
                         </p>
                         <button
-                          onClick={handleConnectStripe}
+                          onClick={handleConnectSquare}
                           disabled={connecting}
                           className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-6 rounded transition-colors text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                          {connecting ? 'Checking...' : 'Complete Setup'}
+                          {connecting ? 'Connecting...' : 'Connect Square'}
                         </button>
                         {connectError && (
                           <p className="text-yellow-800 text-sm mt-3">{connectError}</p>
@@ -394,11 +388,11 @@ const CreatorDashboard = () => {
                 </div>
               )}
 
-              {stripeError && (
+              {squareError && (
                 <div className="card p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                   <p className="text-red-800 mb-3">Failed to load settings</p>
                   <button
-                    onClick={() => refetchStripe()}
+                    onClick={() => refetchSquare()}
                     className="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
                   >
                     Retry

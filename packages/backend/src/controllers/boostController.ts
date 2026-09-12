@@ -102,6 +102,16 @@ export const buyBoost = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message, code: 'XP_ONLY_BOOST' });
     }
 
+    // Stripe removal (2026-09-12): boostService.ts now blocks the STRIPE rail
+    // unconditionally (no Square boost rail exists yet) -- surface that as a clean
+    // 503 rather than falling through to the generic 500 below.
+    if (message.startsWith('STRIPE_UNAVAILABLE:')) {
+      return res.status(503).json({
+        message: message.replace('STRIPE_UNAVAILABLE: ', ''),
+        code: 'BOOST_CASH_RAIL_UNAVAILABLE',
+      });
+    }
+
     console.error('[boost] purchaseBoost error:', err);
     return res.status(500).json({ message: 'Failed to purchase boost. Please try again.' });
   }

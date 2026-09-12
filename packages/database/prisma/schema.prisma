@@ -1741,6 +1741,27 @@ model Purchase {
   refundedAt             DateTime? // When Stripe confirmed the refund
   refundInitiatedBy      String? // 'organizer' | 'admin' | 'dispute' — who/what triggered the refund
 
+  // ── CASH-FEE-DEBT RECOUPMENT (2026-09-12, Stripe removal) ────────────────────────────────
+  // Square has no on-demand-payout API (the old Stripe path deducted accrued
+  // Organizer.cashFeeBalance from a manually-requested Stripe payout -- see
+  // payoutController.ts's now-removed createPayout stripe.payouts.create branch, and
+  // services/cashFeeService.ts's header comment for the full history). The replacement
+  // mechanism recoups outstanding cashFeeBalance opportunistically from the SAME organizer's
+  // next Square card sale(s): a card charge's appFeeMoney is padded above that sale's own
+  // commission by however much cashFeeBalance room exists (see
+  // cashFeeService.applyCashDebtToAppFee / settleCashDebtCollection). This column records how
+  // much of THIS purchase's platformFeeAmount was debt recoupment rather than this sale's own
+  // commission, so: (a) commissionAmount/commissionRate above stay truthful to this sale's own
+  // rate for organizer-facing fee reporting (the FEE SNAPSHOT invariant is unaffected -- this
+  // is a THIRD component added on top: platformFeeAmount == buyerPremiumAmount +
+  // commissionAmount + cashDebtCollectedAmount), and (b) a refund of this purchase can
+  // re-accrue exactly this amount back onto Organizer.cashFeeBalance (see
+  // squareRefundService.ts) instead of the platform silently keeping money for a sale that
+  // was reversed. NULLABLE, NO BACKFILL, DELIBERATE -- same posture as every other additive
+  // block on this model: NULL/0 means "no debt recoupment happened on this purchase", true for
+  // every existing row and every purchase from an organizer with no cashFeeBalance owed.
+  cashDebtCollectedAmount Float?
+
   // POS Cashier Discount Permission (2026-08-28): this row's share of a cart-level
   // discount applied at Terminal checkout (terminalController.ts createTerminalPaymentIntent).
   // `amount` above is already net of the discount; these columns record what/why/who for
@@ -2392,13 +2413,6 @@ model TreasureHuntFind {
 }
 
 // ST4: Stripe webhook event deduplication
-model StripeEvent {
-  id          String   @id
-  processedAt DateTime @default(now())
-
-  @@index([processedAt])
-}
-
 // CD2 Phase 2: Streak Challenges — tracks daily streaks by type (visit, save, buy)
 model UserStreak {
   id               Int       @id @default(autoincrement())

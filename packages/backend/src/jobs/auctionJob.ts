@@ -1,17 +1,14 @@
 import cron from 'node-cron';
-import { getStripe } from '../utils/stripe';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService'; // Explorer's Guild XP awards
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
-import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { createSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe PaymentIntent below
 import { buildSquareIdempotencyKey } from '../services/squarePaymentService';
 import { calculateApplicationFee, getPlatformFeeRate, snapshotFromBreakdown, SubscriptionTier } from '../utils/feeCalculator';
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared with services/auctionService.closeAuction — see that file's header
-const stripe = () => getStripe();
 
 
 export const endAuctions = async () => {
@@ -200,17 +197,13 @@ export const endAuctions = async () => {
           currentItem.sale!.organizer.squareOnboarded === true &&
           !!currentItem.sale!.organizer.squareMerchantId;
 
-        // 2026-09-03 fix (findasale-hacker reverify pass): require the SAME eligibility bar as
-        // the online-checkout gate (paymentEligibilityService.ts Fix 1) -- a live, non-test
-        // Connect id AND stripeOnboarded === true. Previously this only checked truthiness of
-        // stripeConnectId, so an auction winner could be charged against an organizer who had
-        // merely started (not completed) Connect onboarding, or even against a leftover
-        // 'acct_test_' placeholder.
-        const organizerStripeEligible =
-          !!currentItem.sale!.organizer.stripeConnectId &&
-          !currentItem.sale!.organizer.stripeConnectId.startsWith('acct_test_') &&
-          currentItem.sale!.organizer.stripeOnboarded === true;
-
+        // Stripe removal (2026-09-12): the Stripe PaymentIntent branch that used to sit here
+        // (organizerStripeEligible) is guaranteed to fail against the permanently-closed
+        // platform account, so it is removed rather than left to hard-fail unpredictably. An
+        // organizer without Square is now simply "not eligible" -- same as always having had
+        // neither processor -- see the fallback branch below, which forces the resulting
+        // Purchase to PENDING (never a silent, uncollected 'PAID') until they complete Square
+        // onboarding.
         if (organizerHasSquare && highestBid) {
           const linkResult = await createSquareCheckoutLink({
             organizerId: currentItem.sale!.organizerId,
@@ -228,37 +221,8 @@ export const endAuctions = async () => {
           } else {
             console.error(`[auctionJob] Square payment link creation failed for item ${currentItem.id}: ${linkResult.code} -- ${linkResult.message}`);
           }
-        } else if (organizerStripeEligible && highestBid) {
-          try {
-            const feeAmount = auctionFees.applicationFeeCents;
-            const stripeConnectId = currentItem.sale!.organizer.stripeConnectId!;
-            const useDirect = await shouldUseDirectCharge(currentItem.sale!.organizerId, stripeConnectId);
-            const paymentIntent = await stripe().paymentIntents.create(
-              useDirect
-                ? {
-                    amount: buyerChargeCents,
-                    currency: 'usd',
-                    metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
-                    application_fee_amount: feeAmount,
-                  }
-                : {
-                    amount: buyerChargeCents,
-                    currency: 'usd',
-                    metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
-                    application_fee_amount: feeAmount,
-                    on_behalf_of: stripeConnectId,
-                    transfer_data: { destination: stripeConnectId },
-                  },
-              { idempotencyKey: `auction-pi-${currentItem.id}`, ...(useDirect ? { stripeAccount: stripeConnectId } : {}) }
-            );
-            stripePaymentIntentId = paymentIntent.id;
-            purchaseChargeType = useDirect ? 'DIRECT' : 'DESTINATION';
-            purchaseStripeAccountId = useDirect ? stripeConnectId : null;
-          } catch (err) {
-            console.error(`Stripe PaymentIntent creation failed for item ${currentItem.id}:`, err);
-          }
-        } else if (!organizerHasSquare && !organizerStripeEligible) {
-          console.warn(`Organizer for item ${currentItem.id} is not Square- or Stripe-eligible (missing/incomplete onboarding on both) — skipping payment link/intent`);
+        } else if (highestBid) {
+          console.warn(`Organizer for item ${currentItem.id} is not Square-eligible (missing/incomplete Square onboarding) -- skipping payment link creation. Winning bid recorded as PENDING pending organizer Square onboarding.`);
         }
 
         // Purchase.amount is what the buyer was CHARGED (premium included, matching
@@ -270,7 +234,15 @@ export const endAuctions = async () => {
         // Square migration Wave S2 #2 (2026-09-09): a Square checkout link is exactly as
         // "payment not yet collected" as a Stripe PaymentIntent -- either one existing means
         // the winner still owes money and the Purchase must stay PENDING, not PAID.
-        const hasPendingPayment = !!stripePaymentIntentId || !!squareCheckoutUrl;
+        // Stripe removal (2026-09-12) revenue-integrity fix: this used to be
+        // `!!stripePaymentIntentId || !!squareCheckoutUrl`, which silently marked the Purchase
+        // 'PAID' whenever NEITHER processor produced a payment reference (organizer not
+        // Square-eligible, or a Square link-creation call failed) -- an uncollected sale
+        // recorded as paid, giving the item away for free. Neither branch above ever
+        // synchronously collects payment (both hand the buyer a link/intent to complete), so
+        // whenever there is a highestBid this must always stay PENDING -- there is no case in
+        // this function where a real charge has actually completed by this point.
+        const hasPendingPayment = !!highestBid;
         if (highestBid) {
           const createdPurchase = await tx.purchase.create({
             data: {

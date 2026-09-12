@@ -25,6 +25,7 @@ import {
   buildSquareIdempotencyKey,
   createSquareCharge,
 } from '../services/squarePaymentService';
+import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
 
 /**
  * Square Checkout -- Wave 1 #1 (2026-09-07). Mirrors stripeController.ts's
@@ -328,12 +329,20 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       couponId,
     ]);
 
+    // Cash-fee-debt recoupment (2026-09-12): pad this card sale's appFeeMoney with whatever
+    // room exists to collect outstanding Organizer.cashFeeBalance -- see cashFeeService.ts.
+    const { appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
+      organizerId: item.sale!.organizerId,
+      baseAppFeeCents: platformFeeAmount,
+      saleAmountCents: finalPriceCents,
+    });
+
     const chargeResult = await createSquareCharge({
       organizerAccessToken,
       idempotencyKey,
       sourceId,
       amountCents: finalPriceCents,
-      appFeeCents: platformFeeAmount,
+      appFeeCents,
       locationId: item.sale!.organizer.squareLocationId,
       referenceId: item.id,
       note: item.title ? item.title.slice(0, 80) : undefined,
@@ -360,7 +369,8 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
           itemId: item.id,
           saleId: item.sale!.id,
           amount: finalPriceCents / 100,
-          platformFeeAmount: platformFeeAmount / 100,
+          platformFeeAmount: appFeeCents / 100,
+          cashDebtCollectedAmount: debtAppliedCents > 0 ? debtAppliedCents / 100 : undefined,
           ...snapshotFromBreakdown(feeBreakdown, feePercent, saleCoversFee),
           processor: 'SQUARE',
           squarePaymentId: chargeResult.paymentId,
@@ -395,6 +405,11 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
             : {}),
         },
       });
+
+      // Only settle on the branch that actually just created the row -- the findFirst-hit
+      // (idempotent retry) branch above must never decrement cashFeeBalance a second time for
+      // the same real charge.
+      await settleCashDebtCollection({ organizerId: item.sale!.organizerId, debtAppliedCents });
     }
 
     // Platform Safety #102 (auth) / post-payment guest self-dealing check (S1072 Finding #4
@@ -646,12 +661,20 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       itemIds.slice().sort().join(','),
     ]);
 
+    // Cash-fee-debt recoupment (2026-09-12): pad this cart's single charge's appFeeMoney with
+    // whatever room exists to collect outstanding Organizer.cashFeeBalance -- see cashFeeService.ts.
+    const { appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
+      organizerId: items[0].sale!.organizerId,
+      baseAppFeeCents: platformFeeAmount,
+      saleAmountCents: totalCents,
+    });
+
     const chargeResult = await createSquareCharge({
       organizerAccessToken,
       idempotencyKey,
       sourceId,
       amountCents: totalCents,
-      appFeeCents: platformFeeAmount,
+      appFeeCents,
       locationId: organizer?.squareLocationId,
       referenceId: saleId,
       note: `Cart checkout -- ${items.length} item(s)`,
@@ -668,9 +691,21 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
     // (Wave 0 migration), same multi-item-cart reasoning as stripePaymentIntentId.
     const createdPurchaseIds: string[] = [];
     let anyStockRace = false;
-    for (const item of items) {
+    let anyNewPurchaseCreated = false;
+    let remainingDebtCentsToAllocate = debtAppliedCents;
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+      const item = items[itemIndex];
       const itemPriceCents = Math.round((item.price as number) * 100);
       const itemFeeCents = Math.round(itemPriceCents * feeRate);
+      // Allocate the cart's single debt-recoupment amount across per-item Purchase rows
+      // proportionally to price share, so a later refund of ONE item can reverse exactly its
+      // own share (see squareRefundService.ts) -- the last item absorbs any rounding remainder
+      // so the per-item shares always sum to exactly debtAppliedCents.
+      const isLastItem = itemIndex === items.length - 1;
+      const itemDebtCents = isLastItem
+        ? remainingDebtCentsToAllocate
+        : Math.min(remainingDebtCentsToAllocate, Math.round(debtAppliedCents * (itemPriceCents / totalCents)));
+      remainingDebtCentsToAllocate -= itemDebtCents;
 
       let purchase = await prisma.purchase.findFirst({
         where: { squarePaymentId: chargeResult.paymentId, itemId: item.id },
@@ -682,7 +717,8 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
             itemId: item.id,
             saleId,
             amount: item.price as number,
-            platformFeeAmount: itemFeeCents / 100,
+            platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
+            cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
             ...snapshotForCommissionOnly(itemFeeCents / 100, feeRate),
             processor: 'SQUARE',
             squarePaymentId: chargeResult.paymentId,
@@ -692,6 +728,7 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
             buyerCardFingerprint: chargeResult.cardFingerprint ?? undefined,
           },
         });
+        anyNewPurchaseCreated = true;
       }
       createdPurchaseIds.push(purchase.id);
 
@@ -718,6 +755,12 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       setImmediate(() => {
         generateReceipt(purchase!.id).catch((err) => console.error('[squareCartPayment] Failed to generate receipt:', err));
       });
+    }
+
+    // Only settle on the call that actually just created new rows -- an idempotent retry where
+    // every item already had a Purchase row must never decrement cashFeeBalance a second time.
+    if (anyNewPurchaseCreated) {
+      await settleCashDebtCollection({ organizerId: items[0].sale!.organizerId, debtAppliedCents });
     }
 
     if (chargeResult.cardFingerprint) {

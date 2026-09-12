@@ -117,79 +117,23 @@ router.get('/leaderboard', async (_req, res: Response) => {
  * Activation is handled server-side via customer.subscription.created webhook.
  */
 router.post('/subscribe-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-
-    const priceId = process.env.STRIPE_HUNT_PASS_PRICE_ID;
-    if (!priceId) {
-      console.error('[hunt-pass] STRIPE_HUNT_PASS_PRICE_ID env var not set');
-      return res.status(500).json({ message: 'Hunt Pass is not configured. Please try again later.' });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        huntPassStripeCustomerId: true,
-        huntPassStripeSubscriptionId: true,
-      },
-    });
-
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    const { getStripe } = await import('../utils/stripe');
-    const stripe = getStripe();
-
-    // Guard: check for already-active subscription in Stripe
-    if (user.huntPassStripeSubscriptionId) {
-      try {
-        const existingSub = await stripe.subscriptions.retrieve(user.huntPassStripeSubscriptionId);
-        if (existingSub.status === 'active' || existingSub.status === 'trialing') {
-          return res.status(400).json({ message: 'You already have an active Hunt Pass subscription.' });
-        }
-      } catch {
-        // Stale subscription ID — clear it and let the user re-subscribe
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { huntPassStripeSubscriptionId: null },
-        });
-      }
-    }
-
-    // Get or create a Stripe Customer for Hunt Pass billing (shopper-side, separate from organizer)
-    let stripeCustomerId = user.huntPassStripeCustomerId;
-    if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: user.name,
-        metadata: { userId: user.id, type: 'hunt_pass_shopper' },
-      });
-      stripeCustomerId = customer.id;
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { huntPassStripeCustomerId: stripeCustomerId },
-      });
-    }
-
-    const origin = process.env.FRONTEND_URL || 'https://finda.sale';
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: stripeCustomerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      subscription_data: {
-        metadata: { type: 'hunt_pass', userId: user.id },
-      },
-      success_url: `${origin}/shopper/hunt-pass?success=true`,
-      cancel_url: `${origin}/shopper/hunt-pass?canceled=true`,
-    });
-
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error('POST /api/streaks/subscribe-huntpass error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
+  // Stripe removal (2026-09-12): this endpoint always creates a BRAND-NEW Stripe
+  // Checkout Session (mode: subscription), and usually a brand-new Stripe Customer
+  // too -- there is no historical object to service for a fresh subscribe attempt.
+  // Stripe's platform account is permanently closed, and there is no Square
+  // Subscriptions equivalent built for Hunt Pass yet (unlike the checkout flows this
+  // sweep converted to Square, this is a genuinely separate recurring-billing
+  // product with no drop-in replacement). Blocked before any Stripe call or user
+  // row update. ARCHITECT-LEVEL OPEN QUESTION, not resolved by this sweep: should
+  // Hunt Pass move to Square Subscriptions (would need real integration work), a
+  // different recurring-billing provider, or be retired? Flagging per the standing
+  // pattern rather than guessing. /cancel-huntpass below is left untouched -- an
+  // existing subscriber from before the shutdown can still cancel their real,
+  // already-existing Stripe subscription.
+  return res.status(503).json({
+    message: "Hunt Pass sign-ups are temporarily unavailable while we migrate billing. Please check back soon.",
+    code: 'HUNT_PASS_SUBSCRIBE_UNAVAILABLE',
+  });
 });
 
 /**

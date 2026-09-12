@@ -1,6 +1,5 @@
 /**
- * BoostPurchaseModal: Dual-rail boost purchase UI
- * Phase 2b: XP rail (instant) or Stripe rail (PaymentElement flow)
+ * BoostPurchaseModal: XP-based boost purchase UI
  *
  * Usage:
  *   <BoostPurchaseModal
@@ -12,40 +11,25 @@
  *   />
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { loadStripe, Stripe } from '@stripe/stripe-js';
-import {
-  Elements,
-  PaymentElement,
-  useStripe,
-  useElements,
-} from '@stripe/react-stripe-js';
+import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
 
-// Boost cash-rail stopgap (audit sweep, 2026-09-10): handleStripePurchase below (and the
-// StripePayForm confirm flow) calls purchaseBoost's STRIPE rail (boostService.ts ~204-268),
-// which creates a Stripe PaymentIntent against FindA.Sale's Stripe platform account
-// (acct_1T3kXhLIWHQCHu75) -- permanently closed. Every card-payment boost purchase attempt
-// is guaranteed to 500. The XP rail (handleXpPurchase) is a completely separate code path
-// and is unaffected -- left fully working. Mirrors the ENABLE_STRIPE_TERMINAL_CARD_READER /
-// ENABLE_BOOTH_FEE_AUTOPAY pattern: state/logic kept intact, only the cash-fallback rail is
-// disabled with an honest message, nothing deleted. Do not remove or flip to true without
-// Patrick's explicit approval.
-const ENABLE_BOOST_CASH_RAIL = false;
+// Stripe cash-rail removed entirely (2026-09-12, Patrick-approved Stripe-removal pass).
+// It was already disabled (ENABLE_BOOST_CASH_RAIL = false, audit sweep 2026-09-10) because
+// it called boostService.ts's STRIPE rail against FindA.Sale's permanently-closed Stripe
+// platform account -- guaranteed to fail. No Square equivalent exists for boost purchases
+// (backend boostController.ts/boostService.ts only ever supported 'XP' | 'STRIPE'; those are
+// excluded-29 backend files, left untouched by this pass). Boosts are XP-only until/unless a
+// real-money boost rail is scoped as its own feature on Square.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type PaymentRail = 'XP' | 'STRIPE';
 
 interface BoostQuote {
   boostType: string;
   xpCost: number;
-  stripeAmountCents: number;
-  stripeAmountDollars: string;
   durationDays: number;
-  cashRailAvailable: boolean;
   label: string;
   description: string;
   userXpBalance: number;
@@ -61,113 +45,6 @@ interface BoostPurchaseModalProps {
   onSuccess?: () => void;
 }
 
-// ─── Stripe lazy init ─────────────────────────────────────────────────────────
-
-let stripePromise: Promise<Stripe | null> | null = null;
-const getStripePromise = () => {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  if (!stripePromise) {
-    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-  }
-  return stripePromise;
-};
-
-// ─── Stripe inner form ────────────────────────────────────────────────────────
-
-interface StripePayFormProps {
-  quote: BoostQuote;
-  boostType: string;
-  targetType?: string;
-  targetId?: string;
-  durationDays?: number;
-  onSuccess: () => void;
-  onCancel: () => void;
-}
-
-const StripePayForm = ({
-  quote,
-  boostType,
-  targetType,
-  targetId,
-  durationDays,
-  onSuccess,
-  onCancel,
-}: StripePayFormProps) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const { showToast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: { return_url: `${window.location.origin}/shopper` },
-      redirect: 'if_required',
-    });
-
-    if (error) {
-      setErrorMessage(error.message ?? 'Payment failed. Please try again.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (paymentIntent?.status === 'succeeded') {
-      showToast(`${quote.label} activated!`, 'success');
-      onSuccess();
-    } else {
-      setErrorMessage('Payment is processing. Your boost will activate shortly.');
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-800 dark:text-blue-200">
-        <p>
-          You will be charged <strong>${quote.stripeAmountDollars}</strong> for {quote.label}.
-        </p>
-        {quote.durationDays > 0 && quote.durationDays < 999 && (
-          <p className="mt-1 text-xs text-blue-600 dark:text-blue-300">
-            Active for {quote.durationDays} day{quote.durationDays !== 1 ? 's' : ''} after payment confirms.
-          </p>
-        )}
-      </div>
-
-      <PaymentElement />
-
-      {errorMessage && (
-        <p id="stripe-pay-error" role="alert" className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
-      )}
-
-      <div className="flex gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting || !stripe}
-          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
-        >
-          {isSubmitting ? 'Processing…' : `Pay $${quote.stripeAmountDollars}`}
-        </button>
-      </div>
-    </form>
-  );
-};
-
-// ─── Main modal ────────────────────────────────────────────────────────────────
-
 export default function BoostPurchaseModal({
   boostType,
   targetType,
@@ -178,12 +55,10 @@ export default function BoostPurchaseModal({
 }: BoostPurchaseModalProps) {
   const { showToast } = useToast();
   const [quote, setQuote] = useState<BoostQuote | null>(null);
-  const [rail, setRail] = useState<PaymentRail>('XP');
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [undoSeconds, setUndoSeconds] = useState(300); // 5-min undo window
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch quote on mount
@@ -194,8 +69,6 @@ export default function BoostPurchaseModal({
         const res = await api.post('/boosts/quote', { boostType, durationDays });
         const q: BoostQuote = res.data;
         setQuote(q);
-        // Default to XP if affordable, otherwise Stripe
-        setRail(q.canAffordXp ? 'XP' : q.cashRailAvailable && ENABLE_BOOST_CASH_RAIL ? 'STRIPE' : 'XP');
       } catch (err: unknown) {
         setError('Unable to load boost pricing. Please try again.');
       } finally {
@@ -238,40 +111,11 @@ export default function BoostPurchaseModal({
     }
   };
 
-  const handleStripePurchase = async () => {
-    if (!quote) return;
-    if (!ENABLE_BOOST_CASH_RAIL) return;
-    setPurchasing(true);
-    setError(null);
-    try {
-      const res = await api.post('/boosts/purchase', {
-        boostType,
-        targetType,
-        targetId,
-        paymentMethod: 'STRIPE',
-        durationDays,
-      });
-      setClientSecret(res.data.clientSecret ?? null);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Failed to start payment. Please try again.';
-      setError(msg);
-    } finally {
-      setPurchasing(false);
-    }
-  };
-
   const formatSeconds = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
-
-  // Dark-mode-aware Stripe Elements appearance (S-dark-mode-audit) -- see CheckoutModal.tsx
-  // for the full rationale on why this reads document.documentElement's 'dark' class rather
-  // than window.matchMedia('(prefers-color-scheme: dark)').
-  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   return (
     <AccessibleModal
@@ -328,105 +172,38 @@ export default function BoostPurchaseModal({
         )}
 
         {/* Pricing + purchase UI */}
-        {!loading && !success && quote && !clientSecret && (
+        {!loading && !success && quote && (
           <div className="space-y-4">
             {/* Description */}
             <p className="text-sm text-gray-600 dark:text-gray-400">{quote.description}</p>
 
-            {/* Rail selector */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setRail('XP')}
-                disabled={!quote.canAffordXp}
-                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                  rail === 'XP'
-                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
-                    : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
-                } ${!quote.canAffordXp ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className="text-lg font-bold">{quote.xpCost} XP</div>
-                {!quote.canAffordXp && (
-                  <div className="text-xs mt-0.5">Need {quote.xpCost - quote.userXpBalance} more</div>
-                )}
-                {quote.canAffordXp && (
-                  <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">
-                    Balance: {quote.userXpBalance} XP
-                  </div>
-                )}
-              </button>
-
-              <button
-                onClick={() => setRail('STRIPE')}
-                disabled={!quote.cashRailAvailable || !ENABLE_BOOST_CASH_RAIL}
-                title={!ENABLE_BOOST_CASH_RAIL ? "Card payment for boosts isn't available right now" : undefined}
-                className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                  rail === 'STRIPE'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                    : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
-                } ${!quote.cashRailAvailable || !ENABLE_BOOST_CASH_RAIL ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className="text-lg font-bold">${quote.stripeAmountDollars}</div>
-                <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">Credit card</div>
-              </button>
+            {/* XP cost display */}
+            <div className="p-3 rounded-lg border border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-center">
+              <div className="text-lg font-bold">{quote.xpCost} XP</div>
+              {!quote.canAffordXp && (
+                <div className="text-xs mt-0.5">Need {quote.xpCost - quote.userXpBalance} more</div>
+              )}
+              {quote.canAffordXp && (
+                <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">
+                  Balance: {quote.userXpBalance} XP
+                </div>
+              )}
             </div>
 
-            {quote.cashRailAvailable && !ENABLE_BOOST_CASH_RAIL && (
-              <p className="text-xs text-center text-gray-400 dark:text-gray-500">
-                Card payment for boosts isn&apos;t available right now -- earn more XP or check back soon.
-              </p>
-            )}
-
             {/* XP confirm */}
-            {rail === 'XP' && (
-              <button
-                onClick={handleXpPurchase}
-                disabled={purchasing || !quote.canAffordXp}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
-              >
-                {purchasing ? 'Activating…' : `Spend ${quote.xpCost} XP`}
-              </button>
-            )}
-
-            {/* Stripe: click to load PaymentElement */}
-            {rail === 'STRIPE' && ENABLE_BOOST_CASH_RAIL && (
-              <button
-                onClick={handleStripePurchase}
-                disabled={purchasing || !quote.cashRailAvailable}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
-              >
-                {purchasing ? 'Loading…' : `Pay $${quote.stripeAmountDollars}`}
-              </button>
-            )}
+            <button
+              onClick={handleXpPurchase}
+              disabled={purchasing || !quote.canAffordXp}
+              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+            >
+              {purchasing ? 'Activating…' : `Spend ${quote.xpCost} XP`}
+            </button>
 
             {/* Transparency */}
             <p className="text-xs text-center text-gray-400 dark:text-gray-500">
               XP cannot be exchanged for cash. No real-money purchase required to earn XP.
             </p>
           </div>
-        )}
-
-        {/* Stripe PaymentElement flow */}
-        {!loading && !success && clientSecret && quote && ENABLE_BOOST_CASH_RAIL && (
-          <Elements
-            stripe={getStripePromise()}
-            options={{
-              clientSecret,
-              appearance: { theme: isDarkMode ? 'night' : 'stripe' },
-            }}
-          >
-            <StripePayForm
-              quote={quote}
-              boostType={boostType}
-              targetType={targetType}
-              targetId={targetId}
-              durationDays={durationDays}
-              onSuccess={() => {
-                setSuccess(true);
-                onSuccess?.();
-              }}
-              onCancel={() => setClientSecret(null)}
-            />
-          </Elements>
         )}
       </div>
     </AccessibleModal>

@@ -81,7 +81,31 @@ export const SquarePaymentRequestForm: React.FC<SquarePaymentRequestFormProps> =
         await loadSquareSdk();
         if (cancelled || !window.Square) return;
         const payments = window.Square.payments(applicationId, squareLocationId);
-        const card = await payments.card();
+        // Dark-mode-aware Square Web Payments SDK card styling (S-dark-mode-audit). Square's
+        // documented style API (developer.squareup.com/docs/web-payments/customize-styles)
+        // only supports a fixed set of selectors/properties -- backgroundColor, borderColor,
+        // borderRadius, color, fontFamily, fontSize -- keyed by '.input-container',
+        // '.input-container.is-focus', 'input', 'input::placeholder', etc. With no style passed
+        // at all (the prior behavior), the embedded card iframe rendered Square's own default
+        // light theme regardless of the app's dark mode -- unreadable/invisible against a dark
+        // modal. Reads document.documentElement's 'dark' class (not
+        // window.matchMedia('(prefers-color-scheme: dark)'), which misses a user who explicitly
+        // toggled dark mode in-app while their OS is light -- see hooks/useTheme.ts).
+        const isDarkModeForCard = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+        const cardStyle = isDarkModeForCard
+          ? {
+              '.input-container': { borderColor: '#4b5563', borderRadius: '8px' },
+              '.input-container.is-focus': { borderColor: '#f59e0b' },
+              'input': { backgroundColor: '#374151', color: '#f5f5f5', fontSize: '16px' },
+              'input::placeholder': { color: '#9ca3af' },
+            }
+          : {
+              '.input-container': { borderColor: '#e5e7eb', borderRadius: '8px' },
+              '.input-container.is-focus': { borderColor: '#f59e0b' },
+              'input': { backgroundColor: '#ffffff', color: '#1a1a1a', fontSize: '16px' },
+              'input::placeholder': { color: '#9ca3af' },
+            };
+        const card = await payments.card({ style: cardStyle });
         if (cancelled) return;
         if (cardContainerRef.current) {
           await card.attach(cardContainerRef.current);
@@ -143,8 +167,8 @@ export const SquarePaymentRequestForm: React.FC<SquarePaymentRequestFormProps> =
 
   if (loadError) {
     return (
-      <div className="p-4 border border-red-200 rounded-lg bg-red-50">
-        <p className="text-sm text-red-700">{loadError}</p>
+      <div className="p-4 border border-red-200 dark:border-red-800 rounded-lg bg-red-50 dark:bg-red-900/30">
+        <p className="text-sm text-red-700 dark:text-red-300">{loadError}</p>
       </div>
     );
   }
@@ -153,12 +177,12 @@ export const SquarePaymentRequestForm: React.FC<SquarePaymentRequestFormProps> =
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="p-4 border border-gray-200 rounded-lg">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+      <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Card Details
         </label>
         <div ref={cardContainerRef} />
-        {!isReady && <p className="text-sm text-gray-500 mt-2">Loading card form…</p>}
+        {!isReady && <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Loading card form…</p>}
       </div>
 
       <button

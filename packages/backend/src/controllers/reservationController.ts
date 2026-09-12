@@ -22,11 +22,9 @@ import { suppressionService } from '../services/suppressionService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // RECORD-mode cash fee (2026-08-17): Purchase fee snapshot
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, roundMoney } from '../services/cashFeeService'; // RECORD-mode cash commission accrual (2026-08-17)
-import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
 import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim; P0 (2026-08-17): dead-anchor release
-import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // Hold-to-Pay P1 (2026-08-17): released invoices left PAYABLE Stripe sessions live
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // P1 fix (2026-09-04, S-CARDING-INCIDENT-2026-09-03 follow-up): Hold-to-Pay invoicing never ran the shared Stripe-onboarding/sale-state gate
 import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../services/holdInvoiceSquareCheckoutHelper'; // Square changeover Wave S2 #3 (2026-09-09): Hold-to-Pay invoice creation, Square branch
@@ -993,6 +991,12 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             squareMerchantId: (organizer as any).squareMerchantId ?? null,
           });
         } catch (stripeErr: any) {
+          if (stripeErr instanceof SquareOnboardingIncompleteError) {
+            return res.status(409).json({
+              message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
+              code: 'SELLER_PAYMENTS_UNAVAILABLE',
+            });
+          }
           console.error('[settlement] CHECKOUT_LINK payment link creation failed:', stripeErr);
           return res.status(400).json({
             message: 'Failed to create checkout link',
@@ -2078,336 +2082,14 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       });
     }
 
-    // Create Stripe Checkout Session
-    const stripe = require('../utils/stripe').getStripe();
-    const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
-
-    let stripeSession;
-    let useDirect = false; // hoisted: needs to survive past the try block into the $transaction below and the metadata backfill after it
-    try {
-      // Build line_items from all bundled items
-      const line_items = allShopperHolds.map(hold => ({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: hold.item.title,
-            description: hold.item.title || 'Secondhand item',
-            images: hold.item.photoUrls && hold.item.photoUrls.length > 0 ? [hold.item.photoUrls[0]] : [],
-          },
-          unit_amount_decimal: String(Math.round((hold.item.price || 0) * 100)),
-        },
-        quantity: 1,
-      }));
-
-      // P0-C fix (2026-08-16): this key used to be `mark-sold-invoice-${reservationId}` --
-      // pinned to the reservation FOREVER (Stripe keys live 24h). Stripe saves the result of
-      // the FIRST request under a key, error responses included, and returns
-      // "Keys for idempotent requests can only be used with the same parameters" as soon as
-      // any parameter changes. So the instant one attempt failed (e.g. the expires_at 400
-      // fixed above), EVERY subsequent attempt on that hold was poisoned for 24 hours --
-      // and the remedy the UI offers, "Extend (+30min)", is precisely what changes
-      // expires_at and guarantees the parameter mismatch. A hold that failed to invoice
-      // could never be invoiced again.
-      //
-      // WHAT THE KEY STILL GUARDS after this change: the double-submit / concurrent-request
-      // race is NOT its job any more -- the atomic invoiceClaimToken compare-and-swap above
-      // (shipped and confirmed working) is the real guard, and a genuinely concurrent second
-      // request is rejected with a 409 before it ever reaches this call. What remains, and
-      // what this key still covers, is a retry of THIS SAME attempt below the application
-      // layer: the Stripe SDK's own automatic retry of a transient timeout/5xx, or a
-      // connection reset where the Session may or may not have been created server-side.
-      // Scoping the key to claimToken (a fresh randomUUID per attempt, generated before the
-      // Stripe call) is exactly right for that: constant within one attempt, different on
-      // every new attempt.
-      const idempotencyKey = `mark-sold-invoice-${reservationId}-${claimToken}`;
-
-      // P0-B fix (2026-08-16): Stripe rejects expires_at under 30 minutes from Session
-      // creation. LOCKED DECISION #7 makes the invoice window the hold-timer REMAINDER, and
-      // the default shopper rank (INITIATE) holds for 30 minutes total -- so the remainder
-      // was ALWAYS below Stripe's floor and every call 400'd. Clamp ONLY the value handed to
-      // Stripe; HoldInvoice.expiresAt below stays the true business deadline (#7 intact).
-      // See utils/stripeCheckoutExpiry.ts for the accepted-divergence note when the floor
-      // bites (Stripe session outlives the hold by up to ~31 min).
-      const checkoutExpiry = stripeCheckoutExpiry(expiresAt);
-      if (checkoutExpiry.clampedTo) {
-        console.warn(
-          `[hold-invoice] Stripe expires_at clamped to ${checkoutExpiry.clampedTo} for reservation ${reservationId}: ` +
-          `hold/invoice deadline ${expiresAt.toISOString()} -> Stripe session expiry ${checkoutExpiry.effectiveExpiresAt.toISOString()}. ` +
-          `The Checkout Session and HoldInvoice.expiresAt intentionally disagree; invoiceExpiryJob still governs the real deadline.`
-        );
-      }
-
-      // Direct-charges migration (2026-08-08): staged-rollout routing decision. NOTE: this
-      // call site's existing shape (below) already omits on_behalf_of -- a pre-existing,
-      // partial destination-charge shape confirmed this session -- left as-is on the non-
-      // Direct path; out of scope to "fix" beyond what this migration specs.
-      useDirect = organizer.stripeConnectId
-        ? await shouldUseDirectCharge(organizer.id, organizer.stripeConnectId)
-        : false;
-
-      stripeSession = await stripe.checkout.sessions.create(
-        {
-          payment_method_types: ['card'],
-          mode: 'payment',
-          // P0 fix (2026-08-26): see posController.ts sendHoldInvoice's identical note --
-          // same silent metadata-backfill-skip risk (this call site uses the exact same
-          // typeof-string-else-.id derivation pattern), same fix.
-          expand: ['payment_intent'],
-          customer_email: reservation.user.email,
-          line_items,
-          success_url: `${baseUrl}/shopper/checkout-success?paymentStatus=success`,
-          cancel_url: `${baseUrl}/shopper/holds?paymentStatus=cancelled`,
-          expires_at: checkoutExpiry.expiresAtUnix, // clamped into Stripe's 30min..24h window (P0-B)
-          // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount
-          // (+ transfer_data on the non-Direct path only -- see useDirect above).
-          payment_intent_data: {
-            metadata: {
-              invoiceId: null, // Will be filled after HoldInvoice is created
-              itemIds: bundledItemIds.join(','), // Comma-separated item IDs
-              shopperId: reservation.user.id,
-              organizerId: organizer.id,
-              // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
-              saleId: reservation.item.saleId!,
-            },
-            application_fee_amount: Math.round(totalPlatformFeeAmount * 100),
-            // Direct-charges migration (2026-08-08): a Direct charge lives on the connected
-            // account itself -- no platform-side Transfer exists, so transfer_data is
-            // dropped on that path (the { stripeAccount } request option below routes the
-            // Session create call itself to the connected account).
-            ...(useDirect ? {} : { transfer_data: { destination: organizer.stripeConnectId } }),
-          },
-          metadata: {
-            organizerId: organizer.id,
-          },
-        },
-        { idempotencyKey, ...(useDirect ? { stripeAccount: organizer.stripeConnectId! } : {}) }
-      );
-
-      // Record what we just created so any later failure can close it (see the
-      // orphaned-payable-session guard note at the top of this function).
-      createdStripeSessionId = stripeSession?.id ?? null;
-      createdStripeSessionAccount = useDirect ? organizer.stripeConnectId ?? null : null;
-    } catch (stripeError: any) {
-      console.error('[hold-invoice] Stripe session creation failed:', stripeError);
-      // P2 idempotency fix: release the claim taken above so these holds aren't
-      // permanently stuck unable to be invoiced.
-      await releaseClaim();
-      return res.status(400).json({ message: 'Failed to create Stripe checkout session', error: stripeError.message });
-    }
-
-    // Create HoldInvoice record in transaction with item + reservation updates
-    const transaction = await prisma.$transaction(async (tx) => {
-      // P0 fix (2026-08-17): HoldInvoice.reservationId is @unique and, before this,
-      // nothing ever nulled it -- so a single released or expired invoice bricked that
-      // hold forever with P2002 on the next attempt. Every terminal transition now
-      // nulls the anchor, and this clears any dead anchor left behind before that
-      // shipped. Scoped to CANCELLED/EXPIRED only: a PENDING or PAID invoice's anchor
-      // is live/historical and must never be stolen. See services/holdInvoiceClaim.ts.
-      await releaseDeadInvoiceAnchors(tx, holdIds);
-
-      const holdInvoice = await tx.holdInvoice.create({
-        data: {
-          reservationId: reservationId, // Store first reservation for backward compatibility
-          shopperUserId: reservation.user.id,
-          // P0-A fix (2026-08-16): this wrote `organizer.id` -- an Organizer.id -- into a
-          // column whose FK is HoldInvoice_organizerUserId_fkey -> User(id) (schema.prisma
-          // HoldInvoice.organizer @relation("OrganizerInvoices")). Postgres rejected every
-          // insert with P2003 and Hold-to-Pay was 100% broken with an empty HoldInvoice
-          // table platform-wide. `organizer` here is the Organizer row off
-          // reservation.item.sale.organizer (see the ownership check above, which compares
-          // organizer.userId to req.user.id), so its OWNING user is organizer.userId.
-          organizerUserId: organizer.userId,
-          // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
-          saleId: reservation.item.saleId!,
-          stripeSessionId: stripeSession.id,
-          totalAmount: Math.round(totalAmount * 100),
-          platformFeeAmount: Math.round(totalPlatformFeeAmount * 100),
-          itemIds: bundledItemIds,
-          status: 'PENDING',
-          expiresAt,
-          // Stripe account + charge-shape snapshot (2026-08-18 migration): same `useDirect` /
-          // `organizer.stripeConnectId` values already used for the Session create call's
-          // `{ stripeAccount }` option above -- reused verbatim, not re-derived. Closes the
-          // gap documented in utils/expireCheckoutSession.ts and
-          // services/holdInvoicePaymentRecorder.ts (HoldInvoice previously had no persisted
-          // account, so every maintenance path fell back to the organizer's CURRENT
-          // stripeConnectId, which can drift from what was actually used at checkout time).
-          chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
-          stripeAccountId: useDirect ? organizer.stripeConnectId ?? null : null,
-        },
-      });
-
-      // Update ALL bundled ItemReservations with the real invoiceId and clear the claim.
-      // Fencing check (P0 fix, 2026-08-16): scoping this to rows still carrying THIS
-      // attempt's claimToken is what makes the bounded claim TTL safe. If another request
-      // stole a stale claim on these holds while this one was inside the Stripe call, the
-      // token no longer matches, count falls short, and the whole transaction rolls back
-      // rather than stamping a second invoice over the winner's rows.
-      const finalize = await tx.itemReservation.updateMany({
-        where: { id: { in: holdIds }, invoiceClaimToken: claimToken },
-        data: { invoiceId: holdInvoice.id, invoiceClaimToken: null, invoiceClaimedAt: null },
-      });
-      if (finalize.count !== holdIds.length) throw new InvoiceClaimLostError();
-
-      // Update ALL bundled items to INVOICE_ISSUED (LOCKED DECISION #6)
-      await tx.item.updateMany({
-        where: { id: { in: bundledItemIds } },
-        data: { status: 'INVOICE_ISSUED' },
-      });
-
-      return holdInvoice;
-    });
-
-    // The Session now belongs to a real, live HoldInvoice -- it must NOT be closed by
-    // the orphan guard in the outer catch if anything downstream (notification, metadata
-    // backfill, email) throws. Clearing the handle is what makes that guard safe to leave
-    // unconditional.
-    createdStripeSessionId = null;
-    createdStripeSessionAccount = null;
-
-    // Create notification for shopper (LOCKED DECISION #5) — mention all items.
-    // Notification-gap fix (S1195 sweep continuation, 2026-08-08): moved outside the
-    // transaction above (was a raw tx.notification.create, which made email
-    // structurally impossible -- the shared createNotification() helper writes through
-    // the global `prisma` client, not a $transaction's `tx`) and given sendEmail: true.
-    // "Complete payment before your hold expires" is a real deadline -- exactly the
-    // class of event this sweep is closing the email gap for.
-    const itemList = bundledItemIds.length > 1
-      ? `${bundledItemIds.length} items`
-      : `"${allShopperHolds[0]?.item.title}"`;
-
-    createNotification({
-      userId: reservation.user.id,
-      type: 'invoice_sent',
-      title: 'Payment requested',
-      body: `Payment requested for ${itemList}. Complete payment before your hold expires.`,
-      link: `/items/${bundledItemIds[0]}`,
-      channel: 'OPERATIONAL',
-      sendEmail: true,
-    }).catch((err: unknown) => console.error(`[hold-invoice] Failed to create invoice_sent notification for user ${reservation.user.id}:`, err));
-
-    // Payments fix (2026-08-03): backfill invoiceId onto the PaymentIntent's metadata
-    // now that the HoldInvoice row (and its ID) exists -- it didn't exist yet when the
-    // Checkout Session was created above (see the metadata.invoiceId: null placeholder
-    // in payment_intent_data above -- this is what actually fills it in). The
-    // charge.succeeded webhook keys off paymentIntent.metadata.invoiceId, so without
-    // this backfill a payment on this invoice would never be recorded by the webhook
-    // (see holdInvoicePaymentRecorder.ts header comment; invoiceExpiryJob's
-    // STRANDED-PAID reconcile branch is the backstop for any invoice this still
-    // misses). Stripe's metadata.update REPLACES the whole map, so every existing key
-    // must be re-sent, not just the new one. Non-fatal -- never blocks invoice
-    // creation, matches the checkout.session.completed handler's existing non-fatal
-    // PaymentIntent-retrieve pattern in stripeController.ts.
-    let stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
-      ? stripeSession.payment_intent
-      : (stripeSession.payment_intent as any)?.id ?? null;
-
-    // P0 fix (2026-08-27, HoldInvoice cmtbgy90q0211p46d8yq5lfuv): `expand: ['payment_intent']`
-    // above (the 2026-08-26 fix) does not reliably guarantee the synchronous
-    // sessions.create response has payment_intent populated -- confirmed live on a real
-    // 2-item bundled invoice via the sibling posController.ts call sites (sendHoldInvoice,
-    // createCombinedInvoice), which share this exact typeof-string-else-.id pattern. If
-    // it's still falsy here, do a short retry loop against sessions.retrieve (same
-    // account-scoping as the create call) before giving up -- silently leaving it null
-    // skips the metadata backfill below entirely, orphaning the real webhook-side
-    // PaymentIntent from this HoldInvoice.
-    if (!stripePaymentIntentId) {
-      const retrieveOptions = useDirect ? { stripeAccount: organizer.stripeConnectId! } : undefined;
-      for (let attempt = 1; attempt <= 2 && !stripePaymentIntentId; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
-        try {
-          const retrieved = await stripe.checkout.sessions.retrieve(
-            stripeSession.id,
-            { expand: ['payment_intent'] },
-            retrieveOptions
-          );
-          stripePaymentIntentId = typeof retrieved.payment_intent === 'string'
-            ? retrieved.payment_intent
-            : (retrieved.payment_intent as any)?.id ?? null;
-        } catch (retrieveErr: any) {
-          console.error(
-            `[hold-invoice] markSoldAndCreateInvoice: PaymentIntent retry retrieve (attempt ${attempt}) failed for session ${stripeSession.id}:`,
-            retrieveErr?.message ?? retrieveErr
-          );
-        }
-      }
-      if (!stripePaymentIntentId) {
-        const piGapMsg = `[hold-invoice] markSoldAndCreateInvoice: stripePaymentIntentId still unavailable after retries for session ${stripeSession.id} -- metadata backfill will be skipped, this invoice depends entirely on invoiceExpiryJob's STRANDED-PAID reconcile backstop.`;
-        console.error(piGapMsg);
-        try {
-          Sentry.captureMessage(piGapMsg, 'error');
-        } catch {
-          // Sentry may not be initialized -- silently continue
-        }
-      }
-    }
-    if (stripePaymentIntentId) {
-      try {
-        await stripe.paymentIntents.update(stripePaymentIntentId, {
-          metadata: {
-            itemIds: bundledItemIds.join(','),
-            shopperId: reservation.user.id,
-            organizerId: organizer.id,
-            saleId: reservation.item.saleId!,
-            invoiceId: transaction.id,
-          },
-        }, useDirect ? { stripeAccount: organizer.stripeConnectId! } : undefined);
-      } catch (metaErr: any) {
-        const metaErrMsg = `[hold-invoice] Non-fatal: failed to backfill invoiceId metadata onto PaymentIntent ${stripePaymentIntentId} for invoice ${transaction.id}: ${metaErr?.message ?? metaErr}`;
-        console.error(metaErrMsg);
-        // Visible alerting, not just a log line: this invoice now depends entirely on
-        // invoiceExpiryJob's STRANDED-PAID reconcile backstop (which only fires after
-        // the invoice's own expiresAt passes) with zero interim visibility otherwise.
-        try {
-          Sentry.captureException(metaErr instanceof Error ? metaErr : new Error(metaErrMsg), {
-            tags: { area: 'hold-invoice-metadata-backfill' },
-            extra: { invoiceId: transaction.id, stripePaymentIntentId },
-          });
-        } catch {
-          // Sentry may not be initialized -- silently continue
-        }
-      }
-    }
-
-    // Send checkout email to shopper (fire-and-forget)
-    setImmediate(async () => {
-      try {
-        
-        const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
-          const itemList = bundledItemIds.length > 1
-            ? `${bundledItemIds.length} items from ${reservation.item.sale!.title}`
-            : `${allShopperHolds[0]?.item.title} from ${reservation.item.sale!.title}`;
-
-          if (await suppressionService.isHardSuppressed(reservation.user.email)) {
-            console.log(`[hold-invoice] Skipping hard-suppressed recipient: ${reservation.user.email}`);
-            return;
-          }
-          await emailService.emails.send({
-            from: process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale',
-            to: reservation.user.email,
-            subject: `Complete your purchase: ${itemList}`,
-            html: `
-              <h2>Complete Your Purchase</h2>
-              <p>Hi ${reservation.user.name},</p>
-              <p>The organizer is ready for payment on <strong>${itemList}</strong>.</p>
-              <p><a href="${stripeSession.url}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Review and Pay</a></p>
-              <p style="color: #6b7280; font-size: 14px;">This link expires at ${expiryTime} (in approximately ${Math.round((expiresAt.getTime() - Date.now()) / 3600000)} hours).</p>
-            `,
-          });
-      } catch (err) {
-        console.warn('[hold-invoice] Failed to send checkout email:', err);
-      }
-    });
-
-    res.status(201).json({
-      invoiceId: transaction.id,
-      checkoutUrl: stripeSession.url,
-      expiresAt,
-      totalAmount,
-      totalPlatformFeeAmount,
-      estimatedOrganizerPayout: totalAmount - totalPlatformFeeAmount,
-      itemCount: bundledItemIds.length,
-    });
+    // Stripe removal (2026-09-12): this organizer has no Square account connected, and
+    // the platform's Stripe account is permanently closed -- there is no processor left to
+    // create this hold invoice against. The Stripe Checkout Session path that used to live
+    // here is guaranteed to fail against a dead account, so it is removed rather than left
+    // to hard-fail unpredictably. createdStripeSessionId stays null (its initial value,
+    // never reached this branch), so the catch block's Stripe-session-cleanup correctly
+    // no-ops, and releaseClaim() below still runs regardless of which branch failed.
+    throw new SquareOnboardingIncompleteError(organizer.id);
   } catch (error: any) {
     console.error('[hold-invoice] markSoldAndCreateInvoice error:', error);
     // P2 idempotency fix: release any claim still held (e.g. the final invoice
@@ -2440,6 +2122,13 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
 
     if (error instanceof InvoiceClaimLostError) {
       return res.status(409).json({ message: 'Another payment request for these holds completed first.' });
+    }
+
+    if (error instanceof SquareOnboardingIncompleteError) {
+      return res.status(409).json({
+        message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
+        code: 'SELLER_PAYMENTS_UNAVAILABLE',
+      });
     }
 
     // Information-disclosure fix (P2, 2026-08-16): this used to return `error.message`

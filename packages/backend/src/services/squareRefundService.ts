@@ -415,6 +415,30 @@ export async function executeVerifiedSquareRefund(
     }
   }
 
+  // Cash-fee-DEBT-COLLECTION reversal (2026-09-12, Stripe removal) -- distinct from the
+  // cash-purchase branch above. This purchase was a CARD sale whose appFeeMoney was padded to
+  // recoup outstanding cashFeeBalance (see cashFeeService.applyCashDebtToAppFee /
+  // squarePaymentController.ts). Square automatically refunds app_fee_money proportionally on
+  // every refund (see this file's header comment) -- meaning a refund of this purchase already
+  // claws the padded amount back OUT of the platform's own Square balance. If we don't also
+  // re-accrue it here, the organizer's debt would be marked "collected" in our DB while the
+  // platform no longer actually holds that money -- silently forgiving debt on every refunded
+  // sale. Re-accrue the FULL recorded amount regardless of partial/full refund, matching the
+  // simple (non-proportional) posture of the cash-purchase branch above.
+  if (purchase.cashDebtCollectedAmount && purchase.cashDebtCollectedAmount > 0 && organizerId) {
+    try {
+      await prisma.organizer.update({
+        where: { id: organizerId },
+        data: {
+          cashFeeBalance: { increment: purchase.cashDebtCollectedAmount },
+          cashFeeBalanceUpdatedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      console.error(`[executeVerifiedSquareRefund] Failed to re-accrue cashDebtCollectedAmount for organizer ${organizerId} after refund of purchase ${purchaseId} (non-fatal):`, err);
+    }
+  }
+
   // No-op for every Square purchase today (isBoothCartPurchase is guarded out above) -- kept
   // for structural parity with executeVerifiedRefund and forward-compatibility once/if a
   // Square-side vendor-booth path ever ships.
