@@ -135,33 +135,33 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
   if (paymentSucceeded) {
     return (
       <div className="text-center">
-        <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+        <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
           <p className="text-3xl mb-2">✅</p>
-          <p className="text-lg font-bold text-green-900 mb-1">Order Confirmed!</p>
-          <p className="text-xs text-green-700 mb-3">Your payment has been processed successfully.</p>
+          <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-1">Order Confirmed!</p>
+          <p className="text-xs text-green-700 dark:text-green-400 mb-3">Your payment has been processed successfully.</p>
         </div>
 
-        <div className="mb-4 p-4 bg-warm-50 rounded-lg text-left space-y-3">
+        <div className="mb-4 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg text-left space-y-3">
           <div>
-            <p className="text-xs text-warm-500">Item</p>
+            <p className="text-xs text-warm-500 dark:text-warm-300">Item</p>
             <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
           </div>
 
           <div>
-            <p className="text-xs text-warm-500">Total Paid</p>
+            <p className="text-xs text-warm-500 dark:text-warm-300">Total Paid</p>
             <p className="text-lg font-bold text-warm-900 dark:text-warm-100">${total.toFixed(2)}</p>
           </div>
 
           {saleName && (
             <div>
-              <p className="text-xs text-warm-500">Sale</p>
+              <p className="text-xs text-warm-500 dark:text-warm-300">Sale</p>
               <p className="font-semibold text-warm-900 dark:text-warm-100">{saleName}</p>
             </div>
           )}
 
           {saleAddress && (
             <div>
-              <p className="text-xs text-warm-500">Location & Dates</p>
+              <p className="text-xs text-warm-500 dark:text-warm-300">Location & Dates</p>
               <p className="text-sm text-warm-900 dark:text-warm-100">
                 📍 {saleAddress}
                 {saleDates && <span> | {saleDates}</span>}
@@ -213,8 +213,8 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="mb-4 p-3 bg-warm-50 rounded-lg">
-        <p className="text-sm text-warm-600">Item</p>
+      <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded-lg">
+        <p className="text-sm text-warm-600 dark:text-warm-300">Item</p>
         <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
       </div>
 
@@ -264,7 +264,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             <span>${buyerPremium.toFixed(2)}</span>
           </div>
         )}
-        <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 pt-2 mt-2">
+        <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 dark:border-gray-600 pt-2 mt-2">
           <span>Total Due</span>
           <span>${total.toFixed(2)}</span>
         </div>
@@ -278,7 +278,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
       </div>
 
       {errorMessage && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
           <p className="mb-2">{errorMessage}</p>
           <p className="text-xs text-red-600 mb-3">You can also try a different card. Just update your payment details above.</p>
           <button
@@ -353,7 +353,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
           type="button"
           onClick={onClose}
           disabled={isSubmitting}
-          className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
+          className="flex-1 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -732,19 +732,19 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
         <div>
           {squareSuccess ? (
             <div className="text-center">
-              <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                 <p className="text-3xl mb-2">✅</p>
-                <p className="text-lg font-bold text-green-900 mb-1">Order Confirmed!</p>
-                <p className="text-xs text-green-700 mb-3">Your payment has been processed successfully.</p>
+                <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-1">Order Confirmed!</p>
+                <p className="text-xs text-green-700 dark:text-green-400 mb-3">Your payment has been processed successfully.</p>
               </div>
 
-              <div className="mb-4 p-4 bg-warm-50 rounded-lg text-left space-y-3">
+              <div className="mb-4 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg text-left space-y-3">
                 <div>
-                  <p className="text-xs text-warm-500">Item</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-300">Item</p>
                   <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-warm-500">Total Paid</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-300">Total Paid</p>
                   <p className="text-lg font-bold text-warm-900 dark:text-warm-100">${(bountyItemPrice ?? 0).toFixed(2)}</p>
                 </div>
               </div>
@@ -767,17 +767,17 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             </div>
           ) : (
             <>
-              <div className="mb-4 p-3 bg-warm-50 rounded-lg">
-                <p className="text-sm text-warm-600">Item</p>
+              <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                <p className="text-sm text-warm-600 dark:text-warm-300">Item</p>
                 <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
-                <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 pt-2 mt-2 text-sm">
+                <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 dark:border-gray-600 pt-2 mt-2 text-sm">
                   <span>Total Due</span>
                   <span>${(bountyItemPrice ?? 0).toFixed(2)}</span>
                 </div>
               </div>
 
               {squareError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
                   <p className="mb-2">{squareError}</p>
                   <button
                     type="button"
@@ -802,7 +802,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 type="button"
                 onClick={onClose}
                 disabled={squareSubmitting}
-                className="w-full mt-3 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
+                className="w-full mt-3 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -987,7 +987,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50"
+              className="flex-1 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700"
             >
               Cancel
             </button>
@@ -1049,10 +1049,10 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             <div>
               {itemSquareSuccess ? (
                 <div className="text-center">
-                  <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <p className="text-3xl mb-2">✅</p>
-                    <p className="text-lg font-bold text-green-900 mb-1">Order Confirmed!</p>
-                    <p className="text-xs text-green-700 mb-3">Your payment has been processed successfully.</p>
+                    <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-1">Order Confirmed!</p>
+                    <p className="text-xs text-green-700 dark:text-green-400 mb-3">Your payment has been processed successfully.</p>
                   </div>
                   <button
                     onClick={handleSuccess}
@@ -1063,17 +1063,17 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 </div>
               ) : (
                 <>
-                  <div className="mb-4 p-3 bg-warm-50 rounded-lg">
-                    <p className="text-sm text-warm-600">Item</p>
+                  <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                    <p className="text-sm text-warm-600 dark:text-warm-300">Item</p>
                     <p className="font-semibold text-warm-900 dark:text-warm-100">{resolvedTitle}</p>
-                    <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 pt-2 mt-2 text-sm">
+                    <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 dark:border-gray-600 pt-2 mt-2 text-sm">
                       <span>Total Due</span>
                       <span>${(rawItemPrice ?? 0).toFixed(2)}</span>
                     </div>
                   </div>
 
                   {itemSquareError && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
                       <p className="mb-2">{itemSquareError}</p>
                       <button
                         type="button"
@@ -1098,7 +1098,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                     type="button"
                     onClick={onClose}
                     disabled={itemSquareSubmitting}
-                    className="w-full mt-3 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
+                    className="w-full mt-3 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50"
                   >
                     Cancel
                   </button>
