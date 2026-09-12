@@ -16,7 +16,6 @@ import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotification
 import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 (2026-08-01): hub owner's own items sell through a synthetic booth
 import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
 import { Decimal } from '@prisma/client/runtime/library';
-import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, VendorBooth wiring
 import {
   resolveVendorBoothSquareAccessToken,
@@ -951,27 +950,19 @@ export const createBoothCartTerminalConnectionToken = async (req: BoothAuthReque
       return res.status(400).json({ error: 'Booth is not represented in this cart' });
     }
 
-    if (isTerminalSimulated()) {
-      const token = await stripe().terminal.connectionTokens.create({});
-      return res.status(200).json({ secret: token.secret });
-    }
-
-    const booth = await prisma.vendorBooth.findFirst({ where: { id: vendorBoothId, hubId } });
-    if (!booth?.stripeAccountId) {
-      // Processor-accurate messaging (Square migration, 2026-09-10): this connection-token
-      // endpoint is Stripe Terminal hardware -- there is no Square Terminal integration in
-      // this codebase, so a Square-connected booth genuinely cannot use the physical card
-      // reader, but telling them to complete "Stripe onboarding" when they already have a
-      // working Square account for QR/in-app checkout is wrong and confusing.
-      return res.status(400).json({
-        error: booth?.squareOnboarded
-          ? 'This card reader requires a connected Stripe account. This booth is connected via Square, which currently supports QR/in-app checkout only.'
-          : 'This booth has not completed Stripe onboarding',
-      });
-    }
-
-    const token = await stripe().terminal.connectionTokens.create({}, { stripeAccount: booth.stripeAccountId! });
-    return res.status(200).json({ secret: token.secret });
+    // Stripe removal (2026-09-12): Stripe's platform account is permanently closed --
+    // this Terminal-hardware connection-token flow has no live path left at all
+    // (simulated mode included, since simulated PaymentIntents still go through the
+    // same closed platform account). There is no Square Terminal integration anywhere
+    // in this codebase (confirmed via repo-wide grep), so unlike the checkout flows
+    // this sweep converted, there is no drop-in replacement to route to -- blocked
+    // outright rather than left to fail unpredictably against a dead account. The
+    // booth-lookup + connection-token-create code that used to follow here has been
+    // deleted outright, not left as unreachable code.
+    return res.status(503).json({
+      error: 'Card-reader checkout is temporarily unavailable. Please use QR/in-app checkout or cash instead.',
+      code: 'TERMINAL_UNAVAILABLE',
+    });
   } catch (error) {
     console.error('[createBoothCartTerminalConnectionToken] Error:', error);
     return res.status(500).json({ error: 'Failed to create Terminal connection token' });
@@ -1009,187 +1000,19 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
       return res.status(409).json({ error: 'This booth already has an active leg on this cart', legId: existingLeg.id, status: existingLeg.status });
     }
 
-    try {
-      await beginCartCheckout({
-        cart,
-        hubId,
-        cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
-        cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
-        context: 'boothCartTerminalAuthorize',
-      });
-    } catch (guardError: any) {
-      if (guardError instanceof CheckoutGuardError) {
-        return res.status(403).json({ error: guardError.message });
-      }
-      if (typeof guardError?.message === 'string' && guardError.message.startsWith('CART_NOT_CHARGEABLE:')) {
-        return res.status(409).json({ error: `Cart cannot be charged (status: ${guardError.message.split(':')[1]})` });
-      }
-      throw guardError;
-    }
-
-    const booth = await prisma.vendorBooth.findFirst({
-      where: { id: vendorBoothId, hubId },
-      include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true, squareOnboarded: true, squareLocationId: true } } } } },
-    });
-    if (!booth) return res.status(404).json({ error: 'Booth not found' });
-
-    // S1198 (2026-09-06): bank-fingerprint collusion hold. Checked unconditionally --
-    // NOT inside the isTerminalSimulated() gate below, since that flag only exists to
-    // let QA exercise the card-present reader without real hardware and has nothing to
-    // do with Connect-account fraud review. Mirrors payConsignor's 403 (stripeConnectController.ts)
-    // and shouldUseDirectCharge's block (stripeConnectService.ts) for the other two owner
-    // types -- VendorBooth's real-time Direct Charge architecture has no non-direct-charge
-    // fallback to degrade to, so a flagged booth is blocked outright here rather than routed
-    // around, same as a Consignor payout hold.
-    if (await isPayoutFlaggedForReview('VENDOR_BOOTH', booth.id)) {
-      return res.status(403).json({
-        error: `Booth "${booth.vendorName}"'s payments are on hold pending admin review. Contact support@finda.sale for details.`,
-      });
-    }
-
-    if (!isTerminalSimulated()) {
-      if (booth.stripeAccountType !== 'standard' || !booth.stripeOnboarded || !booth.stripeAccountId) {
-        // Fix 2 (2026-08-01): a house booth failing this gate is the HUB OWNER's own
-        // Stripe account, not some other vendor's -- the generic "Booth X hasn't
-        // completed onboarding" copy would be confusing/wrong addressed to the owner
-        // themselves. This is an intentional, architect-approved limitation (ADR-023):
-        // an owner still on a legacy Express account can't sell their own items via
-        // card/QR through venue mode until they migrate to Standard -- cash still works
-        // (captureBoothCash doesn't require this gate). The gate itself is unchanged.
-        // Processor-accurate messaging (Square migration, 2026-09-10): this physical
-        // Terminal rail is Stripe Terminal hardware -- there is no Square Terminal
-        // integration in this codebase, so a booth that is Square-connected but not
-        // Stripe-onboarded genuinely cannot use this register, but telling them to
-        // "complete a Stripe account upgrade" when they already have a working Square
-        // account is wrong and confusing.
-        const message = booth.isHubOwnerBooth
-          ? booth.squareOnboarded
-            ? "This register's card reader requires a connected Stripe account. You are connected via Square, which currently supports QR/in-app checkout only -- use that instead, or complete Stripe onboarding in Settings to use the card reader."
-            : 'Complete your Stripe account upgrade in Settings to sell your own items through this register'
-          : booth.squareOnboarded
-            ? `Booth "${booth.vendorName}" is connected via Square, which currently supports QR/in-app checkout only -- the card reader requires a connected Stripe account`
-            : `Booth "${booth.vendorName}" has not completed Standard-account onboarding`;
-        return res.status(400).json({ error: message });
-      }
-      // Direct-charges migration (2026-08-08): live capability preflight. The check above
-      // relies on VendorBooth.stripeOnboarded, a cached DB flag that can drift from
-      // Stripe's actual live state (a DB-cache vs live-Stripe discrepancy was confirmed
-      // for at least one real organizer this session) -- never authorize a real charge
-      // against an account Stripe itself doesn't currently report as charge-capable.
-      try {
-        const liveStatus = await getAccountStatus(booth.stripeAccountId!);
-        if (!liveStatus.chargesEnabled) {
-          return res.status(400).json({ error: `Booth "${booth.vendorName}"'s Stripe account cannot currently accept charges. Please check its Stripe onboarding status.` });
-        }
-      } catch (statusErr) {
-        console.error(`[boothCartTerminalAuthorize] getAccountStatus preflight failed for booth ${booth.id}:`, statusErr);
-        return res.status(502).json({ error: "Could not verify the booth's payment account status. Please try again." });
-      }
-    }
-
-    const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, vendorBoothId);
-    const amountCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
-    if (amountCents < 50) {
-      return res.status(400).json({ error: `Booth "${booth.vendorName}"'s subtotal must be at least $0.50 to process payment` });
-    }
-
-    // ADR-090 Phase 2: platform cut + hub-owner revenue-share split, computed once
-    // per leg. Blocks checkout (400) if this booth owes a revenue share but its hub
-    // owner isn't onboarded — never silently drops the hub owner's cut.
-    const feeSplit = await computeLegFeeSplit({
-      amountCents,
-      revenueSharePercent: booth.revenueSharePercent,
-      processor: 'STRIPE',
-      hubOwnerOrganizer: booth.hub.organizer,
-    });
-    if (feeSplit.blocked) {
-      return res.status(400).json({ error: feeSplit.reason });
-    }
-
-    // Race-safe claim (findasale-hacker adversarial pass, 2026-07-08): the existingLeg
-    // check above is a plain read and cannot close a TOCTOU window between two
-    // concurrent authorize calls for the SAME booth on the SAME cart (e.g. a flaky
-    // cashier UI double-firing the tap request) -- both could pass that read before
-    // either creates its row, producing TWO PaymentIntents (and, once captured, TWO
-    // Purchase rows) for the same booth's items. This claim leverages the EXISTING
-    // @unique constraint on BoothCartLeg.stripePaymentIntentId as a compare-and-swap
-    // primitive (no schema change): a deterministic key means only one concurrent
-    // request's create() can win; the loser gets a Prisma P2002 and is rejected below,
-    // BEFORE any Stripe call is made (so a losing request never creates a stray
-    // PaymentIntent). The winner overwrites the placeholder with the real Stripe
-    // PaymentIntent id once it's created.
-    const claimKey = `claim_${cart.id}_${vendorBoothId}`;
-    let claimedLeg;
-    try {
-      claimedLeg = await prisma.boothCartLeg.create({
-        data: {
-          cartTransactionId: cart.id,
-          vendorBoothId,
-          stripeAccountId: isTerminalSimulated() ? '' : booth.stripeAccountId!,
-          stripePaymentIntentId: claimKey,
-          amountCents,
-          rail: 'TERMINAL',
-          status: 'PENDING',
-          hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
-          // Persist the platform's own cut alongside the hub owner's, so the vendor-facing
-          // sale notification can quote what was ACTUALLY charged. application_fee_amount is
-          // platformFee + hubOwnerShare, and only the hub-owner half was ever stored -- the
-          // platform half was unrecoverable afterwards without re-reading the organizer's
-          // MUTABLE subscriptionTier, which is exactly how a disclosure ends up saying 10%
-          // when the charge was 8%. Written unconditionally, mirroring hubOwnerShareAmount.
-          platformFeeCents: feeSplit.applicationFeeAmountCents - feeSplit.hubOwnerShareCents,
-        },
-      });
-    } catch (claimErr: any) {
-      if (claimErr?.code === 'P2002') {
-        return res.status(409).json({ error: 'This booth already has an active leg on this cart (concurrent request)' });
-      }
-      throw claimErr;
-    }
-
-    const piParams = {
-      amount: amountCents,
-      currency: 'usd',
-      payment_method_types: ['card_present'],
-      capture_method: 'manual' as const,
-      // ADR-090 Phase 2: application_fee_amount only applies to a Direct/Destination
-      // charge on a connected account — simulated-mode PIs aren't scoped to one
-      // (mirrors terminalController.ts's own !isSimulated gate on this same field).
-      ...(!isTerminalSimulated() ? { application_fee_amount: feeSplit.applicationFeeAmountCents } : {}),
-      metadata: {
-        source: 'booth_cart_leg',
-        rail: 'TERMINAL',
-        hubId,
-        cartTransactionId: cart.id,
-        vendorBoothId,
-      },
-    };
-
-    let paymentIntent;
-    try {
-      paymentIntent = isTerminalSimulated()
-        ? await stripe().paymentIntents.create(piParams)
-        : await stripe().paymentIntents.create(piParams, { stripeAccount: booth.stripeAccountId! });
-    } catch (err: any) {
-      console.error('[authorizeBoothCartTerminalLeg] Failed to create PaymentIntent:', err);
-      // Release the claim so a retry isn't permanently blocked by the deterministic key.
-      await prisma.boothCartLeg.delete({ where: { id: claimedLeg.id } }).catch((delErr) =>
-        console.error('[authorizeBoothCartTerminalLeg] Failed to release claim leg after Stripe error:', delErr)
-      );
-      return res.status(500).json({ error: 'Failed to create payment intent for this booth', details: err.message });
-    }
-
-    const leg = await prisma.boothCartLeg.update({
-      where: { id: claimedLeg.id },
-      data: { stripePaymentIntentId: paymentIntent.id },
-    });
-
-    return res.status(200).json({
-      legId: leg.id,
-      vendorBoothId,
-      clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id,
-      amountCents,
+    // Stripe removal (2026-09-12): Stripe's platform account is permanently closed, and
+    // there is no Square Terminal integration anywhere in this codebase (confirmed via
+    // repo-wide grep) -- this whole rail (card-present hardware reader, one PaymentIntent
+    // per booth on that booth's own Connect account) has no live path left, simulated
+    // mode included. Blocked BEFORE beginCartCheckout (the cart-lock side effect the
+    // original body ran next) so a doomed Terminal attempt never locks the cart out of
+    // the still-working Square/cash rails. The ~150 lines of now-fully-dead per-booth
+    // fraud-hold check, live Stripe capability preflight, and PaymentIntent-create logic
+    // that used to follow here have been deleted outright, not left as unreachable code --
+    // see createBoothCartTerminalConnectionToken above for the fuller rationale.
+    return res.status(503).json({
+      error: 'Card-reader checkout is temporarily unavailable. Please use QR/in-app checkout or cash instead.',
+      code: 'TERMINAL_UNAVAILABLE',
     });
   } catch (error) {
     console.error('[authorizeBoothCartTerminalLeg] Error:', error);
@@ -1232,29 +1055,18 @@ export const createBoothCartQrSetupIntent = async (req: BoothAuthRequest, res: R
       throw guardError;
     }
 
-    // Ad hoc platform-level Stripe Customer for this walk-in cart -- the SetupIntent
-    // (and the PaymentMethod-clone step after it) hangs off it. POS walk-in buyers
-    // legitimately have no FindA.Sale account; Purchase.userId is already nullable for
-    // exactly this case.
-    //
-    // P0 fix (2026-07-28): the branch removed here reused -- and on the miss path
-    // OVERWROTE -- User.stripeCustomerId for whatever user id the CASHIER put in the
-    // request body. That let a cashier both probe an arbitrary account for a saved-card
-    // Customer and clobber it with one of their own making, on an unverified id. Buyer
-    // identity is never taken from the body of a cashier-authenticated call.
-    const customer = await stripe().customers.create({
-      metadata: { source: 'booth_cart_qr', hubId, cartTransactionId: cart.id },
+    // Stripe removal (2026-09-12): this used to create an ad hoc platform-level Stripe
+    // Customer + SetupIntent for the walk-in shopper's phone page to confirm via
+    // Stripe.js. Stripe's platform account is permanently closed, so this can never
+    // succeed for a new cart again. Square QR (postBoothCartSquareToken /
+    // getBoothCartSquareTokenStatus / authorizeBoothCartSquareLegs, below) is the live
+    // replacement rail -- it has no server-hosted session object to hand back here, so
+    // there is no drop-in Square equivalent for this specific two-step
+    // setup-intent-then-authorize shape; the whole rail is blocked, not adapted.
+    return res.status(503).json({
+      error: 'QR/in-app card checkout via this rail is temporarily unavailable. Please use the Square QR checkout instead.',
+      code: 'STRIPE_QR_UNAVAILABLE',
     });
-    const platformCustomerId = customer.id;
-
-    const setupIntent = await stripe().setupIntents.create({
-      customer: platformCustomerId,
-      payment_method_types: ['card'],
-      usage: 'off_session',
-      metadata: { source: 'booth_cart_qr', hubId, cartTransactionId: cart.id },
-    });
-
-    return res.status(200).json({ clientSecret: setupIntent.client_secret, setupIntentId: setupIntent.id });
   } catch (error) {
     console.error('[createBoothCartQrSetupIntent] Error:', error);
     return res.status(500).json({ error: 'Failed to start QR/in-app checkout' });
@@ -1286,231 +1098,23 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
     if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
-    if (cart.status !== 'IN_PROGRESS') {
-      return res.status(409).json({ error: `Cart is not ready for QR authorization (status: ${cart.status})` });
-    }
 
-    let setupIntent;
-    try {
-      setupIntent = await stripe().setupIntents.retrieve(setupIntentId);
-    } catch (err: any) {
-      console.error('[authorizeBoothCartQrLegs] Failed to retrieve SetupIntent:', err);
-      return res.status(400).json({ error: 'Could not verify card setup with Stripe' });
-    }
-    if (setupIntent.status !== 'succeeded') {
-      return res.status(400).json({ error: `SetupIntent status is ${setupIntent.status}, expected succeeded` });
-    }
-    const platformCustomerId = typeof setupIntent.customer === 'string' ? setupIntent.customer : setupIntent.customer?.id;
-    const platformPaymentMethodId = typeof setupIntent.payment_method === 'string' ? setupIntent.payment_method : setupIntent.payment_method?.id;
-    if (!platformCustomerId || !platformPaymentMethodId) {
-      return res.status(400).json({ error: 'SetupIntent is missing a customer or payment method' });
-    }
-    // The SetupIntent id is a client-supplied body field, so it must be proven to belong
-    // to THIS cart -- not merely to exist and have succeeded (findasale-hacker
-    // fix-and-reverify pass, 2026-07-28). Every booth-cart SetupIntent is created by
-    // createBoothCartQrSetupIntent above with source/cartTransactionId metadata on the
-    // PLATFORM account, so without this check a cashier could hand in another cart's
-    // succeeded SetupIntent and clone THAT shopper's card into this cart's booths --
-    // charging a card whose owner never agreed to this basket.
-    if (
-      setupIntent.metadata?.source !== 'booth_cart_qr' ||
-      setupIntent.metadata?.cartTransactionId !== cart.id
-    ) {
-      return res.status(400).json({ error: 'This card setup does not belong to this cart' });
-    }
-
-    const booths = await prisma.vendorBooth.findMany({
-      where: { id: { in: cart.boothsRepresented } },
-      include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true, squareOnboarded: true, squareLocationId: true } } } } },
+    // Stripe removal (2026-09-12): createBoothCartQrSetupIntent above (step 1 of this
+    // same rail) is now blocked unconditionally -- no legitimate caller can ever reach
+    // this step 2 with a real setupIntentId again. Blocked here too, defense-in-depth
+    // against a raw API caller supplying a stale/fabricated one, before the rest of
+    // this function's ~230 lines of now-fully-dead per-booth PaymentMethod-clone +
+    // PaymentIntent-confirm logic (which those lines have been deleted, not just
+    // gated -- confirmed via repo-wide grep that createBoothCartQrSetupIntent is this
+    // endpoint's only possible feeder and it can no longer produce a real setupIntentId).
+    // Square QR (authorizeBoothCartSquareLegs) is the live replacement rail.
+    return res.status(503).json({
+      error: 'QR/in-app card checkout via this rail is temporarily unavailable. Please use the Square QR checkout instead.',
+      code: 'STRIPE_QR_UNAVAILABLE',
     });
-    const alreadyLegged = await prisma.boothCartLeg.findMany({
-      where: { cartTransactionId: cart.id, status: { in: ['PENDING', 'REQUIRES_CAPTURE', 'CAPTURED'] } },
-      select: { vendorBoothId: true },
-    });
-    const alreadyLeggedIds = new Set(alreadyLegged.map((l) => l.vendorBoothId));
-    const boothsToCharge = booths.filter((b) => !alreadyLeggedIds.has(b.id));
-
-    const createdLegs: Array<{ legId: string; vendorBoothId: string; paymentIntentId: string }> = [];
-    let failure: { vendorBoothId: string; vendorName: string; message: string } | null = null;
-
-    for (const booth of boothsToCharge) {
-      if (booth.stripeAccountType !== 'standard' || !booth.stripeOnboarded || !booth.stripeAccountId) {
-        // Fix 2 (2026-08-01): see the identical note on the Terminal rail above -- a
-        // house booth here is the hub owner's own account, so the failure copy is
-        // organizer-facing instead of the generic vendor-facing message.
-        // Processor-accurate messaging (Square migration, 2026-09-10): this endpoint is
-        // the Stripe QR/in-app rail specifically -- a Square-connected booth belongs on
-        // authorizeBoothCartSquareLegs instead, so tell them that rather than implying
-        // Stripe is the only option they have.
-        const message = booth.isHubOwnerBooth
-          ? booth.squareOnboarded
-            ? 'You are connected via Square for this register -- use Square checkout instead, or complete Stripe onboarding in Settings to use this Stripe checkout.'
-            : 'Complete your Stripe account upgrade in Settings to sell your own items through this register'
-          : booth.squareOnboarded
-            ? `Booth "${booth.vendorName}" is connected via Square -- use Square checkout for this booth instead of Stripe`
-            : `Booth "${booth.vendorName}" has not completed Standard-account onboarding`;
-        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message };
-        break;
-      }
-
-      // S1198 (2026-09-06): bank-fingerprint collusion hold -- same unconditional check
-      // as the Terminal rail above, run per-booth inside this loop since a single QR
-      // authorize call can span multiple booths. A flagged booth's failure uses the same
-      // whole-cart-fail path as every other per-booth failure in this loop (cancels any
-      // legs already created earlier in this same call).
-      if (await isPayoutFlaggedForReview('VENDOR_BOOTH', booth.id)) {
-        failure = {
-          vendorBoothId: booth.id,
-          vendorName: booth.vendorName,
-          message: `Booth "${booth.vendorName}"'s payments are on hold pending admin review. Contact support@finda.sale for details.`,
-        };
-        break;
-      }
-
-      // Direct-charges migration (2026-08-08): live capability preflight -- same
-      // DB-cache vs live-Stripe rationale as the Terminal rail's identical check above.
-      try {
-        const liveStatus = await getAccountStatus(booth.stripeAccountId!);
-        if (!liveStatus.chargesEnabled) {
-          failure = {
-            vendorBoothId: booth.id,
-            vendorName: booth.vendorName,
-            message: `Booth "${booth.vendorName}"'s Stripe account cannot currently accept charges. Please check its Stripe onboarding status.`,
-          };
-          break;
-        }
-      } catch (statusErr) {
-        console.error(`[boothCartQrAuthorize] getAccountStatus preflight failed for booth ${booth.id}:`, statusErr);
-        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: "Could not verify the booth's payment account status. Please try again." };
-        break;
-      }
-
-      const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, booth.id);
-      const amountCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
-      if (amountCents < 50) {
-        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: `Booth "${booth.vendorName}"'s subtotal must be at least $0.50` };
-        break;
-      }
-
-      // ADR-090 Phase 2: platform cut + hub-owner revenue-share split (see Terminal
-      // rail's identical computation above for the full rationale). Whole-cart-fail
-      // like every other per-leg failure in this loop — never silently drops the
-      // hub owner's cut.
-      const feeSplit = await computeLegFeeSplit({
-        amountCents,
-        revenueSharePercent: booth.revenueSharePercent,
-        processor: 'STRIPE',
-        hubOwnerOrganizer: booth.hub.organizer,
-      });
-      if (feeSplit.blocked) {
-        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: feeSplit.reason };
-        break;
-      }
-
-      // Race-safe claim (findasale-hacker adversarial pass, 2026-07-08): same
-      // compare-and-swap technique as the Terminal rail's authorize endpoint -- the
-      // alreadyLeggedIds snapshot computed above this loop is a plain read and can't
-      // close a TOCTOU window against a second concurrent /qr/authorize call (e.g. a
-      // double-submitted "Pay" tap on the shopper's phone) for the same booth on the
-      // same cart. A losing concurrent request gets P2002 here and skips this booth
-      // (its leg was already claimed by the winner) rather than creating a duplicate
-      // PaymentMethod clone + PaymentIntent for the same items.
-      const claimKey = `claim_${cart.id}_${booth.id}`;
-      let claimedLeg;
-      try {
-        claimedLeg = await prisma.boothCartLeg.create({
-          data: {
-            cartTransactionId: cart.id,
-            vendorBoothId: booth.id,
-            stripeAccountId: booth.stripeAccountId!,
-            stripePaymentIntentId: claimKey,
-            amountCents,
-            rail: 'QR',
-            status: 'PENDING',
-            hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
-            // Same as the TERMINAL rail above: store the platform's own cut so the sale
-            // notification never has to re-derive it. Both rails converge on captureBoothCart.
-            platformFeeCents: feeSplit.applicationFeeAmountCents - feeSplit.hubOwnerShareCents,
-          },
-        });
-      } catch (claimErr: any) {
-        if (claimErr?.code === 'P2002') {
-          continue;
-        }
-        throw claimErr;
-      }
-
-      try {
-        // Clone the platform PaymentMethod onto this booth's connected account —
-        // Stripe's documented "share payment methods across multiple accounts for
-        // direct charges" call. Returns a NEW PaymentMethod id valid only on this
-        // connected account.
-        const clonedPm = await stripe().paymentMethods.create(
-          { customer: platformCustomerId, payment_method: platformPaymentMethodId },
-          { stripeAccount: booth.stripeAccountId! }
-        );
-
-        const paymentIntent = await stripe().paymentIntents.create(
-          {
-            amount: amountCents,
-            currency: 'usd',
-            payment_method_types: ['card'],
-            payment_method: clonedPm.id,
-            capture_method: 'manual',
-            confirm: true,
-            off_session: true,
-            // ADR-090 Phase 2: platform cut + hub-owner revenue-share cut.
-            application_fee_amount: feeSplit.applicationFeeAmountCents,
-            metadata: {
-              source: 'booth_cart_leg',
-              rail: 'QR',
-              hubId,
-              cartTransactionId: cart.id,
-              vendorBoothId: booth.id,
-            },
-          },
-          { stripeAccount: booth.stripeAccountId! }
-        );
-
-        const leg = await prisma.boothCartLeg.update({
-          where: { id: claimedLeg.id },
-          data: {
-            stripePaymentIntentId: paymentIntent.id,
-            status: paymentIntent.status === 'requires_capture' ? 'REQUIRES_CAPTURE' : 'PENDING',
-          },
-        });
-        createdLegs.push({ legId: leg.id, vendorBoothId: booth.id, paymentIntentId: paymentIntent.id });
-      } catch (err: any) {
-        console.error(`[authorizeBoothCartQrLegs] Failed to confirm leg for booth ${booth.id}:`, err);
-        await prisma.boothCartLeg.delete({ where: { id: claimedLeg.id } }).catch((delErr) =>
-          console.error(`[authorizeBoothCartQrLegs] Failed to release claim leg ${claimedLeg.id} after Stripe error:`, delErr)
-        );
-        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: err.message || 'Card was declined' };
-        break;
-      }
-    }
-
-    if (failure) {
-      // Whole-cart-fail: cancel every leg this call just created (free — none are
-      // captured yet), matching the Terminal rail's cancel policy.
-      for (const created of createdLegs) {
-        const legBooth = booths.find((b) => b.id === created.vendorBoothId);
-        try {
-          if (legBooth?.stripeAccountId) {
-            await stripe().paymentIntents.cancel(created.paymentIntentId, {}, { stripeAccount: legBooth.stripeAccountId! });
-          }
-        } catch (cancelErr) {
-          console.error(`[authorizeBoothCartQrLegs] Failed to cancel leg ${created.legId} during whole-cart-fail:`, cancelErr);
-        }
-        await prisma.boothCartLeg.update({ where: { id: created.legId }, data: { status: 'CANCELED' } }).catch(() => {});
-      }
-      return res.status(402).json({ error: failure.message, vendorBoothId: failure.vendorBoothId, vendorName: failure.vendorName });
-    }
-
-    return res.status(200).json({ legs: createdLegs });
   } catch (error) {
     console.error('[authorizeBoothCartQrLegs] Error:', error);
-    return res.status(500).json({ error: 'Failed to authorize QR checkout legs' });
+    return res.status(500).json({ error: 'Failed to authorize QR legs' });
   }
 };
 
@@ -1524,6 +1128,62 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
 // postBoothCartSquareToken below. The register polls getBoothCartSquareTokenStatus, then
 // calls authorizeBoothCartSquareLegs once ready. Three-endpoint shape replaces Stripe's
 // two-endpoint (setup-intent + qr/authorize) shape because of this session-object gap.
+
+/**
+ * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/square/begin
+ * Body: none.
+ * Square QR/in-app rail, step 0: runs the checkout guard + cart lock (PENDING ->
+ * IN_PROGRESS) exactly once for this cart -- same beginCartCheckout the Terminal
+ * and (now-dead) Stripe QR rails' own first authorize call already runs.
+ *
+ * Stripe removal (2026-09-12), found while verifying this rail after blocking the
+ * dead Stripe QR endpoints: this lock step used to happen ONLY as a side effect of
+ * calling createBoothCartQrSetupIntent (the Stripe QR rail's first call). The
+ * Square QR rail's register-side handler (handleVenueGenerateSquareQr in pos.tsx)
+ * never called that endpoint or ran beginCartCheckout any other way -- meaning a
+ * cart could never actually reach IN_PROGRESS via the Square rail on its own, and
+ * postBoothCartSquareToken / authorizeBoothCartSquareLegs (both of which require
+ * IN_PROGRESS) would 409 on every real attempt. This gives the Square QR rail its
+ * own explicit lock step instead of silently depending on a Stripe sibling's side
+ * effect -- confirmed via repo-wide grep that beginCartCheckout had exactly two
+ * callers (createBoothCartQrSetupIntent, captureBoothCartCash) before this change,
+ * and grep of pos.tsx confirming handleVenueGenerateSquareQr calls no backend
+ * endpoint at all today. Frontend wiring (pos.tsx) is a separate flagged item.
+ */
+export const beginBoothCartSquareCheckout = async (req: BoothAuthRequest, res: Response) => {
+  try {
+    const { hubId, cartTransactionId } = req.params;
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+
+    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
+
+    try {
+      await beginCartCheckout({
+        cart,
+        hubId,
+        cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
+        cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
+        context: 'boothCartSquareBegin',
+      });
+    } catch (guardError: any) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ error: guardError.message });
+      }
+      if (typeof guardError?.message === 'string' && guardError.message.startsWith('CART_NOT_CHARGEABLE:')) {
+        return res.status(409).json({ error: `Cart cannot be charged (status: ${guardError.message.split(':')[1]})` });
+      }
+      throw guardError;
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error('[beginBoothCartSquareCheckout] Error:', error);
+    return res.status(500).json({ error: 'Failed to start Square checkout' });
+  }
+};
+
 
 /**
  * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/square/token

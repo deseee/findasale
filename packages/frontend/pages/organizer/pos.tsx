@@ -477,7 +477,7 @@ export default function POSPage() {
   // upfront "start" call the way handleVenueGenerateQr does for Stripe. Same generate ->
   // display -> poll -> finish shape as the Stripe QR rail above, reusing venueCapturing /
   // venueCaptureFailed / cancelVenueCart for the shared finishing step.
-  const [venueSquareStatus, setVenueSquareStatus] = useState<'idle' | 'waiting' | 'confirmed'>('idle');
+  const [venueSquareStatus, setVenueSquareStatus] = useState<'idle' | 'generating' | 'waiting' | 'confirmed'>('idle');
   const [venueSquareUrl, setVenueSquareUrl] = useState('');
 
   // Stripe Terminal SDK ref
@@ -1680,14 +1680,32 @@ export default function POSPage() {
   // ─── Venue mode: Square QR checkout (vendor-booth-cart-checkout dispatch, 2026-09-07) ──
   // Mirrors handleVenueGenerateQr/finishVenueQrCheckout above exactly in shape; only the
   // underlying rail differs (see the state comment above for why there's no upfront POST).
-  const handleVenueGenerateSquareQr = useCallback(() => {
+  const handleVenueGenerateSquareQr = useCallback(async () => {
     if (!venueCart || !cart.length) return;
     setErrorMessage('');
     setVenueCheckoutFailure(null);
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    setVenueSquareUrl(`${origin}/pay-square/${encodeURIComponent(venueCart.id)}?hub=${encodeURIComponent(venueHubId || '')}&amount=${cartTotal.toFixed(2)}`);
-    setVenueSquareStatus('waiting');
-  }, [venueHubId, venueCart, cart.length, cartTotal]);
+    setVenueSquareStatus('generating');
+    try {
+      // Stripe removal (2026-09-12) fix: this rail used to skip straight to showing the
+      // QR, relying on the (now-dead) Stripe QR endpoint to have already locked the cart
+      // PENDING -> IN_PROGRESS as a side effect. That dependency is gone, so this now
+      // explicitly runs the same checkout guard + lock step itself before displaying the
+      // QR -- postBoothCartSquareToken / authorizeBoothCartSquareLegs both require the
+      // cart to already be IN_PROGRESS and would otherwise 409 on every real attempt.
+      await api.post(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/square/begin`,
+        {},
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      setVenueSquareUrl(`${origin}/pay-square/${encodeURIComponent(venueCart.id)}?hub=${encodeURIComponent(venueHubId || '')}&amount=${cartTotal.toFixed(2)}`);
+      setVenueSquareStatus('waiting');
+    } catch (err: any) {
+      console.error('[pos] Venue Square QR begin failed:', err);
+      setVenueSquareStatus('idle');
+      setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to start Square checkout.');
+    }
+  }, [venueHubId, venueCart, cart.length, cartTotal, venueBoothToken]);
 
   const handleVenueSquareReset = useCallback(() => {
     setVenueSquareStatus('idle');
@@ -3663,10 +3681,11 @@ export default function POSPage() {
                   {/* Register-side Square QR display -- mirrors the Stripe QR rail
                       above exactly (same generate/display/poll shape, same QRCode
                       component, same button styling); only the underlying rail
-                      differs. No upfront POST call is needed to "start" here --
-                      unlike Stripe's clientSecret, the shopper's own phone page
-                      tokenizes the card directly and POSTs the result itself, so
-                      the register can show the QR immediately. */}
+                      differs. A brief 'generating' POST (square/begin) now runs first
+                      to lock the cart PENDING -> IN_PROGRESS (Stripe removal fix,
+                      2026-09-12 -- see handleVenueGenerateSquareQr) before the QR
+                      is shown; the shopper's own phone page still tokenizes the
+                      card directly and POSTs the result itself from there on. */}
                   {venueSquareStatus === 'idle' && (
                     <button
                       onClick={handleVenueGenerateSquareQr}
@@ -3674,6 +3693,11 @@ export default function POSPage() {
                       className="w-full py-4 rounded-xl font-semibold transition bg-sage-700 text-white hover:bg-sage-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       📲 Generate Square QR to pay ${cartTotal.toFixed(2)}
+                    </button>
+                  )}
+                  {venueSquareStatus === 'generating' && (
+                    <button disabled className="w-full py-4 rounded-xl font-semibold bg-sage-700 text-white opacity-70">
+                      Generating…
                     </button>
                   )}
                   {venueSquareStatus === 'waiting' && venueSquareUrl && (

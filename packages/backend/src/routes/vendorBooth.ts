@@ -36,6 +36,7 @@ import {
   authorizeBoothCartTerminalLeg,
   createBoothCartQrSetupIntent,
   authorizeBoothCartQrLegs,
+  beginBoothCartSquareCheckout,
   postBoothCartSquareToken,
   getBoothCartSquareTokenStatus,
   authorizeBoothCartSquareLegs,
@@ -185,6 +186,7 @@ router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/authorize', o
 // deliberately NOT gated by requireBoothTokenOrTeamMember() -- it is called by the SHOPPER's
 // own phone page, which has no cashier/booth session at all (see postBoothCartSquareToken's
 // own doc comment for the trust-model rationale). The other two ARE register/cashier calls.
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/square/begin', optionalAuthenticate, requireBoothTokenOrTeamMember(), beginBoothCartSquareCheckout);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/square/token', optionalAuthenticate, postBoothCartSquareToken);
 router.get('/api/organizer/hubs/:hubId/cart/:cartTransactionId/square/token-status', optionalAuthenticate, requireBoothTokenOrTeamMember(), getBoothCartSquareTokenStatus);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/square/authorize', optionalAuthenticate, requireBoothTokenOrTeamMember(), authorizeBoothCartSquareLegs);
