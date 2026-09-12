@@ -411,11 +411,19 @@ interface CheckoutModalProps {
   organizerSquareOnboarded?: boolean;
   organizerSquareMerchantId?: string | null;
   organizerSquareLocationId?: string | null;
+  // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE): the raw,
+  // pre-fee/pre-discount item price, passed by the parent page (already loaded there). Used
+  // ONLY as the display amount for SquarePaymentRequestForm's Web Payments SDK card form when
+  // isItemSquareOnly -- the ACTUAL charge is always computed server-side in
+  // squarePaymentController.ts's createSquarePayment from itemId, same as every other
+  // processor path in this app. Named distinctly from the existing `itemPrice` state (which
+  // holds the server-confirmed Stripe total) to avoid shadowing it.
+  rawItemPrice?: number;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, organizerName, saleId, shippingAvailable = false, shippingPrice = null, bountySubmissionId, bountyItemPrice, bountyClientSecret, organizerSquareOnboarded, organizerSquareMerchantId, organizerSquareLocationId, onClose, onSuccess }: CheckoutModalProps) => {
+const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, organizerName, saleId, shippingAvailable = false, shippingPrice = null, bountySubmissionId, bountyItemPrice, bountyClientSecret, organizerSquareOnboarded, organizerSquareMerchantId, organizerSquareLocationId, rawItemPrice, onClose, onSuccess }: CheckoutModalProps) => {
   const { user } = useAuth();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [itemPrice, setItemPrice] = useState(0);
@@ -436,6 +444,19 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   // shippingCost below is ALWAYS what the server returned, never computed client-side.
   const isAuction = listingType === 'AUCTION'; // matches stripeController's !isAuctionItem gate
   const canOfferShipping = shippingAvailable && shippingPrice != null && !isAuction;
+  // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE): mirrors
+  // isBountySquare's own organizerHasSquare gate exactly (squareOnboarded === true &&
+  // !!squareMerchantId), scoped to the non-bounty generic itemId flow. Before this, EVERY
+  // single-item "Buy Now" purchase from a Square-only organizer unconditionally hit
+  // /stripe/create-payment-intent and was blocked with SELLER_PAYMENTS_UNAVAILABLE, since
+  // Stripe's platform account is permanently closed and these organizers have no live
+  // Stripe Connect account at all. v1 scope: item price only, no shipping/coupon support yet
+  // (same precedent as the existing isBountySquare branch) -- adding those needs a small
+  // architecture decision (a pre-charge quote step) this BUG MODE fix doesn't take on.
+  const isItemSquareOnly = !bountySubmissionId && organizerSquareOnboarded === true && !!organizerSquareMerchantId;
+  const [itemSquareSubmitting, setItemSquareSubmitting] = useState(false);
+  const [itemSquareError, setItemSquareError] = useState<string | null>(null);
+  const [itemSquareSuccess, setItemSquareSuccess] = useState(false);
   const [shipToMe, setShipToMe] = useState(false);
   const [shippingZipInput, setShippingZipInput] = useState('');
   const [shippingZipError, setShippingZipError] = useState<string | null>(null);
@@ -528,6 +549,14 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
     if (bountyClientSecret) {
       setClientSecret(bountyClientSecret);
       setItemPrice(bountyItemPrice ?? 0);
+      return;
+    }
+
+    // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE): this
+    // organizer has no live Stripe Connect account -- skip the Stripe create-payment-intent
+    // path entirely. The isItemSquareOnly render branch below (mirrors isBountySquare) handles
+    // tokenization and charging via /square-payment/create-payment instead.
+    if (isItemSquareOnly) {
       return;
     }
 
@@ -639,6 +668,39 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
       setSquareError(msg);
     } finally {
       setSquareSubmitting(false);
+    }
+  };
+
+  // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE): sibling of
+  // handleSquareTokenized above, for the generic (non-bounty) single-item flow. Square's
+  // CreatePayment is synchronous on the backend (squarePaymentController.ts's createSquarePayment
+  // header comment) -- charge, Purchase-row creation, and (for guests) the velocity guard all
+  // happen in this one request/response, no webhook/confirm step needed.
+  const handleItemSquareTokenized = async (sourceId: string) => {
+    if (!itemId) return;
+    setItemSquareSubmitting(true);
+    setItemSquareError(null);
+    try {
+      // Parity with the Stripe guest path in loadIntent below: send a device fingerprint for
+      // the same guestCheckoutVelocityGuard.ts carding-hardening check createSquarePayment
+      // already runs (see squarePaymentController.ts's assertGuestCheckoutAllowed call).
+      const deviceFingerprint = isGuest ? await generateDeviceFingerprint() : undefined;
+      const response = await api.post('/square-payment/create-payment', {
+        itemId,
+        sourceId,
+        ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint } : {}),
+      });
+      if (response.data?.purchase || response.data?.squarePaymentId || response.data?.purchaseId) {
+        if (response.data?.purchaseId) setPurchaseId(response.data.purchaseId);
+        setItemSquareSuccess(true);
+      } else {
+        setItemSquareError('Payment did not complete. Please try again.');
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Payment failed. Please try again.';
+      setItemSquareError(msg);
+    } finally {
+      setItemSquareSubmitting(false);
     }
   };
 
@@ -757,7 +819,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           {/* ADR-110 Track 1: "ship this to me" + ZIP, collected before the PaymentElement
               mounts. Shown only when the item actually supports native-checkout shipping
               (mirrors stripeController's own gate) and is never offered on auction items. */}
-          {canOfferShipping && (
+          {canOfferShipping && !isItemSquareOnly && (
             <div className="mb-5 p-3 bg-warm-50 rounded-lg">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -903,7 +965,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 Want to track orders and earn rewards? <a href="/register" className="underline hover:text-warm-900 dark:text-warm-100">Create an account</a> instead.
               </p>
             </div>
-          ) : (
+          ) : !isItemSquareOnly ? (
             <div className="mb-5">
               <label className="block text-sm font-medium text-warm-700 mb-1">
                 Have a coupon code? <span className="text-warm-400 font-normal">(optional)</span>
@@ -920,7 +982,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 Coupons are issued after each completed purchase.
               </p>
             </div>
-          )}
+          ) : null}
           <div className="flex gap-3">
             <button
               type="button"
@@ -978,6 +1040,73 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
       {/* Payment intent loading / error / form */}
       {started && (
         <>
+          {isItemSquareOnly ? (
+            // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE):
+            // mirrors isBountySquare's own rendering branch above -- tokenize via
+            // SquarePaymentRequestForm (Web Payments SDK), then POST sourceId to
+            // /square-payment/create-payment, which is synchronous (charge + Purchase row
+            // creation happen in that one request/response, no webhook/confirm step).
+            <div>
+              {itemSquareSuccess ? (
+                <div className="text-center">
+                  <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-3xl mb-2">✅</p>
+                    <p className="text-lg font-bold text-green-900 mb-1">Order Confirmed!</p>
+                    <p className="text-xs text-green-700 mb-3">Your payment has been processed successfully.</p>
+                  </div>
+                  <button
+                    onClick={handleSuccess}
+                    className="w-full py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4 p-3 bg-warm-50 rounded-lg">
+                    <p className="text-sm text-warm-600">Item</p>
+                    <p className="font-semibold text-warm-900 dark:text-warm-100">{resolvedTitle}</p>
+                    <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 pt-2 mt-2 text-sm">
+                      <span>Total Due</span>
+                      <span>${(rawItemPrice ?? 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {itemSquareError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                      <p className="mb-2">{itemSquareError}</p>
+                      <button
+                        type="button"
+                        onClick={() => setItemSquareError(null)}
+                        className="text-xs underline text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+
+                  <SquarePaymentRequestForm
+                    requestId={itemId || purchaseId || 'item'}
+                    totalAmountCents={Math.round((rawItemPrice ?? 0) * 100)}
+                    squareLocationId={organizerSquareLocationId ?? null}
+                    onSuccess={handleItemSquareTokenized}
+                    onError={setItemSquareError}
+                    isProcessing={itemSquareSubmitting}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={itemSquareSubmitting}
+                    className="w-full mt-3 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
           {loadError && (
             <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm mb-4" role="alert" id="checkout-load-error">
               {/* S1006: render the actual server message so buyers see WHY (was a bare "Try Again") */}
@@ -1027,6 +1156,8 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 onSuccess={handleSuccess}
               />
             </Elements>
+          )}
+            </>
           )}
         </>
       )}

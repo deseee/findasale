@@ -143,6 +143,14 @@ interface Sale {
     removeWatermarkEnabled?: boolean; // Feature: OG watermark removal toggle (TEAMS only)
     isClaimed?: boolean; // Feature #361: Claim-This-Listing
     isUnmanagedListing?: boolean; // True for scraped/unverified listings
+    // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE):
+    // backend (saleController.ts getSale) already returns these (added 2026-09-10 for
+    // CartDrawer's own Square routing fix) -- this page's type just never declared them.
+    // Threaded into CheckoutModal below so Square-only organizers route to Square instead
+    // of unconditionally hitting Stripe.
+    squareOnboarded?: boolean;
+    squareMerchantId?: string | null;
+    squareLocationId?: string | null;
     badges?: Array<{
       id: string;
       name: string;
@@ -2542,8 +2550,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         <CheckoutModal
           itemId={checkoutItem.id}
           itemTitle={checkoutItem.title}
+          rawItemPrice={checkoutItem.price}
+          listingType={checkoutItem.listingType}
           organizerName={sale.organizer?.businessName}
           saleId={sale.id}
+          organizerSquareOnboarded={sale.organizer?.squareOnboarded}
+          organizerSquareMerchantId={sale.organizer?.squareMerchantId}
+          organizerSquareLocationId={sale.organizer?.squareLocationId}
           onClose={handleCheckoutClose}
           onSuccess={handleCheckoutSuccess}
         />

@@ -749,6 +749,15 @@ const ITEM_DETAIL_SELECT = {
               select: {
                 userId: true,
                 businessName: true,
+                // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG
+                // MODE): CheckoutModal.tsx needs to know if this organizer is Square-only
+                // BEFORE calling checkout, same reasoning as CartDrawer.tsx's own
+                // squareOnboarded/squareMerchantId/squareLocationId fix (2026-09-10, see
+                // saleController.ts getSale). Without this, single-item Buy Now always tried
+                // Stripe even for organizers with no live Stripe Connect account.
+                squareOnboarded: true,
+                squareMerchantId: true,
+                squareLocationId: true,
                 user: {
                   select: { name: true }
                 }

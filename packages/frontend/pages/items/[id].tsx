@@ -84,6 +84,12 @@ interface Item {
       userId?: string;
       subscriptionTier?: string; // Feature #65: Subscription Tiers for watermark policy
       removeWatermarkEnabled?: boolean; // Feature: OG watermark removal toggle
+      // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE):
+      // threaded into CheckoutModal below so Square-only organizers route to Square
+      // instead of unconditionally hitting Stripe (which they have no live account on).
+      squareOnboarded?: boolean;
+      squareMerchantId?: string | null;
+      squareLocationId?: string | null;
     } | null;
     location?: string;
   };
@@ -1253,11 +1259,15 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         <CheckoutModal
           itemId={item.id}
           itemTitle={item.title}
+          rawItemPrice={item.price}
           listingType={item.listingType}
           organizerName={item.sale.organizer?.businessName ?? item.sale.organizer?.name}
           saleId={item.sale.id}
           shippingAvailable={item.shippingAvailable}
           shippingPrice={item.shippingPrice}
+          organizerSquareOnboarded={item.sale.organizer?.squareOnboarded}
+          organizerSquareMerchantId={item.sale.organizer?.squareMerchantId}
+          organizerSquareLocationId={item.sale.organizer?.squareLocationId}
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={() => {
             setShowCheckoutModal(false);
