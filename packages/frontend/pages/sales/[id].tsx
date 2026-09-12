@@ -354,7 +354,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const { showToast } = useToast();
   const shopperCart = useShopperCart(user?.id);
 
-  const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
+  const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string; price: number; listingType?: string } | null>(null);
   const [bidAmounts, setBidAmounts] = useState<{ [itemId: string]: string }>({});
   const [biddingItemId, setBiddingItemId] = useState<string | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -579,8 +579,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     staleTime: 60_000,
   });
 
-  const handleBuyNow = (itemId: string, itemTitle: string) => {
-    setCheckoutItem({ id: itemId, title: itemTitle });
+  const handleBuyNow = (itemId: string, itemTitle: string, price: number, listingType?: string) => {
+    setCheckoutItem({ id: itemId, title: itemTitle, price, listingType });
   };
 
   const handleCheckoutClose = () => {
@@ -2158,7 +2158,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                                 </div>
                                 {!isOrganizer && user && item.status === 'AVAILABLE' && !item.auctionStartPrice && (
                                   <div className="flex gap-1">
-                                    <button onClick={() => handleBuyNow(item.id, item.title)} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-2 py-1.5 rounded-lg transition-colors">Buy</button>
+                                    <button onClick={() => handleBuyNow(item.id, item.title, item.price, item.listingType)} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-2 py-1.5 rounded-lg transition-colors">Buy</button>
                                     {item.price !== null && (
                                       <button onClick={() => handleAddToCart(item)} className={`text-xs px-2 py-1.5 rounded-lg font-medium transition-colors ${shopperCart.items.some((ci) => ci.id === item.id) ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 cursor-default' : 'border border-amber-600 dark:border-amber-500 text-amber-600 dark:text-amber-400'}`} disabled={shopperCart.items.some((ci) => ci.id === item.id)}>
                                         {shopperCart.items.some((ci) => ci.id === item.id) ? '✓' : '+'}
