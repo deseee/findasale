@@ -21,13 +21,23 @@
  * `resolveCashCommissionRate` + `accrueCashFeeBalance`.
  *
  * These tests assert the money on a TEAMS organizer (8% contractual rate), not the code shape:
- *   - the card half's Stripe `application_fee_amount` and the Purchase's `platformFeeAmount`
- *     reflect 8% of the card portion, NOT the old hardcoded 10%
+ *   - the card half's application fee and the Purchase's `platformFeeAmount` reflect 8% of
+ *     the card portion, NOT the old hardcoded 10%
  *   - the cash half accrues 8% of the cash portion to `Organizer.cashFeeBalance` — NOT $0
  *   - combined, the platform collects exactly 8% of the full $100 cart ($8.00), split evenly
  *     across the two legs by design of this fixture (50/50 cash/card)
  *
- * MOCKING NOTES: posPaymentController.ts pulls in Stripe, Socket.io, notifications, eBay/
+ * Stripe removal (2026-09-12): this file no longer seeds a Stripe-only organizer or mocks the
+ * Stripe SDK. createPaymentRequest forces `processor` to SQUARE unconditionally now, and
+ * platformFeeCents (the tier-rate math this suite actually verifies) is computed the same way
+ * regardless of processor -- it's persisted on the POSPaymentRequest row at create time and
+ * only spent (as `appFeeCents`) at confirm time, once squarePos.createAndCapturePayment
+ * actually charges the card. squarePos.preflightAccountStatus and .createAndCapturePayment are
+ * mocked directly (the same seam posPaymentController.ts calls), and confirmPaymentRequest is
+ * driven with `sourceId` (the Square Web Payments SDK card token) instead of `paymentIntentId`
+ * for a SQUARE-processor row -- see posPaymentController.ts's own comment on that field pair.
+ *
+ * MOCKING NOTES: posPaymentController.ts pulls in Square, Socket.io, notifications, eBay/
  * Shopify/FB hooks and the collusion checkout-guard at import time — none of them are on the
  * commission-calculation path this suite is verifying, so all are mocked exactly as
  * __tests__/cashSaleFee.test.ts (the sibling fix's precedent test) mocks them. XP/achievement
@@ -39,17 +49,12 @@
 import { prisma } from '../lib/prisma';
 
 // ── Mocks (hoisted by ts-jest above these declarations — `var`, not `const`, deliberately) ──
-var mockPaymentIntentCreate = jest.fn();
-var mockPaymentIntentRetrieve = jest.fn();
+var mockPreflightAccountStatus = jest.fn();
+var mockCreateAndCapturePayment = jest.fn();
 
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    paymentIntents: {
-      create: mockPaymentIntentCreate,
-      retrieve: mockPaymentIntentRetrieve,
-    },
-  })),
-  default: jest.fn(),
+jest.mock('../services/squarePosPaymentAdapter', () => ({
+  preflightAccountStatus: (...args: any[]) => mockPreflightAccountStatus(...args),
+  createAndCapturePayment: (...args: any[]) => mockCreateAndCapturePayment(...args),
 }));
 
 jest.mock('../lib/socket', () => ({
@@ -70,17 +75,13 @@ jest.mock('../services/facebookNudgeService', () => ({
 jest.mock('../services/marketplaceStockSyncService', () => ({
   syncMarketplaceStock: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock('../services/stripeConnectService', () => ({
-  shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
-  getAccountStatus: jest.fn().mockResolvedValue({ chargesEnabled: true }),
-}));
 jest.mock('../services/checkoutGuard', () => ({
   assertCheckoutAllowed: jest.fn().mockResolvedValue(undefined),
   recordSuspectedSignal: jest.fn().mockResolvedValue(undefined),
   CheckoutGuardError: class CheckoutGuardError extends Error {},
 }));
 
-// ── Imports AFTER the mocks ───────────────────────────────────────────────────────────────
+// ── Imports AFTER the mocks ─────────────────────────────────────────────────────────────
 import {
   createPaymentRequest,
   acceptPaymentRequest,
@@ -96,7 +97,7 @@ const makeMockRes = () => {
 };
 
 describe('POS split-payment commission — cash-half accrual + tier-aware rate', () => {
-  /** Build an isolated TEAMS organizer + PUBLISHED sale + shopper. */
+  /** Build an isolated, Square-onboarded TEAMS organizer + PUBLISHED sale + shopper. */
   const seed = async (key: string) => {
     const orgUser = await prisma.user.create({
       data: {
@@ -114,7 +115,9 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
         businessName: `Split Fee Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
-        stripeConnectId: `acct_splitfee${key}`,
+        squareOnboarded: true,
+        squareMerchantId: `sq-merchant-splitfee-${key}`,
+        squareLocationId: `sq-location-splitfee-${key}`,
         cashFeeBalance: 0,
       },
     });
@@ -146,8 +149,10 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     return { orgUser, organizer, sale, shopper };
   };
 
-  beforeAll(() => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_split_fee';
+  beforeEach(() => {
+    mockPreflightAccountStatus.mockReset();
+    mockPreflightAccountStatus.mockResolvedValue({ ok: true, accessToken: 'fake-square-token-splitfee' });
+    mockCreateAndCapturePayment.mockReset();
   });
 
   afterAll(async () => {
@@ -156,11 +161,6 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
 
   it('charges TEAMS 8% on the card half (not the hardcoded 10%) AND accrues 8% on the cash half (not $0)', async () => {
     const { orgUser, organizer, sale, shopper } = await seed('teams');
-
-    mockPaymentIntentCreate.mockResolvedValueOnce({
-      id: 'pi_split_teams',
-      client_secret: 'secret_split_teams',
-    });
 
     // $100 cart, split 50/50 cash/card.
     const createReq: any = {
@@ -173,12 +173,6 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
         isSplitPayment: true,
         cashAmountCents: 5000,
         cardAmountCents: 5000,
-        // S-STRIPE-SQUARE-DEFAULT-FIX (2026-09-09): createPaymentRequest now defaults an
-        // unspecified processor to SQUARE (Stripe's platform account is permanently
-        // closed). This fixture's organizer only has stripeConnectId set (no Square
-        // fields), so it must pin the legacy Stripe path explicitly -- this test is about
-        // split-payment commission math, not about which processor is the default.
-        processor: 'STRIPE',
       },
     };
     const createRes = makeMockRes();
@@ -189,12 +183,12 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     const requestId: string = createBody.requestId;
     expect(requestId).toBeTruthy();
 
-    // THE STRIPE CHARGE: application_fee_amount on the card leg must be 8% of $50 ($4.00 =
-    // 400 cents), never the old hardcoded 10% ($5.00 = 500 cents).
-    expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 5000, application_fee_amount: 400 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
-    );
+    // THE PLATFORM FEE MATH: platformFeeCents (persisted on the row at create time) must be
+    // 8% of $50 (400 cents), never the old hardcoded 10% (500 cents). Square has no
+    // "create now" charge to inspect at this point (see file header) -- the row itself is
+    // the fee-math evidence, spent as appFeeCents once confirm actually charges the card.
+    const posRequestAfterCreate = await prisma.pOSPaymentRequest.findUnique({ where: { id: requestId } });
+    expect(posRequestAfterCreate!.platformFeeCents).toBe(400);
 
     // Shopper accepts.
     const acceptReq: any = { user: { id: shopper.id }, params: { requestId } };
@@ -202,17 +196,17 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     await acceptPaymentRequest(acceptReq, acceptRes);
     expect(acceptRes.json.mock.calls[0][0].status).toBe('ACCEPTED');
 
-    // Stripe confirms the card leg succeeded.
-    mockPaymentIntentRetrieve.mockResolvedValueOnce({
-      id: 'pi_split_teams',
-      status: 'succeeded',
-      metadata: { source: 'pos_payment_request', requestId },
+    // Shopper's device has tokenized a card via the Web Payments SDK; Square charges it.
+    mockCreateAndCapturePayment.mockResolvedValueOnce({
+      ok: true,
+      paymentId: 'sqp_split_teams',
+      captured: true,
     });
 
     const confirmReq: any = {
       user: { id: shopper.id },
       params: { requestId },
-      body: { paymentIntentId: 'pi_split_teams' },
+      body: { sourceId: 'cnon:test-split-teams' },
     };
     const confirmRes = makeMockRes();
     await confirmPaymentRequest(confirmReq, confirmRes);
@@ -222,6 +216,12 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     );
     expect(confirmRes.status).not.toHaveBeenCalledWith(500);
 
+    // THE CHARGE ACTUALLY MADE: appFeeCents on the Square charge is 8% of the card portion,
+    // not the old hardcoded 10% (500 cents).
+    expect(mockCreateAndCapturePayment).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 5000, appFeeCents: 400, sourceId: 'cnon:test-split-teams' })
+    );
+
     // THE CARD-HALF ROW: platformFeeAmount is 8% of the card portion, not 10%.
     const purchase = await prisma.purchase.findFirst({ where: { saleId: sale.id } });
     expect(purchase).not.toBeNull();
@@ -230,7 +230,7 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     expect(purchase!.platformFeeAmount).toBeCloseTo(4, 2); // 8% of $50 card portion — was $5 (10%) before the fix
 
     // THE CASH-HALF LEDGER: the organizer now owes 8% of the $50 cash portion ($4.00) against
-    // their next Stripe payout — before this fix it was exactly $0.00, every time.
+    // their next Square payout — before this fix it was exactly $0.00, every time.
     const organizerAfter = await prisma.organizer.findUnique({ where: { id: organizer.id } });
     expect(organizerAfter!.cashFeeBalance).toBeCloseTo(4, 2);
     expect(organizerAfter!.cashFeeBalanceUpdatedAt).not.toBeNull();
@@ -242,12 +242,7 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
   });
 
   it('a non-split TEAMS card-only payment request still uses the 8% tier rate (control)', async () => {
-    const { orgUser, organizer, sale, shopper } = await seed('teams-nosplit');
-
-    mockPaymentIntentCreate.mockResolvedValueOnce({
-      id: 'pi_nosplit_teams',
-      client_secret: 'secret_nosplit_teams',
-    });
+    const { orgUser, sale, shopper } = await seed('teams-nosplit');
 
     const createReq: any = {
       user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'], email: orgUser.email },
@@ -256,24 +251,21 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
         saleId: sale.id,
         itemIds: [],
         totalAmountCents: 10000,
-        // S-STRIPE-SQUARE-DEFAULT-FIX (2026-09-09): see the split-payment test above -- same
-        // Stripe-only organizer fixture, same reason to pin the processor explicitly.
-        processor: 'STRIPE',
       },
     };
     const createRes = makeMockRes();
     await createPaymentRequest(createReq, createRes);
 
     expect(createRes.status).toHaveBeenCalledWith(201);
-    // Card amount is the FULL total when not split — fee is 8% of $100 = $8.00 = 800 cents,
-    // not the old hardcoded 10% ($10.00 = 1000 cents).
-    expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 10000, application_fee_amount: 800 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
-    );
+    const requestId: string = createRes.json.mock.calls[0][0].requestId;
+
+    // Card amount is the FULL total when not split — fee is 8% of $100 = 800 cents, not the
+    // old hardcoded 10% (1000 cents).
+    const posRequestAfterCreate = await prisma.pOSPaymentRequest.findUnique({ where: { id: requestId } });
+    expect(posRequestAfterCreate!.platformFeeCents).toBe(800);
 
     // Non-split: no cash leg, so no cash-fee accrual should occur.
-    const organizerAfter = await prisma.organizer.findUnique({ where: { id: organizer.id } });
+    const organizerAfter = await prisma.organizer.findUnique({ where: { id: posRequestAfterCreate!.organizerId } });
     expect(organizerAfter!.cashFeeBalance).toBeCloseTo(0, 2);
   });
 });

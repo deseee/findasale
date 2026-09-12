@@ -18,8 +18,20 @@
  *     custom-amount items stay client-priced by design, a separate trust boundary this ADR does
  *     not touch
  *
+ * Stripe removal (2026-09-12): this file no longer seeds a Stripe-only organizer or mocks the
+ * Stripe SDK -- createPaymentRequest forces `processor` to SQUARE unconditionally now (a
+ * client-supplied value is accepted-but-ignored, see that function's own comment), and Square
+ * has no "create now, confirm later" charge object at this stage (see
+ * squarePosPaymentAdapter.ts's file header) -- createPaymentRequest never creates a live charge,
+ * only a 201 response once squarePos.preflightAccountStatus passes. So these tests seed a
+ * Square-onboarded organizer and assert the 201/400 response shape, not a mocked PaymentIntent
+ * call. squarePos.preflightAccountStatus itself is mocked directly -- the same seam
+ * posPaymentController.ts calls -- rather than mocking ITS dependencies
+ * (resolveOrganizerSquareAccessToken, the Square SDK client): that is the narrowest correct
+ * mock boundary for a controller-level test that isn't about Square account verification.
+ *
  * MOCKING NOTES: same convention as posSplitPaymentFee.test.ts (this controller's sibling test
- * file) -- Stripe, Socket.io, notifications, eBay/Shopify/FB hooks and the collusion
+ * file) -- Square preflight, Socket.io, notifications, eBay/Shopify/FB hooks and the collusion
  * checkout-guard are mocked; resolvePosDiscount is left real/unmocked (pure DB + arithmetic, no
  * external calls), consistent with every other test file covering this controller.
  */
@@ -27,17 +39,10 @@
 import { prisma } from '../lib/prisma';
 
 // -- Mocks (hoisted by ts-jest above these declarations -- `var`, not `const`, deliberately) --
-var mockPaymentIntentCreate = jest.fn();
-var mockPaymentIntentRetrieve = jest.fn();
+var mockPreflightAccountStatus = jest.fn();
 
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    paymentIntents: {
-      create: mockPaymentIntentCreate,
-      retrieve: mockPaymentIntentRetrieve,
-    },
-  })),
-  default: jest.fn(),
+jest.mock('../services/squarePosPaymentAdapter', () => ({
+  preflightAccountStatus: (...args: any[]) => mockPreflightAccountStatus(...args),
 }));
 
 jest.mock('../lib/socket', () => ({
@@ -58,10 +63,6 @@ jest.mock('../services/facebookNudgeService', () => ({
 jest.mock('../services/marketplaceStockSyncService', () => ({
   syncMarketplaceStock: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock('../services/stripeConnectService', () => ({
-  shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
-  getAccountStatus: jest.fn().mockResolvedValue({ chargesEnabled: true }),
-}));
 jest.mock('../services/checkoutGuard', () => ({
   assertCheckoutAllowed: jest.fn().mockResolvedValue(undefined),
   recordSuspectedSignal: jest.fn().mockResolvedValue(undefined),
@@ -80,7 +81,7 @@ const makeMockRes = () => {
 };
 
 describe('POS server-authoritative catalog pricing -- no-discount floor check (ADR-112)', () => {
-  /** Build an isolated organizer + PUBLISHED sale + AVAILABLE $50 item + shopper. */
+  /** Build an isolated, Square-onboarded organizer + PUBLISHED sale + AVAILABLE $50 item + shopper. */
   const seed = async (key: string, price: number) => {
     const orgUser = await prisma.user.create({
       data: {
@@ -98,7 +99,9 @@ describe('POS server-authoritative catalog pricing -- no-discount floor check (A
         businessName: `Pricing Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
-        stripeConnectId: `acct_pricing${key}`,
+        squareOnboarded: true,
+        squareMerchantId: `sq-merchant-pricing-${key}`,
+        squareLocationId: `sq-location-pricing-${key}`,
         cashFeeBalance: 0,
       },
     });
@@ -142,8 +145,9 @@ describe('POS server-authoritative catalog pricing -- no-discount floor check (A
     return { orgUser, organizer, sale, item, shopper };
   };
 
-  beforeAll(() => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_pricing';
+  beforeEach(() => {
+    mockPreflightAccountStatus.mockReset();
+    mockPreflightAccountStatus.mockResolvedValue({ ok: true, accessToken: 'fake-square-token-pricing' });
   });
 
   afterAll(async () => {
@@ -165,10 +169,11 @@ describe('POS server-authoritative catalog pricing -- no-discount floor check (A
     const createRes = makeMockRes();
     await createPaymentRequest(createReq, createRes);
 
-    // Before ADR-112 this succeeded with 201 and created a real $1.00 Stripe PaymentIntent for a
-    // $50 item. The floor check now runs unconditionally, so this is rejected.
+    // Before ADR-112 this succeeded with 201 and went on to create a live charge for a $1.00
+    // total against a $50 item. The floor check now runs unconditionally, so this is rejected
+    // before the Square preflight (or any placeholder row) is ever reached.
     expect(createRes.status).toHaveBeenCalledWith(400);
-    expect(mockPaymentIntentCreate).not.toHaveBeenCalled();
+    expect(mockPreflightAccountStatus).not.toHaveBeenCalled();
 
     const requests = await prisma.pOSPaymentRequest.findMany({ where: { saleId: sale.id } });
     expect(requests.length).toBe(0);
@@ -177,11 +182,6 @@ describe('POS server-authoritative catalog pricing -- no-discount floor check (A
   it('still succeeds when totalAmountCents correctly matches the real catalog price, no discount (control)', async () => {
     const { orgUser, organizer, sale, item, shopper } = await seed('correct', 50);
 
-    mockPaymentIntentCreate.mockResolvedValueOnce({
-      id: 'pi_pricing_correct',
-      client_secret: 'secret_pricing_correct',
-    });
-
     const createReq: any = {
       user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'], email: orgUser.email },
       body: {
@@ -189,31 +189,31 @@ describe('POS server-authoritative catalog pricing -- no-discount floor check (A
         saleId: sale.id,
         itemIds: [item.id],
         totalAmountCents: 5000, // exactly matches the real $50.00 catalog price
-        // S-STRIPE-SQUARE-DEFAULT-FIX (2026-09-09): createPaymentRequest now defaults an
-        // unspecified processor to SQUARE (Stripe's platform account is permanently
-        // closed). This fixture's organizer only has stripeConnectId set (no Square
-        // fields), so it must pin the legacy Stripe path explicitly -- this test is about
-        // catalog-pricing correctness, not about which processor is the default.
-        processor: 'STRIPE',
       },
     };
     const createRes = makeMockRes();
     await createPaymentRequest(createReq, createRes);
 
     expect(createRes.status).toHaveBeenCalledWith(201);
-    expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 5000 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
+    expect(createRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'PENDING',
+        totalAmountCents: 5000,
+        processor: 'SQUARE',
+        squareLocationId: organizer.squareLocationId,
+      })
+    );
+    expect(mockPreflightAccountStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: organizer.id,
+        squareMerchantId: organizer.squareMerchantId,
+        squareLocationId: organizer.squareLocationId,
+      })
     );
   });
 
   it('a misc-only cart (itemIds: []) is unaffected by the floor check regardless of totalAmountCents (control)', async () => {
-    const { orgUser, organizer, sale, shopper } = await seed('misc', 50);
-
-    mockPaymentIntentCreate.mockResolvedValueOnce({
-      id: 'pi_pricing_misc',
-      client_secret: 'secret_pricing_misc',
-    });
+    const { orgUser, sale, shopper } = await seed('misc', 50);
 
     // No catalog items at all -- catalogSubtotalCents is 0, so any totalAmountCents >= -1 passes.
     // This is the deliberate, unchanged trust boundary for misc/custom-amount carts.
@@ -224,19 +224,18 @@ describe('POS server-authoritative catalog pricing -- no-discount floor check (A
         saleId: sale.id,
         itemIds: [],
         totalAmountCents: 250, // arbitrary misc amount, no catalog item to check against
-        // S-STRIPE-SQUARE-DEFAULT-FIX (2026-09-09): see the "correctly matches" test above --
-        // same fixture shape (Stripe-only organizer), same reason to pin the processor
-        // explicitly rather than rely on the new SQUARE default.
-        processor: 'STRIPE',
       },
     };
     const createRes = makeMockRes();
     await createPaymentRequest(createReq, createRes);
 
     expect(createRes.status).toHaveBeenCalledWith(201);
-    expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 250 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
+    expect(createRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'PENDING',
+        totalAmountCents: 250,
+        processor: 'SQUARE',
+      })
     );
   });
 });

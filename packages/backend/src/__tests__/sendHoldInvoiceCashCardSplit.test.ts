@@ -12,29 +12,41 @@
  * Covers:
  *   - a TEAMS organizer's split cash/card invoice charges 8% of the CARD portion only
  *   - a SIMPLE-tier organizer (regression guard) still gets 10% of the card portion
- *   - a fully-cash invoice (cashAmountCents >= total) never creates a Stripe Checkout
- *     Session at all, and is recorded PAID immediately with a real Purchase row (no
- *     fabricated PaymentIntent id -- stripePaymentIntentId is null throughout, source 'POS')
+ *   - a fully-cash invoice (cashAmountCents >= total) never creates a payment link at all,
+ *     and is recorded PAID immediately with a real Purchase row (no fabricated PaymentIntent
+ *     id -- stripePaymentIntentId is null throughout, source 'POS')
+ *
+ * Stripe removal (2026-09-12): sendHoldInvoice's card/balance-due leg no longer creates a
+ * Stripe Checkout Session at all (that ~330-line block was deleted outright this session,
+ * see that function's own "Stripe removal (2026-09-12) cleanup" comment) -- a Square-onboarded
+ * organizer's card leg now goes through createHoldInvoiceSquareCheckout
+ * (services/holdInvoiceSquareCheckoutHelper.ts), a Square Payment Link, and a Stripe-only
+ * organizer instead falls through to a 409 SquareOnboardingIncompleteError. This suite now
+ * seeds Square-onboarded organizers and mocks createHoldInvoiceSquareCheckout directly (the
+ * same seam sendHoldInvoice itself calls) -- the fee-rate math it verifies (8%/10% of the CARD
+ * portion only) is unchanged by the processor swap, since platformFeeAmount is computed
+ * before the Square/Stripe branch split and merely spent as `appFeeCents` once the payment
+ * link is created.
  *
  * MOCKING NOTES: same convention as posCombinedInvoiceFee.test.ts / sendHoldInvoiceMergedReservation.test.ts
- * -- Stripe Checkout + PaymentIntent update mocked; commitItemSale/itemSaleGuard,
- * resolveOrganizerOrTeamMember, and holdInvoicePaymentRecorder.markHoldInvoicePaid (for the
- * fully-cash path) are left real (pure DB logic plus the function under joint test).
+ * -- Square payment-link creation, socket, notifications and transactional email are mocked;
+ * commitItemSale/itemSaleGuard, resolveOrganizerOrTeamMember, and
+ * holdInvoicePaymentRecorder.markHoldInvoicePaid (for the fully-cash path) are left real
+ * (pure DB logic plus the function under joint test).
  */
 
 import { prisma } from '../lib/prisma';
 
 // -- Mocks (hoisted by ts-jest above these declarations -- `var`, not `const`, deliberately) --
-var mockSessionsCreate = jest.fn();
-var mockPaymentIntentsUpdate = jest.fn();
+var mockCreateHoldInvoiceSquareCheckout = jest.fn();
 
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    checkout: { sessions: { create: mockSessionsCreate } },
-    paymentIntents: { update: mockPaymentIntentsUpdate },
-  })),
-  default: jest.fn(),
-}));
+jest.mock('../services/holdInvoiceSquareCheckoutHelper', () => {
+  const actual = jest.requireActual('../services/holdInvoiceSquareCheckoutHelper');
+  return {
+    ...actual,
+    createHoldInvoiceSquareCheckout: (...args: any[]) => mockCreateHoldInvoiceSquareCheckout(...args),
+  };
+});
 
 jest.mock('../lib/socket', () => ({
   getIO: jest.fn(() => ({ to: jest.fn().mockReturnValue({ emit: jest.fn() }) })),
@@ -64,10 +76,11 @@ const makeMockRes = () => {
 describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-114)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPaymentIntentsUpdate.mockResolvedValue({});
+    mockCreateHoldInvoiceSquareCheckout.mockReset();
   });
 
-  /** Build an isolated organizer (given tier) + PUBLISHED sale + shopper + one $100 held item. */
+  /** Build an isolated, Square-onboarded organizer (given tier) + PUBLISHED sale + shopper +
+   *  one $100 held item. */
   const seed = async (key: string, tier: 'SIMPLE' | 'TEAMS') => {
     const orgUser = await prisma.user.create({
       data: {
@@ -85,7 +98,10 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
         businessName: `Cash Split Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: tier,
-        stripeConnectId: `acct_hicashsplit${key}`,
+        squareOnboarded: true,
+        squareMerchantId: `sq-merchant-hicashsplit-${key}`,
+        squareLocationId: `sq-location-hicashsplit-${key}`,
+        cashFeeBalance: 0,
       },
     });
     const sale = await prisma.sale.create({
@@ -136,10 +152,6 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     return { orgUser, organizer, sale, shopper, item, hold };
   };
 
-  beforeAll(() => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_hold_invoice_cash_split';
-  });
-
   afterAll(async () => {
     await prisma.$disconnect();
   });
@@ -147,9 +159,12 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
   it('charges TEAMS 8% on the CARD portion of a split cash/card invoice (not the full total)', async () => {
     const { orgUser, hold } = await seed('teams-split', 'TEAMS');
 
-    mockSessionsCreate.mockResolvedValueOnce({
-      id: 'cs_hi_teams_split',
-      payment_intent: 'pi_hi_teams_split',
+    mockCreateHoldInvoiceSquareCheckout.mockResolvedValueOnce({
+      ok: true,
+      paymentLinkId: 'sqpl_hi_teams_split',
+      orderId: 'sqorder_hi_teams_split',
+      url: 'https://squareup.com/pay/hi_teams_split',
+      longUrl: null,
     });
 
     const req: any = {
@@ -168,18 +183,8 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
 
     // $100 item, $40 cash -> $60 card leg. Fee = 8% of 6000 = 480, never 10% of the full
     // 10000 total (800) or 10% of the card leg (600).
-    expect(mockSessionsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        line_items: [
-          expect.objectContaining({
-            price_data: expect.objectContaining({
-              unit_amount_decimal: '6000',
-            }),
-          }),
-        ],
-        payment_intent_data: expect.objectContaining({ application_fee_amount: 480 }),
-      }),
-      expect.objectContaining({ idempotencyKey: expect.any(String) })
+    expect(mockCreateHoldInvoiceSquareCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 6000, appFeeCents: 480 })
     );
 
     const invoice = await prisma.holdInvoice.findFirst({ where: { reservationId: hold.id } });
@@ -188,15 +193,18 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     expect(invoice!.cashAmountCents).toBe(4000);
     expect(invoice!.cardAmountCents).toBe(6000);
     expect(invoice!.platformFeeAmount).toBe(480);
-    expect(invoice!.stripeSessionId).toBe('cs_hi_teams_split');
+    expect(invoice!.squarePaymentLinkId).toBe('sqpl_hi_teams_split');
   });
 
   it('a SIMPLE-tier organizer still gets 10% on the card portion (control -- no overcorrection)', async () => {
     const { orgUser, hold } = await seed('simple-split', 'SIMPLE');
 
-    mockSessionsCreate.mockResolvedValueOnce({
-      id: 'cs_hi_simple_split',
-      payment_intent: 'pi_hi_simple_split',
+    mockCreateHoldInvoiceSquareCheckout.mockResolvedValueOnce({
+      ok: true,
+      paymentLinkId: 'sqpl_hi_simple_split',
+      orderId: 'sqorder_hi_simple_split',
+      url: 'https://squareup.com/pay/hi_simple_split',
+      longUrl: null,
     });
 
     const req: any = {
@@ -210,11 +218,8 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     expect(res.status).not.toHaveBeenCalledWith(500);
 
     // 10% of the $60 card portion = 600 cents.
-    expect(mockSessionsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        payment_intent_data: expect.objectContaining({ application_fee_amount: 600 }),
-      }),
-      expect.objectContaining({ idempotencyKey: expect.any(String) })
+    expect(mockCreateHoldInvoiceSquareCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 6000, appFeeCents: 600 })
     );
 
     const invoice = await prisma.holdInvoice.findFirst({ where: { reservationId: hold.id } });
@@ -223,7 +228,7 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     expect(invoice!.platformFeeAmount).toBe(600);
   });
 
-  it('a fully-cash invoice never touches Stripe and is recorded PAID immediately with a real Purchase row', async () => {
+  it('a fully-cash invoice never touches Square and is recorded PAID immediately with a real Purchase row', async () => {
     const { orgUser, organizer, item, hold, shopper } = await seed('all-cash', 'TEAMS');
 
     const req: any = {
@@ -236,8 +241,8 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
 
     expect(res.status).not.toHaveBeenCalledWith(400);
     expect(res.status).not.toHaveBeenCalledWith(500);
-    // The whole point: no Stripe Checkout Session for a 100%-cash invoice.
-    expect(mockSessionsCreate).not.toHaveBeenCalled();
+    // The whole point: no Square payment link for a 100%-cash invoice.
+    expect(mockCreateHoldInvoiceSquareCheckout).not.toHaveBeenCalled();
 
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'PAID', cashAmountCents: 10000, cardAmountCents: 0 })
@@ -250,9 +255,10 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     expect(invoice!.cardAmountCents).toBeNull();
     expect(invoice!.stripeSessionId).toBeNull();
     expect(invoice!.stripePaymentIntentId).toBeNull();
+    expect(invoice!.squarePaymentLinkId).toBeNull();
     expect(invoice!.platformFeeAmount).toBe(0);
 
-    // Item marked SOLD and reservation COMPLETED -- same terminal state a real Stripe
+    // Item marked SOLD and reservation COMPLETED -- same terminal state a real Square
     // payment would produce via markHoldInvoicePaid.
     const itemAfter = await prisma.item.findUnique({ where: { id: item.id } });
     expect(itemAfter!.status).toBe('SOLD');

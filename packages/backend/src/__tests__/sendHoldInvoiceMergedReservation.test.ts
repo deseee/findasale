@@ -19,24 +19,31 @@
  *     first invoice is still open is rejected 409, not silently allowed (the exact race this
  *     fix closes)
  *
+ * Stripe removal (2026-09-12): sendHoldInvoice's card leg no longer creates a Stripe Checkout
+ * Session (see sendHoldInvoiceCashCardSplit.test.ts's own header for the full detail) -- a
+ * Square-onboarded organizer's card leg now goes through createHoldInvoiceSquareCheckout, a
+ * Square Payment Link. This suite is not about fee math (that's the cash/card split suite's
+ * job) so createHoldInvoiceSquareCheckout is mocked to a bare success -- what this suite
+ * actually verifies (the commit + invoiceId stamp on the merged item, and the second-attempt
+ * 409/400) is unaffected by which processor issued the link.
+ *
  * MOCKING NOTES: same convention as posCombinedInvoiceFee.test.ts (this controller's sibling
- * test file, covering createCombinedInvoice) -- Stripe Checkout + PaymentIntent update mocked;
+ * test file, covering createCombinedInvoice) -- Square payment-link creation mocked;
  * commitItemSale/itemSaleGuard and resolveOrganizerOrTeamMember are left real (pure DB logic).
  */
 
 import { prisma } from '../lib/prisma';
 
 // -- Mocks (hoisted by ts-jest above these declarations -- `var`, not `const`, deliberately) --
-var mockSessionsCreate = jest.fn();
-var mockPaymentIntentsUpdate = jest.fn();
+var mockCreateHoldInvoiceSquareCheckout = jest.fn();
 
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    checkout: { sessions: { create: mockSessionsCreate } },
-    paymentIntents: { update: mockPaymentIntentsUpdate },
-  })),
-  default: jest.fn(),
-}));
+jest.mock('../services/holdInvoiceSquareCheckoutHelper', () => {
+  const actual = jest.requireActual('../services/holdInvoiceSquareCheckoutHelper');
+  return {
+    ...actual,
+    createHoldInvoiceSquareCheckout: (...args: any[]) => mockCreateHoldInvoiceSquareCheckout(...args),
+  };
+});
 
 jest.mock('../lib/socket', () => ({
   getIO: jest.fn(() => ({ to: jest.fn().mockReturnValue({ emit: jest.fn() }) })),
@@ -67,19 +74,16 @@ describe('sendHoldInvoice -- merged item commit + invoiceId stamp (ADR-113)', ()
   beforeEach(() => {
     jest.clearAllMocks();
     // Each test (and each sendHoldInvoice call within a test) must get its OWN unique
-    // mocked Stripe Checkout session id via mockResolvedValueOnce -- HoldInvoice.stripeSessionId
-    // is @unique (schema.prisma), and the real Stripe API always returns a fresh unique id per
+    // mocked Square payment-link id via mockResolvedValueOnce -- HoldInvoice.squarePaymentLinkId
+    // is @unique (schema.prisma), and the real Square API always returns a fresh unique id per
     // call, so a shared/default mockResolvedValue() here causes a false P2002 collision the
     // real system could never produce. See sendHoldInvoiceCashCardSplit.test.ts for the
-    // established per-test-unique pattern this now follows. (Root cause of the CI failure this
-    // fixes: this file's second test calls sendHoldInvoice twice, and with no per-test DB
-    // cleanup, the first call in the SECOND test reused the same hardcoded 'cs_adr113_fixture'
-    // id already persisted by the FIRST test -- a real unique-constraint collision, but only
-    // because the mock, not the app, was reusing an id.)
-    mockPaymentIntentsUpdate.mockResolvedValue({});
+    // established per-test-unique pattern this now follows.
+    mockCreateHoldInvoiceSquareCheckout.mockReset();
   });
 
-  /** Build an isolated organizer + PUBLISHED sale + 2 AVAILABLE items + shopper. */
+  /** Build an isolated, Square-onboarded organizer + PUBLISHED sale + 2 AVAILABLE items +
+   *  shopper. */
   const seed = async (key: string) => {
     const orgUser = await prisma.user.create({
       data: {
@@ -97,7 +101,9 @@ describe('sendHoldInvoice -- merged item commit + invoiceId stamp (ADR-113)', ()
         businessName: `ADR113 Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: 'TEAMS',
-        stripeConnectId: `acct_adr113${key}`,
+        squareOnboarded: true,
+        squareMerchantId: `sq-merchant-adr113-${key}`,
+        squareLocationId: `sq-location-adr113-${key}`,
         cashFeeBalance: 0,
       },
     });
@@ -169,10 +175,6 @@ describe('sendHoldInvoice -- merged item commit + invoiceId stamp (ADR-113)', ()
     return { orgUser, organizer, sale, shopper, anchorItem, mergedItem, anchorHold, mergedHold };
   };
 
-  beforeAll(() => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_adr113';
-  });
-
   afterAll(async () => {
     await prisma.$disconnect();
   });
@@ -180,9 +182,12 @@ describe('sendHoldInvoice -- merged item commit + invoiceId stamp (ADR-113)', ()
   it('commits BOTH items to INVOICE_ISSUED and stamps invoiceId on BOTH reservations', async () => {
     const { orgUser, anchorHold, mergedItem, mergedHold } = await seed('commit');
 
-    mockSessionsCreate.mockResolvedValueOnce({
-      id: 'cs_adr113_commit',
-      payment_intent: 'pi_adr113_commit',
+    mockCreateHoldInvoiceSquareCheckout.mockResolvedValueOnce({
+      ok: true,
+      paymentLinkId: 'sqpl_adr113_commit',
+      orderId: 'sqorder_adr113_commit',
+      url: 'https://squareup.com/pay/adr113_commit',
+      longUrl: null,
     });
 
     const req: any = {
@@ -216,18 +221,24 @@ describe('sendHoldInvoice -- merged item commit + invoiceId stamp (ADR-113)', ()
   it('rejects a second sendHoldInvoice attempt against the already-invoiced merged item (409)', async () => {
     const { orgUser, anchorHold, mergedItem, mergedHold } = await seed('race');
 
-    // Two distinct session ids queued -- the first call is expected to succeed and hit
-    // Stripe; the second is expected to be rejected by the invoiced-item guard BEFORE ever
-    // reaching Stripe, but a second unique id is queued defensively in case that guard
-    // ordering ever changes, so this test can never re-collide on the unique stripeSessionId
-    // constraint the way the shared-mock version of this file did.
-    mockSessionsCreate.mockResolvedValueOnce({
-      id: 'cs_adr113_race_1',
-      payment_intent: 'pi_adr113_race_1',
+    // Two distinct payment-link ids queued -- the first call is expected to succeed and hit
+    // Square; the second is expected to be rejected by the invoiced-item guard BEFORE ever
+    // reaching Square, but a second unique id is queued defensively in case that guard
+    // ordering ever changes, so this test can never re-collide on the unique
+    // squarePaymentLinkId constraint the way the shared-mock version of this file did.
+    mockCreateHoldInvoiceSquareCheckout.mockResolvedValueOnce({
+      ok: true,
+      paymentLinkId: 'sqpl_adr113_race_1',
+      orderId: 'sqorder_adr113_race_1',
+      url: 'https://squareup.com/pay/adr113_race_1',
+      longUrl: null,
     });
-    mockSessionsCreate.mockResolvedValueOnce({
-      id: 'cs_adr113_race_2',
-      payment_intent: 'pi_adr113_race_2',
+    mockCreateHoldInvoiceSquareCheckout.mockResolvedValueOnce({
+      ok: true,
+      paymentLinkId: 'sqpl_adr113_race_2',
+      orderId: 'sqorder_adr113_race_2',
+      url: 'https://squareup.com/pay/adr113_race_2',
+      longUrl: null,
     });
 
     const firstReq: any = {

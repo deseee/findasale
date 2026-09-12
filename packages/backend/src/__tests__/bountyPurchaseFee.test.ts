@@ -18,8 +18,8 @@
  * services/nativeShippingSuggestionService.ts) because it wasn't a FeeStructure-wildcard
  * precedence bug at all -- it was a completely separate, un-imported duplicate definition that
  * those fixes never touched. Every bounty-fulfillment purchase by a PRO or TEAMS organizer was
- * silently charged 10% instead of their contractual 8%, on both the Stripe
- * `application_fee_amount` and the `Purchase.commissionRate` snapshot.
+ * silently charged 10% instead of their contractual 8%, on both the charge's application fee
+ * and the `Purchase.commissionRate` snapshot.
  *
  * Fixed by importing the shared `getPlatformFeeRate` from utils/feeCalculator.ts and deleting
  * the local shadow entirely.
@@ -32,37 +32,52 @@
  * tier rate), so the wildcard row's mere presence is a no-op here; it is seeded anyway so this
  * suite documents and guards the same production condition, not just the code shape in isolation.
  *
- * MOCKING NOTES: bountyController.ts pulls in Stripe, notifications, XP/spend services and the
- * direct-charges routing decision at import/call time -- none of them are on the
- * commission-calculation path this suite verifies, so all are mocked. XP is mocked outright
- * (rather than left real, as posSplitPaymentFee.test.ts does for its fire-and-forget XP calls)
- * because completeBountyPurchase's XP spend GATES the purchase (insufficient spendable XP is a
- * 402), so leaving it real would require seeding a real XP ledger unrelated to what this suite
- * is testing.
+ * Stripe removal (2026-09-12): this file no longer seeds a Stripe-only organizer or mocks the
+ * Stripe SDK -- completeBountyPurchase's Stripe branch was removed outright (a Stripe-only
+ * organizer now gets a 409 SELLER_PAYMENTS_UNAVAILABLE, see that function's own comment), and
+ * every organizer this suite seeds is Square-onboarded instead, exercising the
+ * `organizerHasSquare` branch (Square migration Wave S2 #1) that this fee-rate fix actually
+ * shares with every other processor. resolveOrganizerSquareAccessToken and createSquareCharge
+ * (services/squarePaymentService.ts) are mocked directly via jest.requireActual + override --
+ * everything else in that module (SquareOnboardingIncompleteError, buildSquareIdempotencyKey)
+ * is left real since neither makes an external call. applyCashDebtToAppFee/
+ * settleCashDebtCollection (services/cashFeeService.ts) are left real too -- pure DB reads/
+ * writes against this fixture's cashFeeBalance: 0, so they're a no-op debt-wise, exactly like
+ * resolvePosDiscount is left real in the sibling POS pricing suite.
+ *
+ * MOCKING NOTES: bountyController.ts pulls in Square, notifications, XP/spend services and the
+ * collusion checkout-guard at import/call time -- none of them are on the commission-
+ * calculation path this suite verifies, so all are mocked. XP is mocked outright (rather than
+ * left real, as posSplitPaymentFee.test.ts does for its fire-and-forget XP calls) because
+ * completeBountyPurchase's XP spend GATES the purchase (insufficient spendable XP is a 402), so
+ * leaving it real would require seeding a real XP ledger unrelated to what this suite is
+ * testing.
  */
 
 import { prisma } from '../lib/prisma';
 import { getPlatformFeeRate } from '../utils/feeCalculator';
 
 // ── Mocks (hoisted by ts-jest above these declarations — `var`, not `const`, deliberately) ──
-var mockPaymentIntentCreate = jest.fn();
+var mockResolveOrganizerSquareAccessToken = jest.fn();
+var mockCreateSquareCharge = jest.fn();
 
-jest.mock('../utils/stripe', () => ({
-  getStripe: jest.fn(() => ({
-    paymentIntents: {
-      create: mockPaymentIntentCreate,
-    },
-  })),
-  default: jest.fn(),
-}));
+jest.mock('../services/squarePaymentService', () => {
+  const actual = jest.requireActual('../services/squarePaymentService');
+  return {
+    ...actual,
+    resolveOrganizerSquareAccessToken: (...args: any[]) => mockResolveOrganizerSquareAccessToken(...args),
+    createSquareCharge: (...args: any[]) => mockCreateSquareCharge(...args),
+  };
+});
 
 jest.mock('../services/notificationService', () => ({
   createNotification: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../services/stripeConnectService', () => ({
-  shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
-  getAccountStatus: jest.fn().mockResolvedValue({ chargesEnabled: true }),
+jest.mock('../services/checkoutGuard', () => ({
+  assertCheckoutAllowed: jest.fn().mockResolvedValue(undefined),
+  recordSuspectedSignal: jest.fn().mockResolvedValue(undefined),
+  CheckoutGuardError: class CheckoutGuardError extends Error {},
 }));
 
 jest.mock('../services/xpService', () => ({
@@ -84,8 +99,8 @@ const makeMockRes = () => {
 };
 
 describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 10%', () => {
-  /** Build an isolated {tier} organizer + shopper + PUBLISHED sale + item + bounty +
-   *  APPROVED submission, ready for completeBountyPurchase. */
+  /** Build an isolated, Square-onboarded {tier} organizer + shopper + PUBLISHED sale + item +
+   *  bounty + APPROVED submission, ready for completeBountyPurchase. */
   const seed = async (key: string, tier: 'SIMPLE' | 'PRO' | 'TEAMS', price: number) => {
     const orgUser = await prisma.user.create({
       data: {
@@ -103,13 +118,10 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
         businessName: `Bounty Fee Estate Sales ${key}`,
         address: '219 E Michigan Ave, Paw Paw, MI 49079',
         subscriptionTier: tier,
-        stripeConnectId: `acct_bountyfee${key}`,
-        // Knock-on fix (2026-09-09, findasale-dev BUG MODE): completeBountyPurchase's Stripe
-        // branch now calls the shared assertSaleCanAcceptPayment gate (paymentEligibilityService.ts,
-        // 2026-08-27 carding incident), which blocks with 409 SELLER_PAYMENTS_UNAVAILABLE unless
-        // stripeOnboarded === true, not just a live stripeConnectId. Without this, every test in
-        // this suite would be blocked before ever reaching mockPaymentIntentCreate.
-        stripeOnboarded: true,
+        squareOnboarded: true,
+        squareMerchantId: `sq-merchant-bountyfee-${key}`,
+        squareLocationId: `sq-location-bountyfee-${key}`,
+        cashFeeBalance: 0,
       },
     });
     const sale = await prisma.sale.create({
@@ -166,12 +178,17 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
   };
 
   beforeAll(async () => {
-    process.env.STRIPE_SECRET_KEY = 'sk_test_fake_bounty_fee';
     // The exact production data shape (10/10 rows, confirmed by live query) that caused the
     // sibling FeeStructure-precedence bug fixed 2026-08-22 -- seeded here to prove this path
     // (which never reads FeeStructure) is unaffected by its presence either way.
     await prisma.feeStructure.deleteMany({ where: { listingType: '*' } }).catch(() => {});
     await prisma.feeStructure.create({ data: { listingType: '*', feeRate: 0.10 } });
+  });
+
+  beforeEach(() => {
+    mockResolveOrganizerSquareAccessToken.mockReset();
+    mockResolveOrganizerSquareAccessToken.mockResolvedValue('fake-square-token-bountyfee');
+    mockCreateSquareCharge.mockReset();
   });
 
   afterAll(async () => {
@@ -180,39 +197,38 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
   });
 
   it('resolves PRO to 0.08 (not the old hardcoded 0.10) even with a wildcard FeeStructure row present', async () => {
-    const { shopper, submission, organizer } = await seed('pro', 'PRO', 100);
+    const { shopper, submission } = await seed('pro', 'PRO', 100);
 
-    mockPaymentIntentCreate.mockResolvedValueOnce({
-      id: 'pi_bounty_pro',
-      client_secret: 'secret_bounty_pro',
+    mockCreateSquareCharge.mockResolvedValueOnce({
+      ok: true,
+      paymentId: 'sqp_bounty_pro',
+      status: 'COMPLETED',
+      cardFingerprint: null,
+      riskLevel: null,
     });
 
-    const req: any = { user: { id: shopper.id }, params: { id: submission.id } };
+    const req: any = {
+      user: { id: shopper.id },
+      params: { id: submission.id },
+      body: { sourceId: 'cnon:test-bounty-pro' },
+    };
     const res = makeMockRes();
     await completeBountyPurchase(req, res);
 
     expect(res.status).not.toHaveBeenCalledWith(500);
     expect(res.status).not.toHaveBeenCalledWith(402);
+    expect(res.status).not.toHaveBeenCalledWith(409);
 
     // $10.00 (10%) if the old hardcoded shadow function were still in place -- must be $8.00 (8%).
-    // Shape corrected 2026-08-24: this suite's own jest.mock('../services/stripeConnectService')
-    // above mocks shouldUseDirectCharge to always resolve false, which forces bountyController.ts's
-    // DESTINATION-charge branch (on_behalf_of + transfer_data.destination, single call argument,
-    // no `stripeAccount` request option) -- not the direct-charge branch this assertion used to
-    // check for. The routing logic itself is correct and untouched; only this stale assertion
-    // shape was wrong. See bountyController.ts's "Direct-charges migration (2026-08-08)" comment.
-    expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        amount: 10000,
-        application_fee_amount: 800,
-        on_behalf_of: organizer.stripeConnectId,
-        transfer_data: { destination: organizer.stripeConnectId },
-      }),
-      expect.objectContaining({ idempotencyKey: expect.any(String) })
+    expect(mockCreateSquareCharge).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 800, sourceId: 'cnon:test-bounty-pro' })
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ squarePaymentId: 'sqp_bounty_pro', processor: 'SQUARE' })
     );
 
     const purchase = await prisma.purchase.findFirst({
-      where: { stripePaymentIntentId: 'pi_bounty_pro' },
+      where: { squarePaymentId: 'sqp_bounty_pro' },
     });
     expect(purchase).not.toBeNull();
     expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
@@ -221,32 +237,34 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
   });
 
   it('resolves TEAMS to 0.08 (not the old hardcoded 0.10) even with a wildcard FeeStructure row present', async () => {
-    const { shopper, submission, organizer } = await seed('teams', 'TEAMS', 100);
+    const { shopper, submission } = await seed('teams', 'TEAMS', 100);
 
-    mockPaymentIntentCreate.mockResolvedValueOnce({
-      id: 'pi_bounty_teams',
-      client_secret: 'secret_bounty_teams',
+    mockCreateSquareCharge.mockResolvedValueOnce({
+      ok: true,
+      paymentId: 'sqp_bounty_teams',
+      status: 'COMPLETED',
+      cardFingerprint: null,
+      riskLevel: null,
     });
 
-    const req: any = { user: { id: shopper.id }, params: { id: submission.id } };
+    const req: any = {
+      user: { id: shopper.id },
+      params: { id: submission.id },
+      body: { sourceId: 'cnon:test-bounty-teams' },
+    };
     const res = makeMockRes();
     await completeBountyPurchase(req, res);
 
     expect(res.status).not.toHaveBeenCalledWith(500);
     expect(res.status).not.toHaveBeenCalledWith(402);
+    expect(res.status).not.toHaveBeenCalledWith(409);
 
-    expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        amount: 10000,
-        application_fee_amount: 800,
-        on_behalf_of: organizer.stripeConnectId,
-        transfer_data: { destination: organizer.stripeConnectId },
-      }),
-      expect.objectContaining({ idempotencyKey: expect.any(String) })
+    expect(mockCreateSquareCharge).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 800, sourceId: 'cnon:test-bounty-teams' })
     );
 
     const purchase = await prisma.purchase.findFirst({
-      where: { stripePaymentIntentId: 'pi_bounty_teams' },
+      where: { squarePaymentId: 'sqp_bounty_teams' },
     });
     expect(purchase).not.toBeNull();
     expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
@@ -254,31 +272,32 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
   });
 
   it('resolves SIMPLE to 0.10 whether or not the wildcard row is present (control)', async () => {
-    const { shopper, submission, organizer } = await seed('simple', 'SIMPLE', 100);
+    const { shopper, submission } = await seed('simple', 'SIMPLE', 100);
 
-    mockPaymentIntentCreate.mockResolvedValueOnce({
-      id: 'pi_bounty_simple',
-      client_secret: 'secret_bounty_simple',
+    mockCreateSquareCharge.mockResolvedValueOnce({
+      ok: true,
+      paymentId: 'sqp_bounty_simple',
+      status: 'COMPLETED',
+      cardFingerprint: null,
+      riskLevel: null,
     });
 
-    const req: any = { user: { id: shopper.id }, params: { id: submission.id } };
+    const req: any = {
+      user: { id: shopper.id },
+      params: { id: submission.id },
+      body: { sourceId: 'cnon:test-bounty-simple' },
+    };
     const res = makeMockRes();
     await completeBountyPurchase(req, res);
 
     expect(res.status).not.toHaveBeenCalledWith(500);
 
-    expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        amount: 10000,
-        application_fee_amount: 1000,
-        on_behalf_of: organizer.stripeConnectId,
-        transfer_data: { destination: organizer.stripeConnectId },
-      }),
-      expect.objectContaining({ idempotencyKey: expect.any(String) })
+    expect(mockCreateSquareCharge).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 1000, sourceId: 'cnon:test-bounty-simple' })
     );
 
     const purchase = await prisma.purchase.findFirst({
-      where: { stripePaymentIntentId: 'pi_bounty_simple' },
+      where: { squarePaymentId: 'sqp_bounty_simple' },
     });
     expect(purchase!.commissionRate).toBeCloseTo(getPlatformFeeRate('SIMPLE'), 4); // 0.10
   });
