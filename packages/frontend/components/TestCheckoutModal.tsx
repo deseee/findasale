@@ -155,6 +155,10 @@ const TestCheckoutModal = ({ saleId, onClose, onDone }: TestCheckoutModalProps) 
     fetchIntent();
   }, [saleId]);
 
+  // Dark-mode-aware Stripe Elements appearance (S-dark-mode-audit) -- see CheckoutModal.tsx
+  // for the full rationale.
+  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
   return (
     <AccessibleModal
       isOpen={true}
@@ -189,7 +193,7 @@ const TestCheckoutModal = ({ saleId, onClose, onDone }: TestCheckoutModalProps) 
         {clientSecret && (
           <Elements
             stripe={getStripePromise()}
-            options={{ clientSecret, appearance: { theme: 'stripe' } }}
+            options={{ clientSecret, appearance: { theme: isDarkMode ? 'night' : 'stripe' } }}
           >
             <TestPaymentForm saleId={saleId} onClose={onClose} onDone={onDone} />
           </Elements>

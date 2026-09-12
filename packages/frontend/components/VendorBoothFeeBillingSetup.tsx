@@ -39,8 +39,10 @@ export default function VendorBoothFeeBillingSetup({
   const [state, setState] = useState<SetupState>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
+  // Reads the actual applied theme rather than OS preference (S-dark-mode-audit; see
+  // PosManualCard.tsx / CheckoutModal.tsx for the full rationale).
   const isDark =
-    typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   const cardElementOptions: StripeCardElementOptions = {
     style: {

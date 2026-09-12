@@ -705,13 +705,20 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   };
 
   const isOpen = true; // This modal is shown conditionally by parent
+  // Dark-mode-aware Stripe Elements appearance (S-dark-mode-audit): reads the actual
+  // applied theme (the 'dark' class Tailwind's darkMode:'class' toggles on <html>), not
+  // window.matchMedia('(prefers-color-scheme: dark)') -- that only reflects OS preference
+  // and misses a user who explicitly picked dark mode in-app while their OS is light
+  // (see hooks/useTheme.ts). Without this, Stripe's PaymentElement always renders its
+  // default light UI regardless of the app's theme.
+  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   return (
     <AccessibleModal
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledBy="checkout-modal-title"
-      contentClassName="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6"
+      contentClassName="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto"
     >
       <div className="flex justify-between items-center mb-5">
         <h2 id="checkout-modal-title" className="text-xl font-bold text-warm-900 dark:text-gray-100">Complete Purchase</h2>
@@ -844,7 +851,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                       onChange={(e) => { setShippingAddressLine1Input(e.target.value); setShippingAddressError(null); }}
                       placeholder="123 Main St"
                       maxLength={200}
-                      className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       aria-label="Street address"
                       autoComplete="address-line1"
                     />
@@ -859,7 +866,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                       onChange={(e) => setShippingAddressLine2Input(e.target.value)}
                       placeholder="Apt 4B"
                       maxLength={200}
-                      className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       aria-label="Apartment, suite, or unit"
                       autoComplete="address-line2"
                     />
@@ -875,7 +882,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                         onChange={(e) => { setShippingCityInput(e.target.value); setShippingAddressError(null); }}
                         placeholder="Grand Rapids"
                         maxLength={100}
-                        className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                         aria-label="City"
                         autoComplete="address-level2"
                       />
@@ -890,7 +897,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                         onChange={(e) => { setShippingStateInput(e.target.value.toUpperCase()); setShippingAddressError(null); }}
                         placeholder="MI"
                         maxLength={2}
-                        className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
+                        className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
                         aria-label="State"
                         autoComplete="address-level1"
                       />
@@ -910,7 +917,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                       onChange={(e) => { setShippingZipInput(e.target.value); setShippingZipError(null); }}
                       placeholder="49503"
                       maxLength={10}
-                      className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                       aria-label="Shipping ZIP code"
                       autoComplete="postal-code"
                     />
@@ -939,7 +946,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                   value={guestEmail}
                   onChange={(e) => { setGuestEmail(e.target.value); setGuestFieldError(null); }}
                   placeholder="you@example.com"
-                  className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   aria-label="Email address"
                   autoComplete="email"
                 />
@@ -953,7 +960,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                   value={guestName}
                   onChange={(e) => { setGuestName(e.target.value); setGuestFieldError(null); }}
                   placeholder="Your name"
-                  className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                   aria-label="Your name"
                   autoComplete="name"
                 />
@@ -976,7 +983,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                 placeholder="e.g. A3F2C891"
                 maxLength={8}
-                className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
+                className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-white dark:bg-gray-700 font-mono tracking-widest text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
                 aria-label="Coupon code (optional)" />
               <p className="text-xs text-warm-400 mt-1">
                 Coupons are issued after each completed purchase.
@@ -1135,7 +1142,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           )}
 
           {clientSecret && (
-            <Elements stripe={getStripePromise()} options={{ clientSecret }}>
+            <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: isDarkMode ? 'night' : 'stripe' } }}>
               <PaymentForm
                 itemTitle={resolvedTitle}
                 itemPrice={itemPrice}

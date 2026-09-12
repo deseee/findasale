@@ -268,6 +268,11 @@ export default function BoostPurchaseModal({
     return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
+  // Dark-mode-aware Stripe Elements appearance (S-dark-mode-audit) -- see CheckoutModal.tsx
+  // for the full rationale on why this reads document.documentElement's 'dark' class rather
+  // than window.matchMedia('(prefers-color-scheme: dark)').
+  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
   return (
     <AccessibleModal
       isOpen={true}
@@ -406,7 +411,7 @@ export default function BoostPurchaseModal({
             stripe={getStripePromise()}
             options={{
               clientSecret,
-              appearance: { theme: 'stripe' },
+              appearance: { theme: isDarkMode ? 'night' : 'stripe' },
             }}
           >
             <StripePayForm

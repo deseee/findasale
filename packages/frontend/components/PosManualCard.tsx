@@ -60,9 +60,12 @@ export default function PosManualCard({
   const [cnpFeeAmount, setCnpFeeAmount] = useState<number>(0);
   const [successTimestamp, setSuccessTimestamp] = useState<string>('');
 
-  // Stripe Elements styling (dark mode aware)
-  const isDark = typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches;
+  // Stripe Elements styling (dark mode aware). Reads the actual applied theme (the 'dark'
+  // class Tailwind's darkMode:'class' toggles on <html>) rather than
+  // window.matchMedia('(prefers-color-scheme: dark)'), which only reflects OS preference and
+  // misses a user who explicitly picked dark mode in-app while their OS is light (see
+  // hooks/useTheme.ts). (S-dark-mode-audit)
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   const cardElementOptions: StripeCardElementOptions = {
     style: {

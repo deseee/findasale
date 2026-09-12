@@ -76,10 +76,18 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
 
   const isDisabled = isSubmitting || isProcessing || !stripe || !elements;
 
+  // Dark-mode-aware Stripe Elements styling (S-dark-mode-audit): reads the actual applied
+  // theme (the 'dark' class Tailwind's darkMode:'class' toggles on <html>), not
+  // window.matchMedia('(prefers-color-scheme: dark)') -- that only reflects OS preference and
+  // misses a user who explicitly picked dark mode in-app while their OS is light (see
+  // hooks/useTheme.ts). Without this, the embedded CardElement iframe always rendered dark
+  // navy text (#424770) on an unstyled (effectively white) background, unreadable in dark mode.
+  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="p-4 border border-gray-200 rounded-lg">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+      <div className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Card Details
         </label>
         <CardElement
@@ -87,9 +95,9 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
             style: {
               base: {
                 fontSize: '16px',
-                color: '#424770',
+                color: isDarkMode ? '#f5f5f5' : '#424770',
                 '::placeholder': {
-                  color: '#aab7c4',
+                  color: isDarkMode ? '#9ca3af' : '#aab7c4',
                 },
               },
               invalid: {
