@@ -9,6 +9,12 @@ import {
   triggerGracePeriod,
   clearGracePeriod
 } from '../services/tierGraceService';
+import {
+  ORGANIZER_TRIAL_DAYS,
+  BILLING_INTERVAL_DAYS,
+  createPlatformBillingCard,
+  type BillableOrganizerTier,
+} from '../services/squareBillingService';
 
 const stripe = getStripe();
 
@@ -419,6 +425,24 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
+    // Square Plan B (2026-09-13): this organizer's subscription lifecycle is governed by
+    // squareBillingChargeJob.ts's own scheduler-owned columns, not a live Stripe subscription
+    // object -- never call Stripe for these, DB is the sole source of truth (there is no
+    // processor-pushed webhook to be stale against, unlike the Stripe branch below).
+    if (organizer.billingProcessor === 'square') {
+      return res.json({
+        tier: organizer.subscriptionTier,
+        status: organizer.subscriptionStatus,
+        currentPeriodEnd: organizer.billingCurrentPeriodEnd,
+        cancelAtPeriodEnd: organizer.subscriptionStatus === 'scheduled_for_cancellation',
+        priceId: null,
+        billingInterval: organizer.billingInterval,
+        billingProcessor: 'square',
+        hasSquareCardOnFile: !!organizer.squareCardId,
+        billingLastFailureReason: organizer.billingLastFailureReason,
+      });
+    }
+
     if (!organizer.stripeSubscriptionId) {
       return res.json({
         tier: organizer.subscriptionTier,
@@ -505,6 +529,174 @@ export const cancelSubscription = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Cancel subscription error:', error);
+    res.status(500).json({ message: 'Failed to cancel subscription' });
+  }
+};
+
+/**
+ * POST /api/billing/square/subscribe
+ * Body: { tier: 'PRO' | 'TEAMS', sourceId: string }
+ *
+ * Square Plan B (2026-09-13, see squareBillingService.ts header + claude_docs/feature-notes/
+ * square-changeover-remaining-work-scoping-2026-09-09.md Section 2): tokenizes a card
+ * (Square Web Payments SDK sourceId, produced client-side) into a Card-on-file in
+ * FindA.Sale's platform Square account, then either starts a free trial (this organizer's
+ * first-ever Square subscription -- no immediate charge, first charge deferred to
+ * billingCurrentPeriodEnd) or activates immediately (already had billingProcessor='square'
+ * before -- e.g. re-subscribing after a voluntary cancel or a dunning downgrade; no second
+ * free trial). Covers BOTH a brand-new PRO/TEAMS sign-up and the migration path for an
+ * organizer currently frozen on a dead Stripe subscription (calling this simply switches
+ * them onto Square going forward -- their old stripeSubscriptionId is left untouched/inert).
+ *
+ * AUTHZ/OWNERSHIP: organizer is resolved ONLY from req.user.id -- no organizerId is ever
+ * accepted from the request body, so there is no IDOR path to attach a card to someone
+ * else's organizer record. NO MASS ASSIGNMENT: tier is restricted to the fixed 'PRO'|'TEAMS'
+ * enum and the charge amount is ALWAYS looked up server-side from SQUARE_TIER_PRICE_CENTS --
+ * the client can select which tier to buy, never what it costs.
+ */
+export const createSquareBillingSubscription = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { tier, sourceId } = req.body as { tier?: unknown; sourceId?: unknown };
+    if (tier !== 'PRO' && tier !== 'TEAMS') {
+      return res.status(400).json({ message: "tier must be 'PRO' or 'TEAMS'" });
+    }
+    if (typeof sourceId !== 'string' || !sourceId) {
+      return res.status(400).json({ message: 'sourceId (Square card token) is required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, businessName: true, billingProcessor: true },
+    });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const validatedTier = tier as BillableOrganizerTier;
+
+    let squareCustomerId: string;
+    let squareCardId: string;
+    try {
+      const card = await createPlatformBillingCard({
+        referenceId: organizer.id,
+        sourceId,
+        note: `FindA.Sale ${validatedTier} subscription billing -- organizer ${organizer.id}`,
+      });
+      squareCustomerId = card.customerId;
+      squareCardId = card.cardId;
+    } catch (err) {
+      console.error('[Billing] createSquareBillingSubscription card tokenize error:', err);
+      return res.status(400).json({ message: 'Could not save that card. Please check the details and try again.' });
+    }
+
+    const isFirstEverSquareSubscription = !organizer.billingProcessor;
+    const now = new Date();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const trialEndsAt = isFirstEverSquareSubscription
+      ? new Date(now.getTime() + ORGANIZER_TRIAL_DAYS * msPerDay)
+      : null;
+    const billingCurrentPeriodEnd = trialEndsAt ?? new Date(now.getTime() + BILLING_INTERVAL_DAYS * msPerDay);
+
+    const updated = await prisma.organizer.update({
+      where: { id: organizer.id },
+      data: {
+        subscriptionTier: validatedTier,
+        subscriptionStatus: trialEndsAt ? 'trialing' : 'active',
+        billingProcessor: 'square',
+        billingInterval: 'monthly',
+        squareCustomerId,
+        squareCardId,
+        billingCurrentPeriodEnd,
+        trialEndsAt,
+        billingDunningFailCount: 0,
+        billingNextRetryAt: null,
+        billingGraceEndsAt: null,
+        billingLastFailureReason: null,
+        billingMigrationNoticeSentAt: null,
+        tokenVersion: { increment: 1 }, // real tier change -- invalidate any stale tier claim in a live JWT
+      },
+      select: { subscriptionTier: true, subscriptionStatus: true, billingCurrentPeriodEnd: true, billingInterval: true },
+    });
+
+    await prisma.userRoleSubscription.upsert({
+      where: { userId_role: { userId: req.user.id, role: 'ORGANIZER' } },
+      create: {
+        userId: req.user.id,
+        role: 'ORGANIZER',
+        subscriptionTier: validatedTier,
+        subscriptionStatus: updated.subscriptionStatus,
+        trialEndsAt,
+        tierLapsedAt: null,
+        tierResumedAt: new Date(),
+      },
+      update: {
+        subscriptionTier: validatedTier,
+        subscriptionStatus: updated.subscriptionStatus,
+        trialEndsAt,
+        tierLapsedAt: null,
+        tierResumedAt: new Date(),
+      },
+    });
+
+    res.json({
+      tier: updated.subscriptionTier,
+      status: updated.subscriptionStatus,
+      currentPeriodEnd: updated.billingCurrentPeriodEnd,
+      cancelAtPeriodEnd: false,
+      priceId: null,
+      billingInterval: updated.billingInterval,
+      billingProcessor: 'square',
+      trialEndsAt,
+    });
+  } catch (error) {
+    console.error('[Billing] createSquareBillingSubscription error:', error);
+    res.status(500).json({ message: 'Failed to set up Square billing' });
+  }
+};
+
+/**
+ * POST /api/billing/square/cancel
+ * Square Plan B equivalent of cancelSubscription -- sets 'scheduled_for_cancellation' (the
+ * SAME status string the Stripe path already uses) so squareBillingChargeJob.ts skips the
+ * next charge and downgrades to SIMPLE once the already-paid-for period ends, rather than
+ * cutting access off immediately. AUTHZ/OWNERSHIP: organizer resolved only from req.user.id.
+ */
+export const cancelSquareBillingSubscription = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+    if (organizer.billingProcessor !== 'square' || !organizer.billingCurrentPeriodEnd) {
+      return res.status(400).json({ message: 'No active Square subscription to cancel' });
+    }
+
+    await prisma.organizer.update({
+      where: { id: organizer.id },
+      data: { subscriptionStatus: 'scheduled_for_cancellation' },
+    });
+
+    res.json({
+      tier: organizer.subscriptionTier,
+      status: 'scheduled_for_cancellation',
+      currentPeriodEnd: organizer.billingCurrentPeriodEnd,
+      cancelAtPeriodEnd: true,
+      priceId: null,
+      billingInterval: organizer.billingInterval,
+      billingProcessor: 'square',
+    });
+  } catch (error) {
+    console.error('[Billing] cancelSquareBillingSubscription error:', error);
     res.status(500).json({ message: 'Failed to cancel subscription' });
   }
 };

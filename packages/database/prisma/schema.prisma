@@ -66,6 +66,17 @@ model User {
   huntPassCancelledAt          DateTime? // P0 Exploit Fix: timestamp when HP was cancelled, for XP redemption hold
   huntPassStripeCustomerId     String? // Stripe Customer for HP billing (shopper-side, separate from organizer)
   huntPassStripeSubscriptionId String? // Active HP Stripe Subscription ID; null = not subscribed
+  // Square Plan B recurring billing for Hunt Pass (2026-09-13) -- same Cards-API +
+  // FindA.Sale-owned-scheduler design as Organizer's billing* fields above, shopper-side.
+  // Also runs against FindA.Sale's OWN platform Square account, not any organizer's.
+  huntPassBillingProcessor     String? // 'stripe' | 'square' | null
+  huntPassSquareCustomerId     String? // Square Customer id (platform account) for Hunt Pass billing
+  huntPassSquareCardId         String? // Square Card-on-file id charged by jobs/squareBillingChargeJob.ts on renewal
+  huntPassCancelAtPeriodEnd    Boolean                @default(false) // Square Plan B cancel semantics: stop renewing at huntPassExpiry, don't cut access immediately
+  huntPassDunningFailCount     Int                    @default(0) // consecutive failed renewal charge attempts in the current dunning cycle
+  huntPassNextRetryAt          DateTime? // when squareBillingChargeJob.ts should next retry a failed charge
+  huntPassGraceEndsAt          DateTime? // hard deadline: an unresolved dunning cycle deactivates Hunt Pass for real once this passes
+  huntPassLastFailureReason    String? // human-readable last Square decline reason, shown in Hunt Pass UI
   // ADR-020 follow-up (2026-07-08, real tsc error TS2353 caught by Patrick running
   // native tsc -- confirmed via schema read, not guessed): a GENERIC platform Stripe
   // Customer id for one-off shopper purchases (booth-cart QR/in-app checkout SetupIntent
@@ -287,6 +298,7 @@ model User {
   @@index([createdAt]) // Sentry slow User SELECT: adminController user list queries ORDER BY createdAt DESC (1327ms)
   @@index([roles]) // Sentry slow User SELECT: role-filtered user lookups (roles array GIN index)
   @@index([role]) // Sentry NODEJS-49: leaderboard cron getShopperLeaderboard WHERE role='USER' seq scan 1220ms on 83k rows
+  @@index([huntPassBillingProcessor, huntPassExpiry]) // squareBillingChargeJob.ts's daily Hunt Pass due-for-charge scan
 }
 
 model Organizer {
@@ -399,10 +411,28 @@ model Organizer {
   brandAccentColor                String? // Hex for accent color (PRO tier)
   // Feature #65: Subscription Tiers
   subscriptionTier                SubscriptionTier               @default(SIMPLE)
-  subscriptionStatus              String? // active, trialing, past_due, canceled, null
+  subscriptionStatus              String? // active, trialing, past_due, canceled, scheduled_for_cancellation, null
   trialEndsAt                     DateTime?
   stripeCustomerId                String?
   stripeSubscriptionId            String?
+  // Square Plan B recurring billing (2026-09-13) -- Cards API + FindA.Sale-owned scheduler
+  // (architect-approved GO; native Square Subscriptions API requires shippable goods, doesn't
+  // fit a SaaS tier -- see claude_docs/feature-notes/square-changeover-remaining-work-scoping-
+  // 2026-09-09.md Section 2.2). IMPORTANT: billing runs against FindA.Sale's OWN platform
+  // Square account (SQUARE_ACCESS_TOKEN / SQUARE_PLATFORM_LOCATION_ID via
+  // utils/square.ts's getSquarePlatformClient()), NOT this organizer's own connected
+  // squareMerchantId/squareLocationId/squareAccessTokenEncrypted above -- deliberately
+  // separate identity, never conflate platform-billing calls with organizer-checkout calls.
+  billingProcessor                String? // 'stripe' | 'square' | null -- which system currently governs this organizer's subscription lifecycle
+  squareCustomerId                String? // Square Customer id in FindA.Sale's platform account (billing card-on-file)
+  squareCardId                    String? // Square Card-on-file id charged by jobs/squareBillingChargeJob.ts on renewal
+  billingInterval                 String? // 'monthly' -- only interval Square Plan B v1 supports (see squareBillingService.ts)
+  billingCurrentPeriodEnd         DateTime? // scheduler-owned: next renewal charge is due once this is <= now
+  billingDunningFailCount         Int                            @default(0) // consecutive failed renewal charge attempts in the current dunning cycle
+  billingNextRetryAt              DateTime? // when squareBillingChargeJob.ts should next retry a failed charge
+  billingGraceEndsAt              DateTime? // hard deadline: an unresolved dunning cycle (or an un-migrated frozen tier) downgrades to SIMPLE for real once this passes
+  billingLastFailureReason        String? // human-readable last Square decline reason, shown in organizer billing UI
+  billingMigrationNoticeSentAt    DateTime? // set once the frozen-tier Square migration notice email has gone out (idempotency for scripts/migrateFrozenOrganizersToSquareBilling.ts)
   // SECURITY FIX P0-1: Token version for invalidating tier JWTs on subscription upgrade
   tokenVersion                    Int                            @default(0) // Increment on tier upgrade to invalidate stale tier claims in JWT
   // Feature #40: Sale Hubs — hubs created by this organizer
@@ -596,6 +626,7 @@ model Organizer {
   @@index([dedupeKey])
   @@index([stripeCustomerId]) // Sentry slow Organizer SELECT: stripeController findFirst by customerId in 3 webhook handlers (1108–2063ms)
   @@index([subscriptionStatus, subscriptionTier]) // Sentry slow Organizer SELECT: adminController MRR query filters on both columns simultaneously
+  @@index([billingProcessor, billingCurrentPeriodEnd]) // squareBillingChargeJob.ts's daily due-for-charge scan
   @@index([graceEndAt, graceTierBefore]) // Sentry slow Organizer SELECT: tierGraceCronJob findMany WHERE graceEndAt <= now AND graceTierBefore IS NOT NULL
   @@index([lastScoredAt]) // Sentry slow Organizer SELECT: outreachEmailsCron syncLeadTierGroups filters on lastScoredAt >= 7d ago
   @@index([leadTier]) // Sentry slow Organizer COUNT: adminController scrape-pool-stats groupBy leadTier + internal route leadTier counts (1888ms)
@@ -4748,6 +4779,8 @@ model BoostPurchase {
   xpCost                Int? // populated if paymentMethod = XP
   stripeAmountCents     Int? // populated if paymentMethod = STRIPE (e.g. 50 = $0.50)
   stripePaymentIntentId String?       @unique
+  squareAmountCents     Int? // populated if paymentMethod = SQUARE (mirrors stripeAmountCents, cents)
+  squarePaymentId       String?       @unique // populated if paymentMethod = SQUARE (mirrors stripePaymentIntentId)
   durationDays          Int // how long the boost runs
   activatedAt           DateTime      @default(now())
   expiresAt             DateTime // activatedAt + durationDays
@@ -4776,6 +4809,7 @@ enum BoostType {
 enum PaymentMethod {
   XP
   STRIPE
+  SQUARE
 }
 
 enum BoostStatus {

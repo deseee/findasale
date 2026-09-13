@@ -6,6 +6,7 @@ import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
 import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
 import DowngradePreviewModal from '../../components/DowngradePreviewModal';
+import SquareBillingCardForm from '../../components/SquareBillingCardForm';
 
 interface Subscription {
   status: string | null;
@@ -13,6 +14,11 @@ interface Subscription {
   cancelAtPeriodEnd: boolean;
   priceId: string | null;
   billingInterval: 'monthly' | 'annual' | null;
+  // Square Plan B (2026-09-13) -- present once this organizer is billed via Square Cards
+  // API + jobs/squareBillingChargeJob.ts rather than a (dead) Stripe subscription.
+  billingProcessor?: 'square' | null;
+  hasSquareCardOnFile?: boolean;
+  billingLastFailureReason?: string | null;
 }
 
 export default function SubscriptionPage() {
@@ -27,6 +33,11 @@ export default function SubscriptionPage() {
   const [showDowngradePreview, setShowDowngradePreview] = useState(false);
   const [downgradePreview, setDowngradePreview] = useState<any>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  // Square Plan B (2026-09-13) -- self-serve card-on-file setup, replaces the dead Stripe
+  // Billing Portal for any organizer not (yet) on billingProcessor='square'.
+  const [showSquareSetup, setShowSquareSetup] = useState(false);
+  const [settingUpSquare, setSettingUpSquare] = useState(false);
+  const [squareSetupError, setSquareSetupError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSubscription();
@@ -54,7 +65,10 @@ export default function SubscriptionPage() {
   const handleCancel = async () => {
     setCanceling(true);
     try {
-      const updated = await api.post('/billing/cancel');
+      // Square Plan B (2026-09-13): a Square-billed organizer cancels through the
+      // scheduler-owned endpoint, not the (dead) Stripe one.
+      const endpoint = subscription?.billingProcessor === 'square' ? '/billing/square/cancel' : '/billing/cancel';
+      const updated = await api.post(endpoint);
       setSubscription(updated.data);
       setShowCancelConfirm(false);
       showToast('Subscription canceled. Your plan will remain active until the end of the current period.', 'success');
@@ -64,6 +78,22 @@ export default function SubscriptionPage() {
       showToast('Failed to cancel subscription', 'error');
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const handleSquareTokenized = async (sourceId: string) => {
+    if (tier !== 'PRO' && tier !== 'TEAMS') return;
+    setSettingUpSquare(true);
+    setSquareSetupError(null);
+    try {
+      await api.post('/billing/square/subscribe', { tier, sourceId });
+      showToast('Square billing set up!', 'success');
+      setShowSquareSetup(false);
+      fetchSubscription();
+    } catch (err: any) {
+      setSquareSetupError(err.response?.data?.message ?? 'Could not set up Square billing. Please try again.');
+    } finally {
+      setSettingUpSquare(false);
     }
   };
 
@@ -624,7 +654,20 @@ export default function SubscriptionPage() {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Plan Actions</h3>
 
                 <div className="space-y-4">
-                  {subscription.billingInterval ? (
+                  {subscription.billingProcessor === 'square' ? (
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                      <p className="text-green-800 dark:text-green-200 text-sm">
+                        Billed via Square{subscription.hasSquareCardOnFile ? ' — card on file' : ''}.
+                        {subscription.billingLastFailureReason && (
+                          <>
+                            {' '}Last attempt failed: {subscription.billingLastFailureReason}. We'll keep retrying automatically.
+                          </>
+                        )}
+                        {' '}To update your card or for other billing questions, contact{' '}
+                        <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
+                      </p>
+                    </div>
+                  ) : subscription.billingInterval ? (
                     <button
                       onClick={handleManagePlan}
                       disabled={managingPlan}
@@ -632,12 +675,41 @@ export default function SubscriptionPage() {
                     >
                       {managingPlan ? 'Opening Portal...' : 'Manage Plan'}
                     </button>
+                  ) : showSquareSetup ? (
+                    <div className="space-y-3">
+                      {squareSetupError && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                          {squareSetupError}
+                        </div>
+                      )}
+                      <SquareBillingCardForm
+                        submitLabel={`Start ${tier} billing via Square`}
+                        isProcessing={settingUpSquare}
+                        onTokenized={handleSquareTokenized}
+                        onError={(msg) => setSquareSetupError(msg)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSquareSetup(false)}
+                        disabled={settingUpSquare}
+                        className="w-full py-2 px-4 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   ) : (
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                      <p className="text-green-800 dark:text-green-200 text-sm">
-                        Your {tier} plan was set up directly. For billing questions or changes, contact{' '}
-                        <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                      <p className="text-amber-900 dark:text-amber-200 text-sm mb-3">
+                        Your {tier} plan needs a Square payment method to keep billing active. Add a card now to
+                        continue without interruption.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowSquareSetup(true)}
+                        className="w-full bg-sage-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-sage-700 transition"
+                      >
+                        Add payment method
+                      </button>
                     </div>
                   )}
 

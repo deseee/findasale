@@ -237,6 +237,7 @@ import './jobs/boostExpiryJob';   // Phase 2b: Expire stale ACTIVE BoostPurchase
 import './jobs/xpExpiryCron';      // D-XP-002: XP expiry system — daily at 02:00 UTC with warning flags
 import './jobs/anniversaryXpJob';  // 30-day account anniversary XP bonus — daily at 02:45 UTC (wires ANNIVERSARY_30DAY into User.createdAt tenure tracking)
 import './jobs/huntPassExpiryCron'; // Hunt Pass: deactivate expired passes daily at 03:00 UTC
+import './jobs/squareBillingChargeJob'; // Square Plan B: PRO/TEAMS + Hunt Pass recurring billing scheduler, daily at 01:00 UTC
 import './jobs/deliverabilityMonitorJob'; // Email deliverability monitoring — Sundays 19:00 UTC
 import './jobs/organizerOnboardingDripJob'; // Organizer onboarding drip (Email 5a/5b/5c) — daily 11:00 UTC
 import './jobs/gmailHealthCron';          // Gmail OAuth health, daily send summary, suspension detect

@@ -2,18 +2,17 @@ import React, { useState } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
+import SquareBillingCardForm from './SquareBillingCardForm';
 
-// Hunt Pass subscription stopgap (audit sweep, 2026-09-10): handleSubscribe below POSTs to
-// /streaks/subscribe-huntpass, which unconditionally creates a Stripe Customer + Checkout
-// Session (mode: subscription) against FindA.Sale's Stripe platform account
-// (acct_1T3kXhLIWHQCHu75) -- permanently closed. Every subscribe attempt is guaranteed to
-// 500. This modal is the single shared entry point reached from both StreakWidget.tsx's
-// "Upgrade" button and /shopper/hunt-pass.tsx's two "Upgrade to Hunt Pass" buttons, so
-// gating it here covers every entry point at once. Mirrors the
-// ENABLE_STRIPE_TERMINAL_CARD_READER / ENABLE_BOOTH_FEE_AUTOPAY pattern: state/logic kept
-// intact, UI gated off with an honest message, nothing deleted. Do not remove or flip to
-// true without Patrick's explicit approval.
-const ENABLE_HUNT_PASS_SUBSCRIPTION = false;
+// Square Plan B recurring billing (2026-09-13): Hunt Pass sign-up is back, on Square Cards
+// API + FindA.Sale's own scheduler (jobs/squareBillingChargeJob.ts) instead of the dead
+// Stripe Checkout flow (Stripe's platform account, acct_1T3kXhLIWHQCHu75, is permanently
+// closed). Card is tokenized in-modal via SquareBillingCardForm, then POSTed as { sourceId }
+// to /streaks/subscribe-huntpass, which tokenizes it into a platform-account card-on-file
+// and charges it immediately (no trial for Hunt Pass -- see routes/streaks.ts's own
+// comment for that assumption). Renewal is handled entirely server-side by the scheduler;
+// this modal never sees it again.
+const ENABLE_HUNT_PASS_SUBSCRIPTION = true;
 
 interface HuntPassModalProps {
   isOpen: boolean;
@@ -21,30 +20,33 @@ interface HuntPassModalProps {
   onSuccess: () => void;
 }
 
-const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
+const HuntPassModal = ({ isOpen, onClose, onSuccess }: HuntPassModalProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showCardForm, setShowCardForm] = useState(false);
   const { showToast } = useToast();
   const price = 4.99;
 
-  const handleSubscribe = async () => {
-    if (!ENABLE_HUNT_PASS_SUBSCRIPTION) return;
+  const handleTokenized = async (sourceId: string) => {
     setIsSubmitting(true);
     setErrorMessage(null);
     try {
-      const response = await api.post('/streaks/subscribe-huntpass');
-      if (response.data.url) {
-        window.location.href = response.data.url;
-      } else {
-        throw new Error('No checkout URL returned');
-      }
+      await api.post('/streaks/subscribe-huntpass', { sourceId });
+      showToast?.('Hunt Pass activated!', 'success');
+      onSuccess();
+      onClose();
     } catch (err: any) {
       setErrorMessage(
-        err.response?.data?.message ?? 'Could not start Hunt Pass checkout. Please try again.'
+        err.response?.data?.message ?? 'Could not activate Hunt Pass. Please try again.'
       );
-      showToast?.('Failed to start checkout. Please try again.', 'error');
+      showToast?.('Failed to activate Hunt Pass. Please try again.', 'error');
+    } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCardError = (message: string) => {
+    setErrorMessage(message);
   };
 
   if (!isOpen) return null;
@@ -101,8 +103,8 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
             </div>
 
             <p className="text-xs text-warm-500 mb-5">
-              You&apos;ll be taken to a secure Stripe checkout page. This is a recurring monthly
-              subscription. Cancel anytime from your profile. By subscribing you agree to our{' '}
+              Your card is charged today and renews automatically every 30 days. Cancel
+              anytime from your profile. By subscribing you agree to our{' '}
               <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
                 Terms of Service
               </a>{' '}
@@ -118,24 +120,43 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
               </div>
             )}
 
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSubscribe}
-                disabled={isSubmitting}
-                className="flex-1 py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Loading...' : 'Subscribe, $4.99/mo'}
-              </button>
-            </div>
+            {showCardForm ? (
+              <>
+                <SquareBillingCardForm
+                  submitLabel={`Subscribe, $${price.toFixed(2)}/mo`}
+                  isProcessing={isSubmitting}
+                  onTokenized={handleTokenized}
+                  onError={handleCardError}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCardForm(false)}
+                  disabled={isSubmitting}
+                  className="w-full mt-3 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
+                >
+                  Back
+                </button>
+              </>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 px-4 border border-warm-300 rounded text-warm-700 hover:bg-warm-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCardForm(true)}
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue to payment
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <>

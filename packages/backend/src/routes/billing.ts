@@ -11,6 +11,8 @@ import {
   confirmDowngrade,
   optInOffPlatformSales,
   getOffPlatformUsage,
+  createSquareBillingSubscription,
+  cancelSquareBillingSubscription,
 } from '../controllers/billingController';
 
 const router = Router();
@@ -22,6 +24,12 @@ router.post('/cancel', authenticate, cancelSubscription);
 router.post('/portal', authenticate, paymentLimiter, createBillingPortal);
 router.get('/downgrade-preview', authenticate, getDowngradePreview);
 router.post('/downgrade-confirm', authenticate, confirmDowngrade);
+
+// Square Plan B (2026-09-13) -- PRO/TEAMS recurring billing via Cards API + FindA.Sale-owned
+// scheduler (jobs/squareBillingChargeJob.ts). Separate endpoints, not a replacement of the
+// Stripe ones above (which stay in place for any still-live legacy Stripe subscriber).
+router.post('/square/subscribe', authenticate, paymentLimiter, createSquareBillingSubscription);
+router.post('/square/cancel', authenticate, cancelSquareBillingSubscription);
 
 // Bring-Your-Own-Rails (BYOR, 2026-09-06) -- opt-in/consent + usage visibility. Zero Stripe
 // calls in either handler (see billingController.ts's BYOR section comment).

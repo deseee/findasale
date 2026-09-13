@@ -20,6 +20,13 @@ cron.schedule('0 3 * * *', cronGuard({ jobName: 'huntPassExpiryCron' }, async ()
     where: {
       huntPassActive: true,
       huntPassExpiry: { lt: new Date() },
+      // Square Plan B (2026-09-13): a huntPassBillingProcessor='square' row is fully owned
+      // by jobs/squareBillingChargeJob.ts's daily 01:00 UTC run, which deliberately keeps
+      // huntPassActive=true past huntPassExpiry while a failed renewal is in its dunning
+      // grace window (explicit "don't revoke on the first failure" requirement) -- this
+      // legacy sweep must not race that job and cut access early. It stays authoritative
+      // only for pre-Square one-time-purchase passes (huntPassBillingProcessor null).
+      huntPassBillingProcessor: { not: 'square' },
     },
     data: {
       huntPassActive: false,
