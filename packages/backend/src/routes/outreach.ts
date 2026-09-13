@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { Webhook } from 'svix';
 import { prisma } from '../lib/prisma';
 import { suppressionService } from '../services/suppressionService';
+import { classifyDiagnosticKeywords } from '../services/bounceSuppressService';
 
 const router = express.Router();
 
@@ -247,12 +248,31 @@ async function handleResendWebhook(payload: any, res: express.Response): Promise
   for (const addr of toList) {
     if (type === 'email.bounced') {
       const bounceReason = bounceType === 'Permanent' ? 'hard_bounce' : 'soft_bounce';
-      await suppressionService.addSuppression(addr, bounceReason, { resendEventId: emailId });
+      // Cross-rail deliverability fix (2026-09-13, claude_docs/STATE.md
+      // 2026-09-06 P1 row: "deliverabilityMonitorJob.ts has zero visibility
+      // into the Resend transactional rail"). Classify the actual Resend-
+      // provided bounce message through the SAME keyword rules the Gmail-rail
+      // bounce-mailbox scan uses (classifyDiagnosticKeywords, factored out of
+      // bounceSuppressService.ts's classifyBounce) so an explicit provider
+      // spam-block on THIS rail (e.g. Gmail's "likely unsolicited mail" 550
+      // 5.7.1, surfaced by Resend as a Permanent bounce) sets the same
+      // bounceCategory/diagnosticCode fields deliverabilityMonitorJob.ts's
+      // runSpamBlockTripwire already alerts on -- feeding the existing alert
+      // path instead of a second, rail-specific one. Previously this rail
+      // never populated either field, so a Resend-rail spam-block was
+      // invisible to the tripwire no matter how severe.
+      const bounceDiagnostic: string | undefined = data?.bounce?.message || payload?.reason || undefined;
+      const bounceCategory = bounceDiagnostic ? classifyDiagnosticKeywords(bounceDiagnostic) ?? undefined : undefined;
+      await suppressionService.addSuppression(addr, bounceReason, {
+        resendEventId: emailId,
+        ...(bounceDiagnostic ? { diagnosticCode: bounceDiagnostic.slice(0, 500) } : {}),
+        ...(bounceCategory ? { bounceCategory } : {}),
+      });
     }
 
     // Resend sends `email.complained` for spam complaints (not `email.complaint`).
     if (type === 'email.complained') {
-      await suppressionService.processComplaint(addr);
+      await suppressionService.processComplaint(addr, { resendEventId: emailId });
     }
 
     // Resend added the recipient to its suppression list — mirror it locally as a

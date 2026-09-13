@@ -174,7 +174,7 @@ cron.schedule('0 19 * * 0', cronGuard({ jobName: 'deliverabilityMonitor' }, runD
 
 /**
  * runSpamBlockTripwire — immediate alert on any explicit provider-side spam-block
- * signal, independent of the weekly rate check above.
+ * or complaint signal, independent of the weekly rate check above.
  *
  * Added 2026-09-06 after an email-deliverability audit (see
  * claude_docs/audits/email-deliverability-audit-2026-09-06.md) found that the
@@ -189,6 +189,27 @@ cron.schedule('0 19 * * 0', cronGuard({ jobName: 'deliverabilityMonitor' }, runD
  * row that looks like an explicit spam-block (not just a bounce), regardless of
  * overall send volume or rate, since a single 550 5.7.1 is worth a same-day
  * alert on its own rather than waiting for the weekly rate to cross 2%.
+ *
+ * Cross-rail fix, 2026-09-13 (claude_docs/STATE.md 2026-09-06 P1 blocked-queue
+ * row, still open as of this session despite the 2026-09-08 SENT-volume fix
+ * above): confirmed by direct code read that the query below only ever matched
+ * rows written by the Gmail-rail bounce-mailbox scan
+ * (bounceSuppressService.ts), which is the only writer that populated
+ * `bounceCategory`/`diagnosticCode` or used the uppercase 'POLICY_BLOCK'
+ * `suppressionReason`. The Resend transactional rail's own webhook
+ * (routes/outreach.ts's `email.bounced`/`email.complained` handlers) wrote
+ * `suppressionReason: 'hard_bounce' | 'soft_bounce' | 'complaint'` (lowercase)
+ * and NEVER set `bounceCategory`/`diagnosticCode` at all — so a real Resend-
+ * rail hard rejection or spam complaint (the exact "noreply@finda.sale landed
+ * in Gmail spam" scenario this row describes) could not trip this tripwire no
+ * matter how severe. Fixed at the source instead of here: the Resend webhook
+ * handler now classifies its bounce message through the same
+ * `classifyDiagnosticKeywords()` keyword rules the Gmail-rail scan uses (see
+ * services/bounceSuppressService.ts) and every complaint is unconditionally
+ * tagged `bounceCategory:'COMPLAINT'` (see services/suppressionService.ts),
+ * so Resend-rail signals now arrive in the SAME fields this query already
+ * reads. The `bounceCategory`/uppercase-'COMPLAINT' OR-clauses below are the
+ * only change needed here — added, not replacing, the pre-existing clauses.
  */
 export async function runSpamBlockTripwire(): Promise<void> {
   const windowStart = new Date(Date.now() - 6 * 60 * 60 * 1000);
@@ -198,6 +219,13 @@ export async function runSpamBlockTripwire(): Promise<void> {
       createdAt: { gte: windowStart },
       OR: [
         { suppressionReason: 'POLICY_BLOCK' },
+        { suppressionReason: 'COMPLAINT' },
+        // Cross-rail additions (2026-09-13) — catches Resend-rail bounces/
+        // complaints now classified via classifyDiagnosticKeywords() /
+        // processComplaint(), which set bounceCategory but not necessarily
+        // the uppercase suppressionReason values above.
+        { bounceCategory: 'POLICY_BLOCK' },
+        { bounceCategory: 'COMPLAINT' },
         { diagnosticCode: { contains: 'unsolicited', mode: 'insensitive' } },
         { diagnosticCode: { contains: 'spam', mode: 'insensitive' } },
         { diagnosticCode: { contains: 'blocked', mode: 'insensitive' } },
@@ -239,7 +267,11 @@ export async function runSpamBlockTripwire(): Promise<void> {
   const rows = flagged
     .map(f => {
       const diag = (f.diagnosticCode || '').slice(0, 200).replace(/</g, '&lt;');
-      return `<li><strong>${domainOf(f.emailAddress)}</strong> — ${f.suppressionReason || f.bounceCategory || 'unknown'} @ ${f.createdAt.toISOString()}${diag ? `<br><code style="font-size:11px">${diag}</code>` : ''}</li>`;
+      // Prefer bounceCategory (POLICY_BLOCK/COMPLAINT) over the raw suppressionReason —
+      // on the Resend rail suppressionReason is only the generic 'hard_bounce'/
+      // 'soft_bounce'/'complaint', which reads as far less actionable in this alert
+      // than the classified category. 2026-09-13 cross-rail fix.
+      return `<li><strong>${domainOf(f.emailAddress)}</strong> — ${f.bounceCategory || f.suppressionReason || 'unknown'} @ ${f.createdAt.toISOString()}${diag ? `<br><code style="font-size:11px">${diag}</code>` : ''}</li>`;
     })
     .join('');
 

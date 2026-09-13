@@ -163,7 +163,21 @@ export const suppressionService = {
   async addSuppression(
     email: string,
     reason: 'hard_bounce' | 'soft_bounce' | 'complaint' | 'opted_out' | 'manual',
-    metadata?: { organizerId?: string; touchNumber?: number; resendEventId?: string }
+    metadata?: {
+      organizerId?: string;
+      touchNumber?: number;
+      resendEventId?: string;
+      // Cross-rail deliverability fix (2026-09-13, claude_docs/STATE.md
+      // 2026-09-06 P1 row). These three previously had no writer at all for
+      // non-Gmail-rail suppressions (e.g. the Resend webhook), so a Resend-
+      // rail explicit spam-block/complaint was invisible to
+      // deliverabilityMonitorJob.ts's runSpamBlockTripwire, which reads these
+      // exact fields. Optional and additive -- existing callers that omit
+      // them are unaffected.
+      bounceCategory?: string;
+      diagnosticCode?: string;
+      bounceStatusCode?: string;
+    }
   ): Promise<void> {
     const emailLower = email.toLowerCase();
     const update: any = { suppressionReason: reason };
@@ -185,6 +199,12 @@ export const suppressionService = {
       update.resendEventId = metadata.resendEventId;
       update.resendTimestamp = new Date();
     }
+    if (metadata?.bounceCategory) {
+      update.bounceCategory = metadata.bounceCategory;
+      update.classifiedAt = new Date();
+    }
+    if (metadata?.diagnosticCode) update.diagnosticCode = metadata.diagnosticCode;
+    if (metadata?.bounceStatusCode) update.bounceStatusCode = metadata.bounceStatusCode;
 
     await prisma.emailSuppression.upsert({
       where: { emailAddress: emailLower },
@@ -211,8 +231,13 @@ export const suppressionService = {
     await suppressionService.addSuppression(email, reason);
   },
 
-  async processComplaint(email: string): Promise<void> {
-    await suppressionService.addSuppression(email, 'complaint');
+  async processComplaint(email: string, metadata?: { resendEventId?: string }): Promise<void> {
+    // A complaint (recipient clicked "report spam") IS the explicit spam-
+    // reputation signal regardless of which rail sent the mail -- always tag
+    // bounceCategory:'COMPLAINT' so it's recognized by
+    // deliverabilityMonitorJob.ts's runSpamBlockTripwire the same way a
+    // Gmail-rail feedback-loop complaint already is. 2026-09-13 cross-rail fix.
+    await suppressionService.addSuppression(email, 'complaint', { ...metadata, bounceCategory: 'COMPLAINT' });
   },
 
   async processOptOut(email: string): Promise<void> {

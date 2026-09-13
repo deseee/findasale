@@ -356,6 +356,28 @@ interface BounceClassification {
 }
 
 /**
+ * Keyword-only classification of raw diagnostic/bounce text -- no DSN headers
+ * or SMTP status code required. Exported so a non-Gmail rail's own webhook
+ * (Resend's email.bounced/email.complained, routes/outreach.ts) can classify
+ * its bounce message through the SAME rules the Gmail-rail bounce-mailbox
+ * scan uses below, feeding the SAME bounceCategory field that
+ * deliverabilityMonitorJob.ts's runSpamBlockTripwire already alerts on --
+ * rather than building a second, rail-specific detector. Added 2026-09-13,
+ * cross-rail deliverability monitoring fix (claude_docs/STATE.md 2026-09-06
+ * P1 blocked-queue row: "deliverabilityMonitorJob.ts has zero visibility
+ * into the Resend transactional rail").
+ */
+export function classifyDiagnosticKeywords(text: string): 'POLICY_BLOCK' | 'COMPLAINT' | null {
+  if (/message (rejected|blocked)|unsolicited|policy|spam|answer\/69585|content/i.test(text)) {
+    return 'POLICY_BLOCK';
+  }
+  if (/complaint|feedback[- ]?loop|abuse report|this is a complaint/i.test(text)) {
+    return 'COMPLAINT';
+  }
+  return null;
+}
+
+/**
  * Inspect the DSN headers + body and classify the bounce so we suppress
  * proportionally: permanent dead-mailbox / no-MX failures get hard-suppressed,
  * while recoverable Google policy blocks (5.7.1 "Message rejected") get a
@@ -419,16 +441,21 @@ function classifyBounce(
     return { category: 'NO_MX', statusCode, diagnostic };
   }
 
+  // POLICY_BLOCK / COMPLAINT — keyword-only part factored into
+  // classifyDiagnosticKeywords() (below classifyBounce) so the Resend-webhook
+  // handler (routes/outreach.ts) can classify a Resend-rail bounce/complaint
+  // through these SAME rules, instead of a second drifting copy. See
+  // claude_docs/STATE.md 2026-09-06 P1 row (deliverabilityMonitorJob.ts
+  // cross-rail spam-block tripwire coverage).
+  const keywordCategory = classifyDiagnosticKeywords(hay);
+
   // POLICY_BLOCK — recoverable provider policy / content rejection (e.g. Google 5.7.1).
-  if (
-    /^5\.7\./.test(code) ||
-    /message (rejected|blocked)|unsolicited|policy|spam|answer\/69585|content/i.test(hay)
-  ) {
+  if (/^5\.7\./.test(code) || keywordCategory === 'POLICY_BLOCK') {
     return { category: 'POLICY_BLOCK', statusCode, diagnostic };
   }
 
   // COMPLAINT — feedback-loop / abuse report.
-  if (/complaint|feedback[- ]?loop|abuse report|this is a complaint/i.test(hay)) {
+  if (keywordCategory === 'COMPLAINT') {
     return { category: 'COMPLAINT', statusCode, diagnostic };
   }
 
