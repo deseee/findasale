@@ -18,6 +18,7 @@ import {
 } from '../services/squarePaymentService'; // Square migration Wave S2 #1 (2026-09-09): additive Square branch, see completeBountyPurchase
 import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // BUG FIX (2026-09-09, findasale-dev BUG MODE): completeBountyPurchase's Stripe branch was skipping this shared sale-status / Stripe-Connect-onboarding gate that createPaymentIntent/createCartCheckoutSession (stripeController.ts) already enforce (2026-08-27 carding incident). Stripe-specific fields -- used ONLY in the Stripe branch below. Square eligibility is governed separately (organizerHasSquare + resolveOrganizerSquareAccessToken), so this must not run for Square-onboarded organizers who have no live Stripe Connect account at all.
+import { assertSaleCanAcceptSquarePayment } from '../services/squarePaymentEligibilityService'; // BUG FIX (2026-09-13, findasale-dev + findasale-hacker re-investigation of the Blocked Queue's two 'Bounty purchase (Stripe path)' rows, Session Added 2026-09-09): those rows described completeBountyPurchase skipping the sale-status/payments-held eligibility gate the generic checkout endpoints enforce. By the time of this re-investigation the Stripe branch itself was already dead (see the 2026-09-12 Stripe-removal comment further down, which replaced it with an unconditional throw) -- but the SAME gap was found live in the Square branch below, the only processor path real shoppers can actually reach today. This is the Square-flavored sibling of assertSaleCanAcceptPayment above (squarePaymentEligibilityService.ts's own header explains why it's a separate function, not a shared/parameterized one) -- same call shape squarePaymentController.ts's createSquarePayment already uses.
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 collusion/wash-trade guard -- BUG FIX (2026-09-09): was missing from BOTH processor branches here. Identity-based (buyer vs. organizer fingerprints), not Stripe-specific, so added once, shared, before the Square/Stripe branch split.
 import * as Sentry from '@sentry/node';
 // BUG FIX (2026-09-09, findasale-dev BUG MODE): completeBountyPurchase's Square branch never
@@ -780,32 +781,42 @@ export const getCommunityBounties = async (req: AuthRequest, res: Response) => {
  * POST /api/bounties/submissions/:id/purchase
  * Complete bounty purchase (auth required, owner of bounty)
  *
- * Flow (BUG FIX 2026-09-09, findasale-dev BUG MODE -- Gap 1 & Gap 2, see bottom note):
+ * Flow (BUG FIX 2026-09-09, findasale-dev BUG MODE -- Gap 1 & Gap 2 -- and UPDATED 2026-09-13,
+ * findasale-dev/findasale-hacker re-investigation, see bottom note):
  * 1. Validate submission ownership and status
- * 2. S1072 collusion/wash-trade guard (assertCheckoutAllowed) -- shared, both processors
+ * 2. S1072 collusion/wash-trade guard (assertCheckoutAllowed) -- shared, runs before any
+ *    processor-specific logic
  * 3. Check shopper has ≥50 XP (BOUNTY_FULFILLMENT cost) -- eligibility pre-check only
- * 4. Charge the item price -- SQUARE (organizer.squareOnboarded && squareMerchantId, synchronous
- *    CreatePayment, requires `sourceId` in the request body) or STRIPE (PaymentIntent flow,
- *    gated first by assertSaleCanAcceptPayment -- sale-status / Stripe-Connect-onboarding)
- *    depending on which processor the organizer has completed onboarding for.
- *    Square migration Wave S2 #1 (2026-09-09): additive branch, see organizerHasSquare below.
- * 5. ONLY AFTER a confirmed charge: deduct 50 XP from shopper, award 25 XP to organizer,
- *    update BountySubmission.status → PURCHASED, create/finalize the Purchase record
- *    (Purchase.processor discriminates STRIPE/SQUARE), notify the organizer.
- *    SQUARE's charge is synchronous, so all of this runs inline right after chargeResult.ok.
- *    STRIPE's confirmation is asynchronous, so this endpoint only creates a PENDING Purchase
- *    row + PaymentIntent here; the payment_intent.succeeded webhook (stripeController.ts,
- *    metadata.type === 'BOUNTY_SUBMISSION') runs the rest once Stripe actually confirms.
- * 6. Response shape differs by processor: STRIPE returns a clientSecret for the frontend to
- *    confirm client-side (submission status in the response is NOT yet PURCHASED); SQUARE's
- *    charge is already complete synchronously, so it returns squarePaymentId/status directly
- *    with no further client-side confirmation step.
+ * 4. Charge the item price -- SQUARE is the only live path (organizer.squareOnboarded &&
+ *    squareMerchantId, synchronous CreatePayment, requires `sourceId` in the request body),
+ *    gated first by assertSaleCanAcceptSquarePayment (sale-status / payments-held / same
+ *    eligibility gate squarePaymentController.ts's createSquarePayment already enforces).
+ *    A Square-onboarded organizer's bounty purchases always route here (Square migration
+ *    Wave S2 #1, 2026-09-09). An organizer with NO live Square account falls through to the
+ *    branch below, which fails closed -- see that branch's own 2026-09-12 comment for why:
+ *    Stripe's platform account is permanently closed, there is no second processor to charge
+ *    against, so a bounty purchase for a non-Square organizer returns SELLER_PAYMENTS_UNAVAILABLE
+ *    rather than ever attempting a Stripe charge.
+ * 5. ONLY AFTER a confirmed Square charge: deduct 50 XP from shopper, award 25 XP to organizer,
+ *    update BountySubmission.status → PURCHASED, create/finalize the Purchase record. Charge
+ *    is synchronous, so all of this runs inline right after chargeResult.ok -- there is no
+ *    async webhook-confirmation step in this (Square-only) flow.
+ * 6. Response returns squarePaymentId/status/processor directly -- no further client-side
+ *    confirmation step, since the charge already fully completed by the time this responds.
  *
- * Prior to this fix, Steps "deduct/award XP, flip status, notify" ran unconditionally BEFORE
- * any charge was attempted on either processor, with no rollback on a cancelled/declined
- * Stripe payment, and neither processor branch enforced the sale-status/Connect-onboarding
- * gate or the S1072 collusion guard that the generic single-item checkout endpoints
- * (stripeController.ts createPaymentIntent/createCartCheckoutSession) already enforce.
+ * Historical note: this endpoint used to also support a STRIPE PaymentIntent branch (async
+ * confirmation via stripeController.ts's payment_intent.succeeded webhook, metadata.type ===
+ * 'BOUNTY_SUBMISSION'). Two real bugs were found and fixed in that branch on 2026-09-09 (Gap 1:
+ * XP/status/notification ran BEFORE Stripe confirmed the charge, no rollback on cancel/decline;
+ * Gap 2: the branch skipped the sale-status/Stripe-Connect-onboarding gate and the S1072 guard
+ * that the generic Stripe checkout endpoints enforce). The Stripe branch itself was then removed
+ * outright in the 2026-09-12 Stripe-removal pass (Stripe's platform account is permanently
+ * closed) -- it is now an unconditional throw, never a live charge attempt. This session
+ * (2026-09-13) re-investigated the Blocked Queue's two rows describing those Gap 1/Gap 2 bugs
+ * and confirmed both were already resolved and the branch they described is now dead code; it
+ * also found that the SAME sale-status/payments-held gate (Gap 2's fix, ported to Square as
+ * assertSaleCanAcceptSquarePayment) had never been added to the Square branch above, which is
+ * the only processor path real shoppers can still reach -- fixed here.
  */
 export const completeBountyPurchase = async (req: AuthRequest, res: Response) => {
   try {
@@ -877,6 +888,23 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     // Stripe confirmation is asynchronous. See the Square branch and the Stripe branch's
     // Purchase-creation comment below for exactly where each now happens.
 
+    // BUG FIX (2026-09-13, findasale-hacker adversarial pass -- VALID-STATE-ONLY-EXPOSURE):
+    // this endpoint never checked the underlying Item's own lifecycle status at all. The
+    // generic single-item Square checkout (squarePaymentController.ts's createSquarePayment)
+    // rejects anything but `item.status === 'AVAILABLE'` before charging (blocks a SOLD,
+    // RESERVED-by-someone-else, INVOICE_ISSUED, AUCTION_ENDED, or DONATED item); this
+    // bounty-purchase branch had no equivalent, so an approved submission whose item later
+    // became unavailable through a completely different flow (a hold placed by another
+    // shopper, a sale via the regular storefront, an organizer donating/removing it) could
+    // still be "purchased" here -- charging the buyer for an item they can never receive.
+    // sellItemUnits() below only guards remaining STOCK capacity, not lifecycle status, so it
+    // does not substitute for this check (a multi-stock item can have capacity left while a
+    // specific unit-tracked single item is legitimately no longer AVAILABLE). Placed before
+    // any charge attempt, same "gate first" posture as the checks above.
+    if (submission.item.status !== 'AVAILABLE') {
+      return res.status(409).json({ message: `Item is no longer available (status: ${submission.item.status})` });
+    }
+
     // Step 4: Prepare Stripe PaymentIntent for the item price
     const itemPrice = submission.item.price || 0;
     if (itemPrice <= 0) {
@@ -906,6 +934,28 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     const organizerHasSquare = squareOnboarded === true && !!squareMerchantId;
 
     if (organizerHasSquare) {
+      // BUG FIX (2026-09-13, findasale-dev + findasale-hacker): this branch never checked
+      // sale-status/payments-held eligibility at all -- squarePaymentController.ts's
+      // createSquarePayment (the generic single-item Square checkout) calls
+      // assertSaleCanAcceptSquarePayment before ever attempting a charge; this bounty-purchase
+      // branch did not, so a DRAFT/ENDED sale or a sale already held for fraud review
+      // (Sale.paymentsHeldAt) could still be charged through here. Added, mirroring the generic
+      // path's own call exactly. Placed before touching req.body / attempting anything
+      // charge-related, same "gate first" posture as the S1072 guard above.
+      const bountySquareEligibility = await assertSaleCanAcceptSquarePayment({
+        prisma,
+        sale: {
+          id: submission.item.sale!.id,
+          status: submission.item.sale!.status,
+          paymentsHeldAt: submission.item.sale!.paymentsHeldAt,
+        },
+        organizerSquareMerchantId: squareMerchantId,
+        organizerSquareOnboarded: squareOnboarded,
+      });
+      if (bountySquareEligibility.blocked) {
+        return res.status(bountySquareEligibility.status).json(bountySquareEligibility.body);
+      }
+
       const { sourceId, verificationToken } = req.body as { sourceId?: string; verificationToken?: string };
       if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
         return res.status(400).json({ message: 'A tokenized payment source is required.' });
