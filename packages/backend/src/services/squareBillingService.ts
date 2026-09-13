@@ -179,7 +179,7 @@ export async function chargeStoredCard(params: ChargeStoredCardParams): Promise<
   const client = getSquarePlatformClient();
   try {
     const response = await client.payments.create({
-      idempotencyKey: buildSquareIdempotencyKey(params.idempotencyParts),
+      idempotencyKey: buildSquareIdempotencyKey(params.idempotencyParts.map(String)),
       sourceId: params.cardId,
       customerId: params.customerId,
       amountMoney: toSquareMoney(params.amountCents),
