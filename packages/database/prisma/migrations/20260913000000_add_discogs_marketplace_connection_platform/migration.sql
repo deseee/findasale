@@ -1,0 +1,12 @@
+-- Migration: add_discogs_marketplace_connection_platform
+-- 2026-09-13 -- adds DISCOGS to the MarketplaceConnectionPlatform enum. schema.prisma has
+-- declared DISCOGS since discogsListingConnector.ts was built, but no migration file was ever
+-- created for it when the enum was first added (20260818120000_add_marketplace_account only
+-- created the type with 'REVERB') -- confirmed via claude_docs/STATE.md Blocked Queue P1 row
+-- (2026-09-09): every organizer who clicks "Connect Discogs" (POST /api/discogs/connect) gets
+-- a real Postgres enum error because the live DB enum only has REVERB.
+-- Same safe, idempotent pattern already established for this exact class of fix (see
+-- 20260818130100_add_marketplace_job_platform_values's GUMTREE_AU/POSHMARK/MERCARI/etc.
+-- precedent) -- IF NOT EXISTS makes this safe to run again even if the value was ever added by
+-- hand.
+ALTER TYPE "MarketplaceConnectionPlatform" ADD VALUE IF NOT EXISTS 'DISCOGS';
