@@ -313,7 +313,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                       className="w-4 h-4 text-amber-600 dark:bg-gray-600 dark:border-gray-500 rounded"
                     />
                     <span className="ml-2 text-sm text-warm-700 dark:text-gray-300">
-                      {format(new Date(date), 'EEE, MMM d')}
+                      {format(parseISO(date), 'EEE, MMM d')}
                     </span>
                   </label>
                 ))}
@@ -415,7 +415,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
               <strong>This will create {previewSlots.length} slots</strong>. Every {slotDuration} minutes from{' '}
               {startTime} to {endTime} on{' '}
               {selectedDates.length === 1
-                ? format(new Date(selectedDates[0]), 'EEE, MMM d, yyyy')
+                ? format(parseISO(selectedDates[0]), 'EEE, MMM d, yyyy')
                 : `${selectedDates.length} days`}
             </p>
           </div>
