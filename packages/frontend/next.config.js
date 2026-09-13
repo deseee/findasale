@@ -308,6 +308,23 @@ const nextConfig = {
         { source: '/api/auth/redeem-invite',       destination: `${railwayApi}/auth/redeem-invite` },
         { source: '/api/auth/resend-verification', destination: `${railwayApi}/auth/resend-verification` },
         { source: '/api/auth/passkey/:path*',        destination: `${railwayApi}/auth/passkey/:path*` },
+        // P0 fix (2026-09-13): pages/api/billing/checkout.ts is a stale proxy left over from
+        // a pre-httpOnly-cookie auth era -- it checks NextAuth's getSession() and a
+        // session.backendJwt field that the current login flow never populates (the app
+        // authenticates via the backend's own httpOnly `accessToken` cookie, verified by
+        // middleware/auth.ts's `authenticate`, same as every other /api/billing/* route).
+        // Since that pages/api file exists on disk, Next's filesystem routing intercepted
+        // EVERY /api/billing/checkout request before the working fallback rewrite below ever
+        // got a chance to run -- getSession() returned null for any user logged in via the
+        // normal email/password JWT flow, so the route 401'd with "Authentication required"
+        // even though the same browser session was fully authenticated (GET /api/auth/me
+        // succeeded). Same SH-020 class of conflict as the /api/auth/* entries above --
+        // listing it in beforeFiles routes it straight to Railway (cookies + CSRF header
+        // forwarded like any other proxied request) so it uses the same working auth path as
+        // /api/billing/subscription, /cancel, /portal, etc., none of which have a shadowing
+        // pages/api file. Left checkout.ts in place rather than deleting it -- this rewrite
+        // makes it unreachable without removing the file.
+        { source: '/api/billing/checkout', destination: `${railwayApi}/billing/checkout` },
       ],
       // afterFiles: static file rewrites (no API involvement)
       afterFiles: [
