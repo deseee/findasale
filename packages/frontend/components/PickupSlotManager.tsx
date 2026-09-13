@@ -37,10 +37,13 @@ const generateSlotsForDay = (
   const [startHour, startMin] = startTime.split(':').map(Number);
   const [endHour, endMin] = endTime.split(':').map(Number);
 
-  // Create date objects
-  const date = new Date(dateStr);
-  const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), startHour, startMin, 0);
-  const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), endHour, endMin, 0);
+  // Create date objects. Parse the "YYYY-MM-DD" components directly instead
+  // of going through `new Date(dateStr)` (which parses a date-only string as
+  // UTC midnight) + local getters, which shifts the day back by one in any
+  // timezone behind UTC.
+  const [dateYear, dateMonth, dateDay] = dateStr.split('-').map(Number);
+  const dayStart = new Date(dateYear, dateMonth - 1, dateDay, startHour, startMin, 0);
+  const dayEnd = new Date(dateYear, dateMonth - 1, dateDay, endHour, endMin, 0);
 
   let currentStart = new Date(dayStart);
   while (currentStart < dayEnd) {
