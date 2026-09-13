@@ -2218,9 +2218,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     // viewed/published from Seller Hub UI — feature was broken-by-design).
     // All pushes now go LIVE. Use the per-item "Publish to eBay now" button
     // (publishItemOffer) for any item whose ebayOfferId is stale.
-    const { itemIds, photoMode } = req.body as {
+    const { itemIds, photoMode, queueOnly } = req.body as {
       itemIds: string[];
       photoMode?: string;
+      // eBay Queue Mode tier decision (2026-09-13): when true, this per-item
+      // loop stops right after offer creation instead of publishing -- see
+      // the queueOnly branch below. Used internally by addToEbayQueue via
+      // pushItemsToEbayQueueOnly(), never sent directly by the frontend.
+      queueOnly?: boolean;
     };
     const userId = req.user?.id;
 
@@ -3054,6 +3059,31 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           },
         });
 
+        // eBay Queue Mode fix (2026-09-13, ADR-115 follow-up): Patrick confirmed
+        // Queue Mode is PRO/TEAMS-only (matching this function's own tier gate
+        // above), so it's now safe for the queue-add endpoint to call this exact
+        // pipeline instead of a duplicated one. queueOnly stops here, right after
+        // the offer is created and ebayOfferId is persisted, instead of publishing
+        // immediately -- the item goes back into ebayQueuedAt so
+        // ebayListingQueueCron.ts's existing Phase A fill (live fee-check, then
+        // publish) picks it up on its own schedule. This closes the "manually-
+        // queued items have no ebayOfferId and can never publish" gap (ADR-115
+        // Dev Handoff, 2026-09-11).
+        if (queueOnly) {
+          await prisma.item.update({
+            where: { id: item.id },
+            data: { ebayQueuedAt: new Date(), ebayFeeBlocked: false },
+          });
+          results.push({
+            itemId: item.id,
+            sku,
+            ebayListingId: null,
+            status: 'queued',
+            message: 'Offer created — queued for eBay Queue Mode to publish once a free listing slot is confirmed.',
+          });
+          continue;
+        }
+
         // ADR-115: check whether publishing this item would incur a real eBay
         // insertion fee. Per Patrick's decision (2026-09-11), bulk manual pushes
         // are NOT blocked on this — clearly surfacing the fee in the per-item
@@ -3249,6 +3279,46 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     }
   }
 };
+
+// ─── Internal invocation wrapper for eBay Queue Mode ("Add to Queue") ────────
+// addToEbayQueue (platformStatsController.ts) needs the exact same tier-gate +
+// quota + weight/dims + category + shipping-policy + offer-creation pipeline
+// pushSaleToEbay already has for real pushes -- not a second, duplicated
+// implementation of it (that duplication risk is why this was originally
+// routed to Patrick rather than guessed at, per ADR-115 Dev Handoff,
+// 2026-09-11). pushSaleToEbay is bound to Express (req, res) rather than
+// exported as a plain callable, so this constructs the minimal req/res shape
+// it actually reads (req.params.saleId, req.body.itemIds/queueOnly, req.user.id)
+// and captures the JSON body it would have sent, instead of forking its
+// several-hundred-line per-item pipeline into a parallel function.
+export async function pushItemsToEbayQueueOnly(
+  userId: string,
+  saleId: string,
+  itemIds: string[],
+): Promise<{ statusCode: number; body: any }> {
+  let statusCode = 200;
+  let body: any = null;
+  const fakeRes = {
+    headersSent: false,
+    status(code: number) {
+      statusCode = code;
+      return fakeRes;
+    },
+    json(payload: any) {
+      body = payload;
+      fakeRes.headersSent = true;
+      return fakeRes;
+    },
+  } as unknown as Response;
+  const fakeReq = {
+    params: { saleId },
+    body: { itemIds, queueOnly: true },
+    user: { id: userId },
+  } as unknown as AuthRequest;
+
+  await pushSaleToEbay(fakeReq, fakeRes);
+  return { statusCode, body };
+}
 
 /**
  * Ask eBay's Trading API GetItem call what shipping configuration a LIVE

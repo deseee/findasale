@@ -12,6 +12,7 @@ import {
   invalidatePlatformStatsCache,
   GapPlatform,
 } from '../services/platformStatsService';
+import { pushItemsToEbayQueueOnly } from './ebayController';
 
 // ─── Helper: resolve organizerId from authenticated user ──────────────────────
 
@@ -176,7 +177,7 @@ export async function addToEbayQueue(req: AuthRequest, res: Response): Promise<R
         status: 'AVAILABLE',
         deletedAt: null,
       },
-      select: { id: true, ebayQueuedAt: true, ebayOfferId: true },
+      select: { id: true, saleId: true, ebayQueuedAt: true, ebayOfferId: true },
     });
 
     const foundIds = new Set(items.map(i => i.id));
@@ -184,19 +185,67 @@ export async function addToEbayQueue(req: AuthRequest, res: Response): Promise<R
 
     let queued = 0;
     let alreadyQueued = 0;
+    const failed: Array<{ itemId: string; message: string }> = [];
 
-    const now = new Date();
-    for (const item of items) {
+    // eBay Queue Mode fix (2026-09-13, ADR-115 follow-up): manually-queued
+    // items used to only get ebayQueuedAt set here, with nothing anywhere
+    // creating an ebayOfferId for them — ebayListingQueueCron.ts's Phase A
+    // fill would then always reject them with "has no ebayOfferId — cannot
+    // publish from queue" (see that file's own header comment). Now that
+    // Patrick has confirmed Queue Mode is PRO/TEAMS-only (same gate this
+    // endpoint already enforces above), it's safe to route these items
+    // through pushSaleToEbay's real offer-creation pipeline in "queueOnly"
+    // mode instead of just flipping a flag — that pipeline is the ONLY place
+    // in the codebase that knows how to build a valid eBay offer (weight/dims,
+    // category, shipping policy, etc.), so this reuses it rather than
+    // duplicating it.
+    const toCreateOffer = items.filter(item => {
       if (item.ebayQueuedAt !== null || item.ebayOfferId !== null) {
         // Already queued or already live on eBay — skip
         alreadyQueued++;
+        return false;
+      }
+      return true;
+    });
+
+    // Group by sale — pushSaleToEbay operates per-sale (needs the sale's
+    // address for eBay's merchant-location requirement). Inventory items with
+    // no saleId (Feature #300) have nowhere to source that from and can't be
+    // pushed to eBay at all.
+    const bySaleId = new Map<string, string[]>();
+    for (const item of toCreateOffer) {
+      if (!item.saleId) {
+        failed.push({ itemId: item.id, message: 'Item is not attached to a sale — cannot create an eBay offer for it.' });
         continue;
       }
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { ebayQueuedAt: now },
-      });
-      queued++;
+      const list = bySaleId.get(item.saleId) ?? [];
+      list.push(item.id);
+      bySaleId.set(item.saleId, list);
+    }
+
+    const userId = req.user?.id;
+    if (bySaleId.size > 0 && !userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    for (const [saleId, saleItemIds] of bySaleId) {
+      const { statusCode, body } = await pushItemsToEbayQueueOnly(userId as string, saleId, saleItemIds);
+      if (statusCode !== 200 || !body || !Array.isArray(body.results)) {
+        // Sale-level failure (e.g. eBay not connected, push quota exceeded) —
+        // every item in this sale group failed to get an offer created.
+        const message = (body && typeof body.message === 'string') ? body.message : `Failed to create eBay offer(s) (HTTP ${statusCode})`;
+        for (const itemId of saleItemIds) {
+          failed.push({ itemId, message });
+        }
+        continue;
+      }
+      for (const result of body.results as Array<{ itemId: string; status: string; message?: string; error?: string }>) {
+        if (result.status === 'queued') {
+          queued++;
+        } else {
+          failed.push({ itemId: result.itemId, message: result.message || result.error || 'Failed to create eBay offer' });
+        }
+      }
     }
 
     invalidatePlatformStatsCache(organizerId);
@@ -205,6 +254,7 @@ export async function addToEbayQueue(req: AuthRequest, res: Response): Promise<R
       queued,
       alreadyQueued,
       notFound: notFound.length > 0 ? notFound : undefined,
+      failed: failed.length > 0 ? failed : undefined,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

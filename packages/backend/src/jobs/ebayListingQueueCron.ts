@@ -26,13 +26,17 @@
  *   confirmed-free replacement waiting — withdrawing a free listing to make
  *   room for one that would cost money (or isn't filled at all) is pure waste.
  *
- * Known gap (flagged, not fixed by ADR-115): items added via the manual
- * "add to queue" endpoint (platformStatsController.ts addToEbayQueue) never
- * have an ebayOfferId — nothing in this codebase creates one for them before
- * Phase A tries to publish, so they correctly fail closed with a clear log
- * line but can never actually be fee-checked or published until that's built.
- * Rotation-requeued items DO have an offerId (ADR-115 fix — see withdrawItem)
- * and work end-to-end.
+ * FIXED (2026-09-13, ADR-115 follow-up): items added via the manual
+ * "add to queue" endpoint (platformStatsController.ts addToEbayQueue) used to
+ * never get an ebayOfferId — nothing in this codebase created one for them
+ * before Phase A tried to publish, so they always failed closed with a clear
+ * log line but could never actually be fee-checked or published. Patrick
+ * confirmed Queue Mode is PRO/TEAMS-only (2026-09-13), matching
+ * pushSaleToEbay's existing tier gate, so addToEbayQueue now creates the
+ * offer at add-time via pushSaleToEbay's own pipeline in "queueOnly" mode
+ * (ebayController.ts pushItemsToEbayQueueOnly) instead of just setting
+ * ebayQueuedAt. Manually-queued items now have an ebayOfferId by the time
+ * they reach Phase A below, same as rotation-requeued items.
  *
  * Safety guards:
  *   - Skip organizer if eBay connection missing or token expired
@@ -340,12 +344,13 @@ async function processOrganizer(
         take: candidateCap,
       });
 
-      // NOTE: queue candidates added via the manual "add to queue" endpoint
-      // currently have ebayOfferId: null (a separate, pre-existing gap — see
-      // ADR-115 Dev Handoff) and getListingFees requires a real offerId, so
-      // they cannot be fee-checked and are skipped here rather than rotated
-      // for blindly. Only candidates that already have an offerId (e.g. a
-      // previously-rotated item now waiting its turn again) can be verified.
+      // NOTE: getListingFees requires a real offerId, so a candidate without
+      // one is skipped here rather than rotated for blindly. Since 2026-09-13,
+      // addToEbayQueue creates the offer at add-time (see the file header
+      // above), so this should now be rare — this guard mainly protects
+      // against any item queued under the pre-fix behavior (ebayQueuedAt set
+      // with ebayOfferId still null) or a queueOnly offer-creation attempt
+      // that failed after ebayQueuedAt was otherwise expected.
       for (const candidate of replacementCandidates) {
         if (!candidate.ebayOfferId) continue;
         const feeCheck = await checkEbayListingFee(candidate.ebayOfferId, accessToken);
