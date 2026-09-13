@@ -224,7 +224,12 @@ export const getPosContext = async (req: AuthRequest, res: Response) => {
       }),
       prisma.organizer.findUnique({
         where: { id: actor.id },
-        select: { venmoHandle: true, zelleHandle: true },
+        // squareOnboarded/squareLocationId (2026-09-12, manual card entry Square rebuild):
+        // the organizer POS page needs its own squareLocationId client-side to initialize
+        // the Square Web Payments SDK for register-entered card sales -- see
+        // PosManualCard.tsx / pos.tsx's ENABLE_MANUAL_CARD_ENTRY history. Nothing before
+        // this endpoint's own callers needed this field.
+        select: { venmoHandle: true, zelleHandle: true, squareOnboarded: true, squareLocationId: true },
       }),
     ]);
 
@@ -259,6 +264,8 @@ export const getPosContext = async (req: AuthRequest, res: Response) => {
       })),
       venmoHandle: organizerRow?.venmoHandle ?? null,
       zelleHandle: organizerRow?.zelleHandle ?? null,
+      squareOnboarded: organizerRow?.squareOnboarded ?? false,
+      squareLocationId: organizerRow?.squareLocationId ?? null,
       canApplyDiscount,
       discountCap,
     });

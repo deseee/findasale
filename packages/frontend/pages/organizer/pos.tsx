@@ -107,15 +107,19 @@ const ENABLE_SPLIT_BILL = false;
 // ENABLE_SPLIT_BILL pattern above: state/logic kept intact, UI gated off, nothing deleted.
 const ENABLE_STRIPE_TERMINAL_CARD_READER = false;
 
-// Manual card-entry stopgap (2026-09-09, same dispatch): PosManualCard's non-setup-intent
-// branch (the "No reader? Enter card manually" flow reached from THIS page) POSTs to
-// /stripe/terminal/manual-card-payment-intent -- confirmed via repo-wide grep this session
-// that NO backend route registers this path at all (a separate, additional dead endpoint
-// beyond the 4 confirmed-dead terminalController.ts ones above, found during this stopgap's
-// investigation). Disabled here for the same reason; PosManualCard's setup-intent mode
-// (used by the venue/vendor-booth QR rail) is untouched -- different call site, different
-// code path, not confirmed dead.
-const ENABLE_MANUAL_CARD_ENTRY = false;
+// Manual card entry -- SQUARE REBUILT (2026-09-12, Stripe removal). Was disabled
+// 2026-09-09 (BUG MODE dispatch) after confirming PosManualCard's non-setup-intent branch
+// (the "No reader? Enter card manually" flow reached from THIS page) POSTed to
+// /stripe/terminal/manual-card-payment-intent, a route NO backend controller ever
+// registered -- it could never have worked. Rebuilt on Square: PosManualCard's
+// non-setup-intent branch now uses Square's Web Payments SDK (via
+// SquarePaymentRequestForm, the same component the "Send to Phone" QR flow already uses)
+// to tokenize the card and POSTs the resulting sourceId to the real
+// POST /pos/manual-card-payment endpoint (posPaymentController.ts's manualCardPayment,
+// registered in routes/pos.ts) -- see that function's own header comment for the full
+// design. PosManualCard's setup-intent mode (used by the venue/vendor-booth QR rail) is
+// untouched -- different call site, different code path, still Stripe, not confirmed dead.
+const ENABLE_MANUAL_CARD_ENTRY = true;
 
 // Venue-mode Stripe QR stopgap (2026-09-10, BUG MODE dispatch): handleVenueGenerateQr ->
 // createBoothCartQrSetupIntent (vendorBoothCartController.ts) calls
@@ -420,6 +424,10 @@ export default function POSPage() {
   // Organizer profile (venmo/zelle handles for POS payment modes)
   const [organizerVenmo, setOrganizerVenmo] = useState<string | null>(null);
   const [organizerZelle, setOrganizerZelle] = useState<string | null>(null);
+  // Manual card entry Square rebuild (2026-09-12): the organizer's own connected Square
+  // location, needed by SquarePaymentRequestForm (via PosManualCard) to init the Web
+  // Payments SDK for a register-entered card. Populated from /pos/context below.
+  const [organizerSquareLocationId, setOrganizerSquareLocationId] = useState<string | null>(null);
 
   // ─── Venue mode (S1178, Priority 1) ────────────────────────────────────────────────
   // Entered via ?venue=<hubId>. STAFF/OWNER only in this pass -- both auth branches ride
@@ -512,10 +520,12 @@ export default function POSPage() {
   // with register access reaches this too and is cleanly rejected downstream if not.
   useEffect(() => {
     if (!user) return;
-    api.get<{ actorKind?: string; organizerId?: string; sales?: Sale[]; venmoHandle?: string | null; zelleHandle?: string | null; canApplyDiscount?: boolean; discountCap?: { type: 'PERCENT' | 'FIXED'; value: number } | null }>('/pos/context')
+    api.get<{ actorKind?: string; organizerId?: string; sales?: Sale[]; venmoHandle?: string | null; zelleHandle?: string | null; squareOnboarded?: boolean; squareLocationId?: string | null; canApplyDiscount?: boolean; discountCap?: { type: 'PERCENT' | 'FIXED'; value: number } | null }>('/pos/context')
       .then(r => {
         setOrganizerVenmo(r.data.venmoHandle || null);
         setOrganizerZelle(r.data.zelleHandle || null);
+        // Manual card entry Square rebuild (2026-09-12)
+        setOrganizerSquareLocationId(r.data.squareLocationId || null);
         const all: Sale[] = r.data.sales ?? [];
         const active = all.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i); // dedup by id
         setSales(active);
@@ -3930,6 +3940,11 @@ export default function POSPage() {
             cart={cart}
             selectedSaleId={selectedSaleId}
             buyerEmail={buyerEmail}
+            squareLocationId={organizerSquareLocationId}
+            discountAmount={discountAmount}
+            discountType={discountType}
+            discountValue={discountValueToSubmit}
+            discountReasonNote={discountReasonNote}
             onSuccess={(message) => {
               showToast(message, 'success');
               handleNewTransaction();

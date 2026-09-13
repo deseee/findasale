@@ -1,9 +1,28 @@
 /**
  * PosManualCard — Manual Card Entry for Card-Not-Present Payments
  *
- * Allows organizer to enter shopper's card details directly (no Stripe Terminal reader needed).
- * Uses Stripe Elements (CardElement) for PCI-compliant card tokenization.
- * Features: CNP fee notice, card input, payment processing, success/error states
+ * Allows organizer to enter shopper's card details directly (no card reader needed).
+ *
+ * SQUARE REBUILD (2026-09-12, Stripe removal): this component's non-setup-intent branch
+ * (register-entered manual card sales, reached from pos.tsx's "No reader? Enter card
+ * manually" button) used to POST to /stripe/terminal/manual-card-payment-intent -- a
+ * route that was NEVER registered server-side (confirmed via repo-wide grep this
+ * session, see pos.tsx's ENABLE_MANUAL_CARD_ENTRY history) and could never have
+ * worked. It is rewritten here to use Square's Web Payments SDK for card tokenization
+ * (via SquarePaymentRequestForm.tsx, the SAME component the "Send to Phone" QR flow
+ * already uses -- not reimplemented) and POSTs the resulting one-time card token
+ * (sourceId) to the real POST /pos/manual-card-payment endpoint
+ * (posPaymentController.ts's manualCardPayment), which creates and captures the
+ * actual Square charge -- see that function's own header comment for the full design
+ * (no persisted POSPaymentRequest row exists for this walk-up, no-shopper-account
+ * flow, unlike the QR/phone rail).
+ *
+ * The OTHER mode this component supports, isSetupIntentMode (triggered by a
+ * setupIntentClientSecret prop, used by the venue/vendor-booth QR rail --
+ * pages/pay/[setupIntentClientSecretToken].tsx), is UNTOUCHED by this rebuild: it is
+ * still Stripe-based (stripe.confirmCardSetup against an existing platform
+ * SetupIntent) and was explicitly NOT confirmed dead, so its imports/logic/UI below
+ * are left exactly as they were.
  *
  * States: idle (form), processing (charging), success (receipt), error (decline message)
  */
@@ -12,6 +31,7 @@ import { useState } from 'react';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { StripeCardElementOptions } from '@stripe/stripe-js';
 import api from '../lib/api';
+import SquarePaymentRequestForm from './SquarePaymentRequestForm';
 
 interface PosManualCardProps {
   cartTotal: number;
@@ -20,6 +40,20 @@ interface PosManualCardProps {
   buyerEmail: string;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
+  // Square rebuild (2026-09-12): the organizer's connected Square location, needed by
+  // SquarePaymentRequestForm to initialize the Web Payments SDK for a register-entered
+  // card. Unused in setup-intent mode (that mode is still Stripe, unaffected).
+  squareLocationId?: string | null;
+  // POS Cashier Discount Permission parity (2026-08-28 feature, wired into this flow
+  // for the first time in this rebuild -- the dead Stripe version never accepted these
+  // at all, silently ignoring any discount applied in the POS discount panel even
+  // though that panel renders regardless of payment mode). Optional/no-op when omitted
+  // or discountAmount is 0/undefined, same convention every sibling payment mode
+  // (cash/QR/split-tender) in pos.tsx already follows.
+  discountAmount?: number;
+  discountType?: 'PERCENT' | 'FIXED';
+  discountValue?: number;
+  discountReasonNote?: string;
   // Venue/multi-vendor QR rail (2026-07-31): when set, this component confirms an
   // EXISTING platform SetupIntent (stripe.confirmCardSetup) instead of creating and
   // confirming a PaymentIntent of its own. Used by
@@ -28,16 +62,34 @@ interface PosManualCardProps {
   // via createBoothCartQrSetupIntent and is polling for it to succeed; the actual
   // per-booth PaymentIntents are created server-side afterward
   // (authorizeBoothCartQrLegs), never here. No network call to
-  // /stripe/terminal/manual-card-payment-intent happens in this mode.
+  // /stripe/terminal/manual-card-payment-intent (nor its Square replacement) happens
+  // in this mode.
   setupIntentClientSecret?: string;
 }
 
 type ManualCardState = 'idle' | 'processing' | 'success' | 'error';
 
-interface PaymentIntentResponse {
-  clientSecret: string;
-  amount: number;
-  cnpFeeAmount: number;
+// ── CNP FEE (register-entered / manually-keyed card) DISPLAY ESTIMATE ──────────────────
+// PLACEHOLDER, NOT INDEPENDENTLY VERIFIED (2026-09-12). This is a DISPLAY-ONLY estimate
+// shown before the charge is sent; the AUTHORITATIVE fee actually charged is computed
+// server-side using the SAME placeholder constants, defined and cited in full in
+// posPaymentController.ts's manualCardPayment (search CNP_FEE_RATE_PLACEHOLDER there for
+// the full citation and why this is flagged rather than a confirmed number). Keep these
+// two numbers in sync with that file if either changes -- there is no shared POS-fee
+// constants module today, so this is a deliberate, commented duplication rather than a
+// new cross-package import for two numbers.
+const CNP_FEE_RATE_ESTIMATE = 0.029;
+const CNP_FEE_FIXED_DOLLARS_ESTIMATE = 0.3;
+
+interface ManualCardPaymentResponse {
+  success: boolean;
+  purchaseIds?: string[];
+  squarePaymentId?: string;
+  subtotalCents?: number;
+  cnpFeeCents?: number;
+  totalChargedCents?: number;
+  processing?: boolean;
+  message?: string;
 }
 
 export default function PosManualCard({
@@ -47,6 +99,11 @@ export default function PosManualCard({
   buyerEmail,
   onSuccess,
   onError,
+  squareLocationId,
+  discountAmount,
+  discountType,
+  discountValue,
+  discountReasonNote,
   setupIntentClientSecret,
 }: PosManualCardProps) {
   const isSetupIntentMode = !!setupIntentClientSecret;
@@ -55,16 +112,17 @@ export default function PosManualCard({
 
   const [state, setState] = useState<ManualCardState>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [lastFourDigits, setLastFourDigits] = useState<string>('');
-  const [totalWithFee, setTotalWithFee] = useState<number>(cartTotal);
-  const [cnpFeeAmount, setCnpFeeAmount] = useState<number>(0);
+  const feeEstimate = cartTotal * CNP_FEE_RATE_ESTIMATE + CNP_FEE_FIXED_DOLLARS_ESTIMATE;
+  const [totalWithFee, setTotalWithFee] = useState<number>(cartTotal + feeEstimate);
+  const [cnpFeeAmount, setCnpFeeAmount] = useState<number>(feeEstimate);
   const [successTimestamp, setSuccessTimestamp] = useState<string>('');
 
-  // Stripe Elements styling (dark mode aware). Reads the actual applied theme (the 'dark'
-  // class Tailwind's darkMode:'class' toggles on <html>) rather than
-  // window.matchMedia('(prefers-color-scheme: dark)'), which only reflects OS preference and
-  // misses a user who explicitly picked dark mode in-app while their OS is light (see
-  // hooks/useTheme.ts). (S-dark-mode-audit)
+  // Stripe Elements styling (dark mode aware) -- setup-intent mode only (Stripe,
+  // unaffected by this rebuild). Reads the actual applied theme (the 'dark' class
+  // Tailwind's darkMode:'class' toggles on <html>) rather than
+  // window.matchMedia('(prefers-color-scheme: dark)'), which only reflects OS
+  // preference and misses a user who explicitly picked dark mode in-app while their OS
+  // is light (see hooks/useTheme.ts). (S-dark-mode-audit)
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   const cardElementOptions: StripeCardElementOptions = {
@@ -84,6 +142,10 @@ export default function PosManualCard({
     hidePostalCode: false,
   };
 
+  // Setup-intent mode ONLY (venue/vendor-booth QR rail, Stripe, untouched by this
+  // rebuild) -- confirms an EXISTING platform SetupIntent the register already created.
+  // The register-entered ("manual card entry") flow below never calls this; it uses
+  // handleSquareSourceId instead, wired to SquarePaymentRequestForm's onSuccess.
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -105,128 +167,102 @@ export default function PosManualCard({
       return;
     }
 
-    // Venue/multi-vendor QR rail (2026-07-31): confirm the EXISTING platform
-    // SetupIntent the register already created, instead of creating and confirming a
-    // PaymentIntent. No CNP fee applies here -- the real per-booth charges (and their
-    // own fee math) happen later, server-side, in authorizeBoothCartQrLegs.
-    if (isSetupIntentMode) {
-      try {
-        const { error, setupIntent } = await stripe.confirmCardSetup(setupIntentClientSecret!, {
-          payment_method: {
-            card: cardElement,
-            billing_details: {
-              email: buyerEmail || undefined,
-            },
-          },
-        });
-
-        if (error) {
-          setErrorMessage(error.message || 'Card was declined. Please try another card.');
-          setState('error');
-          onError(error.message || 'Card setup declined');
-          return;
-        }
-
-        if (!setupIntent || setupIntent.status !== 'succeeded') {
-          setErrorMessage(`Card status: ${setupIntent?.status ?? 'unknown'}. Please contact the cashier.`);
-          setState('error');
-          onError(`Unexpected setup intent status: ${setupIntent?.status ?? 'unknown'}`);
-          return;
-        }
-
-        const now = new Date();
-        setSuccessTimestamp(
-          now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-        );
-        setState('success');
-        onSuccess('Card confirmed. Show this screen to the cashier to finish your purchase.');
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred confirming your card.';
-        setErrorMessage(errorMsg);
-        setState('error');
-        onError(errorMsg);
-      }
-      return;
-    }
-
     try {
-      // Step 1: Request PaymentIntent from backend
-      // Backend will calculate CNP fee (~3.7% vs 3.2% for card-present)
-      const piResponse = await api.post<PaymentIntentResponse>(
-        '/stripe/terminal/manual-card-payment-intent',
-        {
-          amount: Math.round(cartTotal * 100), // in cents
-          items: cart.map(item => ({
-            itemId: item.itemId,
-            title: item.title,
-            amount: item.amount,
-          })),
-          saleId: selectedSaleId,
-          buyerEmail,
-        }
-      );
-
-      const { clientSecret, cnpFeeAmount: feeAmount } = piResponse.data;
-      const newTotal = cartTotal + feeAmount / 100;
-
-      // Update fee display
-      setCnpFeeAmount(feeAmount / 100);
-      setTotalWithFee(newTotal);
-
-      // Step 2: Confirm payment with Stripe using CardElement
-      // This tokenizes the card on client side (PCI compliant)
-      const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      const { error, setupIntent } = await stripe.confirmCardSetup(setupIntentClientSecret!, {
         payment_method: {
           card: cardElement,
           billing_details: {
-            email: buyerEmail,
+            email: buyerEmail || undefined,
           },
         },
       });
 
       if (error) {
-        // Card was declined or other error occurred
         setErrorMessage(error.message || 'Card was declined. Please try another card.');
         setState('error');
-        onError(error.message || 'Payment declined');
+        onError(error.message || 'Card setup declined');
         return;
       }
 
-      if (!paymentIntent) {
-        throw new Error('No payment intent returned');
-      }
-
-      if (paymentIntent.status === 'succeeded') {
-        // Step 3: Extract last 4 digits from CardElement for display
-        const cardElementElement = cardElement as any;
-        const cardBrand = cardElementElement._element?.dataset?.brand || 'card';
-
-        // Get card details from payment method
-        // Note: Client-side PaymentIntent doesn't have .charges property (server-side only)
-        const cardLast4 = '';
-        setLastFourDigits(cardLast4);
-
-        // Format current time
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        });
-        setSuccessTimestamp(timeStr);
-
-        setState('success');
-        onSuccess(
-          `Payment of $${newTotal.toFixed(2)} processed successfully. Card ending in ${cardLast4}.`
-        );
-      } else {
-        // Unexpected status
-        setErrorMessage(`Payment status: ${paymentIntent.status}. Please contact support.`);
+      if (!setupIntent || setupIntent.status !== 'succeeded') {
+        setErrorMessage(`Card status: ${setupIntent?.status ?? 'unknown'}. Please contact the cashier.`);
         setState('error');
-        onError(`Unexpected payment status: ${paymentIntent.status}`);
+        onError(`Unexpected setup intent status: ${setupIntent?.status ?? 'unknown'}`);
+        return;
       }
+
+      const now = new Date();
+      setSuccessTimestamp(
+        now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      );
+      setState('success');
+      onSuccess('Card confirmed. Show this screen to the cashier to finish your purchase.');
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred processing the payment.';
+      const errorMsg = err instanceof Error ? err.message : 'An error occurred confirming your card.';
+      setErrorMessage(errorMsg);
+      setState('error');
+      onError(errorMsg);
+    }
+  };
+
+  // Register-entered card flow (Square rebuild, 2026-09-12). Fired by
+  // SquarePaymentRequestForm's onSuccess once the organizer's device has tokenized the
+  // shopper's manually-keyed card client-side (card.tokenize() -- see that file). Posts
+  // the resulting one-time sourceId to the real backend endpoint, which resolves the
+  // organizer, preflights their Square account, computes the authoritative (server-
+  // side) total including the CNP fee, and creates+captures the actual Square charge.
+  const handleSquareSourceId = async (sourceId: string) => {
+    setState('processing');
+    setErrorMessage('');
+
+    try {
+      const items = cart.map((item) => ({
+        ...(item.itemId ? { itemId: item.itemId } : {}),
+        amount: item.amount,
+        label: item.title,
+      }));
+
+      const response = await api.post<ManualCardPaymentResponse>('/pos/manual-card-payment', {
+        sourceId,
+        saleId: selectedSaleId,
+        items, // raw, undiscounted per-item amounts -- backend applies the discount itself
+        ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
+        // POS Cashier Discount Permission parity -- see prop doc comment above.
+        ...(discountAmount && discountAmount > 0
+          ? {
+              discountType,
+              discountValue,
+              ...(discountReasonNote?.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
+            }
+          : {}),
+      });
+
+      if (response.data.processing) {
+        // Held authorization, not yet captured by Square -- see manualCardPayment's own
+        // KNOWN GAP comment (no persisted request row exists to retry against for this
+        // walk-up, no-shopper-account flow, unlike the QR/phone rail's POSPaymentRequest).
+        const msg = response.data.message || 'Your payment is still processing. Please check again shortly.';
+        setErrorMessage(msg);
+        setState('error');
+        onError(msg);
+        return;
+      }
+
+      const chargedTotal = (response.data.totalChargedCents ?? Math.round((cartTotal + feeEstimate) * 100)) / 100;
+      const chargedFee = (response.data.cnpFeeCents ?? Math.round(feeEstimate * 100)) / 100;
+      setTotalWithFee(chargedTotal);
+      setCnpFeeAmount(chargedFee);
+
+      const now = new Date();
+      setSuccessTimestamp(
+        now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      );
+      setState('success');
+      onSuccess(`Payment of $${chargedTotal.toFixed(2)} processed successfully.`);
+    } catch (err: any) {
+      const errorMsg =
+        err?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'An error occurred processing the payment.');
       setErrorMessage(errorMsg);
       setState('error');
       onError(errorMsg);
@@ -264,10 +300,13 @@ export default function PosManualCard({
                 <div>
                   <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
                   <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
-                    Processing fee: 3.4% + $0.30 (vs 2.9% + $0.30 for Stripe QR)
+                    Est. processing fee: ~{(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
+                    {' '}(placeholder — Square's exact rate for a manually-keyed card has not been
+                    independently confirmed yet; this reuses Square's own verified 2.9% + $0.30
+                    online-checkout rate as a floor estimate only — the real keyed-in rate may be higher).
                   </p>
                   <p className="text-xs text-amber-800 dark:text-amber-300">
-                    <strong>No dispute protection.</strong> If a shopper disputes this charge, you will lose the sale amount plus a $15 dispute fee with no recourse. (Stripe's optional Chargeback Protection at +0.4%/transaction can cover this. Contact Stripe support to enable.)
+                    <strong>No dispute protection.</strong> If a shopper disputes this charge, you may lose the sale amount plus a dispute fee with no recourse.
                   </p>
                 </div>
               </div>
@@ -304,30 +343,46 @@ export default function PosManualCard({
           {/* Separator */}
           <div className="border-t border-warm-200 dark:border-gray-700"></div>
 
-          {/* Card Input Form */}
-          <form onSubmit={handleProcessPayment} className="space-y-4">
-            {/* CardElement */}
-            <div>
-              <label className="block text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">
-                Card Details
-              </label>
-              <div className="p-3 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700">
-                <CardElement options={cardElementOptions} />
+          {isSetupIntentMode ? (
+            /* Setup-intent mode: Stripe Elements card form (unchanged from before this rebuild). */
+            <form onSubmit={handleProcessPayment} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">
+                  Card Details
+                </label>
+                <div className="p-3 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700">
+                  <CardElement options={cardElementOptions} />
+                </div>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
+                  Your card info is never stored.
+                </p>
               </div>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
-                Stripe handles card data securely. Your card info is never stored.
-              </p>
-            </div>
 
-            {/* Process Button */}
-            <button
-              type="submit"
-              disabled={!stripe || !elements}
-              className="w-full py-3 rounded-lg bg-sage-700 text-white font-semibold hover:bg-sage-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSetupIntentMode ? `Confirm Card $${cartTotal.toFixed(2)}` : `Process Payment $${totalWithFee.toFixed(2)}`}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={!stripe || !elements}
+                className="w-full py-3 rounded-lg bg-sage-700 text-white font-semibold hover:bg-sage-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {`Confirm Card $${cartTotal.toFixed(2)}`}
+              </button>
+            </form>
+          ) : (
+            /* Register-entered mode: Square Web Payments SDK card form (2026-09-12
+               rebuild). SquarePaymentRequestForm owns its own card-input UI and submit
+               button, tokenizing the card client-side and handing the one-time sourceId
+               back via onSuccess -- see handleSquareSourceId above for what happens next. */
+            <SquarePaymentRequestForm
+              requestId={`manual-${selectedSaleId}`}
+              totalAmountCents={Math.round(totalWithFee * 100)}
+              squareLocationId={squareLocationId ?? null}
+              onSuccess={handleSquareSourceId}
+              onError={(msg) => {
+                setErrorMessage(msg);
+                setState('error');
+                onError(msg);
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -370,10 +425,10 @@ export default function PosManualCard({
               <span className="text-warm-600 dark:text-warm-400">Amount:</span>
               <span className="font-semibold text-warm-900 dark:text-warm-100">${totalWithFee.toFixed(2)}</span>
             </div>
-            {lastFourDigits && (
+            {!isSetupIntentMode && cnpFeeAmount > 0 && (
               <div className="flex justify-between">
-                <span className="text-warm-600 dark:text-warm-400">Card:</span>
-                <span className="font-semibold text-warm-900 dark:text-warm-100">••••{lastFourDigits}</span>
+                <span className="text-warm-600 dark:text-warm-400">Incl. processing fee:</span>
+                <span className="font-semibold text-warm-900 dark:text-warm-100">${cnpFeeAmount.toFixed(2)}</span>
               </div>
             )}
             {successTimestamp && (

@@ -13,9 +13,9 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
-import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard
+import { assertCheckoutAllowed, CheckoutGuardError, recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard; recordSuspectedSignal: manual card entry has no verifiable buyer account either (2026-09-12)
 import { snapshotForCommissionOnly, getPlatformFeeRate } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); getPlatformFeeRate: split-payment commission fix (2026-08-22)
-import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12)
 import { resolvePosDiscount } from '../services/posDiscountService';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
@@ -1398,6 +1398,400 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     });
   } catch (err: any) {
     console.error('[pos-payment] confirmPaymentRequest error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// ── CNP FEE (register-entered / manually-keyed card) ────────────────────────────────────
+// PLACEHOLDER, NOT INDEPENDENTLY VERIFIED (2026-09-12, Square rebuild of the dead Stripe
+// manual-card-entry flow -- see pos.tsx's ENABLE_MANUAL_CARD_ENTRY history / PosManualCard.tsx).
+// The old (dead, never-worked) Stripe UI showed "3.4% + $0.30" as its CNP surcharge -- that
+// was STRIPE's specific manually-keyed-card rate and cannot be carried over to Square. Square's
+// actual published rate for a manually-keyed / card-not-present transaction (Square calls this
+// "Keyed-in" in its fee schedule) was NOT independently verified this dispatch -- no live web
+// access from this tool session to confirm it against Square's own published fee-schedule page.
+// Flagged explicitly in the dev handoff. Using Square's ALREADY-VERIFIED 2.9% + $0.30 rate for
+// its regular Payments/Online API charge (see payoutController.ts's SQUARE_RATE/SQUARE_FIXED,
+// independently verified live 2026-09-09 for that exact integration surface) as a CLEARLY
+// LABELED placeholder floor here -- NOT a confirmed keyed-in number. Square's real keyed-in
+// rate is commonly HIGHER than its online-API rate on other processors' published fee
+// schedules, so this placeholder likely UNDERSTATES the true cost. Patrick or a live web check
+// must confirm the real rate before this ships to real organizers.
+//
+// Surcharge design: the CNP fee is ADDED ON TOP of the sale subtotal and charged to the buyer
+// -- mirrors the pre-existing (dead) Stripe manual-entry flow's own design, not a new decision
+// made in this rebuild. Platform commission (appFeeCents below) is computed on the subtotal
+// only, not on this surcharge -- the surcharge exists to cover this organizer's higher
+// effective processing cost for a manually-keyed card, not to enlarge the platform's own cut.
+const CNP_FEE_RATE_PLACEHOLDER = 0.029;
+const CNP_FEE_FIXED_CENTS_PLACEHOLDER = 30;
+
+/**
+ * POST /api/pos/manual-card-payment
+ * Organizer (or authorized TEAM_MEMBER register operator) keys in a walk-up shopper's card
+ * directly at the register -- no card reader, no shopper account, no POSPaymentRequest row.
+ *
+ * SQUARE REBUILD (2026-09-12, Stripe removal): replaces the dead
+ * /stripe/terminal/manual-card-payment-intent route (confirmed via repo-wide grep to never
+ * have been registered server-side -- see pos.tsx's ENABLE_MANUAL_CARD_ENTRY history). This
+ * is a genuinely NEW endpoint, not a Stripe-to-Square swap of an existing one.
+ *
+ * WHY THIS DOESN'T REUSE confirmPaymentRequest's SQUARE BRANCH: that function is
+ * shopper-initiated -- it requires an existing POSPaymentRequest row (created by
+ * createPaymentRequest) and a real shopperUserId (the shopper has a FindA.Sale account,
+ * confirmed via req.user in that flow). Manual card entry has NEITHER: there is no shopper
+ * account at all (a walk-up buyer standing at the register, card physically handed over),
+ * so there is nothing to create a POSPaymentRequest row against, and the actor making this
+ * request IS the organizer/register operator, not a shopper confirming their own payment.
+ * Purchase rows here therefore get `userId: null`, the SAME convention
+ * cashPaymentController.processCashSaleCore already uses for its own walk-up buyers (see
+ * Purchase.userId's own schema comment: "Nullable: POS walk-in buyers have no FindA.Sale
+ * account").
+ *
+ * WHY sourceId (not a persisted request id) IS THE IDEMPOTENCY SEED: squarePosPaymentAdapter's
+ * createAndCapturePayment takes `posRequestId` to build its Square idempotency key and
+ * referenceId -- it was built for the QR/phone flow's POSPaymentRequest.id. There is no such
+ * row here, but Square's card token (sourceId) is itself single-use and unique per
+ * card.tokenize() call, so it is passed as `posRequestId` directly: a genuine client retry of
+ * the EXACT SAME tokenized submission (e.g. a double-tap before the button disabled, or a
+ * dropped response) reuses the SAME sourceId and therefore the SAME Square idempotency key --
+ * Square's own CreatePayment idempotency guarantees this can never be charged twice. A user who
+ * clicks "Try Again" after a genuine decline re-tokenizes a brand-new sourceId, so that never
+ * collides with a prior attempt's key. See squarePaymentService.ts's buildSquareIdempotencyKey
+ * doc comment for the same pattern used by the online-checkout surfaces.
+ *
+ * Purchase-row idempotency (separate from the Square-charge idempotency above): once Square
+ * confirms the charge, this checks whether ANY Purchase row already exists for the resulting
+ * squarePaymentId before creating new ones -- covers a concurrent duplicate submit that both
+ * reached Square with the same sourceId (both get back the same paymentId from Square's own
+ * dedup) racing to write Purchase rows. Deliberately checked ONCE for the whole charge (not
+ * per item via itemId) because this cart can contain multiple misc/no-itemId lines (custom
+ * amount buttons), and the Purchase.squarePaymentId+itemId partial unique index does not
+ * constrain itemId=NULL rows against each other (Postgres never treats NULL=NULL as a
+ * collision) -- a per-item itemId=null lookup would have incorrectly matched a DIFFERENT
+ * misc line from the same charge. A tiny TOCTOU window remains between this check and the
+ * creates below for two truly concurrent requests; low severity (Square itself already
+ * prevents the money from being charged twice) and flagged in the dev handoff for the
+ * adversarial pass rather than engineered away with a transaction this dispatch didn't budget.
+ *
+ * KNOWN GAP (mirrors squarePosPaymentAdapter.ts's own file-header gap, worse here): if
+ * CreatePayment succeeds but the immediate CompletePayment call fails, the QR/phone flow can
+ * retry against its persisted POSPaymentRequest.squarePaymentId -- this flow has NO persisted
+ * row at all to retry against. A held authorization here is surfaced to Sentry for manual
+ * reconciliation and the organizer is told to check Square's dashboard, never told the sale
+ * succeeded. See the `!result.captured` branch below.
+ */
+export const manualCardPayment = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizerOrTeamMember(req, res);
+    if (!organizer) return;
+
+    const { sourceId, saleId, items, buyerEmail, discountType, discountValue, discountReasonNote } = req.body as {
+      sourceId?: string;
+      saleId?: string;
+      items?: Array<{ itemId?: string; amount: number; label?: string }>;
+      buyerEmail?: string;
+      discountType?: string;
+      discountValue?: number;
+      discountReasonNote?: string;
+    };
+
+    if (!sourceId || typeof sourceId !== 'string') {
+      return res.status(400).json({ message: 'sourceId is required' });
+    }
+    if (!saleId || typeof saleId !== 'string') {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'items array is required and must be non-empty' });
+    }
+    if (!items.every((i) => typeof i.amount === 'number' && i.amount > 0)) {
+      return res.status(400).json({ message: 'Each item must have a positive amount' });
+    }
+
+    // Sale ownership -- same check every other POS payment endpoint in this file makes.
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true, status: true, organizerId: true, organizer: { select: { userId: true } } },
+    });
+    if (!sale || sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Sale does not belong to your account' });
+    }
+    if (sale.status !== 'PUBLISHED') {
+      return res.status(400).json({ message: 'Sale is not published' });
+    }
+
+    // Reject duplicate itemIds -- each physical item can only be charged once per transaction.
+    const itemIds = items.filter((i) => i.itemId).map((i) => i.itemId!);
+    if (itemIds.length !== new Set(itemIds).size) {
+      return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
+    }
+
+    let dbItems: Record<string, { id: string; title: string; status: string; draftStatus: string | null; price: number | null }> = {};
+    if (itemIds.length > 0) {
+      const fetched = await prisma.item.findMany({
+        where: { id: { in: itemIds }, saleId },
+        select: { id: true, title: true, status: true, draftStatus: true, price: true },
+      });
+      dbItems = Object.fromEntries(fetched.map((item) => [item.id, item]));
+      for (const itemId of itemIds) {
+        if (!dbItems[itemId]) {
+          return res.status(404).json({ message: 'Item not found in this sale' });
+        }
+        if (dbItems[itemId].status !== 'AVAILABLE') {
+          return res.status(400).json({ message: `"${dbItems[itemId].title}" is sold or unavailable` });
+        }
+        if (dbItems[itemId].draftStatus !== null && dbItems[itemId].draftStatus !== 'PUBLISHED') {
+          return res.status(400).json({ message: `"${dbItems[itemId].title}" is pending review and cannot be sold yet` });
+        }
+      }
+    }
+
+    // POS Cashier Discount Permission -- same server-side resolution every other POS charge
+    // path in this codebase uses (never trusts a client-supplied discount amount directly).
+    const catalogSubtotalCents = Math.round(
+      items.reduce((sum, i) => sum + (i.itemId && dbItems[i.itemId]?.price ? dbItems[i.itemId].price! : 0), 0) * 100
+    );
+    const discountResolution = await resolvePosDiscount({
+      actor: organizer,
+      input: { discountType, discountValue, discountReasonNote },
+      catalogSubtotalCents,
+    });
+    if (!discountResolution.ok) {
+      return res.status(discountResolution.status).json({ message: discountResolution.message });
+    }
+
+    // findasale-hacker fix (2026-09-12, manual-card-entry adversarial pass): ADR-112's
+    // catalog-price floor (createPaymentRequest above enforces this same invariant via its
+    // own minAllowedTotalCents check) was MISSING here entirely -- unlike createPaymentRequest,
+    // this endpoint never compared the client-supplied items[].amount against
+    // dbItems[itemId].price at all before charging. A tampered/compromised frontend (or a
+    // dishonest organizer/team-member submitting a raw request) could send
+    // items:[{itemId, amount: 0.01}] for a catalog item the DB prices at any real value, and
+    // the server would charge the buyer's card, create the Purchase row, and mark the item
+    // SOLD at that arbitrary low amount -- confirmed exploitable via code trace, not caught by
+    // this file's own test suite. Only catalog (itemId-bearing) lines are floored here --
+    // misc/custom-amount lines (no itemId) remain free-form, same trust boundary
+    // createPaymentRequest's own floor check and ADR-112 already document.
+    const rawCatalogItemsCents = Math.round(
+      items.filter((i) => i.itemId).reduce((sum, i) => sum + i.amount, 0) * 100
+    );
+    const minAllowedCatalogItemsCents = catalogSubtotalCents - discountResolution.discountAmountCents - 1;
+    if (rawCatalogItemsCents < minAllowedCatalogItemsCents) {
+      return res.status(400).json({
+        message: discountResolution.discountAmountCents > 0
+          ? `Total does not match the applied discount. Expected at least ${minAllowedCatalogItemsCents} cents for catalog items.`
+          : `Total does not match catalog pricing. Expected at least ${minAllowedCatalogItemsCents} cents for catalog items.`,
+      });
+    }
+
+    const discountRatio = discountResolution.discountAmountCents > 0 && catalogSubtotalCents > 0
+      ? discountResolution.discountAmountCents / catalogSubtotalCents
+      : 0;
+    const chargedItems = items.map((i) => {
+      if (discountRatio === 0 || !i.itemId) return { ...i, rowDiscountCents: 0 };
+      const beforeCents = Math.round(i.amount * 100);
+      const afterCents = Math.round(beforeCents * (1 - discountRatio));
+      return { ...i, amount: afterCents / 100, rowDiscountCents: beforeCents - afterCents };
+    });
+
+    const subtotalCents = Math.round(chargedItems.reduce((sum, i) => sum + i.amount, 0) * 100);
+    if (subtotalCents <= 0) {
+      return res.status(400).json({ message: 'Total must be greater than $0' });
+    }
+
+    const cnpFeeCents = Math.round(subtotalCents * CNP_FEE_RATE_PLACEHOLDER) + CNP_FEE_FIXED_CENTS_PLACEHOLDER;
+    const totalChargeCents = subtotalCents + cnpFeeCents;
+
+    const preflight = await squarePos.preflightAccountStatus({
+      id: organizer.id,
+      squareOnboarded: organizer.squareOnboarded,
+      squareMerchantId: organizer.squareMerchantId,
+      squareLocationId: organizer.squareLocationId,
+    });
+    if (!preflight.ok) {
+      return res.status(preflight.status).json({ message: preflight.message });
+    }
+
+    // Platform commission on the sale's own subtotal (never the CNP surcharge) -- same
+    // resolution createPaymentRequest above uses for the card portion of its own charges.
+    const hasReferralDiscount =
+      organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
+    const cardFeeRate = hasReferralDiscount ? 0 : getPlatformFeeRate(organizer.subscriptionTier as any);
+    const baseAppFeeCents = Math.round(subtotalCents * cardFeeRate);
+
+    // Cash-fee-debt recoupment (2026-09-12 Stripe removal) -- same mechanism every other
+    // Square card charge in this codebase applies, see cashFeeService.ts's file header.
+    const { appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
+      organizerId: organizer.id,
+      baseAppFeeCents,
+      saleAmountCents: totalChargeCents,
+    });
+
+    const result = await squarePos.createAndCapturePayment({
+      organizer: {
+        id: organizer.id,
+        squareOnboarded: organizer.squareOnboarded,
+        squareMerchantId: organizer.squareMerchantId,
+        squareLocationId: organizer.squareLocationId,
+      },
+      accessToken: preflight.accessToken,
+      sourceId,
+      amountCents: totalChargeCents,
+      appFeeCents,
+      // No POSPaymentRequest row exists for this flow -- sourceId itself is the idempotency
+      // seed. See this function's own header comment for the full reasoning.
+      posRequestId: sourceId,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status).json({ message: result.message });
+    }
+
+    if (!result.captured) {
+      // KNOWN GAP -- see this function's header comment. No persisted request row to retry
+      // against for this walk-up flow, unlike the QR/phone rail's POSPaymentRequest.
+      try {
+        Sentry.captureMessage(
+          `[pos-payment] Square CompletePayment did not capture immediately for manual card entry -- organizerId=${organizer.id} squarePaymentId=${result.paymentId}. No POSPaymentRequest row exists to retry against; needs manual reconciliation via Square dashboard.`,
+          'warning'
+        );
+      } catch {
+        // Sentry may not be initialized -- silently continue
+      }
+      return res.status(202).json({
+        success: false,
+        processing: true,
+        message: "Your payment is still processing. Please check Square's dashboard in a moment, or try the sale again.",
+      });
+    }
+
+    const squarePaymentId = result.paymentId;
+
+    // Whole-charge idempotent-retry-safe lookup -- see this function's header comment for why
+    // this is checked once per charge rather than per item.
+    const existingPurchases = await prisma.purchase.findMany({ where: { squarePaymentId } });
+    if (existingPurchases.length > 0) {
+      return res.json({
+        success: true,
+        purchaseIds: existingPurchases.map((p) => p.id),
+        squarePaymentId,
+        subtotalCents,
+        cnpFeeCents,
+        totalChargedCents: totalChargeCents,
+      });
+    }
+
+    const purchaseIds: string[] = [];
+    let remainingDebtCentsToAllocate = debtAppliedCents;
+    for (let idx = 0; idx < chargedItems.length; idx++) {
+      const item = chargedItems[idx];
+      const itemAmountCents = Math.round(item.amount * 100);
+      const itemFeeCents = Math.round(itemAmountCents * cardFeeRate);
+      const isLastItem = idx === chargedItems.length - 1;
+      const itemDebtCents = isLastItem
+        ? remainingDebtCentsToAllocate
+        : Math.min(
+            remainingDebtCentsToAllocate,
+            subtotalCents > 0 ? Math.round(debtAppliedCents * (itemAmountCents / subtotalCents)) : 0
+          );
+      remainingDebtCentsToAllocate -= itemDebtCents;
+
+      try {
+        const purchase = await prisma.purchase.create({
+          data: {
+            userId: null, // walk-up buyer, no FindA.Sale account -- see Purchase.userId schema comment
+            itemId: item.itemId ?? null,
+            saleId,
+            amount: item.amount,
+            platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
+            cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
+            ...snapshotForCommissionOnly(itemFeeCents / 100, cardFeeRate),
+            discountType: item.rowDiscountCents > 0 ? discountResolution.discountType : null,
+            discountValueRaw: item.rowDiscountCents > 0 ? discountResolution.discountValueRaw : null,
+            discountAmountCents: item.rowDiscountCents > 0 ? item.rowDiscountCents : null,
+            discountReasonNote: item.rowDiscountCents > 0 ? discountResolution.discountReasonNote : null,
+            discountAppliedByUserId: item.rowDiscountCents > 0 ? organizer.actingUserId : null,
+            processor: 'SQUARE',
+            squarePaymentId,
+            status: 'PAID',
+            source: 'POS',
+            buyerEmail: buyerEmail && buyerEmail.trim() ? buyerEmail.trim() : undefined,
+          },
+        });
+        purchaseIds.push(purchase.id);
+      } catch (err: any) {
+        // P0 fix precedent (2026-08-08, Terminal readiness audit / confirmPaymentRequest
+        // above): the Square charge is ALREADY captured by this point -- a failure here
+        // means money was taken but this one line item wasn't recorded as sold. Alert and
+        // keep processing the rest of the cart rather than aborting (which would silently
+        // drop every item after the failed one, on top of the payment already succeeding).
+        console.error(`[pos-payment] manualCardPayment: failed to create Purchase for item ${item.itemId ?? '(misc)'} (payment already captured):`, err);
+        try {
+          Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { area: 'pos-manual-card-payment-purchase-create' },
+            extra: { saleId, itemId: item.itemId ?? null, organizerId: organizer.id, squarePaymentId },
+          });
+        } catch {
+          // Sentry may not be initialized
+        }
+        continue;
+      }
+
+      if (item.itemId) {
+        try {
+          const { fullySoldOut, remainingStock } = await sellItemUnits(item.itemId, 1);
+          if (fullySoldOut) {
+            endEbayListingIfExists(item.itemId).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
+            markShopifyItemSold(item.itemId).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
+            notifyFacebookExportedItemSold(item.itemId).catch((err) => console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message));
+          } else {
+            syncMarketplaceStock(item.itemId, { fullySoldOut: false, remainingStock }).catch((err) =>
+              console.error('[eBay ReviseQty] sync failed for item', item.itemId, err)
+            );
+          }
+        } catch (stockErr: any) {
+          if (stockErr instanceof InsufficientStockError) {
+            console.error(`[pos-payment] manualCardPayment: oversold race on item ${item.itemId} despite captured payment:`, stockErr.message);
+          }
+          console.error(`[pos-payment] manualCardPayment: post-payment stock update FAILED for item ${item.itemId} (payment already captured):`, stockErr);
+          try {
+            Sentry.captureException(stockErr instanceof Error ? stockErr : new Error(String(stockErr)), {
+              tags: { area: 'pos-manual-card-payment-post-payment-stock-update' },
+              extra: { saleId, itemId: item.itemId, organizerId: organizer.id, squarePaymentId },
+            });
+          } catch {
+            // Sentry may not be initialized
+          }
+        }
+      }
+    }
+
+    await settleCashDebtCollection({ organizerId: organizer.id, debtAppliedCents });
+
+    // S1072 Finding #4 shape: no verifiable buyer account for this walk-up register sale --
+    // same posture as cashPaymentController.cashPayment's own recordSuspectedSignal call.
+    // Log-only, never blocks a legitimate sale.
+    if (sale.organizer?.userId) {
+      recordSuspectedSignal({
+        prisma,
+        userId: sale.organizer.userId,
+        saleId,
+        signalType: 'SELF_DEALING',
+        notes: '[manualCardPayment] Manual card-entry sale recorded with no verifiable buyer account: offsite/unpreventable, logged for review only.',
+      }).catch((err) => console.warn('[pos-payment] recordSuspectedSignal failed (non-fatal):', err));
+    }
+
+    return res.json({
+      success: true,
+      purchaseIds,
+      squarePaymentId,
+      subtotalCents,
+      cnpFeeCents,
+      totalChargedCents: totalChargeCents,
+    });
+  } catch (err: any) {
+    console.error('[pos-payment] manualCardPayment error:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };

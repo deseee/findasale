@@ -26,6 +26,7 @@ import {
   getTodaySummary,
   cancelPaymentRequest,
   confirmPaymentRequest,
+  manualCardPayment,
 } from '../controllers/posPaymentController';
 
 const router = Router();
@@ -59,6 +60,10 @@ router.get('/sessions/:sessionId/shopper-holds', authenticate, searchShopperHold
 
 // POS Payment Request endpoints
 router.post('/payment-request', authenticate, requireOrganizerOrTeamMember, paymentLimiter, createPaymentRequest);
+// Manual card entry (2026-09-12, Square rebuild): organizer/register-operator keys in a
+// walk-up shopper's card directly -- no shopper account, no POSPaymentRequest row (see
+// manualCardPayment's own header comment in posPaymentController.ts for the full design).
+router.post('/manual-card-payment', authenticate, requireOrganizerOrTeamMember, paymentLimiter, manualCardPayment);
 // Transaction summary — organizer only
 router.get('/transactions/today-summary', authenticate, requireOrganizerOrTeamMember, getTodaySummary);
 // 'active' and 'pending' must be registered before '/:requestId' to avoid param collision
