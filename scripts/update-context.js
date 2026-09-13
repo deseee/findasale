@@ -24,12 +24,25 @@ const TREE_EXCLUDE = new Set([
   'node_modules', '.git', 'context.md', '.next', 'venv',
   'aider', 'pnpm-lock.yaml', '__pycache__', 'uploads',
   'tsconfig.tsbuildinfo', 'output.css',
+  // Added S-CONTEXT-FIX-2026-09-13: full nested repo checkouts under .claude/
+  // (6 complete second copies of packages/, claude_docs/, etc. as of this fix —
+  // the single worst tree-bloat offender, confirmed via device_bash inspection)
+  'worktrees',
+  // Temp/tooling dirs with zero project-structure value: pip scratch libs,
+  // rclone sync tool + binary, transient push-probe file, Railway CLI binary + .env
+  '.tmp-pylibs', '.tmp-scratch', '.footage-sync', '.push-tmp', '.railway-cli',
+  // Compiled build output (packages/backend/dist) — mirrors src/ 1:1 in compiled
+  // JS, same category as the already-excluded .next frontend build output
+  'dist',
 ]);
 
 // Directories shown with item count but not expanded (avoids token bloat)
 const TREE_COLLAPSE = new Set([
   // Build / tooling
   'migrations', '.cache', '.aider.tags.cache.v4',
+  // Dated backup archives (936MB+ of daily zips as of 2026-09) — collapse to a
+  // count instead of listing every dated filename, which changes every day
+  'backups',
   // Backend source — collapse leaf directories, keep package structure visible
   'controllers', 'routes', 'services', 'jobs', 'middleware', 'models', 'utils', 'lib',
   // Frontend source
@@ -40,6 +53,13 @@ const TREE_COLLAPSE = new Set([
   'archive', 'beta-launch', 'brand', 'competitor-intel', 'feature-notes', 'guides',
   'health-reports', 'improvement-memos', 'logs', 'operations', 'research',
   'self-healing', 'skills-package', 'strategy', 'workflow-retrospectives',
+  // Added S-CONTEXT-FIX-2026-09-13: claude_docs subdirs created since the above
+  // list was last updated (found via direct file-count inspection — each has
+  // dozens to 200+ files that were fully recursing into the tree)
+  'audits', 'architecture', 'marketing', 'ux-spotchecks', 'feature-decisions',
+  'design', 'security', 'feature-specs', 'specs', 'legal', 'content',
+  'skill-updates', 'handoffs', 'UX_SPECS', 'UX', 'ux-audits', 'reports',
+  'monitoring', 'brand-voice',
 ]);
 
 function getTree(dir = '.', prefix = '') {
@@ -87,12 +107,15 @@ function getLastSessionSummary() {
   if (!fs.existsSync(logPath)) return 'No session log found.';
   // Normalize CRLF → LF (file lives on Windows-mounted drive)
   const content = fs.readFileSync(logPath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  // Extract the first ### block (most recent session)
-  const dateMatch = content.match(/### (\d{4}-\d{2}-\d{2})/);
-  if (!dateMatch) return 'No recent session found in log.';
-  const match = content.match(/### \d{4}-\d{2}-\d{2}[^\n]*\n([\s\S]*?)(?=\n### |\n---)/);
-  if (!match) return 'No recent session found in log.';
-  return `### ${dateMatch[1]}\n${match[1].trim()}`;
+  // Current session-wrap format (confirmed 2026-09-13): "## Session <id> -- YYYY-MM-DD (<desc>)"
+  // header, most recent entry first in the file, entries separated by a "---" divider line.
+  // (Fixed S-CONTEXT-FIX-2026-09-13 — old regex expected a "### YYYY-MM-DD" header that this
+  // format had already moved away from, so this always fell through to the not-found message.)
+  const headerMatch = content.match(/^## Session[^\n]*-- (\d{4}-\d{2}-\d{2})[^\n]*$/m);
+  if (!headerMatch) return 'No recent session found in log.';
+  const sectionMatch = content.match(/^(## Session[^\n]*)\n([\s\S]*?)(?=\n## Session |\n---\s*\n|(?![\s\S]))/m);
+  if (!sectionMatch) return 'No recent session found in log.';
+  return `${sectionMatch[1]}\n${sectionMatch[2].trim()}`;
 }
 
 const lastSession = getLastSessionSummary();
