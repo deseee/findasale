@@ -144,7 +144,7 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
       >
         <Heart
           className={`${sizeClasses[size].icon} transition-all`}
-          fill={isFavorited ? 'currentColor' : 'none'}
+          fill={isFavorited ? 'rgb(239, 68, 68)' : 'none'}
           stroke={isFavorited ? 'rgb(239, 68, 68)' : 'currentColor'}
           strokeWidth={isFavorited ? 0 : 2}
         />
