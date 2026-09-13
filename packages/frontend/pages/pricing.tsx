@@ -16,7 +16,6 @@ import BecomeOrganizerModal from '../components/BecomeOrganizerModal';
 import PremiumCTA from '../components/PremiumCTA';
 import TierComparisonTable from '../components/TierComparisonTable';
 import TooltipHelper from '../components/TooltipHelper';
-import api from '../lib/api';
 
 interface PricingTier {
   id: 'SIMPLE' | 'PRO' | 'TEAMS';
@@ -138,26 +137,13 @@ const PricingPage = () => {
       return;
     }
 
-    // Start checkout flow
-    setLoading(tier.id);
-    setError(null);
-
-    try {
-      const response = await api.post('/billing/checkout', {
-        priceId: tier.stripePrice,
-        billingInterval: 'monthly',
-      });
-
-      if (response.data?.url) {
-        window.location.href = response.data.url;
-      } else {
-        setError('Failed to create checkout session. Please try again.');
-      }
-    } catch (err: any) {
-      console.error('Checkout error:', err);
-      setError(err.response?.data?.message || 'Failed to start checkout. Please try again.');
-      setLoading(null);
-    }
+    // Organizer wants to actually pay for PRO/TEAMS -- hand off to the Square billing
+    // flow on the subscription page. The Stripe Checkout Session endpoint this used to
+    // call (POST /billing/checkout) is dead: Stripe's platform account is permanently
+    // closed for live charges. /organizer/subscription already has a working Square
+    // card-on-file flow (SquareBillingCardForm -> POST /billing/square/subscribe);
+    // upgradeTier tells it which tier the organizer is paying for.
+    router.push(`/organizer/subscription?upgradeTier=${tier.id}`);
   };
 
   const getCurrentTierLabel = (tier: PricingTier): string => {

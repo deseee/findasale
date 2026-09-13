@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
@@ -38,10 +39,26 @@ export default function SubscriptionPage() {
   const [showSquareSetup, setShowSquareSetup] = useState(false);
   const [settingUpSquare, setSettingUpSquare] = useState(false);
   const [squareSetupError, setSquareSetupError] = useState<string | null>(null);
+  // ?upgradeTier=PRO|TEAMS -- set by /pricing's "Upgrade" button for a SIMPLE-tier
+  // organizer who wants to actually pay: this is the tier they're BUYING, distinct
+  // from `tier` above (their current tier, from useOrganizerTier). Falls back to
+  // `tier` itself so the existing "add a card for the plan you already have" flow
+  // (SIMPLE-branch-less, tier already PRO/TEAMS) is unaffected.
+  const router = useRouter();
+  const [upgradeTier, setUpgradeTier] = useState<'PRO' | 'TEAMS' | null>(null);
 
   useEffect(() => {
     fetchSubscription();
   }, []);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const q = router.query.upgradeTier;
+    if (q === 'PRO' || q === 'TEAMS') {
+      setUpgradeTier(q);
+      setShowSquareSetup(true);
+    }
+  }, [router.isReady, router.query.upgradeTier]);
 
   const fetchSubscription = async () => {
     // Admin users don't have billing accounts — skip the API call
@@ -82,13 +99,15 @@ export default function SubscriptionPage() {
   };
 
   const handleSquareTokenized = async (sourceId: string) => {
-    if (tier !== 'PRO' && tier !== 'TEAMS') return;
+    const targetTier = upgradeTier ?? tier;
+    if (targetTier !== 'PRO' && targetTier !== 'TEAMS') return;
     setSettingUpSquare(true);
     setSquareSetupError(null);
     try {
-      await api.post('/billing/square/subscribe', { tier, sourceId });
-      showToast('Square billing set up!', 'success');
+      await api.post('/billing/square/subscribe', { tier: targetTier, sourceId });
+      showToast(upgradeTier ? `Welcome to ${targetTier}!` : 'Square billing set up!', 'success');
       setShowSquareSetup(false);
+      setUpgradeTier(null);
       fetchSubscription();
     } catch (err: any) {
       setSquareSetupError(err.response?.data?.message ?? 'Could not set up Square billing. Please try again.');
@@ -463,6 +482,40 @@ export default function SubscriptionPage() {
                   You get 200 items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
                 </p>
               </div>
+
+              {/* Arrived from /pricing wanting to actually pay for PRO/TEAMS -- card entry
+                  via the same Square flow used above for an existing PRO/TEAMS organizer
+                  adding a payment method, just targeting the tier they're buying instead of
+                  a tier they already have. */}
+              {upgradeTier && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-sage-200 dark:border-sage-800 shadow-sm p-8">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                    Upgrade to {upgradeTier}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    Add a card to start your {upgradeTier} subscription.
+                  </p>
+                  {squareSetupError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4">
+                      {squareSetupError}
+                    </div>
+                  )}
+                  <SquareBillingCardForm
+                    submitLabel={`Start ${upgradeTier} billing via Square`}
+                    isProcessing={settingUpSquare}
+                    onTokenized={handleSquareTokenized}
+                    onError={(msg) => setSquareSetupError(msg)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setUpgradeTier(null)}
+                    disabled={settingUpSquare}
+                    className="w-full mt-3 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
 
               {/* Upgrade to PRO Section */}
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8">
