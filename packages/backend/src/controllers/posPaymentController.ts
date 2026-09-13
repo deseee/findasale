@@ -1545,16 +1545,69 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         select: { id: true, title: true, status: true, draftStatus: true, price: true },
       });
       dbItems = Object.fromEntries(fetched.map((item) => [item.id, item]));
+      const notAvailableItemIds: string[] = [];
       for (const itemId of itemIds) {
         if (!dbItems[itemId]) {
           return res.status(404).json({ message: 'Item not found in this sale' });
         }
         if (dbItems[itemId].status !== 'AVAILABLE') {
-          return res.status(400).json({ message: `"${dbItems[itemId].title}" is sold or unavailable` });
+          // Don't reject immediately -- this could be a genuine idempotent retry of an
+          // already-completed charge (the item was marked SOLD by THIS SAME charge's first
+          // attempt via sellItemUnits below, and the client is retrying after e.g. a dropped
+          // response). Collect it and resolve after the loop by checking for a prior PAID
+          // Purchase behind every item in this cart -- see the check below this loop.
+          notAvailableItemIds.push(itemId);
+          continue;
         }
         if (dbItems[itemId].draftStatus !== null && dbItems[itemId].draftStatus !== 'PUBLISHED') {
           return res.status(400).json({ message: `"${dbItems[itemId].title}" is pending review and cannot be sold yet` });
         }
+      }
+      if (notAvailableItemIds.length > 0) {
+        // findasale-dev fix (2026-09-13, posManualCardPayment idempotent-retry regression):
+        // the availability gate above runs BEFORE this function ever reaches Square or the
+        // whole-charge squarePaymentId idempotency check further down (see this function's
+        // header comment). A genuine retry of an already-successful charge -- same
+        // sourceId/items/saleId, e.g. a dropped response -- lands here with the item already
+        // SOLD from the first attempt's sellItemUnits call, and would otherwise be rejected
+        // with this same 400 instead of returning the original successful response. Only
+        // treat it as a safe retry when EVERY item in this cart (not just the not-available
+        // ones) already has a PAID Purchase row from ONE shared prior Square payment -- an
+        // attacker cannot manufacture that state without having already legitimately paid for
+        // these exact items in one shared charge. Otherwise fall through to the original
+        // reject-with-400 behavior unchanged.
+        const priorPurchases = itemIds.length > 0
+          ? await prisma.purchase.findMany({
+              where: { itemId: { in: itemIds }, saleId, processor: 'SQUARE', status: 'PAID' },
+              select: { id: true, itemId: true, squarePaymentId: true },
+            })
+          : [];
+        const priorPurchaseByItemId = new Map(priorPurchases.map((p) => [p.itemId, p]));
+        const distinctPaymentIds = new Set(
+          priorPurchases.map((p) => p.squarePaymentId).filter((id): id is string => !!id)
+        );
+        const isSafeRetry =
+          itemIds.length > 0 &&
+          itemIds.every((itemId) => priorPurchaseByItemId.has(itemId)) &&
+          distinctPaymentIds.size === 1;
+        if (isSafeRetry) {
+          const [reusedSquarePaymentId] = distinctPaymentIds;
+          // Mirrors the whole-charge idempotent-retry-safe lookup further down this function
+          // (see its own comment there) -- return every Purchase row tied to that one prior
+          // payment, not just the ones for the not-available items in THIS request.
+          const allPurchasesForPayment = await prisma.purchase.findMany({
+            where: { squarePaymentId: reusedSquarePaymentId },
+          });
+          return res.json({
+            success: true,
+            purchaseIds: allPurchasesForPayment.map((p) => p.id),
+            squarePaymentId: reusedSquarePaymentId,
+          });
+        }
+        const firstNotAvailableItemId = notAvailableItemIds[0];
+        return res.status(400).json({
+          message: `"${dbItems[firstNotAvailableItemId].title}" is sold or unavailable`,
+        });
       }
     }
 
