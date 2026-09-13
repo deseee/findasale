@@ -14,6 +14,7 @@
 import { Response } from 'express';
 import crypto from 'crypto';
 import * as Sentry from '@sentry/node';
+import { resolveAndBackfillSquareLocationId } from '../services/squarePosPaymentAdapter';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
@@ -229,9 +230,39 @@ export const getPosContext = async (req: AuthRequest, res: Response) => {
         // the Square Web Payments SDK for register-entered card sales -- see
         // PosManualCard.tsx / pos.tsx's ENABLE_MANUAL_CARD_ENTRY history. Nothing before
         // this endpoint's own callers needed this field.
-        select: { venmoHandle: true, zelleHandle: true, squareOnboarded: true, squareLocationId: true },
+        select: {
+          venmoHandle: true,
+          zelleHandle: true,
+          squareOnboarded: true,
+          squareMerchantId: true,
+          squareLocationId: true,
+        },
       }),
     ]);
+
+    // Self-heal (2026-09-13, "organizer not finished connecting Square" bug fix): this is
+    // the FIRST touchpoint the manual-card-entry UI reads squareLocationId from (pos.tsx ->
+    // PosManualCard -> SquarePaymentRequestForm) -- that UI blocks card entry entirely with
+    // its own "not finished connecting Square yet" message the instant this is null,
+    // WITHOUT ever calling a payment endpoint, so squarePosPaymentAdapter.ts's own
+    // preflightAccountStatus self-heal (which only runs once a payment is actually
+    // attempted) would never get a chance to fire for an organizer who only uses this
+    // surface. Best-effort only: any failure here is swallowed and the endpoint falls back
+    // to its pre-existing (possibly-null) value, exactly as before this fix -- this must
+    // never break the rest of the POS context payload (sales list, discount permission,
+    // etc.) that has nothing to do with Square.
+    let resolvedSquareLocationId = organizerRow?.squareLocationId ?? null;
+    if (organizerRow?.squareOnboarded && organizerRow.squareMerchantId && !resolvedSquareLocationId) {
+      try {
+        resolvedSquareLocationId = await resolveAndBackfillSquareLocationId({
+          id: actor.id,
+          squareMerchantId: organizerRow.squareMerchantId,
+          squareOnboarded: organizerRow.squareOnboarded,
+        });
+      } catch (backfillErr) {
+        console.error('[pos] getPosContext squareLocationId backfill failed:', backfillErr);
+      }
+    }
 
     // POS Cashier Discount Permission (2026-08-28): ORGANIZER is always allowed,
     // uncapped -- no lookup needed. TEAM_MEMBER requires the apply_pos_discount
@@ -265,7 +296,7 @@ export const getPosContext = async (req: AuthRequest, res: Response) => {
       venmoHandle: organizerRow?.venmoHandle ?? null,
       zelleHandle: organizerRow?.zelleHandle ?? null,
       squareOnboarded: organizerRow?.squareOnboarded ?? false,
-      squareLocationId: organizerRow?.squareLocationId ?? null,
+      squareLocationId: resolvedSquareLocationId,
       canApplyDiscount,
       discountCap,
     });

@@ -18,6 +18,7 @@ import {
 // onboarding. See the VENDOR_BOOTH branch below for the edge-check this mirrors from
 // getVendorBoothStripeStatus's poll-based version, adapted for a single OAuth callback.
 import { notifyOrganizerBoothSquareConnected } from '../services/vendorBoothLifecycleNotificationService';
+import { resolveAndBackfillSquareLocationId } from '../services/squarePosPaymentAdapter';
 
 /**
  * Square Connect-Equivalent Onboarding Controller
@@ -79,6 +80,27 @@ export const initiateSquareOrganizerOnboarding = async (req: AuthRequest, res: R
     if (!organizer) return res.status(404).json({ message: 'Organizer not found.' });
 
     if (organizer.squareOnboarded && organizer.squareMerchantId) {
+      // Self-heal (2026-09-13, "organizer not finished connecting Square" bug fix):
+      // squareOnboarded+squareMerchantId being true here does NOT guarantee
+      // squareLocationId is set -- see squarePosPaymentAdapter.ts's preflightAccountStatus
+      // doc comment for why that field can be permanently null despite a genuinely
+      // completed OAuth handshake. Best-effort attempt to backfill it here too, so this
+      // organizer-facing "are you connected" status endpoint self-heals the same gap
+      // POS payments do, rather than only ever fixing it the first time a payment is
+      // attempted. Never blocks or changes the alreadyOnboarded verdict on failure --
+      // squareOnboarded+squareMerchantId are the real, permanent OAuth-complete facts;
+      // this is purely a best-effort assist for the DOWNSTREAM squareLocationId gap.
+      if (!organizer.squareLocationId) {
+        try {
+          await resolveAndBackfillSquareLocationId({
+            id: organizer.id,
+            squareMerchantId: organizer.squareMerchantId,
+            squareOnboarded: organizer.squareOnboarded,
+          });
+        } catch (backfillErr) {
+          console.error('initiateSquareOrganizerOnboarding squareLocationId backfill failed:', backfillErr);
+        }
+      }
       // Last-known-cached state only -- see resolveExistingSquareIdentityForUser's own
       // comment in squareConnectService.ts for why this cannot live-verify against Square.
       return res.json({ alreadyOnboarded: true, squareMerchantId: organizer.squareMerchantId });

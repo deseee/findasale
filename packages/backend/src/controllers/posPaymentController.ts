@@ -1016,7 +1016,14 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       },
     });
     if (posRequest.processor === 'SQUARE') {
-      if (!organizerProfile?.squareOnboarded || !organizerProfile.squareMerchantId || !organizerProfile.squareLocationId) {
+      // squareLocationId deliberately NOT checked here (2026-09-13 fix): a null
+      // squareLocationId with squareOnboarded+squareMerchantId both true is a
+      // self-healable gap (see squarePosPaymentAdapter.ts's preflightAccountStatus doc
+      // comment), not "never connected" -- the live preflight call just below is what
+      // decides that, including attempting the backfill. Gating on it here would
+      // short-circuit before preflightAccountStatus ever runs, permanently defeating
+      // the self-heal for this endpoint.
+      if (!organizerProfile?.squareOnboarded || !organizerProfile.squareMerchantId) {
         return res.status(400).json({ message: 'Organizer Square account not configured' });
       }
     } else if (!organizerProfile?.stripeConnectId) {
@@ -1054,7 +1061,11 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           id: organizerProfile.id,
           squareOnboarded: organizerProfile.squareOnboarded,
           squareMerchantId: organizerProfile.squareMerchantId,
-          squareLocationId: organizerProfile.squareLocationId,
+          // preflight.squareLocationId (not organizerProfile.squareLocationId): if this
+          // organizer's location was just backfilled by preflightAccountStatus above,
+          // organizerProfile's own field is still the stale pre-preflight value fetched
+          // at the top of this request.
+          squareLocationId: preflight.squareLocationId,
         },
         accessToken: preflight.accessToken,
         sourceId: sourceId!,
@@ -1633,7 +1644,10 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         id: organizer.id,
         squareOnboarded: organizer.squareOnboarded,
         squareMerchantId: organizer.squareMerchantId,
-        squareLocationId: organizer.squareLocationId,
+        // preflight.squareLocationId (not organizer.squareLocationId): if this organizer's
+        // location was just backfilled by preflightAccountStatus above, `organizer` itself
+        // still holds the stale pre-preflight value resolved at the top of this request.
+        squareLocationId: preflight.squareLocationId,
       },
       accessToken: preflight.accessToken,
       sourceId,

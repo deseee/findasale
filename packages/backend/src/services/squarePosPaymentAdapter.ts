@@ -1,5 +1,7 @@
 import { SquareError } from 'square';
+import * as Sentry from '@sentry/node';
 import { getSquareClientForMerchant } from '../utils/square';
+import { prisma } from '../lib/prisma';
 import {
   resolveOrganizerSquareAccessToken,
   SquareOnboardingIncompleteError,
@@ -67,6 +69,14 @@ import {
 export interface PreflightOk {
   ok: true;
   accessToken: string;
+  // Self-heal backfill (2026-09-13, "organizer not finished connecting Square" bug fix):
+  // the resolved, live-verified ACTIVE Square location id for this organizer -- always
+  // present when ok:true, whether it came from the DB cache or was just backfilled inside
+  // this function. Callers that build a createAndCapturePayment() call in the SAME request
+  // MUST use this field (not their own pre-preflight organizer.squareLocationId local),
+  // since a locationId backfilled inside preflightAccountStatus is not otherwise visible to
+  // a caller that already captured organizer fields into local variables before calling it.
+  squareLocationId: string;
 }
 export interface PreflightFail {
   ok: false;
@@ -86,9 +96,26 @@ export interface OrganizerSquareFields {
  * Live capability preflight, mirroring stripePosPaymentAdapter's own rigor: never trusts
  * the DB-cached squareOnboarded flag alone once a real access token exists -- live-checks
  * the Square location's own status before authorizing a charge against it.
+ *
+ * SELF-HEALING squareLocationId BACKFILL (2026-09-13, "organizer not finished connecting
+ * Square" bug fix): squareOnboarded/squareMerchantId are set together at OAuth-connect
+ * time (handleSquareConnectCallback, squareConnectController.ts) and mean "this organizer
+ * completed the Square OAuth handshake" -- a real, permanent fact that never needs
+ * correcting. squareLocationId is a SEPARATE field, captured from that SAME callback's
+ * one-shot getSquareAccountStatus() call -- if that call returned no location at that
+ * moment (e.g. the organizer's Square account had no location created yet) or the
+ * organizer connected before this field's capture logic existed, squareOnboarded/
+ * squareMerchantId are correctly true forever while squareLocationId is left permanently
+ * null, with nothing to ever re-check or backfill it. That mismatch is exactly what
+ * produced "organizer shows as connected everywhere else but POS payments say not
+ * connected" -- so, same philosophy as resolveOrganizerSquareAccessToken's own
+ * live-token-refresh rigor, a null/stale squareLocationId here is treated as a
+ * live-checkable, self-healable gap, not a "never connected" verdict. Only a genuinely
+ * false squareOnboarded or null squareMerchantId (the two facts that really can never be
+ * recovered without the organizer re-running OAuth) short-circuit immediately below.
  */
 export async function preflightAccountStatus(organizer: OrganizerSquareFields): Promise<PreflightResult> {
-  if (!organizer.squareOnboarded || !organizer.squareMerchantId || !organizer.squareLocationId) {
+  if (!organizer.squareOnboarded || !organizer.squareMerchantId) {
     return {
       ok: false,
       status: 400,
@@ -115,9 +142,24 @@ export async function preflightAccountStatus(organizer: OrganizerSquareFields): 
     return { ok: false, status: 502, message: 'Could not verify the organizer Square account. Please try again.' };
   }
 
+  let locationId = organizer.squareLocationId;
+  let backfillAttempted = false;
+
+  if (!locationId) {
+    backfillAttempted = true;
+    locationId = await backfillSquareLocationId(organizer.id, accessToken);
+    if (!locationId) {
+      return {
+        ok: false,
+        status: 400,
+        message: "This organizer's Square account is not fully connected. Please complete Square onboarding.",
+      };
+    }
+  }
+
   try {
     const client = getSquareClientForMerchant(accessToken);
-    const response = await client.locations.get({ locationId: organizer.squareLocationId });
+    const response = await client.locations.get({ locationId });
     const location = (response as any)?.location;
     if (location?.status !== 'ACTIVE') {
       return {
@@ -127,6 +169,24 @@ export async function preflightAccountStatus(organizer: OrganizerSquareFields): 
       };
     }
   } catch (err) {
+    // Defensive: the DB-stored locationId itself may be stale/invalid against Square (e.g.
+    // deleted/merged on Square's side after we cached it). Only worth a fresh lookup if we
+    // have not already just backfilled this call -- avoids a pointless double list() call.
+    if (!backfillAttempted) {
+      const freshLocationId = await backfillSquareLocationId(organizer.id, accessToken);
+      if (freshLocationId) {
+        try {
+          const client = getSquareClientForMerchant(accessToken);
+          const retryResponse = await client.locations.get({ locationId: freshLocationId });
+          const retryLocation = (retryResponse as any)?.location;
+          if (retryLocation?.status === 'ACTIVE') {
+            return { ok: true, accessToken, squareLocationId: freshLocationId };
+          }
+        } catch (retryErr) {
+          console.error('[squarePosPaymentAdapter] Square locations.get retry after backfill failed:', retryErr);
+        }
+      }
+    }
     console.error('[squarePosPaymentAdapter] Square locations.get preflight failed:', err);
     return {
       ok: false,
@@ -135,7 +195,89 @@ export async function preflightAccountStatus(organizer: OrganizerSquareFields): 
     };
   }
 
-  return { ok: true, accessToken };
+  return { ok: true, accessToken, squareLocationId: locationId };
+}
+
+/**
+ * Lists the merchant's real Square locations (client.locations.list() -- Square Node SDK
+ * v45.1.0, method/response shape verified directly against the installed SDK's own
+ * Client.d.ts and ListLocationsResponse/Location type declarations in
+ * node_modules/.pnpm/square@45.1.0) and picks an ACTIVE one to backfill
+ * Organizer.squareLocationId with. schema.prisma's own comment on that column ("Square
+ * requires a location, not just a merchant id") assumes exactly one location per
+ * organizer; if Square returns more than one ACTIVE location, the first is used and a
+ * Sentry warning is fired so Patrick can review whether that organizer needs real
+ * multi-location support later. Returns null (never throws) when Square has zero ACTIVE
+ * locations or the API call itself fails -- callers treat that the same as before this
+ * fix: "still not fully connected."
+ */
+async function backfillSquareLocationId(organizerId: string, accessToken: string): Promise<string | null> {
+  try {
+    const client = getSquareClientForMerchant(accessToken);
+    const response = await client.locations.list();
+    const locations = (response as any)?.locations ?? [];
+    const activeLocations = locations.filter((loc: any) => loc?.status === 'ACTIVE' && loc?.id);
+
+    if (activeLocations.length === 0) {
+      console.warn(
+        `[squarePosPaymentAdapter] backfillSquareLocationId: organizer ${organizerId} has no ACTIVE Square location.`
+      );
+      return null;
+    }
+
+    if (activeLocations.length > 1) {
+      const msg =
+        `[squarePosPaymentAdapter] Organizer ${organizerId} has ${activeLocations.length} ACTIVE Square ` +
+        `locations -- Organizer.squareLocationId assumes exactly one per organizer (see schema.prisma). ` +
+        `Backfilling with the first (${activeLocations[0].id}); the rest are ignored.`;
+      console.warn(msg);
+      try {
+        Sentry.captureMessage(msg, 'warning');
+      } catch {
+        // Sentry may not be initialized -- never let alerting break a payment preflight
+      }
+    }
+
+    const locationId = activeLocations[0].id as string;
+    await prisma.organizer.update({
+      where: { id: organizerId },
+      data: { squareLocationId: locationId },
+    });
+    console.warn(`[squarePosPaymentAdapter] Backfilled Organizer ${organizerId}.squareLocationId = ${locationId} (was null).`);
+    return locationId;
+  } catch (err) {
+    console.error('[squarePosPaymentAdapter] backfillSquareLocationId failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Best-effort wrapper around the same self-heal for callers that only have the
+ * organizer's cached identity fields (not an already-resolved access token) and must
+ * never fail their own request over this -- e.g. getPosContext (posController.ts) and
+ * initiateSquareOrganizerOnboarding (squareConnectController.ts), both of which display
+ * Square-connection status to the organizer well BEFORE any payment is ever attempted, so
+ * preflightAccountStatus's own backfill (above) would otherwise never get a chance to run
+ * for an organizer who only ever uses those surfaces first. Returns null on ANY failure
+ * (never throws) so callers can fall back to their existing behavior unchanged.
+ */
+export async function resolveAndBackfillSquareLocationId(organizer: {
+  id: string;
+  squareMerchantId: string | null;
+  squareOnboarded: boolean;
+}): Promise<string | null> {
+  if (!organizer.squareOnboarded || !organizer.squareMerchantId) return null;
+  try {
+    const accessToken = await resolveOrganizerSquareAccessToken({
+      id: organizer.id,
+      squareMerchantId: organizer.squareMerchantId,
+      squareOnboarded: organizer.squareOnboarded,
+    });
+    return await backfillSquareLocationId(organizer.id, accessToken);
+  } catch (err) {
+    console.error('[squarePosPaymentAdapter] resolveAndBackfillSquareLocationId failed:', err);
+    return null;
+  }
 }
 
 export interface CreateAndCapturePaymentParams {
