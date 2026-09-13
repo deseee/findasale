@@ -2061,12 +2061,12 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                             </div>
                             {/* Sold overlay */}
                             {(item.status === 'SOLD' || item.status === 'PENDING') && (
-                              <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(11,15,23,0.55)' }}>
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(11,15,23,0.55)' }}>
                                 <span style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontSize: 20, fontWeight: 600, color: '#F2F0EA', letterSpacing: '0.08em', padding: '4px 12px', border: '2px solid #F2F0EA', transform: 'rotate(-6deg)', display: 'inline-block' }}>SOLD</span>
                               </div>
                             )}
                             {item.status === 'RESERVED' && (
-                              <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(200,85,43,0.25)' }}>
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(200,85,43,0.25)' }}>
                                 <span style={{ fontFamily: '"Inter Tight","Inter",sans-serif', fontSize: 13, fontWeight: 600, color: '#F2F0EA', letterSpacing: '0.04em', padding: '3px 10px', border: '1.5px solid rgba(242,240,234,0.7)', borderRadius: 4 }}>ON HOLD</span>
                               </div>
                             )}
