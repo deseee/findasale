@@ -4362,7 +4362,7 @@ export default function POSPage() {
               <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                 <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">Pay with Venmo</p>
                 <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                  The buyer pays you directly via Venmo. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
+                  The buyer pays you directly via Venmo. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Square payout.
                 </p>
                 {organizerVenmo ? (
                   (() => {
@@ -4412,7 +4412,7 @@ export default function POSPage() {
               <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
                 <p className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-1">Pay with Zelle</p>
                 <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">
-                  The buyer pays you directly via Zelle. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Stripe payout.
+                  The buyer pays you directly via Zelle. You collect the full ${cartTotal.toFixed(2)} yourself. FindA.Sale will deduct its platform fee from your next Square payout.
                 </p>
                 {organizerZelle ? (
                   <div className="flex flex-col gap-2 mb-3">
@@ -4454,7 +4454,7 @@ export default function POSPage() {
       {/* Platform fee note */}
       {!venueHubId && cart.length > 0 && paymentMode === 'card' && paymentStatus === 'idle' && (
         <p className="mt-4 text-xs text-warm-400 dark:text-warm-500 text-center">
-          Platform fee (10%) applied. Net payout: ~${(cartTotal * 0.9 * 0.971).toFixed(2)} after Stripe fees.
+          Platform fee (10%) applied. Net payout: ~${(cartTotal * 0.9 * 0.971).toFixed(2)} after Square fees.
         </p>
       )}
 
