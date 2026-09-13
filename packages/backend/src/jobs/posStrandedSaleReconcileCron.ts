@@ -77,18 +77,24 @@ const reclaimExpiredPaymentLink = async (
   // cmnxueoas0005tfv8brnc0kky, 2026-08-20T18:16:07Z). Undefined = platform account
   // (DESTINATION-charge / no-Connect links), matching every other call site's
   // { stripeAccount } convention in this codebase.
-  stripeRequestOptions?: { stripeAccount: string }
-): Promise<void> => {
+  stripeRequestOptions?: { stripeAccount: string },
+  // Manual-reclaim P2 fix (2026-09-13): 'CANCELLED' lets manuallyReclaimPosPaymentLink
+  // (below) reuse this exact same flip+revert+notify+deactivate sequence for an
+  // organizer-initiated reclaim, distinct in the DB and in the shopper-facing
+  // notification copy from the cron's own timeout-driven 'EXPIRED' path. Defaults to
+  // 'EXPIRED' so every existing call site (both branches above) is unaffected.
+  targetStatus: 'EXPIRED' | 'CANCELLED' = 'EXPIRED'
+): Promise<{ flipped: boolean; revertedItemIds: string[] }> => {
   try {
-    const { revertIds: revertedItemIds, affectedReservations } = await prisma.$transaction(async (tx) => {
+    const { revertIds: revertedItemIds, affectedReservations, flipped } = await prisma.$transaction(async (tx) => {
       // Atomic link flip: only proceed if still ACTIVE -- a concurrent
       // webhook/reconcile completing this link in the same window wins the
       // race, same guarded-flip pattern as recordPosPaymentLinkSale.
       const linkFlip = await tx.pOSPaymentLink.updateMany({
         where: { id: link.id, status: 'ACTIVE' },
-        data: { status: 'EXPIRED' },
+        data: { status: targetStatus },
       });
-      if (linkFlip.count === 0) return { revertIds: [] as string[], affectedReservations: [] as { userId: string; itemId: string }[] };
+      if (linkFlip.count === 0) return { revertIds: [] as string[], affectedReservations: [] as { userId: string; itemId: string }[], flipped: false };
 
       // Only items still INVOICE_ISSUED get reverted. If something else
       // already moved an item on (SOLD via a race-winning webhook, or this
@@ -99,7 +105,7 @@ const reclaimExpiredPaymentLink = async (
         select: { id: true },
       });
       const revertIds = stillIssued.map((i) => i.id);
-      if (revertIds.length === 0) return { revertIds: [] as string[], affectedReservations: [] as { userId: string; itemId: string }[] };
+      if (revertIds.length === 0) return { revertIds: [] as string[], affectedReservations: [] as { userId: string; itemId: string }[], flipped: true };
 
       await tx.item.updateMany({
         where: { id: { in: revertIds }, status: 'INVOICE_ISSUED' },
@@ -118,7 +124,7 @@ const reclaimExpiredPaymentLink = async (
         data: { status: 'CONFIRMED' },
       });
 
-      return { revertIds, affectedReservations };
+      return { revertIds, affectedReservations, flipped: true };
     });
 
     // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this previously wrote
@@ -129,12 +135,15 @@ const reclaimExpiredPaymentLink = async (
     // enough to retry -- not just whenever they next happen to open the app. Moved outside
     // the transaction (fire-and-forget) so it can go through the email-capable
     // lib/notificationService.ts helper (already imported in this file) instead.
+    const isManualCancel = targetStatus === 'CANCELLED';
     for (const r of affectedReservations) {
       createNotification({
         userId: r.userId,
         type: 'invoice_expired',
-        title: 'Payment link expired',
-        body: 'Your payment link expired before payment was completed. Your hold remains active.',
+        title: isManualCancel ? 'Payment link cancelled' : 'Payment link expired',
+        body: isManualCancel
+          ? 'The organizer cancelled this payment link. Your hold remains active.'
+          : 'Your payment link expired before payment was completed. Your hold remains active.',
         link: `/items/${r.itemId}`,
         channel: 'OPERATIONAL',
         sendEmail: true,
@@ -142,9 +151,9 @@ const reclaimExpiredPaymentLink = async (
     }
 
     if (revertedItemIds.length > 0) {
-      console.error(`[pos-reconcile] EXPIRED-RECLAIMED link=${link.id} items=${revertedItemIds.join(',')} -- ${reasonLabel}; reverted to RESERVED/CONFIRMED.`);
+      console.error(`[pos-reconcile] ${targetStatus}-RECLAIMED link=${link.id} items=${revertedItemIds.join(',')} -- ${reasonLabel}; reverted to RESERVED/CONFIRMED.`);
     } else {
-      console.log(`[pos-reconcile] EXPIRED-NOOP link=${link.id} -- ${reasonLabel}, but no items still INVOICE_ISSUED (already resolved elsewhere, or an ad-hoc link with no underlying hold).`);
+      console.log(`[pos-reconcile] ${targetStatus}-NOOP link=${link.id} -- ${reasonLabel}, but no items still INVOICE_ISSUED (already resolved elsewhere, or an ad-hoc link with no underlying hold).`);
     }
 
     // Best-effort deactivation -- non-fatal, mirrors invoiceExpiryJob.ts's best-effort
@@ -168,9 +177,112 @@ const reclaimExpiredPaymentLink = async (
     } catch (deactivateErr: any) {
       console.warn(`[pos-reconcile] Failed to deactivate payment link ${link.id} (non-fatal):`, deactivateErr?.message ?? deactivateErr);
     }
+
+    return { flipped, revertedItemIds };
   } catch (revertErr: any) {
     console.error(`[pos-reconcile] Failed to reclaim payment link ${link.id} -- will retry next run:`, revertErr?.message ?? revertErr);
+    return { flipped: false, revertedItemIds: [] };
   }
+};
+
+/**
+ * Manual override for CHECKOUT_LINK-settled holds (P2 fix, 2026-09-13): an organizer
+ * viewing /organizer/holds previously had NO way to reclaim a hold stuck at
+ * INVOICE_ISSUED behind an abandoned POSPaymentLink -- the "Cancel payment request"
+ * button (holds.tsx hasInvoice()) only recognizes the HoldInvoice-based HOLD_INVOICE
+ * path, and the only other path back was this same file's reconcileStrandedPosSales
+ * cron, which does not even look at a link until it is 10+ minutes old (this file's own
+ * header comment). This is called by POST /reservations/:id/release-payment-link
+ * (reservationController.ts) to run the exact same paid-check + revert + notify +
+ * best-effort-deactivate sequence on demand, scoped to one link, instead of the
+ * organizer waiting on the next cron tick.
+ *
+ * Never reverts a link that is actually paid -- re-checks live with the processor
+ * first (Stripe Checkout Session list / Square Order status), the same source of truth
+ * the cron itself uses, not the DB's own possibly-stale POSPaymentLink.status.
+ */
+export const manuallyReclaimPosPaymentLink = async (
+  link: POSPaymentLink
+): Promise<
+  | { outcome: 'released'; itemsReleased: number }
+  | { outcome: 'already_paid' }
+  | { outcome: 'not_active' }
+  | { outcome: 'error'; message: string }
+> => {
+  if (link.status !== 'ACTIVE') {
+    return { outcome: 'not_active' };
+  }
+
+  const isSquareLink = link.processor === 'SQUARE';
+
+  // Same Direct-charge account-context resolution reconcileStrandedPosSales runs per
+  // link below -- duplicated rather than extracted so this manual path stays
+  // independently readable; it is the only other call site.
+  let stripeRequestOptions: { stripeAccount: string } | undefined;
+  if (!isSquareLink) {
+    if (link.chargeType) {
+      if (link.chargeType === 'DIRECT' && link.stripeAccountId) {
+        stripeRequestOptions = { stripeAccount: link.stripeAccountId };
+      }
+    } else {
+      try {
+        const linkOrganizer = await prisma.organizer.findUnique({
+          where: { id: link.organizerId },
+          select: { stripeConnectId: true },
+        });
+        if (linkOrganizer?.stripeConnectId) {
+          const linkUseDirect = await shouldUseDirectCharge(link.organizerId, linkOrganizer.stripeConnectId);
+          if (linkUseDirect) {
+            stripeRequestOptions = { stripeAccount: linkOrganizer.stripeConnectId };
+          }
+        }
+      } catch (routingErr: any) {
+        console.warn(`[pos-reconcile] manual-reclaim: failed to resolve Stripe account context for link=${link.id} (falling back to platform account):`, routingErr?.message ?? routingErr);
+      }
+    }
+  }
+
+  try {
+    if (isSquareLink) {
+      if (!link.squareOrderId) {
+        return { outcome: 'error', message: 'This payment link has no order on record and cannot be verified. Try again shortly.' };
+      }
+      const statusResult = await getSquareOrderPaymentStatus({ organizerId: link.organizerId, orderId: link.squareOrderId });
+      if (!statusResult.ok) {
+        return { outcome: 'error', message: 'Could not reach Square to verify this payment link just now. Please try again in a moment.' };
+      }
+      if (statusResult.paid) {
+        return { outcome: 'already_paid' };
+      }
+    } else {
+      const sessions = await stripe().checkout.sessions.list(
+        { payment_link: link.stripePaymentLinkId!, limit: 5 },
+        stripeRequestOptions
+      );
+      const paidSession = sessions.data.find((s) => s.status === 'complete' && s.payment_status === 'paid');
+      if (paidSession) {
+        return { outcome: 'already_paid' };
+      }
+    }
+  } catch (checkErr: any) {
+    console.error(`[pos-reconcile] manual-reclaim: payment-status check failed for link=${link.id}:`, checkErr?.message ?? checkErr);
+    return { outcome: 'error', message: 'Could not verify this payment link with our payment processor just now. Please try again in a moment.' };
+  }
+
+  const { flipped, revertedItemIds } = await reclaimExpiredPaymentLink(
+    link,
+    'manually reclaimed by organizer via /organizer/holds',
+    stripeRequestOptions,
+    'CANCELLED'
+  );
+
+  if (!flipped) {
+    // Lost a race -- a webhook or the cron resolved this link in the moment between
+    // our paid-check above and the atomic flip inside reclaimExpiredPaymentLink.
+    return { outcome: 'not_active' };
+  }
+
+  return { outcome: 'released', itemsReleased: revertedItemIds.length };
 };
 
 export const reconcileStrandedPosSales = async (): Promise<void> => {

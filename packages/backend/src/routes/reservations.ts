@@ -19,6 +19,7 @@ import {
   getItemInvoiceStatus,
   releaseInvoice,
   releaseInvoiceById,
+  releasePaymentLink,
 } from '../controllers/reservationController';
 
 const router = express.Router();
@@ -67,6 +68,10 @@ router.post('/batch', batchUpdateHolds);                       // #24: batch rel
 // Hold-to-Pay Phase 2: Invoice endpoints
 router.post('/:id/mark-sold', markSoldAndCreateInvoice);       // Organizer: mark sold + create invoice
 router.post('/:id/release-invoice', releaseInvoice);           // Organizer: cancel pending invoice
+// Manual-reclaim P2 fix (2026-09-13): CHECKOUT_LINK settlement mode's equivalent of the
+// route above -- releaseInvoice only ever finds a HoldInvoice-based invoice, never a
+// POSPaymentLink (see releasePaymentLink's own header comment in the controller).
+router.post('/:id/release-payment-link', releasePaymentLink); // Organizer: manually reclaim a CHECKOUT_LINK payment request
 // Reservation-less POS-cart invoices (posController.createCombinedInvoice with zero held
 // reservations) have no ItemReservation for the route above to key off of -- this cancels
 // by the HoldInvoice's own id instead. 3-segment literal-prefixed path, so it cannot be

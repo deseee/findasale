@@ -24,6 +24,7 @@ import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // RECORD-mo
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, roundMoney } from '../services/cashFeeService'; // RECORD-mode cash commission accrual (2026-08-17)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
+import { manuallyReclaimPosPaymentLink } from '../jobs/posStrandedSaleReconcileCron'; // Manual-reclaim P2 fix (2026-09-13): CHECKOUT_LINK 'reclaim invoice' override, reuses the cron's own paid-check + revert logic
 import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim; P0 (2026-08-17): dead-anchor release
 import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // Hold-to-Pay P1 (2026-08-17): released invoices left PAYABLE Stripe sessions live
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // P1 fix (2026-09-04, S-CARDING-INCIDENT-2026-09-03 follow-up): Hold-to-Pay invoicing never ran the shared Stripe-onboarding/sale-state gate
@@ -762,8 +763,30 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
       prisma.itemReservation.count({ where }),
     ]);
 
+    // Manual-reclaim P2 fix (2026-09-13): a CHECKOUT_LINK-settled hold has no
+    // HoldInvoice/invoiceId (releaseInvoice's own trigger, see holds.tsx's hasInvoice())
+    // -- it is only ever discoverable via an ACTIVE POSPaymentLink whose itemIds
+    // contains the hold's item. One extra query, scoped to this organizer and this
+    // page's own item ids, so /organizer/holds can render the equivalent
+    // "Cancel payment request" control for this settlement mode too.
+    const holdItemIds = reservations.map((r) => r.item.id);
+    const activeLinkItemIds = new Set<string>();
+    if (holdItemIds.length > 0) {
+      const activeLinks = await prisma.pOSPaymentLink.findMany({
+        where: { organizerId: organizer.id, status: 'ACTIVE', itemIds: { hasSome: holdItemIds } },
+        select: { itemIds: true },
+      });
+      for (const link of activeLinks) {
+        for (const itemId of link.itemIds) activeLinkItemIds.add(itemId);
+      }
+    }
+    const holdsWithPaymentLinkFlag = reservations.map((r) => ({
+      ...r,
+      hasActivePaymentLink: activeLinkItemIds.has(r.item.id),
+    }));
+
     res.json({
-      holds: reservations,
+      holds: holdsWithPaymentLinkFlag,
       page: pageNum,
       limit: pageLimit,
       total,
@@ -2725,6 +2748,83 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Invoice released and hold reactivated', itemsReleased: releasedItemIds.length });
   } catch (error: any) {
     console.error('[hold-invoice] releaseInvoice error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/reservations/:id/release-payment-link -- manual reclaim for a CHECKOUT_LINK-
+// settled hold (P2 fix, 2026-09-13). markSold's CHECKOUT_LINK settlement mode
+// (batchUpdateHolds below) sets Item.status = 'INVOICE_ISSUED' and creates a
+// POSPaymentLink, not a HoldInvoice -- so releaseInvoice above (keyed on
+// invoice/invoiceRel) never finds anything for it, and holds.tsx's hasInvoice() /
+// "Cancel payment request" button never renders for this settlement mode either. Before
+// this fix the ONLY way an abandoned CHECKOUT_LINK request came back was
+// posStrandedSaleReconcileCron.ts's own cron, which does not even look at a link until
+// it is 10+ minutes old. This gives the organizer an on-demand equivalent.
+//
+// Organizer-only (unlike releaseInvoice's shopper+organizer split): a CHECKOUT_LINK is
+// something the ORGANIZER chose to send from /organizer/holds, mirroring this file's own
+// "Send checkout link" settlement option -- there is no shopper-facing surface for it to
+// cancel from today, so only the sale's organizer is authorized here.
+export const releasePaymentLink = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const { id: reservationId } = req.params;
+
+    const reservation = await prisma.itemReservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        item: { include: { sale: { include: { organizer: { select: { id: true } } } } } },
+      },
+    });
+
+    if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
+
+    const saleOrganizer = reservation.item.sale?.organizer ?? null;
+    const userOrganizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    const isSaleOrganizer = !!userOrganizer && !!saleOrganizer && saleOrganizer.id === userOrganizer.id;
+
+    // Ownership before existence, same information-disclosure discipline as
+    // releaseInvoice above -- a caller probing reservation ids learns nothing more from
+    // a 403 than they would from a genuinely-missing link.
+    if (!isSaleOrganizer) {
+      return res.status(403).json({ message: 'Access denied. This payment request is not yours.' });
+    }
+
+    // POSPaymentLink has no reservationId column (schema.prisma) -- it is keyed by
+    // itemIds, same lookup shape createPaymentLinkInternal writes it with. Most-recent
+    // first: a hold can in principle have had more than one link created against it over
+    // time (e.g. an earlier one already expired/cancelled), and only the live one matters.
+    const link = await prisma.pOSPaymentLink.findFirst({
+      where: { organizerId: userOrganizer!.id, status: 'ACTIVE', itemIds: { has: reservation.item.id } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!link) {
+      return res.status(404).json({ message: 'No active payment link found for this hold.' });
+    }
+
+    const result = await manuallyReclaimPosPaymentLink(link);
+
+    switch (result.outcome) {
+      case 'already_paid':
+        // Resource-state gate, same refusal shape as releaseInvoice's PAID check above:
+        // never hand items back to RESERVED after money has actually changed hands.
+        return res.status(409).json({
+          message: 'This payment has already gone through. Refund it from the sale\'s payments instead of cancelling the request.',
+        });
+      case 'not_active':
+        return res.status(409).json({
+          message: 'This payment request is no longer open, so there is nothing to cancel.',
+        });
+      case 'error':
+        return res.status(502).json({ message: result.message });
+      case 'released':
+        return res.json({ message: 'Payment link cancelled and hold reactivated', itemsReleased: result.itemsReleased });
+    }
+  } catch (error: any) {
+    console.error('[pos-payment-link] releasePaymentLink error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

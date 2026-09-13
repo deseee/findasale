@@ -89,6 +89,10 @@ interface HoldItem {
   // not typed or displayed, which is why an organizer had no way to tell that a payment
   // request was already out on a hold.
   invoiceId?: string | null;
+  // Manual-reclaim P2 fix (2026-09-13): set true when an ACTIVE POSPaymentLink covers
+  // this hold's item -- the CHECKOUT_LINK settlement mode's equivalent of invoiceId
+  // above (that mode never writes a HoldInvoice, so invoiceId is never set for it).
+  hasActivePaymentLink?: boolean;
   user: { id: string; name: string; email: string; fraudConfidenceScore?: number; explorerRank?: string };
   item: {
     id: string;
@@ -137,6 +141,9 @@ const OrganizerHoldsPage = () => {
   // to be cancelled. Confirmed before it fires — cancelling voids the shopper's live
   // payment link.
   const [pendingRelease, setPendingRelease] = useState<HoldItem | null>(null);
+  // Manual-reclaim P2 fix (2026-09-13): same confirm-before-cancel gate as
+  // pendingRelease above, for the CHECKOUT_LINK settlement mode's own payment link.
+  const [pendingReleasePaymentLink, setPendingReleasePaymentLink] = useState<HoldItem | null>(null);
 
   // Initialize saleFilter from query param on mount
   React.useEffect(() => {
@@ -211,6 +218,37 @@ const OrganizerHoldsPage = () => {
       }
       showToast(
         err.response?.data?.message || 'Could not cancel that payment request. Please try again.',
+        'error'
+      );
+    },
+  });
+
+  // Manual-reclaim P2 fix (2026-09-13): CHECKOUT_LINK's equivalent of
+  // releaseInvoiceMutation above. Before this, an organizer whose "Send checkout link"
+  // request went stale had NO on-demand way to reclaim it -- only
+  // posStrandedSaleReconcileCron.ts's own 10-minutes-past-expiry cron ever did, and the
+  // "Cancel payment request" button never rendered for this settlement mode at all
+  // (hasInvoice() only recognizes a real HoldInvoice.id, which this mode never creates).
+  const releasePaymentLinkMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/reservations/${id}/release-payment-link`),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+      const count = res?.data?.itemsReleased ?? 1;
+      showToast(
+        count > 1
+          ? `Payment link cancelled. ${count} items are back on hold for the shopper.`
+          : 'Payment link cancelled. The item is back on hold for the shopper.',
+        'success'
+      );
+    },
+    onError: (err: any) => {
+      // Same shape as releaseInvoiceMutation's onError: 409 = already paid or already
+      // resolved, 502 = the processor could not be reached to verify/deactivate.
+      if (err.response?.status === 409) {
+        queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+      }
+      showToast(
+        err.response?.data?.message || 'Could not cancel that payment link. Please try again.',
         'error'
       );
     },
@@ -352,6 +390,10 @@ const OrganizerHoldsPage = () => {
   // ItemReservation.invoiceClaimToken/invoiceClaimedAt and never touch this field.
   const hasInvoice = (h: HoldItem) => !!h.invoiceId;
 
+  // Manual-reclaim P2 fix (2026-09-13): the CHECKOUT_LINK equivalent of hasInvoice above
+  // -- true when getOrganizerHolds found an ACTIVE POSPaymentLink covering this item.
+  const hasPaymentLink = (h: HoldItem) => !!h.hasActivePaymentLink;
+
   // Hold-to-Pay (#221): open the payment-request modal for the selected holds. The
   // server endpoint is per-reservation and bundles every item that shopper is holding at
   // the sale, so one anchor hold is enough — but the selection has to describe a single
@@ -367,7 +409,7 @@ const OrganizerHoldsPage = () => {
       showToast('A payment request covers one sale at a time. Select holds from a single sale.', 'error');
       return;
     }
-    if (chosen.some(hasInvoice)) {
+    if (chosen.some(hasInvoice) || chosen.some(hasPaymentLink)) {
       showToast('You have already sent this shopper a payment request. Cancel it first if you need to change it.', 'error');
       return;
     }
@@ -729,6 +771,16 @@ const OrganizerHoldsPage = () => {
                                       {releaseInvoiceMutation.isPending ? 'Cancelling...' : 'Cancel payment request'}
                                     </button>
                                   )}
+                                  {hasPaymentLink(hold) && (
+                                    <button
+                                      onClick={() => setPendingReleasePaymentLink(hold)}
+                                      disabled={releasePaymentLinkMutation.isPending}
+                                      title="Cancel the checkout link you sent this shopper. It stops working and the item goes back on hold for them -- don't wait on the automatic ~10-minute cleanup."
+                                      className="text-xs border border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1 rounded disabled:opacity-50"
+                                    >
+                                      {releasePaymentLinkMutation.isPending ? 'Cancelling...' : 'Cancel payment request'}
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => updateMutation.mutate({ id: hold.id, status: 'CANCELLED' })}
                                     disabled={updateMutation.isPending}
@@ -780,7 +832,7 @@ const OrganizerHoldsPage = () => {
                                       enum name is not something to show a human. */}
                                   {hold.status === 'HOLD_IN_CART' ? 'In POS cart' : hold.status}
                                 </span>
-                                {hasInvoice(hold) && (
+                                {(hasInvoice(hold) || hasPaymentLink(hold)) && (
                                   <span
                                     title="This shopper has been emailed a payment request for this item."
                                     className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
@@ -862,6 +914,35 @@ const OrganizerHoldsPage = () => {
               const target = pendingRelease;
               setPendingRelease(null);
               releaseInvoiceMutation.mutate(target.id);
+            }}
+          />
+        );
+      })()}
+
+      {/* Manual-reclaim P2 fix (2026-09-13): CHECKOUT_LINK's own confirm-before-cancel
+          gate, same reasoning as pendingRelease's dialog above -- voiding a live payment
+          link the shopper may be looking at right now is not a one-click action. */}
+      {pendingReleasePaymentLink && (() => {
+        const bundle = bundlesByKey[bundleKey(pendingReleasePaymentLink)] ?? [pendingReleasePaymentLink];
+        const linked = bundle.filter(hasPaymentLink);
+        const count = linked.length || 1;
+        return (
+          <ConfirmDialog
+            isOpen
+            title="Cancel this payment request?"
+            message={
+              count > 1
+                ? `${pendingReleasePaymentLink.user.name}'s checkout link for ${count} items will stop working. The items stay on hold for them, and you can send a new request afterwards.`
+                : `${pendingReleasePaymentLink.user.name}'s checkout link for "${pendingReleasePaymentLink.item.title}" will stop working. The item stays on hold for them, and you can send a new request afterwards.`
+            }
+            confirmLabel="Cancel the request"
+            cancelLabel="Leave it active"
+            variant="danger"
+            onCancel={() => setPendingReleasePaymentLink(null)}
+            onConfirm={() => {
+              const target = pendingReleasePaymentLink;
+              setPendingReleasePaymentLink(null);
+              releasePaymentLinkMutation.mutate(target.id);
             }}
           />
         );
