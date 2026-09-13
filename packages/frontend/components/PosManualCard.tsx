@@ -92,6 +92,36 @@ interface ManualCardPaymentResponse {
   message?: string;
 }
 
+// Not every failure here is an actual card decline -- posPaymentController.ts's
+// manualCardPayment can also fail before ever reaching Square (e.g. a database error
+// after the charge already captured, see the 2026-09-13 Eagles-album incident: Square
+// approved the card, but the post-capture DB check crashed with a bare 500 whose
+// message was literally "Internal server error", which this component used to relabel
+// "Card Was Declined" -- telling the cashier the customer's card was bad when it
+// wasn't, while the money had already been taken). Only show the decline headline when
+// the message actually reads like one; anything else (a generic/server error, a
+// network failure, a timeout) gets a neutral headline so the cashier isn't told
+// something false about the customer's card.
+function isActualCardDecline(message: string): boolean {
+  if (!message) return false;
+  const m = message.toLowerCase();
+  const declineSignals = [
+    'declin',
+    'insufficient funds',
+    'do not honor',
+    'card_declined',
+    'expired card',
+    'invalid card',
+    'invalid_expiration',
+    'incorrect cvv',
+    'incorrect_cvv',
+    'card_not_supported',
+    'transaction_limit',
+    'generic_decline',
+  ];
+  return declineSignals.some((signal) => m.includes(signal));
+}
+
 export default function PosManualCard({
   cartTotal,
   cart,
@@ -446,9 +476,11 @@ export default function PosManualCard({
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700">
             <p className="text-3xl mb-2">✗</p>
-            <p className="text-sm font-bold text-red-900 dark:text-red-100 mb-1">Card Was Declined</p>
+            <p className="text-sm font-bold text-red-900 dark:text-red-100 mb-1">
+              {isActualCardDecline(errorMessage) ? 'Card Was Declined' : "Payment Couldn't Be Completed"}
+            </p>
             <p className="text-xs text-red-700 dark:text-red-300 mt-2">
-              {errorMessage || 'The card was declined. Please check the details and try again.'}
+              {errorMessage || 'Something went wrong processing this payment. Please check with the customer before trying again.'}
             </p>
           </div>
 
