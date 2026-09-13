@@ -80,5 +80,27 @@ export const getSquareClientForMerchant = (organizerAccessToken: string): Square
   });
 };
 
+/**
+ * FindA.Sale's own platform Square location id (Developer Console -> Locations) --
+ * used for charges that belong to the PLATFORM itself, not any connected organizer/
+ * booth (e.g. boostService.ts's SQUARE cash rail, and the hub-owner-share portion of
+ * a booth-cart leg's app fee allocation in squareVendorBoothCartService.ts, ADR-123).
+ * Same env var (SQUARE_PLATFORM_LOCATION_ID) squareVendorBoothCartService.ts already
+ * reads for that ADR -- Patrick set this once, so no new Railway env var is needed
+ * for the boost Square rail to use it too.
+ */
+export const getPlatformSquareLocationId = (): string => {
+  const locationId = process.env.SQUARE_PLATFORM_LOCATION_ID;
+  if (!locationId) {
+    throw new Error(
+      'SQUARE_PLATFORM_LOCATION_ID is not set. Patrick must look up ' +
+        "FindA.Sale's platform Square location id (Developer Console -> Locations) and set it as " +
+        'an env var on the Railway backend service before any platform-level Square charge ' +
+        '(boost purchases, hub-owner-share allocations) can go through.'
+    );
+  }
+  return locationId;
+};
+
 export { SquareError };
 export default getSquarePlatformClient;

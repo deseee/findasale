@@ -1,5 +1,5 @@
 /**
- * BoostPurchaseModal: XP-based boost purchase UI
+ * BoostPurchaseModal: XP or Square-card boost purchase UI
  *
  * Usage:
  *   <BoostPurchaseModal
@@ -15,20 +15,24 @@ import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
+import { SquarePaymentRequestForm } from './SquarePaymentRequestForm';
 
-// Stripe cash-rail removed entirely (2026-09-12, Patrick-approved Stripe-removal pass).
-// It was already disabled (ENABLE_BOOST_CASH_RAIL = false, audit sweep 2026-09-10) because
-// it called boostService.ts's STRIPE rail against FindA.Sale's permanently-closed Stripe
-// platform account -- guaranteed to fail. No Square equivalent exists for boost purchases
-// (backend boostController.ts/boostService.ts only ever supported 'XP' | 'STRIPE'; those are
-// excluded-29 backend files, left untouched by this pass). Boosts are XP-only until/unless a
-// real-money boost rail is scoped as its own feature on Square.
+// Square cash rail restored (Square-replaces-Stripe migration): the Stripe cash rail was
+// removed entirely 2026-09-12 (backend boostService.ts's STRIPE rail is permanently blocked --
+// FindA.Sale's Stripe platform account is permanently closed). boostService.ts now has a real
+// SQUARE rail (platform-level Square CreatePayment, no organizer involved), so this modal
+// offers "pay by card" as a fallback when the shopper is short on XP (an XP-shortfall cash
+// top-up), reusing the same SquarePaymentRequestForm/Web-Payments-SDK card-tokenize pattern
+// already used for checkout/POS/booth-cart Square payments elsewhere in this codebase.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BoostQuote {
   boostType: string;
   xpCost: number;
+  stripeAmountCents: number;
+  stripeAmountDollars: string;
+  cashRailAvailable: boolean;
   durationDays: number;
   label: string;
   description: string;
@@ -60,6 +64,9 @@ export default function BoostPurchaseModal({
   const [success, setSuccess] = useState(false);
   const [undoSeconds, setUndoSeconds] = useState(300); // 5-min undo window
   const [error, setError] = useState<string | null>(null);
+  // Rail selector -- defaults to 'xp', but auto-switches to 'square' once the quote comes
+  // back short on XP and a cash rail exists for this boost type (the XP-shortfall case).
+  const [rail, setRail] = useState<'xp' | 'square'>('xp');
 
   // Fetch quote on mount
   useEffect(() => {
@@ -69,6 +76,9 @@ export default function BoostPurchaseModal({
         const res = await api.post('/boosts/quote', { boostType, durationDays });
         const q: BoostQuote = res.data;
         setQuote(q);
+        if (!q.canAffordXp && q.cashRailAvailable) {
+          setRail('square');
+        }
       } catch (err: unknown) {
         setError('Unable to load boost pricing. Please try again.');
       } finally {
@@ -100,6 +110,32 @@ export default function BoostPurchaseModal({
       });
       setSuccess(true);
       showToast(`${quote.label} activated! −${quote.xpCost} XP`, 'success');
+      onSuccess?.();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Purchase failed. Please try again.';
+      setError(msg);
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  const handleSquarePurchase = async (sourceId: string) => {
+    if (!quote) return;
+    setPurchasing(true);
+    setError(null);
+    try {
+      await api.post('/boosts/purchase', {
+        boostType,
+        targetType,
+        targetId,
+        paymentMethod: 'SQUARE',
+        sourceId,
+        durationDays,
+      });
+      setSuccess(true);
+      showToast(`${quote.label} activated! Charged $${quote.stripeAmountDollars}`, 'success');
       onSuccess?.();
     } catch (err: unknown) {
       const msg =
@@ -177,32 +213,89 @@ export default function BoostPurchaseModal({
             {/* Description */}
             <p className="text-sm text-gray-600 dark:text-gray-400">{quote.description}</p>
 
-            {/* XP cost display */}
-            <div className="p-3 rounded-lg border border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-center">
-              <div className="text-lg font-bold">{quote.xpCost} XP</div>
-              {!quote.canAffordXp && (
-                <div className="text-xs mt-0.5">Need {quote.xpCost - quote.userXpBalance} more</div>
-              )}
-              {quote.canAffordXp && (
-                <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">
-                  Balance: {quote.userXpBalance} XP
+            {/* Rail selector -- only shown when this boost type actually has a cash rail */}
+            {quote.cashRailAvailable && (
+              <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 p-1 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setRail('xp')}
+                  className={`flex-1 py-1.5 rounded-md font-medium transition-colors ${
+                    rail === 'xp'
+                      ? 'bg-amber-500 text-white'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                >
+                  Pay with XP
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRail('square')}
+                  className={`flex-1 py-1.5 rounded-md font-medium transition-colors ${
+                    rail === 'square'
+                      ? 'bg-sage-600 text-white'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                >
+                  Pay ${quote.stripeAmountDollars} by card
+                </button>
+              </div>
+            )}
+
+            {rail === 'xp' && (
+              <>
+                {/* XP cost display */}
+                <div className="p-3 rounded-lg border border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-center">
+                  <div className="text-lg font-bold">{quote.xpCost} XP</div>
+                  {!quote.canAffordXp && (
+                    <div className="text-xs mt-0.5">Need {quote.xpCost - quote.userXpBalance} more</div>
+                  )}
+                  {quote.canAffordXp && (
+                    <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">
+                      Balance: {quote.userXpBalance} XP
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* XP confirm */}
-            <button
-              onClick={handleXpPurchase}
-              disabled={purchasing || !quote.canAffordXp}
-              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
-            >
-              {purchasing ? 'Activating…' : `Spend ${quote.xpCost} XP`}
-            </button>
+                {/* XP confirm */}
+                <button
+                  onClick={handleXpPurchase}
+                  disabled={purchasing || !quote.canAffordXp}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-colors"
+                >
+                  {purchasing ? 'Activating…' : `Spend ${quote.xpCost} XP`}
+                </button>
 
-            {/* Transparency */}
-            <p className="text-xs text-center text-gray-400 dark:text-gray-500">
-              XP cannot be exchanged for cash. No real-money purchase required to earn XP.
-            </p>
+                {!quote.canAffordXp && quote.cashRailAvailable && (
+                  <p className="text-xs text-center text-gray-400 dark:text-gray-500">
+                    Short on XP? Switch to &ldquo;Pay ${quote.stripeAmountDollars} by card&rdquo; above.
+                  </p>
+                )}
+
+                {/* Transparency */}
+                <p className="text-xs text-center text-gray-400 dark:text-gray-500">
+                  XP cannot be exchanged for cash. No real-money purchase required to earn XP.
+                </p>
+              </>
+            )}
+
+            {rail === 'square' && (
+              <>
+                <div className="p-3 rounded-lg border border-sage-500 bg-sage-50 dark:bg-sage-900/20 text-sage-700 dark:text-sage-300 text-center">
+                  <div className="text-lg font-bold">${quote.stripeAmountDollars}</div>
+                  <div className="text-xs mt-0.5 text-gray-400 dark:text-gray-500">
+                    One-time charge, no subscription
+                  </div>
+                </div>
+                <SquarePaymentRequestForm
+                  requestId={`boost-${boostType}-${targetId ?? 'global'}`}
+                  totalAmountCents={quote.stripeAmountCents}
+                  squareLocationId={process.env.NEXT_PUBLIC_SQUARE_PLATFORM_LOCATION_ID ?? null}
+                  onSuccess={handleSquarePurchase}
+                  onError={(msg) => setError(msg)}
+                  isProcessing={purchasing}
+                />
+              </>
+            )}
           </div>
         )}
       </div>
