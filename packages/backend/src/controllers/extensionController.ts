@@ -165,6 +165,23 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // now organizer-confirmed-only). Cheap to recompute -- small PackageProfile table lookups
   // + already-stored AI columns, no external API calls. No-ops (single early return, no
   // extra queries) for any item that already has a confirmed/measured weight or is pickup-only.
+
+  // Shared trust gate for package weight/dims provenance (2026-09-14) -- used by BOTH the
+  // FB-specific weight-resolution loop immediately below and the `shaped` response object
+  // further down (aiPackageWeightOz/packageWeightOz/packageLengthIn/WidthIn/HeightIn gating).
+  // Previously each had its OWN local copy (this loop's UNTRUSTED_SOURCES, `shaped`'s
+  // UNTRUSTED_PACKAGE_SOURCES) and both shared the identical bug:
+  // `!UNTRUSTED_SOURCES.includes(it.packageEstimateSource || '')` coerces a NULL
+  // packageEstimateSource (unknown provenance -- exactly what the frontend save-flow bug
+  // fixed the same day, S-PKG-WEIGHT-LEAK-2026-09-14, was writing) to '', which is not in
+  // ['SEED','AI'], so it registered as "trusted" -- backwards for data whose provenance is
+  // simply unrecorded. Fixed: only a KNOWN, non-untrusted source (or organizer confirmation)
+  // counts as trusted now. One shared definition so the two checks can't drift apart again.
+  const UNTRUSTED_PACKAGE_SOURCES = ['SEED', 'AI'];
+  const hasTrustedPackage = (it: { packageEstimateSource: string | null; packageConfirmedByOrganizer: boolean | null }) =>
+    it.packageConfirmedByOrganizer === true ||
+    (it.packageEstimateSource != null && !UNTRUSTED_PACKAGE_SOURCES.includes(it.packageEstimateSource));
+
   for (const it of items) {
     if (it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') continue;
     // 2026-07-22 follow-up: don't treat a persisted 'SEED' (generic fallback) or 'AI'
@@ -175,11 +192,10 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // guess any more than it should ship on the generic fallback -- neither is a real
     // measurement. Only a PackageProfile CATEGORY/KEYWORD match or an organizer-confirmed
     // value counts as "already resolved" now.
-    const UNTRUSTED_SOURCES = ['SEED', 'AI'];
     if (
       it.packageWeightOz != null &&
       Number(it.packageWeightOz) > 0 &&
-      !UNTRUSTED_SOURCES.includes(it.packageEstimateSource || '')
+      hasTrustedPackage(it)
     ) continue;
     try {
       // Package-estimation isolation ADR (2026-08-05): the old combined
@@ -200,7 +216,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // recompute, not treat the untrusted guess as already-resolved. Pass null here
       // (FB-side only, not touching the shared function's own semantics used by eBay)
       // so it falls through to a fresh estimate.
-      const isUntrustedSource = UNTRUSTED_SOURCES.includes(it.packageEstimateSource || '');
+      const isUntrustedSource = !hasTrustedPackage(it);
 
       const overrideResult = await applyNeverShippableOverride({
         id: it.id,
@@ -237,7 +253,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         // mirror it in-memory so the shippingOverride computed below reflects pickup-only
         // on THIS response instead of a stale null override from the initial query.
         (it as { ebayShippingOverride: string | null }).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
-      } else if (resolved && !UNTRUSTED_SOURCES.includes(resolved.source)) {
+      } else if (resolved && !UNTRUSTED_PACKAGE_SOURCES.includes(resolved.source)) {
         // 'SEED' (generic 24oz/0.25-confidence last-resort guess) and 'AI' (unmeasured
         // single-photo vision guess) are NOT curated PackageProfile rows (those come back
         // as 'CATEGORY'/'KEYWORD') and are not organizer-confirmed either. Per the ADR and
@@ -247,7 +263,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         // explicitly revert that persistence for this item rather than silently using a
         // value we've decided not to trust.
         (it as { packageWeightOz: number | null }).packageWeightOz = resolved.weightOz;
-      } else if (resolved && UNTRUSTED_SOURCES.includes(resolved.source)) {
+      } else if (resolved && UNTRUSTED_PACKAGE_SOURCES.includes(resolved.source)) {
         try {
           await prisma.item.update({
             where: { id: it.id },
@@ -327,9 +343,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // range once corrected). Mirrors the UNTRUSTED_SOURCES list used above for weight; a curated
   // PackageProfile CATEGORY/KEYWORD default (Patrick's "media mail"-style strict-known case) or
   // an organizer-confirmed value is still trusted and passes through unchanged.
-  const UNTRUSTED_PACKAGE_SOURCES = ['SEED', 'AI'];
-  const hasTrustedPackage = (it: { packageEstimateSource: string | null; packageConfirmedByOrganizer: boolean | null }) =>
-    it.packageConfirmedByOrganizer === true || !UNTRUSTED_PACKAGE_SOURCES.includes(it.packageEstimateSource || '');
+  // (hasTrustedPackage/UNTRUSTED_PACKAGE_SOURCES are now defined once, shared with the
+  // FB weight-resolution loop above -- see that shared block's own comment, 2026-09-14.)
 
   const shaped = items.map((it) => ({
     id: it.id,
@@ -405,7 +420,12 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       VINTED: checkEligibility('VINTED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
-    packageWeightOz: it.packageWeightOz,
+    // Gated 2026-09-14 (see hasTrustedPackage above) -- previously exposed the raw,
+    // untrusted packageWeightOz value unconditionally; the FB-specific loop above already
+    // reverts THIS field to null in-memory for FB when untrusted, but that in-memory revert
+    // only happens inside that loop's own try/catch -- gate here too as defense-in-depth for
+    // every platform this response is shaped for (Mercari, Vinted, Poshmark, etc), not just FB.
+    packageWeightOz: hasTrustedPackage(it) ? it.packageWeightOz : null,
     // Gated 2026-09-14 (see hasTrustedPackage above) -- previously exposed the raw, untrusted AI
     // guess unconditionally, which fas-mercari.js's/fas-vinted.js's own
     // `packageWeightOz ?? aiPackageWeightOz` fallback then used directly, fully defeating the

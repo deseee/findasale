@@ -217,10 +217,20 @@ const EbayEditForm: React.FC<{
       ean: formData.ean ? formData.ean.trim() : undefined,
       ebaySubtitle: formData.ebaySubtitle ? formData.ebaySubtitle.trim().slice(0, 55) : undefined,
       conditionNotes: formData.conditionNotes ? formData.conditionNotes.trim().slice(0, 1000) : undefined,
-      packageWeightOz: formData.packageWeightOz ? Math.max(0, formData.packageWeightOz) : undefined,
-      packageLengthIn: formData.packageLengthIn ? Math.max(0, formData.packageLengthIn) : undefined,
-      packageWidthIn: formData.packageWidthIn ? Math.max(0, formData.packageWidthIn) : undefined,
-      packageHeightIn: formData.packageHeightIn ? Math.max(0, formData.packageHeightIn) : undefined,
+      // Package weight/dims themselves are also gated behind weightTouched (2026-09-14):
+      // applyAiEstimate() fills formData with a suggestion but deliberately does NOT set
+      // weightTouched (see comment above it) -- an unrelated save (e.g. fixing brand/mpn)
+      // must not silently persist an unreviewed suggestion into these organizer-facing
+      // columns. When untouched, omit these fields entirely so the backend leaves the
+      // existing DB values alone. Mirrors the confirm-flags gating just below.
+      ...(weightTouched
+        ? {
+            packageWeightOz: formData.packageWeightOz ? Math.max(0, formData.packageWeightOz) : undefined,
+            packageLengthIn: formData.packageLengthIn ? Math.max(0, formData.packageLengthIn) : undefined,
+            packageWidthIn: formData.packageWidthIn ? Math.max(0, formData.packageWidthIn) : undefined,
+            packageHeightIn: formData.packageHeightIn ? Math.max(0, formData.packageHeightIn) : undefined,
+          }
+        : {}),
       packageType: formData.packageType || undefined,
       allowBestOffer: formData.allowBestOffer,
       bestOfferAutoAcceptAmt: formData.bestOfferAutoAcceptAmt ? Math.max(0, formData.bestOfferAutoAcceptAmt) : undefined,

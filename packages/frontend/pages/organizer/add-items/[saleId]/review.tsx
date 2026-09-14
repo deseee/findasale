@@ -901,10 +901,18 @@ const ReviewPage = () => {
         backgroundRemoved: editState.backgroundRemoved,
         tags: editState.tags, // Sprint 1: Save tags
         // Bug 6: persist shipping dimensions
-        packageWeightOz: editState.packageWeightOz ?? null,
-        packageLengthIn: editState.packageLengthIn ?? null,
-        packageWidthIn: editState.packageWidthIn ?? null,
-        packageHeightIn: editState.packageHeightIn ?? null,
+        // Package weight/dims themselves are gated behind weightTouched (2026-09-14):
+        // an unreviewed AI/SEED suggestion sitting in editState must not silently persist
+        // to these organizer-facing columns on an unrelated save. Omitted entirely when
+        // untouched, so the backend leaves the existing DB values alone.
+        ...(weightTouched.has(item.id)
+          ? {
+              packageWeightOz: editState.packageWeightOz ?? null,
+              packageLengthIn: editState.packageLengthIn ?? null,
+              packageWidthIn: editState.packageWidthIn ?? null,
+              packageHeightIn: editState.packageHeightIn ?? null,
+            }
+          : {}),
         // Organizer typed a real weight on this page: record it as confirmed so eBay
         // publish stops treating it as an estimate. Never sent when the weight field
         // was left untouched (see weightTouched above).
@@ -1111,10 +1119,18 @@ const ReviewPage = () => {
           condition: editState.condition,
           conditionGrade: editState.conditionGrade,
           tags: editState.tags,
-          packageWeightOz: editState.packageWeightOz ?? null,
-          packageLengthIn: editState.packageLengthIn ?? null,
-          packageWidthIn: editState.packageWidthIn ?? null,
-          packageHeightIn: editState.packageHeightIn ?? null,
+          // Package weight/dims themselves are gated behind weightTouched (2026-09-14):
+          // an unreviewed AI/SEED suggestion sitting in editState must not silently persist
+          // to these organizer-facing columns on an unrelated save. Omitted entirely when
+          // untouched, so the backend leaves the existing DB values alone.
+          ...(weightTouched.has(item.id)
+            ? {
+                packageWeightOz: editState.packageWeightOz ?? null,
+                packageLengthIn: editState.packageLengthIn ?? null,
+                packageWidthIn: editState.packageWidthIn ?? null,
+                packageHeightIn: editState.packageHeightIn ?? null,
+              }
+            : {}),
           // Same confirm-on-real-edit rule as handleSaveItem above.
           ...(weightTouched.has(item.id) && editState.packageWeightOz != null
             ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
@@ -1174,10 +1190,18 @@ const ReviewPage = () => {
             condition: editState.condition,
             conditionGrade: editState.conditionGrade,
             tags: editState.tags,
-            packageWeightOz: editState.packageWeightOz ?? null,
-            packageLengthIn: editState.packageLengthIn ?? null,
-            packageWidthIn: editState.packageWidthIn ?? null,
-            packageHeightIn: editState.packageHeightIn ?? null,
+            // Package weight/dims themselves are gated behind weightTouched (2026-09-14):
+            // an unreviewed AI/SEED suggestion sitting in editState must not silently persist
+            // to these organizer-facing columns on an unrelated save. Omitted entirely when
+            // untouched, so the backend leaves the existing DB values alone.
+            ...(weightTouched.has(item.id)
+              ? {
+                  packageWeightOz: editState.packageWeightOz ?? null,
+                  packageLengthIn: editState.packageLengthIn ?? null,
+                  packageWidthIn: editState.packageWidthIn ?? null,
+                  packageHeightIn: editState.packageHeightIn ?? null,
+                }
+              : {}),
             // Same confirm-on-real-edit rule as handleSaveItem above.
             ...(weightTouched.has(item.id) && editState.packageWeightOz != null
               ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }

@@ -493,16 +493,22 @@ const EditItemPage = () => {
     const pushDeclinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
     const savePayload = {
       ...formData,
-      packageWeightOz: toIntOrNull(formData.packageWeightOz),
+      // Package weight is gated behind weightTouched (2026-09-14, same ADR-106
+      // pattern as shippingAvailable/shippingPrice below): an unreviewed estimate
+      // sitting in formData must not silently overwrite this column on an unrelated
+      // save. Omitted entirely when untouched (JSON.stringify drops `undefined`),
+      // overriding the raw un-converted string from the ...formData spread above.
+      packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,
       // Organizer typed a real weight on this page: record it as confirmed so eBay
       // publish stops treating it as an estimate. Never sent when the box was left
       // untouched (see weightTouched).
       ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
         ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
         : {}),
-      packageLengthIn: toIntOrNull(formData.packageLengthIn),
-      packageWidthIn: toIntOrNull(formData.packageWidthIn),
-      packageHeightIn: toIntOrNull(formData.packageHeightIn),
+      // Same weightTouched gating as packageWeightOz above.
+      packageLengthIn: weightTouched ? toIntOrNull(formData.packageLengthIn) : undefined,
+      packageWidthIn: weightTouched ? toIntOrNull(formData.packageWidthIn) : undefined,
+      packageHeightIn: weightTouched ? toIntOrNull(formData.packageHeightIn) : undefined,
       allowBestOffer: formData.allowBestOffer,
       bestOfferAutoAcceptAmt: formData.allowBestOffer && pushAcceptPct !== null && pushPrice > 0
         ? parseFloat((pushPrice * (1 - pushAcceptPct / 100)).toFixed(2))
@@ -963,14 +969,20 @@ const EditItemPage = () => {
       const declinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
       const payload = {
         ...formData,
-        packageWeightOz: toIntOrNull(formData.packageWeightOz),
+        // Package weight is gated behind weightTouched (2026-09-14, same ADR-106
+        // pattern as shippingAvailable/shippingPrice below): an unreviewed estimate
+        // sitting in formData must not silently overwrite this column on an unrelated
+        // save. Omitted entirely when untouched (JSON.stringify drops `undefined`),
+        // overriding the raw un-converted string from the ...formData spread above.
+        packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,
         // Same confirm-on-real-edit rule as saveFormState above.
         ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
           ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
           : {}),
-        packageLengthIn: toIntOrNull(formData.packageLengthIn),
-        packageWidthIn: toIntOrNull(formData.packageWidthIn),
-        packageHeightIn: toIntOrNull(formData.packageHeightIn),
+        // Same weightTouched gating as packageWeightOz above.
+        packageLengthIn: weightTouched ? toIntOrNull(formData.packageLengthIn) : undefined,
+        packageWidthIn: weightTouched ? toIntOrNull(formData.packageWidthIn) : undefined,
+        packageHeightIn: weightTouched ? toIntOrNull(formData.packageHeightIn) : undefined,
         allowBestOffer: formData.allowBestOffer,
         bestOfferAutoAcceptAmt: formData.allowBestOffer && acceptPct !== null && price > 0
           ? parseFloat((price * (1 - acceptPct / 100)).toFixed(2))
