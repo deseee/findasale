@@ -51,7 +51,7 @@ export const discoverHubs = async (req: Request, res: Response) => {
         where: { isActive: true },
         take: 500,
         include: {
-          _count: { select: { vendorBooths: true } },
+          _count: { select: { vendorBooths: { where: { deletedAt: null, isHubOwnerBooth: false } } } },
           organizer: { select: { businessName: true } },
         },
       });
@@ -91,7 +91,7 @@ export const discoverHubs = async (req: Request, res: Response) => {
       where: { isActive: true },
       take: 500,
       include: {
-        _count: { select: { vendorBooths: true } },
+        _count: { select: { vendorBooths: { where: { deletedAt: null, isHubOwnerBooth: false } } } },
         organizer: { select: { businessName: true } },
       },
     });
@@ -137,7 +137,7 @@ export const getHub = async (req: Request, res: Response) => {
     const hub = await prisma.saleHub.findFirst({
       where: { slug, isActive: true },
       include: {
-        _count: { select: { vendorBooths: true } },
+        _count: { select: { vendorBooths: { where: { deletedAt: null, isHubOwnerBooth: false } } } },
         organizer: { select: { businessName: true, profilePhoto: true } },
       },
     });
@@ -451,7 +451,7 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
     const hubs = await prisma.saleHub.findMany({
       where: { organizerId: req.user.organizerProfile?.id },
       include: {
-        _count: { select: { vendorBooths: true } },
+        _count: { select: { vendorBooths: { where: { deletedAt: null, isHubOwnerBooth: false } } } },
       },
     });
 
