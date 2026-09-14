@@ -288,6 +288,59 @@ interface RapidItem {
   ebayListingId?: string;
 }
 
+// Add Items collapsed-row multi-channel status (2026-09-14) -- see
+// claude_docs/ux-spotchecks/add-items-collapsed-row-publish-status-2026-09-14.md
+// and claude_docs/feature-notes/ADR-2026-09-14-add-items-multichannel-status-aggregation.md.
+// item.channelStatus comes from getDraftItemsBySaleId's response (itemController.ts).
+type ChannelDotState = 'PUBLISHED' | 'ELIGIBLE' | null | undefined;
+const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string }> = [
+  { key: 'ebay', label: 'eBay', color: 'bg-blue-500' },
+  { key: 'shopify', label: 'Shopify', color: 'bg-emerald-500' },
+  { key: 'facebook', label: 'Facebook Marketplace', color: 'bg-indigo-500' },
+  { key: 'craigslist', label: 'Craigslist', color: 'bg-purple-500' },
+  { key: 'gumtreeAu', label: 'Gumtree AU', color: 'bg-teal-500' },
+  { key: 'grailed', label: 'Grailed', color: 'bg-neutral-500' },
+  { key: 'poshmark', label: 'Poshmark', color: 'bg-pink-500' },
+  { key: 'mercari', label: 'Mercari', color: 'bg-orange-500' },
+  { key: 'vinted', label: 'Vinted', color: 'bg-teal-600' },
+  { key: 'discogs', label: 'Discogs', color: 'bg-amber-600' },
+];
+const CHANNEL_DOT_VISIBLE_CAP = 4;
+
+/** Small per-connected-channel dot cluster for the collapsed Add Items row.
+ * Filled dot = published. Outlined dot = eligible, not yet published.
+ * A channel with no status (not eligible / organizer hasn't connected it) renders
+ * nothing at all -- no permanently-empty dot. Capped at 4 visible + a "+N" overflow
+ * dot (native title attribute for the name/state -- works on hover and long-press). */
+function ChannelStatusDots({ channelStatus }: { channelStatus?: Record<string, ChannelDotState> | null }) {
+  if (!channelStatus) return null;
+  const active = CHANNEL_DOT_CONFIG.filter(c => channelStatus[c.key] === 'PUBLISHED' || channelStatus[c.key] === 'ELIGIBLE');
+  if (active.length === 0) return null;
+  const visible = active.slice(0, CHANNEL_DOT_VISIBLE_CAP);
+  const overflow = active.slice(CHANNEL_DOT_VISIBLE_CAP);
+  return (
+    <div className="flex items-center gap-0.5 mt-0.5" aria-label="Marketplace publish status">
+      {visible.map(c => {
+        const state = channelStatus[c.key];
+        const title = `${c.label}: ${state === 'PUBLISHED' ? 'Live' : 'Eligible, not yet published'}`;
+        return state === 'PUBLISHED' ? (
+          <span key={c.key} title={title} className={`w-2 h-2 rounded-full ${c.color}`} />
+        ) : (
+          <span key={c.key} title={title} className={`w-2 h-2 rounded-full border ${c.color.replace('bg-', 'border-')} bg-transparent`} />
+        );
+      })}
+      {overflow.length > 0 && (
+        <span
+          title={overflow.map(c => `${c.label}: ${channelStatus[c.key] === 'PUBLISHED' ? 'Live' : 'Eligible, not yet published'}`).join(' | ')}
+          className="text-[9px] leading-none px-1 py-0.5 rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 font-semibold"
+        >
+          +{overflow.length}
+        </span>
+      )}
+    </div>
+  );
+}
+
 const CATEGORIES = [
   'Furniture',
   'Jewelry',
@@ -2905,7 +2958,6 @@ const AddItemsDetailPage = () => {
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
                               item.status === 'SOLD' ? 'bg-warm-700 text-white dark:bg-warm-800 dark:text-warm-100' :
                               item.status === 'RESERVED' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
-                              item.ebayListingId ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                               draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
                               draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                               'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
@@ -2919,6 +2971,7 @@ const AddItemsDetailPage = () => {
                               </span>
                             )}
                           </div>
+                          <ChannelStatusDots channelStatus={item.channelStatus} />
                           <button
                             type="button"
                             onClick={(e) => {

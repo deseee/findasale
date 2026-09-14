@@ -43,6 +43,7 @@ import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleG
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
 import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
+import { computeChannelStatusForItems, ChannelStatusItemInput, ExtensionPlatformsUsed, PublishedExtensionPlatformsByItemId } from '../services/itemChannelStatusService'; // Add Items collapsed-row multi-channel status (2026-09-14), see ADR-2026-09-14-add-items-multichannel-status-aggregation.md
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -3953,6 +3954,9 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         ebayOfferId: true, // S725: surfaces "Pending Publish" state in organizer UI
         listedOnEbayAt: true,
         ebayNeedsReview: true, // S791: #295 fix — badge persists across page loads
+        // Add Items collapsed-row multi-channel status (2026-09-14)
+        discogsListingId: true,
+        shopifyListing: { select: { id: true } },
         // Feature #91: Auto-Markdown (P3: Fix 2)
         priceBeforeMarkdown: true,
         markdownApplied: true,
@@ -4007,6 +4011,68 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       }));
     }
 
+    // Add Items collapsed-row multi-channel status (2026-09-14) -- exactly 2 extra
+    // queries total regardless of item count: one organizer-scoped lookup for
+    // channel-connection flags, one batched MarketplaceListingJob query for this
+    // page's items. See ADR-2026-09-14-add-items-multichannel-status-aggregation.md.
+    const channelStatusOrganizer = await prisma.organizer.findUnique({
+      where: { id: sale.organizerId },
+      select: {
+        ebayConnection: { select: { id: true } },
+        shopifyEnabled: true,
+        subscriptionTier: true,
+        marketplaceAccounts: { where: { platform: 'DISCOGS', status: 'ACTIVE' }, select: { id: true } },
+      },
+    });
+
+    const itemIds = items.map(i => i.id);
+    const EXTENSION_PLATFORMS = ['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI', 'VINTED'] as const;
+
+    // Organizer-wide: which extension platforms has this organizer EVER posted to
+    // (any status) -- used only to decide whether to show a dot for that channel
+    // at all, not whether any specific item is published on it.
+    const organizerJobPlatforms = await prisma.marketplaceListingJob.findMany({
+      where: { item: { sale: { organizerId: sale.organizerId } }, platform: { in: [...EXTENSION_PLATFORMS] } },
+      distinct: ['platform'],
+      select: { platform: true },
+    });
+    const extensionPlatformsUsed: ExtensionPlatformsUsed = {
+      facebook: organizerJobPlatforms.some(j => j.platform === 'FACEBOOK'),
+      craigslist: organizerJobPlatforms.some(j => j.platform === 'CRAIGSLIST'),
+      gumtreeAu: organizerJobPlatforms.some(j => j.platform === 'GUMTREE_AU'),
+      grailed: organizerJobPlatforms.some(j => j.platform === 'GRAILED'),
+      poshmark: organizerJobPlatforms.some(j => j.platform === 'POSHMARK'),
+      mercari: organizerJobPlatforms.some(j => j.platform === 'MERCARI'),
+      vinted: organizerJobPlatforms.some(j => j.platform === 'VINTED'),
+    };
+
+    // This page's items only: which are currently POSTED per platform.
+    const pagePostedJobs = await prisma.marketplaceListingJob.findMany({
+      where: { itemId: { in: itemIds }, status: 'POSTED', platform: { in: [...EXTENSION_PLATFORMS] } },
+      select: { itemId: true, platform: true },
+    });
+    const publishedExtensionPlatformsByItemId: PublishedExtensionPlatformsByItemId = new Map();
+    for (const job of pagePostedJobs) {
+      if (!publishedExtensionPlatformsByItemId.has(job.itemId)) {
+        publishedExtensionPlatformsByItemId.set(job.itemId, new Set());
+      }
+      publishedExtensionPlatformsByItemId.get(job.itemId)!.add(job.platform as any);
+    }
+
+    const channelStatusByItemId = channelStatusOrganizer
+      ? computeChannelStatusForItems(
+          items as unknown as ChannelStatusItemInput[],
+          {
+            hasEbayConnection: channelStatusOrganizer.ebayConnection != null,
+            shopifyEnabled: channelStatusOrganizer.shopifyEnabled,
+            subscriptionTier: channelStatusOrganizer.subscriptionTier,
+            hasActiveDiscogsAccount: channelStatusOrganizer.marketplaceAccounts.length > 0,
+          },
+          extensionPlatformsUsed,
+          publishedExtensionPlatformsByItemId
+        )
+      : {};
+
     // Sprint 1: Compute health score for each item
     const itemsWithHealth = items.map(item => ({
       ...item,
@@ -4022,6 +4088,8 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       // Feature #310: Add effective price after discount (if any rule applies)
       effectivePrice: getEffectivePrice(item, activeRules),
       tagColor: item.tagColor ?? null,
+      // Add Items collapsed-row multi-channel status (2026-09-14)
+      channelStatus: channelStatusByItemId[item.id] ?? null,
     }));
 
     res.json(itemsWithHealth);
