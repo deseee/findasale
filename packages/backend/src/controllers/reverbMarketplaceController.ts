@@ -193,7 +193,19 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
     const publish = req.body?.publish === true;
     const reverbCategoryUuid = typeof req.body?.reverbCategoryUuid === 'string' ? req.body.reverbCategoryUuid : undefined;
 
-    const listing = await createReverbListing(organizer.id, item, { publish, reverbCategoryUuid });
+    const reverbResponse = await createReverbListing(organizer.id, item, { publish, reverbCategoryUuid });
+    // BUG FIX 2026-09-14 (live-verified via a real push against Patrick's own Reverb account,
+    // item cmt3betxs01nra4xv0dtry9kr -- "Planet Waves XLR Microphone Cable"): Reverb's
+    // create-listing response wraps the actual listing under a `listing` key -- confirmed from
+    // the live response body: { message, listing: { id: 101841575, ... }, errors, warnings }.
+    // createReverbListing() returns that envelope unchanged (reverbConnector.ts, `return
+    // JSON.parse(text)`), so `reverbResponse` here is the WHOLE envelope, not the listing
+    // itself. The persistence check below and the frontend (edit-item/[id].tsx's
+    // reverbPushMutation reads response.data.listing.id / .​_links directly) both assumed the
+    // flat shape and silently no-op'd -- confirmed live: the push succeeded on Reverb (real
+    // draft listing created) but reverbListingId never got written. Unwrap once here so both
+    // sides get the flat listing object they already expect.
+    const reverbListing = reverbResponse?.listing;
 
     // ADDENDUM 2026-09-14 (ADR-2026-09-14-add-items-multichannel-status-aggregation.md): persist
     // the real Reverb listing id, closing the gap this file's own prior comment on
@@ -202,18 +214,18 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
     // created on Reverb's side by this point, so a persistence failure here must not surface as
     // a user-facing error (same posture as the lastErrorMessage write in reverbConnector.ts's own
     // error path above).
-    if (listing?.id != null) {
+    if (reverbListing?.id != null) {
       await prisma.item
         .update({
           where: { id: item.id },
-          data: { reverbListingId: String(listing.id), reverbListedAt: new Date() },
+          data: { reverbListingId: String(reverbListing.id), reverbListedAt: new Date() },
         })
         .catch((err) => {
           console.error(`[Reverb] Failed to persist reverbListingId for item ${item.id}:`, err);
         });
     }
 
-    res.json({ success: true, listing });
+    res.json({ success: true, listing: reverbListing, message: reverbResponse?.message });
   } catch (error: any) {
     respondReverbError(res, error, 'Failed to create Reverb listing');
   }
