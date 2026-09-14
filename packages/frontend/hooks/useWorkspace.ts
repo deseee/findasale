@@ -99,6 +99,7 @@ export const useInviteMember = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace', 'members'] });
+      queryClient.invalidateQueries({ queryKey: ['workspace', 'invitations', 'sent'] });
     },
   });
 };
@@ -202,6 +203,37 @@ export const useMyWorkspaceMemberships = (options?: { enabled?: boolean }) => {
     // dashboard, always-authenticated) is unaffected. AvatarDropdown.tsx (renders for
     // logged-out visitors too, on every page) passes enabled: !!user?.id so this never
     // fires an authenticated-only call with no session.
+    enabled: options?.enabled ?? true,
+  });
+};
+
+/**
+ * Fetch invites the current user's workspace has SENT (owner/admin perspective).
+ * Distinct from usePendingWorkspaceInvitations, which lists invitations the
+ * current user has RECEIVED as an invitee.
+ */
+export interface SentInvite {
+  id: string;
+  inviteEmail: string;
+  role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER';
+  invitedAt: string;
+  expiresAt: string;
+}
+
+export const useSentWorkspaceInvites = (options?: { enabled?: boolean }) => {
+  return useQuery<SentInvite[]>({
+    queryKey: ['workspace', 'invitations', 'sent'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/workspace/invitations/sent');
+        return response.data;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          return [];
+        }
+        throw error;
+      }
+    },
     enabled: options?.enabled ?? true,
   });
 };

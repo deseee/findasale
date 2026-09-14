@@ -267,6 +267,43 @@ export const getPendingInvitations = async (req: AuthRequest, res: Response) => 
   }
 };
 
+export const getSentInvites = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const workspace = await prisma.organizerWorkspace.findUnique({ where: { ownerId: organizerId } });
+    if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
+
+    const requester = await prisma.workspaceMember.findFirst({ where: { workspaceId: workspace.id, organizerId } });
+    const isOwner = workspace.ownerId === organizerId;
+    const isAdmin = requester && requester.role === 'ADMIN';
+    if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Insufficient permissions' });
+
+    // WorkspaceInvite rows are deleted on acceptance (see acceptMagicLinkInvite), so
+    // every remaining row for this workspace is, by construction, unaccepted. Still
+    // filter out expired ones -- an expired invite is no longer actionable for the
+    // owner and would otherwise sit here forever.
+    const invites = await prisma.workspaceInvite.findMany({
+      where: { workspaceId: workspace.id, expiresAt: { gt: new Date() } },
+      select: {
+        id: true,
+        inviteEmail: true,
+        role: true,
+        invitedAt: true,
+        expiresAt: true,
+      },
+      orderBy: { invitedAt: 'desc' },
+    });
+
+    return res.json(invites);
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching sent invites:', error);
+    return res.status(500).json({ message: 'Failed to fetch sent invites' });
+  }
+};
+
 export const removeMember = async (req: AuthRequest, res: Response) => {
   try {
     const { organizerId: targetOrganizerId } = req.params;

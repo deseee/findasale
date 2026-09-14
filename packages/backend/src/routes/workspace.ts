@@ -8,6 +8,7 @@ import {
   inviteMember,
   acceptInvite,
   getPendingInvitations,
+  getSentInvites,
   removeMember,
   listMembers,
   getPublicWorkspace,
@@ -51,6 +52,7 @@ router.post('/add-seat', authenticate, requireTier('TEAMS'), addTeamSeat);
 router.post('/invite/accept/:token', authenticate, acceptMagicLinkInvite);
 router.post('/accept', authenticate, acceptInvite);
 router.get('/invitations/pending', authenticate, getPendingInvitations);
+router.get('/invitations/sent', authenticate, requireTier('TEAMS'), getSentInvites);
 router.get('/my-memberships', authenticate, getMyWorkspaceMemberships);
 router.delete('/members/:organizerId', authenticate, requireTier('TEAMS'), removeMember);
 router.get('/members', authenticate, listMembers);

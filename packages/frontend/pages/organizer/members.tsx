@@ -29,7 +29,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
-import { useMyWorkspace, useInviteMember } from '../../hooks/useWorkspace';
+import { useMyWorkspace, useInviteMember, useSentWorkspaceInvites } from '../../hooks/useWorkspace';
 import {
   useStaffList,
   useUpdateStaffProfile,
@@ -166,6 +166,13 @@ const OrganizerMembersPage = () => {
 
   // Mutations
   const inviteMutation = useInviteMember();
+  // Invites this workspace's owner/admin has SENT (separate from the staff/member
+  // list, since a TeamMember row only exists once an invite is ACCEPTED -- see
+  // staffService.getStaffMembers). Only meaningful for the owner, who is the only
+  // one shown the invite form below.
+  const { data: sentInvites, isLoading: sentInvitesLoading } = useSentWorkspaceInvites({
+    enabled: !!workspaceId && workspace?.ownerUserId === user?.id,
+  });
   const updateProfileMutation = useUpdateStaffProfile(workspaceId);
   const updateAvailabilityMutation = useUpdateAvailability(workspaceId);
   const removeStaffMutation = useRemoveStaffMember(workspaceId);
@@ -500,6 +507,46 @@ const OrganizerMembersPage = () => {
                       {inviteMutation.isPending ? 'Sending...' : 'Send Invite'}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Pending Invites -- invites sent but not yet accepted (or expired).
+                  Without this, the "Invitation sent" toast is the only confirmation
+                  an owner ever gets that an invite exists. */}
+              {isOwner && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                    Pending Invites
+                  </h3>
+                  {sentInvitesLoading ? (
+                    <Skeleton className="h-16 rounded-lg" />
+                  ) : !sentInvites || sentInvites.length === 0 ? (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      No pending invites. Invitations you send appear here until they're accepted or expire.
+                    </p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {sentInvites.map((invite) => (
+                        <li
+                          key={invite.id}
+                          className="flex items-center justify-between gap-3 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {invite.inviteEmail}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Invited {new Date(invite.invitedAt).toLocaleDateString()} &middot; Expires {new Date(invite.expiresAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 flex-shrink-0">
+                            {displayRole(invite.role)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
