@@ -24,6 +24,9 @@ declare global {
 // whether/when to actually charge it (a deferred trial-end charge for organizer billing,
 // or an immediate first charge for Hunt Pass) and shows its own price/trial copy around
 // this component rather than this component assuming a "Pay $X now" framing.
+// NEXT_PUBLIC_SQUARE_PLATFORM_LOCATION_ID was added to Vercel prod+preview
+// (2026-09-14); this comment forces a real build so Next.js inlines it --
+// Vercel's ignoreCommand skips a plain redeploy of an unchanged commit.
 const SQUARE_SDK_SRC_PRODUCTION = 'https://web.squarecdn.com/v1/square.js';
 const SQUARE_SDK_SRC_SANDBOX = 'https://sandbox.web.squarecdn.com/v1/square.js';
 
