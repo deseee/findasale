@@ -12,38 +12,20 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { loadStripe, Stripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import VendorBoothFeeBillingSetup from '../../components/VendorBoothFeeBillingSetup';
 
-// Module-level singleton, same pattern as CheckoutModal.tsx / pos.tsx -- avoids
-// re-creating the Stripe.js instance on every render.
-let stripePromise: Promise<Stripe | null> | null = null;
-const getStripePromise = () => {
-  if (!stripePromise) {
-    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-  }
-  return stripePromise;
-};
-
-// Booth rent auto-pay stopgap (audit sweep, 2026-09-10): VendorBoothFeeBillingSetup's card
-// entry (below) and the backend fee-billing/setup-intent + fee-billing/confirm endpoints
-// (vendorBoothController.ts) are 100% Stripe -- a platform-account Stripe Customer +
-// SetupIntent, then vendorBoothFeeBillingCron.ts charges via a platform-account
-// PaymentIntent and Transfers the proceeds to the hub owner's stripeConnectId. Stripe's
-// platform account is permanently closed (same fact already documented in this file's own
-// header comment above and in pos.tsx's ENABLE_STRIPE_TERMINAL_CARD_READER stopgap) -- every
-// one of those Stripe calls now fails for every organizer, not just Square-only ones. A real
-// Square-based replacement is NOT a small swap: Square has no platform-initiated
-// Transfer-between-connected-merchants primitive (confirmed, see squareRefundService.ts's file
-// header), so the cron's hub-owner payout leg needs a genuinely different architecture, not a
-// drop-in client change -- flagged as DECISION NEEDED / architecture work, not built blind
-// here. Mirrors the ENABLE_STRIPE_TERMINAL_CARD_READER / ENABLE_SPLIT_BILL pattern in
-// pos.tsx: state/logic kept intact, UI gated off with an honest message, nothing deleted.
-const ENABLE_BOOTH_FEE_AUTOPAY = false;
+// Booth rent auto-pay (2026-09-14, claude_docs/feature-notes/
+// booth-rent-autopay-square-design-2026-09-13.md): the Stripe SetupIntent-based stopgap
+// described in this flag's history (audit sweep, 2026-09-10 -- Stripe's platform account
+// permanently closed 2026-09-12) is gone. VendorBoothFeeBillingSetup now uses Square's Web
+// Payments SDK (no Stripe Elements provider needed here anymore) and
+// vendorBoothFeeBillingCron.ts charges directly on the hub owner's own connected Square
+// account using the vendor's platform-account shared card -- see the design doc for the
+// full architecture. Flipped on now that steps 1-7 of that doc's task breakdown are built.
+const ENABLE_BOOTH_FEE_AUTOPAY = true;
 
 interface PublicBoothSummary {
   boothNumber: string;
@@ -71,6 +53,10 @@ interface FeeBillingStatus {
   configured: boolean;
   brand?: string;
   last4?: string;
+  /** Whether the HUB OWNER has finished connecting Square -- gates whether the
+   *  square-setup card-entry form can render at all (2026-09-14 Square design §7). */
+  squareReady?: boolean;
+  squareLocationId?: string | null;
 }
 
 interface FeeCharge {
@@ -122,11 +108,12 @@ const VendorBoothTokenPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [feeBillingFailed, setFeeBillingFailed] = useState(false);
+  const [cancellingAutopay, setCancellingAutopay] = useState(false);
 
   // Square is the sole payout processor for vendor booths. Stripe onboarding removed
   // 2026-09-09 -- the Stripe platform account is permanently closed. Supersedes the
-  // 2026-09-07 "Stripe stays available" decision. (The Stripe.js/Elements usage further
-  // below for Booth Rent Auto-Pay is a separate, unrelated concern -- not touched here.)
+  // 2026-09-07 "Stripe stays available" decision. (Booth Rent Auto-Pay below also moved to
+  // Square, 2026-09-14 -- no Stripe.js/Elements usage remains on this page.)
   const [squareStatus, setSquareStatus] = useState<SquarePayoutStatus | null>(null);
   const [squarePayoutSetup, setSquarePayoutSetup] = useState<SquarePayoutSetupState>('loading');
   const [squareOnboarding, setSquareOnboarding] = useState(false);
@@ -146,6 +133,27 @@ const VendorBoothTokenPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error checking Square payout status:', error);
       setSquarePayoutSetup('unknown');
+    }
+  };
+
+  // Booth rent auto-pay "Cancel" affordance (2026-09-14 Square design §7/§8.2) -- the
+  // Stripe-era UI never needed this: auto-pay never actually worked in production, so
+  // nobody had ever turned it off. Calls the new cancel endpoint, then re-fetches
+  // fee-billing/status from the server (rather than optimistically setting local state)
+  // so the UI reflects exactly what the backend now believes, same as the initial load.
+  const handleCancelAutopay = async () => {
+    if (!myBoothId) return;
+    setCancellingAutopay(true);
+    try {
+      await api.post(`/vendor-booth/${myBoothId}/fee-billing/cancel`);
+      const response = await api.get(`/vendor-booth/${myBoothId}/fee-billing/status`);
+      setFeeBillingStatus(response.data);
+      showToast('Booth rent auto-pay turned off', 'success');
+    } catch (error: any) {
+      console.error('Error cancelling booth rent auto-pay:', error);
+      showToast(error?.response?.data?.error || 'Failed to turn off auto-pay', 'error');
+    } finally {
+      setCancellingAutopay(false);
     }
   };
 
@@ -433,28 +441,43 @@ const VendorBoothTokenPage: React.FC = () => {
                             Checking your auto-pay setup...
                           </p>
                         ) : feeBillingStatus.configured ? (
-                          <p className="text-sm text-green-700 dark:text-green-400">
-                            ✓ Auto-pay active
-                            {feeBillingStatus.brand && feeBillingStatus.last4
-                              ? `. ${feeBillingStatus.brand} ending in ${feeBillingStatus.last4}`
-                              : ''}
-                          </p>
+                          <div>
+                            <p className="text-sm text-green-700 dark:text-green-400">
+                              ✓ Auto-pay active
+                              {feeBillingStatus.brand && feeBillingStatus.last4
+                                ? `. ${feeBillingStatus.brand} ending in ${feeBillingStatus.last4}`
+                                : ''}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleCancelAutopay}
+                              disabled={cancellingAutopay}
+                              className="mt-2 text-xs font-medium text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                            >
+                              {cancellingAutopay ? 'Turning off...' : 'Cancel auto-pay'}
+                            </button>
+                          </div>
                         ) : !ENABLE_BOOTH_FEE_AUTOPAY ? (
                           <p className="text-sm text-warm-500 dark:text-warm-400">
                             Booth rent auto-pay isn&apos;t available right now. Contact your hub
                             organizer to arrange paying your booth rent directly.
                           </p>
+                        ) : !feeBillingStatus.squareReady || !feeBillingStatus.squareLocationId ? (
+                          <p className="text-sm text-warm-500 dark:text-warm-400">
+                            Your hub organizer hasn&apos;t finished connecting Square yet, so booth
+                            rent auto-pay isn&apos;t available. Contact them to arrange paying your
+                            booth rent directly for now.
+                          </p>
                         ) : myBoothId ? (
-                          <Elements stripe={getStripePromise()}>
-                            <VendorBoothFeeBillingSetup
-                              vendorBoothId={myBoothId}
-                              boothFee={payoutInfo.boothFee}
-                              onConfigured={() => {
-                                showToast('Booth rent auto-pay is set up', 'success');
-                                setFeeBillingStatus({ configured: true });
-                              }}
-                            />
-                          </Elements>
+                          <VendorBoothFeeBillingSetup
+                            vendorBoothId={myBoothId}
+                            boothFee={payoutInfo.boothFee}
+                            squareLocationId={feeBillingStatus.squareLocationId}
+                            onConfigured={() => {
+                              showToast('Booth rent auto-pay is set up', 'success');
+                              setFeeBillingStatus({ ...feeBillingStatus, configured: true });
+                            }}
+                          />
                         ) : null}
 
                         <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">

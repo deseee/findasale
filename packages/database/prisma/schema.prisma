@@ -6353,6 +6353,26 @@ model VendorBooth {
   vendorStripeCustomerId String?
   vendorPaymentMethodId  String?
 
+  // Booth-rent auto-pay, Square path (2026-09-14, claude_docs/feature-notes/
+  // booth-rent-autopay-square-design-2026-09-13.md). Square analogs of
+  // vendorStripeCustomerId/vendorPaymentMethodId above -- the Stripe fields stay in the
+  // schema unused/legacy (same "never delete a dead Stripe field mid-sweep" convention as
+  // the rest of this migration), NOT reused or renamed, since a live Stripe row could in
+  // principle still exist from before the 2026-09-12 shutdown and must not be silently
+  // reinterpreted as a Square id.
+  //
+  // vendorSquarePlatformCustomerId / vendorSquareCardId live in FindA.Sale's OWN platform
+  // Square account (getSquarePlatformClient()) -- NOT the hub owner's connected account and
+  // NOT the booth's own squareAccountId above. Mirrors createSquareSharedCardForCart's
+  // platformCustomerId/sharedCardId pair exactly (squareVendorBoothCartService.ts).
+  vendorSquarePlatformCustomerId String?
+  vendorSquareCardId             String? // the "ccof:..." shared-card id
+  // Set the moment the vendor cancels auto-pay (POST .../fee-billing/cancel) -- distinguishes
+  // "never set up" (both fields above NULL, cancelledAt NULL) from "was set up, tenant turned
+  // it off" for support/audit purposes. The cron still treats either state as
+  // PENDING_PAYMENT_METHOD -- this field is informational/audit, not a separate gate.
+  vendorSquareBillingCancelledAt DateTime?
+
   notes String?
 
   // Invite/claim mechanism (ADR-015 primary access → ADR-016 demoted to fallback only).
@@ -6750,6 +6770,12 @@ model VendorBoothFeeCharge {
   squarePaymentId  String? @unique
   squareTransferId String?
 
+  // Retry/dunning (2026-09-14 design, booth-rent-autopay-square-design-2026-09-13.md §5.2 --
+  // the Stripe-era cron had NO retry logic at all).
+  attemptCount  Int       @default(0) // 1 after the first attempt (success or fail), increments each retry
+  nextRetryAt   DateTime? // when the daily retry sweep (vendorBoothFeeRetryCron.ts) should next attempt this row; NULL once COMPLETED, CANCELLED, or FAILED_FINAL
+  lastAttemptAt DateTime? // distinct from updatedAt -- updatedAt also changes on non-charge-attempt transitions (e.g. a manual status correction)
+
   // One charge per booth per period -- the cron's own idempotent claim, independent of the
   // Stripe-level idempotencyKey used on the actual charge/transfer calls.
   @@unique([vendorBoothId, periodStart, periodEnd])
@@ -6758,6 +6784,7 @@ model VendorBoothFeeCharge {
   @@index([status])
   @@index([stripeTransferId])
   @@index([squarePaymentId])
+  @@index([nextRetryAt]) // the daily retry sweep's own query
 }
 
 

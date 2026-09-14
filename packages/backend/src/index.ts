@@ -251,6 +251,7 @@ import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operation
 import { scheduleScrapedSalePruneCron } from './jobs/pruneScrapedSales'; // Stale scraped ENDED-sale prune (volume reclaim, ADR 2026-07-05)
 import { scheduleStripeMigrationReconcileCron } from './jobs/stripeMigrationReconcileCron'; // ADR 1 2026-07-11: Stripe migration reconciliation backstop (daily, 04:30)
 import { scheduleVendorBoothFeeBillingCron } from './jobs/vendorBoothFeeBillingCron'; // ADR-090 Phase 4: flat VendorBooth.boothFee periodic billing (monthly, 1st @ 06:00 UTC)
+import { scheduleVendorBoothFeeRetryCron } from './jobs/vendorBoothFeeRetryCron'; // booth-rent auto-pay dunning sweep (daily, 07:00 UTC) -- 2026-09-14 Square design §6.3
 import { scheduleArchivalCron, expireStaleVenueCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly) + daily stale venue expiry
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature: Automatic Markdown Cycles (PRO Tier)
@@ -1004,6 +1005,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // Transfers proceeds to the hub owner. Safe to run with no vendor payment methods
   // on file yet (pre-wire state) — see vendorBoothFeeBillingCron.ts header.
   scheduleVendorBoothFeeBillingCron();
+  // Daily dunning sweep companion to the monthly cron above -- re-attempts FAILED_RETRYING
+  // booth-rent charges per the resolved retry cadence (+3/+7 days, then FAILED_FINAL).
+  scheduleVendorBoothFeeRetryCron();
 
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();

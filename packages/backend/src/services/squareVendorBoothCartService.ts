@@ -442,3 +442,168 @@ export async function refundVendorBoothSquarePayment(
     ...(reason ? { reason } : {}),
   });
 }
+
+/**
+ * ============================================================================
+ * BOOTH-RENT AUTO-PAY (2026-09-14, claude_docs/feature-notes/
+ * booth-rent-autopay-square-design-2026-09-13.md) -- a second, simpler consumer of the
+ * Shared Card on File pattern documented in this file's header comment. Booth-cart
+ * checkout above charges N different BOOTHS' own connected accounts from one shopper
+ * card; booth-rent auto-pay charges exactly ONE target account (the HUB OWNER's own
+ * connected Square account) from one VENDOR's shared card, on a recurring cadence driven
+ * by jobs/vendorBoothFeeBillingCron.ts (first attempt) and jobs/vendorBoothFeeRetryCron.ts
+ * (dunning retries). No appFeeMoney/appFeeAllocations of any kind -- per the design doc's
+ * §4, booth rent has no platform cut today, so this is a plain single-recipient charge,
+ * simpler than authorizeSquareBoothCartLeg above (which must also implement ADR-123 fee
+ * allocation). Kept in THIS file, not a new service module, because it is the same
+ * "cross-account Square charge using a platform-account shared card" primitive already
+ * documented and implemented immediately above -- one home for the pattern, two per-feature
+ * thin call sites.
+ * ============================================================================
+ */
+
+/**
+ * Booth-fee twin of createSquareSharedCardForCart above -- creates the Customer + Card in
+ * FindA.Sale's OWN platform Square account from the vendor's single-use sourceId, called
+ * once per POST .../fee-billing/square-setup. Kept as its own function (rather than a
+ * literal call to createSquareSharedCardForCart) so the idempotency key and referenceId
+ * are booth-fee-scoped, not sharing key-space with the unrelated booth-cart-checkout
+ * shared cards created above -- same client, same shape, different feature.
+ */
+export async function createSquareSharedCardForBoothFee(params: {
+  vendorBoothId: string;
+  sourceId: string;
+}): Promise<{ platformCustomerId: string; sharedCardId: string }> {
+  const client = getSquarePlatformClient();
+
+  const customerResponse = await client.customers.create({
+    referenceId: params.vendorBoothId,
+    note: `FindA.Sale booth-rent auto-pay -- shared-card-on-file platform customer for booth ${params.vendorBoothId}`,
+  });
+  const platformCustomerId = (customerResponse as any)?.customer?.id;
+  if (!platformCustomerId) {
+    throw new Error(
+      '[squareVendorBoothCartService] Square CreateCustomer (platform account, booth-fee) returned no customer id'
+    );
+  }
+
+  const cardResponse = await client.cards.create({
+    idempotencyKey: buildSquareIdempotencyKey(['boothfeecard', params.vendorBoothId, params.sourceId]),
+    sourceId: params.sourceId,
+    card: {
+      customerId: platformCustomerId,
+      referenceId: params.vendorBoothId,
+    } as any,
+  } as any);
+  const sharedCardId = (cardResponse as any)?.card?.id;
+  if (!sharedCardId) {
+    throw new Error(
+      '[squareVendorBoothCartService] Square CreateCard (shared card, booth-fee) returned no card id'
+    );
+  }
+
+  return { platformCustomerId, sharedCardId };
+}
+
+export interface SquareBoothFeeChargeParams {
+  /** The HUB OWNER's own resolved Square OAuth access token (resolveOrganizerSquareAccessToken). */
+  hubOwnerAccessToken: string;
+  hubOwnerSquareLocationId?: string | null;
+  /** The vendor's platform-account shared card id (VendorBooth.vendorSquareCardId, "ccof:..."). */
+  sharedCardId: string;
+  amountCents: number;
+  vendorBoothId: string;
+  hubId: string;
+  /** VendorBoothFeeCharge.id -- the SAME row across every retry attempt (no new row per retry). */
+  chargeId: string;
+  /** 1 on the first (cron) attempt, 2/3 on retry-cron re-attempts. Diagnostic/logging only as
+   *  of the 2026-09-14 P1 fix below -- NOT part of the Square idempotency key (see
+   *  chargeVendorBoothFeeOnHubOwnerAccount's idempotencyKey, which is now keyed on chargeId
+   *  alone) so that a genuinely-ambiguous retry (the first attempt's response was lost, but the
+   *  charge may have actually landed at Square) safely resolves to Square's ORIGINAL result
+   *  instead of risking a second live charge. */
+  attemptNumber: number;
+}
+
+export interface SquareBoothFeeChargeSuccess {
+  ok: true;
+  paymentId: string;
+  status: string;
+}
+export interface SquareBoothFeeChargeFailure {
+  ok: false;
+  code: string;
+  message: string;
+}
+export type SquareBoothFeeChargeResult = SquareBoothFeeChargeSuccess | SquareBoothFeeChargeFailure;
+
+/**
+ * The one Square call this design needs (§4/§6.2): create (or, per this implementation,
+ * always freshly create -- same "small accepted amount of Customer clutter" trade-off
+ * authorizeSquareBoothCartLeg above already makes per leg) a Customer in the HUB OWNER's
+ * own connected account, then CreatePayment scoped to the hub owner's own access token
+ * using the vendor's shared card as sourceId. Immediate capture (autocomplete omitted,
+ * i.e. Square's own default of true) -- booth rent has no hold/authorize-then-capture
+ * requirement the way a booth-cart leg does. No appFeeMoney -- no platform cut on booth
+ * rent (resolved default, see the design doc's §9 item 2).
+ */
+export async function chargeVendorBoothFeeOnHubOwnerAccount(
+  params: SquareBoothFeeChargeParams
+): Promise<SquareBoothFeeChargeResult> {
+  const client = getSquareClientForMerchant(params.hubOwnerAccessToken);
+
+  let hubOwnerCustomerId: string;
+  try {
+    const customerResponse = await client.customers.create({
+      referenceId: params.chargeId,
+      note: `FindA.Sale booth rent auto-pay -- booth ${params.vendorBoothId}, hub ${params.hubId}`,
+    });
+    hubOwnerCustomerId = (customerResponse as any)?.customer?.id;
+    if (!hubOwnerCustomerId) {
+      return { ok: false, code: 'NO_CUSTOMER_IN_RESPONSE', message: DECLINE_MESSAGE };
+    }
+  } catch (err) {
+    if (err instanceof SquareError) {
+      const first = (err as any).errors?.[0];
+      console.warn(
+        `[squareVendorBoothCartService] Square CreateCustomer (hub owner account, booth-fee) failed: ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
+      );
+      return { ok: false, code: first?.code || 'SQUARE_ERROR', message: DECLINE_MESSAGE };
+    }
+    throw err;
+  }
+
+  try {
+    const paymentResponse = await client.payments.create({
+      // P1 fix (2026-09-14 security review): keyed on chargeId ALONE -- never attemptNumber.
+      // Square's idempotency key exists precisely so a retried request with an ambiguous
+      // outcome (timeout/connection-drop AFTER Square captured the charge but BEFORE this code
+      // read the response) is safe to retry: reusing the SAME key means Square hands back the
+      // ORIGINAL result instead of creating a brand-new charge. Varying the key per attempt (the
+      // prior behavior) defeated that guarantee entirely.
+      idempotencyKey: buildSquareIdempotencyKey(['boothfeecharge', params.chargeId]),
+      sourceId: params.sharedCardId,
+      customerId: hubOwnerCustomerId,
+      amountMoney: toSquareMoney(params.amountCents),
+      ...(params.hubOwnerSquareLocationId ? { locationId: params.hubOwnerSquareLocationId } : {}),
+      autocomplete: true,
+      referenceId: params.chargeId.slice(0, 40),
+      note: `FindA.Sale booth rent -- hub ${params.hubId}, booth ${params.vendorBoothId}`,
+    } as any);
+    const payment = (paymentResponse as any)?.payment;
+    if (!payment?.id) {
+      return { ok: false, code: 'NO_PAYMENT_IN_RESPONSE', message: DECLINE_MESSAGE };
+    }
+    return { ok: true, paymentId: payment.id, status: payment.status ?? 'UNKNOWN' };
+  } catch (err) {
+    if (err instanceof SquareError) {
+      const first = (err as any).errors?.[0];
+      console.warn(
+        `[squareVendorBoothCartService] Square CreatePayment decline/error (booth-fee): ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
+      );
+      return { ok: false, code: first?.code || 'SQUARE_ERROR', message: DECLINE_MESSAGE };
+    }
+    throw err;
+  }
+}
+

@@ -46,19 +46,60 @@
  * ARCHITECT-LEVEL OPEN QUESTION, not resolved by this sweep: what should
  * recurring booth-fee billing look like on Square? Flagging per dispatch
  * instructions rather than guessing at a new billing architecture.
+ *
+ * *** SQUARE IMPLEMENTATION (2026-09-14) ***
+ * The open question above is now RESOLVED -- see claude_docs/feature-notes/
+ * booth-rent-autopay-square-design-2026-09-13.md. The Stripe paymentIntents.create +
+ * transfers.create two-hop block described above is GONE from this cron's live code path
+ * (history kept in this comment, not the code). The charge branch now gates on the hub
+ * owner's SQUARE readiness (squareOnboarded/squareLocationId + a resolvable OAuth token)
+ * and the vendor's Square shared-card fields (vendorSquarePlatformCustomerId/
+ * vendorSquareCardId), then makes ONE Square CreatePayment call directly on the hub
+ * owner's own connected account using the vendor's shared card -- no Transfer, no
+ * allocation, no CLAIMING sentinel, since there is no second async step to race against
+ * (see squareVendorBoothCartService.ts's chargeVendorBoothFeeOnHubOwnerAccount). On
+ * failure this cron no longer marks a charge terminally FAILED -- it sets
+ * FAILED_RETRYING with a nextRetryAt, and jobs/vendorBoothFeeRetryCron.ts (new, daily)
+ * re-attempts it per the resolved retry/dunning cadence (2 retries at +3/+7 days after
+ * the original failure, then FAILED_FINAL).
  */
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
-// Rent-charge failure notification. Fire-and-forget with a .catch at both FAILED sites
-// below: telling people must NEVER change what this cron does to money, and the service
-// itself never throws (it returns { sent, reason }).
+// Rent-charge failure notification. Fire-and-forget with a .catch at both FAILED-RETRYING
+// sites below: telling people must NEVER change what this cron does to money, and the
+// service itself never throws (it returns { sent, reason }).
 import { notifyBoothRentChargeFailed, notifyBoothRentCharged } from '../services/vendorBoothLifecycleNotificationService';
 import { cronGuard } from '../utils/cronGuard';
-import { getStripe } from '../utils/stripe';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, hub-owner Transfer wiring
+// Square path (2026-09-14 design) -- resolves the HUB OWNER's own OAuth access token
+// (never the platform's, never the vendor's) to charge on their own connected account.
+import { resolveOrganizerSquareAccessToken, SquareOnboardingIncompleteError } from '../services/squarePaymentService';
+import { chargeVendorBoothFeeOnHubOwnerAccount } from '../services/squareVendorBoothCartService';
 
-const stripe = () => getStripe();
+/**
+ * Retry/dunning cadence (2026-09-14, resolved default per the design doc's §9 item 1 --
+ * Architect's own suggested default, Patrick-confirmed): 2 retries at +3 and +7 days after
+ * the ORIGINAL failed attempt, then FAILED_FINAL. 3 total attempts (1 initial + 2 retries).
+ * "Original failure" is approximated as the VendorBoothFeeCharge row's own createdAt --
+ * that row is created and attempted within the same cron run (sub-second gap in practice),
+ * so this is accurate to well within the day-granularity this cadence actually needs.
+ * Exported so jobs/vendorBoothFeeRetryCron.ts (the daily dunning sweep) uses the exact same
+ * policy rather than a second, driftable copy of it.
+ */
+export const BOOTH_FEE_RETRY_DELAYS_DAYS = [3, 7] as const;
+export const MAX_BOOTH_FEE_ATTEMPTS = BOOTH_FEE_RETRY_DELAYS_DAYS.length + 1; // 3
+
+/**
+ * Given the ORIGINAL failure timestamp and the attempt number that just failed (1 = the
+ * initial cron attempt, 2 = the first retry, ...), returns when the next retry should run,
+ * or null if the retry budget (MAX_BOOTH_FEE_ATTEMPTS) is exhausted -- i.e. FAILED_FINAL.
+ */
+export function computeNextBoothFeeRetryAt(originalFailureAt: Date, attemptNumberJustFailed: number): Date | null {
+  const delayDays = BOOTH_FEE_RETRY_DELAYS_DAYS[attemptNumberJustFailed - 1];
+  if (delayDays === undefined) return null; // retry budget exhausted -> FAILED_FINAL
+  return new Date(originalFailureAt.getTime() + delayDays * 24 * 60 * 60 * 1000);
+}
 
 export interface BoothFeeBillingSummary {
   checked: number;
@@ -103,6 +144,13 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
             periodEnd,
             amountCents: Math.round(Number(booth.boothFee) * 100),
             status: 'PENDING',
+            // Square path (2026-09-14): every NEW charge row this cron creates is
+            // Square-only going forward -- Stripe's platform account is permanently
+            // closed, so a STRIPE row can only be historical/pre-shutdown (schema.prisma's
+            // own comment on this column). Set explicitly rather than relying on the
+            // schema default, which stays 'STRIPE' for backward compatibility with rows
+            // already written.
+            processor: 'SQUARE',
           },
         });
       } catch (createErr: any) {
@@ -114,14 +162,28 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
       }
 
       const hubOwnerOrganizer = booth.hub.organizer;
-      const hubOwnerReady =
-        hubOwnerOrganizer.stripeAccountType === 'standard' &&
-        hubOwnerOrganizer.stripeOnboarded &&
-        !!hubOwnerOrganizer.stripeConnectId;
-      if (!hubOwnerReady) {
+      const hubOwnerSquareReady = hubOwnerOrganizer.squareOnboarded && !!hubOwnerOrganizer.squareLocationId;
+      if (!hubOwnerSquareReady) {
         summary.pendingOnboarding += 1;
-        await prisma.vendorBoothFeeCharge.update({ where: { id: charge.id }, data: { status: 'PENDING_STRIPE_ONBOARDING' } });
+        await prisma.vendorBoothFeeCharge.update({ where: { id: charge.id }, data: { status: 'PENDING_SQUARE_ONBOARDING' } });
         continue;
+      }
+
+      // Resolve the hub owner's own OAuth access token now (rather than deep inside the
+      // charge attempt below) so a resolution failure (revoked/expired token with no
+      // usable refresh token) reads identically to "not onboarded" -- same gate, same
+      // status -- instead of falling through to a Square API call doomed to fail with a
+      // confusing error.
+      let hubOwnerAccessToken: string;
+      try {
+        hubOwnerAccessToken = await resolveOrganizerSquareAccessToken(hubOwnerOrganizer);
+      } catch (tokenErr) {
+        if (tokenErr instanceof SquareOnboardingIncompleteError) {
+          summary.pendingOnboarding += 1;
+          await prisma.vendorBoothFeeCharge.update({ where: { id: charge.id }, data: { status: 'PENDING_SQUARE_ONBOARDING' } });
+          continue;
+        }
+        throw tokenErr;
       }
 
       // S1198 (2026-09-06): bank-fingerprint collusion hold. Checked here, BEFORE the
@@ -144,7 +206,7 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
         continue;
       }
 
-      if (!booth.vendorStripeCustomerId || !booth.vendorPaymentMethodId) {
+      if (!booth.vendorSquarePlatformCustomerId || !booth.vendorSquareCardId) {
         summary.pendingPaymentMethod += 1;
         await prisma.vendorBoothFeeCharge.update({ where: { id: charge.id }, data: { status: 'PENDING_PAYMENT_METHOD' } });
         continue;
@@ -153,39 +215,37 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
       await prisma.vendorBoothFeeCharge.update({ where: { id: charge.id }, data: { status: 'PROCESSING' } });
 
       try {
-        // Platform-account charge — the vendor's saved payment method lives on the
-        // PLATFORM's own Stripe Customer (analogous to how createBoothCartQrSetupIntent
-        // already saves a SHOPPER's card on a platform Customer), NOT the vendor's own
-        // connected account. This is deliberately NOT scoped to a {stripeAccount}
-        // option, unlike every other VendorBooth charge in this codebase.
-        const paymentIntent = await stripe().paymentIntents.create(
-          {
-            amount: charge.amountCents,
-            currency: 'usd',
-            customer: booth.vendorStripeCustomerId,
-            payment_method: booth.vendorPaymentMethodId,
-            off_session: true,
-            confirm: true,
-            metadata: {
-              source: 'vendor_booth_fee_charge',
-              vendorBoothId: booth.id,
-              hubId: booth.hubId,
-              chargeId: charge.id,
-            },
-          },
-          { idempotencyKey: `booth-fee-charge-${charge.id}` }
-        );
-
-        await prisma.vendorBoothFeeCharge.update({
-          where: { id: charge.id },
-          data: { stripePaymentIntentId: paymentIntent.id },
+        // Square path (2026-09-14 design §4/§6.2): ONE call, directly on the hub owner's
+        // own connected Square account, using the vendor's platform-account shared card.
+        // Money lands in the hub owner's Square balance the instant this succeeds -- no
+        // Transfer, no allocation, no CLAIMING sentinel/second async step to race against
+        // (unlike the deleted Stripe charge+transfer block this replaces). No appFeeMoney --
+        // no platform cut on booth fee (ADR-090 §3, still deferred; resolved default per
+        // the design doc's §9 item 2).
+        const now = new Date();
+        const result = await chargeVendorBoothFeeOnHubOwnerAccount({
+          hubOwnerAccessToken,
+          hubOwnerSquareLocationId: hubOwnerOrganizer.squareLocationId,
+          sharedCardId: booth.vendorSquareCardId!,
+          amountCents: charge.amountCents,
+          vendorBoothId: booth.id,
+          hubId: booth.hubId,
+          chargeId: charge.id,
+          attemptNumber: 1,
         });
 
-        if (paymentIntent.status !== 'succeeded') {
+        if (!result.ok) {
           summary.failed += 1;
+          const nextRetryAt = computeNextBoothFeeRetryAt(now, 1);
           await prisma.vendorBoothFeeCharge.update({
             where: { id: charge.id },
-            data: { status: 'FAILED', failureReason: `PaymentIntent status: ${paymentIntent.status}` },
+            data: {
+              status: 'FAILED_RETRYING',
+              failureReason: `${result.code}: ${result.message}`.slice(0, 500),
+              attemptCount: 1,
+              lastAttemptAt: now,
+              nextRetryAt,
+            },
           });
           // The vendor's card did not go through and the hub owner did not get the rent.
           // Before this, both facts were silent -- the only surface was the fee-charges table.
@@ -195,59 +255,38 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
           continue;
         }
 
-        // Transfer the FULL charged amount to the hub owner — no platform cut is
-        // taken on booth fee (ADR-090 §3: "platform taking a cut of the hub owner's
-        // cut" is an explicitly DEFERRED pricing decision, not silently built here).
-        // Same atomic claim pattern as BoothCartLeg's Transfer (ADR-090 Phase 2).
-        const claim = await prisma.vendorBoothFeeCharge.updateMany({
-          where: { id: charge.id, stripeTransferId: null },
-          data: { stripeTransferId: 'CLAIMING' },
+        await prisma.vendorBoothFeeCharge.update({
+          where: { id: charge.id },
+          data: {
+            squarePaymentId: result.paymentId,
+            status: 'COMPLETED',
+            attemptCount: 1,
+            lastAttemptAt: now,
+            nextRetryAt: null,
+          },
         });
-        if (claim.count === 1) {
-          try {
-            const transfer = await stripe().transfers.create(
-              {
-                amount: charge.amountCents,
-                currency: 'usd',
-                destination: hubOwnerOrganizer.stripeConnectId!,
-                description: `Booth fee — booth ${booth.boothNumber} (${booth.vendorName}), ${periodStart.toISOString().slice(0, 10)} to ${periodEnd.toISOString().slice(0, 10)}`,
-                metadata: {
-                  source: 'vendor_booth_fee_charge',
-                  vendorBoothId: booth.id,
-                  hubId: booth.hubId,
-                  chargeId: charge.id,
-                },
-              },
-              { idempotencyKey: `booth-fee-transfer-${charge.id}` }
-            );
-            await prisma.vendorBoothFeeCharge.update({
-              where: { id: charge.id },
-              data: { stripeTransferId: transfer.id, status: 'COMPLETED' },
-            });
-            summary.charged += 1;
-            // Gap closed 2026-07-28: rent SUCCESS was silent. The charge above is
-            // off_session with confirm: true and no receipt_email, so real money left the
-            // vendor's card with no message from anyone. The failure twin already existed;
-            // this is the receipt. Reached only inside the claim.count === 1 branch of the
-            // stripeTransferId compare-and-swap, which can win at most once per charge row,
-            // so this fires exactly once. Fire-and-forget: rent has already been collected
-            // and Transferred, and a notification must not unwind that.
-            notifyBoothRentCharged(charge.id).catch(err =>
-              console.warn('[booth-lifecycle] Rent receipt notification failed for charge', charge.id, err)
-            );
-          } catch (transferErr) {
-            await prisma.vendorBoothFeeCharge
-              .updateMany({ where: { id: charge.id, stripeTransferId: 'CLAIMING' }, data: { stripeTransferId: null } })
-              .catch(() => {});
-            throw transferErr;
-          }
-        }
+        summary.charged += 1;
+        // Gap closed 2026-07-28 (Stripe era): rent SUCCESS was silent. The charge above
+        // charges the vendor's card directly into the hub owner's own account, so this is
+        // the only receipt anyone gets. Fire-and-forget: rent has already been collected,
+        // and a notification must not unwind that.
+        notifyBoothRentCharged(charge.id).catch(err =>
+          console.warn('[booth-lifecycle] Rent receipt notification failed for charge', charge.id, err)
+        );
       } catch (chargeErr: any) {
         summary.failed += 1;
+        const now = new Date();
+        const nextRetryAt = computeNextBoothFeeRetryAt(now, 1);
         await prisma.vendorBoothFeeCharge
           .update({
             where: { id: charge.id },
-            data: { status: 'FAILED', failureReason: chargeErr?.message?.slice(0, 500) || 'Stripe charge/transfer failed' },
+            data: {
+              status: 'FAILED_RETRYING',
+              failureReason: chargeErr?.message?.slice(0, 500) || 'Square charge failed',
+              attemptCount: 1,
+              lastAttemptAt: now,
+              nextRetryAt,
+            },
           })
           .catch(() => {});
         notifyBoothRentChargeFailed(charge.id).catch(err =>

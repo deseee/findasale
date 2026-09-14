@@ -13,7 +13,13 @@ import { createOnboardingLink, getAccountStatus } from '../services/stripeConnec
 // handleSquareConnectCallback (Square's OAuth app has one fixed redirect URL for all four
 // owner types, so the callback is centralized there rather than duplicated per controller).
 import { buildSquareAuthorizeUrl, resolveExistingSquareIdentityForUser } from '../services/squareConnectService';
-import { getStripe } from '../utils/stripe';
+// Booth-rent auto-pay, Square path (2026-09-14 design,
+// claude_docs/feature-notes/booth-rent-autopay-square-design-2026-09-13.md). Same platform
+// Square client every other platform-account Square call in this codebase uses (Boost's cash
+// rail, squareVendorBoothCartService.ts's own createSquareSharedCardForCart) -- NEVER the
+// hub owner's own connected-account client, which the cron (not this controller) resolves.
+import { getSquarePlatformClient } from '../utils/square';
+import { createSquareSharedCardForBoothFee } from '../services/squareVendorBoothCartService';
 // Single source of truth for the platform's cut. The vendor-facing fee disclosure
 // below MUST derive from this, using the same hub-owner tier the money path
 // (vendorBoothCartController.ts computeLegFeeSplit) feeds it -- a hardcoded
@@ -30,10 +36,10 @@ import {
   notifyVendorBoothDecision,
   notifyOrganizerBoothStripeConnected,
   notifyOrganizerBoothSquareConnected,
+  notifyOrganizerBoothAutopayCancelled,
 } from '../services/vendorBoothLifecycleNotificationService';
 import type { BoothNotifyResult } from '../services/vendorBoothLifecycleNotificationService';
 
-const stripe = () => getStripe();
 
 /**
  * Vendor Booth Payments — CRUD + Claim + Stripe Onboarding (2026-07-07)
@@ -954,113 +960,188 @@ export const getVendorBoothPayouts = async (req: AuthRequest, res: Response) => 
 
 /**
  * POST /api/vendor-booth/:vendorBoothId/fee-billing/setup-intent
- * Booth owner only. Creates (or reuses) a platform-account Stripe Customer for this
- * booth and returns a SetupIntent clientSecret so the vendor can save a card for
- * recurring booth-fee billing (ADR-090 Phase 4). This Customer/PaymentMethod pair is
- * intentionally on the PLATFORM's own Stripe account, not the booth's own Connect
- * account (stripeAccountId) -- see schema.prisma's VendorBooth comment and
- * vendorBoothFeeBillingCron.ts, which charges off-session against exactly these two
- * fields. Mirrors createBoothCartQrSetupIntent's platform-Customer pattern
- * (vendorBoothCartController.ts).
+ * GONE (2026-09-14, booth-rent-autopay-square-design-2026-09-13.md §6.1) -- superseded by
+ * the single-step POST .../fee-billing/square-setup below. Stripe's platform account is
+ * permanently closed (2026-09-12) and this two-step SetupIntent/confirm pair has no Square
+ * equivalent (Square's Web Payments SDK produces a sourceId directly, client-side, with no
+ * server-issued secret to round-trip -- see square-setup's own doc comment). Kept registered
+ * and returning 410 Gone rather than deleted, in case any stale client still calls it
+ * (matches this codebase's general non-destructive-gate convention, e.g. the old booth-cart
+ * Stripe routes).
  */
 export const startVendorBoothFeeBillingSetup = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-    const { vendorBoothId } = req.params;
-
-    const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId } });
-    if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
-    if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
-
-    // Stripe removal (2026-09-12): Stripe's platform account is permanently closed --
-    // EVERY live stripe() call now fails, not just brand-new-customer creation, since the
-    // shutdown is at the platform-account level (an existing vendorStripeCustomerId from
-    // before the shutdown does not make a fresh SetupIntent.create call against it work).
-    // This endpoint has no code path that avoids a live create call, so it is blocked
-    // unconditionally rather than only for boothless-of-a-customer-id case. Recurring
-    // booth-fee billing has no built Square equivalent yet (Square Card-on-File + a
-    // subscriptions/off-session-charge scheduler would need to be designed and built --
-    // see vendorBoothFeeBillingCron.ts, flagged separately for Architect sign-off), so
-    // unlike the checkout endpoints this session converted, there is no drop-in Square
-    // replacement to route to. Blocking cleanly here is the safe stopgap until that
-    // design lands.
-    return res.status(503).json({
-      error:
-        "Recurring card billing for booth fees isn't available right now. Please contact support@finda.sale to arrange billing for this booth.",
-      code: 'BOOTH_BILLING_SETUP_UNAVAILABLE',
-    });
-  } catch (error) {
-    console.error('[startVendorBoothFeeBillingSetup] Error:', error);
-    return res.status(500).json({ error: 'Failed to start booth fee billing setup' });
-  }
+  return res.status(410).json({
+    error:
+      "This endpoint has been replaced. Use POST /vendor-booth/:vendorBoothId/fee-billing/square-setup instead.",
+    code: 'BOOTH_BILLING_SETUP_INTENT_GONE',
+  });
 };
 
 /**
  * POST /api/vendor-booth/:vendorBoothId/fee-billing/confirm
- * Booth owner only. Body: { setupIntentId }. Never trusts a client-supplied
- * payment_method id directly -- always re-reads the SetupIntent from Stripe and
- * confirms it actually succeeded and belongs to this booth's own Customer before
- * persisting anything.
+ * GONE (2026-09-14) -- same supersession as startVendorBoothFeeBillingSetup above. Square's
+ * single-step square-setup endpoint has no separate confirm step to round-trip.
  */
 export const confirmVendorBoothFeeBillingSetup = async (req: AuthRequest, res: Response) => {
+  return res.status(410).json({
+    error:
+      "This endpoint has been replaced. Use POST /vendor-booth/:vendorBoothId/fee-billing/square-setup instead.",
+    code: 'BOOTH_BILLING_CONFIRM_GONE',
+  });
+};
+
+/**
+ * POST /api/vendor-booth/:vendorBoothId/fee-billing/square-setup
+ * Booth owner only. Body: { sourceId }. Square path (2026-09-14 design) replacing the dead
+ * Stripe SetupIntent/confirm pair above with ONE step -- Square's Web Payments SDK produces
+ * a sourceId directly, client-side, with no server-issued secret to round-trip (see
+ * SquarePaymentRequestForm.tsx's header comment for the same contrast on the checkout side).
+ * Creates a Customer + Card in FindA.Sale's OWN platform Square account
+ * (createSquareSharedCardForBoothFee, squareVendorBoothCartService.ts) from that sourceId
+ * and persists the resulting pair on the booth -- see schema.prisma's VendorBooth comment
+ * and vendorBoothFeeBillingCron.ts, which charges against exactly these two fields.
+ *
+ * Gated on the HUB OWNER's Square readiness first -- never let a vendor set up a card that
+ * can never be charged (mirrors ADR-123 §3.2's checkout-time gate philosophy). The card
+ * itself lives in FindA.Sale's platform account regardless of the hub owner's own state, but
+ * there is no point saving one for a hub that can never receive the money.
+ */
+export const squareSetupVendorBoothFeeBilling = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
     const { vendorBoothId } = req.params;
-    const { setupIntentId } = req.body as { setupIntentId?: string };
-    if (!setupIntentId) return res.status(400).json({ error: 'setupIntentId is required' });
+    const { sourceId } = req.body as { sourceId?: string };
+    if (!sourceId) return res.status(400).json({ error: 'sourceId is required' });
+
+    const booth = await prisma.vendorBooth.findUnique({
+      where: { id: vendorBoothId },
+      include: { hub: { include: { organizer: true } } },
+    });
+    if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
+    if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
+
+    const hubOwnerOrganizer = booth.hub.organizer;
+    if (!hubOwnerOrganizer.squareOnboarded || !hubOwnerOrganizer.squareLocationId) {
+      return res.status(400).json({
+        error:
+          "Your hub organizer hasn't finished connecting Square yet, so booth rent can't be auto-charged. Ask them to finish connecting Square, then try again.",
+        code: 'HUB_OWNER_SQUARE_NOT_READY',
+      });
+    }
+
+    const { platformCustomerId, sharedCardId } = await createSquareSharedCardForBoothFee({
+      vendorBoothId: booth.id,
+      sourceId,
+    });
+
+    await prisma.vendorBooth.update({
+      where: { id: booth.id },
+      data: {
+        vendorSquarePlatformCustomerId: platformCustomerId,
+        vendorSquareCardId: sharedCardId,
+        vendorSquareBillingCancelledAt: null,
+      },
+    });
+
+    return res.status(200).json({ configured: true });
+  } catch (error) {
+    console.error('[squareSetupVendorBoothFeeBilling] Error:', error);
+    return res.status(500).json({ error: 'Failed to set up booth fee auto-pay' });
+  }
+};
+
+/**
+ * POST /api/vendor-booth/:vendorBoothId/fee-billing/cancel
+ * Booth owner only (§6.1/§8.2). Nulls the vendor's Square shared-card-on-file fields and
+ * stamps vendorSquareBillingCancelledAt for support/audit purposes -- does NOT delete the
+ * Square-side Customer/Card objects (no live API benefit, and Square's docs don't require
+ * cleanup). The booth reverts to PENDING_PAYMENT_METHOD on the next billing cycle, same
+ * honest, no-silent-charge-attempt behavior as a booth that never set up auto-pay at all.
+ * Notifies the hub owner (only when a card was actually on file -- calling cancel on an
+ * already-unconfigured booth is a harmless no-op, not a repeat notification) so they know
+ * to expect a manual payment.
+ */
+export const cancelVendorBoothFeeBillingSetup = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { vendorBoothId } = req.params;
 
     const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId } });
     if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
 
-    const setupIntent = await stripe().setupIntents.retrieve(setupIntentId);
-    if (setupIntent.status !== 'succeeded') {
-      return res.status(400).json({ error: `Card setup not complete (status: ${setupIntent.status})` });
-    }
-    if (setupIntent.customer !== booth.vendorStripeCustomerId) {
-      return res.status(403).json({ error: 'SetupIntent does not belong to this booth' });
+    const wasConfigured = !!booth.vendorSquareCardId;
+
+    await prisma.vendorBooth.update({
+      where: { id: booth.id },
+      data: {
+        vendorSquarePlatformCustomerId: null,
+        vendorSquareCardId: null,
+        vendorSquareBillingCancelledAt: new Date(),
+      },
+    });
+
+    if (wasConfigured) {
+      notifyOrganizerBoothAutopayCancelled(booth.id).catch(err =>
+        console.warn('[cancelVendorBoothFeeBillingSetup] Cancellation notification failed for booth', booth.id, err)
+      );
     }
 
-    const paymentMethodId =
-      typeof setupIntent.payment_method === 'string' ? setupIntent.payment_method : setupIntent.payment_method?.id;
-    if (!paymentMethodId) {
-      return res.status(400).json({ error: 'No payment method attached to this SetupIntent' });
-    }
-
-    await prisma.vendorBooth.update({ where: { id: booth.id }, data: { vendorPaymentMethodId: paymentMethodId } });
-
-    return res.status(200).json({ configured: true });
+    return res.status(200).json({ configured: false });
   } catch (error) {
-    console.error('[confirmVendorBoothFeeBillingSetup] Error:', error);
-    return res.status(500).json({ error: 'Failed to confirm booth fee billing setup' });
+    console.error('[cancelVendorBoothFeeBillingSetup] Error:', error);
+    return res.status(500).json({ error: 'Failed to cancel booth fee auto-pay' });
   }
 };
 
 /**
  * GET /api/vendor-booth/:vendorBoothId/fee-billing/status
- * Booth owner only. Whether a payment method is on file for recurring booth-fee
- * billing. Card display details are best-effort -- a Stripe retrieve failure here
- * degrades to configured:true with no card details rather than erroring the page.
+ * Booth owner only. Whether a Square shared card is on file for recurring booth-fee
+ * billing (Square path, 2026-09-14 design -- swaps the dead Stripe paymentMethods.retrieve
+ * call for a Square cards.get). Card display details are best-effort -- a Square retrieve
+ * failure here degrades to configured:true with no card details rather than erroring the
+ * page, same non-fatal-degrade pattern the Stripe version used.
+ *
+ * Also reports the hub owner's Square readiness (squareReady/squareLocationId) so the
+ * frontend can decide whether to render the square-setup card-entry form at all, or an
+ * honest "your hub organizer hasn't finished connecting Square yet" message instead --
+ * needed because, unlike Stripe's clientSecret round-trip, initializing Square's Web
+ * Payments SDK client-side requires a locationId BEFORE the vendor can tokenize a card,
+ * and this status call is already fetched on every page load.
  */
 export const getVendorBoothFeeBillingStatus = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
     const { vendorBoothId } = req.params;
 
-    const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId } });
+    const booth = await prisma.vendorBooth.findUnique({
+      where: { id: vendorBoothId },
+      include: { hub: { include: { organizer: true } } },
+    });
     if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
 
-    if (!booth.vendorPaymentMethodId) {
-      return res.status(200).json({ configured: false });
+    const hubOwnerOrganizer = booth.hub.organizer;
+    const squareReady = !!(hubOwnerOrganizer.squareOnboarded && hubOwnerOrganizer.squareLocationId);
+    const squareLocationId = squareReady ? hubOwnerOrganizer.squareLocationId : null;
+
+    if (!booth.vendorSquareCardId) {
+      return res.status(200).json({ configured: false, squareReady, squareLocationId });
     }
 
     try {
-      const pm = await stripe().paymentMethods.retrieve(booth.vendorPaymentMethodId);
-      return res.status(200).json({ configured: true, brand: pm.card?.brand, last4: pm.card?.last4 });
+      const cardResponse = await getSquarePlatformClient().cards.get({ cardId: booth.vendorSquareCardId });
+      const card = (cardResponse as any)?.card;
+      return res.status(200).json({
+        configured: true,
+        brand: card?.cardBrand,
+        last4: card?.last4,
+        squareReady,
+        squareLocationId,
+      });
     } catch (retrieveErr) {
       console.warn('[getVendorBoothFeeBillingStatus] Could not retrieve card details (non-fatal):', retrieveErr);
-      return res.status(200).json({ configured: true });
+      return res.status(200).json({ configured: true, squareReady, squareLocationId });
     }
   } catch (error) {
     console.error('[getVendorBoothFeeBillingStatus] Error:', error);

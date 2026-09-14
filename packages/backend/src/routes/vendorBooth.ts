@@ -18,6 +18,8 @@ import {
   getVendorBoothPayouts,
   startVendorBoothFeeBillingSetup,
   confirmVendorBoothFeeBillingSetup,
+  squareSetupVendorBoothFeeBilling,
+  cancelVendorBoothFeeBillingSetup,
   getVendorBoothFeeBillingStatus,
   getVendorBoothFeeCharges,
   listHubVendorBoothFeeCharges,
@@ -100,10 +102,14 @@ router.get('/api/vendor-booth/:vendorBoothId/square/status', authenticate, getVe
 router.get('/api/vendor-booth/:vendorBoothId/payouts', authenticate, getVendorBoothPayouts);
 
 // ADR-090 Phase 4 (S-hubs-followup): vendor payment-method collection for recurring
-// booth-fee (rent) billing. Platform-account SetupIntent flow, mirrors
-// createBoothCartQrSetupIntent's Customer pattern -- see vendorBoothController.ts.
+// booth-fee (rent) billing. Square path (2026-09-14 design,
+// claude_docs/feature-notes/booth-rent-autopay-square-design-2026-09-13.md) -- the old
+// Stripe SetupIntent/confirm pair is GONE (410, kept registered per this codebase's
+// non-destructive-gate convention), replaced by the single square-setup step below.
 router.post('/api/vendor-booth/:vendorBoothId/fee-billing/setup-intent', authenticate, startVendorBoothFeeBillingSetup);
 router.post('/api/vendor-booth/:vendorBoothId/fee-billing/confirm', authenticate, confirmVendorBoothFeeBillingSetup);
+router.post('/api/vendor-booth/:vendorBoothId/fee-billing/square-setup', authenticate, squareSetupVendorBoothFeeBilling);
+router.post('/api/vendor-booth/:vendorBoothId/fee-billing/cancel', authenticate, cancelVendorBoothFeeBillingSetup);
 router.get('/api/vendor-booth/:vendorBoothId/fee-billing/status', authenticate, getVendorBoothFeeBillingStatus);
 router.get('/api/vendor-booth/:vendorBoothId/fee-charges', authenticate, getVendorBoothFeeCharges);
 

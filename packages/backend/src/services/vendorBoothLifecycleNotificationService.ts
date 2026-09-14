@@ -17,6 +17,10 @@
  *   4. notifyOrganizerBoothStripeConnected vendor connects      -> hub organizer
  *   5. notifyBoothRentChargeFailed         rent charge fails    -> vendor AND hub organizer
  *   6. notifyBoothRentCharged              rent charge succeeds -> vendor
+ *   7. notifyBoothRentChargeFailedFinal    rent dunning exhausted (2026-09-14, Square design
+ *                                          §6.3/§9 item 3)         -> vendor AND hub organizer
+ *   8. notifyOrganizerBoothAutopayCancelled tenant cancels auto-pay (2026-09-14, §6.1/§8.2)
+ *                                                                  -> hub organizer
  *
  * Each one does TWO things: an in-app notification AND an email.
  *
@@ -779,5 +783,220 @@ export async function notifyBoothRentCharged(chargeId: string): Promise<BoothNot
   } catch (error) {
     console.error(`[booth-lifecycle] notifyBoothRentCharged failed for charge ${chargeId}:`, error);
     return { sent: false, reason: 'Could not send the rent receipt notification' };
+  }
+}
+
+/**
+ * 7. Booth rent dunning is EXHAUSTED (FAILED_FINAL) -> tell the vendor AND the hub owner.
+ * (2026-09-14, claude_docs/feature-notes/booth-rent-autopay-square-design-2026-09-13.md
+ * §6.3/§9 item 3 -- resolved default: both parties are notified, no new UI list view this
+ * pass, notification-only for v1.)
+ *
+ * Fired by jobs/vendorBoothFeeRetryCron.ts the moment a charge's retry budget
+ * (MAX_BOOTH_FEE_ATTEMPTS, vendorBoothFeeBillingCron.ts) is exhausted -- this is terminal,
+ * the row will never auto-retry again, and a human needs to follow up manually.
+ *
+ * IDEMPOTENCY without a new stamp column, same reasoning style as notifyBoothRentChargeFailed:
+ * a VendorBoothFeeCharge row can only transition INTO FAILED_FINAL once (it is a terminal
+ * status the retry sweep only ever writes on the attempt that exhausts the budget), so this
+ * can only be reached once per charge row.
+ */
+export async function notifyBoothRentChargeFailedFinal(chargeId: string): Promise<BoothNotifyResult> {
+  try {
+    const charge = await prisma.vendorBoothFeeCharge.findUnique({
+      where: { id: chargeId },
+      select: {
+        id: true,
+        amountCents: true,
+        periodStart: true,
+        periodEnd: true,
+        failureReason: true,
+        attemptCount: true,
+        vendorBooth: {
+          select: {
+            id: true,
+            hubId: true,
+            boothNumber: true,
+            vendorName: true,
+            vendorEmail: true,
+            userId: true,
+            boothToken: true,
+            user: { select: { email: true } },
+            hub: {
+              select: {
+                name: true,
+                organizer: { select: { businessName: true, userId: true, user: { select: { email: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!charge || !charge.vendorBooth) return { sent: false, reason: 'Charge not found' };
+
+    const booth = charge.vendorBooth;
+    const amount = (charge.amountCents / 100).toFixed(2);
+    const period = `${charge.periodStart.toISOString().slice(0, 10)} to ${charge.periodEnd.toISOString().slice(0, 10)}`;
+
+    const vendorName = escapeHtml(booth.vendorName);
+    const boothNumber = escapeHtml(booth.boothNumber);
+    const hubName = escapeHtml(booth.hub?.name || 'the market');
+    const organizerName = escapeHtml(booth.hub?.organizer?.businessName || 'the market organizer');
+    const boothPath = `/vendor-booth/${booth.boothToken}`;
+    const boothUrl = `${FRONTEND_URL}${boothPath}`;
+    const boothsPath = `/organizer/hubs/${booth.hubId}/vendor-booths`;
+    const boothsUrl = `${FRONTEND_URL}${boothsPath}`;
+
+    // --- Vendor side: we have stopped trying, they need to pay some other way. ---
+    const vendorEmail = booth.user?.email || booth.vendorEmail;
+    if (booth.userId) {
+      await createNotification(
+        booth.userId,
+        'vendor_booth',
+        `Booth rent could not be collected after several tries`,
+        `We tried ${charge.attemptCount} times to charge the $${amount} rent for Booth ${booth.boothNumber} at ${booth.hub?.name || 'the market'} and could not. We will not try again automatically -- please arrange payment directly with your organizer.`,
+        boothPath,
+        'OPERATIONAL'
+      );
+    }
+
+    let vendorResult: BoothNotifyResult = { sent: false, reason: 'No vendor email on file' };
+    if (vendorEmail) {
+      const html = buildEmail({
+        preheader: `We could not collect Booth ${boothNumber}'s rent for ${period} after several tries.`,
+        headline: `We've stopped trying to collect your booth rent`,
+        body: `<p>Hi ${vendorName},</p>
+        <p>We tried ${charge.attemptCount} times to charge the $${amount} rent for Booth ${boothNumber} at ${hubName} for ${period}, and it did not go through any of those times.</p>
+        <p>We will not automatically try this charge again. Please contact ${organizerName} at ${hubName} directly to arrange payment.</p>
+        <p>Your booth is still active. Nothing has been shut off.</p>
+        <p>If the button does not work, copy this link into your browser:<br />${boothUrl}</p>
+        <p>The FindA.Sale Team</p>`,
+        ctaText: 'View Your Booth',
+        ctaUrl: boothUrl,
+      });
+      vendorResult = await deliverEmail(
+        vendorEmail,
+        `Booth ${booth.boothNumber} rent could not be collected`,
+        html,
+        'rent-failed-final-vendor'
+      );
+    }
+
+    // --- Organizer side: this rent needs manual follow-up now. ---
+    const organizerUserId = booth.hub?.organizer?.userId;
+    const organizerEmail = booth.hub?.organizer?.user?.email;
+    if (organizerUserId) {
+      await createNotification(
+        organizerUserId,
+        'vendor_booth',
+        `Booth ${booth.boothNumber} rent needs manual follow-up`,
+        `We tried ${charge.attemptCount} times to charge ${booth.vendorName} the $${amount} rent for Booth ${booth.boothNumber} and could not. We will not try again automatically -- you'll need to collect this rent directly.`,
+        boothsPath,
+        'OPERATIONAL'
+      );
+
+      if (organizerEmail) {
+        const html = buildEmail({
+          preheader: `Booth ${boothNumber} rent for ${period} needs manual follow-up.`,
+          headline: `Booth ${boothNumber} rent needs your follow-up`,
+          body: `<p>Hi ${escapeHtml(booth.hub?.organizer?.businessName || 'there')},</p>
+          <p>We tried ${charge.attemptCount} times to charge ${vendorName} the $${amount} rent for Booth ${boothNumber} at ${hubName} for ${period}, and it did not go through any of those times. That money has not reached you.</p>
+          <p>We have stopped retrying this charge automatically. Please follow up with ${vendorName} directly to collect this rent.</p>
+          <p>If the button does not work, copy this link into your browser:<br />${boothsUrl}</p>
+          <p>The FindA.Sale Team</p>`,
+          ctaText: 'View Vendor Booths',
+          ctaUrl: boothsUrl,
+        });
+        await deliverEmail(
+          organizerEmail,
+          `Booth ${booth.boothNumber} rent needs manual follow-up`,
+          html,
+          'rent-failed-final-organizer'
+        );
+      }
+    }
+
+    return vendorResult;
+  } catch (error) {
+    console.error(`[booth-lifecycle] notifyBoothRentChargeFailedFinal failed for charge ${chargeId}:`, error);
+    return { sent: false, reason: 'Could not send the final dunning-failure notification' };
+  }
+}
+
+/**
+ * 8. A vendor CANCELLED booth-rent auto-pay -> tell the hub owner. (2026-09-14,
+ * §6.1/§8.2 of the Square design doc.) The Stripe-era UI never needed this: auto-pay never
+ * actually worked in production, so nobody had ever turned it off. Fired from
+ * cancelVendorBoothFeeBillingSetup (vendorBoothController.ts) only when a card was actually
+ * on file before the cancel (calling cancel on an already-unconfigured booth is a no-op,
+ * not a repeat notification).
+ *
+ * Vendor is not notified here -- they are the one who took the action, so there is nothing
+ * new to tell them (mirrors notifyBoothRentCharged's own "the actor doesn't need telling
+ * what they just did" reasoning).
+ */
+export async function notifyOrganizerBoothAutopayCancelled(boothId: string): Promise<BoothNotifyResult> {
+  try {
+    const booth = await prisma.vendorBooth.findUnique({
+      where: { id: boothId },
+      select: {
+        id: true,
+        hubId: true,
+        boothNumber: true,
+        vendorName: true,
+        hub: {
+          select: {
+            name: true,
+            organizer: { select: { businessName: true, userId: true, user: { select: { email: true } } } },
+          },
+        },
+      },
+    });
+
+    if (!booth) return { sent: false, reason: 'Booth not found' };
+
+    const boothNumber = escapeHtml(booth.boothNumber);
+    const vendorName = escapeHtml(booth.vendorName);
+    const hubName = escapeHtml(booth.hub?.name || 'the market');
+    const boothsPath = `/organizer/hubs/${booth.hubId}/vendor-booths`;
+    const boothsUrl = `${FRONTEND_URL}${boothsPath}`;
+
+    const organizerUserId = booth.hub?.organizer?.userId;
+    if (organizerUserId) {
+      await createNotification(
+        organizerUserId,
+        'vendor_booth',
+        `Booth ${booth.boothNumber} turned off rent auto-pay`,
+        `${booth.vendorName} turned off automatic rent payment for Booth ${booth.boothNumber}. You'll need to collect this booth's rent directly going forward.`,
+        boothsPath,
+        'OPERATIONAL'
+      );
+    }
+
+    const organizerEmail = booth.hub?.organizer?.user?.email;
+    if (!organizerEmail) return { sent: false, reason: 'No organizer email on file' };
+
+    const html = buildEmail({
+      preheader: `${vendorName} turned off rent auto-pay for Booth ${boothNumber}.`,
+      headline: `Booth ${boothNumber} turned off rent auto-pay`,
+      body: `<p>Hi ${escapeHtml(booth.hub?.organizer?.businessName || 'there')},</p>
+        <p>${vendorName} turned off automatic rent payment for Booth ${boothNumber} at ${hubName}.</p>
+        <p>Going forward, you'll need to collect this booth's rent directly -- it will no longer be charged automatically. ${vendorName} can turn auto-pay back on from their booth page at any time.</p>
+        <p>If the button does not work, copy this link into your browser:<br />${boothsUrl}</p>
+        <p>The FindA.Sale Team</p>`,
+      ctaText: 'View Vendor Booths',
+      ctaUrl: boothsUrl,
+    });
+
+    return await deliverEmail(
+      organizerEmail,
+      `Booth ${booth.boothNumber} turned off rent auto-pay`,
+      html,
+      'rent-autopay-cancelled'
+    );
+  } catch (error) {
+    console.error(`[booth-lifecycle] notifyOrganizerBoothAutopayCancelled failed for booth ${boothId}:`, error);
+    return { sent: false, reason: 'Could not send the auto-pay cancellation notification' };
   }
 }
