@@ -314,6 +314,23 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     }
   }
 
+  // BUG FIX 2026-09-14 (Patrick-directed, Q12E Chromatic Guitar Tuner Mercari $30-shipping
+  // incident, live-verified this session): an unconfirmed AI/SEED-sourced package weight or
+  // dimension estimate must never reach ANY content-script marketplace as if it were real data.
+  // Previously only packageWeightOz got this treatment (the FB-specific resolve loop above) --
+  // packageLengthIn/WidthIn/HeightIn and the raw aiPackageWeightOz column were selected and
+  // returned to every platform (Mercari, Vinted, Poshmark, Craigslist, Grailed, Gumtree AU)
+  // completely ungated regardless of packageConfirmedByOrganizer or packageEstimateSource. Live
+  // case: this item's AI vision pass estimated a guitar-case-sized package (40x14x5in, 12lb) for
+  // a small tuner accessory, which fas-mercari.js filled straight into Mercari's real shipping
+  // wizard producing an actual $30 buyer-facing delivery fee (vs. the correct ~$5.66-15.99
+  // range once corrected). Mirrors the UNTRUSTED_SOURCES list used above for weight; a curated
+  // PackageProfile CATEGORY/KEYWORD default (Patrick's "media mail"-style strict-known case) or
+  // an organizer-confirmed value is still trusted and passes through unchanged.
+  const UNTRUSTED_PACKAGE_SOURCES = ['SEED', 'AI'];
+  const hasTrustedPackage = (it: { packageEstimateSource: string | null; packageConfirmedByOrganizer: boolean | null }) =>
+    it.packageConfirmedByOrganizer === true || !UNTRUSTED_PACKAGE_SOURCES.includes(it.packageEstimateSource || '');
+
   const shaped = items.map((it) => ({
     id: it.id,
     saleId: it.saleId,
@@ -389,15 +406,21 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
-    aiPackageWeightOz: it.aiPackageWeightOz,
+    // Gated 2026-09-14 (see hasTrustedPackage above) -- previously exposed the raw, untrusted AI
+    // guess unconditionally, which fas-mercari.js's/fas-vinted.js's own
+    // `packageWeightOz ?? aiPackageWeightOz` fallback then used directly, fully defeating the
+    // FB-specific packageWeightOz revert-to-null loop above for every OTHER platform.
+    aiPackageWeightOz: hasTrustedPackage(it) ? it.aiPackageWeightOz : null,
     // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-8, live-confirmed via Patrick's screenshots): these
     // three were already selected from Prisma (see the `select` block above) but never actually
     // included in this response object -- same silent-drop pattern as bestOfferAutoAcceptAmt
     // earlier this session. Needed so fas-mercari.js can answer Mercari's real "will your item fit
     // in a shoebox?" shipping-label question from real item dimensions instead of guessing.
-    packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-    packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-    packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+    // Gated 2026-09-14 (see hasTrustedPackage above) -- these were previously passed through
+    // completely ungated regardless of confirmation status or estimate source.
+    packageLengthIn: hasTrustedPackage(it) && it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+    packageWidthIn: hasTrustedPackage(it) && it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+    packageHeightIn: hasTrustedPackage(it) && it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
     // BUG FIX 2026-08-20 (S-EXT-BATCH-12, Patrick-reported + confirmed by direct code read): brand/
     // size/color/material were already added to the Prisma `select` above (2026-08-18) and popup.js's
     // queue-building map already passes them through (its own comment there even claims "getExtensionItems

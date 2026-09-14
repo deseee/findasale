@@ -1572,6 +1572,24 @@
     return norm(el.value != null && el.value !== '' ? el.value : el.textContent);
   }
   async function fillMercariShippingLabel(item) {
+    // BUG FIX 2026-09-14 (Patrick-directed, Q12E Chromatic Guitar Tuner $30-shipping incident,
+    // live-verified this session): an unconfirmed AI-estimated package weight (packageEstimateSource
+    // 'AI'/'SEED', not organizer-confirmed) was flowing straight into this wizard and driving a
+    // wildly wrong price -- a 40x14x5in/12lb guitar-case-sized guess for a small tuner accessory
+    // produced a real $30 buyer-facing delivery fee (vs. the correct ~$5.66-15.99 range once
+    // corrected by hand). The backend (extensionController.ts getExtensionItems) now withholds
+    // packageWeightOz/aiPackageWeightOz/packageLengthIn/WidthIn/HeightIn entirely (sends null)
+    // whenever the estimate is untrusted -- this function can no longer tell "genuinely unmeasured"
+    // apart from "untrusted guess withheld", and doesn't need to: Patrick's direction is the same
+    // either way -- an AI guess must never silently drive a real listing's shipping price; require
+    // the organizer to enter it. Bail out BEFORE any DOM interaction (same early-return pattern as
+    // fillWeight() above) rather than falling through to the "unmeasured defaults to Yes/cheapest"
+    // path below, which was designed for the different, lower-stakes case of a merely-unmeasured
+    // item (S-EXT-MERCARI-BATCH-11), not an actively wrong estimate.
+    const trustedOunces = item.packageWeightOz != null ? item.packageWeightOz : item.aiPackageWeightOz;
+    if (trustedOunces == null) {
+      return 'Mercari requires a shipping weight and FindA.Sale has no confirmed weight for this item (unconfirmed AI estimates are no longer auto-filled here) -- please enter the real weight on the item\'s FindA.Sale page and confirm it before publishing.';
+    }
     const opener = await waitForSelector(mercariShippingOpener, 5000);
     if (!opener) {
       return 'FindA.Sale couldn\'t find the Shipping label field automatically (UNVERIFIED selector).';
