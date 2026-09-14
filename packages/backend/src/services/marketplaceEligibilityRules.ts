@@ -28,7 +28,7 @@
 
 import { EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS } from './ebayRateEstimateService';
 
-export type EligibilityPlatform = 'FACEBOOK' | 'CRAIGSLIST' | 'GUMTREE_AU' | 'GRAILED' | 'POSHMARK' | 'MERCARI' | 'VINTED';
+export type EligibilityPlatform = 'FACEBOOK' | 'CRAIGSLIST' | 'GUMTREE_AU' | 'GRAILED' | 'POSHMARK' | 'MERCARI' | 'VINTED' | 'REVERB';
 
 export interface EligibilityCheckItem {
   category: string | null | undefined;
@@ -469,6 +469,33 @@ const RULES: EligibilityRule[] = [
       'gunmetal', 'bladerunner',
     ],
     reason: 'Vinted prohibits all sharp knives and bladed tools with a pointed tip (including kitchen knives), plus firearms, ammunition, and other weapons (Items Not Allowed policy). Only dull/rounded table knives and sealed electric or cartridge razors are allowed.',
+  },
+
+  // ---- REVERB (added 2026-09-14, ADR addendum -- Patrick explicitly rejected excluding Reverb
+  // from this registry, "make it just like every other site"). Sourced live this session:
+  // reverb.com/page/prohibited-items-policy and help.reverb.com/hc/en-us/articles/115014277407
+  // ("Listing Guidelines: Prohibited Items and Actions") -- Reverb allows musical instruments,
+  // gear, accessories, home audio equipment, and recording equipment/setups; prohibits non-music
+  // general electronics (standalone computers, phones, tablets -- though computer bundles paired
+  // with recording setups and mp3 players as home audio ARE allowed), IP/trademark violations,
+  // and hate content. Allowlist, not blocklist -- same reasoning as GRAILED above (Reverb's
+  // entire business is this one vertical; enumerating every non-music category to block would be
+  // unreliable).
+  //
+  // Kept in lockstep with the SERVER-SIDE gate that actually blocks the real push, not
+  // reconstructed independently from raw keyword guessing: reverbMarketplaceController.ts's
+  // pushItemToReverb already hard-gates on `item.category === 'Musical Instruments & Gear'`
+  // (REVERB_ELIGIBLE_CATEGORY, added 2026-09-02 after a live Patrick-reported bug where the
+  // "Push to Reverb" action showed up on unrelated items). Matching that exact category string
+  // here -- rather than the broader per-word instrument/gear keyword lists used by the VINTED
+  // musical-instrument rules above -- means the collapsed-row ELIGIBLE dot can never promise a
+  // push that the real endpoint would then reject with a 422. A looser keyword allowlist would
+  // risk exactly that: showing ELIGIBLE for an item the actual push route refuses.
+  {
+    type: 'CATEGORY_ALLOWLIST',
+    platform: 'REVERB',
+    nameKeywords: ['musical instruments & gear'],
+    reason: 'Reverb is for musical instruments & gear only (Listing Guidelines: Prohibited Items and Actions).',
   },
 ];
 

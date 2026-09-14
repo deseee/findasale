@@ -3956,6 +3956,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         ebayNeedsReview: true, // S791: #295 fix — badge persists across page loads
         // Add Items collapsed-row multi-channel status (2026-09-14)
         discogsListingId: true,
+        reverbListingId: true,
         shopifyListing: { select: { id: true } },
         // Feature #91: Auto-Markdown (P3: Fix 2)
         priceBeforeMarkdown: true,
@@ -4021,7 +4022,14 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         ebayConnection: { select: { id: true } },
         shopifyEnabled: true,
         subscriptionTier: true,
-        marketplaceAccounts: { where: { platform: 'DISCOGS', status: 'ACTIVE' }, select: { id: true } },
+        // ADDENDUM 2026-09-14: widened from DISCOGS-only to both official-API-tier platforms --
+        // Prisma can't select the same relation key (marketplaceAccounts) twice under one
+        // parent select with two different `where` filters, so both flags are derived below
+        // from this single combined query instead.
+        marketplaceAccounts: {
+          where: { platform: { in: ['DISCOGS', 'REVERB'] }, status: 'ACTIVE' },
+          select: { id: true, platform: true },
+        },
       },
     });
 
@@ -4066,7 +4074,8 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
             hasEbayConnection: channelStatusOrganizer.ebayConnection != null,
             shopifyEnabled: channelStatusOrganizer.shopifyEnabled,
             subscriptionTier: channelStatusOrganizer.subscriptionTier,
-            hasActiveDiscogsAccount: channelStatusOrganizer.marketplaceAccounts.length > 0,
+            hasActiveDiscogsAccount: channelStatusOrganizer.marketplaceAccounts.some(a => a.platform === 'DISCOGS'),
+            hasActiveReverbAccount: channelStatusOrganizer.marketplaceAccounts.some(a => a.platform === 'REVERB'),
           },
           extensionPlatformsUsed,
           publishedExtensionPlatformsByItemId

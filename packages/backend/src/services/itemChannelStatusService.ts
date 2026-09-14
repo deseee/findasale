@@ -15,10 +15,14 @@
  * list on every page load. That check stays exactly where it already lives
  * (the row-expand / GET /api/discogs/items/:id/eligibility endpoint).
  *
- * Reverb is intentionally excluded entirely -- no category-eligibility rule
- * exists for it yet, and its connector (reverbConnector.ts) is flagged
- * UNTESTED end-to-end in its own file header. See the ADR's "Flagged for
- * Patrick" section.
+ * Reverb (added 2026-09-14, ADR addendum): full PUBLISHED/ELIGIBLE parity
+ * with every other Tier A channel. Eligibility uses the registry's new
+ * 'REVERB' CATEGORY_ALLOWLIST rule (marketplaceEligibilityRules.ts), kept in
+ * lockstep with the exact category gate reverbMarketplaceController.ts's
+ * pushItemToReverb already enforces server-side. Published uses the new
+ * Item.reverbListingId field (mirrors discogsListingId), populated by
+ * reverbMarketplaceController.ts on a successful push and cleared on
+ * delete/end-listing.
  */
 
 import { checkEligibility, EligibilityCheckItem } from './marketplaceEligibilityRules';
@@ -36,7 +40,7 @@ export interface ItemChannelStatus {
   mercari: ChannelStatusValue;
   vinted: ChannelStatusValue;
   discogs: ChannelStatusValue;
-  // reverb intentionally omitted -- see file header
+  reverb: ChannelStatusValue;
 }
 
 /** Minimal item shape this service needs. Matches fields already selected by
@@ -45,6 +49,7 @@ export interface ChannelStatusItemInput extends EligibilityCheckItem {
   id: string;
   ebayListingId: string | null | undefined;
   discogsListingId: string | null | undefined;
+  reverbListingId: string | null | undefined;
   shopifyListing: { id: string } | null | undefined;
 }
 
@@ -56,6 +61,7 @@ export interface ChannelStatusOrganizerInput {
   shopifyEnabled: boolean;
   subscriptionTier: string; // 'SIMPLE' | 'PRO' | 'TEAMS'
   hasActiveDiscogsAccount: boolean;
+  hasActiveReverbAccount: boolean;
 }
 
 /** Which extension-based (no official API/OAuth) platforms this organizer has
@@ -124,6 +130,16 @@ export function computeChannelStatusForItems(
 
       // Discogs: published-only by design (see file header) -- never 'ELIGIBLE' here.
       discogs: organizer.hasActiveDiscogsAccount && item.discogsListingId ? 'PUBLISHED' : null,
+
+      // Reverb (2026-09-14 addendum): full Tier A parity -- PUBLISHED when a real listing id is
+      // persisted, else ELIGIBLE when connected and the registry's REVERB allowlist rule passes.
+      reverb: !organizer.hasActiveReverbAccount
+        ? null
+        : item.reverbListingId
+          ? 'PUBLISHED'
+          : checkEligibility('REVERB', item).eligible
+            ? 'ELIGIBLE'
+            : null,
 
       facebook: extensionChannelStatus('FACEBOOK', extensionPlatformsUsed.facebook, publishedOnItem.has('FACEBOOK'), item),
       craigslist: extensionChannelStatus('CRAIGSLIST', extensionPlatformsUsed.craigslist, publishedOnItem.has('CRAIGSLIST'), item),

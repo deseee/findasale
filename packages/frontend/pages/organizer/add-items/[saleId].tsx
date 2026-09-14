@@ -304,6 +304,7 @@ const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string }> =
   { key: 'mercari', label: 'Mercari', color: 'bg-orange-500' },
   { key: 'vinted', label: 'Vinted', color: 'bg-teal-600' },
   { key: 'discogs', label: 'Discogs', color: 'bg-amber-600' },
+  { key: 'reverb', label: 'Reverb', color: 'bg-orange-600' },
 ];
 const CHANNEL_DOT_VISIBLE_CAP = 4;
 

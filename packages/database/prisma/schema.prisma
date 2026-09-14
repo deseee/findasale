@@ -1322,6 +1322,15 @@ model Item {
   // removeItemFromDiscogs on a successful delete.
   discogsListingId                  String?
   discogsListedAt                   DateTime?
+  // Reverb push persistence (2026-09-14, ADR addendum -- ADR-2026-09-14-add-items-multichannel-
+  // status-aggregation.md): mirrors discogsListingId/discogsListedAt above verbatim.
+  // reverbConnector.ts's endOrDeleteReverbListing already threads a reverbListingId through its
+  // delete/end-listing calls but nothing persisted it on create -- without these, a push
+  // confirmation would vanish the moment the organizer refreshed the item edit page, same
+  // failure mode the Discogs fields were added to fix. Nullable/additive, cleared back to null
+  // on a successful delete/end-listing, same lifecycle as discogsListingId.
+  reverbListingId                   String?
+  reverbListedAt                    DateTime?
   // B1: Item listing/transaction type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
   listingType                     String                  @default("FIXED")
   // CD2: Live Drop — item hidden until liveDropAt time

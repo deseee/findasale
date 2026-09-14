@@ -194,6 +194,25 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
     const reverbCategoryUuid = typeof req.body?.reverbCategoryUuid === 'string' ? req.body.reverbCategoryUuid : undefined;
 
     const listing = await createReverbListing(organizer.id, item, { publish, reverbCategoryUuid });
+
+    // ADDENDUM 2026-09-14 (ADR-2026-09-14-add-items-multichannel-status-aggregation.md): persist
+    // the real Reverb listing id, closing the gap this file's own prior comment on
+    // removeItemFromReverb flagged as a follow-up. Mirrors the existing Discogs push-persistence
+    // pattern (discogsListingConnector.ts) -- best-effort, non-fatal: the listing was already
+    // created on Reverb's side by this point, so a persistence failure here must not surface as
+    // a user-facing error (same posture as the lastErrorMessage write in reverbConnector.ts's own
+    // error path above).
+    if (listing?.id != null) {
+      await prisma.item
+        .update({
+          where: { id: item.id },
+          data: { reverbListingId: String(listing.id), reverbListedAt: new Date() },
+        })
+        .catch((err) => {
+          console.error(`[Reverb] Failed to persist reverbListingId for item ${item.id}:`, err);
+        });
+    }
+
     res.json({ success: true, listing });
   } catch (error: any) {
     respondReverbError(res, error, 'Failed to create Reverb listing');
@@ -204,11 +223,11 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
  * DELETE /api/reverb/items/:id/listing
  * End or delete the item's Reverb listing (drafts are hard-deleted; published listings are
  * zeroed out — see endOrDeleteReverbListing's doc comment in reverbConnector.ts).
- * Body: { reverbListingId: string } — FindA.Sale does not yet persist the remote Reverb
- * listing id anywhere (no MarketplaceListingJob-style row exists yet for this official-API
- * tier — out of scope for this pass per the ADR addendum's "no code dispatched" scope note).
- * A follow-up pass should persist listing ids the same way MarketplaceListingJob does for
- * the content-script tier; until then the caller must supply the id.
+ * Body: { reverbListingId: string } — the caller still supplies the id explicitly rather than
+ * this route looking it up from Item.reverbListingId itself, matching the existing call
+ * pattern on the frontend; ADDENDUM 2026-09-14 persists reverbListingId on push (see
+ * pushItemToReverb above) and clears it here on a successful end/delete, mirroring the
+ * discogsListingId lifecycle exactly.
  */
 export const removeItemFromReverb = async (req: AuthRequest, res: Response) => {
   try {
@@ -235,6 +254,19 @@ export const removeItemFromReverb = async (req: AuthRequest, res: Response) => {
     }
 
     const result = await endOrDeleteReverbListing(organizer.id, reverbListingId);
+
+    // ADDENDUM 2026-09-14: clear the persisted fields on a successful end/delete, mirroring
+    // discogsListingId's clear-on-delete lifecycle. Best-effort/non-fatal, same reasoning as
+    // the push-side persistence write above.
+    await prisma.item
+      .update({
+        where: { id: item.id },
+        data: { reverbListingId: null, reverbListedAt: null },
+      })
+      .catch((err) => {
+        console.error(`[Reverb] Failed to clear reverbListingId for item ${item.id}:`, err);
+      });
+
     res.json({ success: true, ...result });
   } catch (error: any) {
     respondReverbError(res, error, 'Failed to end/delete Reverb listing');
