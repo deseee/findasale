@@ -1022,100 +1022,39 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
 
 /**
  * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/setup-intent
- * Body: none.
- * ADR-020 QR/in-app rail, step 1: collect the shopper's card ONCE via a SetupIntent
- * on the PLATFORM account (not any single booth's account — this PaymentMethod
- * gets cloned to each booth next). Runs the checkout guard + cart lock on this
- * first call, same as the Terminal rail's authorize endpoint.
+ * GONE (2026-09-14) -- Stripe removal (2026-09-12) left this endpoint registered but
+ * unable to ever succeed again (Stripe's platform account is permanently closed). It had
+ * been returning a 503 with an honest message, but that still ran beginCartCheckout
+ * (locking this cart PENDING -> IN_PROGRESS) before failing -- the exact side effect
+ * authorizeBoothCartTerminalLeg's own dead-rail block, above, was deliberately written to
+ * avoid. Converted here to an immediate 410 Gone with no side effects, matching this
+ * codebase's general non-destructive-gate convention (e.g.
+ * startVendorBoothFeeBillingSetup / confirmVendorBoothFeeBillingSetup in
+ * vendorBoothController.ts) -- kept registered in case any stale client still calls it.
+ * Square QR (beginBoothCartSquareCheckout / postBoothCartSquareToken /
+ * authorizeBoothCartSquareLegs, below) is the live replacement rail.
  */
 export const createBoothCartQrSetupIntent = async (req: BoothAuthRequest, res: Response) => {
-  try {
-    const { hubId, cartTransactionId } = req.params;
-    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
-
-    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
-    if (!cart) return res.status(404).json({ error: 'Cart not found' });
-    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
-
-    try {
-      await beginCartCheckout({
-        cart,
-        hubId,
-        cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
-        cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
-        context: 'boothCartQrSetupIntent',
-      });
-    } catch (guardError: any) {
-      if (guardError instanceof CheckoutGuardError) {
-        return res.status(403).json({ error: guardError.message });
-      }
-      if (typeof guardError?.message === 'string' && guardError.message.startsWith('CART_NOT_CHARGEABLE:')) {
-        return res.status(409).json({ error: `Cart cannot be charged (status: ${guardError.message.split(':')[1]})` });
-      }
-      throw guardError;
-    }
-
-    // Stripe removal (2026-09-12): this used to create an ad hoc platform-level Stripe
-    // Customer + SetupIntent for the walk-in shopper's phone page to confirm via
-    // Stripe.js. Stripe's platform account is permanently closed, so this can never
-    // succeed for a new cart again. Square QR (postBoothCartSquareToken /
-    // getBoothCartSquareTokenStatus / authorizeBoothCartSquareLegs, below) is the live
-    // replacement rail -- it has no server-hosted session object to hand back here, so
-    // there is no drop-in Square equivalent for this specific two-step
-    // setup-intent-then-authorize shape; the whole rail is blocked, not adapted.
-    return res.status(503).json({
-      error: 'QR/in-app card checkout via this rail is temporarily unavailable. Please use the Square QR checkout instead.',
-      code: 'STRIPE_QR_UNAVAILABLE',
-    });
-  } catch (error) {
-    console.error('[createBoothCartQrSetupIntent] Error:', error);
-    return res.status(500).json({ error: 'Failed to start QR/in-app checkout' });
-  }
+  return res.status(410).json({
+    error: 'This payment method has been retired; use the Square QR checkout instead.',
+    code: 'BOOTH_CART_QR_SETUP_INTENT_GONE',
+  });
 };
 
 /**
  * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/authorize
- * Body: { setupIntentId }
- * ADR-020 QR/in-app rail, step 2: after the shopper confirms the SetupIntent on
- * their own phone (Stripe.js `confirmCardSetup`), clone the resulting
- * PaymentMethod to EACH represented booth's Standard account
- * (docs.stripe.com/connect/direct-charges-multiple-accounts) and confirm one
- * `capture_method: 'manual'`, `off_session: true` PaymentIntent per booth — no
- * further shopper interaction. Converges on the same `captureBoothCart` endpoint
- * the Terminal rail uses once every leg has authorized. Partial-failure handling
- * mirrors the Terminal flow: if any leg fails to confirm, every already-authorized
- * (uncaptured) leg from this call is cancelled (free) and the whole cart fails —
- * same v1 whole-cart-cancel-and-restart policy as the Terminal rail, not
- * partial-capture/split-transaction.
+ * GONE (2026-09-14) -- same supersession as createBoothCartQrSetupIntent above: that step 1
+ * endpoint can no longer produce a real setupIntentId, so no legitimate caller can reach
+ * this step 2 either. Converted to an immediate 410 Gone, matching this codebase's general
+ * non-destructive-gate convention (e.g. startVendorBoothFeeBillingSetup /
+ * confirmVendorBoothFeeBillingSetup in vendorBoothController.ts). Square QR
+ * (authorizeBoothCartSquareLegs) is the live replacement rail.
  */
 export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Response) => {
-  try {
-    const { hubId, cartTransactionId } = req.params;
-    const { setupIntentId } = req.body as { setupIntentId?: string };
-    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
-    if (!setupIntentId) return res.status(400).json({ error: 'setupIntentId is required' });
-
-    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
-    if (!cart) return res.status(404).json({ error: 'Cart not found' });
-    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
-
-    // Stripe removal (2026-09-12): createBoothCartQrSetupIntent above (step 1 of this
-    // same rail) is now blocked unconditionally -- no legitimate caller can ever reach
-    // this step 2 with a real setupIntentId again. Blocked here too, defense-in-depth
-    // against a raw API caller supplying a stale/fabricated one, before the rest of
-    // this function's ~230 lines of now-fully-dead per-booth PaymentMethod-clone +
-    // PaymentIntent-confirm logic (which those lines have been deleted, not just
-    // gated -- confirmed via repo-wide grep that createBoothCartQrSetupIntent is this
-    // endpoint's only possible feeder and it can no longer produce a real setupIntentId).
-    // Square QR (authorizeBoothCartSquareLegs) is the live replacement rail.
-    return res.status(503).json({
-      error: 'QR/in-app card checkout via this rail is temporarily unavailable. Please use the Square QR checkout instead.',
-      code: 'STRIPE_QR_UNAVAILABLE',
-    });
-  } catch (error) {
-    console.error('[authorizeBoothCartQrLegs] Error:', error);
-    return res.status(500).json({ error: 'Failed to authorize QR legs' });
-  }
+  return res.status(410).json({
+    error: 'This payment method has been retired; use the Square QR checkout instead.',
+    code: 'BOOTH_CART_QR_AUTHORIZE_GONE',
+  });
 };
 
 // ============================================================================
