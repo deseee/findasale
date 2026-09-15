@@ -807,15 +807,20 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <TrendingUp size={16} className="text-purple-400" />
                     <span>Flip Report</span>
                   </Link>
-                  <Link
-                    href="/organizer/markdown-cycles"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Auto-reduce prices after set days. PRO"
-                  >
-                    <TrendingUp size={16} className="text-purple-400" />
-                    <span>Markdown Cycles</span>
-                  </Link>
+                  {/* S-TIER-RECONCILE: gate consistent with Fraud Signals below and with
+                      the sidebar's canAccess('PRO') gate in Layout.tsx -- previously this link
+                      rendered unconditionally for every tier. */}
+                  {canAccess('PRO') && (
+                    <Link
+                      href="/organizer/markdown-cycles"
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                      onClick={() => setIsOpen(false)}
+                      title="Auto-reduce prices after set days. PRO"
+                    >
+                      <TrendingUp size={16} className="text-purple-400" />
+                      <span>Markdown Cycles</span>
+                    </Link>
+                  )}
                   <Link
                     href="/organizer/appraisals"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"

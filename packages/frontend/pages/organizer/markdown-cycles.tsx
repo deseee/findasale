@@ -4,12 +4,10 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
-import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import TierGate from '../../components/TierGate';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
@@ -34,10 +32,8 @@ interface Sale {
 }
 
 const MarkdownCyclesPage = () => {
-  const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  const { canAccess } = useOrganizerTier();
   const queryClient = useQueryClient();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -247,41 +243,12 @@ const MarkdownCyclesPage = () => {
     );
   }
 
-  // Tier gate for PRO+
-  if (!canAccess('PRO')) {
-    return (
-      <>
-        <Head>
-          <title>Auto Markdown. FindA.Sale</title>
-        </Head>
-        <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
-          <div className="max-w-4xl mx-auto px-4">
-            <div className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-8 text-center">
-              <TrendingDown size={48} className="mx-auto mb-4 text-amber-600 dark:text-amber-400" />
-              <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">
-                Auto Markdown
-              </h2>
-              <p className="text-warm-600 dark:text-warm-300 mb-6">
-                Automatic price reductions to move inventory faster. Available on PRO tier and above.
-              </p>
-              <button
-                onClick={() => router.push('/organizer/subscription')}
-                className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-              >
-                Upgrade to PRO
-              </button>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <Head>
         <title>Auto Markdown. FindA.Sale</title>
       </Head>
+      <TierGate requiredTier="PRO" featureName="Auto Markdown" description="Automatic price reductions to move inventory faster. Available on PRO tier and above.">
       <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
         <div className="max-w-4xl mx-auto px-4">
           {/* Error banner */}
@@ -586,6 +553,7 @@ const MarkdownCyclesPage = () => {
           </div>
         </div>
       )}
+      </TierGate>
     </>
   );
 };

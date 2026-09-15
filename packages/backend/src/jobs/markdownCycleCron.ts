@@ -124,37 +124,35 @@ export function scheduleMarkdownCycleCron(): void {
             });
 
             if (secondMarkdownItems.length > 0) {
-              // Use original price (priceBeforeMarkdown) for second markdown calculation
-              const originalPrice = secondMarkdownItems[0].priceBeforeMarkdown!;
               const effectiveSecondPct = Math.min(100, cycle.secondPct * dormDashMultiplier);
-              const newPrice = Math.max(
-                0,
-                originalPrice * (1 - effectiveSecondPct / 100)
-              );
 
-              await prisma.item.updateMany({
-                where: {
-                  id: { in: secondMarkdownItems.map(item => item.id) },
-                },
-                data: {
-                  price: newPrice,
-                },
-              });
+              // Per-item update: each item must have ITS OWN priceBeforeMarkdown used
+              // to compute ITS OWN new price and have its own price reduced. A batch
+              // updateMany would (incorrectly) write item[0]'s computed price onto
+              // every item — same class of bug the first-markdown loop above avoids.
+              for (const item of secondMarkdownItems) {
+                const originalPrice = item.priceBeforeMarkdown!;
+                const newPrice = Math.max(0, originalPrice * (1 - effectiveSecondPct / 100));
+
+                await prisma.item.update({
+                  where: { id: item.id },
+                  data: {
+                    price: newPrice,
+                  },
+                });
+
+                // Tell anyone who favorited this item that its price just dropped.
+                // Uses this item's own pre-write price as "old", and this item's own
+                // newly computed price as "new".
+                notifyPriceDropAlerts(item.id, item.price, newPrice).catch(err =>
+                  console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
+                );
+              }
 
               totalMarkdownsApplied += secondMarkdownItems.length;
               console.log(
                 `[markdown-cycle-cron] Applied second markdown (${effectiveSecondPct}% off${isDormDashUrgent ? ' — 2x DORM_DASH rate' : ''}) to ${secondMarkdownItems.length} items for cycle ${cycle.id}`
               );
-
-              // Tell anyone who favorited one of these items that its price just
-              // dropped. Uses each item's own pre-write price (just selected above)
-              // as "old", and the price actually written above as "new" — this
-              // reflects the real DB change regardless of how newPrice was derived.
-              for (const item of secondMarkdownItems) {
-                notifyPriceDropAlerts(item.id, item.price, newPrice).catch(err =>
-                  console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
-                );
-              }
             }
           }
         } catch (cycleError) {
