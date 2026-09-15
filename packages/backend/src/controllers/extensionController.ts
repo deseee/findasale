@@ -560,6 +560,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // fas-grailed.js can compute floorPrice = item.bestOfferMinimumAmt ?? price * (1 - pct/100)
       // the same way fas-content.js already derives Facebook's Best Offer minimum.
       defaultBestOfferDeclinePct: organizer.defaultBestOfferDeclinePct,
+      // FIX 2026-09-15: Smart Pricing floor fallback needs the ACCEPT pct (auto-accept up
+      // to this discount, suggested default 10), not the DECLINE pct above (a different,
+      // more permissive boundary, suggested default 25) -- same zero-query-change basis as
+      // defaultBestOfferDeclinePct just above (organizer fetched with `include`).
+      defaultBestOfferAcceptPct: organizer.defaultBestOfferAcceptPct,
     },
     items: shaped,
   });

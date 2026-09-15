@@ -1071,7 +1071,8 @@
   // floor pattern already proven on Facebook (fas-content.js ~line 524, configureOfferStep) and
   // Grailed (fas-grailed.js ~line 1129, fillSmartPricingFloor): prefers the organizer's own
   // per-item dollar floor (item.bestOfferMinimumAmt), falling back to the organizer-level
-  // percentage default (item.defaultBestOfferDeclinePct, schema.prisma suggested default 25%)
+  // percentage default (item.defaultBestOfferAcceptPct, schema.prisma suggested default 10% --
+  // fixed 2026-09-15, this previously misread defaultBestOfferDeclinePct, a different field)
   // applied against this item's price. Both fields already flow onto every extension queue item
   // via popup.js's shared startQueue() map (not Mercari-specific) -- no new wiring needed. Clamped
   // to a sane range and rounded to a whole dollar, same digit-reflow avoidance already proven
@@ -1101,9 +1102,14 @@
     } else if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
       floor = Number(item.bestOfferMinimumAmt);
     } else {
-      const declinePct = (item.defaultBestOfferDeclinePct != null && isFinite(Number(item.defaultBestOfferDeclinePct)))
-        ? Number(item.defaultBestOfferDeclinePct) : 25; // schema.prisma's own suggested default
-      floor = price * (1 - declinePct / 100);
+      // FIX 2026-09-15: use defaultBestOfferAcceptPct ("auto-accept up to this discount",
+      // suggested default 10) -- NOT defaultBestOfferDeclinePct (a different, more permissive
+      // "decline offers below this" boundary, suggested default 25), which this previously read
+      // by mistake, making the floor twice as generous as the organizer's real default. See the
+      // re-enabled call-site comment below for the confirmed live impact (4/24 items affected).
+      const acceptPct = (item.defaultBestOfferAcceptPct != null && isFinite(Number(item.defaultBestOfferAcceptPct)))
+        ? Number(item.defaultBestOfferAcceptPct) : 10; // schema.prisma's own suggested default
+      floor = price * (1 - acceptPct / 100);
     }
     floor = Math.max(1, Math.min(floor, price - 0.01));
     // BUG FIX 2026-08-28 (S-EXT-MERCARI-FLOOR-BOUNDARY-STALL, Patrick live report: "Mercari stopped
@@ -2043,19 +2049,14 @@
       const shippingResult = await fillMercariShippingLabel(item);
       if (shippingResult !== true) shippingLabelFailedReason = shippingResult;
     }
-    // DISABLED 2026-09-14 (Patrick-directed): Mercari's Smart Pricing floor auto-fill is paused
-    // for now, not just tweaked -- two real bugs found the same day. (1) This call ran
-    // unconditionally with no `item.allowBestOffer` check at all, so items where the organizer
-    // explicitly turned OFF best-offer negotiation still got an automated price-drop floor set
-    // on Mercari. (2) When no item-level bestOfferAutoAcceptAmt/bestOfferMinimumAmt dollar amount
-    // existed, the fallback read Organizer.defaultBestOfferDeclinePct (suggested default 25% --
-    // the "decline offers below this" floor) instead of Organizer.defaultBestOfferAcceptPct
-    // (suggested default 10% -- the actual "auto-accept up to this discount" threshold), so
-    // those items got a floor twice as generous as the organizer's real 10% default. Confirmed
-    // live: 4 of 24 currently-Mercari-posted items had allowBestOffer=false and hit exactly this
-    // path. Re-enable only after both are fixed: gate on item.allowBestOffer, and read
-    // defaultBestOfferAcceptPct (not DeclinePct) in the no-item-level-amount fallback.
-    // if (!interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
+    // RE-ENABLED 2026-09-15 (both 2026-09-14-pause bugs now fixed, findasale-dev): (1) gated on
+    // item.allowBestOffer, so items where the organizer turned OFF best-offer negotiation never
+    // get an automated price-drop floor set on Mercari. (2) fillMercariSmartPricingFloor()'s own
+    // no-item-level-amount fallback now reads Organizer.defaultBestOfferAcceptPct ("auto-accept
+    // up to this discount", suggested default 10), not defaultBestOfferDeclinePct (a different,
+    // more permissive boundary, suggested default 25) -- confirmed live impact before this fix:
+    // 4/24 currently-Mercari-posted items had allowBestOffer=false and were hitting this path.
+    if (item.allowBestOffer && !interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
     return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
   }
 
