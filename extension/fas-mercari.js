@@ -2043,7 +2043,19 @@
       const shippingResult = await fillMercariShippingLabel(item);
       if (shippingResult !== true) shippingLabelFailedReason = shippingResult;
     }
-    if (!interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
+    // DISABLED 2026-09-14 (Patrick-directed): Mercari's Smart Pricing floor auto-fill is paused
+    // for now, not just tweaked -- two real bugs found the same day. (1) This call ran
+    // unconditionally with no `item.allowBestOffer` check at all, so items where the organizer
+    // explicitly turned OFF best-offer negotiation still got an automated price-drop floor set
+    // on Mercari. (2) When no item-level bestOfferAutoAcceptAmt/bestOfferMinimumAmt dollar amount
+    // existed, the fallback read Organizer.defaultBestOfferDeclinePct (suggested default 25% --
+    // the "decline offers below this" floor) instead of Organizer.defaultBestOfferAcceptPct
+    // (suggested default 10% -- the actual "auto-accept up to this discount" threshold), so
+    // those items got a floor twice as generous as the organizer's real 10% default. Confirmed
+    // live: 4 of 24 currently-Mercari-posted items had allowBestOffer=false and hit exactly this
+    // path. Re-enable only after both are fixed: gate on item.allowBestOffer, and read
+    // defaultBestOfferAcceptPct (not DeclinePct) in the no-item-level-amount fallback.
+    // if (!interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
     return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
   }
 
