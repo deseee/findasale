@@ -9,6 +9,7 @@ import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpServi
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
@@ -1248,6 +1249,9 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           markShopifyItemSold(item.id).catch(err =>
             console.error('[Shopify] Failed to mark item sold:', err)
           );
+          withdrawDiscogsListingIfExists(item.id).catch(err =>
+            console.error('[Discogs] Failed to withdraw listing:', err)
+          );
           notifyFacebookExportedItemSold(item.id).catch(err =>
             console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
           );
@@ -1811,6 +1815,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
           if (fullySoldOut) {
             endEbayListingIfExists(item.itemId).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
             markShopifyItemSold(item.itemId).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
+            withdrawDiscogsListingIfExists(item.itemId).catch((err) => console.error('[Discogs] Failed to withdraw listing:', err));
             notifyFacebookExportedItemSold(item.itemId).catch((err) => console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message));
           } else {
             syncMarketplaceStock(item.itemId, { fullySoldOut: false, remainingStock }).catch((err) =>

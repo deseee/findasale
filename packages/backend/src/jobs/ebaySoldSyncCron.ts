@@ -20,6 +20,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken, endEbayListingIfExists } from '../controllers/ebayController';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService';
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { createNotification } from '../lib/notificationService';
 
@@ -290,6 +291,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           );
           markShopifyItemSold(matchedItem.id).catch((err) =>
             console.warn(`[Shopify] mark-sold failed for item ${matchedItem!.id}:`, err.message)
+          );
+          withdrawDiscogsListingIfExists(matchedItem.id).catch((err) =>
+            console.warn(`[Discogs] withdraw failed for item ${matchedItem!.id}:`, err.message)
           );
           notifyFacebookExportedItemSold(matchedItem.id).catch((err) =>
             console.warn(`[FB Nudge] failed for item ${matchedItem!.id}:`, err.message)

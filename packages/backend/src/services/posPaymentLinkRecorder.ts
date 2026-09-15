@@ -4,6 +4,7 @@ import { getPlatformFeeRate, snapshotForCommissionOnly, SubscriptionTier } from 
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { createNotification } from '../lib/notificationService';
@@ -358,6 +359,7 @@ export async function recordPosPaymentLinkSale(
     setImmediate(() => {
       Promise.allSettled(fullySoldOutIds.map((itemId) => endEbayListingIfExists(itemId))).catch(() => {});
       Promise.allSettled(fullySoldOutIds.map((itemId) => markShopifyItemSold(itemId))).catch(() => {});
+      Promise.allSettled(fullySoldOutIds.map((itemId) => withdrawDiscogsListingIfExists(itemId))).catch(() => {});
       Promise.allSettled(fullySoldOutIds.map((itemId) => notifyFacebookExportedItemSold(itemId))).catch(() => {});
     });
   }

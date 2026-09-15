@@ -240,6 +240,7 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
               origin: { zip: item.sale!.zip, lat: item.sale!.organizer.lat, lng: item.sale!.organizer.lng },
               subscriptionTier: item.sale!.organizer.subscriptionTier as any,
               categoryId: item.ebayCategoryId ?? null,
+              category: item.category ?? null,
               priceUsd: item.price ?? null,
             },
             zipCandidate

@@ -5,6 +5,7 @@ import { getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { applyNeverShippableOverride, computeEffectivePackageWeight, endEbayListingIfExists } from './ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
@@ -1281,6 +1282,9 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
   );
   markShopifyItemSold(itemId).catch((err: any) =>
     console.warn(`[Shopify] mark-sold-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
+  );
+  withdrawDiscogsListingIfExists(itemId).catch((err: any) =>
+    console.warn(`[Discogs] withdraw-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
   );
 
   res.json({ ok: true });

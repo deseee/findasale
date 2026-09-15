@@ -293,51 +293,40 @@ interface RapidItem {
 // and claude_docs/feature-notes/ADR-2026-09-14-add-items-multichannel-status-aggregation.md.
 // item.channelStatus comes from getDraftItemsBySaleId's response (itemController.ts).
 type ChannelDotState = 'PUBLISHED' | 'ELIGIBLE' | null | undefined;
-const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string }> = [
-  { key: 'ebay', label: 'eBay', color: 'bg-blue-500' },
-  { key: 'shopify', label: 'Shopify', color: 'bg-emerald-500' },
-  { key: 'facebook', label: 'Facebook Marketplace', color: 'bg-indigo-500' },
-  { key: 'craigslist', label: 'Craigslist', color: 'bg-purple-500' },
-  { key: 'gumtreeAu', label: 'Gumtree AU', color: 'bg-teal-500' },
-  { key: 'grailed', label: 'Grailed', color: 'bg-neutral-500' },
-  { key: 'poshmark', label: 'Poshmark', color: 'bg-pink-500' },
-  { key: 'mercari', label: 'Mercari', color: 'bg-orange-500' },
-  { key: 'vinted', label: 'Vinted', color: 'bg-teal-600' },
-  { key: 'discogs', label: 'Discogs', color: 'bg-amber-600' },
-  { key: 'reverb', label: 'Reverb', color: 'bg-orange-600' },
+const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string; border: string; tint: string }> = [
+  { key: 'ebay', label: 'eBay', color: 'bg-blue-500', border: 'border-blue-500', tint: 'bg-blue-500/25' },
+  { key: 'shopify', label: 'Shopify', color: 'bg-emerald-500', border: 'border-emerald-500', tint: 'bg-emerald-500/25' },
+  { key: 'facebook', label: 'Facebook Marketplace', color: 'bg-indigo-500', border: 'border-indigo-500', tint: 'bg-indigo-500/25' },
+  { key: 'craigslist', label: 'Craigslist', color: 'bg-purple-500', border: 'border-purple-500', tint: 'bg-purple-500/25' },
+  { key: 'gumtreeAu', label: 'Gumtree AU', color: 'bg-teal-500', border: 'border-teal-500', tint: 'bg-teal-500/25' },
+  { key: 'grailed', label: 'Grailed', color: 'bg-neutral-500', border: 'border-neutral-500', tint: 'bg-neutral-500/25' },
+  { key: 'poshmark', label: 'Poshmark', color: 'bg-pink-500', border: 'border-pink-500', tint: 'bg-pink-500/25' },
+  { key: 'mercari', label: 'Mercari', color: 'bg-orange-500', border: 'border-orange-500', tint: 'bg-orange-500/25' },
+  { key: 'vinted', label: 'Vinted', color: 'bg-teal-600', border: 'border-teal-600', tint: 'bg-teal-600/25' },
+  { key: 'discogs', label: 'Discogs', color: 'bg-amber-600', border: 'border-amber-600', tint: 'bg-amber-600/25' },
+  { key: 'reverb', label: 'Reverb', color: 'bg-orange-600', border: 'border-orange-600', tint: 'bg-orange-600/25' },
 ];
-const CHANNEL_DOT_VISIBLE_CAP = 4;
-
 /** Small per-connected-channel dot cluster for the collapsed Add Items row.
- * Filled dot = published. Outlined dot = eligible, not yet published.
+ * Filled dot = published. Outlined/tinted dot = eligible, not yet published.
  * A channel with no status (not eligible / organizer hasn't connected it) renders
- * nothing at all -- no permanently-empty dot. Capped at 4 visible + a "+N" overflow
- * dot (native title attribute for the name/state -- works on hover and long-press). */
+ * nothing at all -- no permanently-empty dot. Every active channel gets its own
+ * dot (no cap, no "+N" overflow badge -- Patrick 2026-09-15: show them all).
+ * Wraps onto a second line via flex-wrap if an item has many active channels. */
 function ChannelStatusDots({ channelStatus }: { channelStatus?: Record<string, ChannelDotState> | null }) {
   if (!channelStatus) return null;
   const active = CHANNEL_DOT_CONFIG.filter(c => channelStatus[c.key] === 'PUBLISHED' || channelStatus[c.key] === 'ELIGIBLE');
   if (active.length === 0) return null;
-  const visible = active.slice(0, CHANNEL_DOT_VISIBLE_CAP);
-  const overflow = active.slice(CHANNEL_DOT_VISIBLE_CAP);
   return (
-    <div className="flex items-center gap-0.5 mt-0.5" aria-label="Marketplace publish status">
-      {visible.map(c => {
+    <div className="flex items-center flex-wrap gap-0.5 mt-0.5" aria-label="Marketplace publish status">
+      {active.map(c => {
         const state = channelStatus[c.key];
         const title = `${c.label}: ${state === 'PUBLISHED' ? 'Live' : 'Eligible, not yet published'}`;
         return state === 'PUBLISHED' ? (
           <span key={c.key} title={title} className={`w-2 h-2 rounded-full ${c.color}`} />
         ) : (
-          <span key={c.key} title={title} className={`w-2 h-2 rounded-full border ${c.color.replace('bg-', 'border-')} bg-transparent`} />
+          <span key={c.key} title={title} className={`w-2.5 h-2.5 rounded-full border-2 ${c.border} ${c.tint}`} />
         );
       })}
-      {overflow.length > 0 && (
-        <span
-          title={overflow.map(c => `${c.label}: ${channelStatus[c.key] === 'PUBLISHED' ? 'Live' : 'Eligible, not yet published'}`).join(' | ')}
-          className="text-[9px] leading-none px-1 py-0.5 rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 font-semibold"
-        >
-          +{overflow.length}
-        </span>
-      )}
     </div>
   );
 }

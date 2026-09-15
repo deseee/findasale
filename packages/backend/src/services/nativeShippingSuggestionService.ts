@@ -57,7 +57,7 @@ export { ShippingHardBlockError };
 
 export interface NativeShippingSuggestion {
   suggestedPrice: number;
-  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope';
+  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope' | 'media_mail';
   zone: ZoneKey;
   carrier: 'USPS' | 'UPS' | 'FEDEX';
   /** The platform fee rate actually used for the gross-up (the organizer's tier-based
@@ -96,6 +96,14 @@ interface NativeShippingPriceInput {
   origin: { zip?: string | null; lat?: number | null; lng?: number | null };
   subscriptionTier?: SubscriptionTier;
   categoryId?: string | null;
+  /** Item's eBay L1 category name (Item.category, e.g. "Books, Movies & Music") --
+   *  ADDED for Media Mail eligibility (see isMediaMailEligibleCategory in
+   *  ebayRateEstimateService.ts). Optional; passed through unchanged. Omitting it
+   *  simply means Media Mail is never selected for this call -- no other behavior
+   *  changes. Distinct from categoryId (eBay leaf category ID, used for Standard
+   *  Envelope) -- Media Mail eligibility has no verified leaf-ID list yet, so it is
+   *  gated on this name field instead; see that comment for why. */
+  category?: string | null;
   /** Item's current listing price -- gates eBay Standard Envelope flat-rate eligibility.
    *  This is the item's SALE price, not the shipping price being suggested here. */
   priceUsd?: number | null;
@@ -133,6 +141,7 @@ async function computeNativeShippingPrice(
       dims: input.dims ?? null,
       origin: input.origin,
       packageType: input.packageType ?? null,
+      category: input.category ?? null,
       categoryId: input.categoryId ?? null,
       priceUsd: input.priceUsd ?? null,
       destinationZip: input.destinationZip ?? null,

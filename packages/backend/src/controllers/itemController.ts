@@ -41,6 +41,7 @@ import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCat
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD, mirrors endEbayListingIfExists/markShopifyItemSold
 import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
 import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
 import { computeChannelStatusForItems, ChannelStatusItemInput, ExtensionPlatformsUsed, PublishedExtensionPlatformsByItemId } from '../services/itemChannelStatusService'; // Add Items collapsed-row multi-channel status (2026-09-14), see ADR-2026-09-14-add-items-multichannel-status-aggregation.md
@@ -1476,6 +1477,9 @@ async function computeAutoShippingPatch(input: {
   origin: { zip: string | null; lat: number | null; lng: number | null };
   subscriptionTier: string | null;
   categoryId: string | null;
+  /** Item.category (eBay L1 category name) -- gates Media Mail eligibility, see
+   *  nativeShippingSuggestionService.ts's NativeShippingPriceInput.category. */
+  category: string | null;
   priceUsd: number | null;
 }): Promise<{ shippingAvailable: true; shippingPrice: number; shippingPriceSource: 'AUTO' } | null> {
   try {
@@ -1486,6 +1490,7 @@ async function computeAutoShippingPatch(input: {
       origin: input.origin,
       subscriptionTier: input.subscriptionTier as any,
       categoryId: input.categoryId,
+      category: input.category,
       priceUsd: input.priceUsd,
     });
     return { shippingAvailable: true, shippingPrice: suggestion.suggestedPrice, shippingPriceSource: 'AUTO' };
@@ -1900,6 +1905,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         : (item.packageHeightIn != null ? Number(item.packageHeightIn) : null);
       const effPackageType = packageType !== undefined ? (packageType || null) : item.packageType;
       const effEbayCategoryId = ebayCategoryId !== undefined ? (ebayCategoryId || null) : item.ebayCategoryId;
+      // Media Mail gate (ebayRateEstimateService.ts's isMediaMailEligibleCategory) reads
+      // Item.category (the eBay L1 name), same "current unsaved value first" precedence
+      // already established for effEbayCategoryId/effPrice above.
+      const effCategory = category !== undefined ? (category || null) : item.category;
       const effPrice = price !== undefined ? (price ? parseFloat(price) : null) : item.price;
       const effEbayShippingOverride = ebayShippingOverride !== undefined ? (ebayShippingOverride || null) : item.ebayShippingOverride;
 
@@ -1931,6 +1940,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           },
           subscriptionTier: item.sale!.organizer.subscriptionTier,
           categoryId: effEbayCategoryId ?? null,
+          category: effCategory ?? null,
           priceUsd: effPrice ?? null,
         });
         if (shippingPatch) Object.assign(updateData, shippingPatch);
@@ -2137,6 +2147,19 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (status === 'SOLD' && item.status !== 'SOLD') {
       markShopifyItemSold(id).catch(err =>
         console.warn(`[Shopify] mark-sold-on-SOLD failed for item ${id}:`, err.message)
+      );
+    }
+
+    // P0 (2026-09-15, S-discogs-sold-parity, Patrick-reported): same gap this file already fixed
+    // for eBay (S1122) and Shopify (2026-07-18) existed for Discogs too -- unlike Facebook (no
+    // API at all), Discogs has a real server-side delete call (deleteDiscogsListing in
+    // discogsListingConnector.ts, already used by the manual organizer-triggered delete in
+    // discogsMarketplaceController.ts) and was never wired into any SOLD-trigger call site.
+    // withdrawDiscogsListingIfExists re-queries the item, self-guards on discogsListingId being
+    // set (no-ops if never pushed to Discogs), and never throws -- fire-and-forget, same as above.
+    if (status === 'SOLD' && item.status !== 'SOLD') {
+      withdrawDiscogsListingIfExists(id).catch(err =>
+        console.warn(`[Discogs] withdraw-on-SOLD failed for item ${id}:`, err.message)
       );
     }
 
@@ -2623,10 +2646,19 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     // `prisma.item.findMany({ where: { sale: { organizerId, deletedAt: null }, status: 'SOLD' } })`
     // -- purely keyed on Item.status === 'SOLD' scoped to the organizer, with ZERO dependency on
     // which code path set that status. It is the poll target the browser extension uses for
-    // every extension-tracked marketplace (Facebook Marketplace, Grailed, Mercari, Poshmark,
-    // Discogs, Reverb, etc. -- anything with a MarketplaceListingJob row), so those channels
-    // self-heal automatically once commitItemSale() above flips the item to SOLD. NO explicit
-    // call needed for them here.
+    // the genuinely API-less, extension-only platforms in VALID_LISTING_PLATFORMS (Facebook
+    // Marketplace, Grailed, Mercari, Poshmark, Vinted -- anything with a MarketplaceListingJob
+    // row and no server-side delete call), so those channels self-heal once commitItemSale()
+    // above flips the item to SOLD, but only while the organizer's browser extension is open and
+    // polling. NO explicit call needed for them here.
+    //
+    // CORRECTION (2026-09-15, S-discogs-sold-parity -- item cmtsyyhig007o6p9vlk04ocvh sold on
+    // eBay but never delisted from Discogs, confirmed zero MarketplaceListingJob rows for it):
+    // this comment previously lumped Discogs in with the extension-only platforms above -- wrong.
+    // Discogs is an official-API connector (discogsListingConnector.ts) with a real server-side
+    // deleteDiscogsListing() call, same as eBay/Shopify, and is NOT in VALID_LISTING_PLATFORMS /
+    // getPendingRemovals's poll at all, so it was never self-healing. It now gets the same
+    // explicit synchronous withdraw below, alongside eBay and Shopify.
     //
     // eBay and Shopify are official-API integrations (not extension-based), so they DO need an
     // explicit synchronous withdraw call -- confirmed by reading both markItemSoldOnFacebook
@@ -2641,7 +2673,7 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     // independent of the FB-export nudge check below it, "on every one of the 11 existing
     // sold-trigger call sites" per its own comment. Skipping it here would silently reopen
     // that exact gap for off-platform sales. itemController.ts's own updateItem() SOLD path
-    // (~line 2096-2130) calls all three of these together for the same reason.
+    // (~line 2096-2130) calls all four of these together for the same reason.
     notifyFacebookExportedItemSold(id).catch((err: any) =>
       console.warn(`[FB Nudge] mark-sold-off-platform failed for item ${id}:`, err.message)
     );
@@ -2650,6 +2682,9 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     );
     markShopifyItemSold(id).catch((err: any) =>
       console.warn(`[Shopify] mark-sold-on-SOLD (off-platform) failed for item ${id}:`, err.message)
+    );
+    withdrawDiscogsListingIfExists(id).catch((err: any) =>
+      console.warn(`[Discogs] withdraw-on-SOLD (off-platform) failed for item ${id}:`, err.message)
     );
 
     res.json({
@@ -5075,6 +5110,7 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
         packageHeightIn: true,
         packageType: true,
         ebayCategoryId: true,
+        category: true,
         price: true,
         sale: {
           select: {
@@ -5152,6 +5188,11 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
         },
         subscriptionTier: item.sale.organizer.subscriptionTier as any,
         categoryId: categoryIdOverride ?? item.ebayCategoryId ?? null,
+        // No query-param override for category name exists yet (the edit-item form
+        // never sends one -- only categoryId changes independently of it), so this
+        // preview always reflects the item's last-PERSISTED category, same as every
+        // other field here before its own override was added.
+        category: item.category ?? null,
         priceUsd:
           priceUsdOverride != null && !isNaN(priceUsdOverride)
             ? priceUsdOverride

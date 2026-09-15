@@ -31,6 +31,7 @@ import * as Sentry from '@sentry/node';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { markShopifyItemSold } from '../services/shopifyService';
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { endEbayListingIfExists } from './ebayController';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 
@@ -1114,6 +1115,9 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       if (bountyFullySoldOut) {
         markShopifyItemSold(submission.itemId).catch(err =>
           console.error('[completeBountyPurchase][square] Shopify markSold failed:', err)
+        );
+        withdrawDiscogsListingIfExists(submission.itemId).catch(err =>
+          console.error('[completeBountyPurchase][square] Discogs withdraw failed:', err)
         );
         endEbayListingIfExists(submission.itemId).catch(err =>
           console.error('[completeBountyPurchase][square] eBay withdraw failed:', err)

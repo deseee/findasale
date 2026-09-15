@@ -5,6 +5,7 @@ import { pushEvent } from '../services/liveFeedService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
@@ -677,6 +678,9 @@ export async function markHoldInvoicePaid(
     ).catch(() => {});
     Promise.allSettled(
       fullySoldOutIds.map((itemId: string) => markShopifyItemSold(itemId))
+    ).catch(() => {});
+    Promise.allSettled(
+      fullySoldOutIds.map((itemId: string) => withdrawDiscogsListingIfExists(itemId))
     ).catch(() => {});
     Promise.allSettled(
       fullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))

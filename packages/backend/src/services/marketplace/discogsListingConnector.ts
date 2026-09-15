@@ -503,6 +503,53 @@ export async function deleteDiscogsListing(organizerId: string, discogsListingId
 }
 
 /**
+ * Withdraw an item's Discogs listing when it goes SOLD via a non-Discogs channel (e.g. eBay,
+ * Shopify, POS, off-platform). Added 2026-09-15 (S-discogs-sold-parity, Patrick-reported item
+ * cmtsyyhig007o6p9vlk04ocvh sold on eBay but never delisted from Discogs) -- mirrors
+ * endEbayListingIfExists (ebayController.ts) and markShopifyItemSold (shopifyService.ts): it
+ * re-queries the item, self-guards on discogsListingId actually being set (no-ops if this item
+ * was never pushed to Discogs), and never throws. On a successful delete it clears
+ * Item.discogsListingId/discogsListedAt, the same clear-on-delete behavior as the manual
+ * organizer-triggered delete in discogsMarketplaceController.ts's removeItemFromDiscogs.
+ */
+export async function withdrawDiscogsListingIfExists(itemId: string): Promise<void> {
+  try {
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        discogsListingId: true,
+        sale: { select: { organizerId: true } },
+      },
+    });
+
+    if (!item || !item.discogsListingId) {
+      // Never pushed to Discogs -- nothing to withdraw.
+      return;
+    }
+
+    const organizerId = item.sale?.organizerId ?? null;
+    if (!organizerId) {
+      console.warn(`[Discogs] Could not resolve organizerId for item ${itemId} -- skipping withdraw`);
+      return;
+    }
+
+    await deleteDiscogsListing(organizerId, item.discogsListingId);
+
+    await prisma.item
+      .update({
+        where: { id: itemId },
+        data: { discogsListingId: null, discogsListedAt: null },
+      })
+      .catch((e) => {
+        console.error(`[Discogs] Failed to clear discogsListingId after withdraw-on-SOLD for item ${itemId}:`, e);
+      });
+  } catch (error: any) {
+    // Log but don't throw -- fire-and-forget, same posture as endEbayListingIfExists/markShopifyItemSold.
+    console.error(`[Discogs] withdraw-on-SOLD failed for item ${itemId}:`, error.message);
+  }
+}
+
+/**
  * Eligibility pre-check for the frontend: is this item in Discogs's catalog at
  * all? Requires an active Discogs connection (reuses the organizer's own
  * authenticated rate-limit budget rather than the unauthenticated tier).

@@ -136,6 +136,7 @@ import { resyncShippingDriftSweep } from '../jobs/resyncShippingDrift'; // ADR s
 import { backfillStaleWeightTierPoliciesSweep } from '../jobs/backfillStaleWeightTierPolicies'; // ADR-102 one-time backfill: re-pin items still on pre-migration weight-tier eBay policies
 import { endEbayListingIfExists } from '../controllers/ebayController'; // used by /mark-item-sold-elsewhere below
 import { markShopifyItemSold } from '../services/shopifyService';
+import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
 
 const router = express.Router();
@@ -1202,6 +1203,9 @@ router.post('/mark-item-sold-elsewhere', requireSecret, async (req: express.Requ
     );
     markShopifyItemSold(itemId).catch((err: any) =>
       console.warn(`[Shopify] mark-sold-on-SOLD (mark-item-sold-elsewhere) failed for item ${itemId}:`, err.message)
+    );
+    withdrawDiscogsListingIfExists(itemId).catch((err: any) =>
+      console.warn(`[Discogs] withdraw-on-SOLD (mark-item-sold-elsewhere) failed for item ${itemId}:`, err.message)
     );
 
     res.json({ ok: true, alreadyCommitted: false });

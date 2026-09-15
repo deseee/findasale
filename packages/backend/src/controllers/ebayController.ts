@@ -2218,7 +2218,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     // viewed/published from Seller Hub UI — feature was broken-by-design).
     // All pushes now go LIVE. Use the per-item "Publish to eBay now" button
     // (publishItemOffer) for any item whose ebayOfferId is stale.
-    const { itemIds, photoMode, queueOnly } = req.body as {
+    const { itemIds, photoMode, queueOnly, feeCheckOnly } = req.body as {
       itemIds: string[];
       photoMode?: string;
       // eBay Queue Mode tier decision (2026-09-13): when true, this per-item
@@ -2226,6 +2226,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       // the queueOnly branch below. Used internally by addToEbayQueue via
       // pushItemsToEbayQueueOnly(), never sent directly by the frontend.
       queueOnly?: boolean;
+      // Manual push panel pre-flight fee visibility (2026-09-15): when true,
+      // this per-item loop stops right after offer creation/update -- same
+      // spot as queueOnly -- but does NOT set ebayQueuedAt, so the item is
+      // never silently enrolled in ebayListingQueueCron.ts's automatic Phase A
+      // fill just because the organizer looked at the fee. Used internally by
+      // checkItemEbayFee via pushItemsToEbayFeeCheckOnly(), never sent
+      // directly by the frontend.
+      feeCheckOnly?: boolean;
     };
     const userId = req.user?.id;
 
@@ -3069,6 +3077,30 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // publish) picks it up on its own schedule. This closes the "manually-
         // queued items have no ebayOfferId and can never publish" gap (ADR-115
         // Dev Handoff, 2026-09-11).
+        // Manual push panel pre-flight fee check (2026-09-15): stops here, right
+        // after the offer is created/updated and ebayOfferId is persisted -- same
+        // point as the queueOnly branch just below -- but deliberately does NOT
+        // set ebayQueuedAt. This lets PostSaleEbayPanel.tsx show the organizer
+        // whether pushing this item live would incur a real eBay insertion fee
+        // BEFORE they click the actual "push live" action, without silently
+        // enrolling the item in ebayListingQueueCron.ts's automatic Phase A fill
+        // (which queueOnly deliberately does do). offerId is guaranteed non-null
+        // here by the create/update branches above; the fallback mirrors the
+        // same explicit guard used for manualFeeCheck further down.
+        if (feeCheckOnly) {
+          const feeCheck = offerId
+            ? await checkEbayListingFee(offerId, accessToken)
+            : ({ status: 'unknown', reason: 'offerId missing after create/update' } as const);
+          results.push({
+            itemId: item.id,
+            sku,
+            ebayListingId: null,
+            status: 'fee_checked',
+            feeCheck,
+          });
+          continue;
+        }
+
         if (queueOnly) {
           await prisma.item.update({
             where: { id: item.id },
@@ -3319,6 +3351,120 @@ export async function pushItemsToEbayQueueOnly(
   await pushSaleToEbay(fakeReq, fakeRes);
   return { statusCode, body };
 }
+
+// ─── Internal invocation wrapper for the manual push panel's pre-flight fee
+// check ─────────────────────────
+// Same rationale as pushItemsToEbayQueueOnly directly above: pushSaleToEbay's
+// per-item pipeline (weight/dims guard, category resolution, shipping policy,
+// merchant location, offer creation) is the only place in the codebase that
+// knows how to build a valid eBay offer, so a single-item fee check reuses it
+// via the feeCheckOnly flag instead of duplicating it. Only ever called with
+// one itemId by checkItemEbayFee below.
+export async function pushItemsToEbayFeeCheckOnly(
+  userId: string,
+  saleId: string,
+  itemId: string,
+): Promise<{ statusCode: number; body: any }> {
+  let statusCode = 200;
+  let body: any = null;
+  const fakeRes = {
+    headersSent: false,
+    status(code: number) {
+      statusCode = code;
+      return fakeRes;
+    },
+    json(payload: any) {
+      body = payload;
+      fakeRes.headersSent = true;
+      return fakeRes;
+    },
+  } as unknown as Response;
+  const fakeReq = {
+    params: { saleId },
+    body: { itemIds: [itemId], feeCheckOnly: true },
+    user: { id: userId },
+  } as unknown as AuthRequest;
+
+  await pushSaleToEbay(fakeReq, fakeRes);
+  return { statusCode, body };
+}
+
+/**
+ * POST /api/ebay/organizer/items/:itemId/ebay-fee-check
+ *
+ * Manual push panel pre-flight fee visibility (2026-09-15, PostSaleEbayPanel.tsx).
+ * Organizers previously had zero visibility into whether pushing an item live
+ * would cost a real eBay insertion fee until AFTER it was already published
+ * (pushSaleToEbay / publishItemOffer both compute manualFeeCheck but only
+ * surface it in the response of the push that already happened). This
+ * endpoint lets the frontend ask BEFORE that click: ensures the item has (or
+ * creates, via pushSaleToEbay's real offer-creation pipeline in feeCheckOnly
+ * mode) an ebayOfferId, then calls checkEbayListingFee against eBay's live
+ * get_listing_fees API and returns the result. Never publishes and never
+ * queues the item for ebayListingQueueCron.ts's automatic fill.
+ */
+export const checkItemEbayFee = async (req: AuthRequest, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Load the item + its sale's organizerId for ownership check (mirrors
+    // publishItemOffer's ownership pattern).
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        saleId: true,
+        sale: { select: { organizerId: true } },
+      },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    if (!item.sale || !item.saleId) {
+      return res.status(400).json({ message: 'Item is not attached to a sale' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId } });
+    if (!organizer || item.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Not authorized to check this item' });
+    }
+
+    // Tier gate, eBay-connection check, quota check, rate-limit check, and the
+    // actual offer-creation pipeline all live inside pushSaleToEbay itself --
+    // reused here rather than duplicated.
+    const { statusCode, body } = await pushItemsToEbayFeeCheckOnly(userId, item.saleId, itemId);
+
+    if (statusCode !== 200 || !body) {
+      const message = body && typeof body.message === 'string' ? body.message : 'Failed to check eBay listing fee';
+      return res.status(statusCode !== 200 ? statusCode : 502).json({ message, code: body?.code });
+    }
+
+    const result = Array.isArray(body.results) ? body.results[0] : null;
+    if (!result) {
+      return res.status(502).json({ message: 'eBay fee check returned no result' });
+    }
+    if (result.status === 'error') {
+      return res.status(400).json({
+        code: result.code || result.error || 'FEE_CHECK_FAILED',
+        message: result.message || 'Failed to check eBay listing fee',
+      });
+    }
+
+    return res.json({ itemId, feeCheck: result.feeCheck });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[eBay FeeCheck Failed] itemId=${req.params.itemId} reason=${msg}`);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Failed to check eBay listing fee', error: msg.slice(0, 200) });
+    }
+  }
+};
 
 /**
  * Ask eBay's Trading API GetItem call what shipping configuration a LIVE

@@ -8,6 +8,7 @@ import {
   getEbayPreview,
   pushSaleToEbay,
   publishItemOffer,
+  checkItemEbayFee,
   importInventoryFromEbay,
   handleEbayAccountDeletionVerification,
   handleEbayAccountDeletion,
@@ -128,6 +129,12 @@ router.post('/sync-policies', authenticate, async (req: AuthRequest, res: Respon
 // Preview and push endpoints
 router.get('/organizer/items/:itemId/ebay-preview', authenticate, getEbayPreview);
 router.post('/organizer/sales/:saleId/ebay-push', authenticate, pushSaleToEbay);
+
+// Manual push panel pre-flight fee visibility (2026-09-15): lets
+// PostSaleEbayPanel.tsx ask whether pushing a specific item live would incur
+// a real eBay insertion fee BEFORE the organizer clicks the actual push
+// button. Creates/reuses the item's eBay offer but never publishes it.
+router.post('/organizer/items/:itemId/ebay-fee-check', authenticate, checkItemEbayFee);
 
 // S725: Publish an existing UNPUBLISHED Inventory API offer to LIVE on eBay.
 // Used by the in-app "Publish to eBay now" button for items whose ebayOfferId

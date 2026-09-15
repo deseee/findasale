@@ -1875,7 +1875,7 @@ export interface CheapestRate {
   /** Total additive surcharge folded into `rate` (0 if none triggered). */
   surcharge?: number;
   surchargeType?: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null;
-  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope';
+  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope' | 'media_mail';
   /** Set when basis === 'cubic' -- which named GA Cubic tier was selected. */
   cubicTierLabel?: string | null;
   zone: ZoneKey;
@@ -2361,6 +2361,121 @@ function evaluateStandardEnvelope(
   const rate = EBAY_STANDARD_ENVELOPE_RATES[ozTier];
   return rate != null ? { rate } : null;
 }
+
+// ── MEDIA MAIL (added 2026-09-15, Patrick's question: "why don't media mail categories
+// get media mail prices for finda.sale shipping? ebay does it correctly") ─────────────
+//
+// Confirmed via full-repo grep this session (packages/backend/src + packages/frontend,
+// "media mail" / "mediaMail" / "MEDIA_MAIL", zero hits before this change): Media Mail
+// had NO representation anywhere in this codebase. estimateCheapestRate only ever
+// compared USPS/UPS/FEDEX Ground Advantage-class rates, GA Cubic, and eBay Standard
+// Envelope -- never USPS's separate, cheaper, content-restricted Media Mail rate class.
+// eBay's own calculated-shipping path (ebayCalculatedPolicyService.ts /
+// ebayFlatRatePolicyService.ts) hands the rate calculation to eBay's own live API for
+// eBay listings, which is why eBay "does it correctly" already there (out of scope here
+// per this session's instructions -- untouched) -- this gap only ever affected
+// FindA.Sale's OWN native-checkout suggestion.
+//
+// ELIGIBILITY -- USPS Media Mail Eligibility Standards (DMM 273 / pe.usps.com/text/
+// dmm300/173.htm#ep1113500) and usps.com/ship, both fetched live this session,
+// 2026-09-15: eligible content is books (>=8 printed pages), 16mm-or-narrower film,
+// printed/sheet music, educational test materials, sound recordings (records/vinyl/
+// CDs/cassettes), recorded video (DVDs/VHS), playscripts & manuscripts, educational
+// reference charts, medical loose-leaf binder pages, and prerecorded computer-readable
+// media. Explicitly NOT eligible: video games, computer/digital drives, blank media,
+// software, or anything primarily advertising.
+//
+// CATEGORY MATCH -- same shape as isStandardEnvelopeEligibleCategory above (name
+// substring match against Item.category, the eBay L1 category name -- see that
+// function's own comment for the established pattern/caveats this mirrors). eBay's
+// CURRENT live L1 taxonomy (confirmed via a direct fetch of ebay.com/n/all-categories
+// this session, 2026-09-15) groups books, movies AND music into ONE L1 node, "Books,
+// Movies & Music" -- conveniently covering all three Media-Mail-eligible content
+// families in a single category name, with no "Musical Instruments" or "Video Games"
+// category anywhere near it in the tree (so this cannot accidentally catch an actual
+// guitar or a game console). This is strictly ADDITIVE to the cheapest-wins comparison
+// below -- it only ever widens which items get a (cheaper) Media Mail rate considered;
+// an unmatched category simply skips Media Mail exactly as today, and this can never
+// make any existing rate MORE expensive.
+//
+// CAVEAT (same class of limitation EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES already
+// documents): this is a coarse L1-category-NAME substring match, not a per-item content
+// check -- a periodical/magazine-only item listed under this same L1 node would also
+// match, even though standalone magazines are not reliably Media-Mail eligible under
+// DMM 273. No categoryId-based (real eBay leaf-taxonomy) eligibility list exists yet for
+// Media Mail the way EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS does for Standard
+// Envelope -- that would need a real eBay Taxonomy API pull (live client_credentials
+// call) this session did not make; flagged in the handoff as a follow-up, not
+// fabricated here. `category` is only threaded through for items that already carry a
+// real eBay L1 category name (see nativeShippingSuggestionService.ts) -- items with no
+// category on file simply never match, same fail-closed default as
+// isStandardEnvelopeEligibleCategory.
+export const MEDIA_MAIL_ELIGIBLE_CATEGORIES: readonly string[] = [
+  'Books, Movies & Music',
+];
+
+/** Case-insensitive substring match against MEDIA_MAIL_ELIGIBLE_CATEGORIES. */
+function isMediaMailEligibleCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase();
+  return MEDIA_MAIL_ELIGIBLE_CATEGORIES.some((c) => lower.includes(c.toLowerCase()));
+}
+
+/** USPS Media Mail max weight -- 70lb, same absolute ceiling as Ground Advantage
+ *  (Notice 123). */
+export const MEDIA_MAIL_MAX_WEIGHT_OZ = 70 * 16;
+
+/**
+ * USPS Media Mail -- single-piece rate by weight, rounded UP to the next whole pound
+ * (USPS's own "Weight Not Over (lbs.)" table convention). Media Mail is priced FLAT
+ * NATIONALLY -- unlike every other table in this file, it does NOT vary by zone.
+ *
+ * SOURCE: USPS Notice 123 Price List, "Media/Library Mail -- Retail" section, effective
+ * 2026-07-12, page 9, pe.usps.com/cpim/ftp/manuals/dmm300/notice123.pdf -- pulled via a
+ * direct fetch of the real PDF this session, 2026-09-15. That same fetch found no
+ * separate discounted "commercial"/online Media Mail rate the way Ground Advantage and
+ * Priority Mail have -- Media Mail pricing appears to be the same figure regardless of
+ * retail-vs-commercial postage source.
+ *
+ * NOT INDEPENDENTLY LIVE-VALIDATED this session (unlike RATE_TABLE/USPS_CUBIC_RATE_TABLE
+ * above, which were cross-checked against real eBay-quoted totals) -- no real Media Mail
+ * label or quote was requested to confirm these figures, per this session's hard "never
+ * spend real money without explicit permission" rule. FLAGGED for QA: spot-check at
+ * least 2-3 of these weight tiers against a real USPS/Shippo Media Mail quote before
+ * this table governs a real customer-facing charge at scale.
+ */
+export const MEDIA_MAIL_RATE_TABLE: Record<number, number> = {
+  1: 4.39, 2: 5.13, 3: 5.86, 4: 6.60, 5: 7.34, 6: 8.08, 7: 8.81, 8: 9.55, 9: 10.29, 10: 11.02,
+  11: 11.76, 12: 12.50, 13: 13.23, 14: 13.97, 15: 14.71, 16: 15.44, 17: 16.18, 18: 16.92, 19: 17.65, 20: 18.39,
+  21: 19.13, 22: 19.86, 23: 20.60, 24: 21.34, 25: 22.07, 26: 22.81, 27: 23.55, 28: 24.29, 29: 25.02, 30: 25.76,
+  31: 26.50, 32: 27.23, 33: 27.97, 34: 28.71, 35: 29.44, 36: 30.18, 37: 30.92, 38: 31.65, 39: 32.39, 40: 33.13,
+  41: 33.86, 42: 34.60, 43: 35.34, 44: 36.07, 45: 36.81, 46: 37.55, 47: 38.28, 48: 39.02, 49: 39.76, 50: 40.49,
+  51: 41.23, 52: 41.97, 53: 42.71, 54: 43.44, 55: 44.18, 56: 44.92, 57: 45.65, 58: 46.39, 59: 47.13, 60: 47.86,
+  61: 48.60, 62: 49.34, 63: 50.07, 64: 50.81, 65: 51.55, 66: 52.28, 67: 53.02, 68: 53.76, 69: 54.49, 70: 55.23,
+};
+
+/**
+ * USPS Media Mail eligibility + rate lookup -- same shape/pattern as evaluateUspsCubic()/
+ * evaluateStandardEnvelope() above (raw inputs in, matched rate or null out, no side
+ * effects). Gated on: weight within Media Mail's 70lb ceiling, category eligible
+ * (isMediaMailEligibleCategory), and NOT already USPS-Oversized (Notice 123's general
+ * parcel dimension limits still apply to Media Mail -- an oversized parcel is priced off
+ * USPS_OVERSIZED_TABLE regardless of content, same as every other USPS service in this
+ * file).
+ */
+function evaluateMediaMail(
+  dims: PackageDims,
+  weightOz: number,
+  category: string | null | undefined
+): { rate: number } | null {
+  if (weightOz <= 0 || weightOz > MEDIA_MAIL_MAX_WEIGHT_OZ) return null;
+  if (!isMediaMailEligibleCategory(category)) return null;
+  if (isUspsOversized(dims)) return null;
+  const lb = Math.min(70, Math.ceil(weightOz / 16));
+  const rate = MEDIA_MAIL_RATE_TABLE[lb];
+  return rate != null ? { rate } : null;
+}
+
 
 // ── ADR-103 Phase 4: real oversize / AHS / Large-Package / USPS-nonstandard surcharges ──
 // Sourced from ADR-103 §2(D) exactly, per the honesty gate in this session's dispatch --
@@ -3168,9 +3283,10 @@ export function estimateCheapestRate(input: {
   dims?: PackageDims;
   zone: ZoneKey;
   packageType?: string | null;
-  /** eBay category name/path (e.g. item.category) -- optional, used ONLY to check eBay
-   *  Standard Envelope eligibility (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES). Omitting
-   *  it simply means Standard Envelope is never selected -- no other behavior changes. */
+  /** eBay category name/path (e.g. item.category) -- optional, used to check eBay
+   *  Standard Envelope eligibility (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES) AND Media
+   *  Mail eligibility (MEDIA_MAIL_ELIGIBLE_CATEGORIES). Omitting it simply means neither
+   *  Standard Envelope nor Media Mail is ever selected -- no other behavior changes. */
   category?: string | null;
   /** Real eBay numeric category ID (e.g. item.ebayCategoryId) -- optional, checked FIRST
    *  against EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS when present; falls back to the
@@ -3321,6 +3437,29 @@ export function estimateCheapestRate(input: {
       zone: input.zone,
       fvfOnShipping: round2(envelope.rate * EBAY_SHIPPING_FVF_RATE),
       netToSeller: round2(envelope.rate - envelope.rate * EBAY_SHIPPING_FVF_RATE),
+    };
+  }
+
+  // USPS Media Mail -- competes in the same cheapest-wins comparison as everything
+  // above. Flat national rate (zone-independent, like Standard Envelope), so it's
+  // evaluated last and compared directly against whatever `best` already holds. See
+  // isMediaMailEligibleCategory's comment for sourcing/caveats. input.category is
+  // optional -- when omitted or non-matching, evaluateMediaMail always returns null and
+  // this is a no-op, so every existing caller that doesn't pass a matching category is
+  // unaffected.
+  const mediaMail = evaluateMediaMail(dims, input.weightOz, input.category);
+  if (mediaMail && mediaMail.rate < best!.rate) {
+    best = {
+      carrier: 'USPS',
+      rate: mediaMail.rate,
+      baseRate: mediaMail.rate,
+      surcharge: 0,
+      surchargeType: null,
+      basis: 'media_mail',
+      cubicTierLabel: null,
+      zone: input.zone,
+      fvfOnShipping: round2(mediaMail.rate * EBAY_SHIPPING_FVF_RATE),
+      netToSeller: round2(mediaMail.rate - mediaMail.rate * EBAY_SHIPPING_FVF_RATE),
     };
   }
 
