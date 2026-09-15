@@ -1643,6 +1643,66 @@
     // If it didn't appear, this may mean Mercari skipped straight to the next screen (e.g. already
     // dismissed once, "Don't show this again" from a prior session) -- not fatal, keep going.
 
+    // Shared helper: sets Mercari's ItemWeightInPounds/ItemWeightInOunces fields from the same
+    // trusted weight this function already bailed out early for if missing (trustedOunces check
+    // at the top). Factored out so BOTH the new weight-entry modal below AND the existing
+    // shoebox-fit modal further down (which live-DOM testing this session confirmed has its OWN
+    // copy of these same two testids -- see BATCH-11's comment on that call site) use the exact
+    // same lbs/oz-remainder math and the same zero-oz-doesn't-stick skip, instead of the two call
+    // sites drifting if only one copy is ever fixed later. Returns false (no-op) if there's no
+    // trusted weight to set, matching this function's existing null-safety elsewhere.
+    function setMercariWeightFields() {
+      const totalOz = item.packageWeightOz != null ? item.packageWeightOz : item.aiPackageWeightOz;
+      if (totalOz == null || !isFinite(Number(totalOz))) return false;
+      const lbs = Math.floor(Number(totalOz) / 16);
+      const remOz = Math.round(Number(totalOz) % 16);
+      const lbEl = document.querySelector('input[data-testid="ItemWeightInPounds"]');
+      const ozEl = document.querySelector('input[data-testid="ItemWeightInOunces"]');
+      if (lbEl) setNativeValue(lbEl, String(lbs));
+      // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, live-confirmed): live-tested setting this field
+      // to literal "0" directly and it does NOT stick (value reverts to empty) even though a
+      // non-zero value like "5" sets fine via the identical setNativeValue call -- some kind of
+      // zero-specific rejection on Mercari's own side, not a bug in the setter itself. Skips setting
+      // it when the real remainder is 0 -- Mercari's own default already shows "0" here on its own
+      // (confirmed in Patrick's own screenshot before this function ever touched the field), so
+      // leaving it alone in that case matches the field's own working default rather than fighting
+      // a quirk that only breaks things when triggered synthetically.
+      if (ozEl && remOz > 0) setNativeValue(ozEl, String(remOz));
+      return true;
+    }
+
+    // BUG FIX 2026-09-15 (Patrick-shared live tab, DOM-confirmed this session): direct DOM
+    // inspection of a real, live-stuck Mercari /sell/ tab this session found an entire
+    // intermediate modal this function never accounted for, sitting between the "Got it" info
+    // modal just above and the shoebox-fit modal just below -- titled "How heavy will the
+    // package be?", with its own `ItemWeightInPounds`/`ItemWeightInOunces` fields (Mercari had
+    // already carried over "2" into the pounds field on its own; ounces was empty) and its own
+    // "Next" button, confirmed live to be the SAME `data-testid="SelectCarrierButton"` the
+    // existing code below already looks for AFTER the shoebox question -- Mercari reuses this
+    // testid across multiple steps of the wizard, so that later lookup isn't wrong on its own,
+    // it's just that this function currently tries to reach the shoebox modal without ever
+    // passing through this weight modal first. The old code jumped straight from "Got it" to a
+    // waitForSelector for the shoebox radio with only a 4000ms timeout, which reliably timed out
+    // on this modal and returned this function's own honest failure message ('..."fits in a
+    // shoebox?" question never appeared...') instead of ever reaching the real shoebox modal.
+    // Handled defensively: if this modal isn't present (e.g. a future Mercari change removes it
+    // again, or it genuinely doesn't appear on some runs), this step is a silent no-op and
+    // control falls through to the existing shoebox wait exactly as it did before this fix -- it
+    // does not make this function newly fragile to Mercari NOT showing this modal.
+    const weighModalField = await waitForSelector(() => document.querySelector('input[data-testid="ItemWeightInPounds"]'), 3500);
+    if (weighModalField) {
+      setMercariWeightFields();
+      await sleep(200);
+      const weighModalNext = await waitForSelector(() => document.querySelector('[data-testid="SelectCarrierButton"]:not([disabled])'), 4000);
+      if (!weighModalNext) {
+        return 'Clicked the Shipping label field and reached Mercari\'s "how heavy will the package be?" modal, but its "Next" button never became enabled (UNVERIFIED state) -- the weight fields were set, but Mercari\'s own form still didn\'t accept it as complete.';
+      }
+      await realClick(weighModalNext);
+      await sleep(500);
+    }
+    // If the weight-entry modal wasn't found within the wait above, assume Mercari didn't show
+    // it on this run and proceed straight to the shoebox question exactly as before this fix.
+
     // Step 2: weight/shoebox-fit modal -- weight fields are left alone (Mercari appears to carry
     // over the value already set on the main form; no evidence this modal's own fields are wrong).
     // Answers "Will your item fit in a shoebox?" from real dimensions when known, else "No".
@@ -1698,24 +1758,14 @@
     // sufficient to enable Next (this session's repeated testing against the same live draft left
     // some open questions about that button's exact gating that a single clean run should settle),
     // but setting real weight data here is a correct, no-downside improvement regardless.
-    const ounces = item.packageWeightOz != null ? item.packageWeightOz : item.aiPackageWeightOz;
-    if (ounces != null && isFinite(Number(ounces))) {
-      const lbs = Math.floor(Number(ounces) / 16);
-      const remOz = Math.round(Number(ounces) % 16);
-      const lbEl = document.querySelector('input[data-testid="ItemWeightInPounds"]');
-      const ozEl = document.querySelector('input[data-testid="ItemWeightInOunces"]');
-      if (lbEl) setNativeValue(lbEl, String(lbs));
-      // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-11, live-confirmed): live-tested setting this field
-      // to literal "0" directly and it does NOT stick (value reverts to empty) even though a
-      // non-zero value like "5" sets fine via the identical setNativeValue call -- some kind of
-      // zero-specific rejection on Mercari's own side, not a bug in the setter itself. Skips setting
-      // it when the real remainder is 0 -- Mercari's own default already shows "0" here on its own
-      // (confirmed in Patrick's own screenshot before this function ever touched the field), so
-      // leaving it alone in that case matches the field's own working default rather than fighting
-      // a quirk that only breaks things when triggered synthetically.
-      if (ozEl && remOz > 0) setNativeValue(ozEl, String(remOz));
-      await sleep(200);
-    }
+    // BUG FIX 2026-09-15: this exact lb/oz field pair also appears on the earlier weight-entry
+    // modal now handled above (same `ItemWeightInPounds`/`ItemWeightInOunces` testids, live-DOM
+    // confirmed this session) -- factored into the shared setMercariWeightFields() helper
+    // defined near Step 1 above so both call sites use identical logic (same lbs/oz-remainder
+    // math, same zero-oz-doesn't-stick skip -- see that helper's own comment for the "0" quirk)
+    // instead of drifting if only one copy is ever fixed. Same behavior as before: only pauses
+    // here if there was actually a trusted weight to set.
+    if (setMercariWeightFields()) await sleep(200);
     await realClick(shoeboxRadio);
     await sleep(250);
     // "No" (a confirmed, real non-fit, not the unknown-defaults-to-Yes case) reveals a real
