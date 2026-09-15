@@ -27,7 +27,7 @@ const SecurityNoticePage = () => {
               <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
                 Any confirmed security incident affecting user data will be posted here within 72 hours of
                 confirmation, and affected users will also be notified directly by email. We&apos;ll keep this page
-                plain and factual &mdash; what happened, what data was involved, and what we&apos;re doing about it.
+                plain and factual: what happened, what data was involved, and what we&apos;re doing about it.
               </p>
             </div>
           </section>
@@ -38,7 +38,7 @@ const SecurityNoticePage = () => {
               This is where FindA.Sale posts notice of any confirmed security breach affecting your personal
               information, as described in our{' '}
               <Link href="/privacy" className="text-amber-600 hover:underline">Privacy Policy</Link>. We only post
-              here once an incident is confirmed &mdash; not for routine security maintenance or unconfirmed reports.
+              here once an incident is confirmed, not for routine security maintenance or unconfirmed reports.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               If you believe your account has been compromised, or you&apos;ve spotted something that looks off,

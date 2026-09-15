@@ -710,7 +710,7 @@ export default function SubscriptionPage() {
                   {subscription.billingProcessor === 'square' ? (
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                       <p className="text-green-800 dark:text-green-200 text-sm">
-                        Billed via Square{subscription.hasSquareCardOnFile ? ' — card on file' : ''}.
+                        Billed via Square{subscription.hasSquareCardOnFile ? ' (card on file)' : ''}.
                         {subscription.billingLastFailureReason && (
                           <>
                             {' '}Last attempt failed: {subscription.billingLastFailureReason}. We'll keep retrying automatically.

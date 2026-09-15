@@ -10,7 +10,7 @@ export const postB: BlogPost = {
   excerpt: 'Most organizers aren\'t stuck with completely broken software. They\'re stuck with software that handles most of the job while leaving two or three critical pieces for them to solve on their own.',
   body: `There's a specific kind of software frustration that doesn't get talked about much: not the tools that obviously fail, but the ones that almost work.
 
-Most estate sale organizers running sales in 2026 aren't stuck with completely broken software. They're stuck with software that handles most of the job, listing, basic inventory, maybe some AI-assisted tagging, while leaving two or three critical pieces for them to solve on their own. The listing goes on EstateSales.NET. Payments go through Square or Venmo. Client reports get assembled in a spreadsheet at the end. Photos get uploaded through a desktop browser because the mobile upload is unreliable.
+Most estate sale organizers running sales in 2026 aren't stuck with completely broken software. They're stuck with software that handles most of the job, listing, basic inventory, maybe some smart-assisted tagging, while leaving two or three critical pieces for them to solve on their own. The listing goes on EstateSales.NET. Payments go through Square or Venmo. Client reports get assembled in a spreadsheet at the end. Photos get uploaded through a desktop browser because the mobile upload is unreliable.
 
 That patchwork has a cost. Most organizers have just absorbed it as the cost of doing business, the same way you absorb a slow commute.
 

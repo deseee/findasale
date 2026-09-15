@@ -181,7 +181,7 @@ const ShopperHoldsPage = () => {
                                 className="inline-flex items-center gap-2 bg-[#3D95CE] hover:bg-[#3285be] text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
                               >
                                 <span>Pay with Venmo</span>
-                                <span className="opacity-80">&mdash; ${hold.item.price.toFixed(2)}</span>
+                                <span className="opacity-80">(${hold.item.price.toFixed(2)})</span>
                               </a>
                             )}
                             {hold.item.sale.organizerZelleHandle && (

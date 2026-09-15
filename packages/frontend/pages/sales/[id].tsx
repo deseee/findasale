@@ -318,10 +318,10 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
     <div className="rounded-lg border border-[#C8552B]/25 bg-[#C8552B]/5 dark:bg-[#C8552B]/10 p-4">
       <h3 className="text-sm font-semibold text-[#1A1814] dark:text-[#F2F0EA] mb-0.5">Get alerts for this sale</h3>
       {submitted ? (
-        <p className="text-sm font-medium text-[#C8552B]">&#10003; You&apos;re on the list &mdash; we&apos;ll email you when new items are added.</p>
+        <p className="text-sm font-medium text-[#C8552B]">&#10003; You&apos;re on the list. We&apos;ll email you when new items are added.</p>
       ) : (
         <>
-          <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] mb-3">We&apos;ll email you when items are added &mdash; no account needed.</p>
+          <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] mb-3">We&apos;ll email you when items are added. No account needed.</p>
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               type="email"

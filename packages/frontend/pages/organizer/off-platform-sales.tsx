@@ -88,7 +88,7 @@ const OffPlatformSalesPage = () => {
               Off-Platform Sales
             </h1>
             <p className="text-warm-600 dark:text-warm-400">
-              Items you&apos;ve marked sold outside of FindA.Sale &mdash; cash, Venmo, or another payment method you handled yourself.
+              Items you&apos;ve marked sold outside of FindA.Sale: cash, Venmo, or another payment method you handled yourself.
             </p>
           </div>
 

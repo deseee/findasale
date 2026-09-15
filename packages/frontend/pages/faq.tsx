@@ -516,7 +516,7 @@ const organizerFAQs: FAQItem[] = [
         <br /><br />
         Support for a dedicated physical card reader is under review. If a reader option becomes
         available, it will appear right on your{' '}
-        <Link href="/organizer/pos" className="text-amber-600 hover:underline">POS page</Link> &mdash; no
+        <Link href="/organizer/pos" className="text-amber-600 hover:underline">POS page</Link>. No
         separate setup elsewhere.
       </>
     ),

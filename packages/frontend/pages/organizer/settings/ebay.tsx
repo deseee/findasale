@@ -1400,7 +1400,7 @@ const EbayPolicySetupPage = () => {
                                     ? 'eBay works it out'
                                     : row.parsedPrice != null
                                       ? `$${row.parsedPrice.toFixed(2)}`
-                                      : '—'}
+                                      : 'Not set'}
                               </td>
                               <td className="py-3 px-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
                                 {row.usedByItemCount === 0 && row.pinnedByItemCount === 0

@@ -266,7 +266,7 @@ function CurioPage() {
       // "Please wait tomorrow before scanning again" reads wrong -- special-case the
       // "tomorrow" bucket instead of splicing it into the "wait X" template (QA follow-up,
       // 2026-09-04, found live-testing the formatWaitTime fix itself).
-      showToast(wait === 'tomorrow' ? "You've hit today's scan limit — try again tomorrow" : `Please wait ${wait} before scanning again`, 'error');
+      showToast(wait === 'tomorrow' ? "You've hit today's scan limit. Try again tomorrow" : `Please wait ${wait} before scanning again`, 'error');
       return;
     }
     try {
@@ -286,9 +286,9 @@ function CurioPage() {
         if (typeof retryAfterSeconds === 'number') {
           setRateLimitedUntil(Date.now() + retryAfterSeconds * 1000);
           const wait = formatWaitTime(retryAfterSeconds);
-          showToast(wait === 'tomorrow' ? "You've hit today's scan limit — try again tomorrow" : `Scan limit reached — try again in ${wait}`, 'error');
+          showToast(wait === 'tomorrow' ? "You've hit today's scan limit. Try again tomorrow" : `Scan limit reached. Try again in ${wait}`, 'error');
         } else {
-          showToast("You've hit today's scan limit — try again tomorrow", 'error');
+          showToast("You've hit today's scan limit. Try again tomorrow", 'error');
         }
         return;
       }
@@ -304,7 +304,7 @@ function CurioPage() {
       if (result.organizerAutoProvisioned) {
         const nextRoles = user?.roles?.includes('ORGANIZER') ? user.roles : [...(user?.roles || ['USER']), 'ORGANIZER'];
         updateUser({ role: 'ORGANIZER', roles: nextRoles });
-        showToast("We set up your seller profile — you can edit your business name anytime", 'success');
+        showToast("We set up your seller profile. You can edit your business name anytime", 'success');
       } else {
         showToast('Listing created as a draft', 'success');
       }
@@ -345,7 +345,7 @@ function CurioPage() {
   return (
     <>
       <Head>
-        <title>Curio — What's This Worth? | FindA.Sale</title>
+        <title>Curio: What's This Worth? | FindA.Sale</title>
         <meta
           name="description"
           content="Snap a photo of anything and get an instant identification and estimated value based on similar listings."
@@ -359,7 +359,7 @@ function CurioPage() {
             Curio
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Snap a photo of anything to see what it might be worth — then list it in one tap.
+            Snap a photo of anything to see what it might be worth, then list it in one tap.
           </p>
         </div>
 

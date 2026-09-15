@@ -8,7 +8,7 @@ export const postD: BlogPost = {
   category: 'guides',
   readingTimeMinutes: 5,
   excerpt: 'A year ago, smart cataloging was a differentiator. Now it\'s on every competitor\'s feature page. The question has shifted from "does this platform have it?" to "does it actually work when I need it?"',
-  body: `A year ago, smart cataloging was a differentiator. A handful of platforms offered it and made it the centerpiece of their pitch. Now it's on every competitor's feature page. MaxSold, SimpleConsign, Gavelbase, the Valuable app used by Blue Moon franchise organizers, the list of "we have AI tagging" claims is long and getting longer.
+  body: `A year ago, smart cataloging was a differentiator. A handful of platforms offered it and made it the centerpiece of their pitch. Now it's on every competitor's feature page. MaxSold, SimpleConsign, Gavelbase, the Valuable app used by Blue Moon franchise organizers, the list of "we have smart tagging" claims is long and getting longer.
 
 Which means the question has shifted. It's no longer "does this platform have smart cataloging?" It's "does this platform's smart cataloging actually work when I need it?"
 

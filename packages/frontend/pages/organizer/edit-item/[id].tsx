@@ -1754,11 +1754,11 @@ const EditItemPage = () => {
                 }}
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many separate units of this item you have to sell. Each sale &mdash; in person, at POS, or on a connected marketplace &mdash; draws one unit from this pool, and the item stays listed until every unit is gone. Leave at 1 for a single item.</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many separate units of this item you have to sell. Each sale (in person, at POS, or on a connected marketplace) draws one unit from this pool, and the item stays listed until every unit is gone. Leave at 1 for a single item.</p>
               {formData.quantity > 1 && (formData.stockTotal ?? 1) <= 1 && (
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-start gap-1">
                   <span aria-hidden="true">&#9888;</span>
-                  <span>This item&apos;s stock pool isn&apos;t set &mdash; shoppers and marketplaces will see only 1 available. Set &ldquo;Units available&rdquo; to your real number of units.</span>
+                  <span>This item&apos;s stock pool isn&apos;t set. Shoppers and marketplaces will see only 1 available. Set &ldquo;Units available&rdquo; to your real number of units.</span>
                 </p>
               )}
             </div>

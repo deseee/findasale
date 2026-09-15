@@ -191,7 +191,7 @@ export default function SquareOAuthCallbackPage() {
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 {result.ownerType === 'VENDOR_BOOTH'
                   ? 'Your booth is now connected to Square.'
-                  : `You're all set — Square is now connected to ${OWNER_LABEL[result.ownerType]}.`}
+                  : `You're all set. Square is now connected to ${OWNER_LABEL[result.ownerType]}.`}
               </p>
 
               {!result.squareOnboarded && (
@@ -207,7 +207,7 @@ export default function SquareOAuthCallbackPage() {
                 <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 text-left">
                   <p className="text-xs text-blue-800 dark:text-blue-200">
                     As a routine precaution, our team is taking a quick look at this account before payouts
-                    begin. You'll be notified as soon as that's done — no action is needed from you.
+                    begin. You'll be notified as soon as that's done. No action is needed from you.
                   </p>
                 </div>
               )}

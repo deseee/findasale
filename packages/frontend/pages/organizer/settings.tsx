@@ -920,7 +920,7 @@ const OrganizerSettingsPage = () => {
                       <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3">
                         <p className="text-xs text-blue-800 dark:text-blue-200">
                           As a routine precaution, our team is taking a quick look at this account
-                          before payouts begin. You'll be notified as soon as that's done — no action
+                          before payouts begin. You'll be notified as soon as that's done. No action
                           is needed from you.
                         </p>
                       </div>
@@ -989,7 +989,7 @@ const OrganizerSettingsPage = () => {
                   Sometimes a shopper pays you directly instead of through FindA.Sale -- cash at the sale, Venmo, your own card reader. Off-Platform Sales lets you mark that item sold in FindA.Sale anyway, so your inventory stays accurate. FindA.Sale never sees or processes that payment; instead, we bill you a separate flat fee for items marked sold this way.
                 </p>
                 <p className="text-sm text-warm-500 dark:text-gray-500 mb-4">
-                  Pricing details coming soon &mdash; we&apos;ll show the fee here before it applies to any sale.
+                  Pricing details coming soon. We&apos;ll show the fee here before it applies to any sale.
                 </p>
                 {offPlatformUsageLoading ? (
                   <div className="h-10 w-48 bg-warm-100 dark:bg-gray-700 rounded-lg animate-pulse" />

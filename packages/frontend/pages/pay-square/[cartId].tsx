@@ -88,7 +88,7 @@ export default function PaySquareCartPage() {
           {status === 'done' ? (
             <div className="p-4 border border-green-200 rounded-lg bg-green-50">
               <p className="text-sm text-green-700">
-                Card submitted. Please look at the register — the cashier will finish your sale in a moment.
+                Card submitted. Please look at the register. The cashier will finish your sale in a moment.
               </p>
             </div>
           ) : (

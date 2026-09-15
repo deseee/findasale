@@ -4418,7 +4418,7 @@ export default function POSPage() {
                   <div className="flex flex-col gap-2 mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xl font-bold text-purple-900 dark:text-purple-100 tracking-wide">{organizerZelle}</span>
-                      <span className="text-lg font-semibold text-purple-700 dark:text-purple-300">&mdash; ${cartTotal.toFixed(2)}</span>
+                      <span className="text-lg font-semibold text-purple-700 dark:text-purple-300">(${cartTotal.toFixed(2)})</span>
                     </div>
                     <button
                       onClick={() => { navigator.clipboard.writeText(organizerZelle!); showToast('Zelle handle copied', 'success'); }}

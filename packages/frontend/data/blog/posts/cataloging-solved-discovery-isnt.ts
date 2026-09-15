@@ -10,9 +10,9 @@ export const postP: BlogPost = {
   excerpt: "Cataloging is becoming automatic for nearly every sale. Discovery isn't, and it's costing organizers real money to solve the old way.",
   body: `## Cataloging your sale just got easier for everyone
 
-If you're running a sale in 2026, chances are you're not the only one snapping photos and letting an AI generate pricing, titles, and descriptions off them. That workflow has stopped being a differentiator and started being the norm.
+If you're running a sale in 2026, chances are you're not the only one snapping photos and letting smart tools generate pricing, titles, and descriptions off them. That workflow has stopped being a differentiator and started being the norm.
 
-EstiMint has been doing AI-powered cataloging for a while now: snap a photo, get a price range and listing copy in seconds. Now Blue Moon Estate Sales, the largest estate sale franchise in the country, has rolled its own version of that out to every franchisee nationwide, through a partnership with an AI pricing app called Valuable. Photograph an item, get a comparable-sold-price estimate and an enhanced photo, and move on to the next one.
+EstiMint has been doing smart, automated cataloging for a while now: snap a photo, get a price range and listing copy in seconds. Now Blue Moon Estate Sales, the largest estate sale franchise in the country, has rolled its own version of that out to every franchisee nationwide, through a partnership with an automated pricing app called Valuable. Photograph an item, get a comparable-sold-price estimate and an enhanced photo, and move on to the next one.
 
 Different companies, different business models, but the same basic promise: cataloging gets faster, and pricing gets smarter. That's genuinely good for the industry. Fewer organizers guessing at prices, fewer items sitting unlabeled in a "misc" pile because there wasn't time to research them properly.
 

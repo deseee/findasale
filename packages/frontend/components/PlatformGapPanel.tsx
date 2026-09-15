@@ -144,7 +144,7 @@ export default function PlatformGapPanel({
         <div className="flex items-center justify-between px-5 py-4 border-b border-warm-200 dark:border-gray-700">
           <div>
             <h2 className="text-lg font-bold text-warm-900 dark:text-warm-100">
-              {PLATFORM_LABELS[platform]} &mdash; Items Not Listed
+              {PLATFORM_LABELS[platform]}: Items Not Listed
             </h2>
             {initialized && (
               <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300">
@@ -203,7 +203,7 @@ export default function PlatformGapPanel({
                 All your items are listed on {PLATFORM_LABELS[platform]}!
               </p>
               <p className="text-sm text-warm-500 dark:text-warm-400">
-                Nothing missing &mdash; you&apos;re fully covered.
+                Nothing missing. You&apos;re fully covered.
               </p>
             </div>
           ) : (
@@ -274,7 +274,7 @@ export default function PlatformGapPanel({
                     {/* ADR-115: distinguish "waiting for a slot" from "waiting for free eBay quota" */}
                     {platform === 'ebay' && item.ebayQueuedAt && item.ebayFeeBlocked && (
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                        Waiting for free eBay listing quota — publishing now would incur a real eBay fee
+                        Waiting for free eBay listing quota. Publishing now would incur a real eBay fee
                       </p>
                     )}
 

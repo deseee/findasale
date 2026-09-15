@@ -265,7 +265,7 @@ export default function PlatformsPage() {
   return (
     <>
       <Head>
-        <title>Platform Reach &mdash; FindA.Sale</title>
+        <title>Platform Reach: FindA.Sale</title>
       </Head>
 
       {/* Gap Panel */}
@@ -337,19 +337,19 @@ export default function PlatformsPage() {
 
                   {ebay.warningLevel === 'warning' && (
                     <div className="mt-2 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-xs text-yellow-800 dark:text-yellow-200">
-                      80% used &mdash; {ebay.freeSlots} free slots left
+                      80% used: {ebay.freeSlots} free slots left
                     </div>
                   )}
                   {(ebay.warningLevel === 'critical' || ebay.warningLevel === 'over') && (
                     <div className="mt-2 px-2 py-1 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-200">
-                      Limit reached &mdash; paying $0.35 per new listing
+                      Limit reached: paying $0.35 per new listing
                     </div>
                   )}
 
                   {ebay.queueMode && (
                     <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-[#87A878]/10 text-[#6b8f5e] dark:text-[#a8c49a] border border-[#87A878]/30">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#87A878]" />
-                      Queue Mode ON &mdash; {ebay.queued} items waiting
+                      Queue Mode ON: {ebay.queued} items waiting
                     </div>
                   )}
                   {!ebay.queueMode && ebay.listed > 200 && (
@@ -557,7 +557,7 @@ export default function PlatformsPage() {
                 /* Queue Mode requires PRO/TEAMS */
                 <div className="space-y-2">
                   <p className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed">
-                    eBay Listing Queue requires the PRO or TEAMS plan &mdash; it automatically manages your free eBay listing slots so items go live the moment a spot opens, with no manual pushing and no surprise eBay fees.
+                    eBay Listing Queue requires the PRO or TEAMS plan. It automatically manages your free eBay listing slots so items go live the moment a spot opens, with no manual pushing and no surprise eBay fees.
                   </p>
                   <Link href="/organizer/settings" className="mt-2 inline-block text-xs font-medium text-[#6b8f5e] dark:text-[#a8c49a] hover:text-[#87A878]">
                     Upgrade to PRO or TEAMS &rarr;
@@ -567,7 +567,7 @@ export default function PlatformsPage() {
                 /* Queue Mode OFF */
                 <div className="space-y-4">
                   <p className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed">
-                    Queue Mode automatically manages your {ebay.limit} free eBay listing slots. When you hit the limit, new items wait in line. When a slot opens (item sells or listing rotates out) and eBay confirms the next item in queue is still free to list, it goes live automatically &mdash; no manual work, and never a surprise eBay fee.
+                    Queue Mode automatically manages your {ebay.limit} free eBay listing slots. When you hit the limit, new items wait in line. When a slot opens (item sells or listing rotates out) and eBay confirms the next item in queue is still free to list, it goes live automatically (no manual work, never a surprise eBay fee).
                   </p>
                   <button
                     onClick={() => queueSettingsMutation.mutate({ ebayQueueMode: true })}
@@ -635,7 +635,7 @@ export default function PlatformsPage() {
                   {ebay.queued === 0 && ebay.freeSlots === 0 && (
                     <div className="text-center py-8 text-warm-500 dark:text-warm-400">
                       <p className="text-sm">
-                        All slots are in use. Add items to the queue and they&apos;ll go live automatically once a slot opens and eBay confirms it&apos;s still free to list &mdash; items are never auto-published if it would cost a real eBay fee.
+                        All slots are in use. Add items to the queue and they&apos;ll go live automatically once a slot opens and eBay confirms it&apos;s still free to list. Items are never auto-published if it would cost a real eBay fee.
                       </p>
                     </div>
                   )}
@@ -661,7 +661,7 @@ export default function PlatformsPage() {
           {stats && stats.totals.totalUnlisted > 0 && (
             <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-xl p-6">
               <h2 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">
-                Invisible Inventory &mdash; {stats.totals.totalUnlisted} items earning nothing online
+                Invisible Inventory: {stats.totals.totalUnlisted} items earning nothing online
               </h2>
               <p className="text-sm text-warm-500 dark:text-warm-400 mb-4">
                 These items are not listed on any external platform.

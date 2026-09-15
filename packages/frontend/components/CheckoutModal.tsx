@@ -177,8 +177,8 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         {organizerName ? (
           <p className="text-xs text-warm-600 mb-4 leading-relaxed">
             This purchase was made directly with <strong>{organizerName}</strong> and processed
-            securely by Stripe. If you have any questions about your order &mdash; pickup,
-            condition, timing &mdash; {organizerName} is who to contact first
+            securely by Stripe. If you have any questions about your order (pickup,
+            condition, timing), {organizerName} is who to contact first
             {saleId ? (
               <>
                 {' '}via the{' '}
@@ -731,8 +731,8 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
               {organizerName && (
                 <p className="text-xs text-warm-600 mb-4 leading-relaxed">
                   This purchase was made directly with <strong>{organizerName}</strong> and processed
-                  securely by Square. If you have any questions about your order &mdash; pickup,
-                  condition, timing &mdash; {organizerName} is who to contact first.
+                  securely by Square. If you have any questions about your order (pickup,
+                  condition, timing), {organizerName} is who to contact first.
                   {' '}FindA.Sale is here if you need help finding them or navigating the platform.
                 </p>
               )}

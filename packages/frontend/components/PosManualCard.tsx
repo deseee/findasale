@@ -331,9 +331,9 @@ export default function PosManualCard({
                   <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
                   <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
                     Est. processing fee: ~{(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
-                    {' '}(placeholder — Square's exact rate for a manually-keyed card has not been
+                    {' '}(placeholder: Square's exact rate for a manually-keyed card has not been
                     independently confirmed yet; this reuses Square's own verified 2.9% + $0.30
-                    online-checkout rate as a floor estimate only — the real keyed-in rate may be higher).
+                    online-checkout rate as a floor estimate only: the real keyed-in rate may be higher).
                   </p>
                   <p className="text-xs text-amber-800 dark:text-amber-300">
                     <strong>No dispute protection.</strong> If a shopper disputes this charge, you may lose the sale amount plus a dispute fee with no recourse.

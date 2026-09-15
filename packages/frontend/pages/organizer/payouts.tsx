@@ -432,7 +432,7 @@ const OrganizerPayoutsPage = () => {
             {isSquareOnly ? (
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 On-demand payouts aren't available through FindA.Sale for Square accounts. Square
-                settles funds to your bank automatically — check your Square Dashboard for your
+                settles funds to your bank automatically. Check your Square Dashboard for your
                 payout schedule and history.
               </p>
             ) : (

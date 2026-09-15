@@ -36,7 +36,7 @@ If the honest answer to any of those is "we're not totally sure" or "it depends,
 
 ## Built as one system, not stitched into one
 
-FindA.Sale wasn't assembled by partnering two separate companies together after the fact. Photo capture, AI-assisted cataloging, the buyer-facing listing, checkout, and the settlement report all run on the same system, one login, one data model, one place where marking an item sold updates everything downstream immediately. There's no second company's roadmap to track, and no sync delay to explain to a client asking why the report doesn't match what actually happened at the sale.
+FindA.Sale wasn't assembled by partnering two separate companies together after the fact. Photo capture, Smart Auto-tag cataloging, the buyer-facing listing, checkout, and the settlement report all run on the same system, one login, one data model, one place where marking an item sold updates everything downstream immediately. There's no second company's roadmap to track, and no sync delay to explain to a client asking why the report doesn't match what actually happened at the sale.
 
 If you're comparing options right now, the "how many logins" question is a genuinely fast way to tell a real platform from two tools wearing a joint press release. finda.sale is free to try.`,
 };

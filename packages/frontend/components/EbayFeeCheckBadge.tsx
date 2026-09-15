@@ -55,7 +55,7 @@ export const EbayFeeCheckBadge: React.FC<{ itemId: string; enabled: boolean }> =
   if (isError || !feeCheck) {
     return (
       <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1">
-        Couldn't confirm eBay listing fee — proceed with caution
+        Couldn't confirm eBay listing fee. Proceed with caution
       </p>
     );
   }
@@ -78,7 +78,7 @@ export const EbayFeeCheckBadge: React.FC<{ itemId: string; enabled: boolean }> =
   // feeCheck.status === 'unknown'
   return (
     <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1" title={feeCheck.reason}>
-      Couldn't confirm eBay listing fee — proceed with caution
+      Couldn't confirm eBay listing fee. Proceed with caution
     </p>
   );
 };

@@ -38,7 +38,7 @@ const BOUNDARY_MARK = '\u2063';
  * COPY LAYER — the shopper-facing heading. Safe to reword or restyle at any
  * time: parsing does not depend on a single character of it.
  */
-export const DETAILS_HEADING = '— Item details —';
+export const DETAILS_HEADING = 'Item details:';
 
 /** The boundary written by every compose from now on. */
 export const SENTINEL = `\n\n${BOUNDARY_MARK}${DETAILS_HEADING}${BOUNDARY_MARK}\n\n`;

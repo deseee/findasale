@@ -79,7 +79,7 @@ const TermsPage = () => {
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               <strong>Payouts:</strong> Organizers receive proceeds via the payment processor connected to their
-              account &mdash; currently Stripe (through Stripe Connect Express) or Square, depending on which
+              account, currently Stripe (through Stripe Connect Express) or Square, depending on which
               processor the Organizer has set up. Payouts are subject to that processor's own standard processing
               timelines and account agreement, including, as applicable, Stripe's{' '}
               <a href="https://stripe.com/legal/connect-account" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">
@@ -185,7 +185,7 @@ const TermsPage = () => {
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">7. Payment Processing</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               FindA.Sale uses one or more third-party payment processors to process payments and payouts on the
-              Platform &mdash; currently Stripe, Inc. and Square, Inc. The specific processor used for a given
+              Platform, currently Stripe, Inc. and Square, Inc. The specific processor used for a given
               transaction depends on how the Organizer&apos;s account is set up. By making or receiving a payment
               on FindA.Sale, you agree to the terms of the processor actually used for your transaction,
               including, as applicable, Stripe's{' '}
@@ -323,10 +323,10 @@ const TermsPage = () => {
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14c. Identity Verification</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               Before receiving payouts, organizers must complete the identity verification (KYC) process required
-              by whichever payment processor their account uses &mdash; Stripe Connect onboarding for
+              by whichever payment processor their account uses: Stripe Connect onboarding for
               Stripe-connected accounts, or Square&apos;s own account verification process for Square-connected
               accounts. FindA.Sale does not control either processor&apos;s KYC decisions. Payouts are subject to
-              the applicable processor&apos;s own terms of service &mdash; Stripe&apos;s{' '}
+              the applicable processor&apos;s own terms of service (Stripe&apos;s{' '}
               <a href="https://stripe.com/legal/connect-account" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">
                 Connected Account Agreement
               </a>{' '}
@@ -334,7 +334,7 @@ const TermsPage = () => {
               <a href="https://squareup.com/us/en/legal/general/ua" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">
                 General Terms of Service
               </a>{' '}
-              &mdash; and may be withheld by that processor for any reason consistent with its own policies.
+              ) and may be withheld by that processor for any reason consistent with its own policies.
             </p>
           </section>
 

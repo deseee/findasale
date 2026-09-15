@@ -66,7 +66,7 @@ export default function HubLandingPage() {
   const pageTitle = hub ? `${hub.eventName || hub.name} - FindA.Sale` : 'Market Hub - FindA.Sale';
   const pageDescription = hub
     ? (hub.description && hub.description.trim()) ||
-      `${hub.eventName || hub.name}${hub.organizerName ? ` hosted by ${hub.organizerName}` : ''} — a multi-vendor market on FindA.Sale.`
+      `${hub.eventName || hub.name}${hub.organizerName ? ` hosted by ${hub.organizerName}` : ''}, a multi-vendor market on FindA.Sale.`
     : 'Multi-vendor market event on FindA.Sale.';
 
   return (

@@ -13,7 +13,7 @@ const FAQ_DATA = [
     category: 'Getting Started',
     question: 'How do I set up payments before my first sale?',
     answer:
-      'Before you can receive payments, you\'ll need to connect a Square account. From your Dashboard, click Setup Payments and follow the short onboarding flow. Square will verify your identity and bank account. This usually takes a few minutes. Once connected, Square settles your share of each sale to your bank account automatically — check your Square Dashboard for your exact payout schedule. You only need to do this once.',
+      'Before you can receive payments, you\'ll need to connect a Square account. From your Dashboard, click Setup Payments and follow the short onboarding flow. Square will verify your identity and bank account. This usually takes a few minutes. Once connected, Square settles your share of each sale to your bank account automatically. Check your Square Dashboard for your exact payout schedule. You only need to do this once.',
   },
   {
     id: 'getting-started-2',
