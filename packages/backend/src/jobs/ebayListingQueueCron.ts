@@ -211,6 +211,10 @@ async function pushQueuedItem(
         listedOnEbayAt: new Date(),
         // ebayListedAt: first listing timestamp, never overwritten on relist
         ebayListedAt: item.ebayListedAt ?? new Date(),
+        // ADR ebay-renewal-forecasting (2026-09-15): Queue Mode's automatic
+        // publish assigns a fresh listingId just like a manual push — the GTC
+        // renewal anchor starts here too.
+        ebayRenewalAnchorAt: new Date(),
         ebayQueuedAt: null,
         ebayNeedsReview: false,
         ebayFeeBlocked: false,
@@ -266,6 +270,11 @@ async function withdrawItem(
       where: { id: itemId },
       data: {
         ebayListingId: null,
+        // ADR ebay-renewal-forecasting (2026-09-15): item is being withdrawn from
+        // eBay (rotation) — no live listing means no future GTC renewal until it
+        // is republished, which will set a fresh anchor via the Phase A fill above.
+        ebayRenewalAnchorAt: null,
+        ebayNextRenewalAt: null,
         // Re-queue so it goes back to waiting (to the back of the line)
         ebayQueuedAt: new Date(),
       },

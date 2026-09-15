@@ -13,6 +13,9 @@ import {
   GapPlatform,
 } from '../services/platformStatsService';
 import { pushItemsToEbayQueueOnly } from './ebayController';
+import { computeEbayInsertionsForecast } from '../lib/ebayInsertionsForecast';
+import { getNextMonthStart } from '../lib/ebayInsertionsQuotaTracker';
+import { EBAY_FREE_INSERTIONS_CAP } from '../config/ebayInsertionLimits';
 
 // ─── Helper: resolve organizerId from authenticated user ──────────────────────
 
@@ -63,6 +66,48 @@ export async function getPlatformStats(req: AuthRequest, res: Response): Promise
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[platformStats] getPlatformStats error:', msg);
     return res.status(500).json({ message: 'Failed to compute platform stats' });
+  }
+}
+
+// ─── GET /api/organizers/me/ebay-insertions-forecast ──────────────────────────
+// ADR ebay-renewal-forecasting (2026-09-15). Response shape per the ADR's
+// Decision section plus the two UX-required additions (resetAt, computed
+// status) from ebay-markdown-budget-warnings-ux-spec-2026-09-15.md's Dev
+// Handoff Notes #1 — threshold logic lives here, single-sourced, not
+// duplicated client-side.
+
+export async function getEbayInsertionsForecast(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    if (!requireOrganizer(req, res)) return res;
+
+    const organizerId = await resolveOrganizerId(req);
+    if (!organizerId) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    try {
+      const forecast = await computeEbayInsertionsForecast(organizerId);
+      return res.json(forecast);
+    } catch (computeErr) {
+      // UX spec edge case (Piece 1, "freeInsertionsCap unresolved / constant
+      // lookup fails backend-side"): degrade to a best-effort response rather
+      // than a 500, mirroring the ADR's own graceful-degradation posture for a
+      // null ebayNextRenewalAt (an under-count, never a crash or over-count).
+      console.error('[platformStats] getEbayInsertionsForecast compute error (degrading):', computeErr);
+      return res.json({
+        usedThisMonth: 0,
+        freeInsertionsCap: EBAY_FREE_INSERTIONS_CAP,
+        projectedRenewalsBeforeReset: 0,
+        projectedTotalUsage: 0,
+        resetAt: getNextMonthStart().toISOString(),
+        status: 'ok',
+        degraded: true,
+      });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[platformStats] getEbayInsertionsForecast error:', msg);
+    return res.status(500).json({ message: 'Failed to compute eBay insertions forecast' });
   }
 }
 

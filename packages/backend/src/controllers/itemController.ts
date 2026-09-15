@@ -1636,6 +1636,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
     if (price !== undefined) {
       updateData.price = price ? parseFloat(price) : null;
+      // ADR markdown-cycle-ebay-price-sync (2026-09-15), Dev Instructions step 8: stamp
+      // whenever the organizer's own manual edit writes Item.price, same as the markdown
+      // cron does -- this is what extends the ebayListingSyncCron.ts push-first/pull-sync
+      // clobber guard to manual price edits, not just markdown-driven ones.
+      updateData.priceUpdatedAt = new Date();
       fieldsBeingEdited.push('price');
     }
     if (category !== undefined) {

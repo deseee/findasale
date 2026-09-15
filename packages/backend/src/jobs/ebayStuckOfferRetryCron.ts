@@ -135,6 +135,10 @@ async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<bo
           ebayListingId: healResult.listingId,
           listedOnEbayAt: new Date(),
           ebayListedAt: item.ebayListedAt ?? new Date(),
+          // ADR ebay-renewal-forecasting (2026-09-15): this recovery publish
+          // assigns a fresh listingId (item was stuck with ebayOfferId set but
+          // ebayListingId null) — the GTC renewal anchor starts here.
+          ebayRenewalAnchorAt: new Date(),
           ebayNeedsReview: false,
           ...(item.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
         },

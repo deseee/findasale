@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
+import { propagateMarkdownPriceToMarketplaces } from '../services/markdownPricePropagationService';
 
 /**
  * Feature: Automatic Markdown Cycles (PRO Tier)
@@ -74,7 +75,7 @@ export function scheduleMarkdownCycleCron(): void {
                 lte: new Date(now.getTime() - cycle.daysUntilFirst * 24 * 60 * 60 * 1000),
               },
             },
-            select: { id: true, price: true },
+            select: { id: true, price: true, ebayOfferId: true },
           });
 
           if (firstMarkdownItems.length > 0) {
@@ -95,6 +96,10 @@ export function scheduleMarkdownCycleCron(): void {
                   priceBeforeMarkdown: currentPrice,
                   price: newPrice,
                   markdownApplied: true,
+                  // ADR markdown-cycle-ebay-price-sync (2026-09-15): stamp so the
+                  // ebayListingSyncCron.ts pull-sync guard knows this price change
+                  // hasn't reached eBay yet and won't clobber it back on the next pull.
+                  priceUpdatedAt: new Date(),
                 },
               });
 
@@ -102,6 +107,34 @@ export function scheduleMarkdownCycleCron(): void {
               notifyPriceDropAlerts(item.id, currentPrice, newPrice).catch(err =>
                 console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
               );
+
+              // ADR markdown-cycle-ebay-price-sync (2026-09-15), Dev Instructions step 6:
+              // propagate the new price to eBay (Discogs/Reverb are extension points, not
+              // wired yet — see markdownPricePropagationService.ts). Awaited (unlike the
+              // fire-and-forget alert above) so a confirmed eBay push can stamp
+              // ebayPriceSyncedAt before moving to the next item, but wrapped in try/catch
+              // so a propagation failure never blocks the loop.
+              try {
+                const propResults = await propagateMarkdownPriceToMarketplaces({
+                  id: item.id,
+                  organizerId: cycle.organizerId,
+                  price: newPrice,
+                  ebayOfferId: item.ebayOfferId,
+                });
+                const ebayResult = propResults.find(r => r.platform === 'EBAY');
+                if (ebayResult?.ok) {
+                  await prisma.item.update({
+                    where: { id: item.id },
+                    data: { ebayPriceSyncedAt: new Date() },
+                  });
+                } else if (ebayResult) {
+                  console.warn(
+                    `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm: ${ebayResult.reason ?? 'unknown'}`
+                  );
+                }
+              } catch (propErr) {
+                console.error(`[markdown-cycle-cron] propagation threw for item ${item.id}:`, propErr);
+              }
             }
 
             totalMarkdownsApplied += firstMarkdownItems.length;
@@ -120,7 +153,7 @@ export function scheduleMarkdownCycleCron(): void {
                   lte: new Date(now.getTime() - cycle.daysUntilSecond * 24 * 60 * 60 * 1000),
                 },
               },
-              select: { id: true, priceBeforeMarkdown: true, price: true },
+              select: { id: true, priceBeforeMarkdown: true, price: true, ebayOfferId: true },
             });
 
             if (secondMarkdownItems.length > 0) {
@@ -138,6 +171,9 @@ export function scheduleMarkdownCycleCron(): void {
                   where: { id: item.id },
                   data: {
                     price: newPrice,
+                    // ADR markdown-cycle-ebay-price-sync (2026-09-15): see first-markdown
+                    // loop above for why this is stamped on every FAS-initiated price write.
+                    priceUpdatedAt: new Date(),
                   },
                 });
 
@@ -147,6 +183,30 @@ export function scheduleMarkdownCycleCron(): void {
                 notifyPriceDropAlerts(item.id, item.price, newPrice).catch(err =>
                   console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
                 );
+
+                // ADR markdown-cycle-ebay-price-sync (2026-09-15), Dev Instructions step 6:
+                // same propagation call as the first-markdown loop above.
+                try {
+                  const propResults = await propagateMarkdownPriceToMarketplaces({
+                    id: item.id,
+                    organizerId: cycle.organizerId,
+                    price: newPrice,
+                    ebayOfferId: item.ebayOfferId,
+                  });
+                  const ebayResult = propResults.find(r => r.platform === 'EBAY');
+                  if (ebayResult?.ok) {
+                    await prisma.item.update({
+                      where: { id: item.id },
+                      data: { ebayPriceSyncedAt: new Date() },
+                    });
+                  } else if (ebayResult) {
+                    console.warn(
+                      `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm: ${ebayResult.reason ?? 'unknown'}`
+                    );
+                  }
+                } catch (propErr) {
+                  console.error(`[markdown-cycle-cron] propagation threw for item ${item.id}:`, propErr);
+                }
               }
 
               totalMarkdownsApplied += secondMarkdownItems.length;

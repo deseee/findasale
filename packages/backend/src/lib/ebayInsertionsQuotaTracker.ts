@@ -4,9 +4,17 @@
  * OBSERVABILITY ONLY. This does NOT gate whether ebayListingQueueCron.ts or a
  * manual eBay push publishes an item -- that gate is the live per-item
  * getListingFees check (eBay's own account state, checked at publish time).
- * This counter exists purely so the organizer dashboard can eventually show
- * "you've used ~N of your free eBay listings this month" without an extra
- * eBay API call on every page load.
+ * This counter exists purely so the organizer dashboard can show "you've used
+ * ~N of your free eBay listings this month" without an extra eBay API call on
+ * every page load.
+ *
+ * getEbayInsertionsUsed() got its first real caller in ADR ebay-renewal-
+ * forecasting (2026-09-15): GET /api/organizers/me/ebay-insertions-forecast
+ * (ebayInsertionsForecast.ts) combines this "actual used" half with the new
+ * Item.ebayNextRenewalAt "projected additional" half. getMonthStart()/
+ * getNextMonthStart() below are exported so that endpoint and the new
+ * ebayRenewalForecastCron.ts reuse this file's own month-boundary logic
+ * instead of reinventing it.
  *
  * Lazy-reset pattern copied from the working aiTagsQuotaTracker.ts (that one
  * is confirmed correct and in production use). Do NOT copy the OLDER
@@ -17,9 +25,21 @@
 
 import { prisma } from './prisma';
 
-function getMonthStart(): Date {
+export function getMonthStart(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+/**
+ * ADR ebay-renewal-forecasting (2026-09-15): the next calendar-month boundary
+ * (UTC), used as the organizer-facing "resets [date]" value and as the upper
+ * bound for counting projected GTC renewals before that reset. Exported
+ * alongside getMonthStart() so the forecast endpoint/cron reuse this file's
+ * existing month-boundary logic rather than reinventing month-math elsewhere.
+ */
+export function getNextMonthStart(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 }
 
 /**

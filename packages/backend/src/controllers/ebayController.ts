@@ -3209,6 +3209,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             listedOnEbayAt: new Date(),
             // ebayListedAt: first listing timestamp — only set once, never overwritten on relist
             ...(item.ebayListedAt == null ? { ebayListedAt: new Date() } : {}),
+            // ADR ebay-renewal-forecasting (2026-09-15): this write persists a
+            // live-published listingId (first push, relist, or the 25005 self-heal
+            // delete+recreate-offer result flowing through healResult above) — the
+            // GTC renewal clock effectively (re)starts here, so the anchor moves
+            // alongside listedOnEbayAt every time, not just on first-ever push.
+            ebayRenewalAnchorAt: new Date(),
             ebayNeedsReview: false,
             // Auto-publish on FindA.Sale when pushed to eBay — item should not
             // remain on the "review & publish" page after a successful eBay push.
@@ -4009,6 +4015,11 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         listedOnEbayAt: new Date(),
         // ebayListedAt: first listing timestamp — only set once, never overwritten on relist
         ...(item.ebayListedAt == null ? { ebayListedAt: new Date() } : {}),
+        // ADR ebay-renewal-forecasting (2026-09-15): same reasoning as the bulk
+        // push write site above — a successful publish here (direct or via a
+        // 25005 self-heal recreate) is a fresh live listing, so the GTC anchor
+        // moves alongside listedOnEbayAt.
+        ebayRenewalAnchorAt: new Date(),
         ebayNeedsReview: false,
         // Auto-publish on FindA.Sale — pushing to eBay should remove the item
         // from the "review & publish" queue automatically.
@@ -5949,6 +5960,20 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
     console.log(
       `[eBay] Successfully withdrew offer ${offerId} for item ${itemId} — item sold on FindA.Sale`
     );
+
+    // ADR ebay-renewal-forecasting (2026-09-15): item is no longer eBay-live —
+    // no future GTC renewal is coming. ebayListingId/ebayOfferId are deliberately
+    // left set above (per this function's existing S1157 comment: preserved so
+    // ebaySoldSyncCron can still match the eBay order by ebayListingId) — only the
+    // forecast fields clear here.
+    try {
+      await prisma.item.update({
+        where: { id: itemId },
+        data: { ebayRenewalAnchorAt: null, ebayNextRenewalAt: null },
+      });
+    } catch (clearErr) {
+      console.warn(`[eBay] Failed to clear renewal-forecast fields for item ${itemId} after withdraw (non-fatal):`, (clearErr as Error).message);
+    }
   } catch (error) {
     console.error(`[eBay] Error withdrawing eBay listing for item ${itemId}:`, error);
     // Fire-and-forget: don't throw
@@ -7365,6 +7390,10 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
               ebayListingId: null,
               listedOnEbayAt: null,
               ebayOfferId: null,
+              // ADR ebay-renewal-forecasting (2026-09-15): item's eBay presence has
+              // ended (unsold, seller-pulled) — no future GTC renewal is coming.
+              ebayRenewalAnchorAt: null,
+              ebayNextRenewalAt: null,
             },
           });
 

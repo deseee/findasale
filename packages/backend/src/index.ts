@@ -263,6 +263,7 @@ import { startEbayListingQueueCron } from './jobs/ebayListingQueueCron'; // eBay
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
 import { startEbayListingSyncCron } from './jobs/ebayListingSyncCron'; // Feature #244 Phase 4: eBay bidirectional listing sync
 import { startEbayStuckOfferRetryCron } from './jobs/ebayStuckOfferRetryCron'; // S1215: auto-retry offers stuck in Pending Publish (offer-aware, never recreates)
+import { startEbayRenewalForecastCron } from './jobs/ebayRenewalForecastCron'; // ADR ebay-renewal-forecasting (2026-09-15): nightly GTC renewal-date forecast + approaching-cap-warning notification, zero eBay API calls
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
@@ -1048,6 +1049,11 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // S1215: Register eBay stuck-offer retry cron (every 2 hours — auto-recovers items
   // with ebayOfferId set but ebayListingId null, offer-aware, never re-creates the offer)
   startEbayStuckOfferRetryCron();
+
+  // ADR ebay-renewal-forecasting (2026-09-15): register nightly eBay GTC renewal
+  // forecast cron (3:15 AM UTC — staggered after huntPassExpiryCron/markdownCycleCron
+  // and the eBay listing-state crons above). Pure local arithmetic, zero eBay API calls.
+  startEbayRenewalForecastCron();
 
   // Feature #244 Phase 4: Register eBay Commerce Notification subscription (real-time sold sync)
   registerEbayNotificationSubscription().catch(err =>

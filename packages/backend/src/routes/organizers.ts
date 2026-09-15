@@ -21,7 +21,7 @@ import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } fr
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
-import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue } from '../controllers/platformStatsController';
+import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast } from '../controllers/platformStatsController';
 import { startStandardMigration, getHubOwnerStripeStatus, initiateHubOwnerStripeOnboarding } from '../controllers/stripeConnectController';
 
 const router = Router();
@@ -110,6 +110,8 @@ router.get('/me/platform-gap', authenticate, getPlatformGap);
 router.patch('/me/ebay-queue-settings', authenticate, updateEbayQueueSettings);
 router.post('/me/ebay-queue', authenticate, addToEbayQueue);
 router.delete('/me/ebay-queue/:itemId', authenticate, removeFromEbayQueue);
+// ADR ebay-renewal-forecasting (2026-09-15): real free-insertion usage + projected GTC-renewal forecast
+router.get('/me/ebay-insertions-forecast', authenticate, getEbayInsertionsForecast);
 
 // Authenticated: get revenue analytics for the current organizer
 router.post('/me/stripe/start-standard-migration', authenticate, startStandardMigration);

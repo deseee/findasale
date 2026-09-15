@@ -14,12 +14,42 @@
  *   USED_EXCELLENT / USED_VERY_GOOD / USED_GOOD / USED_ACCEPTABLE -> USED
  *   SELLER_REFURBISHED                       -> REFURBISHED
  *   FOR_PARTS_OR_NOT_WORKING                 -> PARTS_OR_REPAIR
+ *
+ * ADR markdown-cycle-ebay-price-sync (2026-09-15) -- push-first-then-pull:
+ * Before the pull-and-compare logic below runs for an item, this now checks
+ * Item.priceUpdatedAt / Item.ebayPriceSyncedAt (stamped by markdownCycleCron.ts and by
+ * the organizer manual price-edit path). If a local price change hasn't been confirmed
+ * on eBay yet, PUSH it first via reviseEbayOfferPrice() and skip that item's pull
+ * comparison this cycle -- otherwise this cron's own price pull would clobber the
+ * pending local change right back to eBay's stale value (the live bug this ADR fixes).
+ * On push failure, the pull is skipped for that item THIS cycle too (never immediately
+ * followed by the old pull-and-clobber in the same run) -- guard flags stay untouched so
+ * it retries again next cycle (4h later). Every other item (no pending local change, or
+ * already synced) keeps the exact pull-and-compare behavior this file always had.
+ *
+ * Also per ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2: an item still
+ * unsynced ~8h / 2 cron cycles after Item.priceUpdatedAt fires one aggregate
+ * "markdown_sync_failure" Notification per organizer per day (see bottom of
+ * pullSyncForOrganizer). The sync-issues list endpoint + platforms.tsx mini-panel that
+ * notification deep-links to (Dev Handoff Notes #4-5 in that spec) are NOT built here --
+ * that's explicit frontend/dispatch-5 scope per next-session-prompt.md, not this dispatch.
  */
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken } from '../controllers/ebayController';
+import { reviseEbayOfferPrice } from '../services/ebayPriceRevisionService';
+
+// ADR markdown-cycle-ebay-price-sync (2026-09-15), UX spec Piece 2: an item counts as
+// "sync-failed" (not just mid-retry) once this much time has passed since
+// Item.priceUpdatedAt with no confirming ebayPriceSyncedAt -- two full 4h sync-cron
+// cycles, giving the automatic push-first retry above two real chances first. This is
+// the UX spec's own concrete RECOMMENDATION, not a confirmed Patrick decision (its own
+// words: "flagged for Patrick/backend to confirm or adjust; do not silently ship a
+// different number without it being visible in code comments referencing this spec") --
+// visible here per that instruction.
+const SYNC_FAILURE_THRESHOLD_MS = 8 * 60 * 60 * 1000;
 
 // Map eBay Inventory API condition enum -> FindA.Sale condition string
 function mapEbayConditionToFas(ebayCondition: string): string | null {
@@ -77,6 +107,8 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       condition: true,
       ebayListingId: true,
       ebayOfferId: true,
+      priceUpdatedAt: true,
+      ebayPriceSyncedAt: true,
     },
   });
 
@@ -107,8 +139,45 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
     ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
   };
 
+  // ADR markdown-cycle-ebay-price-sync (2026-09-15) / UX spec Piece 2: items still out of
+  // sync after the push-first step below, long enough to clear the threshold, are
+  // collected here for one aggregate end-of-run Notification (not one per item -- see
+  // bottom of this function).
+  const staleItems: { id: string; title: string }[] = [];
+
   for (const item of items) {
     try {
+      // --- Push-first: a locally-pending price change wins over eBay's pull value ---
+      const pendingLocalPriceChange =
+        !!item.priceUpdatedAt &&
+        (!item.ebayPriceSyncedAt || item.priceUpdatedAt.getTime() > item.ebayPriceSyncedAt.getTime());
+
+      if (pendingLocalPriceChange && item.price != null) {
+        const pushResult = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken);
+        if (pushResult.ok) {
+          const syncedAt = new Date();
+          await prisma.item.update({
+            where: { id: item.id },
+            data: { ebayPriceSyncedAt: syncedAt },
+          });
+          console.log(
+            `[eBay PullSync] item ${item.id}: push-first sent pending FAS price $${item.price} to eBay, stamped ebayPriceSyncedAt`
+          );
+          // Nothing left to reconcile for this item this cycle -- skip the pull compare below.
+          continue;
+        }
+
+        console.warn(
+          `[eBay PullSync] item ${item.id}: push-first failed (${pushResult.reason ?? 'unknown'}${pushResult.detail ? ` — ${pushResult.detail}` : ''}) — skipping pull this cycle too; guard flags untouched, retries next cycle`
+        );
+        if (Date.now() - item.priceUpdatedAt!.getTime() >= SYNC_FAILURE_THRESHOLD_MS) {
+          staleItems.push({ id: item.id, title: item.title });
+        }
+        // Per the ADR: a failed push must never be immediately followed by the old
+        // pull-and-clobber in the same run -- skip this item's pull entirely this cycle.
+        continue;
+      }
+
       const sku = `FAS-${item.id}`;
       const updates: Record<string, string | number | null> = {};
       const changeLog: string[] = [];
@@ -191,6 +260,57 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
     } catch (err) {
       console.error(`[eBay PullSync ERROR] Item ${item.id}:`, err);
       // Continue -- one item failure shouldn't block the rest
+    }
+  }
+
+  // ADR markdown-cycle-ebay-price-sync (2026-09-15) / UX spec Piece 2, Dev Handoff Note
+  // #3: one aggregate Notification per organizer per day-with-new-failures (never one
+  // per item). Dedupe approximation: skip if this organizer already has a
+  // markdown_sync_failure Notification created today (UTC) -- there is no dedicated
+  // "already notified for these items" flag in the schema (unlike Piece 3's separate,
+  // out-of-scope ebayInsertionCapWarningNotifiedThisMonth column for a different
+  // notification type), so a same-day re-check of a still-stale batch will not
+  // re-notify, but a newly-stale batch later the same day also will not get its own
+  // notification until the next UTC day. Flagged as a known simplification in this
+  // dispatch's handoff report, not a silent guess.
+  if (staleItems.length > 0) {
+    try {
+      const organizer = await prisma.organizer.findUnique({
+        where: { id: organizerId },
+        select: { userId: true },
+      });
+
+      if (organizer?.userId) {
+        const now = new Date();
+        const startOfTodayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const alreadyNotifiedToday = await prisma.notification.findFirst({
+          where: {
+            userId: organizer.userId,
+            type: 'markdown_sync_failure',
+            createdAt: { gte: startOfTodayUtc },
+          },
+          select: { id: true },
+        });
+
+        if (!alreadyNotifiedToday) {
+          const count = staleItems.length;
+          await prisma.notification.create({
+            data: {
+              userId: organizer.userId,
+              type: 'markdown_sync_failure',
+              title: `${count} price cut${count === 1 ? '' : 's'} didn't reach eBay`,
+              body:
+                "These items still show your markdown price on FindA.Sale, but the change hasn't confirmed on the marketplace. Review and retry.",
+              link: '/organizer/platforms?syncIssues=1',
+            },
+          });
+          console.log(
+            `[eBay PullSync] organizer ${organizerId}: created markdown_sync_failure notification for ${count} stale item(s)`
+          );
+        }
+      }
+    } catch (notifyErr) {
+      console.error(`[eBay PullSync] organizer ${organizerId}: failed to create sync-failure notification:`, notifyErr);
     }
   }
 }
