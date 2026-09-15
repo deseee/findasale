@@ -37,6 +37,7 @@ import VoiceDescriptionInput from '../../../components/VoiceDescriptionInput';
 import BarcodeScanner from '../../../components/BarcodeScanner';
 import CatalogSuggestionPanel from '../../../components/CatalogSuggestionPanel';
 import { ShippingNetPreview } from '../../../components/ShippingNetPreview';
+import { EbayFeeCheckBadge } from '../../../components/EbayFeeCheckBadge';
 import { Mic } from 'lucide-react';
 
 // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
@@ -2600,6 +2601,7 @@ const EditItemPage = () => {
                     <div className="inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
                       Pending Publish
                     </div>
+                    <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
                     <button
                       type="button"
                       onClick={handlePublishNow}
@@ -2615,19 +2617,22 @@ const EditItemPage = () => {
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handlePushToEbay}
-                    disabled={ebayPushPending || !ebayConnected}
-                    title={!ebayConnected ? 'Connect eBay in Settings first' : 'Publish live to eBay immediately'}
-                    className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
-                      ebayConnected
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    } disabled:opacity-50`}
-                  >
-                    {ebayPushPending ? 'Pushing...' : 'Push to eBay'}
-                  </button>
+                  <div className="space-y-2">
+                    <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
+                    <button
+                      type="button"
+                      onClick={handlePushToEbay}
+                      disabled={ebayPushPending || !ebayConnected}
+                      title={!ebayConnected ? 'Connect eBay in Settings first' : 'Publish live to eBay immediately'}
+                      className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
+                        ebayConnected
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      } disabled:opacity-50`}
+                    >
+                      {ebayPushPending ? 'Pushing...' : 'Push to eBay'}
+                    </button>
+                  </div>
                 )}
               </div>
             )}
