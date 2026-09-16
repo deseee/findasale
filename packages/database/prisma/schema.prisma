@@ -2231,8 +2231,48 @@ model HoldInvoice {
   // Back-relation for ItemReservation.invoiceId (ItemReservation_invoiceId_fkey). A bundled
   // invoice covers 2+ reservations, hence a list -- the column stopped being unique 2026-08-05.
   reservations          ItemReservation[] @relation("ReservationInvoiceFk")
-  shopperUserId         String
-  shopper User @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  // Guest / no-account invoice (2026-09-16, organizer-initiated email invoice, PRO/TEAMS
+  // feature): nullable so an organizer can bill a real person who has never made a
+  // FindA.Sale account and never places a hold themselves -- see
+  // guestInvoiceController.ts. When the recipient email matches an existing User,
+  // shopperUserId is still set (real account, same as every other HoldInvoice path) and
+  // guestEmail/guestName stay null. When it does not, shopperUserId is null and
+  // guestEmail/guestName carry the recipient identity directly on the invoice --
+  // mirrors the already-established Purchase.userId/buyerEmail/guestName guest pattern
+  // (schema.prisma's own Purchase model, used today by POS walk-ins and online guest
+  // checkout). markHoldInvoicePaid (holdInvoicePaymentRecorder.ts) is null-safe for this:
+  // Purchase.userId already tolerates null, the shopper-side notification/XP/email are
+  // skipped for a null shopperUserId, and the guest gets their only record via the
+  // Square Checkout receipt + this invoice's own confirmation email.
+  shopperUserId         String?
+  shopper User? @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  guestEmail            String? // Set only when shopperUserId is null -- the emailed recipient's address
+  guestName             String? // Set only when shopperUserId is null -- organizer-entered recipient name (optional)
+  // Recipient contact + shipping (2026-09-16, same dispatch as the guest fields above):
+  // Patrick's own example is "a Christmas tree with a separate shipping quote" -- the
+  // organizer needs a real address to work from regardless of whether the recipient turns
+  // out to be a guest or an existing account, so these are always available on the send
+  // form, not guest-only. Field NAMES deliberately mirror Purchase's own existing
+  // "SHIPPING DESTINATION" block (shippingAddressLine1/2/City/State/Zip/Country) exactly --
+  // confirmed via schema read this session that Purchase is the ONLY place an address is
+  // captured anywhere in this codebase (always per-purchase at checkout time; there is no
+  // persisted default/profile address on User anywhere to instead read from). Reusing the
+  // same names/shape lets markHoldInvoicePaid pass these straight through onto the
+  // Purchase row(s) it creates on payment, so the EXISTING "buy shipping label" feature
+  // (payoutController.ts's buyShippingLabel, ADR-115) works unmodified on an invoice-born
+  // order. recipientPhone has no Purchase-side equivalent to mirror -- confirmed via
+  // payoutController.ts's own "no buyer phone field exists anywhere in the current
+  // checkout data model" comment (2026-09-05) that this is a genuine, previously-flagged
+  // gap; recipientPhone here is organizer reference/contact info on the invoice itself,
+  // not (yet) threaded into the shipping-label carrier call -- flagged as a follow-up in
+  // the dispatch handoff, not built here.
+  recipientPhone        String?
+  shippingAddressLine1  String?
+  shippingAddressLine2  String?
+  shippingCity          String?
+  shippingState         String?
+  shippingZip           String?
+  shippingCountry       String?  @default("US")
   organizerUserId       String
   organizer User @relation("OrganizerInvoices", fields: [organizerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   saleId                String

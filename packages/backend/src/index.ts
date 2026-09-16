@@ -182,6 +182,7 @@ import posTiersRoutes from './routes/posTiers';               // POS Tier Status
 import settlementRoutes from './routes/settlement';           // Feature #228: Settlement Hub
 import consignorSettlementRoutes from './routes/consignorSettlement'; // Feature #239: Multi-Consignor Estate Settlement
 import posRoutes from './routes/pos';                         // POS Upgrade: Open Cart & Payment Links
+import guestInvoiceRoutes from './routes/guestInvoices';       // Guest/no-account emailed invoice (PRO/TEAMS), 2026-09-16
 import ebayRoutes from './routes/ebay';                       // eBay Marketplace Account Deletion
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
 import reverbRoutes from './routes/reverb';                   // Universal Crosslister -- Reverb Official-API Tier
@@ -719,6 +720,7 @@ app.use('/api/wishlists', wishlistRoutes); // Wishlist / Registry feature
 app.use('/api/tiers', tierRoutes); // Phase 31: Organizer Tier Rewards
 app.use('/api/organizer/pos-tiers', posTiersRoutes); // POS Tier Status tracking
 app.use('/api/pos', posRoutes);                       // POS Upgrade: Open Cart & Payment Links
+app.use('/api/guest-invoices', guestInvoiceRoutes);   // Guest/no-account emailed invoice (PRO/TEAMS), 2026-09-16
 app.use('/api/planner', plannerRoutes); // Planning assistant chatbot
 app.use('/api/buying-pools', buyingPoolRoutes); // Group Buying Pools
 app.use('/api/organizer-digest', organizerDigestRoutes); // Organizer weekly digest manual trigger

@@ -454,6 +454,32 @@ export async function markHoldInvoicePaid(
       chargeAccountId = useDirect ? saleOrganizer?.stripeConnectId ?? null : null;
     }
 
+    // Shipping passthrough (2026-09-16 follow-up, guest-invoice shipping/phone): a
+    // guest-invoice organizer may have captured a real ship-to address on the invoice
+    // itself (HoldInvoice.shippingAddressLine1/2/City/State/Zip/Country -- same field
+    // names/shape as Purchase's own SHIPPING DESTINATION block, deliberately). Copy it
+    // straight onto the Purchase row(s) below so the EXISTING "buy shipping label" feature
+    // (payoutController.ts's buyShippingLabel) works on an invoice-born order with no
+    // further changes there. deliveryMethod only flips to 'SHIP' when the address is
+    // actually complete (line1+city+state+zip) -- mirrors squarePaymentController.ts's own
+    // shippingApplicable gate; a partial/blank address must not silently claim SHIP and
+    // then 400 at label-purchase time with no visible reason.
+    const hasShippingAddress = !!(
+      holdInvoice.shippingAddressLine1 && holdInvoice.shippingCity &&
+      holdInvoice.shippingState && holdInvoice.shippingZip
+    );
+    const shippingFieldsForPurchase = hasShippingAddress
+      ? {
+          deliveryMethod: 'SHIP',
+          shippingAddressLine1: holdInvoice.shippingAddressLine1,
+          shippingAddressLine2: holdInvoice.shippingAddressLine2 ?? undefined,
+          shippingCity: holdInvoice.shippingCity,
+          shippingState: holdInvoice.shippingState,
+          shippingZip: holdInvoice.shippingZip,
+          shippingCountry: holdInvoice.shippingCountry ?? undefined,
+        }
+      : {};
+
     for (const bundledItem of bundledItems) {
       if (!sellableItemIdSet.has(bundledItem.id)) continue; // oversold race -- no Purchase row, matches posPaymentLinkRecorder.ts
       const itemAmount = bundledItem.price || 0;
@@ -464,6 +490,14 @@ export async function markHoldInvoicePaid(
         await tx.purchase.create({
           data: {
             userId: holdInvoice.shopperUserId,
+            // Guest invoice (2026-09-16, nullable shopperUserId): no real User row to read
+            // contact info from at refund/support time, so stamp it directly on the Purchase
+            // row -- same Purchase.buyerEmail/guestName columns squarePaymentController.ts's
+            // guest checkout already uses for exactly this reason. Omitted (not overwritten
+            // with undefined) for a real-account invoice; that Purchase already has a User
+            // to look up via userId.
+            ...(!holdInvoice.shopperUserId ? { buyerEmail: holdInvoice.guestEmail ?? undefined, guestName: holdInvoice.guestName ?? undefined } : {}),
+            ...shippingFieldsForPurchase,
             itemId: bundledItem.id,
             saleId: holdInvoice.saleId,
             amount: itemAmount,
@@ -528,6 +562,9 @@ export async function markHoldInvoicePaid(
         await tx.purchase.create({
           data: {
             userId: holdInvoice.shopperUserId,
+            // Guest invoice: see the identical comment on the bundled-item Purchase.create above.
+            ...(!holdInvoice.shopperUserId ? { buyerEmail: holdInvoice.guestEmail ?? undefined, guestName: holdInvoice.guestName ?? undefined } : {}),
+            ...shippingFieldsForPurchase,
             itemId: null,
             saleId: holdInvoice.saleId,
             amount: holdInvoice.totalAmount / 100,
@@ -625,16 +662,22 @@ export async function markHoldInvoicePaid(
       ? `${bundledItems.length} items`
       : `"${bundledItems[0]?.title}"`;
 
+    // Guest invoice (2026-09-16): Notification.userId is required and a guest has no
+    // account/inbox to see an in-app notification in anyway -- only queue the shopper
+    // notification when shopperUserId is a real account. The organizer notification below is
+    // unconditional either way -- unaffected by who the buyer is.
     await tx.notification.createMany({
       data: [
-        {
-          userId: holdInvoice.shopperUserId,
-          type: 'payment_completed',
-          title: 'Payment confirmed',
-          body: `Payment confirmed for ${itemListNotif}. The organizer will send shipping/pickup details.`,
-          link: `/items/${holdInvoice.itemIds[0]}`,
-          channel: 'OPERATIONAL',
-        },
+        ...(holdInvoice.shopperUserId
+          ? [{
+              userId: holdInvoice.shopperUserId,
+              type: 'payment_completed',
+              title: 'Payment confirmed',
+              body: `Payment confirmed for ${itemListNotif}. The organizer will send shipping/pickup details.`,
+              link: `/items/${holdInvoice.itemIds[0]}`,
+              channel: 'OPERATIONAL',
+            }]
+          : []),
         {
           userId: holdInvoice.organizerUserId,
           type: 'payment_received',
@@ -700,14 +743,18 @@ export async function markHoldInvoicePaid(
   }
 
   // Award XP to shopper (+15 guildXP for payment completion)
-  try {
-    const { awardXp, XP_AWARDS } = await import('../services/xpService');
-    void XP_AWARDS; // preserved verbatim from the original charge.succeeded handler (unused there too)
-    await awardXp(holdInvoice.shopperUserId, 'PAYMENT_COMPLETED', 15, {
-      saleId: holdInvoice.saleId,
-    });
-  } catch (err) {
-    console.warn(`[hold-invoice/${source}] Failed to award XP:`, err);
+  // Guest invoice: no User row, so no guildXp to award to -- skip entirely rather than
+  // calling awardXp with a null id.
+  if (holdInvoice.shopperUserId) {
+    try {
+      const { awardXp, XP_AWARDS } = await import('../services/xpService');
+      void XP_AWARDS; // preserved verbatim from the original charge.succeeded handler (unused there too)
+      await awardXp(holdInvoice.shopperUserId, 'PAYMENT_COMPLETED', 15, {
+        saleId: holdInvoice.saleId,
+      });
+    } catch (err) {
+      console.warn(`[hold-invoice/${source}] Failed to award XP:`, err);
+    }
   }
 
   // Emit socket event for live dashboard updates
@@ -737,19 +784,26 @@ export async function markHoldInvoicePaid(
     const totalPaid = (holdInvoice.totalAmount / 100).toFixed(2);
     const platformFee = (holdInvoice.platformFeeAmount / 100).toFixed(2);
 
-    // Email to shopper
-    transactionalEmailService.emails.send({
-      from: fromEmail,
-      to: holdInvoice.shopper.email,
-      subject: `Payment confirmed for ${itemList}`,
-      html: `
-        <h2>Payment Confirmed</h2>
-        <p>Hi ${holdInvoice.shopper.name},</p>
-        <p>Your payment of $${totalPaid} for <strong>${itemList}</strong> has been confirmed.</p>
-        <p>The organizer will contact you soon about shipping or pickup details.</p>
-        <p style="color: #6b7280; font-size: 14px;">Transaction ID: ${invoiceId.slice(0, 8)}</p>
-      `,
-    }).catch((err: unknown) => console.warn(`[hold-invoice/${source}] Failed to send shopper email:`, err));
+    // Email to shopper (or guest -- this IS their only durable payment record on our side
+    // for a guest invoice, since they have no account/inbox for the notification above).
+    const buyerEmailAddress = holdInvoice.shopper?.email ?? holdInvoice.guestEmail ?? null;
+    const buyerDisplayName = holdInvoice.shopper?.name ?? holdInvoice.guestName ?? 'there';
+    if (buyerEmailAddress) {
+      transactionalEmailService.emails.send({
+        from: fromEmail,
+        to: buyerEmailAddress,
+        subject: `Payment confirmed for ${itemList}`,
+        html: `
+          <h2>Payment Confirmed</h2>
+          <p>Hi ${buyerDisplayName},</p>
+          <p>Your payment of $${totalPaid} for <strong>${itemList}</strong> has been confirmed.</p>
+          <p>The organizer will contact you soon about shipping or pickup details.</p>
+          <p style="color: #6b7280; font-size: 14px;">Transaction ID: ${invoiceId.slice(0, 8)}</p>
+        `,
+      }).catch((err: unknown) => console.warn(`[hold-invoice/${source}] Failed to send shopper email:`, err));
+    } else {
+      console.warn(`[hold-invoice/${source}] No buyer email on file (invoice ${invoiceId}) -- skipping payment-confirmed email.`);
+    }
 
     // Email to organizer
     // Square changeover (2026-09-10): processor-accurate copy -- `processor` is already in

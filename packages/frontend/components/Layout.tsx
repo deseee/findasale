@@ -382,6 +382,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <ShoppingCart size={16} className="text-amber-500" />
               <span>POS / Checkout</span>
             </Link>
+            <Link href="/organizer/send-invoice" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Email a one-off invoice to anyone -- no hold, no account required">
+              <Send size={16} className="text-amber-500" />
+              <span>Email Invoice</span>
+            </Link>
             <Link href="/organizer/print-inventory" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Generate printable item sheets for your sale table">
               <Printer size={16} className="text-amber-500" />
               <span>Print Inventory</span>
@@ -1197,6 +1201,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/organizer/pos" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <ShoppingCart size={14} className="inline mr-2 text-amber-500" /> POS / Checkout
+                    </Link>
+                    <Link href="/organizer/send-invoice" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Send size={14} className="inline mr-2 text-amber-500" /> Email Invoice
                     </Link>
                     <Link href="/organizer/ripples" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Activity size={14} className="inline mr-2 text-amber-500" /> Sale Ripples
