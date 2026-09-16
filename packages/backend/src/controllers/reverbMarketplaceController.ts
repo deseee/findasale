@@ -182,7 +182,36 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
     // territory, not this). Matches the same 422 { message, eligible: false } shape Discogs'
     // eligibility check already uses (discogsMarketplaceController.ts) for frontend consistency.
     const REVERB_ELIGIBLE_CATEGORY = 'Musical Instruments & Gear';
-    if ((item.category || '').trim().toLowerCase() !== REVERB_ELIGIBLE_CATEGORY.toLowerCase()) {
+    // BUG FIX 2026-09-16 (live QA finding, pre-existing gap surfaced by tonight's
+    // eBay/Markdown-Cycles build, unrelated to that build's own code): item.category
+    // is not always a bare L1 name -- it can be a colon-delimited deep taxonomy path
+    // whose FIRST segment is the L1 name (same convention extractL1() in
+    // config/ebayCategories.ts documents and normalizes for CategoryDepreciation/
+    // BrandException/etc lookups; see that file's docstring -- ~33% of items carry a
+    // full deep-path category, confirmed there 2026-08-25). The old exact-string
+    // check required item.category === 'Musical Instruments & Gear' verbatim, so a
+    // real subcategory path like "Musical Instruments &amp; Gear:guitars &amp;
+    // Basses:electric Guitars" (confirmed live in the prod DB tonight) silently
+    // failed the gate and could never become Reverb-eligible even though it's a
+    // genuine musical item.
+    //
+    // Deliberately NOT reusing extractL1()/domainToL1() here: a live DB sanity check
+    // for this fix turned up a real false-positive risk in domainToL1's keyword
+    // fallback -- its Musical Instruments & Gear pattern
+    // (/guitar|amp|drum|keyboard|piano|violin|instrument|microphone|dj/i) matches
+    // the bare substring "amp", which fires on entity-encoded categories such as the
+    // real prod value "Books &amp; Magazines:Magazines" (the "&amp;" itself contains
+    // "amp") BEFORE the Books & Magazines pattern ever gets a chance, since map
+    // order is first-match-wins -- that would wrongly make a non-musical item
+    // Reverb-eligible. Flagged separately in this session's handoff (not fixed here,
+    // out of this fix's scope) rather than silently patched as a side effect.
+    //
+    // Fix: normalize the same HTML-entity artifact (&amp; -> &) real category values
+    // carry, then match on the extracted L1 segment (bare name, or first
+    // colon-delimited segment) instead of the full string.
+    const normalizedCategory = (item.category || '').trim().replace(/&amp;/gi, '&');
+    const categoryL1Segment = normalizedCategory.split(':')[0].trim();
+    if (categoryL1Segment.toLowerCase() !== REVERB_ELIGIBLE_CATEGORY.toLowerCase()) {
       res.status(422).json({
         message: "Reverb is for musical instruments & gear only -- this item's category isn't eligible.",
         eligible: false,

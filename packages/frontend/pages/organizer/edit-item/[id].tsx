@@ -752,7 +752,19 @@ const EditItemPage = () => {
   // exact L1 bucket a guitar, amp, keyboard, etc. gets AI-tagged into. Case/whitespace-tolerant
   // compare since formData.category is separately title-cased for the FindA.Sale category select.
   const REVERB_ELIGIBLE_CATEGORY = 'Musical Instruments & Gear';
-  const reverbCategoryEligible = formData.category?.trim().toLowerCase() === REVERB_ELIGIBLE_CATEGORY.toLowerCase();
+  // BUG FIX 2026-09-16 (paired with the backend fix in reverbMarketplaceController.ts's
+  // pushItemToReverb -- see that fix's comment for the full root-cause and the real
+  // prod DB example it's based on): formData.category can be a colon-delimited deep
+  // path ("Musical Instruments & Gear:Guitars & Basses:Electric Guitars") whose FIRST
+  // segment is the L1 name, not always the bare L1 name itself. The old exact-string
+  // compare hid the Push-to-Reverb button entirely for those items even though
+  // they're genuinely musical, and even after the backend fix an organizer would
+  // never see the button to click in the first place. Same normalize-then-match-on-
+  // L1-segment approach as the backend fix (deliberately not a generic keyword
+  // fallback -- see backend comment for the real false-positive it avoids).
+  const reverbCategoryEligible =
+    (formData.category || '').trim().replace(/&amp;/gi, '&').split(':')[0].trim().toLowerCase() ===
+    REVERB_ELIGIBLE_CATEGORY.toLowerCase();
 
   const reverbPushMutation = useMutation({
     mutationFn: async ({ publish }: { publish: boolean }) => {
