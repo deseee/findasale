@@ -67,6 +67,21 @@ const PurchaseConfirmationPage = () => {
     purchase.status === 'PENDING' &&
     purchase.processor !== 'SQUARE' &&
     !!purchase.stripePaymentIntentId;
+  // No-processor fix (2026-09-16, findasale-dev -- claude_docs/STATE.md Blocked Queue P0
+  // "Stripe-only auction winners may have NO working way to pay"): a PENDING auction Purchase
+  // with NO stripePaymentIntentId and NOT Square means the organizer has no working payment
+  // processor at all (Stripe's platform account is permanently closed -- see ADR-121 -- and
+  // this organizer hasn't completed Square onboarding). isPendingStripePayment above is
+  // correctly false for this case (there is no real checkout to resume), but until this fix
+  // that meant a winner landing here saw only a bare "Pending" badge with no explanation at
+  // all. Mirrors services/auctionService.ts's manual-close-path copy ("Contact the organizer
+  // to complete payment.") instead of inventing new wording.
+  const isPendingNoProcessor =
+    !!purchase &&
+    purchase.item?.listingType === 'AUCTION' &&
+    purchase.status === 'PENDING' &&
+    purchase.processor !== 'SQUARE' &&
+    !purchase.stripePaymentIntentId;
   useEffect(() => {
     if (isPendingStripePayment) {
       setShowCheckout(true);
@@ -215,6 +230,17 @@ const PurchaseConfirmationPage = () => {
                 >
                   Complete Payment
                 </button>
+              </div>
+            )}
+            {isPendingNoProcessor && (
+              <div className="mt-4 max-w-sm mx-auto p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  This seller hasn't finished payment setup yet. Please{' '}
+                  <Link href="/shopper/messages" className="font-semibold underline">
+                    contact the organizer
+                  </Link>{' '}
+                  directly to arrange payment for this item.
+                </p>
               </div>
             )}
           </div>
