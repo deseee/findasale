@@ -36,6 +36,16 @@ function SettingsPage() {
   const [deletePassword, setDeletePassword] = useState<string>('');
   const [spendableXp, setSpendableXp] = useState<number>(0);
 
+  // ADR-126 (2026-09-16): phone becomes genuinely shopper-settable -- this is the
+  // account's OWN phone number (User.phone), separate from any per-shipment Address.phone.
+  const [phone, setPhone] = useState('');
+
+  // ADR-126: saved shipping addresses -- add/view/delete/set-default, so the opt-in
+  // "save this address" checkbox elsewhere in the app has somewhere the shopper can
+  // review and manage what got saved.
+  const [showAddAddress, setShowAddAddress] = useState(false);
+  const [newAddress, setNewAddress] = useState({ recipientName: '', line1: '', line2: '', city: '', state: '', zip: '', phone: '' });
+
   useEffect(() => {
     setMounted(true);
     setLowBandwidthEnabled(isLowBandwidth);
@@ -54,6 +64,34 @@ function SettingsPage() {
       setPurchasesVisible(user.purchasesVisible !== false);
     }
   }, [user]);
+
+  // ADR-126: fetch the account's own phone (AuthContext's cached user doesn't carry it) --
+  // GET /users/me is the existing getUserProfile endpoint, already used app-wide.
+  const { data: myProfile } = useQuery({
+    queryKey: ['myProfile'],
+    queryFn: async () => {
+      const response = await api.get('/users/me');
+      return response.data as { phone?: string | null };
+    },
+    enabled: !!user,
+  });
+
+  useEffect(() => {
+    if (myProfile) setPhone(myProfile.phone || '');
+  }, [myProfile]);
+
+  // ADR-126: this shopper's saved addresses.
+  const { data: addressesData, refetch: refetchAddresses } = useQuery({
+    queryKey: ['myAddresses'],
+    queryFn: async () => {
+      const response = await api.get('/users/me/addresses');
+      return response.data as { addresses: Array<{
+        id: string; label: string | null; recipientName: string; line1: string; line2: string | null;
+        city: string; state: string; zip: string; country: string; phone: string | null; isDefault: boolean;
+      }> };
+    },
+    enabled: !!user,
+  });
 
   // Fetch XP profile data for slug unlock UI
   const { data: xpProfile } = useQuery({
@@ -90,7 +128,7 @@ function SettingsPage() {
 
   // Mutation for updating profile settings
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { name?: string; profileSlug?: string | null; purchasesVisible?: boolean }) => {
+    mutationFn: async (data: { name?: string; profileSlug?: string | null; purchasesVisible?: boolean; phone?: string | null }) => {
       const response = await api.patch('/users/me', data);
       return response.data;
     },
@@ -107,6 +145,60 @@ function SettingsPage() {
       setSuccessMessage(message);
       setTimeout(() => setSuccessMessage(''), 3000);
     }
+  });
+
+  // ADR-126: save the account's own phone number.
+  const updatePhoneMutation = useMutation({
+    mutationFn: async (value: string) => {
+      const response = await api.patch('/users/me', { phone: value.trim() || null });
+      return response.data;
+    },
+    onSuccess: () => {
+      setSuccessMessage('Phone number saved!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to save phone number';
+      setSuccessMessage(message);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    },
+  });
+
+  // ADR-126: opt-in saved-address management (add / set default / delete). Creating an
+  // address here is an explicit, deliberate save -- never silent (ADR-126 §9.4).
+  const createAddressMutation = useMutation({
+    mutationFn: async (data: typeof newAddress) => {
+      const response = await api.post('/users/me/addresses', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      setNewAddress({ recipientName: '', line1: '', line2: '', city: '', state: '', zip: '', phone: '' });
+      setShowAddAddress(false);
+      refetchAddresses();
+      setSuccessMessage('Address saved!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to save address';
+      setSuccessMessage(message);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    },
+  });
+
+  const setDefaultAddressMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.patch(`/users/me/addresses/${id}`, { isDefault: true });
+      return response.data;
+    },
+    onSuccess: () => refetchAddresses(),
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.delete(`/users/me/addresses/${id}`);
+      return response.data;
+    },
+    onSuccess: () => refetchAddresses(),
   });
 
   // Mutation for deleting account
@@ -471,6 +563,160 @@ function SettingsPage() {
                 >
                   {updateProfileMutation.isPending ? 'Saving...' : 'Save Display Name'}
                 </button>
+              </div>
+
+              {/* Phone (ADR-126, 2026-09-16): now genuinely shopper-settable -- this is the
+                  account's own number, separate from the per-shipment contact phone on a
+                  saved address below. */}
+              <div className="pb-6 border-b border-gray-200 dark:border-gray-700">
+                <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(555) 123-4567"
+                  maxLength={30}
+                  className="w-full sm:w-64 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                  aria-label="Phone number"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Used as your default contact number when an organizer or shipping label needs one
+                </p>
+                <button
+                  onClick={() => updatePhoneMutation.mutate(phone)}
+                  disabled={updatePhoneMutation.isPending}
+                  className="mt-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                >
+                  {updatePhoneMutation.isPending ? 'Saving...' : 'Save Phone Number'}
+                </button>
+              </div>
+
+              {/* Saved Addresses (ADR-126, 2026-09-16): manage addresses saved via the
+                  opt-in "save this address" checkbox at checkout/invoice time, or added
+                  directly here. */}
+              <div className="pb-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400">
+                    Saved Addresses
+                  </label>
+                  <button
+                    onClick={() => setShowAddAddress((v) => !v)}
+                    className="text-sm text-amber-600 dark:text-amber-400 hover:underline"
+                  >
+                    {showAddAddress ? 'Cancel' : '+ Add address'}
+                  </button>
+                </div>
+
+                {(addressesData?.addresses ?? []).length === 0 && !showAddAddress && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No saved addresses yet. They're added automatically when you check the
+                    "save this address" box at checkout, or you can add one here.
+                  </p>
+                )}
+
+                <div className="space-y-3 mb-3">
+                  {(addressesData?.addresses ?? []).map((addr) => (
+                    <div key={addr.id} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">
+                          {addr.recipientName}
+                          {addr.isDefault && (
+                            <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">Default</span>
+                          )}
+                        </p>
+                        <p>{addr.line1}{addr.line2 ? `, ${addr.line2}` : ''}</p>
+                        <p>{addr.city}, {addr.state} {addr.zip}</p>
+                        {addr.phone && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{addr.phone}</p>}
+                      </div>
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                        {!addr.isDefault && (
+                          <button
+                            onClick={() => setDefaultAddressMutation.mutate(addr.id)}
+                            className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
+                          >
+                            Make default
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (confirm('Delete this saved address?')) deleteAddressMutation.mutate(addr.id);
+                          }}
+                          className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {showAddAddress && (
+                  <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
+                    <input
+                      type="text"
+                      value={newAddress.recipientName}
+                      onChange={(e) => setNewAddress((a) => ({ ...a, recipientName: e.target.value }))}
+                      placeholder="Recipient name"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                    <input
+                      type="text"
+                      value={newAddress.line1}
+                      onChange={(e) => setNewAddress((a) => ({ ...a, line1: e.target.value }))}
+                      placeholder="Street address"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                    <input
+                      type="text"
+                      value={newAddress.line2}
+                      onChange={(e) => setNewAddress((a) => ({ ...a, line2: e.target.value }))}
+                      placeholder="Apt, suite, etc. (optional)"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newAddress.city}
+                        onChange={(e) => setNewAddress((a) => ({ ...a, city: e.target.value }))}
+                        placeholder="City"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      />
+                      <input
+                        type="text"
+                        value={newAddress.state}
+                        onChange={(e) => setNewAddress((a) => ({ ...a, state: e.target.value.toUpperCase() }))}
+                        placeholder="State"
+                        maxLength={2}
+                        className="w-20 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 uppercase"
+                      />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={newAddress.zip}
+                        onChange={(e) => setNewAddress((a) => ({ ...a, zip: e.target.value }))}
+                        placeholder="ZIP"
+                        maxLength={10}
+                        className="w-28 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
+                    <input
+                      type="tel"
+                      value={newAddress.phone}
+                      onChange={(e) => setNewAddress((a) => ({ ...a, phone: e.target.value }))}
+                      placeholder="Contact phone for this address (optional)"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                    <button
+                      onClick={() => createAddressMutation.mutate(newAddress)}
+                      disabled={createAddressMutation.isPending || !newAddress.line1.trim() || !newAddress.city.trim() || !newAddress.state.trim() || !newAddress.zip.trim()}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                    >
+                      {createAddressMutation.isPending ? 'Saving...' : 'Save Address'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Email Display */}

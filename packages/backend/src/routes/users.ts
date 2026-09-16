@@ -12,6 +12,13 @@ import {
   exportMyData
 } from '../controllers/userController';
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
+import {
+  listMyAddresses,
+  createMyAddress,
+  updateMyAddress,
+  deleteMyAddress,
+  getCheckoutAddressDefaults,
+} from '../controllers/addressController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { spendXp, getSpendableXp } from '../services/xpService';
@@ -338,11 +345,27 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { notificationPrefs, profileSlug, purchasesVisible, teamsOnboardingComplete, name } = req.body;
+    const { notificationPrefs, profileSlug, purchasesVisible, teamsOnboardingComplete, name, phone } = req.body;
 
     // Validate notification preferences if provided
     if (notificationPrefs && typeof notificationPrefs !== 'object') {
       return res.status(400).json({ message: 'notificationPrefs must be an object' });
+    }
+
+    // ADR-126 §9.2 (2026-09-16): phone is now genuinely shopper-settable from Account
+    // Settings -- this is the account's OWN phone number (see schema.prisma's comment on
+    // User.phone for why this is deliberately separate from any per-Address.phone).
+    // Loose validation only (digits, spaces, dashes, parens, leading +), same permissive
+    // shape organizer-entered phone numbers already use elsewhere in this codebase --
+    // this is a contact number, not something billed against, so no carrier-format check.
+    if (phone !== undefined && phone !== null) {
+      if (typeof phone !== 'string') {
+        return res.status(400).json({ message: 'Phone must be a string' });
+      }
+      const trimmedPhone = phone.trim();
+      if (trimmedPhone && !/^[\d\s()+-]{7,30}$/.test(trimmedPhone)) {
+        return res.status(400).json({ message: 'Enter a valid phone number' });
+      }
     }
 
     // Validate profile slug if provided (alphanumeric, dash, underscore)
@@ -414,6 +437,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     if (name !== undefined && name !== null) {
       updateData.name = name.trim();
     }
+    if (phone !== undefined) {
+      updateData.phone = phone === null ? null : (phone.trim() || null);
+    }
     if (teamsOnboardingComplete !== undefined) {
       updateData.teamsOnboardingComplete = teamsOnboardingComplete;
 
@@ -480,6 +506,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         id: true,
         email: true,
         name: true,
+        phone: true,
         streakPoints: true,
         notificationPrefs: true,
         profileSlug: true,
@@ -500,6 +527,13 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error while updating preferences' });
   }
 });
+
+// ADR-126 (2026-09-16): saved shipping addresses -- opt-in only, see addressController.ts.
+router.get('/me/addresses', authenticate, listMyAddresses);
+router.post('/me/addresses', authenticate, createMyAddress);
+router.patch('/me/addresses/:id', authenticate, updateMyAddress);
+router.delete('/me/addresses/:id', authenticate, deleteMyAddress);
+router.get('/me/checkout-address-defaults', authenticate, getCheckoutAddressDefaults);
 
 // Phase 2a: Hunt Pass trial activation
 router.post('/hunt-pass/trial', authenticate, activateHuntPassTrial);

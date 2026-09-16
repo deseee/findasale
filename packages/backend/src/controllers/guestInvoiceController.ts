@@ -57,6 +57,7 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
 import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../services/holdInvoiceSquareCheckoutHelper';
 import { SquareOnboardingIncompleteError } from '../services/squarePaymentService';
+import { getDefaultAddress, findGuestPromotionAddress } from '../services/addressService';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ZIP_RE = /^\d{5}(-\d{4})?$/; // same US-ZIP shape squarePaymentController.ts's shipping capture already validates against
@@ -76,11 +77,17 @@ function isProOrAbove(tier: string | null): boolean {
 /**
  * GET /api/guest-invoices/lookup-recipient?email=...
  * Organizer-facing, PRO/TEAMS-gated (same as the send endpoint): does this email already
- * belong to a FindA.Sale account, and if so, what phone (if any) is on file? Drives the
- * send-invoice form's auto-fill -- it needs this BEFORE the organizer hits Send, not just
- * at submit time. Deliberately returns nothing else about the account (no name, no address
- * -- there is no persisted address anywhere on User to return, see the schema comment on
- * HoldInvoice's shipping columns).
+ * belong to a FindA.Sale account, and if so, what phone/address (if any) is on file?
+ * Drives the send-invoice form's auto-fill -- it needs this BEFORE the organizer hits
+ * Send, not just at submit time.
+ *
+ * ADR-126 (2026-09-16): address auto-fill added. Prefers that account's saved default
+ * SHIP_TO Address; when there isn't one, falls back to the quiet guest-to-account
+ * promotion (ADR-126 §4/§9.5, Patrick's call -- pre-fill only, never a proactive prompt)
+ * by looking up that same email's most recent guest Purchase/HoldInvoice address. Either
+ * way this is autofill ONLY -- the organizer can still overwrite any field for this one
+ * invoice, and nothing here writes a new Address row (this invoice's own shipping fields
+ * are a fresh, immutable per-invoice snapshot, same as always).
  */
 export const lookupRecipientForInvoice = async (req: AuthRequest, res: Response) => {
   try {
@@ -101,16 +108,60 @@ export const lookupRecipientForInvoice = async (req: AuthRequest, res: Response)
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { phone: true },
+      select: { id: true, phone: true },
     });
+
+    // ADR-126 address auto-fill: a real saved default address always wins over the
+    // guest-promotion fallback. Both are optional -- most matched accounts today still
+    // have neither, exactly as before this ADR.
+    let address: {
+      recipientName: string | null;
+      line1: string;
+      line2: string | null;
+      city: string;
+      state: string;
+      zip: string;
+      country: string;
+    } | null = null;
+    let addressSource: 'saved' | 'guest_history' | null = null;
+
+    if (user) {
+      const savedAddress = await getDefaultAddress(user.id, 'SHIP_TO');
+      if (savedAddress) {
+        address = {
+          recipientName: savedAddress.recipientName,
+          line1: savedAddress.line1,
+          line2: savedAddress.line2,
+          city: savedAddress.city,
+          state: savedAddress.state,
+          zip: savedAddress.zip,
+          country: savedAddress.country,
+        };
+        addressSource = 'saved';
+      } else {
+        const promoted = await findGuestPromotionAddress(email);
+        if (promoted) {
+          address = {
+            recipientName: promoted.recipientName,
+            line1: promoted.line1,
+            line2: promoted.line2,
+            city: promoted.city,
+            state: promoted.state,
+            zip: promoted.zip,
+            country: promoted.country,
+          };
+          addressSource = 'guest_history';
+        }
+      }
+    }
 
     return res.json({
       exists: !!user,
-      // User.phone has no shopper-facing settings UI anywhere in this codebase today
-      // (confirmed via a full grep of the profile-update routes) -- almost always empty
-      // for a real shopper account, but returned as-is on the rare account that does have
-      // one (e.g. via an organizer-claim path). Never fabricated.
+      // User.phone is now genuinely shopper-settable (ADR-126 §9.2, via /shopper/settings)
+      // -- still returned as-is here, never fabricated.
       phone: user?.phone || null,
+      address,
+      addressSource,
     });
   } catch (error) {
     console.error('[guestInvoice] lookupRecipientForInvoice error:', error);
@@ -151,13 +202,14 @@ export const lookupRecipientForInvoice = async (req: AuthRequest, res: Response)
  * exact same field names as Purchase's own shipping-destination columns, then copied
  * straight onto the Purchase row(s) markHoldInvoicePaid creates on payment -- so the
  * EXISTING "buy shipping label" button (payoutController.ts's buyShippingLabel) works on an
- * invoice-born order with no further changes. There is no persisted default address to
- * auto-fill from (confirmed: Purchase is the only place an address is ever captured in this
- * codebase, always fresh per-purchase) -- these fields always start blank regardless of
- * whether the email matches an existing account. Phone is different: User.phone IS a real,
- * persisted column, so lookupRecipientForInvoice above returns it when present for the
- * frontend to pre-fill (rare in practice today -- there's no shopper-facing way to ever set
- * it, see that endpoint's own comment).
+ * invoice-born order with no further changes. As of ADR-126 (2026-09-16), lookupRecipientForInvoice
+ * above now ALSO returns a saved-or-guest-history address for the matched account when one
+ * exists, for send-invoice.tsx to pre-fill -- but these fields on THIS endpoint are still
+ * always accepted as submitted: the organizer can freely overwrite any pre-filled value,
+ * and submitting here never writes back to that account's saved Address. Phone: User.phone
+ * IS a real, persisted column, and is now genuinely shopper-settable from Account Settings
+ * (ADR-126 §9.2) -- lookupRecipientForInvoice returns it when present for the frontend to
+ * pre-fill.
  */
 export const createGuestInvoice = async (req: AuthRequest, res: Response) => {
   try {

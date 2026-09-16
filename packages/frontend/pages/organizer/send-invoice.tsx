@@ -35,9 +35,24 @@ interface SendInvoiceResult {
   emailWarning?: string;
 }
 
+interface RecipientLookupAddress {
+  recipientName: string | null;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+}
+
 interface RecipientLookupResult {
   exists: boolean;
   phone: string | null;
+  // ADR-126 (2026-09-16): address auto-fill -- 'saved' means a real saved default address
+  // on that account, 'guest_history' means the quiet guest-to-account promotion (their
+  // most recent guest order's address, never auto-saved, just offered as a pre-fill).
+  address: RecipientLookupAddress | null;
+  addressSource: 'saved' | 'guest_history' | null;
 }
 
 function SendInvoiceForm() {
@@ -103,6 +118,34 @@ function SendInvoiceForm() {
     }
   }, [recipientLookup, recipientPhone]);
 
+  // ADR-126 (2026-09-16): address auto-fill -- same "only fill blank fields, flag it,
+  // let the organizer overwrite" pattern as phone above. Only fires when the shipping
+  // block is still fully blank, so it never clobbers something the organizer already typed.
+  const [addressAutoFilled, setAddressAutoFilled] = useState(false);
+  React.useEffect(() => {
+    const addr = recipientLookup?.address;
+    if (
+      addr &&
+      !shippingAddressLine1 && !shippingCity && !shippingState && !shippingZip
+    ) {
+      setShippingAddressLine1(addr.line1 || '');
+      setShippingAddressLine2(addr.line2 || '');
+      setShippingCity(addr.city || '');
+      setShippingState(addr.state || '');
+      setShippingZip(addr.zip || '');
+      setAddressAutoFilled(true);
+    }
+  }, [recipientLookup, shippingAddressLine1, shippingCity, shippingState, shippingZip]);
+
+  const clearAutoFilledAddress = () => {
+    setShippingAddressLine1('');
+    setShippingAddressLine2('');
+    setShippingCity('');
+    setShippingState('');
+    setShippingZip('');
+    setAddressAutoFilled(false);
+  };
+
   const handleEmailBlur = () => {
     if (emailLooksValid) setLookupEmail(trimmedEmail);
   };
@@ -159,6 +202,7 @@ function SendInvoiceForm() {
       setRecipientPhone('');
       setPhoneAutoFilled(false);
       setLookupEmail('');
+      setAddressAutoFilled(false);
       setShippingAddressLine1('');
       setShippingAddressLine2('');
       setShippingCity('');
@@ -293,13 +337,29 @@ function SendInvoiceForm() {
           </div>
 
           <div className="border-t border-warm-200 dark:border-gray-700 pt-4">
-            <p className="text-sm font-medium text-warm-900 dark:text-warm-100 mb-1">
-              Shipping address (optional)
-            </p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium text-warm-900 dark:text-warm-100">
+                Shipping address (optional)
+              </p>
+              {addressAutoFilled && (
+                <button
+                  type="button"
+                  onClick={clearAutoFilledAddress}
+                  className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
+                >
+                  Use a different address
+                </button>
+              )}
+            </div>
             <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
               For anything you'll ship -- like a Christmas tree needing a shipping quote.
-              Leave blank for local pickup. This never comes pre-filled: there's no saved
-              address on any FindA.Sale account to pull from, even a linked one.
+              Leave blank for local pickup.
+              {addressAutoFilled && recipientLookup?.addressSource === 'saved' && (
+                <span className="text-amber-700 dark:text-amber-400"> Pre-filled from their saved address -- edit or clear it above.</span>
+              )}
+              {addressAutoFilled && recipientLookup?.addressSource === 'guest_history' && (
+                <span className="text-amber-700 dark:text-amber-400"> Pre-filled from their most recent order -- edit or clear it above.</span>
+              )}
             </p>
             <div className="space-y-2">
               <input

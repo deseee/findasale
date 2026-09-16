@@ -26,6 +26,7 @@ import {
   createSquareCharge,
 } from '../services/squarePaymentService';
 import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
+import { saveOrUpdateDefaultAddress } from '../services/addressService'; // ADR-126 (2026-09-16): opt-in address save
 
 /**
  * Square Checkout -- Wave 1 #1 (2026-09-07). Mirrors stripeController.ts's
@@ -80,6 +81,12 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       shippingCity,
       shippingState,
       verificationToken,
+      // ADR-126 (2026-09-16): opt-in 'save this address' -- only ever acted on for a
+      // logged-in shopper (Address.userId is required; a guest cannot save one). Never
+      // saves anything unless this is explicitly true -- see saveOrUpdateDefaultAddress's
+      // own call site below.
+      saveAddress,
+      recipientName,
     } = req.body;
 
     if (!itemId) {
@@ -411,6 +418,31 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       // (idempotent retry) branch above must never decrement cashFeeBalance a second time for
       // the same real charge.
       await settleCashDebtCollection({ organizerId: item.sale!.organizerId, debtAppliedCents });
+
+      // ADR-126 (2026-09-16): opt-in "save this address" checkbox. Only for a logged-in
+      // shopper (Address.userId is required -- a guest checkout has none to attach this
+      // to) who actually shipped this order and explicitly checked the box. Best-effort
+      // and non-blocking: the charge already succeeded above, so a failure here must
+      // never fail or roll back the checkout itself.
+      if (req.user && shippingApplicable && saveAddress === true) {
+        try {
+          await saveOrUpdateDefaultAddress(
+            req.user.id,
+            {
+              recipientName: typeof recipientName === 'string' ? recipientName : req.user.name,
+              line1: typeof shippingAddressLine1 === 'string' ? shippingAddressLine1 : '',
+              line2: typeof shippingAddressLine2 === 'string' ? shippingAddressLine2 : null,
+              city: typeof shippingCity === 'string' ? shippingCity : '',
+              state: typeof shippingState === 'string' ? shippingState : '',
+              zip: typeof shippingZip === 'string' ? shippingZip : '',
+              country: 'US',
+            },
+            'SHIP_TO'
+          );
+        } catch (addrErr) {
+          console.warn('[squarePayment] save-address-on-checkout failed (non-fatal):', addrErr);
+        }
+      }
     }
 
     // Platform Safety #102 (auth) / post-payment guest self-dealing check (S1072 Finding #4
