@@ -119,6 +119,12 @@ export async function recordPosPaymentLinkSale(
   // rather than recomputing it a second time.
   let recordedStripeAccountId: string | null = null;
   let recordedUseDirect = false;
+  // payment_received notification fix (2026-09-16): captured inside the tx for use by
+  // the fire-and-forget organizer notification below, same capture-inside-tx/use-outside
+  // idiom already used for recordedStripeAccountId/recordedUseDirect above.
+  let recordedSaleId: string | null = null;
+  let recordedAmountCents = 0;
+  let recordedItemTitles: string[] = [];
 
   await prisma.$transaction(async (tx) => {
     // Guarded atomic flip: the WHERE clause + UPDATE row lock is what actually
@@ -141,6 +147,12 @@ export async function recordPosPaymentLinkSale(
     if (!fresh) {
       return; // unreachable in practice (we just updated this row), defensive only
     }
+
+    // payment_received notification fix (2026-09-16): capture what the fire-and-forget
+    // success notification below needs -- this closure's `fresh`/`items` are out of scope
+    // once the tx returns.
+    recordedSaleId = fresh.saleId;
+    recordedAmountCents = fresh.amount;
 
     // Look up organizer tier + Connect id for fee calculation and Direct-charge routing.
     // Hoisted out of the itemIds-only branch (2026-08-28 income-tracking fix, S-POS-MISC-
@@ -248,6 +260,7 @@ export async function recordPosPaymentLinkSale(
             },
           });
           createdPurchaseIds.push(purchase.id);
+          recordedItemTitles.push(item.title);
         } catch (purchaseErr: any) {
           // Compound partial unique (stripePaymentIntentId, itemId) backstop: a
           // webhook/reconciler race that both reach the insert can't double-create.
@@ -379,6 +392,48 @@ export async function recordPosPaymentLinkSale(
     // external id instead of always naming a (possibly null, for SQUARE) stripePaymentLinkId.
     const externalLinkRef = posPaymentLink.processor === 'SQUARE' ? posPaymentLink.squarePaymentLinkId : posPaymentLink.stripePaymentLinkId;
     console.log(`[pos-record/${source}] Payment link completed: ${externalLinkRef} (link ${posPaymentLink.id})`);
+  }
+
+  // Notification-gap fix (2026-09-16): confirmed live in production -- a real customer's
+  // completed Square Payment Link sale ($89.99+shipping, item correctly flipped SOLD, eBay
+  // listing correctly withdrawn) never notified the organizer at all, in-app or email. This
+  // recorder only ever called createNotification() for the OVERSOLD edge case below --
+  // the ordinary, successful, non-oversold completion path (every normal POS Payment Link /
+  // QR sale, across every caller: the Stripe webhook, the Square webhook, and this
+  // reconciliation cron) had no organizer notification at all. Fire-and-forget / non-fatal,
+  // matching the oversold block's own .catch() below -- a notification failure must never
+  // retroactively fail a sale that already recorded successfully. Shape mirrors the
+  // established payment_received pattern (stripeController.ts's payment_intent.succeeded /
+  // cart-checkout branches, holdInvoicePaymentRecorder.ts).
+  if (didRecord && recordedAmountCents > 0) {
+    setImmediate(async () => {
+      try {
+        const organizer = await prisma.organizer.findUnique({
+          where: { id: posPaymentLink.organizerId },
+          select: { userId: true },
+        });
+        if (!organizer?.userId) {
+          console.error(`[pos-record/${source}] Could not resolve organizer for payment_received notification, link=${posPaymentLink.id}`);
+          return;
+        }
+        const itemsLabel = recordedItemTitles.length === 1
+          ? `"${recordedItemTitles[0]}"`
+          : recordedItemTitles.length > 1
+            ? `${recordedItemTitles.length} items`
+            : 'a POS payment link sale';
+        await createNotification({
+          userId: organizer.userId,
+          type: 'payment_received',
+          title: 'Payment received',
+          body: `Payment of $${(recordedAmountCents / 100).toFixed(2)} received for ${itemsLabel}`,
+          link: recordedSaleId ? `/organizer/sales/${recordedSaleId}` : '/organizer/pos',
+          channel: 'OPERATIONAL',
+          sendEmail: true,
+        });
+      } catch (notifErr) {
+        console.error(`[pos-record/${source}] Failed to send payment_received notification for link=${posPaymentLink.id}:`, notifErr);
+      }
+    });
   }
 
   // findasale-hacker fix (2026-08-06): surface oversold/already-sold-elsewhere captures to
