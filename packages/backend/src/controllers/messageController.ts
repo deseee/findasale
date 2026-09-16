@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../lib/notificationService';
+import { notifyNewMessage } from '../services/messageEmailService';
 
 // GET /api/messages — list all conversations for the current user
 export const getConversations = async (req: AuthRequest, res: Response) => {
@@ -239,6 +240,11 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       }).catch(() => {});
     }
 
+    // Branded email notification (Resend rail, independent of Gmail suspension) --
+    // was defined in messageEmailService.ts but never wired up; createNotification
+    // above only writes the in-app bell notification unless sendEmail:true is passed.
+    notifyNewMessage(conversation.id, message.id).catch(() => {});
+
     res.status(201).json({ conversation, message });
   } catch (error) {
     console.error('[messages] sendMessage error:', error);
@@ -315,6 +321,9 @@ export const replyInThread = async (req: AuthRequest, res: Response) => {
       body: message.body.substring(0, 100),
       link: `/messages/${conversationId}`,
     }).catch(() => {});
+
+    // Branded email notification (Resend rail) -- see note in sendMessage above.
+    notifyNewMessage(conversationId, message.id).catch(() => {});
 
     res.status(201).json(message);
   } catch (error) {
