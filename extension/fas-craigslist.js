@@ -202,16 +202,35 @@
   // is found at all after a short grace period (e.g. zero images, or Craigslist changes this
   // widget), treats "nothing found" as "nothing pending" rather than hanging forever -- never
   // blocks a listing that has nothing left to wait for.
+  // BUG FIX 2026-09-16 (S-EXT-CRAIGSLIST-IMAGES-LAG-10PLUS, P0, Patrick-reported: publishing an
+  // item with more than ~10 photos stalls on this step). ROOT CAUSE FOUND BY READING THE CODE --
+  // the 2026-09-08 fix above only ever checked ONE progressbar (`document.querySelector`, singular,
+  // first-match-only). Craigslist's real image-upload widget renders one <div role="progressbar">
+  // PER PHOTO thumbnail, not one shared bar for the whole batch -- with a handful of photos the
+  // race window between "the first bar's upload finishes" and "every bar's upload finishes" is
+  // small enough that checking just the first one rarely mattered, but with 10+ photos that window
+  // widens enough that this poller was resolving "done" while later photos were still uploading --
+  // exactly the false-positive -> silent-no-op-click -> waitForStepChange timeout -> "Stopped on
+  // the Images step" chain Patrick is seeing. Not independently re-confirmed against a live 10+
+  // photo DOM capture this session (that would mean walking a real posting most of the way through
+  // Craigslist's own flow) -- but querying every bar and requiring ALL of them done is strictly
+  // safer than querying only the first regardless of whether Craigslist renders one bar per photo
+  // or one shared bar: with a single bar this behaves identically to before, so there is no
+  // regression risk either way. Same "no bar found -> short grace period -> nothing pending"
+  // fallback kept as-is for the zero-images / widget-changed case.
   function waitForImagesUploadComplete(timeoutMs) {
     return new Promise((resolve) => {
       const startedAt = Date.now();
       const NO_BAR_GRACE_MS = 1500;
       const check = () => {
-        const bar = document.querySelector('[role="progressbar"]');
-        if (bar) {
-          const now = bar.getAttribute('aria-valuenow');
-          const max = bar.getAttribute('aria-valuemax');
-          if (now != null && max != null && now !== '' && max !== '0' && now === max) {
+        const bars = Array.from(document.querySelectorAll('[role="progressbar"]'));
+        if (bars.length) {
+          const allDone = bars.every((bar) => {
+            const now = bar.getAttribute('aria-valuenow');
+            const max = bar.getAttribute('aria-valuemax');
+            return now != null && max != null && now !== '' && max !== '0' && now === max;
+          });
+          if (allDone) {
             resolve(true);
             return;
           }
@@ -769,7 +788,16 @@
     // "still processing" diagnostic this file already uses elsewhere rather than fabricate
     // progress.
     overlay('<b>FindA.Sale</b> - waiting for photos to finish uploading...');
-    const uploadDone = await waitForImagesUploadComplete(20000);
+    // BUG FIX 2026-09-16 (S-EXT-CRAIGSLIST-IMAGES-LAG-10PLUS, P0, same dispatch as the
+    // waitForImagesUploadComplete fix above): the flat 20000ms bound didn't scale with photo
+    // count, but this file's own prior comment already noted the completion lag grows with photo
+    // count. Baseline 20s covers up to 5 photos unchanged (no behavior change for the common
+    // case); each photo beyond that adds 2.5s, capped at 45s total, so a 10-photo listing gets
+    // ~32.5s instead of 20s. These numbers are a reasoned estimate, not a live-measured curve --
+    // if 10+ photo listings still time out at this bound, that's the next thing to widen.
+    const imagesPhotoCount = (item && item.photoUrls && item.photoUrls.length) || 0;
+    const imagesUploadTimeoutMs = Math.min(45000, 20000 + Math.max(0, imagesPhotoCount - 5) * 2500);
+    const uploadDone = await waitForImagesUploadComplete(imagesUploadTimeoutMs);
     if (!uploadDone) {
       overlayError('Images', 'Photos are still uploading after waiting -- Craigslist\'s own upload progress hasn\'t finished. Please wait for the upload to complete, then click "done with images" yourself.');
       return;
