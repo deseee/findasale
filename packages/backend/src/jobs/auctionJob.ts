@@ -301,7 +301,19 @@ export const endAuctions = async () => {
         }
 
         // Email the winner with a payment link
-        if ((result.stripePaymentIntentId || result.squareCheckoutUrl) && result.highestBid.user?.email) {
+        // No-processor fix (2026-09-16, findasale-dev -- claude_docs/STATE.md Blocked Queue
+        // P0 "Stripe-only auction winners may have NO working way to pay"): this block used to
+        // require a working payment reference (result.stripePaymentIntentId ||
+        // result.squareCheckoutUrl) before sending ANY email at all. Since the 2026-09-12
+        // Stripe-removal pass, stripePaymentIntentId can never be set again here -- Stripe's
+        // platform account is permanently closed (see ADR-121-payment-processor-stripe-
+        // replacement-evaluation.md) -- so a Stripe-only (non-Square) winner was silently
+        // skipped: no "how to pay" email, no honest explanation, nothing at all. Now sends
+        // unconditionally whenever the winner has an email, mirroring
+        // services/auctionService.ts's manual-close path (`checkoutCta`), which has always
+        // handled the no-processor case honestly with a "Contact the organizer to complete
+        // payment." fallback instead of silence.
+        if (result.highestBid.user?.email) {
           if (await suppressionService.isHardSuppressed(result.highestBid.user.email)) {
             console.log(`[auctionJob] Skipping hard-suppressed winner: ${result.highestBid.user.email}`);
           } else {
@@ -322,12 +334,28 @@ export const endAuctions = async () => {
             // always set here: this whole block runs only when `result.highestBid` is truthy,
             // which is exactly the condition under which the transaction above created a
             // Purchase row. The `/shopper/history` fallback is defensive only (should be
-            // unreachable) and points at a page that DOES exist.
+            // unreachable) and points at a page that DOES exist. NOTE (2026-09-16): the
+            // stripePaymentIntentId branch of this ternary is permanently unreachable now
+            // (Stripe can never issue a new PaymentIntent again) -- left in place, harmless,
+            // rather than ripped out speculatively during a payment-path fix.
             const payUrl = result.squareCheckoutUrl
               ? result.squareCheckoutUrl
               : result.purchaseId
                 ? `${process.env.FRONTEND_URL || 'https://finda.sale'}/purchases/${result.purchaseId}`
                 : `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/history`;
+            // Whether there is anywhere real for this winner to pay right now. Currently only
+            // ever true via result.squareCheckoutUrl -- see the payUrl note above.
+            const hasWorkingPaymentLink = !!(result.stripePaymentIntentId || result.squareCheckoutUrl);
+            const paymentSectionHtml = hasWorkingPaymentLink
+              ? `
+                    <p>Please complete your payment within 48 hours to secure the item.</p>
+                    <a href="${payUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:16px">
+                      Complete Payment
+                    </a>`
+              : `
+                    <p style="background:#fef3c7;color:#92400e;padding:12px 16px;border-radius:6px">
+                      This seller hasn't finished payment setup yet. Please contact the organizer directly to arrange payment for this item.
+                    </p>`;
             try {
               await emailService.emails.send({
                 from: fromEmail,
@@ -337,10 +365,7 @@ export const endAuctions = async () => {
                   <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
                     <h2>Congratulations, you won the auction!</h2>
                     <p>Your winning bid of <strong>$${result.price.toFixed(2)}</strong> was accepted for <strong>${result.item.title}</strong>.</p>
-                    <p>Please complete your payment within 48 hours to secure the item.</p>
-                    <a href="${payUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:16px">
-                      Complete Payment
-                    </a>
+                    ${paymentSectionHtml}
                     <p style="margin-top:24px;color:#666;font-size:13px">
                       If you have questions, contact the sale organizer directly.
                     </p>
