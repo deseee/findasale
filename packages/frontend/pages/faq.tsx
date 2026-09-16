@@ -369,14 +369,15 @@ const organizerFAQs: FAQItem[] = [
     question: 'What is the platform fee?',
     answer: (
       <>
-        FindA.Sale charges a platform fee on each completed purchase, regardless of sale type (fixed-price or auction).
-        The fee depends on your plan: <strong>SIMPLE organizers pay 10%</strong>; <strong>PRO and TEAMS organizers pay 8%</strong>.
-        Upgrading to PRO or TEAMS saves 2 percentage points on every transaction.
+        FindA.Sale charges the same flat <strong>10%</strong> platform fee on every completed purchase,
+        on every plan, regardless of sale type (fixed-price or auction). SIMPLE, PRO, and TEAMS all pay
+        the same rate. Upgrading your plan unlocks tools like bulk operations, discount rules, and staff
+        accounts, not a lower fee.
         <br /><br />
         Auctions add a second, separate fee that the <em>winning bidder</em> pays, not you: a{' '}
         <strong>buyer&apos;s premium</strong> on top of the winning bid, a flat <strong>5%</strong> set by
         FindA.Sale. It is not something you configure, and it does not change your platform fee. On a $200
-        winning bid at the 10% platform rate, the buyer pays $210.00, your platform fee is $20.00, and you
+        winning bid, the buyer pays $210.00, your platform fee is $20.00, and you
         receive $180.00 before Square's processing fee. If you would rather your winner paid exactly their bid,
         turn on &ldquo;Cover the buyer&apos;s premium&rdquo; and it comes out of your payout instead.
       </>
@@ -386,16 +387,20 @@ const organizerFAQs: FAQItem[] = [
     question: 'How do I test my payment setup before my sale starts?',
     answer: (
       <>
-        From your <Link href="/organizer/dashboard" className="text-amber-600 hover:underline">dashboard</Link>,
-        open the Sale Progress card and tap <strong>Track Progress</strong> to reach your sale's Plan
-        page. It walks you through a pre-sale checklist, including a payment test step that verifies
-        your checkout is wired up correctly. No real money moves and your inventory isn't affected.
+        Go to <Link href="/organizer/settings" className="text-amber-600 hover:underline">Settings &rarr; Payments</Link> and
+        confirm you see a green &ldquo;Square Connected&rdquo; status with no setup banners. That connection
+        is what actually determines whether card payments and payouts work on sale day.
         <br /><br />
-        For a full pre-sale walkthrough including all checkout methods and a day-before checklist, see the{' '}
+        Then open your <Link href="/organizer/pos" className="text-amber-600 hover:underline">POS page</Link> and
+        walk through it once: search for an item, add it to the cart, and confirm prices and the checkout
+        screen look right. If your sale uses self-checkout QR codes, scan one with your phone to confirm
+        it loads correctly.
+        <br /><br />
+        For the full pre-sale walkthrough and a day-before checklist, see the{' '}
         <Link href="/guide#before-you-go-live" className="text-amber-600 hover:underline">Before You Go Live</Link>{' '}
         section of the Organizer Guide.
         <br /><br />
-        <strong>Common reasons a test doesn't go through:</strong> your payment account isn't fully
+        <strong>Common reasons something doesn't go through:</strong> your Square account isn't fully
         connected yet (check{' '}
         <Link href="/organizer/settings" className="text-amber-600 hover:underline">Settings &rarr; Payments</Link>),
         your sale isn't published yet, or no items have been added. Still stuck? Contact support with
@@ -451,7 +456,7 @@ const organizerFAQs: FAQItem[] = [
         When creating your sale, enable the <strong>Auction</strong> option. Then, for each item you
         want to auction, mark it as an auction item and set a starting bid. Bidding is live. Shoppers
         see real-time bids. At the end time you set, the highest bidder wins and payment is processed
-        automatically. Your standard platform fee applies (10% on SIMPLE, 8% on PRO and TEAMS). The
+        automatically. Your standard 10% platform fee applies, the same on every plan. The
         winning bidder separately pays a flat 5% buyer&apos;s premium on top of their bid, set by
         FindA.Sale. It is disclosed to them before they bid and again at checkout.
       </>
