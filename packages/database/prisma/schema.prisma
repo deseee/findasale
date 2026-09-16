@@ -16,6 +16,12 @@ model User {
   name                         String
   role                         String                 @default("USER") // USER, ORGANIZER, ADMIN (deprecated — use roles array in Phase 3)
   roles                        String[]               @default(["USER"]) // ["USER"], ["USER", "ORGANIZER"], ["USER", "ORGANIZER", "ADMIN"]
+  // ADR-126 §9.2 (2026-09-16): now genuinely shopper-settable, via PATCH /users/me from
+  // /shopper/settings -- this is the account's OWN phone number. Deliberately NOT
+  // auto-synced with any Address.phone (a per-shipment contact number that can legitimately
+  // differ, e.g. shipping to someone else's address): a shopper edits each independently.
+  // Account Settings pre-fills a NEW saved address's phone field FROM this value as a
+  // one-time convenience only, never the other way, and never automatically after that.
   phone                        String?
   createdAt                    DateTime               @default(now())
   updatedAt                    DateTime               @updatedAt
@@ -285,6 +291,12 @@ model User {
   // Bring-Your-Own-Rails (BYOR, 2026-09-06): items this user (as organizer) marked sold off-platform
   offPlatformSalesMarked        OffPlatformSale[]
 
+  // ADR-126 (2026-09-16): persisted, reusable shipping/return addresses -- see the Address
+  // model below. Additive-only: every existing User starts with zero Address rows (no
+  // backfill), exactly this codebase's own "nullable, no backfill, deliberate" convention
+  // (FEE SNAPSHOT / SHIPPING DESTINATION blocks on Purchase use the same posture).
+  addresses                      Address[]
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -299,6 +311,51 @@ model User {
   @@index([roles]) // Sentry slow User SELECT: role-filtered user lookups (roles array GIN index)
   @@index([role]) // Sentry NODEJS-49: leaderboard cron getShopperLeaderboard WHERE role='USER' seq scan 1220ms on 83k rows
   @@index([huntPassBillingProcessor, huntPassExpiry]) // squareBillingChargeJob.ts's daily Hunt Pass due-for-charge scan
+}
+
+
+// ── ADR-126 (2026-09-16): Address -- a real, reusable, editable saved address, owned by
+// a User, separate from any one order. Replaces "typed fresh into 5 fields every time"
+// (Purchase.shippingAddressLine1..Country, HoldInvoice.shippingAddressLine1..Country) as
+// the SOURCE of checkout/invoice autofill -- those per-transaction snapshot fields are kept
+// exactly as they are (see their own comments): an order needs a permanent record of where
+// it actually shipped even if this row is later edited or deleted. Additive-only, no
+// backfill: every existing User has zero rows here until they explicitly save one via an
+// opt-in "save this address" checkbox (never silent -- Patrick's ADR-126 §9.4 call).
+//
+// role: 'SHIP_TO' (a shopper's own reusable shipping address, multiple allowed, one
+// isDefault per user+role -- Patrick's ADR-126 §9.1 call: multiple addresses, fast-path UI
+// shows only the default) | 'SHIP_FROM' (an organizer's own return address -- schema support
+// only; per Patrick's ADR-126 §9.3 call, payoutController.ts's buyShippingLabel keeps
+// reading Sale.address exactly as it does today, NOT this role -- nothing wires SHIP_FROM
+// into the live label-purchase flow yet). Plain String discriminator, matching this schema's
+// own repeated convention (Purchase.chargeType/processor, HoldInvoice.processor) rather than
+// a Prisma enum or a second table.
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label         String?  // "Home", "Work" -- optional, shopper's own words
+  recipientName String   // who it's addressed to -- may differ from User.name (gifts, a spouse, etc.)
+  line1         String
+  line2         String?
+  city          String
+  state         String
+  zip           String
+  country       String   @default("US")
+  // Per-address contact phone for this specific shipment. Deliberately separate from
+  // User.phone (see that field's own comment): this is "who to call about THIS package",
+  // User.phone is "this shopper's own number for their account". Not auto-synced either
+  // direction -- Patrick's ADR-126 §9.2 call.
+  phone         String?
+
+  role          String   @default("SHIP_TO") // 'SHIP_TO' | 'SHIP_FROM' -- see model comment above
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, role])
 }
 
 model Organizer {
