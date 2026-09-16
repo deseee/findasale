@@ -176,7 +176,7 @@ export default function SaleOGMeta({
       <meta name="twitter:image" content={ogImageUrl} />
 
       {/* Canonical link */}
-      <link rel="canonical" href={url} />
+      <link rel="canonical" href={url} key="canonical" />
     </Head>
   );
 }
