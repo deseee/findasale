@@ -481,6 +481,100 @@ export async function createDiscogsListing(
   return JSON.parse(text);
 }
 
+/**
+ * Update an existing Discogs marketplace listing's price. Independently verified against
+ * Discogs's own live API docs (discogs.com/developers/resources/marketplace/listing.html,
+ * "Edit Listing" section, checked 2026-09-15 for this dispatch): the edit endpoint is
+ * `POST /marketplace/listings/{listing_id}` (POST, not PUT/PATCH), and its documented
+ * request body is NOT a partial-field patch -- `condition`, `price`, `release_id`, and
+ * `status` are all listed as required together even for a price-only change. This
+ * function therefore does a GET-then-POST, mirroring the GET-offer-then-PUT-offer shape
+ * ebayPriceRevisionService.ts already uses for the same "price-only revision" problem on
+ * eBay: fetch the listing's current condition/status/release_id first (GET
+ * /marketplace/listings/{listing_id}, confirmed via the same docs pass to return
+ * `condition`, `status`, and `release.id` on the listing object), then POST those same
+ * values back with only `price` changed. Never throws -- returns a result object so
+ * markdownPricePropagationService.ts's pushToDiscogs can wrap it without its own
+ * try/catch needing to guess at failure shapes.
+ */
+export interface DiscogsPriceUpdateResult {
+  ok: boolean;
+  reason?: 'no-connection' | 'fetch-failed' | 'fetch-parse-failed' | 'incomplete-listing-data' | 'post-failed' | 'threw';
+  detail?: string;
+}
+
+export async function updateDiscogsListingPrice(
+  organizerId: string,
+  discogsListingId: string,
+  newPrice: number
+): Promise<DiscogsPriceUpdateResult> {
+  try {
+    const account = await getActiveDiscogsAccount(organizerId);
+    if (!account) {
+      return { ok: false, reason: 'no-connection' };
+    }
+    const accessToken = decryptAccessToken(account);
+
+    // Fetch the listing's current condition/status/release_id -- the Edit Listing endpoint
+    // requires all three alongside price (see function header); omitting them is not a
+    // documented partial-update path.
+    const getResp = await discogsRequest(
+      `/marketplace/listings/${encodeURIComponent(discogsListingId)}`,
+      accessToken
+    );
+    if (getResp.status < 200 || getResp.status >= 300) {
+      return { ok: false, reason: 'fetch-failed', detail: parseDiscogsError(getResp.status, getResp.text) };
+    }
+
+    let current: any;
+    try {
+      current = JSON.parse(getResp.text);
+    } catch {
+      return { ok: false, reason: 'fetch-parse-failed' };
+    }
+
+    const releaseId = current?.release?.id;
+    const condition = current?.condition;
+    const status = current?.status;
+    if (releaseId == null || !condition || !status) {
+      return { ok: false, reason: 'incomplete-listing-data' };
+    }
+
+    const { status: postStatus, text } = await discogsRequest(
+      `/marketplace/listings/${encodeURIComponent(discogsListingId)}`,
+      accessToken,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          release_id: releaseId,
+          condition,
+          status,
+          price: newPrice,
+        }),
+      }
+    );
+
+    if (postStatus < 200 || postStatus >= 300) {
+      const message = parseDiscogsError(postStatus, text);
+      console.error(`[Discogs] Update listing price failed for organizer ${organizerId}, listing ${discogsListingId}: ${postStatus} ${text}`);
+      await prisma.marketplaceAccount
+        .update({
+          where: { id: account.id },
+          data: { lastErrorAt: new Date(), lastErrorMessage: message.slice(0, 500) },
+        })
+        .catch(() => {
+          /* non-fatal -- don't let error-logging itself break the caller's error handling */
+        });
+      return { ok: false, reason: 'post-failed', detail: message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: 'threw', detail: (err as Error).message };
+  }
+}
+
 /** Permanently remove a Discogs listing (DELETE /marketplace/listings/{listing_id}). */
 export async function deleteDiscogsListing(organizerId: string, discogsListingId: string): Promise<{ action: 'deleted' }> {
   const account = await getActiveDiscogsAccount(organizerId);

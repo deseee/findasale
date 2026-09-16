@@ -16,6 +16,7 @@ import { pushItemsToEbayQueueOnly } from './ebayController';
 import { computeEbayInsertionsForecast } from '../lib/ebayInsertionsForecast';
 import { getNextMonthStart } from '../lib/ebayInsertionsQuotaTracker';
 import { EBAY_FREE_INSERTIONS_CAP } from '../config/ebayInsertionLimits';
+import { SYNC_FAILURE_THRESHOLD_MS } from '../jobs/ebayListingSyncCron';
 
 // ─── Helper: resolve organizerId from authenticated user ──────────────────────
 
@@ -108,6 +109,93 @@ export async function getEbayInsertionsForecast(req: AuthRequest, res: Response)
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[platformStats] getEbayInsertionsForecast error:', msg);
     return res.status(500).json({ message: 'Failed to compute eBay insertions forecast' });
+  }
+}
+
+// ─── GET /api/organizers/me/ebay-sync-issues ─────────────────────────────────
+// ebay-markdown-budget-warnings-ux-spec-2026-09-15.md, Piece 2, Dev Handoff Note #4.
+// Returns the organizer's CURRENTLY-open eBay price sync issues (evaluated fresh on
+// every request, not a snapshot of the last cron run) so the "Sync issues" mini-panel
+// on /organizer/platforms always reflects live state -- an item that resolves itself
+// on the next 4h sync-cron cycle simply stops appearing here, no separate "resolved"
+// signal needed (mirrors how the existing "not listed" gap panel behaves).
+//
+// Staleness condition intentionally mirrors ebayListingSyncCron.ts's own
+// pullSyncForOrganizer() staleItems check exactly (same SYNC_FAILURE_THRESHOLD_MS
+// constant, imported rather than redefined): Item.priceUpdatedAt is set AND
+// (Item.ebayPriceSyncedAt is null OR older than priceUpdatedAt) AND at least
+// SYNC_FAILURE_THRESHOLD_MS (~8h / 2 cron cycles) has elapsed since priceUpdatedAt.
+//
+// organizerId OR sale.organizerId scoping matches computeEbayInsertionsForecast()'s
+// pattern in ebayInsertionsForecast.ts (Item.organizerId is denormalized from
+// sale.organizerId for inventory-library items with no saleId, per schema.prisma).
+
+interface EbaySyncIssueItem {
+  id: string;
+  title: string;
+  primaryPhotoUrl: string | null;
+  price: number | null;
+  platforms: string[];
+  priceUpdatedAt: string;
+}
+
+export async function getEbaySyncIssues(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    if (!requireOrganizer(req, res)) return res;
+
+    const organizerId = await resolveOrganizerId(req);
+    if (!organizerId) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const thresholdCutoff = new Date(Date.now() - SYNC_FAILURE_THRESHOLD_MS);
+
+    const candidates = await prisma.item.findMany({
+      where: {
+        status: 'AVAILABLE',
+        deletedAt: null,
+        ebayListingId: { not: null },
+        priceUpdatedAt: { not: null, lte: thresholdCutoff },
+        OR: [
+          { organizerId },
+          { sale: { organizerId } },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        photoUrls: true,
+        price: true,
+        priceUpdatedAt: true,
+        ebayPriceSyncedAt: true,
+      },
+      orderBy: { priceUpdatedAt: 'asc' },
+    });
+
+    // ebayPriceSyncedAt-vs-priceUpdatedAt comparison can't be expressed as a single
+    // Prisma where clause (no field-to-field comparison in the standard client API) --
+    // filtered in JS here, same approach ebayListingSyncCron.ts's own staleItems check uses.
+    const syncIssues: EbaySyncIssueItem[] = candidates
+      .filter(item => !item.ebayPriceSyncedAt || item.ebayPriceSyncedAt.getTime() < item.priceUpdatedAt!.getTime())
+      .map(item => ({
+        id: item.id,
+        title: item.title,
+        primaryPhotoUrl: item.photoUrls[0] ?? null,
+        price: item.price ?? null,
+        // eBay-only for v1 -- Discogs/Reverb have no xPriceSyncedAt equivalent to
+        // compute staleness from (UX spec Open Decision C, out of scope this dispatch).
+        platforms: ['ebay'],
+        priceUpdatedAt: item.priceUpdatedAt!.toISOString(),
+      }));
+
+    return res.json({
+      totalSyncIssues: syncIssues.length,
+      items: syncIssues,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[platformStats] getEbaySyncIssues error:', msg);
+    return res.status(500).json({ message: 'Failed to compute eBay sync issues' });
   }
 }
 

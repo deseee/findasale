@@ -455,6 +455,71 @@ export async function createReverbListing(
 }
 
 /**
+ * Update an existing Reverb listing's price. Independently verified against Reverb's own
+ * live API docs (reverb-api.com/docs/updating-your-listing, fetched 2026-09-15 for this
+ * dispatch): updating a listing is a `PUT` request to `https://api.reverb.com/api/listings/
+ * {listing_id}` and "takes the same parameters as the create, but uses a PUT request" --
+ * same base URL/headers/auth this file already uses for createReverbListing. A price-only
+ * partial body is consistent with this file's own existing PUT usage:
+ * endOrDeleteReverbListing below already PUTs a partial `{ inventory: 0, has_inventory:
+ * true }` body to this exact same endpoint shape to end a listing, so this isn't a new
+ * guess about partial-PUT support -- it's the same call pattern already proven in this
+ * file. Price body shape (`{ amount, currency }`) mirrors createReverbListing's own price
+ * field exactly. Never throws -- returns a result object so
+ * markdownPricePropagationService.ts's pushToReverb can wrap it without its own try/catch
+ * needing to guess at failure shapes.
+ */
+export interface ReverbPriceUpdateResult {
+  ok: boolean;
+  reason?: 'no-connection' | 'put-failed' | 'threw';
+  detail?: string;
+}
+
+export async function updateReverbListingPrice(
+  organizerId: string,
+  reverbListingId: string,
+  newPrice: number
+): Promise<ReverbPriceUpdateResult> {
+  try {
+    const account = await getActiveReverbAccount(organizerId);
+    if (!account) {
+      return { ok: false, reason: 'no-connection' };
+    }
+    const accessToken = decryptAccessToken(account);
+
+    const resp = await fetch(`${REVERB_API_BASE}/listings/${encodeURIComponent(reverbListingId)}`, {
+      method: 'PUT',
+      headers: reverbHeaders(accessToken),
+      body: JSON.stringify({
+        price: {
+          amount: newPrice.toFixed(2),
+          currency: 'USD',
+        },
+      }),
+    });
+    const text = await resp.text();
+
+    if (!resp.ok) {
+      const { message } = parseReverbError(resp.status, text);
+      console.error(`[Reverb] Update listing price failed for organizer ${organizerId}, listing ${reverbListingId}: ${resp.status} ${text}`);
+      await prisma.marketplaceAccount
+        .update({
+          where: { id: account.id },
+          data: { lastErrorAt: new Date(), lastErrorMessage: message.slice(0, 500) },
+        })
+        .catch(() => {
+          /* non-fatal -- don't let error-logging itself break the caller's error handling */
+        });
+      return { ok: false, reason: 'put-failed', detail: message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: 'threw', detail: (err as Error).message };
+  }
+}
+
+/**
  * End or delete a Reverb listing, depending on whether it's still a draft or already
  * published. Tries a hard DELETE first (only works for drafts — Reverb: "Listings that have
  * already been published can't be deleted", confirmed live 2026-08-18 via

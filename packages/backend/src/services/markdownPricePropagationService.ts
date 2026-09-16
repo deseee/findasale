@@ -8,17 +8,18 @@
  * platform IDs are actually present on the item (eBay/Discogs/Reverb) so one platform's
  * failure never blocks another.
  *
- * Scope note (Patrick's Decision, Flagged Question #2 — "eBay ships first; Discogs/Reverb
+ * Scope note (Patrick's Decision, Flagged Question #2 -- "eBay ships first; Discogs/Reverb
  * is a fast-follow, not simultaneous"): eBay is wired for real below. Discogs and Reverb
- * are marked as explicit EXTENSION POINTS in the `handlers` array — their connector
- * functions (`updateDiscogsListingPrice` / `updateReverbListingPrice`) do not exist yet
- * (next-session-prompt.md Dispatch 3). Do NOT add a stub call for either here; when that
- * dispatch lands, add a handler entry below following pushToEbay's exact shape (own
- * try/catch, never throws, returns a MarketplacePropagationResult) — no restructuring of
- * this function should be needed.
+ * (Dispatch 3, 2026-09-15) are now wired too, following pushToEbay's exact shape (own
+ * try/catch, never throws, returns a MarketplacePropagationResult) via
+ * updateDiscogsListingPrice (discogsListingConnector.ts) and updateReverbListingPrice
+ * (reverbConnector.ts) -- no restructuring of this function was needed, per the file's
+ * own original instruction.
  */
 import { refreshEbayAccessToken } from './ebayHttp';
 import { reviseEbayOfferPrice } from './ebayPriceRevisionService';
+import { updateDiscogsListingPrice } from './marketplace/discogsListingConnector';
+import { updateReverbListingPrice } from './marketplace/reverbConnector';
 
 export type MarkdownPropagationPlatform = 'EBAY' | 'DISCOGS' | 'REVERB';
 
@@ -27,9 +28,8 @@ export interface MarkdownPropagationItem {
   organizerId: string;
   price: number;
   ebayOfferId?: string | null;
-  // discogsListingId / reverbListingId are already on the Item model (schema.prisma) but
-  // are not read here yet — no connector function exists to push to for either (see file
-  // header). Wiring them in is a fast-follow, not this dispatch's scope.
+  discogsListingId?: string | null;
+  reverbListingId?: string | null;
 }
 
 export interface MarketplacePropagationResult {
@@ -58,11 +58,41 @@ async function pushToEbay(item: MarkdownPropagationItem): Promise<MarketplacePro
   }
 }
 
+async function pushToDiscogs(item: MarkdownPropagationItem): Promise<MarketplacePropagationResult> {
+  try {
+    const result = await updateDiscogsListingPrice(item.organizerId, item.discogsListingId as string, item.price);
+    if (!result.ok) {
+      console.warn(
+        `[markdown-propagation] item ${item.id} Discogs push failed: ${result.reason}${result.detail ? ` — ${result.detail}` : ''}`
+      );
+    }
+    return { platform: 'DISCOGS', ok: result.ok, reason: result.reason, detail: result.detail };
+  } catch (err) {
+    console.error(`[markdown-propagation] item ${item.id} Discogs push threw:`, (err as Error).message);
+    return { platform: 'DISCOGS', ok: false, reason: 'threw', detail: (err as Error).message };
+  }
+}
+
+async function pushToReverb(item: MarkdownPropagationItem): Promise<MarketplacePropagationResult> {
+  try {
+    const result = await updateReverbListingPrice(item.organizerId, item.reverbListingId as string, item.price);
+    if (!result.ok) {
+      console.warn(
+        `[markdown-propagation] item ${item.id} Reverb push failed: ${result.reason}${result.detail ? ` — ${result.detail}` : ''}`
+      );
+    }
+    return { platform: 'REVERB', ok: result.ok, reason: result.reason, detail: result.detail };
+  } catch (err) {
+    console.error(`[markdown-propagation] item ${item.id} Reverb push threw:`, (err as Error).message);
+    return { platform: 'REVERB', ok: false, reason: 'threw', detail: (err as Error).message };
+  }
+}
+
 /**
  * Extension-point registry: one entry per marketplace this function can push to, each
- * gated on whichever id the item actually carries. Add Discogs/Reverb entries here
- * (following pushToEbay's shape) once their connector functions exist — no other
- * change to this function should be required.
+ * gated on whichever id the item actually carries. eBay/Discogs/Reverb are all wired as
+ * of Dispatch 3 (2026-09-15) -- any future marketplace follows the same shape (own
+ * try/catch push* function above, gated entry below).
  */
 function buildHandlers(item: MarkdownPropagationItem): Array<() => Promise<MarketplacePropagationResult>> {
   const handlers: Array<() => Promise<MarketplacePropagationResult>> = [];
@@ -71,11 +101,13 @@ function buildHandlers(item: MarkdownPropagationItem): Array<() => Promise<Marke
     handlers.push(() => pushToEbay(item));
   }
 
-  // --- Discogs extension point (not wired — updateDiscogsListingPrice doesn't exist yet) ---
-  // if (item.discogsListingId) handlers.push(() => pushToDiscogs(item));
+  if (item.discogsListingId) {
+    handlers.push(() => pushToDiscogs(item));
+  }
 
-  // --- Reverb extension point (not wired — updateReverbListingPrice doesn't exist yet) ---
-  // if (item.reverbListingId) handlers.push(() => pushToReverb(item));
+  if (item.reverbListingId) {
+    handlers.push(() => pushToReverb(item));
+  }
 
   return handlers;
 }

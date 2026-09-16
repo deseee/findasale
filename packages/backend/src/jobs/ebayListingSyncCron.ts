@@ -49,7 +49,7 @@ import { reviseEbayOfferPrice } from '../services/ebayPriceRevisionService';
 // words: "flagged for Patrick/backend to confirm or adjust; do not silently ship a
 // different number without it being visible in code comments referencing this spec") --
 // visible here per that instruction.
-const SYNC_FAILURE_THRESHOLD_MS = 8 * 60 * 60 * 1000;
+export const SYNC_FAILURE_THRESHOLD_MS = 8 * 60 * 60 * 1000; // exported (dispatch 5, ebay-markdown-budget-warnings-ux-spec-2026-09-15 Dev Handoff Note #4) so platformStatsController.ts's getEbaySyncIssues can reuse the exact same threshold instead of redefining it.
 
 // Map eBay Inventory API condition enum -> FindA.Sale condition string
 function mapEbayConditionToFas(ebayCondition: string): string | null {

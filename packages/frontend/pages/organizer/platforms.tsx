@@ -16,6 +16,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Skeleton from '../../components/Skeleton';
 import PlatformGapPanel from '../../components/PlatformGapPanel';
+import SyncIssuesPanel from '../../components/SyncIssuesPanel';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,24 @@ interface PlatformGapResponse {
 
 type GapPlatform = 'ebay' | 'google' | 'facebook' | 'shopify';
 
+// ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 1 -- mirrors
+// ebayInsertionsForecast.ts's EbayInsertionsForecast response shape exactly.
+interface EbayInsertionsForecast {
+  usedThisMonth: number;
+  freeInsertionsCap: number;
+  projectedRenewalsBeforeReset: number;
+  projectedTotalUsage: number;
+  resetAt: string;
+  status: 'ok' | 'approaching' | 'over';
+  degraded?: boolean;
+}
+
+// ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2 -- mirrors
+// getEbaySyncIssues's response shape (platformStatsController.ts).
+interface EbaySyncIssuesResponse {
+  totalSyncIssues: number;
+}
+
 // ── Coverage ring SVG ─────────────────────────────────────────────────────
 
 function CoverageRing({ score }: { score: number }) {
@@ -165,6 +184,70 @@ function EbayLimitBar({ listed, limit, warningLevel }: { listed: number; limit: 
   );
 }
 
+// ── eBay insertions forecast sub-block ────────────────────────────────────
+// ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 1, Recommended Design.
+// Reuses EbayLimitBar's exact bar visual pattern (h-2 rounded bar, green/amber/
+// red fill) per the spec's explicit "do not invent a second bar style on the
+// same card" instruction.
+function EbayForecastBlock({ forecast }: { forecast: EbayInsertionsForecast }) {
+  if (forecast.degraded) {
+    return (
+      <div className="mt-3 pt-3 border-t border-warm-100 dark:border-gray-700">
+        <p className="text-xs text-warm-500 dark:text-warm-400 italic">
+          Free insertion limit unavailable right now
+        </p>
+      </div>
+    );
+  }
+
+  const { usedThisMonth, freeInsertionsCap, projectedRenewalsBeforeReset, projectedTotalUsage, resetAt, status } = forecast;
+  const pct = freeInsertionsCap > 0 ? Math.min((projectedTotalUsage / freeInsertionsCap) * 100, 100) : 0;
+  const projectedPct = freeInsertionsCap > 0 ? Math.round((projectedTotalUsage / freeInsertionsCap) * 100) : 0;
+  const barColor =
+    status === 'ok' ? 'bg-green-500'
+    : status === 'approaching' ? 'bg-yellow-500'
+    : 'bg-red-500';
+  const resetLabel = new Date(resetAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  return (
+    <div className="mt-3 pt-3 border-t border-warm-100 dark:border-gray-700">
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-xs font-medium text-warm-700 dark:text-warm-300">
+          Free eBay insertions this month
+        </span>
+        <span className="text-xs text-warm-500 dark:text-warm-400">(estimated)</span>
+        <span
+          className="text-warm-400 dark:text-warm-500 cursor-help text-xs"
+          title="Based on your GTC listings' renewal dates. Doesn't call eBay live, so it can drift if you relist directly on eBay's own dashboard."
+        >
+          &#9432;
+        </span>
+      </div>
+      <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">
+        {usedThisMonth} used + ~{projectedRenewalsBeforeReset} projected renewals = ~{projectedTotalUsage} of {freeInsertionsCap}
+      </p>
+      <div className="h-2 bg-warm-100 dark:bg-gray-700 rounded-full overflow-hidden mt-1.5">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Resets {resetLabel}</p>
+
+      {status === 'approaching' && (
+        <div className="mt-2 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-xs text-yellow-800 dark:text-yellow-200">
+          Projected to use {projectedPct}% of your free insertions &mdash; consider pausing new eBay pushes this month
+        </div>
+      )}
+      {status === 'over' && (
+        <div className="mt-2 px-2 py-1 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-200">
+          Projected to exceed your free eBay insertions this month &mdash; new listings past {freeInsertionsCap} will incur eBay&apos;s insertion fee.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────
 
 export default function PlatformsPage() {
@@ -173,6 +256,10 @@ export default function PlatformsPage() {
   const queryClient = useQueryClient();
 
   const [gapPanel, setGapPanel] = useState<{ platform: GapPlatform; googleFilter?: string } | null>(null);
+  // ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2, Recommended
+  // Design point 3 -- click-to-expand mini-panel, reusing PlatformGapPanel's
+  // exact slide-in pattern.
+  const [syncIssuesPanelOpen, setSyncIssuesPanelOpen] = useState(false);
 
   // Unlisted inventory pagination
   const [unlistedPage, setUnlistedPage] = useState(1);
@@ -213,6 +300,45 @@ export default function PlatformsPage() {
     }
     setUnlistedInit(true);
   }, [unlistedData, unlistedPage]);
+
+  // ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 1, Dev Handoff
+  // Note #2: gated on ebay?.connected -- don't fetch or render the forecast for
+  // a disconnected account (Piece 1 Edge Cases).
+  const { data: forecastData } = useQuery<EbayInsertionsForecast>({
+    queryKey: ['ebay-insertions-forecast'],
+    queryFn: async () => {
+      const res = await api.get('/organizers/me/ebay-insertions-forecast');
+      return res.data as EbayInsertionsForecast;
+    },
+    staleTime: 60_000,
+    enabled: !!user?.id && !!stats?.ebay?.connected,
+  });
+
+  // ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2, Dev Handoff
+  // Note #5: drives the "View N sync issues" link's count on the eBay card.
+  // The mini-panel itself (SyncIssuesPanel) fetches the full item list only
+  // once opened, so this query stays cheap on every page load.
+  const { data: syncIssuesData } = useQuery<EbaySyncIssuesResponse>({
+    queryKey: ['ebay-sync-issues'],
+    queryFn: async () => {
+      const res = await api.get('/organizers/me/ebay-sync-issues');
+      return res.data as EbaySyncIssuesResponse;
+    },
+    staleTime: 30_000,
+    enabled: !!user?.id && !!stats?.ebay?.connected,
+  });
+
+  // ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2, Recommended
+  // Design step 2: the markdown_sync_failure Notification's link is
+  // /organizer/platforms?syncIssues=1 -- auto-open the mini-panel when that
+  // query param is present so the notification's deep link actually lands
+  // somewhere concrete (Piece 2's own JTBD rationale for the panel existing).
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (router.query.syncIssues === '1') {
+      setSyncIssuesPanelOpen(true);
+    }
+  }, [router.isReady, router.query.syncIssues]);
 
   // Queue settings mutation
   const queueSettingsMutation = useMutation({
@@ -277,6 +403,11 @@ export default function PlatformsPage() {
           googleFilter={gapPanel.googleFilter}
           onClose={() => setGapPanel(null)}
         />
+      )}
+
+      {/* Sync Issues Panel */}
+      {syncIssuesPanelOpen && (
+        <SyncIssuesPanel onClose={() => setSyncIssuesPanelOpen(false)} />
       )}
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
@@ -346,6 +477,8 @@ export default function PlatformsPage() {
                     </div>
                   )}
 
+                  {forecastData && <EbayForecastBlock forecast={forecastData} />}
+
                   {ebay.queueMode && (
                     <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-[#87A878]/10 text-[#6b8f5e] dark:text-[#a8c49a] border border-[#87A878]/30">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#87A878]" />
@@ -379,6 +512,17 @@ export default function PlatformsPage() {
                     >
                       View {stats?.totals.totalUnlisted ?? 0} not listed &rarr;
                     </button>
+                    {/* ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2:
+                        only rendered when count > 0 (Edge Cases -- no permanently-
+                        empty state). */}
+                    {!!syncIssuesData?.totalSyncIssues && syncIssuesData.totalSyncIssues > 0 && (
+                      <button
+                        onClick={() => setSyncIssuesPanelOpen(true)}
+                        className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
+                      >
+                        View {syncIssuesData.totalSyncIssues} sync issue{syncIssuesData.totalSyncIssues === 1 ? '' : 's'} &rarr;
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (
