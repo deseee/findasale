@@ -178,51 +178,33 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
         continue;
       }
 
-      const sku = `FAS-${item.id}`;
       const updates: Record<string, string | number | null> = {};
       const changeLog: string[] = [];
 
-      // --- Fetch inventory item (title, description, condition) ---
-      const inventoryPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-      const inventoryRes = await fetch(
-        `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(inventoryPath)}`,
-        { method: 'GET', headers: proxyHeaders }
-      );
+      // ROOT CAUSE (2026-09-16, live Railway logs + prod DB check -- organizer
+      // cmnxueoas0005tfv8brnc0kky, ~192/192 of this call 404ing every cron cycle):
+      // this file used to guess `sku = FAS-${item.id}` for the inventory_item fetch
+      // below. That guess 404s whenever the organizer has skuAppendDate/Cost/
+      // Location enabled, because buildCustomLabel() (ebayController.ts) appends a
+      // date/cost/roomTag suffix to the REAL SKU in that case (e.g.
+      // "FAS-<id> 2026-09-10") -- confirmed live: that organizer has
+      // skuAppendDate=true. Same root cause and same fix pattern itemController.ts's
+      // push-sync path already uses ("Use the REAL SKU from the offer object
+      // (carries a date suffix) — not `FAS-${id}`"): fetch the offer FIRST (this
+      // call already existed and works fine, keyed on the stored ebayOfferId, not a
+      // guess), read the real sku off the returned offer object, and use THAT for
+      // the inventory_item fetch -- never reconstruct it from item.id.
+      //
+      // The remaining ~47/239 of that organizer's items have no ebayOfferId stored
+      // at all (all from an April 2026 batch predating this organizer's
+      // Inventory-API-based eBay push flow -- i.e. not Inventory API items at all).
+      // There is no Inventory API offer/inventory_item resource to pull for those,
+      // so both fetches below are skipped for them (this file already gated the
+      // offer fetch on `item.ebayOfferId`; the inventory_item fetch below now is
+      // too) instead of burning eBay API budget on a guaranteed 404 for zero benefit.
+      let offerObject: Record<string, unknown> | null = null;
 
-      if (inventoryRes.ok) {
-        const inventoryData = (await inventoryRes.json()) as EbayInventoryItem;
-
-        // Title
-        const ebayTitle = inventoryData.product?.title?.trim();
-        if (ebayTitle && ebayTitle !== item.title) {
-          updates.title = ebayTitle;
-          changeLog.push(`title "${item.title}" -> "${ebayTitle}"`);
-        }
-
-        // Description — skip if organizer has a template (eBay stores expanded HTML; pulling back would clobber the clean item description)
-        if (!hasDescriptionTemplate) {
-          const ebayDescription = inventoryData.product?.description?.trim();
-          if (ebayDescription && ebayDescription !== (item.description ?? '')) {
-            updates.description = ebayDescription;
-            changeLog.push(`description updated`);
-          }
-        }
-
-        // Condition
-        if (inventoryData.condition) {
-          const fasCond = mapEbayConditionToFas(inventoryData.condition);
-          if (fasCond && fasCond !== item.condition) {
-            updates.condition = fasCond;
-            changeLog.push(`condition "${item.condition ?? 'null'}" -> "${fasCond}"`);
-          }
-        }
-      } else {
-        console.warn(
-          `[eBay PullSync] Inventory item fetch failed for ${sku}: HTTP ${inventoryRes.status}`
-        );
-      }
-
-      // --- Fetch offer (price) ---
+      // --- Fetch offer (price) -- also recovers the real Inventory API SKU ---
       if (item.ebayOfferId) {
         const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(item.ebayOfferId)}`;
         const offerRes = await fetch(
@@ -231,7 +213,8 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
         );
 
         if (offerRes.ok) {
-          const offerData = (await offerRes.json()) as EbayOffer;
+          offerObject = (await offerRes.json()) as Record<string, unknown>;
+          const offerData = offerObject as EbayOffer;
           const priceStr = offerData.pricingSummary?.price?.value;
           if (priceStr) {
             const ebayPrice = parseFloat(priceStr);
@@ -243,6 +226,56 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
         } else {
           console.warn(
             `[eBay PullSync] Offer fetch failed for offerId ${item.ebayOfferId}: HTTP ${offerRes.status}`
+          );
+        }
+      } else {
+        console.log(
+          `[eBay PullSync] item ${item.id}: no ebayOfferId on file -- skipping inventory/offer pull (likely a pre-Inventory-API listing)`
+        );
+      }
+
+      // --- Fetch inventory item (title, description, condition) using the REAL
+      // SKU recovered from the offer object above. No offer fetched = no known real
+      // SKU = skip (see root-cause note above; replaces the old `FAS-${item.id}`
+      // guess entirely). ---
+      const sku = offerObject ? (offerObject.sku as string | undefined) : undefined;
+      if (sku) {
+        const inventoryPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+        const inventoryRes = await fetch(
+          `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(inventoryPath)}`,
+          { method: 'GET', headers: proxyHeaders }
+        );
+
+        if (inventoryRes.ok) {
+          const inventoryData = (await inventoryRes.json()) as EbayInventoryItem;
+
+          // Title
+          const ebayTitle = inventoryData.product?.title?.trim();
+          if (ebayTitle && ebayTitle !== item.title) {
+            updates.title = ebayTitle;
+            changeLog.push(`title "${item.title}" -> "${ebayTitle}"`);
+          }
+
+          // Description — skip if organizer has a template (eBay stores expanded HTML; pulling back would clobber the clean item description)
+          if (!hasDescriptionTemplate) {
+            const ebayDescription = inventoryData.product?.description?.trim();
+            if (ebayDescription && ebayDescription !== (item.description ?? '')) {
+              updates.description = ebayDescription;
+              changeLog.push(`description updated`);
+            }
+          }
+
+          // Condition
+          if (inventoryData.condition) {
+            const fasCond = mapEbayConditionToFas(inventoryData.condition);
+            if (fasCond && fasCond !== item.condition) {
+              updates.condition = fasCond;
+              changeLog.push(`condition "${item.condition ?? 'null'}" -> "${fasCond}"`);
+            }
+          }
+        } else {
+          console.warn(
+            `[eBay PullSync] Inventory item fetch failed for ${sku}: HTTP ${inventoryRes.status}`
           );
         }
       }
