@@ -342,18 +342,24 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
         // they need to know promptly enough to decide whether to retry, not just whenever
         // they next happen to open the app. Moved outside the transaction (fire-and-forget,
         // matching every other post-commit notification in this job's sibling crons).
-        createNotification({
-          userId: invoice.shopperUserId,
-          type: 'invoice_expired',
-          title: 'Invoice expired',
-          body:
-            invoice.itemIds.length > 1
-              ? `Your invoice for ${invoice.itemIds.length} items expired before payment was completed. Your hold remains active.`
-              : 'Your invoice expired before payment was completed. Your hold remains active.',
-          link: invoice.itemIds[0] ? `/items/${invoice.itemIds[0]}` : undefined,
-          channel: 'OPERATIONAL',
-          sendEmail: true,
-        }).catch((err: unknown) => console.error(`[invoiceExpiryJob] Failed to create invoice_expired notification for invoice ${invoice.id}:`, err));
+        // Guest invoice (2026-09-16, nullable shopperUserId): no real User row to write
+        // an in-app/email notification against via this helper -- skip it for a guest
+        // invoice, same guard holdInvoicePaymentRecorder.ts already uses for this
+        // nullability.
+        if (invoice.shopperUserId) {
+          createNotification({
+            userId: invoice.shopperUserId,
+            type: 'invoice_expired',
+            title: 'Invoice expired',
+            body:
+              invoice.itemIds.length > 1
+                ? `Your invoice for ${invoice.itemIds.length} items expired before payment was completed. Your hold remains active.`
+                : 'Your invoice expired before payment was completed. Your hold remains active.',
+            link: invoice.itemIds[0] ? `/items/${invoice.itemIds[0]}` : undefined,
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err: unknown) => console.error(`[invoiceExpiryJob] Failed to create invoice_expired notification for invoice ${invoice.id}:`, err));
+        }
 
         // Stripe-side cancellation. Non-fatal to this job, but NOT best-effort-and-
         // forget any more (P1, 2026-08-17): the items were just handed back to RESERVED,

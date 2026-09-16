@@ -2712,24 +2712,29 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
       const multi = releasedItemIds.length > 1;
       const itemLabel = multi ? `${releasedItemIds.length} items` : `"${reservation.item.title}"`;
 
-      await tx.notification.create({
-        data: {
-          // The INVOICE's shopper, not the passed reservation's holder. Identical in
-          // every path that creates an invoice (a bundle only ever bundles one shopper's
-          // own holds), but the invoice is the object being cancelled, so its owner is
-          // the correct recipient -- and on the shopper arm it is the same id the
-          // authorization above was granted on, so "You cancelled..." can never be sent
-          // to someone who did not.
-          userId: invoice.shopperUserId,
-          type: 'invoice_cancelled',
-          title: isInvoiceShopper ? 'Payment request cancelled' : 'Invoice cancelled',
-          body: isInvoiceShopper
-            ? `You cancelled the payment request for ${itemLabel}. ${multi ? 'Your holds are' : 'Your hold is'} still active, so nothing has gone back on sale.`
-            : `The invoice for ${itemLabel} has been cancelled. ${multi ? 'Your holds remain' : 'Your hold remains'} active.`,
-          link: `/items/${reservation.item.id}`,
-          channel: 'OPERATIONAL',
-        },
-      });
+      // Guest invoice (2026-09-16, nullable shopperUserId): no real User row to write
+      // an in-app notification against -- skip it for a guest invoice, same guard
+      // holdInvoicePaymentRecorder.ts already uses for this nullability.
+      if (invoice.shopperUserId) {
+        await tx.notification.create({
+          data: {
+            // The INVOICE's shopper, not the passed reservation's holder. Identical in
+            // every path that creates an invoice (a bundle only ever bundles one shopper's
+            // own holds), but the invoice is the object being cancelled, so its owner is
+            // the correct recipient -- and on the shopper arm it is the same id the
+            // authorization above was granted on, so "You cancelled..." can never be sent
+            // to someone who did not.
+            userId: invoice.shopperUserId,
+            type: 'invoice_cancelled',
+            title: isInvoiceShopper ? 'Payment request cancelled' : 'Invoice cancelled',
+            body: isInvoiceShopper
+              ? `You cancelled the payment request for ${itemLabel}. ${multi ? 'Your holds are' : 'Your hold is'} still active, so nothing has gone back on sale.`
+              : `The invoice for ${itemLabel} has been cancelled. ${multi ? 'Your holds remain' : 'Your hold remains'} active.`,
+            link: `/items/${reservation.item.id}`,
+            channel: 'OPERATIONAL',
+          },
+        });
+      }
 
       // On the shopper arm the organizer is the one left waiting on a payment that is
       // not coming, and nothing else tells them. Not sent on the organizer arm -- they
@@ -2983,18 +2988,23 @@ export const releaseInvoiceById = async (req: AuthRequest, res: Response) => {
 
       const amountLabel = `$${(invoice.totalAmount / 100).toFixed(2)}`;
 
-      await tx.notification.create({
-        data: {
-          userId: invoice.shopperUserId,
-          type: 'invoice_cancelled',
-          title: isInvoiceShopper ? 'Payment request cancelled' : 'Invoice cancelled',
-          body: isInvoiceShopper
-            ? `You cancelled the ${amountLabel} payment request.`
-            : `The ${amountLabel} payment request has been cancelled.`,
-          link: '/shopper/dashboard',
-          channel: 'OPERATIONAL',
-        },
-      });
+      // Guest invoice (2026-09-16, nullable shopperUserId): no real User row to write
+      // an in-app notification against -- skip it for a guest invoice, same guard
+      // holdInvoicePaymentRecorder.ts already uses for this nullability.
+      if (invoice.shopperUserId) {
+        await tx.notification.create({
+          data: {
+            userId: invoice.shopperUserId,
+            type: 'invoice_cancelled',
+            title: isInvoiceShopper ? 'Payment request cancelled' : 'Invoice cancelled',
+            body: isInvoiceShopper
+              ? `You cancelled the ${amountLabel} payment request.`
+              : `The ${amountLabel} payment request has been cancelled.`,
+            link: '/shopper/dashboard',
+            channel: 'OPERATIONAL',
+          },
+        });
+      }
 
       if (isInvoiceShopper) {
         await tx.notification.create({

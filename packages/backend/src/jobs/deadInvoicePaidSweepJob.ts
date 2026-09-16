@@ -204,7 +204,7 @@ function reportPaidDeadInvoice(params: {
   paymentIntentId: string | null;
   amountCents: number;
   saleId: string;
-  shopperUserId: string;
+  shopperUserId: string | null;
   stripeAccount: string | null;
   isDirectCharge: boolean;
   refundOutcome: DeadInvoiceRefundOutcome;
@@ -350,14 +350,15 @@ export const sweepDeadInvoicesForPayment = async (): Promise<void> => {
           reason: 'NOT_ATTEMPTED (no PaymentIntent on the Stripe session)',
         };
 
-        if (paymentIntentId && ctx.paymentIntent) {
+        if (paymentIntentId && ctx.paymentIntent && invoice.shopperUserId) {
+          const shopperUserId = invoice.shopperUserId;
           try {
             refundOutcome = await attemptDeadInvoiceRefund({
               invoiceId: invoice.id,
               invoiceStatus: invoice.status,
               itemIds: invoice.itemIds,
               saleId: invoice.saleId,
-              shopperUserId: invoice.shopperUserId,
+              shopperUserId,
               invoiceTotalCents: invoice.totalAmount,
               paymentIntentId,
               chargeAmountReceivedCents:
@@ -384,6 +385,12 @@ export const sweepDeadInvoicesForPayment = async (): Promise<void> => {
               refundErr
             );
           }
+        } else if (paymentIntentId && ctx.paymentIntent && !invoice.shopperUserId) {
+          refundOutcome = {
+            attempted: false,
+            refunded: false,
+            reason: 'NOT_ATTEMPTED (guest invoice -- no shopper account to run the auto-refund path against; still alerted below)',
+          };
         }
 
         if (refundOutcome.refunded) refunded++;

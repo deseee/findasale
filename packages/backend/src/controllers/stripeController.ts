@@ -3139,15 +3139,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // they next happen to open the app. Moved outside the transaction (fire-and-forget,
           // same pattern as every other post-commit notification in this file) so it can go
           // through the email-capable lib/notificationService.ts helper instead.
-          createNotification({
-            userId: holdInvoice.shopperUserId,
-            type: 'payment_failed',
-            title: 'Payment failed',
-            body: `Your payment for ${itemList} failed: ${charge.failure_message || 'Unknown error'}. Your holds remain active.`,
-            link: `/items/${holdInvoice.itemIds[0]}`,
-            channel: 'OPERATIONAL',
-            sendEmail: true,
-          }).catch((err: unknown) => console.error(`[hold-invoice] Failed to create payment_failed notification for invoice ${invoiceId}:`, err));
+          // Guest invoice (2026-09-16, nullable shopperUserId): no real User row to write
+          // an in-app/email notification against via this helper -- skip it for a guest
+          // invoice, same guard holdInvoicePaymentRecorder.ts already uses for this
+          // nullability.
+          if (holdInvoice.shopperUserId) {
+            createNotification({
+              userId: holdInvoice.shopperUserId,
+              type: 'payment_failed',
+              title: 'Payment failed',
+              body: `Your payment for ${itemList} failed: ${charge.failure_message || 'Unknown error'}. Your holds remain active.`,
+              link: `/items/${holdInvoice.itemIds[0]}`,
+              channel: 'OPERATIONAL',
+              sendEmail: true,
+            }).catch((err: unknown) => console.error(`[hold-invoice] Failed to create payment_failed notification for invoice ${invoiceId}:`, err));
+          }
 
           // P1 fix (2026-08-17): close the Stripe Checkout Session. Stripe deliberately
           // leaves a Checkout Session OPEN after a decline so the buyer can retry -- and on
