@@ -22,11 +22,25 @@
  */
 import { ebayFetch } from './ebayPublishService';
 import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
+import { ebayProxyUrl, ebayProxyHeaders } from './ebayHttp';
 
 export interface EbayPriceRevisionResult {
   ok: boolean;
-  reason?: 'rate-limited' | 'no-offer-id' | 'get-failed' | 'put-failed' | 'error';
+  reason?:
+    | 'rate-limited'
+    | 'no-offer-id'
+    | 'get-failed'
+    | 'put-failed'
+    | 'error'
+    // Legacy Trading-API path (eBay-sync-issues investigation, 2026-09-16): these items
+    // predate FindA.Sale's Inventory-API push flow (April 2026 batch, imported via
+    // GetItem/GetMyeBaySelling sync) -- they have Item.ebayListingId (classic numeric
+    // ItemID) but no Item.ebayOfferId, so there is no Offer object for the GET/PUT path
+    // above to revise. See reviseLegacyListingPrice() below.
+    | 'legacy-revise-failed';
   detail?: string;
+  /** Which code path actually handled this revision -- absent on failures before either path ran. */
+  method?: 'inventory-api' | 'trading-api-legacy';
 }
 
 /**
@@ -41,14 +55,21 @@ export interface EbayPriceRevisionResult {
 export async function reviseEbayOfferPrice(
   offerId: string | null | undefined,
   newPrice: number,
-  accessToken: string
+  accessToken: string,
+  ebayListingId?: string | null
 ): Promise<EbayPriceRevisionResult> {
   // Don't spend eBay calls when rate-limited — skip and let the caller defer to next cycle.
   if (isEbayRateLimited()) {
     return { ok: false, reason: 'rate-limited' };
   }
   if (!offerId) {
-    return { ok: false, reason: 'no-offer-id' };
+    if (!ebayListingId) {
+      return { ok: false, reason: 'no-offer-id' };
+    }
+    // Legacy listing: no Offer object exists (never pushed through the Inventory-API
+    // publish flow), but a live eBay listing (Item.ebayListingId) does. Revise its price
+    // in place via the Trading API -- same ItemID, never a new listing, never a delete.
+    return reviseLegacyListingPrice(ebayListingId, newPrice, accessToken);
   }
 
   try {
@@ -89,8 +110,74 @@ export async function reviseEbayOfferPrice(
       const bodyText = await putRes.text().catch(() => '');
       return { ok: false, reason: 'put-failed', detail: `HTTP ${putRes.status} ${bodyText.slice(0, 200)}` };
     }
-    return { ok: true };
+    return { ok: true, method: 'inventory-api' };
   } catch (err) {
     return { ok: false, reason: 'error', detail: (err as Error).message };
+  }
+}
+
+// Minimal local copy of the XML-value extractor ebayController.ts's Trading API parsing
+// uses (module-scope `xmlVal` there is not exported) -- same regex, same behavior.
+function xmlVal(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`));
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Revise price on a LEGACY eBay listing -- one that has Item.ebayListingId (a classic
+ * Trading-API ItemID) but no Item.ebayOfferId, meaning FindA.Sale never created an Offer
+ * object for it (imported/synced in, not published through this app's Inventory-API flow --
+ * see ebayController.ts's reviseNativeListingShippingPolicy(), the same-shaped fix already
+ * shipped for shipping-policy drift on these listings, which this mirrors for price).
+ *
+ * Uses the Trading API's ReviseItem call to update StartPrice directly on the existing
+ * ItemID -- updates the SAME live listing in place. This must never create a new listing
+ * or delete-then-recreate one (that burns eBay's free-listing-slot quota); ReviseItem does
+ * neither -- it is a pure in-place field update on an ItemID that already exists.
+ */
+async function reviseLegacyListingPrice(
+  ebayListingId: string,
+  newPrice: number,
+  accessToken: string
+): Promise<EbayPriceRevisionResult> {
+  try {
+    const reviseXml = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Item>
+    <ItemID>${ebayListingId}</ItemID>
+    <StartPrice currencyID="USD">${newPrice.toFixed(2)}</StartPrice>
+  </Item>
+</ReviseItemRequest>`;
+
+    const reviseRes = await fetch(ebayProxyUrl('/ws/api.dll'), {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'ReviseItem',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+        'X-EBAY-API-IAF-TOKEN': accessToken,
+        'Content-Type': 'text/xml',
+        ...ebayProxyHeaders(),
+      },
+      body: reviseXml,
+    });
+    trackEbayCall();
+
+    if (!reviseRes.ok) {
+      const bodyText = await reviseRes.text().catch(() => '');
+      return { ok: false, reason: 'legacy-revise-failed', detail: `HTTP ${reviseRes.status} ${bodyText.slice(0, 200)}` };
+    }
+
+    const reviseText = await reviseRes.text();
+    const ack = xmlVal(reviseText, 'Ack');
+    if (ack && ack !== 'Success' && ack !== 'Warning') {
+      const errMsg = xmlVal(reviseText, 'LongMessage') || xmlVal(reviseText, 'ShortMessage') || 'Unknown error';
+      return { ok: false, reason: 'legacy-revise-failed', detail: `${ack}:${errMsg}`.slice(0, 200) };
+    }
+
+    return { ok: true, method: 'trading-api-legacy' };
+  } catch (err) {
+    return { ok: false, reason: 'legacy-revise-failed', detail: (err as Error).message };
   }
 }

@@ -153,7 +153,7 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
         (!item.ebayPriceSyncedAt || item.priceUpdatedAt.getTime() > item.ebayPriceSyncedAt.getTime());
 
       if (pendingLocalPriceChange && item.price != null) {
-        const pushResult = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken);
+        const pushResult = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken, item.ebayListingId);
         if (pushResult.ok) {
           const syncedAt = new Date();
           await prisma.item.update({

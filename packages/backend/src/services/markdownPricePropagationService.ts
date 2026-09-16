@@ -28,6 +28,7 @@ export interface MarkdownPropagationItem {
   organizerId: string;
   price: number;
   ebayOfferId?: string | null;
+  ebayListingId?: string | null;
   discogsListingId?: string | null;
   reverbListingId?: string | null;
 }
@@ -45,7 +46,7 @@ async function pushToEbay(item: MarkdownPropagationItem): Promise<MarketplacePro
     if (!accessToken) {
       return { platform: 'EBAY', ok: false, reason: 'no-token' };
     }
-    const result = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken);
+    const result = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken, item.ebayListingId);
     if (!result.ok) {
       console.warn(
         `[markdown-propagation] item ${item.id} eBay push failed: ${result.reason}${result.detail ? ` — ${result.detail}` : ''}`

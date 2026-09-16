@@ -75,7 +75,7 @@ export function scheduleMarkdownCycleCron(): void {
                 lte: new Date(now.getTime() - cycle.daysUntilFirst * 24 * 60 * 60 * 1000),
               },
             },
-            select: { id: true, price: true, ebayOfferId: true, discogsListingId: true, reverbListingId: true },
+            select: { id: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true },
           });
 
           if (firstMarkdownItems.length > 0) {
@@ -120,6 +120,7 @@ export function scheduleMarkdownCycleCron(): void {
                   organizerId: cycle.organizerId,
                   price: newPrice,
                   ebayOfferId: item.ebayOfferId,
+                  ebayListingId: item.ebayListingId,
                   discogsListingId: item.discogsListingId,
                   reverbListingId: item.reverbListingId,
                 });
@@ -155,7 +156,7 @@ export function scheduleMarkdownCycleCron(): void {
                   lte: new Date(now.getTime() - cycle.daysUntilSecond * 24 * 60 * 60 * 1000),
                 },
               },
-              select: { id: true, priceBeforeMarkdown: true, price: true, ebayOfferId: true, discogsListingId: true, reverbListingId: true },
+              select: { id: true, priceBeforeMarkdown: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true },
             });
 
             if (secondMarkdownItems.length > 0) {
@@ -194,6 +195,7 @@ export function scheduleMarkdownCycleCron(): void {
                     organizerId: cycle.organizerId,
                     price: newPrice,
                     ebayOfferId: item.ebayOfferId,
+                    ebayListingId: item.ebayListingId,
                     discogsListingId: item.discogsListingId,
                     reverbListingId: item.reverbListingId,
                   });
