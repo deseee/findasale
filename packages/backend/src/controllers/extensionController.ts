@@ -657,16 +657,13 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   // fas-content.js) already decided. Only blocks platform === 'FACEBOOK' -- eBay, native
   // checkout, and every other platform's markItemListed call is unaffected.
   //
-  // DELIBERATELY NOT extended to GRAILED/POSHMARK/MERCARI/VINTED (considered, then reverted, this
-  // same session): those 4 content scripts never auto-publish -- the organizer always reviews the
-  // filled form and clicks that platform's own final publish/list button THEMSELVES first, and
-  // markItemListed only fires afterward as their "I posted" confirmation (see each fas-*.js's
-  // showReviewOverlay). By the time this endpoint is called, the human has already made the real
-  // decision. A backend reject here would not prevent a bad listing (it already happened, on the
-  // real platform) -- it would only corrupt FindA.Sale's own record of what the organizer just
-  // told us they did, and would directly defeat popup.js's new "Show all items" override (the
-  // whole point of that toggle is letting the organizer list an item the category filter got
-  // wrong -- see PLATFORM_ELIGIBILITY_KEY/checkResumeableQueue in popup.js). The category registry
+  // DELIBERATELY NOT extended to GRAILED/POSHMARK/MERCARI/VINTED -- see the CORRECTED note below
+  // for why "those 4 never auto-publish" (this paragraph's original justification) is itself stale.
+  // A backend reject here would not prevent a bad listing (it already happened, on the real
+  // platform) -- it would only corrupt FindA.Sale's own record of what the organizer just told us
+  // they did, and would directly defeat popup.js's "Show all items" override (the whole point of
+  // that toggle is letting the organizer list an item the category filter got wrong -- see
+  // PLATFORM_ELIGIBILITY_KEY/checkResumeableQueue in popup.js). The category registry
   // (checkEligibility, marketplaceEligibilityRules.ts) stays a client-side UX filter (hide by
   // default + override) for these platforms, not a server-side hard gate here.
   // CORRECTED S-CROSS-MARKETPLACE-AUDIT-2026-09-03: this comment used to justify Facebook's special
@@ -677,10 +674,20 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   // stays Facebook-only: mark()/markItemListed always fires AFTER a successful publish click (a
   // post-hoc "record what happened" call, confirmed by reading fas-content.js's own call site), so
   // it was never actually a pre-submit gate for ANY platform including Facebook -- the real pre-
-  // submit protection lives in each platform's own content script (fas-content.js's
-  // facebookRestrictionReason check for Facebook; fas-craigslist.js gained an equivalent check this
-  // same session; Gumtree AU/Grailed/Poshmark/Mercari/Vinted do not yet have one, flagged as a
-  // follow-up). Generalizing this endpoint's reject to every platform would only risk breaking the
+  // submit protection lives in each platform's own content script.
+  // CORRECTED AGAIN 2026-09-16: the line above used to end "...Gumtree AU/Grailed/Poshmark/Mercari/
+  // Vinted do not yet have one, flagged as a follow-up." That was already false by the time it was
+  // read this session -- confirmed via direct grep of every fas-*.js file, ALL SEVEN
+  // (Facebook/Craigslist/Gumtree AU/Grailed/Poshmark/Mercari/Vinted) have their own
+  // <platform>RestrictionReason(category, title) pre-submit gate today, most added in the SAME
+  // 2026-09-03 S-CROSS-MARKETPLACE-AUDIT-2026-09-03 sweep that added Craigslist's and Facebook's
+  // weapons coverage (see S-EXT-POSHMARK-PROHIBITED-GATE / S-EXT-MERCARI-PROHIBITED-GATE / Grailed's
+  // and Gumtree AU's own dated comments in their respective files). A findasale-hacker deep dive
+  // this session initially flagged this as a live CRITICAL/P0 gap based on THIS comment alone,
+  // without re-checking the content scripts directly -- corrected before any code was written on
+  // that mistaken premise. Lesson: this comment is exactly the kind of stale fact that costs a
+  // session real time; if you're about to cite it, grep the actual fas-*.js files first.
+  // Generalizing this endpoint's reject to every platform would only risk breaking the
   // "Show all items" override for a legitimate miscategorized item, for no real preventive gain --
   // left Facebook-only on purpose, not by oversight.
   if (platform === 'FACEBOOK') {
@@ -709,6 +716,26 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   const renewDueAt = isRenewalEligiblePlatform(platform)
     ? new Date(Date.now() + RENEWAL_LAPSE_WINDOW_DAYS[platform] * 24 * 60 * 60 * 1000)
     : null;
+
+  // BUG FIX 2026-09-16 (S-EXT-LISTED-REPORT-NOT-IDEMPOTENT, found during a findasale-hacker deep
+  // dive on a proposed auto-fan-out feature -- flagged as a prerequisite for that feature, but
+  // fixed now since it's a real gap in today's shipped code too, same bug CLASS as
+  // markItemRemoved's 2026-09-04 fix directly below (S-EXT-REMOVAL-REPORT-NOT-IDEMPOTENT, 695
+  // duplicate-row incident) which this endpoint never got the equivalent of. Any retry of this
+  // request (extension network hiccup, a double-fire, or a future queue-consumer re-processing
+  // the same job after a crash) previously created a brand new MarketplaceListingJob row every
+  // time, unconditionally. Scoped to (item, platform) and keyed off the LATEST row, same shape as
+  // markItemRemoved's fix -- a genuine re-list after a REMOVE still creates a fresh POSTED row;
+  // this only suppresses a duplicate report against an already-POSTED listing.
+  const latestForPlatform = await prisma.marketplaceListingJob.findFirst({
+    where: { itemId, platform },
+    orderBy: { createdAt: 'desc' },
+    select: { action: true, status: true },
+  });
+  if (latestForPlatform && latestForPlatform.action === 'POST' && latestForPlatform.status === 'POSTED') {
+    res.json({ ok: true, deduped: true });
+    return;
+  }
 
   await prisma.marketplaceListingJob.create({
     data: { itemId, action: 'POST', status: 'POSTED', remoteListingId, platform, renewDueAt },
