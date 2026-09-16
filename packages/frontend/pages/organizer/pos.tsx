@@ -3494,23 +3494,38 @@ export default function POSPage() {
                   yet, only the tap-per-vendor card flow and cash. */}
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <button
-                  onClick={() => setPaymentMode('card')}
+                  onClick={() => {
+                    if (!ENABLE_STRIPE_TERMINAL_CARD_READER) return;
+                    setPaymentMode('card');
+                  }}
                   // Cart-on-load UX trap fix (2026-09-06): was disabled={!venueCart}, which
                   // (with the mount-time auto-start now removed) would permanently disable
                   // mode selection before the cashier ever adds a first item -- switching
                   // payment mode doesn't touch the cart at all, so it never needed a cart to
                   // exist. Only disable once venueStartFailure confirms the register can't
                   // open at all (e.g. market closed).
-                  disabled={!!venueStartFailure}
+                  // Stripe Terminal card-reader stopgap (2026-09-16, honest-disable sweep):
+                  // venue mode's own "tap per vendor" flow hits the SAME dead Stripe
+                  // Terminal endpoints as the non-venue reader flow above
+                  // (connectReaderForVenueBooth -> vendorBoothCartController.ts's
+                  // createBoothCartTerminalConnectionToken/authorizeBoothCartTerminalLeg,
+                  // both confirmed 503 TERMINAL_UNAVAILABLE 2026-09-12) but had no
+                  // pre-emptive UI gate -- an organizer could land on this mode (it's
+                  // paymentMode's default) or select it and only discover it was dead
+                  // after actually attempting a tap. Reuses ENABLE_STRIPE_TERMINAL_CARD_READER
+                  // (see its own comment above) rather than a new flag, since it's the same
+                  // underlying dead capability, not a separate stopgap.
+                  disabled={!!venueStartFailure || !ENABLE_STRIPE_TERMINAL_CARD_READER}
+                  title={!ENABLE_STRIPE_TERMINAL_CARD_READER ? 'Card-reader hardware support is being updated -- cash and Square QR are available now.' : undefined}
                   className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
-                    venueStartFailure
+                    venueStartFailure || !ENABLE_STRIPE_TERMINAL_CARD_READER
                       ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                       : paymentMode === 'card'
                       ? 'bg-sage-700 text-white'
                       : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
                   }`}
                 >
-                  <span>💳</span><span className="text-xs">Card. Tap per vendor</span>
+                  <span>💳</span><span className="text-xs">{ENABLE_STRIPE_TERMINAL_CARD_READER ? 'Card. Tap per vendor' : 'Card reader unavailable'}</span>
                 </button>
                 <button
                   onClick={() => {
@@ -3738,6 +3753,15 @@ export default function POSPage() {
                     </button>
                   )}
                 </>
+              ) : !ENABLE_STRIPE_TERMINAL_CARD_READER ? (
+                // Honest-disable safety net (2026-09-16) -- the mode-selector button above
+                // already keeps paymentMode from becoming 'card' while this flag is false,
+                // but 'card' is paymentMode's own default (see useState above), so a
+                // freshly-opened venue register could still land here before any selection.
+                // Mirrors the non-venue "Card-reader hardware..." message exactly.
+                <div className="p-4 rounded-xl bg-warm-100 dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-sm text-warm-600 dark:text-warm-400 text-center">
+                  Card-reader hardware support is being updated -- cash and Square QR are available now.
+                </div>
               ) : (
                 <button
                   onClick={handleCharge}
