@@ -102,5 +102,58 @@ export const getPlatformSquareLocationId = (): string => {
   return locationId;
 };
 
+let sandboxClient: SquareClient | null = null;
+
+/**
+ * Real Square Sandbox ADR (2026-09-17, "What Dev Builds Next Session") -- lazy-singleton
+ * client for FindA.Sale's own platform-level Square SANDBOX credential set. Mirrors
+ * getSquarePlatformClient() above exactly, with one deliberate difference: the environment
+ * is HARDCODED to SquareEnvironment.Sandbox -- NEVER derived from resolveEnvironment()/the
+ * global SQUARE_ENVIRONMENT var -- so a misconfigured or accidentally-flipped-to-
+ * 'production' global env var can never make a test-tagged request (isTestTransaction +
+ * X-QA-Bypass gated, see posPaymentController.ts's isTestBypassActive) touch a live Square
+ * account. Used ONLY via squarePosPaymentAdapter.ts's createAndCaptureSandboxPayment --
+ * never by any real (non-test) charge path.
+ */
+export const getSquareSandboxClient = (): SquareClient => {
+  if (!sandboxClient) {
+    const token = process.env.SQUARE_SANDBOX_ACCESS_TOKEN;
+    if (!token) {
+      throw new Error(
+        'SQUARE_SANDBOX_ACCESS_TOKEN is not set. Patrick must set FindA.Sale\'s Square ' +
+          'Sandbox Access Token (Developer Console -> your app -> Credentials -> Sandbox ' +
+          'tab) as an env var on the Railway backend service before any QA test-transaction ' +
+          'sandbox charge (isTestTransaction + X-QA-Bypass gated requests) can go through.'
+      );
+    }
+    sandboxClient = new SquareClient({
+      token,
+      environment: SquareEnvironment.Sandbox,
+    });
+  }
+  return sandboxClient;
+};
+
+/**
+ * FindA.Sale's platform Square Sandbox test account's default Location id (Sandbox Square
+ * Dashboard -> Locations, or a one-time ListLocations call using the sandbox access
+ * token). Used by createAndCaptureSandboxPayment (squarePosPaymentAdapter.ts) instead of
+ * the organizer's own squareLocationId -- see getSquareSandboxClient() above for why this
+ * must never fall back to a real organizer/platform location.
+ */
+export const getSquareSandboxLocationId = (): string => {
+  const locationId = process.env.SQUARE_SANDBOX_LOCATION_ID;
+  if (!locationId) {
+    throw new Error(
+      'SQUARE_SANDBOX_LOCATION_ID is not set. Patrick must look up the default Sandbox test ' +
+        "account's Location id (Sandbox Square Dashboard -> Locations, or a one-time " +
+        'ListLocations call using the Sandbox Access Token) and set it as an env var on the ' +
+        'Railway backend service before any QA test-transaction sandbox charge ' +
+        '(isTestTransaction + X-QA-Bypass gated requests) can go through.'
+    );
+  }
+  return locationId;
+};
+
 export { SquareError };
 export default getSquarePlatformClient;

@@ -1037,6 +1037,19 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       if (!isTestBypassActive && (!sourceId || typeof sourceId !== 'string')) {
         return res.status(400).json({ message: 'sourceId is required' });
       }
+      // findasale-hacker fix (2026-09-17, sandbox-QA adversarial pass): the check above only
+      // validated sourceId's type on the non-test path -- when isTestBypassActive is true,
+      // sourceId is optional (createAndCaptureSandboxPayment defaults it), but a caller who
+      // DOES supply one had no type check at all before it reached the Square SDK call
+      // (`params.sourceId || DEFAULT_SANDBOX_TEST_SOURCE_ID` treats a truthy non-string, e.g.
+      // an object/array, as "supplied" and passes it straight through). Not exploitable
+      // (Square's client validates/rejects malformed payloads and every throw path here is
+      // already caught and turned into a clean error response -- no SQL/shell/log injection
+      // surface), but reject malformed input at the edge rather than relying on the SDK to
+      // fail safely.
+      if (isTestBypassActive && sourceId !== undefined && typeof sourceId !== 'string') {
+        return res.status(400).json({ message: 'sourceId must be a string' });
+      }
     } else {
       if (!paymentIntentId || typeof paymentIntentId !== 'string') {
         return res.status(400).json({ message: 'paymentIntentId is required' });
@@ -1093,16 +1106,51 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
 
     if (posRequest.processor === 'SQUARE') {
       if (isTestBypassActive) {
-        // QA Test-Transaction Harness (2026-09-17): skip the real Square preflight +
-        // createAndCapturePayment call entirely -- see createSquareTestTransaction's header
-        // comment (squarePaymentController.ts) for the full "why no isolated per-organizer
-        // Square sandbox exists" reasoning, which applies identically here: this endpoint
-        // charges the organizer's own live connected Square account exactly like that one
-        // does, and Square has no separate platform-level test credential the way Stripe
-        // does. Synthetic id mirrors that same function's `sq_test_${randomUUID()}`
-        // convention so downstream code (Purchase.squarePaymentId, receipt/notification
-        // text) sees a realistic-shaped value.
-        externalPaymentId = `sq_test_${crypto.randomUUID()}`;
+        // Real Square Sandbox ADR (2026-09-17, supersedes the old no-op bypass): routes to
+        // FindA.Sale's platform-level Square SANDBOX credential set
+        // (getSquareSandboxClient/getSquareSandboxLocationId, utils/square.ts) via
+        // createAndCaptureSandboxPayment (squarePosPaymentAdapter.ts) -- NEVER the
+        // organizer's own live connected account. sourceId defaults to Square's
+        // always-succeeds sandbox nonce ('cnon:card-nonce-ok') when the request body
+        // doesn't supply one, so existing QA calls keep working unchanged; an explicit
+        // override (e.g. 'cnon:card-nonce-declined') is honored below. A real decline is
+        // NOT swallowed -- it falls through to the same DECLINE_MESSAGE-shaped response
+        // the non-test branch returns, same as a real captured/held distinction.
+        const sandboxResult = await squarePos.createAndCaptureSandboxPayment({
+          sourceId,
+          amountCents: posRequest.cardAmountCents ?? posRequest.totalAmountCents,
+          posRequestId: posRequest.id,
+          existingSquarePaymentId: posRequest.squarePaymentId,
+        });
+
+        if (!sandboxResult.ok) {
+          return res.status(sandboxResult.status).json({ message: sandboxResult.message, error: sandboxResult.message });
+        }
+
+        // Persist regardless of captured state -- same retry-safety reasoning as the real
+        // (non-test) branch below: a retried confirm must find this id via
+        // existingSquarePaymentId rather than re-authorizing.
+        await prisma.pOSPaymentRequest
+          .update({ where: { id: requestId }, data: { squarePaymentId: sandboxResult.paymentId } })
+          .catch((err) => console.error('[pos-payment] Failed to persist sandbox squarePaymentId:', err));
+
+        if (!sandboxResult.captured) {
+          try {
+            Sentry.captureMessage(
+              `[pos-payment] Square SANDBOX CompletePayment did not capture immediately -- requestId=${requestId} squarePaymentId=${sandboxResult.paymentId} (isTestTransaction). Authorization held; needs manual retry/reconciliation.`,
+              'warning'
+            );
+          } catch {
+            // Sentry may not be initialized -- silently continue
+          }
+          return res.status(202).json({
+            success: false,
+            processing: true,
+            message: 'Your payment is still processing. Please wait a moment and check your receipts, or ask the organizer to try again.',
+          });
+        }
+
+        externalPaymentId = sandboxResult.paymentId;
       } else {
         const preflight = await squarePos.preflightAccountStatus({
           id: organizerProfile.id,
@@ -1629,6 +1677,12 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ message: 'sourceId is required' });
       }
     }
+    // findasale-hacker fix (2026-09-17, sandbox-QA adversarial pass): same sourceId
+    // type-validation gap as confirmPaymentRequest above -- see that function's comment on
+    // this identical check for the full rationale.
+    if (isTestBypassActive && sourceId !== undefined && typeof sourceId !== 'string') {
+      return res.status(400).json({ message: 'sourceId must be a string' });
+    }
     if (!saleId || typeof saleId !== 'string') {
       return res.status(400).json({ message: 'saleId is required' });
     }
@@ -1812,7 +1866,46 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     if (isTestBypassActive) {
       appFeeCents = baseAppFeeCents;
       debtAppliedCents = 0;
-      squarePaymentId = `sq_test_${crypto.randomUUID()}`;
+
+      // Real Square Sandbox ADR (2026-09-17, supersedes the old synthetic-id no-op): real
+      // sandbox charge/capture round-trip via createAndCaptureSandboxPayment
+      // (squarePosPaymentAdapter.ts) -- see confirmPaymentRequest's own isTestBypassActive
+      // comment above for the full rationale (sourceId defaults to 'cnon:card-nonce-ok',
+      // honors an explicit override, never touches the organizer's live account). A fresh
+      // random posRequestId seeds the idempotency key here (unlike the non-test branch
+      // below, which reuses the one-time sourceId itself) because a test-bypass sourceId is
+      // often the SAME shared nonce across many unrelated test purchases (e.g. the default
+      // 'cnon:card-nonce-ok') -- reusing it as the idempotency seed would incorrectly
+      // collapse distinct test transactions into one cached Square payment. A real decline
+      // is not swallowed -- it returns the same DECLINE_MESSAGE shape the non-test path
+      // below returns.
+      const sandboxResult = await squarePos.createAndCaptureSandboxPayment({
+        sourceId,
+        amountCents: totalChargeCents,
+        posRequestId: `manual-test-${crypto.randomUUID()}`,
+      });
+
+      if (!sandboxResult.ok) {
+        return res.status(sandboxResult.status).json({ message: sandboxResult.message });
+      }
+
+      if (!sandboxResult.captured) {
+        try {
+          Sentry.captureMessage(
+            `[pos-payment] Square SANDBOX CompletePayment did not capture immediately for manual card entry (isTestTransaction) -- organizerId=${organizer.id} squarePaymentId=${sandboxResult.paymentId}. No POSPaymentRequest row exists to retry against; needs manual reconciliation.`,
+            'warning'
+          );
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+        return res.status(202).json({
+          success: false,
+          processing: true,
+          message: "Your payment is still processing. Please check Square's dashboard in a moment, or try the sale again.",
+        });
+      }
+
+      squarePaymentId = sandboxResult.paymentId;
     } else {
       const preflight = await squarePos.preflightAccountStatus({
         id: organizer.id,

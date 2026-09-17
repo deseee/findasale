@@ -1,6 +1,6 @@
 import { SquareError } from 'square';
 import * as Sentry from '@sentry/node';
-import { getSquareClientForMerchant } from '../utils/square';
+import { getSquareClientForMerchant, getSquareSandboxClient, getSquareSandboxLocationId } from '../utils/square';
 import { prisma } from '../lib/prisma';
 import {
   resolveOrganizerSquareAccessToken,
@@ -400,6 +400,117 @@ export async function createAndCapturePayment(
   } catch (err) {
     console.error(
       '[squarePosPaymentAdapter] Square CompletePayment failed (payment remains APPROVED/held):',
+      err
+    );
+    return { ok: true, paymentId, captured: false };
+  }
+}
+
+/**
+ * Real Square Sandbox ADR (2026-09-17) -- sandbox-environment sibling of
+ * createAndCapturePayment above, for isTestTransaction + X-QA-Bypass gated requests ONLY
+ * (posPaymentController.ts's isTestBypassActive branches). Reuses that function's exact
+ * create-then-complete logic, with three deliberate differences called out in the ADR's
+ * Decision section:
+ *   1. Client/location: getSquareSandboxClient() + getSquareSandboxLocationId()
+ *      (utils/square.ts) instead of the organizer's own connected client/locationId --
+ *      HARDCODED to Sandbox, never derived from any organizer or global env var, so a
+ *      test-tagged request can never reach a live account.
+ *   2. sourceId defaults to Square's published always-succeeds sandbox nonce
+ *      (DEFAULT_SANDBOX_TEST_SOURCE_ID = 'cnon:card-nonce-ok') when the caller doesn't
+ *      supply one, so every existing isTestTransaction call site that never sent a
+ *      sourceId keeps working unchanged -- but an explicit override is honored, so QA can
+ *      pass 'cnon:card-nonce-declined' (or any other Square-documented sandbox nonce, see
+ *      the ADR's Research section) to genuinely exercise a decline.
+ *   3. appFeeMoney is omitted entirely -- the sandbox test account making this call
+ *      effectively IS the platform account, so there is no second connected merchant for
+ *      an app fee to be routed away from. This call proves connectivity/auth/delayed-
+ *      capture against a real gateway only -- fee-split math stays covered by the
+ *      existing zero-network createSquareTestTransaction (squarePaymentController.ts),
+ *      deliberately left unchanged.
+ */
+export interface CreateAndCaptureSandboxPaymentParams {
+  sourceId?: string;
+  amountCents: number;
+  posRequestId: string;
+  existingSquarePaymentId?: string | null;
+}
+
+const DEFAULT_SANDBOX_TEST_SOURCE_ID = 'cnon:card-nonce-ok';
+
+export async function createAndCaptureSandboxPayment(
+  params: CreateAndCaptureSandboxPaymentParams
+): Promise<CreateAndCapturePaymentResult> {
+  const client = getSquareSandboxClient();
+  const locationId = getSquareSandboxLocationId();
+  const sourceId = params.sourceId || DEFAULT_SANDBOX_TEST_SOURCE_ID;
+
+  let paymentId: string;
+  let status: string | undefined;
+
+  if (params.existingSquarePaymentId) {
+    try {
+      const response = await client.payments.get({ paymentId: params.existingSquarePaymentId });
+      const payment = (response as any)?.payment;
+      if (!payment?.id) {
+        return { ok: false, status: 502, message: 'Could not verify payment with Square' };
+      }
+      paymentId = payment.id;
+      status = payment.status;
+    } catch (err) {
+      console.error('[squarePosPaymentAdapter] sandbox payments.get (retry path) failed:', err);
+      return { ok: false, status: 502, message: 'Could not verify payment with Square' };
+    }
+  } else {
+    try {
+      const response = await client.payments.create({
+        idempotencyKey: buildSquareIdempotencyKey(['pos-sandbox', params.posRequestId]),
+        sourceId,
+        amountMoney: toSquareMoney(params.amountCents),
+        // appFeeMoney deliberately omitted -- see file header (3).
+        locationId,
+        // Delayed capture -- same rationale as createAndCapturePayment above.
+        autocomplete: false,
+        referenceId: params.posRequestId.slice(0, 40),
+        note: 'FindA.Sale POS payment request (SANDBOX test transaction)',
+      } as any);
+      const payment = (response as any)?.payment;
+      if (!payment?.id) {
+        return { ok: false, status: 400, message: DECLINE_MESSAGE };
+      }
+      paymentId = payment.id;
+      status = payment.status;
+    } catch (err) {
+      if (err instanceof SquareError) {
+        const first = (err as any).errors?.[0];
+        console.warn(
+          `[squarePosPaymentAdapter] Square sandbox CreatePayment decline/error: ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
+        );
+        return { ok: false, status: 400, message: DECLINE_MESSAGE };
+      }
+      console.error('[squarePosPaymentAdapter] Square sandbox CreatePayment failed:', err);
+      return { ok: false, status: 500, message: 'Failed to create Square payment' };
+    }
+  }
+
+  if (status === 'COMPLETED') {
+    return { ok: true, paymentId, captured: true };
+  }
+
+  if (status !== 'APPROVED') {
+    return { ok: false, status: 400, message: DECLINE_MESSAGE };
+  }
+
+  try {
+    const completeResponse = await client.payments.complete({ paymentId });
+    const completedPayment = (completeResponse as any)?.payment;
+    if (completedPayment?.status === 'COMPLETED') {
+      return { ok: true, paymentId, captured: true };
+    }
+    return { ok: true, paymentId, captured: false, delayedUntil: completedPayment?.delayedUntil };
+  } catch (err) {
+    console.error(
+      '[squarePosPaymentAdapter] Square sandbox CompletePayment failed (payment remains APPROVED/held):',
       err
     );
     return { ok: true, paymentId, captured: false };
