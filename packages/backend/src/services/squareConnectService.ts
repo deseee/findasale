@@ -438,6 +438,52 @@ export const getSquareAccountStatus = async (merchantAccessToken: string): Promi
 
 export const isSquareAccountActive = (status: SquareAccountStatus): boolean => status.active;
 
+/**
+ * ADR-123 §5 item 1 / §9 fix (2026-09-16, findasale-architect + findasale-dev): calls
+ * Square's real RetrieveTokenStatus endpoint (POST /oauth2/token/status -- confirmed live
+ * via Square's own API reference this session, not assumed) to read the scopes ACTUALLY
+ * granted on an existing access token, rather than trusting the single cached
+ * squareOnboarded boolean. Needed because PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS was only
+ * added to SQUARE_OAUTH_SCOPES on 2026-09-07 (ADR-123) -- any merchant who completed Square
+ * OAuth consent before that date has squareOnboarded=true but never actually granted this
+ * scope, and the schema has no per-scope tracking column to detect that from cached state
+ * alone. Uses the SDK's own oAuth client is not available for this endpoint (not exposed by
+ * the installed `square` SDK version at the time of this fix, confirmed via package
+ * inspection this session) -- calls the documented REST endpoint directly instead, the same
+ * pattern already used elsewhere in this backend for third-party calls the SDK doesn't wrap
+ * (see ebayCalculatedPolicyService.ts's raw `fetch` calls).
+ *
+ * Fails CLOSED: any network/parse error or non-200 response returns an empty scopes array
+ * (never throws), so a caller checking `.includes(SOME_SCOPE)` correctly treats an
+ * unreachable/errored introspection call the same as "scope not granted" -- never silently
+ * treats an error as "must be fine."
+ */
+export const getSquareGrantedScopes = async (accessToken: string): Promise<string[]> => {
+  try {
+    const response = await fetch(`${squareOAuthBaseUrl()}/oauth2/token/status`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Square-Version': '2026-08-19', // pinned to match the installed square SDK's own default (square@45.1.0 BaseClient.js) -- not an arbitrary date
+      },
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) {
+      console.warn(`[squareConnectService] getSquareGrantedScopes: token/status returned HTTP ${response.status} -- treating as no scopes granted (fail closed).`);
+      return [];
+    }
+    const data: any = await response.json();
+    return Array.isArray(data?.scopes) ? data.scopes : [];
+  } catch (err) {
+    console.error('[squareConnectService] getSquareGrantedScopes: token/status call failed -- treating as no scopes granted (fail closed):', err);
+    return [];
+  }
+};
+
+/** Scope required for a CreatePayment call's app_fee_allocations to name a second (hub-owner) recipient location -- see squareConnectService's SQUARE_OAUTH_SCOPES comment (ADR-123) for the full rationale. */
+export const SQUARE_ADDITIONAL_RECIPIENTS_SCOPE = 'PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS';
+
 // ---------------------------------------------------------------------------
 // Reuse-resolution (Square-side design for vendorBoothController.ts's existing
 // "does the claiming user already have a working Stripe identity" logic,

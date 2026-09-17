@@ -18,6 +18,8 @@ import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 
 import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
 import { Decimal } from '@prisma/client/runtime/library';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, VendorBooth wiring
+import { resolveOrganizerSquareAccessToken } from '../services/squarePaymentService'; // 2026-09-16 fix: live Square OAuth scope check (ADR-123 §5 item 1/§9), see computeLegFeeSplit
+import { getSquareGrantedScopes, SQUARE_ADDITIONAL_RECIPIENTS_SCOPE } from '../services/squareConnectService'; // 2026-09-16 fix: same
 import {
   resolveVendorBoothSquareAccessToken,
   SquareBoothOnboardingIncompleteError,
@@ -96,6 +98,12 @@ async function computeLegFeeSplit(params: {
   // predates this ADR (and never set this) keeps its exact existing behavior unchanged.
   processor?: 'STRIPE' | 'SQUARE';
   hubOwnerOrganizer: {
+    // 2026-09-16 fix: id/squareMerchantId added so the SQUARE branch can resolve a real
+    // usable access token (resolveOrganizerSquareAccessToken) and live-check its granted
+    // OAuth scopes -- see the hubOwnerReady block below. Optional so pre-existing STRIPE-only
+    // call sites that never select these two fields still type-check unchanged.
+    id?: string;
+    squareMerchantId?: string | null;
     subscriptionTier: string | null;
     stripeConnectId: string | null;
     stripeOnboarded: boolean;
@@ -139,16 +147,15 @@ async function computeLegFeeSplit(params: {
     // cannot have a Square-rail sale with a revenue-share cut happen in their hub at all,
     // exactly the same guarantee the Stripe path already gives.
     //
-    // KNOWN GAP, flagged not silently assumed away (ADR-123 §5 item 1 / §9): squareOnboarded
-    // is a single cached boolean with no per-scope tracking column. A hub owner who
-    // completed Square onboarding BEFORE the PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS scope was
-    // added (squareConnectService.ts SQUARE_OAUTH_SCOPES) will still read squareOnboarded ===
-    // true here even though their existing OAuth grant does NOT include that scope --
-    // Square would reject the allocation at authorize time (see resolveSquareAppFeeParams /
-    // ADR-123 §3.3's "fail the whole leg" behavior for what happens then), not this gate.
-    // The ADR does not specify a way to distinguish pre- vs post-scope onboarding from
-    // existing schema alone; this is flagged here and in this dispatch's Handoff Contract
-    // rather than guessed at.
+    // RESOLVED 2026-09-16 (findasale-architect + findasale-dev, this dispatch): the KNOWN
+    // GAP this comment used to describe (ADR-123 §5 item 1 / §9) is closed below. Confirmed
+    // live via Square's own API reference this session: Square's RetrieveTokenStatus
+    // endpoint (POST /oauth2/token/status) returns the scopes ACTUALLY granted on an
+    // access token, so the cached squareOnboarded boolean no longer has to be trusted blind
+    // -- a hub owner who completed Square onboarding BEFORE PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS
+    // was added (2026-09-07) now fails THIS pre-flight gate with a clear, actionable message
+    // instead of reaching Square's real CreatePayment call and getting a generic decline
+    // (resolveSquareAppFeeParams / authorizeSquareBoothCartLeg's existing catch block).
     const hubOwnerReady =
       processor === 'SQUARE'
         ? !!hubOwnerOrganizer && !!hubOwnerOrganizer.squareOnboarded && !!hubOwnerOrganizer.squareLocationId
@@ -165,6 +172,38 @@ async function computeLegFeeSplit(params: {
             ? "This hub's owner has not completed Square onboarding yet. Checkout is unavailable for booths with a revenue-share agreement until they do."
             : "This hub's owner has not completed Stripe onboarding yet. Checkout is unavailable for booths with a revenue-share agreement until they do.",
       };
+    }
+
+    // 2026-09-16 fix (ADR-123 §5 item 1 / §9): hubOwnerReady above only proves the cached
+    // flags look right -- it cannot see whether the ADDITIONAL_RECIPIENTS scope was actually
+    // granted. Live-check it here, once per checkout attempt (not cached -- a scope grant
+    // can also be revoked later, e.g. if the hub owner disconnects/reconnects Square with a
+    // narrower consent). Fails closed: any resolution/introspection error blocks the leg
+    // with the same actionable message a missing scope gets, never lets an unverifiable
+    // token through silently.
+    if (processor === 'SQUARE' && hubOwnerOrganizer?.id) {
+      let hasAllocationScope = false;
+      try {
+        const hubOwnerToken = await resolveOrganizerSquareAccessToken({
+          id: hubOwnerOrganizer.id,
+          squareMerchantId: hubOwnerOrganizer.squareMerchantId ?? null,
+          squareOnboarded: !!hubOwnerOrganizer.squareOnboarded,
+        });
+        const grantedScopes = await getSquareGrantedScopes(hubOwnerToken);
+        hasAllocationScope = grantedScopes.includes(SQUARE_ADDITIONAL_RECIPIENTS_SCOPE);
+      } catch (err) {
+        console.warn(
+          '[vendorBoothCartController] computeLegFeeSplit: failed to verify hub owner Square OAuth scopes -- blocking leg (fail closed):',
+          err
+        );
+      }
+      if (!hasAllocationScope) {
+        return {
+          blocked: true,
+          reason:
+            "This hub's owner needs to reconnect Square (their existing connection predates a permission FindA.Sale now requires for revenue-share payouts). Checkout is unavailable for booths with a revenue-share agreement until they do.",
+        };
+      }
     }
   }
 
@@ -1235,7 +1274,7 @@ export const authorizeBoothCartSquareLegs = async (req: BoothAuthRequest, res: R
 
     const booths = await prisma.vendorBooth.findMany({
       where: { id: { in: cart.boothsRepresented } },
-      include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true, squareOnboarded: true, squareLocationId: true } } } } },
+      include: { hub: { select: { organizer: { select: { id: true, squareMerchantId: true, subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true, squareOnboarded: true, squareLocationId: true } } } } },
     });
     const alreadyLegged = await prisma.boothCartLeg.findMany({
       where: { cartTransactionId: cart.id, status: { in: ['PENDING', 'REQUIRES_CAPTURE', 'CAPTURED'] } },
@@ -1864,7 +1903,7 @@ export const captureBoothCartCash = async (req: BoothAuthRequest, res: Response)
 
     const booths = await prisma.vendorBooth.findMany({
       where: { id: { in: cart.boothsRepresented } },
-      include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true, squareOnboarded: true, squareLocationId: true } } } } },
+      include: { hub: { select: { organizer: { select: { id: true, squareMerchantId: true, subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true, squareOnboarded: true, squareLocationId: true } } } } },
     });
 
     // Resolve every represented booth's items + amount BEFORE validating the cash
