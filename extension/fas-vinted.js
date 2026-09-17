@@ -1312,7 +1312,18 @@
     return 'Good';
   }
 
-  const VINTED_MIN_PRICE = 1, VINTED_MAX_PRICE = 1000; // platform-enforced range per this dispatch's spec
+  // BUG FIX 2026-09-17 (Patrick live-reported): VINTED_MAX_PRICE was previously hardcoded to
+  // 1000, sourced from an AI-summarized read of Vinted's own help page, never actually tested
+  // against the live listing flow. Patrick then listed a real item at $3999.99 on Vinted with no
+  // problem, directly disproving that number -- so it was a fabricated ceiling, not a real Vinted
+  // rule, and enforcing it was silently mis-pricing items above $1000 with no visible warning.
+  // Removed rather than replaced with another guessed number: there is no reliable source for
+  // Vinted's real upper limit (if one exists at all), so this now sends the item's real price and
+  // lets Vinted's own live field validation be the actual authority -- same pattern already used
+  // for the stale-error re-check below. VINTED_MIN_PRICE=1 is kept because it IS live-confirmed:
+  // Vinted's own validation text ("must be greater than or equal to 1.0", see vintedErrorStillShown
+  // above) directly states this floor.
+  const VINTED_MIN_PRICE = 1;
 
   // Direct (non-descendant) text of an element -- BUG FIX 2026-08-19, S-EXT-BATCH-2, helper for
   // clickableOptionByExactText below. Concatenates only this element's own Text-node children, so
@@ -1953,13 +1964,24 @@
     }
     const conditionLabel = mapVintedCondition(item.condition);
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
-    if (item.price != null && isFinite(Number(item.price))) {
-      let priceVal = Math.round(Number(item.price));
-      if (priceVal < VINTED_MIN_PRICE || priceVal > VINTED_MAX_PRICE) {
-        console.warn('[FAS Vinted] Price $' + priceVal + ' falls outside Vinted\'s platform-enforced $' + VINTED_MIN_PRICE + '-$' + VINTED_MAX_PRICE + ' range -- clamping rather than submitting an invalid value.');
-        priceVal = Math.max(VINTED_MIN_PRICE, Math.min(VINTED_MAX_PRICE, priceVal));
+    // FEATURE 2026-09-17 (ADR: eBay freight & Vinted shipping-cap pricing): vintedPrice is item.price
+    // plus any bump computed backend-side (extensionController.ts) to cover real shipping cost that
+    // exceeds Vinted's $100 shipping cap. Falls back to item.price when no bump was computed. When a
+    // bump was applied, vintedShippingNote is pushed onto warnings so it is visible to the organizer on
+    // the review overlay BEFORE publishing -- never silent. (Silent price adjustment with no visible
+    // warning was the original bug this whole feature exists to fix -- see the VINTED_MAX_PRICE removal
+    // earlier in this file.)
+    const priceToUse = (item.vintedPrice != null && isFinite(Number(item.vintedPrice))) ? item.vintedPrice : item.price;
+    if (priceToUse != null && isFinite(Number(priceToUse))) {
+      let priceVal = Math.round(Number(priceToUse));
+      if (priceVal < VINTED_MIN_PRICE) {
+        console.warn('[FAS Vinted] Price $' + priceVal + ' is below Vinted\'s $' + VINTED_MIN_PRICE + ' minimum -- clamping up rather than submitting an invalid value.');
+        priceVal = VINTED_MIN_PRICE;
       }
       await tryFill('Price', priceVal, (v) => fillVintedPrice(String(v)), warnings);
+      if (item.vintedShippingNote) {
+        warnings.push(item.vintedShippingNote);
+      }
     }
     const packageSizeOk = await fillPackageSize(item);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
@@ -1974,7 +1996,7 @@
     // AFTER package size, instantly cleared it again on the real page. Final guard: re-check right
     // before finishing and re-apply the fix once more if anything after Price knocked it back into
     // this state, whatever the exact trigger turns out to be.
-    if (item.price != null && isFinite(Number(item.price))) {
+    if (priceToUse != null && isFinite(Number(priceToUse))) {
       // BUG FIX 2026-09-02 (live-observed on a real batch run, item 3 of 18, via a Claude session
       // watching Patrick's actual open tab): this same-turn re-check (added 2026-08-30 round 10)
       // still had a live gap -- confirmed no '[FAS Vinted] Price -- stale validation error
@@ -1991,7 +2013,7 @@
       await sleep(600);
       if (vintedErrorStillShown()) {
         console.warn('[FAS Vinted] Price -- stale validation error reappeared after a later field (likely Package Size) touched the page -- re-clearing.');
-        const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.min(VINTED_MAX_PRICE, Math.round(Number(item.price))));
+        const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
         await fillVintedPrice(String(rePriceVal));
         if (vintedErrorStillShown()) warnings.push('Price shows a validation error that would not clear -- please check it manually before publishing.');
       }

@@ -9,6 +9,7 @@ import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsL
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
+import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -347,12 +348,83 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // (hasTrustedPackage/UNTRUSTED_PACKAGE_SOURCES are now defined once, shared with the
   // FB weight-resolution loop above -- see that shared block's own comment, 2026-09-14.)
 
+  // ADR eBay-freight-and-Vinted-shipping-cap-pricing (2026-09-17): Vinted hard-caps shipping at
+  // $100 (Patrick, confirmed live from his own real listing) with no working freight/custom-
+  // shipping alternative today (Vinted's own help docs are self-contradictory on whether "Custom
+  // shipping" still exists for new listings, and separately document a live bug where selecting
+  // it disables the Buy Now button -- treated as unavailable, not built around). When an item's
+  // real shipping cost exceeds that cap, bump the Vinted-specific price by the difference so the
+  // organizer isn't shorted, instead of a silent shortfall -- and always surface this visibly via
+  // vintedShippingNote (fas-vinted.js pushes it onto the same on-screen warnings list Category
+  // misses already use), never silently. Reuses the SAME cheapest-carrier rate engine eBay flat-
+  // rate/native-checkout pricing already uses (computeCheapestForOrigin) -- no second cost-
+  // estimation system, see nativeShippingSuggestionService.ts for the identical reuse pattern.
+  //
+  // Gated on hasTrustedPackage(it) for the SAME reason packageWeightOz/dims are gated in `shaped`
+  // below (2026-09-14 fix, the Q12E tuner incident): an unconfirmed AI/SEED package guess must
+  // never drive a real dollar decision on any content-script marketplace. When the package isn't
+  // trusted or a weight isn't set, this does NOT guess a bump -- it surfaces a warning asking the
+  // organizer to confirm package weight/dimensions first, same posture as every other
+  // UNVERIFIED-guess field in this payload.
+  const VINTED_SHIPPING_CAP = 100;
+  const vintedPricingByItemId = new Map<string, { vintedPrice: number; vintedShippingNote: string | null }>();
+  for (const it of items) {
+    if (it.price == null) continue;
+    const basePrice = Number(it.price.toFixed(2));
+    if (!hasTrustedPackage(it) || it.packageWeightOz == null || Number(it.packageWeightOz) <= 0) {
+      vintedPricingByItemId.set(it.id, {
+        vintedPrice: basePrice,
+        vintedShippingNote:
+          "This item's shipping cost hasn't been confirmed, so FindA.Sale could not check it against Vinted's $100 shipping cap -- confirm the item's package weight/dimensions, then re-check before publishing to Vinted.",
+      });
+      continue;
+    }
+    try {
+      const zip = saleLocationById.get(it.saleId || '')?.zip || null;
+      const cheapest = await computeCheapestForOrigin({
+        weightOz: Number(it.packageWeightOz),
+        dims: {
+          length: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+          width: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+          height: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+        },
+        origin: { zip },
+        packageType: it.packageType ?? null,
+        category: it.ebayCategoryName || it.category || null,
+        categoryId: it.ebayCategoryId || null,
+        priceUsd: basePrice,
+      });
+      if (cheapest.rate > VINTED_SHIPPING_CAP) {
+        const overage = Math.round((cheapest.rate - VINTED_SHIPPING_CAP) * 100) / 100;
+        vintedPricingByItemId.set(it.id, {
+          vintedPrice: Math.round((basePrice + overage) * 100) / 100,
+          vintedShippingNote: `Price includes $${overage.toFixed(2)} to cover shipping over Vinted's $100 cap (real shipping cost: $${cheapest.rate.toFixed(2)}).`,
+        });
+      } else {
+        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null });
+      }
+    } catch (e: any) {
+      if (e instanceof ShippingHardBlockError) {
+        vintedPricingByItemId.set(it.id, {
+          vintedPrice: basePrice,
+          vintedShippingNote:
+            'Shipping cost for this item could not be estimated for Vinted (it exceeds standard carrier limits) -- please review shipping and pricing manually before publishing.',
+        });
+      } else {
+        console.warn('[Vinted pricing] computeCheapestForOrigin failed for item', it.id, e?.message || e);
+        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null });
+      }
+    }
+  }
+
   const shaped = items.map((it) => ({
     id: it.id,
     saleId: it.saleId,
     saleTitle: saleTitleById.get(it.saleId || '') || 'Sale',
     title: it.title,
     price: it.price != null ? Number(it.price.toFixed(2)) : null,
+    vintedPrice: vintedPricingByItemId.get(it.id)?.vintedPrice ?? (it.price != null ? Number(it.price.toFixed(2)) : null),
+    vintedShippingNote: vintedPricingByItemId.get(it.id)?.vintedShippingNote ?? null,
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
     // S-EXT-BATCH-12 (2026-08-20, Patrick + live-Chrome-confirmed root cause): `category` on Item
