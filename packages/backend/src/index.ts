@@ -477,7 +477,17 @@ const globalLimiter = rateLimit({
     (req.method === 'GET' && detectCrawler((req.headers['user-agent'] as string) || '') !== null) ||
     (req.path === '/api/crawler-log' &&
       !!process.env.INTERNAL_SCRAPER_KEY &&
-      req.headers['x-scraper-key'] === process.env.INTERNAL_SCRAPER_KEY),
+      req.headers['x-scraper-key'] === process.env.INTERNAL_SCRAPER_KEY) ||
+    // 2026-09-17: same shape as the crawler-log exemption directly above -- this is a
+    // server-to-server POST from our own frontend's Vercel-hosted getStaticProps code
+    // (ADR-2026-09-16-isr-regeneration-logging), not end-user traffic, and it was tripping
+    // the anonymous 500/15min budget from Vercel's shared serverless egress IPs (heavy 429s
+    // observed 2026-09-16/17). Already secret-gated by internalIsrLogController.ts itself
+    // (REVALIDATE_SECRET query param, same trust boundary as /api/revalidate) -- this only
+    // loosens rate limiting for an already-authenticated caller, not the 401 check itself.
+    (req.path === '/api/internal/isr-log' &&
+      !!process.env.REVALIDATE_SECRET &&
+      req.query.secret === process.env.REVALIDATE_SECRET),
   store: createRateLimitStore('rl:global:'),
 });
 app.use(resilientLimiter(globalLimiter));
