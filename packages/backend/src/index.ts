@@ -64,6 +64,7 @@ import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
 import saleRoutes from './routes/sales';
+import isrLogRoutes from './routes/isrLog'; // ADR-2026-09-16: ISR regeneration logging
 import companyRoutes from './routes/companies'; // #567: hire-intent company directory
 import itemRoutes from './routes/items';
 import extensionRoutes from './routes/extension'; // ADR-084: Marketplace Autofill browser extension
@@ -676,6 +677,7 @@ app.get('/health/ready', async (req, res) => {
 app.use('/api/auth', resilientLimiter(authLimiter), authRoutes); // stricter rate limit on auth
 app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
 app.use('/api/sales', saleRoutes);
+app.use('/api/internal', isrLogRoutes); // ADR-2026-09-16: ISR regeneration logging (secret-gated, adds only /isr-log alongside the existing ADR-076 internal router)
 app.use('/api/extension', extensionRoutes); // ADR-084: Marketplace Autofill browser extension
 // Sentry FINDASALE-NODEJS-4H: re-analyze pipeline needs more than the global 30s
 // budget (image download + Vision/Haiku + eBay category resolve + catalog

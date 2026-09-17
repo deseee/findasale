@@ -7099,3 +7099,26 @@ model PlatformCostSnapshot {
   @@unique([date, provider, metric])
   @@index([provider, metric, date])
 }
+
+// IsrRegenerationLog -- ADR-2026-09-16-isr-regeneration-logging. Hourly-bucketed
+// aggregate count of getStaticProps invocations on /sales/[id] and /items/[id],
+// tagged by outcome branch and deploymentId. Built to answer "what's causing all
+// the ISR writes" with real queryable data across many deploys, instead of a
+// single before/after spot check. Deliberately NOT a per-event row (that would
+// double this feature's own write volume against the exact metric it measures).
+model IsrRegenerationLog {
+  id           String   @id @default(cuid())
+  route        String   // "sales/[id]" | "items/[id]"
+  outcome      String   // "success_active" | "success_ended" | "backend_404" |
+                         // "malformed_body" | "missing_api_url" | "backend_non_2xx" |
+                         // "catch_network_error"
+  deploymentId String   // process.env.VERCEL_GIT_COMMIT_SHA (short sha) or "unknown"
+  hourBucket   DateTime // UTC, truncated to the hour
+  count        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([route, outcome, deploymentId, hourBucket])
+  @@index([hourBucket])
+  @@index([deploymentId])
+}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { logIsrWrite } from '@/lib/isrWriteLogger'; // ADR-2026-09-16: ISR regeneration logging
 import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -2672,6 +2673,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
 
   if (!apiUrl) {
     console.warn('[getStaticProps:fallback] missing-api-url', { id });
+    await logIsrWrite('sales/[id]', 'missing_api_url');
     return {
       props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
       revalidate: 86400,
@@ -2691,9 +2693,11 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
         // window (matches ENDED-sale precedent below) instead of daily re-checks.
         // ADR: claude_docs/feature-notes/ADR-2026-08-29-isr-writes-backend404-fix.md
         console.warn('[getStaticProps:fallback] backend-404', { id });
+        await logIsrWrite('sales/[id]', 'backend_404');
         return { notFound: true, revalidate: 2592000 };
       }
       console.warn('[getStaticProps:fallback] backend-non-2xx', { id, status: res.status });
+      await logIsrWrite('sales/[id]', 'backend_non_2xx');
       return {
         props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
         revalidate: 86400,
@@ -2706,6 +2710,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       // Same confirmed-absent reasoning as backend-404 above -- 30-day window.
       // ADR: claude_docs/feature-notes/ADR-2026-08-29-isr-writes-backend404-fix.md
       console.warn('[getStaticProps:fallback] malformed-body', { id });
+      await logIsrWrite('sales/[id]', 'malformed_body');
       return { notFound: true, revalidate: 2592000 };
     }
 
@@ -2807,6 +2812,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     // via findasale-architect ADR; safe because live data (price/bids/inventory/sold-state)
     // is 100% client-polled, see useQuery refetchInterval ~line 542 (5s poll) -- the ISR HTML
     // only backs OG tags/JSON-LD for crawlers and a brief pre-hydration flash.
+    await logIsrWrite('sales/[id]', isEnded ? 'success_ended' : 'success_active');
     return {
       props: { ogData, initialData, eventSeriesData, noindex, unavailableAfter },
       revalidate: isEnded ? 2592000 : 604800,
@@ -2814,6 +2820,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
   } catch (err) {
     // Network/timeout/parse failure: render the shell, let the client fetch and ISR retry
     console.warn('[getStaticProps:fallback] catch-network-error', { id, err: err instanceof Error ? err.message : String(err) });
+    await logIsrWrite('sales/[id]', 'catch_network_error');
     return {
       props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
       revalidate: 86400,

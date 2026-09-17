@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { logIsrWrite } from '@/lib/isrWriteLogger'; // ADR-2026-09-16: ISR regeneration logging
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -1487,6 +1488,7 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     null;
 
   if (!apiUrl) {
+    await logIsrWrite('items/[id]', 'missing_api_url');
     return { props: { ogData: null, initialData: null }, revalidate: 86400 };
   }
 
@@ -1498,12 +1500,18 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     clearTimeout(timeout);
 
     if (!res.ok) {
+      // ADR-2026-09-16: logging only distinguishes 404 (confirmed-absent, cuid IDs
+      // never reused) from other non-2xx here -- revalidate window intentionally
+      // left unchanged (86400 for both) to keep this dispatch scoped to adding
+      // observability, not re-litigating items/[id]'s cost tuning separately.
+      await logIsrWrite('items/[id]', res.status === 404 ? 'backend_404' : 'backend_non_2xx');
       return { props: { ogData: null, initialData: null }, revalidate: 86400 };
     }
     const item = await res.json();
 
     // Safeguard: check that item has required fields for OG data
     if (!item?.id || !item?.title) {
+      await logIsrWrite('items/[id]', 'malformed_body');
       return { props: { ogData: null, initialData: null }, revalidate: 86400 };
     }
 
@@ -1544,10 +1552,12 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     // crawlers and a brief pre-hydration flash. Widened 2026-08-04, Patrick-approved,
     // via findasale-dev cost-optimization batch (Vercel ISR Writes 345% of cap).
     const isEnded = item.sale?.status === 'ENDED';
+    await logIsrWrite('items/[id]', isEnded ? 'success_ended' : 'success_active');
     return { props: { ogData, initialData }, revalidate: isEnded ? 2592000 : 604800 };
   } catch (error) {
     // Fail open: page still works, OG tags fall back to CSR version
     console.error('[items/[id] getStaticProps error]', error);
+    await logIsrWrite('items/[id]', 'catch_network_error');
     return { props: { ogData: null, initialData: null }, revalidate: 86400 };
   }
 }
