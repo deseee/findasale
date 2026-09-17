@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
@@ -22,6 +23,24 @@ import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
 import * as squarePos from '../services/squarePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): phone-based Square POS adapter -- charge creation moved to accept/confirm time, see file header
 import { transactionalEmailService } from '../lib/transactionalEmailService'; // 2026-09-16 fix: shopper receipt/notification email gap on manual-card + QR POS payments (mirrors cashPaymentController.ts's receipt pattern)
+
+
+// ─── QA Test-Transaction Harness (2026-09-17) ───────────────────────────────────
+// Reuses the SAME X-QA-Bypass / QA_RATE_LIMIT_BYPASS_SECRET mechanism
+// squarePaymentController.ts's createSquareTestTransaction, index.ts and
+// routes/auth.ts already gate QA-only behavior with. Re-declared locally here (not
+// imported) -- none of those are exported, the same convention every other file
+// re-declaring this identical 4-line check already follows (see
+// squarePaymentController.ts's own header comment on isQABypassRequest for why).
+// This is layered ON TOP OF, never instead of, each endpoint's own existing
+// organizer/shopper authorization -- see manualCardPayment's and
+// confirmPaymentRequest's own isTestBypassActive comments below for the exact
+// authorization order each one uses.
+const isQABypassRequest = (req: AuthRequest): boolean => {
+  const secret = process.env.QA_RATE_LIMIT_BYPASS_SECRET;
+  if (!secret) return false;
+  return req.headers['x-qa-bypass'] === secret;
+};
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -950,7 +969,22 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     // token, submitted instead of paymentIntentId when posRequest.processor === 'SQUARE'.
     // Which field is actually required depends on the row's OWN processor (checked below,
     // once posRequest is loaded) -- not guessable from the request body alone.
-    const { paymentIntentId, sourceId } = req.body as { paymentIntentId?: string; sourceId?: string };
+    // QA Test-Transaction Harness (2026-09-17): isTestTransaction only ever takes effect
+    // for the shopper who already owns this specific POSPaymentRequest (the
+    // `posRequest.shopperUserId !== req.user.id` ownership check below, which this
+    // endpoint already requires unconditionally) AND only when the X-QA-Bypass header
+    // matches QA_RATE_LIMIT_BYPASS_SECRET (isQABypassRequest, defined above -- same
+    // secret + header squarePaymentController.ts's createSquareTestTransaction gates its
+    // own bypass with; see that function's header comment for why no isolated
+    // per-organizer Square sandbox exists in this codebase). A client cannot use
+    // isTestTransaction to skip a real charge on a request it doesn't already own, and
+    // cannot skip the real charge on a request it DOES own without the server-side
+    // secret either -- see isTestBypassActive below for the exact authorization order.
+    const { paymentIntentId, sourceId, isTestTransaction } = req.body as {
+      paymentIntentId?: string;
+      sourceId?: string;
+      isTestTransaction?: boolean;
+    };
 
     if (!requestId) return res.status(400).json({ message: 'requestId is required' });
 
@@ -987,10 +1021,20 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       });
     }
 
+    // QA Test-Transaction Harness (2026-09-17): computed here, AFTER the
+    // shopper-ownership + status checks above -- mirrors createSquareTestTransaction's
+    // exact authorization order (resource-ownership check BEFORE the QA-header check
+    // takes effect). Only ever applies to the SQUARE branch below -- the STRIPE branch
+    // is dead code for new rows (processor is unconditionally forced to 'SQUARE' at
+    // request-creation time now, see createPaymentRequest's "Stripe removal
+    // (2026-09-12)" comment), so there is nothing left to test-bypass there.
+    const isTestBypassActive =
+      isTestTransaction === true && posRequest.processor === 'SQUARE' && isQABypassRequest(req);
+
     // Square migration Wave 1 #3 (2026-09-07): body-field requirement depends on this
     // specific row's processor, not a global assumption.
     if (posRequest.processor === 'SQUARE') {
-      if (!sourceId || typeof sourceId !== 'string') {
+      if (!isTestBypassActive && (!sourceId || typeof sourceId !== 'string')) {
         return res.status(400).json({ message: 'sourceId is required' });
       }
     } else {
@@ -1048,68 +1092,81 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     let externalPaymentId: string;
 
     if (posRequest.processor === 'SQUARE') {
-      const preflight = await squarePos.preflightAccountStatus({
-        id: organizerProfile.id,
-        squareOnboarded: organizerProfile.squareOnboarded,
-        squareMerchantId: organizerProfile.squareMerchantId,
-        squareLocationId: organizerProfile.squareLocationId,
-      });
-      if (!preflight.ok) {
-        return res.status(preflight.status).json({ message: preflight.message });
-      }
-
-      const result = await squarePos.createAndCapturePayment({
-        organizer: {
+      if (isTestBypassActive) {
+        // QA Test-Transaction Harness (2026-09-17): skip the real Square preflight +
+        // createAndCapturePayment call entirely -- see createSquareTestTransaction's header
+        // comment (squarePaymentController.ts) for the full "why no isolated per-organizer
+        // Square sandbox exists" reasoning, which applies identically here: this endpoint
+        // charges the organizer's own live connected Square account exactly like that one
+        // does, and Square has no separate platform-level test credential the way Stripe
+        // does. Synthetic id mirrors that same function's `sq_test_${randomUUID()}`
+        // convention so downstream code (Purchase.squarePaymentId, receipt/notification
+        // text) sees a realistic-shaped value.
+        externalPaymentId = `sq_test_${crypto.randomUUID()}`;
+      } else {
+        const preflight = await squarePos.preflightAccountStatus({
           id: organizerProfile.id,
           squareOnboarded: organizerProfile.squareOnboarded,
           squareMerchantId: organizerProfile.squareMerchantId,
-          // preflight.squareLocationId (not organizerProfile.squareLocationId): if this
-          // organizer's location was just backfilled by preflightAccountStatus above,
-          // organizerProfile's own field is still the stale pre-preflight value fetched
-          // at the top of this request.
-          squareLocationId: preflight.squareLocationId,
-        },
-        accessToken: preflight.accessToken,
-        sourceId: sourceId!,
-        amountCents: posRequest.cardAmountCents ?? posRequest.totalAmountCents,
-        appFeeCents: posRequest.platformFeeCents,
-        posRequestId: posRequest.id,
-        existingSquarePaymentId: posRequest.squarePaymentId,
-      });
-
-      if (!result.ok) {
-        return res.status(result.status).json({ message: result.message, error: result.message });
-      }
-
-      // Persist the Square paymentId regardless of captured state -- a held (captured:
-      // false) authorization must not be lost if the shopper's client retries: the next
-      // confirm attempt will find this id via existingSquarePaymentId above and complete
-      // it rather than re-authorizing the card a second time.
-      await prisma.pOSPaymentRequest
-        .update({ where: { id: requestId }, data: { squarePaymentId: result.paymentId } })
-        .catch((err) => console.error('[pos-payment] Failed to persist squarePaymentId:', err));
-
-      if (!result.captured) {
-        // KNOWN GAP (see squarePosPaymentAdapter.ts file header): no reconciliation job
-        // built this session. The authorization is safely held (Square's own confirmed
-        // 7-day default for card-not-present delayed capture) -- surfaced to Sentry for
-        // manual follow-up rather than silently told to the shopper as success.
-        try {
-          Sentry.captureMessage(
-            `[pos-payment] Square CompletePayment did not capture immediately -- requestId=${requestId} squarePaymentId=${result.paymentId}. Authorization held (Square default 7-day window); needs manual retry/reconciliation.`,
-            'warning'
-          );
-        } catch {
-          // Sentry may not be initialized -- silently continue
-        }
-        return res.status(202).json({
-          success: false,
-          processing: true,
-          message: 'Your payment is still processing. Please wait a moment and check your receipts, or ask the organizer to try again.',
+          squareLocationId: organizerProfile.squareLocationId,
         });
-      }
+        if (!preflight.ok) {
+          return res.status(preflight.status).json({ message: preflight.message });
+        }
 
-      externalPaymentId = result.paymentId;
+        const result = await squarePos.createAndCapturePayment({
+          organizer: {
+            id: organizerProfile.id,
+            squareOnboarded: organizerProfile.squareOnboarded,
+            squareMerchantId: organizerProfile.squareMerchantId,
+            // preflight.squareLocationId (not organizerProfile.squareLocationId): if this
+            // organizer's location was just backfilled by preflightAccountStatus above,
+            // organizerProfile's own field is still the stale pre-preflight value fetched
+            // at the top of this request.
+            squareLocationId: preflight.squareLocationId,
+          },
+          accessToken: preflight.accessToken,
+          sourceId: sourceId!,
+          amountCents: posRequest.cardAmountCents ?? posRequest.totalAmountCents,
+          appFeeCents: posRequest.platformFeeCents,
+          posRequestId: posRequest.id,
+          existingSquarePaymentId: posRequest.squarePaymentId,
+        });
+
+        if (!result.ok) {
+          return res.status(result.status).json({ message: result.message, error: result.message });
+        }
+
+        // Persist the Square paymentId regardless of captured state -- a held (captured:
+        // false) authorization must not be lost if the shopper's client retries: the next
+        // confirm attempt will find this id via existingSquarePaymentId above and complete
+        // it rather than re-authorizing the card a second time.
+        await prisma.pOSPaymentRequest
+          .update({ where: { id: requestId }, data: { squarePaymentId: result.paymentId } })
+          .catch((err) => console.error('[pos-payment] Failed to persist squarePaymentId:', err));
+
+        if (!result.captured) {
+          // KNOWN GAP (see squarePosPaymentAdapter.ts file header): no reconciliation job
+          // built this session. The authorization is safely held (Square's own confirmed
+          // 7-day default for card-not-present delayed capture) -- surfaced to Sentry for
+          // manual follow-up rather than silently told to the shopper as success.
+          try {
+            Sentry.captureMessage(
+              `[pos-payment] Square CompletePayment did not capture immediately -- requestId=${requestId} squarePaymentId=${result.paymentId}. Authorization held (Square default 7-day window); needs manual retry/reconciliation.`,
+              'warning'
+            );
+          } catch {
+            // Sentry may not be initialized -- silently continue
+          }
+          return res.status(202).json({
+            success: false,
+            processing: true,
+            message: 'Your payment is still processing. Please wait a moment and check your receipts, or ask the organizer to try again.',
+          });
+        }
+
+        externalPaymentId = result.paymentId;
+      }
 
       // Mark POS request as PAID
       await prisma.pOSPaymentRequest.update({
@@ -1164,7 +1221,11 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     // every other cash-commission call site -- not at request-creation time, and not from
     // the card-portion rate computed above (a referral discount or tier change between
     // request and confirm should apply the same way it would to any other cash sale).
-    if (posRequest.isSplitPayment && posRequest.cashAmountCents) {
+    // QA Test-Transaction Harness (2026-09-17): the cash-half commission accrual below
+    // mutates the organizer's real cashFeeBalance -- a fake test sale must never touch
+    // it, same posture cashPaymentController.ts already takes for its own
+    // isTestTransaction rows (see that file's own "deliberately NEVER accrued" comment).
+    if (posRequest.isSplitPayment && posRequest.cashAmountCents && !isTestBypassActive) {
       try {
         const cashFeeRate = await resolveCashCommissionRate({
           subscriptionTier: organizerProfile.subscriptionTier,
@@ -1224,6 +1285,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             ...buildProcessorPurchaseFields(item.id),
             source: 'POS',
             status: 'PAID',
+            isTestTransaction: isTestBypassActive,
           },
         });
 
@@ -1231,36 +1293,45 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         // old unconditional status update. Downstream cross-channel-removal hooks only fire
         // once the item is actually fully sold out (stockSold reached stockTotal) -- they
         // previously fired unconditionally on every sale regardless of remaining stock.
-        let fullySoldOut: boolean;
-        let remainingStock: number;
-        try {
-          ({ fullySoldOut, remainingStock } = await sellItemUnits(item.id, 1));
-        } catch (stockErr: any) {
-          if (stockErr instanceof InsufficientStockError) {
-            console.error(`[pos-payment] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
+        // QA Test-Transaction Harness (2026-09-17): the irreversible stock decrement /
+        // SOLD flip / cross-channel (eBay/Shopify/Discogs) withdraw-on-sale below is
+        // skipped for a test transaction -- same "Test Transaction safety net" precedent
+        // cashPaymentController.ts already established (2026-08-29 incident: a real QA
+        // pass permanently marked a real production item SOLD with no clean undo). The
+        // Purchase row above was still created for real (tagged isTestTransaction) so the
+        // pricing/fee math and the receipt/notification below are genuinely exercised.
+        if (!isTestBypassActive) {
+          let fullySoldOut: boolean;
+          let remainingStock: number;
+          try {
+            ({ fullySoldOut, remainingStock } = await sellItemUnits(item.id, 1));
+          } catch (stockErr: any) {
+            if (stockErr instanceof InsufficientStockError) {
+              console.error(`[pos-payment] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
+            }
+            throw stockErr;
           }
-          throw stockErr;
-        }
 
-        if (fullySoldOut) {
-          // Fire-and-forget: end eBay listing if item was pushed there
-          endEbayListingIfExists(item.id).catch(err =>
-            console.error('[eBay] Failed to withdraw offer:', err)
-          );
-          markShopifyItemSold(item.id).catch(err =>
-            console.error('[Shopify] Failed to mark item sold:', err)
-          );
-          withdrawDiscogsListingIfExists(item.id).catch(err =>
-            console.error('[Discogs] Failed to withdraw listing:', err)
-          );
-          notifyFacebookExportedItemSold(item.id).catch(err =>
-            console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
-          );
-        } else {
-          // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
-          syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock }).catch(err =>
-            console.error('[eBay ReviseQty] sync failed for item', item.id, err)
-          );
+          if (fullySoldOut) {
+            // Fire-and-forget: end eBay listing if item was pushed there
+            endEbayListingIfExists(item.id).catch(err =>
+              console.error('[eBay] Failed to withdraw offer:', err)
+            );
+            markShopifyItemSold(item.id).catch(err =>
+              console.error('[Shopify] Failed to mark item sold:', err)
+            );
+            withdrawDiscogsListingIfExists(item.id).catch(err =>
+              console.error('[Discogs] Failed to withdraw listing:', err)
+            );
+            notifyFacebookExportedItemSold(item.id).catch(err =>
+              console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+            );
+          } else {
+            // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
+            syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock }).catch(err =>
+              console.error('[eBay ReviseQty] sync failed for item', item.id, err)
+            );
+          }
         }
 
         // Update ItemReservation if exists
@@ -1343,6 +1414,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
                 }),
             source: 'POS',
             status: 'PAID',
+            isTestTransaction: isTestBypassActive,
           },
         });
       } catch (err: any) {
@@ -1413,6 +1485,14 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     // buyers, posRequest.shopperUserId here is a real, logged-in FindA.Sale account (same
     // account confirmPaymentRequest already authenticated req.user against above), so it
     // gets the same createNotification + email treatment the organizer side already has.
+    //
+    // DELIBERATELY NOT suppressed for isTestBypassActive (2026-09-17) -- unlike
+    // cashPaymentController.ts's isTestTransaction rows, which suppress their receipt
+    // email because that suppression is about not spamming a real buyerEmail during
+    // routine fee-math QA (no money-safety requirement), this QA Test-Transaction Harness
+    // exists specifically so QA CAN verify this exact email/notification fires end-to-end
+    // without a real Square charge. Suppressing it here would defeat the harness's entire
+    // purpose. Do not "fix" this back to suppressed.
     try {
       await createNotification({
         userId: posRequest.shopperUserId,
@@ -1431,6 +1511,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     return res.json({
       success: true,
       receiptUrl: '/shopper/history?view=receipts',
+      isTestTransaction: isTestBypassActive,
     });
   } catch (err: any) {
     console.error('[pos-payment] confirmPaymentRequest error:', err);
@@ -1522,7 +1603,16 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
 
-    const { sourceId, saleId, items, buyerEmail, discountType, discountValue, discountReasonNote } = req.body as {
+    // QA Test-Transaction Harness (2026-09-17): isTestTransaction only ever takes effect
+    // for the organizer/team-member resolveOrganizerOrTeamMember already resolved above,
+    // AND only when the X-QA-Bypass header matches QA_RATE_LIMIT_BYPASS_SECRET
+    // (isQABypassRequest, defined near the top of this file -- same secret + header
+    // squarePaymentController.ts's createSquareTestTransaction gates its own bypass with).
+    // Computed immediately (both inputs -- the flag and the header -- are already
+    // available here), but it has NO effect on anything until AFTER the sale-ownership
+    // check below passes: a client cannot use isTestTransaction to reach a sale this
+    // organizer doesn't already have full charge rights to.
+    const { sourceId, saleId, items, buyerEmail, discountType, discountValue, discountReasonNote, isTestTransaction } = req.body as {
       sourceId?: string;
       saleId?: string;
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
@@ -1530,10 +1620,14 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       discountType?: string;
       discountValue?: number;
       discountReasonNote?: string;
+      isTestTransaction?: boolean;
     };
+    const isTestBypassActive = isTestTransaction === true && isQABypassRequest(req);
 
-    if (!sourceId || typeof sourceId !== 'string') {
-      return res.status(400).json({ message: 'sourceId is required' });
+    if (!isTestBypassActive) {
+      if (!sourceId || typeof sourceId !== 'string') {
+        return res.status(400).json({ message: 'sourceId is required' });
+      }
     }
     if (!saleId || typeof saleId !== 'string') {
       return res.status(400).json({ message: 'saleId is required' });
@@ -1692,16 +1786,6 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     const cnpFeeCents = Math.round(subtotalCents * CNP_FEE_RATE_PLACEHOLDER) + CNP_FEE_FIXED_CENTS_PLACEHOLDER;
     const totalChargeCents = subtotalCents + cnpFeeCents;
 
-    const preflight = await squarePos.preflightAccountStatus({
-      id: organizer.id,
-      squareOnboarded: organizer.squareOnboarded,
-      squareMerchantId: organizer.squareMerchantId,
-      squareLocationId: organizer.squareLocationId,
-    });
-    if (!preflight.ok) {
-      return res.status(preflight.status).json({ message: preflight.message });
-    }
-
     // Platform commission on the sale's own subtotal (never the CNP surcharge) -- same
     // resolution createPaymentRequest above uses for the card portion of its own charges.
     const hasReferralDiscount =
@@ -1709,56 +1793,88 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     const cardFeeRate = hasReferralDiscount ? 0 : getPlatformFeeRate(organizer.subscriptionTier as any);
     const baseAppFeeCents = Math.round(subtotalCents * cardFeeRate);
 
-    // Cash-fee-debt recoupment (2026-09-12 Stripe removal) -- same mechanism every other
-    // Square card charge in this codebase applies, see cashFeeService.ts's file header.
-    const { appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
-      organizerId: organizer.id,
-      baseAppFeeCents,
-      saleAmountCents: totalChargeCents,
-    });
-
-    const result = await squarePos.createAndCapturePayment({
-      organizer: {
+    // QA Test-Transaction Harness (2026-09-17): mirrors squarePaymentController.ts's
+    // createSquareTestTransaction -- see that function's header comment for the full "why
+    // no isolated Square sandbox exists" reasoning, which applies identically here (this
+    // endpoint always charges the organizer's own live connected Square account). When
+    // isTestBypassActive: skip the real Square preflight + createAndCapturePayment call
+    // entirely, AND skip the cash-fee-debt recoupment (applyCashDebtToAppFee only reads
+    // organizer.cashFeeBalance and returns a computed split -- the actual mutation happens
+    // later in settleCashDebtCollection, which is already a no-op for debtAppliedCents=0,
+    // so setting debtAppliedCents=0 here is sufficient to guarantee a fake test sale never
+    // touches the organizer's real cash-fee balance, same posture cashPaymentController.ts
+    // already takes for its own isTestTransaction rows). cardFeeRate/baseAppFeeCents above
+    // are still computed the normal way so the Purchase row's fee math is genuinely
+    // exercised -- exactly what this test path exists to verify.
+    let appFeeCents: number;
+    let debtAppliedCents: number;
+    let squarePaymentId: string;
+    if (isTestBypassActive) {
+      appFeeCents = baseAppFeeCents;
+      debtAppliedCents = 0;
+      squarePaymentId = `sq_test_${crypto.randomUUID()}`;
+    } else {
+      const preflight = await squarePos.preflightAccountStatus({
         id: organizer.id,
         squareOnboarded: organizer.squareOnboarded,
         squareMerchantId: organizer.squareMerchantId,
-        // preflight.squareLocationId (not organizer.squareLocationId): if this organizer's
-        // location was just backfilled by preflightAccountStatus above, `organizer` itself
-        // still holds the stale pre-preflight value resolved at the top of this request.
-        squareLocationId: preflight.squareLocationId,
-      },
-      accessToken: preflight.accessToken,
-      sourceId,
-      amountCents: totalChargeCents,
-      appFeeCents,
-      // No POSPaymentRequest row exists for this flow -- sourceId itself is the idempotency
-      // seed. See this function's own header comment for the full reasoning.
-      posRequestId: sourceId,
-    });
-
-    if (!result.ok) {
-      return res.status(result.status).json({ message: result.message });
-    }
-
-    if (!result.captured) {
-      // KNOWN GAP -- see this function's header comment. No persisted request row to retry
-      // against for this walk-up flow, unlike the QR/phone rail's POSPaymentRequest.
-      try {
-        Sentry.captureMessage(
-          `[pos-payment] Square CompletePayment did not capture immediately for manual card entry -- organizerId=${organizer.id} squarePaymentId=${result.paymentId}. No POSPaymentRequest row exists to retry against; needs manual reconciliation via Square dashboard.`,
-          'warning'
-        );
-      } catch {
-        // Sentry may not be initialized -- silently continue
-      }
-      return res.status(202).json({
-        success: false,
-        processing: true,
-        message: "Your payment is still processing. Please check Square's dashboard in a moment, or try the sale again.",
+        squareLocationId: organizer.squareLocationId,
       });
-    }
+      if (!preflight.ok) {
+        return res.status(preflight.status).json({ message: preflight.message });
+      }
 
-    const squarePaymentId = result.paymentId;
+      // Cash-fee-debt recoupment (2026-09-12 Stripe removal) -- same mechanism every other
+      // Square card charge in this codebase applies, see cashFeeService.ts's file header.
+      ({ appFeeCents, debtAppliedCents } = await applyCashDebtToAppFee({
+        organizerId: organizer.id,
+        baseAppFeeCents,
+        saleAmountCents: totalChargeCents,
+      }));
+
+      const result = await squarePos.createAndCapturePayment({
+        organizer: {
+          id: organizer.id,
+          squareOnboarded: organizer.squareOnboarded,
+          squareMerchantId: organizer.squareMerchantId,
+          // preflight.squareLocationId (not organizer.squareLocationId): if this organizer's
+          // location was just backfilled by preflightAccountStatus above, `organizer` itself
+          // still holds the stale pre-preflight value resolved at the top of this request.
+          squareLocationId: preflight.squareLocationId,
+        },
+        accessToken: preflight.accessToken,
+        sourceId: sourceId!,
+        amountCents: totalChargeCents,
+        appFeeCents,
+        // No POSPaymentRequest row exists for this flow -- sourceId itself is the idempotency
+        // seed. See this function's own header comment for the full reasoning.
+        posRequestId: sourceId!,
+      });
+
+      if (!result.ok) {
+        return res.status(result.status).json({ message: result.message });
+      }
+
+      if (!result.captured) {
+        // KNOWN GAP -- see this function's header comment. No persisted request row to retry
+        // against for this walk-up flow, unlike the QR/phone rail's POSPaymentRequest.
+        try {
+          Sentry.captureMessage(
+            `[pos-payment] Square CompletePayment did not capture immediately for manual card entry -- organizerId=${organizer.id} squarePaymentId=${result.paymentId}. No POSPaymentRequest row exists to retry against; needs manual reconciliation via Square dashboard.`,
+            'warning'
+          );
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+        return res.status(202).json({
+          success: false,
+          processing: true,
+          message: "Your payment is still processing. Please check Square's dashboard in a moment, or try the sale again.",
+        });
+      }
+
+      squarePaymentId = result.paymentId;
+    }
 
     // Whole-charge idempotent-retry-safe lookup -- see this function's header comment for why
     // this is checked once per charge rather than per item.
@@ -1771,6 +1887,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         subtotalCents,
         cnpFeeCents,
         totalChargedCents: totalChargeCents,
+        isTestTransaction: isTestBypassActive,
       });
     }
 
@@ -1809,6 +1926,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             status: 'PAID',
             source: 'POS',
             buyerEmail: buyerEmail && buyerEmail.trim() ? buyerEmail.trim() : undefined,
+            isTestTransaction: isTestBypassActive,
           },
         });
         purchaseIds.push(purchase.id);
@@ -1830,7 +1948,13 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         continue;
       }
 
-      if (item.itemId) {
+      // QA Test-Transaction Harness (2026-09-17): the irreversible stock decrement / SOLD
+      // flip / cross-channel (eBay/Shopify/Discogs) withdraw-on-sale below is skipped for a
+      // test transaction -- same "Test Transaction safety net" precedent
+      // cashPaymentController.ts already established (2026-08-29 incident). The Purchase
+      // row above was still created for real (tagged isTestTransaction) so the pricing/fee
+      // math and the receipt email below are genuinely exercised.
+      if (item.itemId && !isTestBypassActive) {
         try {
           const { fullySoldOut, remainingStock } = await sellItemUnits(item.itemId, 1);
           if (fullySoldOut) {
@@ -1864,9 +1988,14 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // accepted and stored buyerEmail on each Purchase row but never actually sent a receipt.
     // Mirrors cashPaymentController.ts's processCashSaleCore receipt block exactly (same
     // buildEmail template helper, same transactionalEmailService rail, fail-open on error).
-    // No isTestTransaction concept exists on this endpoint (manual card entry always charges
-    // a real Square card), so unlike the cash path this always attempts the receipt when a
-    // buyerEmail was provided.
+    //
+    // 2026-09-17 update: isTestTransaction now exists on this endpoint (QA Test-Transaction
+    // Harness, see isTestBypassActive above) -- but this block is DELIBERATELY NOT
+    // suppressed for it, unlike cashPaymentController.ts's own isTestTransaction rows. That
+    // suppression is about not spamming a real buyerEmail during routine fee-math QA (no
+    // money-safety requirement); this harness exists specifically so QA CAN verify this
+    // exact receipt email fires end-to-end without a real Square charge. Suppressing it
+    // here would defeat the harness's entire purpose. Do not "fix" this back to suppressed.
     if (buyerEmail && buyerEmail.trim()) {
       try {
         const { buildEmail } = await import('../services/emailTemplateService');
@@ -1898,7 +2027,11 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // S1072 Finding #4 shape: no verifiable buyer account for this walk-up register sale --
     // same posture as cashPaymentController.cashPayment's own recordSuspectedSignal call.
     // Log-only, never blocks a legitimate sale.
-    if (sale.organizer?.userId) {
+    // Skipped for isTestBypassActive (2026-09-17): no real money moved and no real buyer
+    // exists for a test transaction -- same posture cashPaymentController.ts's own
+    // isTestTransaction check on this identical call already takes ("nothing here worth an
+    // admin's self-dealing review; recording one anyway would just be false-positive noise").
+    if (sale.organizer?.userId && !isTestBypassActive) {
       recordSuspectedSignal({
         prisma,
         userId: sale.organizer.userId,
@@ -1915,6 +2048,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       subtotalCents,
       cnpFeeCents,
       totalChargedCents: totalChargeCents,
+      isTestTransaction: isTestBypassActive,
     });
   } catch (err: any) {
     console.error('[pos-payment] manualCardPayment error:', err);
