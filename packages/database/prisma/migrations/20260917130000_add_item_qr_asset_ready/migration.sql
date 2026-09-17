@@ -1,0 +1,1 @@
+ALTER TABLE "Item" ADD COLUMN "qrAssetReady" BOOLEAN NOT NULL DEFAULT false;

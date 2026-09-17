@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { applyNeverShippableOverride, computeEffectivePackageWeight, endEbayListingIfExists } from './ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -118,7 +118,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     take: 2000,
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
-      category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, createdAt: true,
+      category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, qrAssetReady: true, createdAt: true,
       // S-EXT-BATCH-12 (2026-08-20): ebayCategoryName -- see the `category` field build below for why.
       ebayCategoryName: true,
       // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 5): brand/size/color/material --
@@ -420,7 +420,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       MERCARI: checkEligibility('MERCARI', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       VINTED: checkEligibility('VINTED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
     },
-    photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
+    photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady)) : (it.photoUrls || []),
     // Gated 2026-09-14 (see hasTrustedPackage above) -- previously exposed the raw,
     // untrusted packageWeightOz value unconditionally; the FB-specific loop above already
     // reverts THIS field to null in-memory for FB when untrusted, but that in-memory revert
@@ -542,6 +542,16 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // #xstreet0 field on the ?s=geoverify "add map" screen. Same never-invent rule.
     saleAddress: saleLocationById.get(it.saleId || '')?.address || null,
   }));
+
+  // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+  // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+  // the external QR-service URL on every photo. Outside the `shaped` .map() so it fires once
+  // per item, not once per photo.
+  for (const it of items) {
+    if (it.qrAssetReady === false) {
+      ensureQrCodeAsset(it.id).catch(() => {});
+    }
+  }
 
   res.json({
     organizer: {
@@ -1717,7 +1727,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, ebayCategoryName: true, ebayCategoryId: true, condition: true,
-      photoUrls: true, qrEmbedEnabled: true,
+      photoUrls: true, qrEmbedEnabled: true, qrAssetReady: true,
       brand: true, size: true, color: true, material: true, isbn: true,
       packageWeightOz: true, aiPackageWeightOz: true,
       packageLengthIn: true, packageWidthIn: true, packageHeightIn: true,
@@ -1784,7 +1794,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     category: it.ebayCategoryName || it.category || null,
     categoryBreadcrumb: it.category || null,
     photoUrls: applyWatermark
-      ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false))
+      ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady))
       : (it.photoUrls || []),
     packageWeightOz: hasTrustedPackage(it) ? it.packageWeightOz : null,
     aiPackageWeightOz: hasTrustedPackage(it) ? it.aiPackageWeightOz : null,
@@ -1808,6 +1818,16 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     saleZip: saleLocationById.get(it.saleId || '')?.zip || null,
     saleAddress: saleLocationById.get(it.saleId || '')?.address || null,
   });
+
+  // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+  // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+  // the external QR-service URL on every photo. Iterates `items` directly (not `shapeItem`,
+  // which runs once per item per enabled platform below) so it fires exactly once per item.
+  for (const it of items) {
+    if (it.qrAssetReady === false) {
+      ensureQrCodeAsset(it.id).catch(() => {});
+    }
+  }
 
   const queues: Record<AutoListPlatform, unknown[]> = {
     CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],

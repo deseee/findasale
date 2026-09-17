@@ -1,3 +1,12 @@
+import { v2 as cloudinary } from 'cloudinary';
+import { prisma } from '../lib/prisma';
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 /**
  * Cloudinary watermark utility for FindA.Sale
  * Applies a FindA.Sale watermark overlay to Cloudinary image URLs using URL-based transformations
@@ -60,15 +69,22 @@ export function getWatermarkedUrl(originalUrl: string): string {
  * @param originalUrl - Full Cloudinary URL (https://res.cloudinary.com/...)
  * @param itemId - Item ID for QR code (if qrEmbedEnabled is true)
  * @param qrEmbedEnabled - Whether to embed QR code overlay (default true)
+ * @param qrAssetReady - Whether this item's QR overlay image has already been generated +
+ *   stored on Cloudinary (see ensureQrCodeAsset below). When true, references the short
+ *   public_id instead of re-deriving + re-encoding the external QR-service URL on every call
+ *   (fixes eBay's 3975-char photo URL limit being exceeded). When false, falls back to the
+ *   original external-URL base64 fetch overlay.
  * @returns Watermarked URL with optional QR overlay appended
  *
  * Example input:  https://res.cloudinary.com/abc/image/upload/v1/findasale/item123.jpg
- * Example output: https://res.cloudinary.com/abc/image/upload/l_text:Montserrat_bold_18:FindA.Sale,g_south_east,x_20,y_20,o_60/l_fetch:aHR0cHM6Ly9hcGkucXJzZXJ2ZXIuY29tL3YxL2NyZWF0ZS1xci1jb2RlLz9zaXplPTgweDgwJmRhdGE9aHR0cHM6Ly9maW5kYS5zYWxlL2l0ZW1zL2l0ZW0xMjM=,g_south_east,w_80,h_80,x_10,y_10/v1/findasale/item123.jpg
+ * Example output (qrAssetReady): https://res.cloudinary.com/abc/image/upload/l_text:Montserrat_bold_18:FindA.Sale,g_south_east,x_20,y_20,o_60/l_findasale:qr:item123,g_south_east,w_85,h_85,x_15,y_20/v1/findasale/item123.jpg
+ * Example output (fallback):     https://res.cloudinary.com/abc/image/upload/l_text:Montserrat_bold_18:FindA.Sale,g_south_east,x_20,y_20,o_60/l_fetch:aHR0cHM6Ly9hcGkucXJzZXJ2ZXIuY29tL3YxL2NyZWF0ZS1xci1jb2RlLz9zaXplPTgweDgwJmRhdGE9aHR0cHM6Ly9maW5kYS5zYWxlL2l0ZW1zL2l0ZW0xMjM=,g_south_east,w_80,h_80,x_10,y_10/v1/findasale/item123.jpg
  */
 export function getWatermarkedUrlWithQR(
   originalUrl: string,
   itemId?: string,
-  qrEmbedEnabled: boolean = true
+  qrEmbedEnabled: boolean = true,
+  qrAssetReady: boolean = false
 ): string {
   // Start with the watermarked URL
   const watermarkedUrl = getWatermarkedUrl(originalUrl);
@@ -84,12 +100,6 @@ export function getWatermarkedUrlWithQR(
   }
 
   try {
-    // Build QR code URL — request a larger source so the scaled overlay stays crisp
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=4&data=https://finda.sale/items/${itemId}`;
-
-    // Base64 encode the QR code URL for Cloudinary fetch overlay
-    const qrCodeUrlBase64 = Buffer.from(qrCodeUrl).toString('base64');
-
     // Find the version segment to insert the QR overlay before it
     const versionMatch = watermarkedUrl.match(/\/v\d+\//);
     if (!versionMatch) {
@@ -99,9 +109,30 @@ export function getWatermarkedUrlWithQR(
     const versionSegment = versionMatch[0];
     const versionIndex = watermarkedUrl.indexOf(versionSegment);
 
-    // QR overlay: positioned bottom-right corner, sized 85×85, with small margins from edges.
-    // Positioned under where ENDED sale banner would appear. Text overlay remains centered at g_south,y_25.
-    const qrTransformation = `l_fetch:${qrCodeUrlBase64},g_south_east,w_85,h_85,x_15,y_20`;
+    let qrTransformation: string;
+
+    if (qrAssetReady) {
+      // QR overlay image already generated + stored on Cloudinary for this item (see
+      // ensureQrCodeAsset below) -- reference it by its short public_id instead of
+      // re-deriving + re-encoding the external QR-service URL on every call (this is what
+      // was blowing past eBay's 3975-char photo URL limit). Hand-built as a literal
+      // colon-delimited string -- never via the Cloudinary SDK's transformation-object
+      // builder, which has a known bug with slash-containing public_ids
+      // (cloudinary/cloudinary_npm#88).
+      qrTransformation = `l_findasale:qr:${itemId},g_south_east,w_85,h_85,x_15,y_20`;
+    } else {
+      // Fallback: QR asset not ready yet for this item -- derive the external QR-service
+      // URL and embed it as a base64 fetch overlay (original behavior, unchanged).
+      // Build QR code URL — request a larger source so the scaled overlay stays crisp
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=4&data=https://finda.sale/items/${itemId}`;
+
+      // Base64 encode the QR code URL for Cloudinary fetch overlay
+      const qrCodeUrlBase64 = Buffer.from(qrCodeUrl).toString('base64');
+
+      // QR overlay: positioned bottom-right corner, sized 85×85, with small margins from edges.
+      // Positioned under where ENDED sale banner would appear. Text overlay remains centered at g_south,y_25.
+      qrTransformation = `l_fetch:${qrCodeUrlBase64},g_south_east,w_85,h_85,x_15,y_20`;
+    }
 
     // Insert QR transformation before the version segment
     const urlWithQR =
@@ -114,5 +145,27 @@ export function getWatermarkedUrlWithQR(
   } catch {
     // On any error, return the watermarked URL without QR
     return watermarkedUrl;
+  }
+}
+
+
+/**
+ * Generates (if needed) and stores this item's QR overlay image on Cloudinary, once per item,
+ * so getWatermarkedUrlWithQR can reference it by a short public_id instead of re-deriving +
+ * re-encoding the external QR-service URL on every call. Fire-and-forget: callers invoke this
+ * without awaiting it, so it never throws.
+ */
+export async function ensureQrCodeAsset(itemId: string): Promise<void> {
+  try {
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=4&data=https://finda.sale/items/${itemId}`;
+    await cloudinary.uploader.upload(qrCodeUrl, {
+      public_id: `findasale/qr/${itemId}`,
+      resource_type: 'image',
+      overwrite: false,
+      unique_filename: false,
+    });
+    await prisma.item.update({ where: { id: itemId }, data: { qrAssetReady: true } });
+  } catch {
+    // never throw — callers invoke this fire-and-forget
   }
 }

@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrl, getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import archiver from 'archiver';
 import ExcelJS from 'exceljs';
@@ -124,6 +124,7 @@ export const exportEstatesalesCSV = async (
             shippingAvailable: true,
             shippingPrice: true,
             qrEmbedEnabled: true,
+            qrAssetReady: true,
           },
         },
       },
@@ -147,6 +148,16 @@ export const exportEstatesalesCSV = async (
       return;
     }
 
+    // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+    // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+    // the external QR-service URL on every photo. Outside the .map() below so it fires once
+    // per item, not once per photo.
+    for (const item of sale.items) {
+      if (item.qrAssetReady === false) {
+        ensureQrCodeAsset(item.id).catch(() => {});
+      }
+    }
+
     // Build CSV headers
     const headers = [
       'Title',
@@ -166,7 +177,7 @@ export const exportEstatesalesCSV = async (
         const rawUrl = item.photoUrls[0];
         photoUrl = canRemoveWatermark(sale.organizer)
           ? rawUrl
-          : getWatermarkedUrlWithQR(rawUrl, item.id, item.qrEmbedEnabled);
+          : getWatermarkedUrlWithQR(rawUrl, item.id, item.qrEmbedEnabled, item.qrAssetReady);
       }
       return [
         escapeCSV(item.title),
@@ -257,6 +268,7 @@ export const exportFacebookJSON = async (
             shippingAvailable: true,
             shippingPrice: true,
             qrEmbedEnabled: true,
+            qrAssetReady: true,
           },
         },
       },
@@ -280,6 +292,16 @@ export const exportFacebookJSON = async (
       return;
     }
 
+    // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+    // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+    // the external QR-service URL on every photo. Outside the .map() below so it fires once
+    // per item, not once per photo.
+    for (const item of sale.items) {
+      if (item.qrAssetReady === false) {
+        ensureQrCodeAsset(item.id).catch(() => {});
+      }
+    }
+
     // Build Facebook JSON export
     const facebookData = {
       sale: {
@@ -299,7 +321,7 @@ export const exportFacebookJSON = async (
         images: (item.photoUrls || []).map((url, imgIndex) => {
           const photoUrl = canRemoveWatermark(sale.organizer)
             ? url
-            : getWatermarkedUrlWithQR(url, item.id, item.qrEmbedEnabled);
+            : getWatermarkedUrlWithQR(url, item.id, item.qrEmbedEnabled, item.qrAssetReady);
           return {
             url: photoUrl,
             isPrimary: imgIndex === 0,
@@ -385,6 +407,7 @@ export const exportCraigslistText = async (
             condition: true,
             photoUrls: true,
             qrEmbedEnabled: true,
+            qrAssetReady: true,
           },
         },
       },
@@ -406,6 +429,16 @@ export const exportCraigslistText = async (
     if (!sale.items || sale.items.length === 0) {
       res.status(400).json({ message: 'No published items to export' });
       return;
+    }
+
+    // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+    // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+    // the external QR-service URL on every photo. Outside the .forEach() below so it fires once
+    // per item, not once per photo.
+    for (const item of sale.items) {
+      if (item.qrAssetReady === false) {
+        ensureQrCodeAsset(item.id).catch(() => {});
+      }
     }
 
     // Build Craigslist text export
@@ -437,7 +470,7 @@ export const exportCraigslistText = async (
         const rawUrl = item.photoUrls[0];
         const photoUrl = canRemoveWatermark(sale.organizer)
           ? rawUrl
-          : getWatermarkedUrlWithQR(rawUrl, item.id, item.qrEmbedEnabled);
+          : getWatermarkedUrlWithQR(rawUrl, item.id, item.qrEmbedEnabled, item.qrAssetReady);
         lines.push(photoUrl);
       }
       lines.push('');
@@ -557,8 +590,20 @@ export const exportOrganizer = async (
         tags: true,
         photoUrls: true,
         createdAt: true,
+        qrEmbedEnabled: true,
+        qrAssetReady: true,
       },
     });
+
+    // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+    // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+    // the external QR-service URL on every photo. This runs at up to 5000 items per call, so the
+    // lazy self-heal (only items missing their QR asset) matters most here.
+    for (const item of items) {
+      if (item.qrAssetReady === false) {
+        ensureQrCodeAsset(item.id).catch(() => {});
+      }
+    }
 
     // Fetch all purchases on organizer's items
     const purchases = await prisma.purchase.findMany({
@@ -625,7 +670,7 @@ export const exportOrganizer = async (
       // Gate watermarks on item photos
       const photoUrls = item.photoUrls && item.photoUrls.length > 0
         ? item.photoUrls.map((url: string) =>
-            canRemoveWatermark(organizer) ? url : getWatermarkedUrlWithQR(url, item.id)
+            canRemoveWatermark(organizer) ? url : getWatermarkedUrlWithQR(url, item.id, item.qrEmbedEnabled !== false, item.qrAssetReady)
           )
         : [];
       return [

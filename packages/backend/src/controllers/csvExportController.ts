@@ -81,6 +81,8 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
         updatedAt: true,
         stockTotal: true,
         stockSold: true,
+        qrEmbedEnabled: true,
+        qrAssetReady: true,
       },
       orderBy: { createdAt: 'asc' },
     });

@@ -1,5 +1,5 @@
 import { Item } from '@prisma/client';
-import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrl, getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermarkPolicy';
 
 type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
@@ -68,6 +68,16 @@ function formatEbayCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null
 
   const rows: string[] = [...infoRows, headerRow];
 
+  // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+  // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+  // the external QR-service URL on every photo. Outside the items.forEach() below so it fires
+  // once per item, not once per photo.
+  for (const item of items) {
+    if (item.qrAssetReady === false) {
+      ensureQrCodeAsset(item.id).catch(() => {});
+    }
+  }
+
   items.forEach((item) => {
     // Extract first photo URL or use empty string
     let photoUrl = '';
@@ -76,7 +86,7 @@ function formatEbayCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null
       // Apply QR+name watermark if requested and tier allows it
       if (includeWatermark && photoUrl) {
         if (!canRemoveWatermark(organizer)) {
-          photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+          photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id, item.qrEmbedEnabled !== false, item.qrAssetReady);
         }
       }
     }
@@ -150,6 +160,16 @@ function formatAmazonCsv(items: Item[], organizer: WatermarkPolicyOrganizer | nu
   const headers = ['product-id', 'product-id-type', 'item-condition', 'price', 'item-note', 'will-ship-internationally', 'image-url'];
   const rows: string[] = [headers.map(escapeCsvField).join(',')];
 
+  // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+  // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+  // the external QR-service URL on every photo. Outside the items.forEach() below so it fires
+  // once per item, not once per photo.
+  for (const item of items) {
+    if (item.qrAssetReady === false) {
+      ensureQrCodeAsset(item.id).catch(() => {});
+    }
+  }
+
   items.forEach((item) => {
     const productId = item.sku || item.id;
     const description = item.description ? item.description.substring(0, 500) : '';
@@ -160,7 +180,7 @@ function formatAmazonCsv(items: Item[], organizer: WatermarkPolicyOrganizer | nu
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
       if (!canRemoveWatermark(organizer)) {
-        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id, item.qrEmbedEnabled !== false, item.qrAssetReady);
       }
     }
 
@@ -190,6 +210,16 @@ function formatFacebookCsv(items: Item[], organizer: WatermarkPolicyOrganizer | 
   const headers = ['title', 'price', 'category', 'condition', 'description', 'availability', 'image_url'];
   const rows: string[] = [headers.map(escapeCsvField).join(',')];
 
+  // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
+  // awaited/blocking) so subsequent calls can use the short public_id instead of re-deriving
+  // the external QR-service URL on every photo. Outside the items.forEach() below so it fires
+  // once per item, not once per photo.
+  for (const item of items) {
+    if (item.qrAssetReady === false) {
+      ensureQrCodeAsset(item.id).catch(() => {});
+    }
+  }
+
   items.forEach((item) => {
     const availability = item.status === 'AVAILABLE' ? 'In Stock' : 'Out of Stock';
 
@@ -198,7 +228,7 @@ function formatFacebookCsv(items: Item[], organizer: WatermarkPolicyOrganizer | 
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
       if (!canRemoveWatermark(organizer)) {
-        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id, item.qrEmbedEnabled !== false, item.qrAssetReady);
       }
     }
 

@@ -1507,6 +1507,7 @@ model Item {
   masterItemLibraryId             String? // Pre-wire: FK to future MasterItemLibrary model
   // Feature #136: QR Code Auto-Embedding in Photo Exports
   qrEmbedEnabled                  Boolean                 @default(true) // Embed QR code linking to item in exported photos
+  qrAssetReady                    Boolean                 @default(false) // Set true once this item's QR overlay image has been generated + stored on Cloudinary (see cloudinaryWatermark.ts)
   // Feature #103: Photo Retention — archive old photos, delete very old ones
   archivedAt                      DateTime? // When photos were archived (90+ days after sale end)
   deletedFromCloudinary           Boolean                 @default(false) // Whether original photo was deleted from Cloudinary (365+ days)

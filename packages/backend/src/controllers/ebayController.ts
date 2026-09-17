@@ -23,7 +23,7 @@ import {
 export { ensureConditionValidForCategory } from '../services/ebayPublishService';
 export type { RequiredAspect } from '../services/ebayPublishService';
 import { resolveBookIsbn } from '../services/productEnrichment';
-import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrl, getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermarkPolicy';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
@@ -2395,6 +2395,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             roomTag: true,
             stockTotal: true,
             stockSold: true,
+            qrAssetReady: true,
           },
         },
       },
@@ -2658,8 +2659,15 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           if (canRemoveWatermark(organizer)) {
             return url; // TEAMS with toggle: return clean URL
           }
-          return getWatermarkedUrlWithQR(url, item.id); // QR+name watermark default
+          return getWatermarkedUrlWithQR(url, item.id, true, item.qrAssetReady); // QR+name watermark default
         });
+
+        // Generate + store this item's QR overlay asset on Cloudinary once (fire-and-forget,
+        // never awaited/blocking) so subsequent calls can use the short public_id instead of
+        // re-deriving the external QR-service URL on every photo.
+        if (item.qrAssetReady === false) {
+          ensureQrCodeAsset(item.id).catch(() => {});
+        }
 
         // Step 1: Create or replace inventory item
         const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
