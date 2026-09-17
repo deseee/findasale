@@ -34,6 +34,14 @@ const TREE_EXCLUDE = new Set([
   // Compiled build output (packages/backend/dist) — mirrors src/ 1:1 in compiled
   // JS, same category as the already-excluded .next frontend build output
   'dist',
+  // Added S-CONTEXT-FIX-2026-09-17: package-manager caches that appeared at
+  // repo root after the 2026-09-13 fix and were not yet accounted for.
+  // .pnpm-store and .npm-cache fully recursed into their content-addressable
+  // hash-sharded storage (3546 + 1712 entries, ~489KB + ~96KB of tree text —
+  // together ~86% of the 37KB->681KB regression, confirmed via device_bash
+  // line/byte counts). .corepack-cache is the same category (pnpm binary
+  // cache) and excluded pre-emptively before it grows the same way.
+  '.pnpm-store', '.npm-cache', '.corepack-cache',
 ]);
 
 // Directories shown with item count but not expanded (avoids token bloat)
