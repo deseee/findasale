@@ -21,6 +21,7 @@ import { resolvePosDiscount } from '../services/posDiscountService';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
 import * as squarePos from '../services/squarePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): phone-based Square POS adapter -- charge creation moved to accept/confirm time, see file header
+import { transactionalEmailService } from '../lib/transactionalEmailService'; // 2026-09-16 fix: shopper receipt/notification email gap on manual-card + QR POS payments (mirrors cashPaymentController.ts's receipt pattern)
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1407,6 +1408,26 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       console.warn('[pos-payment] Failed to create notification:', err.message);
     }
 
+    // 2026-09-16 fix: shopper email/notification gap -- this QR/phone flow previously only
+    // notified the organizer on a completed payment. Unlike manualCardPayment's walk-up
+    // buyers, posRequest.shopperUserId here is a real, logged-in FindA.Sale account (same
+    // account confirmPaymentRequest already authenticated req.user against above), so it
+    // gets the same createNotification + email treatment the organizer side already has.
+    try {
+      await createNotification({
+        userId: posRequest.shopperUserId,
+        type: 'pos_payment_completed_shopper',
+        title: 'Payment Successful',
+        body: `Your payment of $${(posRequest.totalAmountCents / 100).toFixed(2)} to ${posRequest.organizer?.name || 'the organizer'}${posRequest.sale?.title ? ` for ${posRequest.sale.title}` : ''} was successful.`,
+        link: `/shopper/history?view=receipts`,
+        channel: 'OPERATIONAL',
+        sendEmail: true,
+        emailSubject: 'Your FindA.Sale payment was successful',
+      });
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to create shopper notification:', err.message);
+    }
+
     return res.json({
       success: true,
       receiptUrl: '/shopper/history?view=receipts',
@@ -1836,6 +1857,39 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             // Sentry may not be initialized
           }
         }
+      }
+    }
+
+    // 2026-09-16 fix: manual-card-entry buyer receipt-email gap -- this endpoint has always
+    // accepted and stored buyerEmail on each Purchase row but never actually sent a receipt.
+    // Mirrors cashPaymentController.ts's processCashSaleCore receipt block exactly (same
+    // buildEmail template helper, same transactionalEmailService rail, fail-open on error).
+    // No isTestTransaction concept exists on this endpoint (manual card entry always charges
+    // a real Square card), so unlike the cash path this always attempts the receipt when a
+    // buyerEmail was provided.
+    if (buyerEmail && buyerEmail.trim()) {
+      try {
+        const { buildEmail } = await import('../services/emailTemplateService');
+        const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+        const itemsList = chargedItems
+          .map((i) => `<li>${(i.itemId && dbItems[i.itemId]?.title) || i.label || 'Item'}: $${i.amount.toFixed(2)}</li>`)
+          .join('');
+        const html = buildEmail({
+          preheader: `Receipt for your purchase`,
+          headline: 'Your receipt from FindA.Sale 🎉',
+          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul><p><strong>Total: $${(totalChargeCents / 100).toFixed(2)}</strong></p>`,
+          ctaText: 'Visit FindA.Sale',
+          ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
+          accentColor: '#10b981',
+        });
+        await transactionalEmailService.emails.send({
+          from: fromEmail,
+          to: buyerEmail.trim(),
+          subject: `Receipt: Your in-person purchase`,
+          html,
+        });
+      } catch (emailErr) {
+        console.warn('[pos-payment] Failed to send manual-card sale receipt email:', emailErr);
       }
     }
 
