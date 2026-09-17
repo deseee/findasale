@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -35,5 +35,10 @@ router.post('/items/:id/message-autosend-decision', authenticate, requireOrganiz
 // ADR-100 (2026-08-06/07): Marketplace Listing Auto-Renew -- items posted via the extension
 // whose per-platform renewDueAt has arrived. Same auth/tier gating as every other route here.
 router.get('/pending-renewals', authenticate, requireOrganizer, requireTier('PRO'), getPendingRenewals);
+// ADR-DRAFT approve-to-autolist-fanout (Architect Handoff 2026-09-17, section D): content-script
+// tier (Craigslist, Facebook, Gumtree AU, Grailed, Poshmark, Mercari) auto-fan-out queue -- computed
+// live on every call, no job rows, no claim/lock semantics. Same auth/tier gating as every other
+// route in this file.
+router.get('/autolist-queue', authenticate, requireOrganizer, requireTier('PRO'), getAutolistQueue);
 
 export default router;

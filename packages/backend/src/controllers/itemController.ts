@@ -12,6 +12,7 @@ import FormData from 'form-data';
 import { z } from 'zod';
 import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
+import { dispatchApiTierAutoFanout } from '../services/marketplace/autoFanoutDispatcher'; // ADR-DRAFT approve-to-autolist-fanout
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 import { checkAiTagQuota, incrementAiTagCount } from '../lib/aiTagsQuotaTracker';
 import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // Hold-to-Pay checkout URL live-lookup
@@ -3821,6 +3822,27 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
       title: updatedItem.title,
       status: updatedItem.draftStatus
     }).catch(err => console.error('Webhook fire error:', err));
+
+    // ADR-DRAFT approve-to-autolist-fanout (Architect Handoff 2026-09-17, section B): fire the
+    // API-tier (Discogs/Reverb) auto-fanout dispatcher, non-blocking, same style as fireWebhooks
+    // above. Deliberately NOT hooked into the generic item-update endpoint's draftStatus write
+    // path (~line 1777) -- under-triggering is safer than over-triggering for a feature with
+    // restricted-item safety implications; that is a deliberate scoping choice, not an oversight.
+    // Re-fetches the full Item row (dispatchApiTierAutoFanout's signature takes the full Prisma
+    // `Item` type, and this endpoint's own `updatedItem` select above is intentionally narrow --
+    // never widened just to satisfy this call) and uses the item's own denormalized
+    // `organizerId` (Item.organizerId, kept in sync with sale.organizerId) as the dispatcher's
+    // `organizerId` argument -- NOT req.user.id/userId, which is what the connectors underneath
+    // (createDiscogsListing/createReverbListing) actually key their MarketplaceAccount lookups on.
+    prisma.item.findUnique({ where: { id: updatedItem.id } })
+      .then((fullItem) => {
+        if (fullItem?.organizerId) {
+          dispatchApiTierAutoFanout(fullItem.organizerId, fullItem).catch((err) =>
+            console.error('Auto-fanout dispatch error:', err)
+          );
+        }
+      })
+      .catch((err) => console.error('Auto-fanout item refetch error:', err));
 
     // ADR-069 Phase 2: Queue async eBay comps fetch (non-blocking)
     enqueueFetchEbayComps(updatedItem.id);

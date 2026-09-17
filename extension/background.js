@@ -955,6 +955,97 @@ async function ensureRenewAlarm() {
 chrome.runtime.onInstalled.addListener(ensureRenewAlarm);
 chrome.runtime.onStartup.addListener(ensureRenewAlarm);
 
+// ---- Auto-Fanout Queue Poller (Track B -- ADR-DRAFT-approve-to-autolist-fanout-2026-09-16,
+// Architect Handoff 2026-09-17 SS D/E) ----
+// Polls the new GET /extension/autolist-queue (Track A, backend) on its own recurring alarm,
+// same 20-min cadence as FAS_REMOVAL_ALARM (Section E just says "mirror the existing
+// pending-removals alarm pattern" with no cadence of its own specified). Response shape per the
+// locked contract: { ok: true, queues: { CRAIGSLIST: [...], FACEBOOK: [...], GUMTREE_AU: [...],
+// GRAILED: [...], POSHMARK: [...], MERCARI: [...] } }, empty array for any platform the organizer
+// hasn't opted into (organizer.<platform>AutoListEnabled) -- each item already shaped like a
+// normal /extension/items record, i.e. already a valid queue entry.
+//
+// Deliberately STORAGE-ONLY: setQueue/setCraigslistQueue/setGumtreeAuQueue/setPoshmarkQueue/
+// setMercariQueue/setGrailedQueue (see those handlers above) don't just write
+// chrome.storage.local -- Craigslist/Gumtree AU/Poshmark/Mercari/Grailed ALSO call
+// chrome.tabs.create to open a real posting tab as a side effect of the organizer's own click
+// (only Facebook's setQueue doesn't -- popup.js opens that tab itself). This poller merges into
+// the SAME storage keys/shape those handlers use but never calls chrome.tabs.create. Per the
+// ADR's Finding #1 ("do not resurrect" the zero-human/server-side posting path that was
+// deliberately killed) and Finding #3 (the intended increment is the extension "poll... and
+// self-populate its own queue... while the organizer's Chrome happens to be open", collapsing
+// "approve in the app" and "already queued next time your Chrome is open" into one step -- not a
+// new unattended-launch path), auto-opening 5-6 browser tabs from a background alarm the
+// organizer never triggered would change this feature's whole risk posture. So a platform whose
+// queue this poller fills just sits there, already loaded, for whenever the organizer next opens
+// (or is already sitting on) that platform's own tab -- exactly as if they'd clicked the popup's
+// queue button themselves moments earlier.
+const FAS_AUTOLIST_QUEUE_ALARM = 'fasAutoListQueuePoll';
+
+// One row per content-script-tier platform, matching this file's existing
+// FAS_AUTOPUBLISH_QUEUE_KEYS-style config-table pattern (see the top-of-file block above) so the
+// merge below is a single table-driven loop, not 6 copy-pasted branches. `autoPublish` is
+// omitted for GUMTREE_AU on purpose -- same fact setGumtreeAuQueue's own handler comments above
+// state: fas-gumtree-au.js never auto-fills or auto-submits anything, so there is no flag to
+// preserve for that platform. `setAt` is omitted everywhere except FACEBOOK -- fasQueueSetAt/
+// FAS_QUEUE_STALE_MS (the 30-min self-clear) is a Facebook-only mechanism today (confirmed by
+// grep -- no other platform's setXQueue writes a *QueueSetAt key at all), so only that platform's
+// entry gets a fresh timestamp on a queue this poller just filled.
+const FAS_AUTOLIST_QUEUE_CFG = {
+  CRAIGSLIST: { queue: 'fasCraigslistQueue', index: 'fasCraigslistIndex', autoPublish: 'fasCraigslistAutoPublish' },
+  FACEBOOK: { queue: 'fasQueue', index: 'fasIndex', autoPublish: 'fasAutoPublish', setAt: 'fasQueueSetAt' },
+  GUMTREE_AU: { queue: 'fasGumtreeAuQueue', index: 'fasGumtreeAuIndex' },
+  GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish' },
+  POSHMARK: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', autoPublish: 'fasPoshmarkAutoPublish' },
+  MERCARI: { queue: 'fasMercariQueue', index: 'fasMercariIndex', autoPublish: 'fasMercariAutoPublish' },
+};
+
+async function ensureAutoListQueueAlarm() {
+  const existing = await chrome.alarms.get(FAS_AUTOLIST_QUEUE_ALARM);
+  if (!existing) chrome.alarms.create(FAS_AUTOLIST_QUEUE_ALARM, { periodInMinutes: 20 });
+}
+chrome.runtime.onInstalled.addListener(ensureAutoListQueueAlarm);
+chrome.runtime.onStartup.addListener(ensureAutoListQueueAlarm);
+
+// Table-driven merge over all 6 platforms in one loop (per the handoff's explicit instruction not
+// to split this into a per-platform block). For each platform with a non-empty response array,
+// only writes that platform's queue when it is currently idle/exhausted -- empty, or its stored
+// index has already walked off the end of its stored queue. This generalizes the same
+// "abandoned/interrupted run" concept the FB-only FAS_QUEUE_STALE_MS check (getQueueItem handler
+// above) uses, without needing a timestamp: an organizer actively mid-run on any platform (queue
+// non-empty AND index < queue.length) is left completely untouched this tick, never clobbered or
+// reordered -- their current run finishes on its own, and any newly-approved items for that
+// platform simply get picked up on a later poll once it goes idle again.
+async function checkAutoListQueue() {
+  const resp = await apiFetch('/extension/autolist-queue');
+  if (!resp.ok) return 'error:' + (resp.error || resp.status);
+  const queues = (resp.data && resp.data.queues) || {};
+  const outcomes = [];
+  for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
+    const items = queues[platform];
+    if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
+    const cfg = FAS_AUTOLIST_QUEUE_CFG[platform];
+    const readKeys = [cfg.queue, cfg.index];
+    if (cfg.autoPublish) readKeys.push(cfg.autoPublish);
+    const st = await chrome.storage.local.get(readKeys);
+    const curQueue = st[cfg.queue] || [];
+    const curIndex = st[cfg.index] || 0;
+    const isIdle = curQueue.length === 0 || curIndex >= curQueue.length;
+    if (!isIdle) { outcomes.push(platform + ':skipped_active'); continue; }
+    // Same write path/shape as the manual setXQueue handlers above (queue + index reset to 0).
+    // autoPublish default (2026-09-17, per handoff): nobody clicked anything to get here, so
+    // there is no msg.autoPublish to read -- preserve whatever the organizer already has stored
+    // for this platform (st[cfg.autoPublish]) and only fall back to the same default TRUE those
+    // handlers use (msg.autoPublish !== false) when nothing has ever been stored yet.
+    const writeObj = { [cfg.queue]: items, [cfg.index]: 0 };
+    if (cfg.autoPublish) writeObj[cfg.autoPublish] = st[cfg.autoPublish] !== false;
+    if (cfg.setAt) writeObj[cfg.setAt] = Date.now();
+    await chrome.storage.local.set(writeObj);
+    outcomes.push(platform + ':queued_' + items.length);
+  }
+  return outcomes.join(',') || 'no_platforms_configured';
+}
+
 // True when a posting queue for this platform is already mid-run (organizer manually posting,
 // or a prior auto-renew run still in flight) -- auto-renew must never clobber an in-progress
 // queue by overwriting fasQueue/fasCraigslistQueue out from under a live content script.
@@ -1183,6 +1274,14 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       .then((outcome) => chrome.storage.local.set({
         fasLastRenewAlarmFiredAt: Date.now(),
         fasLastRenewOutcome: outcome
+      }));
+  }
+  if (alarm.name === FAS_AUTOLIST_QUEUE_ALARM) {
+    return checkAutoListQueue()
+      .catch((e) => 'error:' + String((e && e.message) || e))
+      .then((outcome) => chrome.storage.local.set({
+        fasLastAutoListQueueFiredAt: Date.now(),
+        fasLastAutoListQueueOutcome: outcome
       }));
   }
   if (alarm.name !== FAS_REMOVAL_ALARM) return;

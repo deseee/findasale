@@ -521,6 +521,19 @@ model Organizer {
   ebaySubscriptionId              String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
   ebayQueueMode                   Boolean                        @default(false) // Opt-in: auto-manage eBay listing slots
   ebayQueueRotation               Boolean                        @default(false) // Opt-in: cycle oldest listings when queue has waiting items
+  // ADR-DRAFT approve-to-autolist-fanout (2026-09-16/17, Architect Handoff section A): 8 additive
+  // per-platform opt-in booleans for the approval-triggered auto-fan-out feature. All default
+  // false, no backfill. Discogs/Reverb are dispatched directly (API tier, autoFanoutDispatcher.ts);
+  // the other 6 populate the content-script extension queue (GET /extension/autolist-queue).
+  // Vinted deliberately excluded -- no field -- per Patrick's confirmed decision + ToS fact-check.
+  craigslistAutoListEnabled       Boolean                        @default(false) // Opt-in: auto-fan-out approved items to Craigslist queue
+  facebookAutoListEnabled         Boolean                        @default(false) // Opt-in: auto-fan-out approved items to Facebook queue
+  gumtreeAuAutoListEnabled        Boolean                        @default(false) // Opt-in: auto-fan-out approved items to Gumtree AU queue
+  grailedAutoListEnabled          Boolean                        @default(false) // Opt-in: auto-fan-out approved items to Grailed queue
+  poshmarkAutoListEnabled         Boolean                        @default(false) // Opt-in: auto-fan-out approved items to Poshmark queue
+  mercariAutoListEnabled          Boolean                        @default(false) // Opt-in: auto-fan-out approved items to Mercari queue
+  discogsAutoListEnabled          Boolean                        @default(false) // Opt-in: auto-fan-out approved items directly to Discogs
+  reverbAutoListEnabled           Boolean                        @default(false) // Opt-in: auto-fan-out approved items directly to Reverb
   workspaceChatMessages           WorkspaceChatMessage[]         @relation("WorkspaceChatMessages")
   // Feature #S483: Organizer Signals — expansion + churn scoring
   organizerScore                  OrganizerScore?

@@ -1645,3 +1645,184 @@ export const decideMessageAutosendForItem = async (req: AuthRequest, res: Respon
 
   res.json(result);
 };
+
+// GET /extension/autolist-queue — Approve-to-Autolist Fan-Out, content-script tier
+// (ADR-DRAFT-approve-to-autolist-fanout-2026-09-16.md, "Architect Handoff — 2026-09-17",
+// section D). Covers Craigslist, Facebook, Gumtree AU, Grailed, Poshmark, Mercari --
+// Discogs/Reverb are the API tier and go through autoFanoutDispatcher.ts instead, not this
+// endpoint. Stateless and safe to poll repeatedly: no MarketplaceListingJob rows are written
+// here, no claim/lock semantics -- background.js's alarm just merges whatever comes back into
+// its existing chrome.storage.local queues (see the ADR's section E).
+//
+// Ownership: mirrors assertItemOwned/getExtensionItems exactly -- organizer is resolved from
+// req.user.id server-side; every item query is scoped to sale.organizerId = organizer.id.
+// Never accepts a client-supplied organizer/account id.
+type AutoListPlatform = 'CRAIGSLIST' | 'FACEBOOK' | 'GUMTREE_AU' | 'GRAILED' | 'POSHMARK' | 'MERCARI';
+
+export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({
+    where: { userId },
+    select: {
+      id: true,
+      subscriptionTier: true,
+      removeWatermarkEnabled: true,
+      craigslistAutoListEnabled: true,
+      facebookAutoListEnabled: true,
+      gumtreeAuAutoListEnabled: true,
+      grailedAutoListEnabled: true,
+      poshmarkAutoListEnabled: true,
+      mercariAutoListEnabled: true,
+    },
+  });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const emptyQueues: Record<AutoListPlatform, unknown[]> = {
+    CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
+  };
+
+  const enabledPlatforms: AutoListPlatform[] = [];
+  if (organizer.craigslistAutoListEnabled === true) enabledPlatforms.push('CRAIGSLIST');
+  if (organizer.facebookAutoListEnabled === true) enabledPlatforms.push('FACEBOOK');
+  if (organizer.gumtreeAuAutoListEnabled === true) enabledPlatforms.push('GUMTREE_AU');
+  if (organizer.grailedAutoListEnabled === true) enabledPlatforms.push('GRAILED');
+  if (organizer.poshmarkAutoListEnabled === true) enabledPlatforms.push('POSHMARK');
+  if (organizer.mercariAutoListEnabled === true) enabledPlatforms.push('MERCARI');
+
+  if (enabledPlatforms.length === 0) {
+    res.json({ ok: true, queues: emptyQueues });
+    return;
+  }
+
+  // Candidate items: approved/published only (draftStatus: 'PUBLISHED' per the handoff),
+  // still AVAILABLE (never auto-fan-out something already sold/reserved between polls -- same
+  // status filter getExtensionItems' own base query uses), owned by this organizer, sale not
+  // soft-deleted, and not opted out of cross-listing entirely (ebayShippingOverride !=
+  // 'DONT_LIST' -- same ADR-084 amendment getExtensionItems already applies at the query level).
+  const applyWatermark = !canRemoveWatermark(organizer);
+
+  const items = await prisma.item.findMany({
+    where: {
+      sale: { organizerId: organizer.id, deletedAt: null },
+      draftStatus: 'PUBLISHED',
+      status: 'AVAILABLE',
+      OR: [
+        { ebayShippingOverride: null },
+        { ebayShippingOverride: { not: 'DONT_LIST' } },
+      ],
+    },
+    take: 2000,
+    select: {
+      id: true, saleId: true, title: true, description: true, price: true,
+      category: true, ebayCategoryName: true, ebayCategoryId: true, condition: true,
+      photoUrls: true, qrEmbedEnabled: true,
+      brand: true, size: true, color: true, material: true, isbn: true,
+      packageWeightOz: true, aiPackageWeightOz: true,
+      packageLengthIn: true, packageWidthIn: true, packageHeightIn: true,
+      packageConfirmedByOrganizer: true, packageEstimateSource: true,
+      ebayShippingOverride: true, crosslisterFreeShipping: true,
+      allowBestOffer: true, bestOfferMinimumAmt: true, bestOfferAutoAcceptAmt: true,
+    },
+  });
+
+  if (items.length === 0) {
+    res.json({ ok: true, queues: emptyQueues });
+    return;
+  }
+
+  const saleIds = Array.from(new Set(items.map((i) => i.saleId).filter((id): id is string => !!id)));
+  const sales = saleIds.length
+    ? await prisma.sale.findMany({ where: { id: { in: saleIds } }, select: { id: true, title: true, city: true, zip: true, address: true } })
+    : [];
+  const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
+  const saleLocationById = new Map(sales.map((s) => [s.id, { city: s.city, zip: s.zip, address: s.address }]));
+
+  // Already-listed dedupe -- reuse the exact same "latest MarketplaceListingJob row per
+  // item+platform wins" signal getExtensionItems computes for its marketplaceListedX booleans
+  // (see that function's own 2026-08-15 "Silent Service" comment for why time-ordering, not just
+  // row existence, matters), rather than reinventing it. Once markItemListed (or background.js's
+  // own post-success confirmation, once Track B wires it up) writes a POST/POSTED row for an
+  // item+platform, this dedupe stops it from reappearing on the next poll.
+  const itemIds = items.map((i) => i.id);
+  const jobs = await prisma.marketplaceListingJob.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true },
+  });
+  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
+  for (const j of jobs) {
+    const key = `${j.itemId}:${j.platform}`;
+    const existing = latestByItemPlatform.get(key);
+    if (!existing || j.createdAt > existing.createdAt) {
+      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
+    }
+  }
+  const isAlreadyListed = (itemId: string, platform: AutoListPlatform): boolean => {
+    const latest = latestByItemPlatform.get(`${itemId}:${platform}`);
+    return !!latest && latest.action === 'POST' && latest.status === 'POSTED';
+  };
+
+  // Same package-weight/dimension trust gate getExtensionItems applies (2026-09-14 fix) --
+  // never surface an unconfirmed AI/SEED package estimate to a content script as if it were
+  // real data. Kept as an independent copy here (not cross-imported), same posture the
+  // resolveOwnedOrganizerAndItem helpers in discogsMarketplaceController.ts/reverbMarketplaceController.ts
+  // already take for their own small duplicated helpers.
+  const UNTRUSTED_PACKAGE_SOURCES = ['SEED', 'AI'];
+  const hasTrustedPackage = (it: { packageEstimateSource: string | null; packageConfirmedByOrganizer: boolean | null }) =>
+    it.packageConfirmedByOrganizer === true ||
+    (it.packageEstimateSource != null && !UNTRUSTED_PACKAGE_SOURCES.includes(it.packageEstimateSource));
+
+  const shapeItem = (it: (typeof items)[number]) => ({
+    id: it.id,
+    saleId: it.saleId,
+    saleTitle: saleTitleById.get(it.saleId || '') || 'Sale',
+    title: it.title,
+    price: it.price != null ? Number(it.price.toFixed(2)) : null,
+    condition: toFacebookCondition(it.condition),
+    description: buildDescription(it.description, it.saleId),
+    category: it.ebayCategoryName || it.category || null,
+    categoryBreadcrumb: it.category || null,
+    photoUrls: applyWatermark
+      ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false))
+      : (it.photoUrls || []),
+    packageWeightOz: hasTrustedPackage(it) ? it.packageWeightOz : null,
+    aiPackageWeightOz: hasTrustedPackage(it) ? it.aiPackageWeightOz : null,
+    packageLengthIn: hasTrustedPackage(it) && it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+    packageWidthIn: hasTrustedPackage(it) && it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+    packageHeightIn: hasTrustedPackage(it) && it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+    brand: it.brand,
+    size: it.size,
+    color: it.color,
+    material: it.material,
+    isbn: it.isbn,
+    shippingOverride:
+      it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' || it.packageWeightOz == null
+        ? 'LOCAL_PICKUP_ONLY'
+        : it.ebayShippingOverride,
+    crosslisterFreeShipping: it.crosslisterFreeShipping === true,
+    allowBestOffer: it.allowBestOffer,
+    bestOfferMinimumAmt: it.bestOfferMinimumAmt != null ? Number(it.bestOfferMinimumAmt) : null,
+    bestOfferAutoAcceptAmt: it.bestOfferAutoAcceptAmt != null ? Number(it.bestOfferAutoAcceptAmt) : null,
+    saleCity: saleLocationById.get(it.saleId || '')?.city || null,
+    saleZip: saleLocationById.get(it.saleId || '')?.zip || null,
+    saleAddress: saleLocationById.get(it.saleId || '')?.address || null,
+  });
+
+  const queues: Record<AutoListPlatform, unknown[]> = {
+    CRAIGSLIST: [], FACEBOOK: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
+  };
+  for (const it of items) {
+    const eligibilityCategory = it.ebayCategoryName || it.category;
+    for (const platform of enabledPlatforms) {
+      if (isAlreadyListed(it.id, platform)) continue;
+      // TOCTOU-safe: re-run fresh on every call, never cached -- a category/title edit between
+      // polls is picked up automatically (per the handoff's section D).
+      const eligibility = checkEligibility(platform, { category: eligibilityCategory, ebayCategoryId: it.ebayCategoryId, title: it.title });
+      if (!eligibility.eligible) continue;
+      queues[platform].push(shapeItem(it));
+    }
+  }
+
+  res.json({ ok: true, queues });
+};
