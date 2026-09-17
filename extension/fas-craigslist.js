@@ -154,7 +154,23 @@
   function waitForCraigslistPublish(timeoutMs) {
     return new Promise((resolve) => {
       const startedAt = Date.now();
+      let rateLimitReported = false; // ADDED 2026-09-17 -- report at most once per wait call
       const check = () => {
+        // ADDED 2026-09-17 (S-EXT-CRAIGSLIST-RATE-LIMIT diagnostic round, Patrick live report --
+        // "posting too rapidly" hit again around item 19 despite the batch cooldown) -- detect
+        // Craigslist's own rate-limit page text so a hit gets logged with a real timestamp+index
+        // instead of just looking like an ordinary stuck-on-preview timeout. Craigslist won't leave
+        // this state on its own, so resolve false immediately rather than continuing to poll.
+        const isRateLimited = /posting too rapidly|posting too fast/i.test(bodyText());
+        if (isRateLimited) {
+          if (!rateLimitReported) {
+            rateLimitReported = true;
+            // Fire-and-forget, not awaited -- must not slow down or change this poll's timing.
+            try { chrome.runtime.sendMessage({ type: 'craigslistRateLimitHit', bodyTextSnippet: bodyText().slice(0, 300) }).catch(() => {}); } catch (e) {}
+          }
+          resolve(false);
+          return;
+        }
         const stillDraft = /s=preview/.test(location.search) || /unpublished draft/i.test(bodyText());
         if (!stillDraft) { resolve(true); return; }
         if (Date.now() - startedAt >= timeoutMs) { resolve(false); return; }

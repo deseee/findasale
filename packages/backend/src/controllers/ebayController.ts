@@ -1009,27 +1009,42 @@ export async function fetchAllEbayPolicies(organizerId: string, accessToken: str
   const headers = ebayUserHeaders(accessToken);
 
   async function fetchAll(endpoint: string, resultKey: string): Promise<any[]> {
-    try {
-      const res = await fetch(
-        ebayProxyUrl(`/sell/account/v1/${endpoint}?marketplace_id=EBAY_US&limit=100`),
-        {
-          headers: {
-            ...headers,
-            ...ebayProxyHeaders(),
-          },
+    const maxAttempts = 2;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(
+          ebayProxyUrl(`/sell/account/v1/${endpoint}?marketplace_id=EBAY_US&limit=100`),
+          {
+            headers: {
+              ...headers,
+              ...ebayProxyHeaders(),
+            },
+          }
+        );
+        if (!res.ok) {
+          const isRetryableStatus = res.status >= 500 && res.status <= 599;
+          if (isRetryableStatus && attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            continue;
+          }
+          console.error(
+            `[eBay] ${endpoint} fetch failed: ${res.status}${isRetryableStatus ? ' (after retry)' : ''}`
+          );
+          return [];
         }
-      );
-      if (!res.ok) {
-        console.error(`[eBay] ${endpoint} fetch failed: ${res.status}`);
+        trackEbayCall();
+        const data = await res.json();
+        return data[resultKey] || [];
+      } catch (err) {
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          continue;
+        }
+        console.error(`[eBay] ${endpoint} error (after retry):`, err);
         return [];
       }
-      trackEbayCall();
-      const data = await res.json();
-      return data[resultKey] || [];
-    } catch (err) {
-      console.error(`[eBay] ${endpoint} error:`, err);
-      return [];
     }
+    return [];
   }
 
   const [fulfillmentPolicies, returnPolicies, paymentPolicies] = await Promise.all([
@@ -2441,21 +2456,40 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     let ebayFulfillmentPolicies: any[] | null = null;
     const getFulfillmentPoliciesOnce = async (): Promise<any[]> => {
       if (ebayFulfillmentPolicies !== null) return ebayFulfillmentPolicies;
-      try {
-        const res = await fetch(
-          ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100'),
-          { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
-        );
-        if (res.ok) {
-          trackEbayCall();
-          const data = (await res.json()) as any;
-          ebayFulfillmentPolicies = data.fulfillmentPolicies || [];
-        } else {
+      const maxAttempts = 2;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const res = await fetch(
+            ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100'),
+            { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
+          );
+          if (res.ok) {
+            trackEbayCall();
+            const data = (await res.json()) as any;
+            ebayFulfillmentPolicies = data.fulfillmentPolicies || [];
+            break;
+          }
+          const isRetryableStatus = res.status >= 500 && res.status <= 599;
+          if (isRetryableStatus && attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            continue;
+          }
+          if (isRetryableStatus) {
+            console.warn(
+              `[eBay ShippingPick] fulfillment policy fetch failed after retry — treating as unknown, not zero, policies (status ${res.status})`
+            );
+          }
           ebayFulfillmentPolicies = [];
+          break;
+        } catch (err) {
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            continue;
+          }
+          console.warn('[eBay ShippingPick] fulfillment policy fetch failed after retry — treating as unknown, not zero, policies:', err);
+          ebayFulfillmentPolicies = [];
+          break;
         }
-      } catch (err) {
-        console.warn('[eBay ShippingPick] failed to fetch fulfillment policies:', err);
-        ebayFulfillmentPolicies = [];
       }
       return ebayFulfillmentPolicies ?? [];
     };

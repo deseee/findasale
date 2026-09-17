@@ -1397,7 +1397,10 @@ function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 // Additive fix, not a replacement: keep the existing per-item delay AND add a much longer pause
 // after every batch of CRAIGSLIST_BATCH_SIZE items.
 const CRAIGSLIST_BATCH_SIZE = 5;
-const CRAIGSLIST_BATCH_COOLDOWN_MS = { MIN: 300000, MAX: 420000 }; // 5-7 minutes between batches
+const CRAIGSLIST_BATCH_COOLDOWN_MS = { MIN: 360000, MAX: 420000 }; // 6-7 minutes between batches
+// WIDENED 2026-09-17 -- tripped "posting too rapidly" again around item 19 despite this cooldown;
+// narrowing the window slightly while adding a post-timing log (see fasCraigslistPostLog) so the
+// next occurrence has real data instead of another guess.
 function craigslistIsBatchBoundary(nextIndex) {
   return nextIndex > 0 && nextIndex % CRAIGSLIST_BATCH_SIZE === 0;
 }
@@ -1656,6 +1659,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // branch's craigslistDelayWithOverlay() call is the one that matters in practice.
           const clAdvanceTabId = sender && sender.tab && sender.tab.id != null ? sender.tab.id : undefined;
           const clBatchBoundary2 = craigslistIsBatchBoundary(next);
+          // ADDED 2026-09-17 (S-EXT-CRAIGSLIST-RATE-LIMIT diagnostic round, Patrick live report --
+          // hit "posting too rapidly" again around item 19 despite the batch cooldown above)
+          // -- diagnostic-only timing log so the NEXT hit has real timestamp+count data instead of
+          // another guess. Capped at 200 entries so it can't grow unbounded across many runs.
+          // Best-effort: must never break the real posting flow if storage.local has an issue.
+          try {
+            const { fasCraigslistPostLog: clLog0 = [] } = await chrome.storage.local.get(['fasCraigslistPostLog']);
+            const clLog1 = clLog0.concat([{ t: Date.now(), index: next, batchBoundary: clBatchBoundary2 }]);
+            await chrome.storage.local.set({ fasCraigslistPostLog: clLog1.length > 200 ? clLog1.slice(-200) : clLog1 });
+          } catch (e) {}
           await craigslistDelayWithOverlay(
             clAdvanceTabId,
             clBatchBoundary2 ? CRAIGSLIST_BATCH_COOLDOWN_MS : CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
@@ -1663,6 +1676,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           ); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
+      } else if (msg.type === 'craigslistRateLimitHit') {
+        // ADDED 2026-09-17 (S-EXT-CRAIGSLIST-RATE-LIMIT diagnostic round) -- reported by
+        // waitForCraigslistPublish's isRateLimited check in fas-craigslist.js when Craigslist's own
+        // "posting too rapidly" text is detected. Appends to the SAME fasCraigslistPostLog array
+        // the advanceCraigslistQueue handler above writes to (same 200-entry cap), including the
+        // current fasCraigslistIndex as `index` so this entry is directly comparable to the normal
+        // advance-log entries. Diagnostic-only: must never throw back to the sender.
+        try {
+          const { fasCraigslistPostLog: clLog0 = [], fasCraigslistIndex: clIdx0 = null } =
+            await chrome.storage.local.get(['fasCraigslistPostLog', 'fasCraigslistIndex']);
+          const clLog1 = clLog0.concat([{ t: Date.now(), event: 'rate_limited', index: clIdx0, bodyTextSnippet: msg.bodyTextSnippet || null }]);
+          await chrome.storage.local.set({ fasCraigslistPostLog: clLog1.length > 200 ? clLog1.slice(-200) : clLog1 });
+        } catch (e) {}
+        sendResponse({ ok: true });
       } else if (msg.type === 'craigslistLoginStateObserved') {
         // (2026-08-08) Best-effort DOM-observed login state reported by fas-craigslist.js's
         // isLoggedIntoCraigslist(). Only ever a definite true/false (the content script never
