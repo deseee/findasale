@@ -10,6 +10,14 @@ const CRAWLER_PATTERNS: { pattern: RegExp; name: string }[] = [
   { pattern: /Bytespider/i, name: 'Bytespider' },
   { pattern: /Googlebot/i, name: 'GoogleBot' },
   { pattern: /bingbot/i, name: 'BingBot' },
+  // 2026-09-17 (scheduled CI/Sentry health monitor, Sentry FINDASALE-NODEJS-7V): Meta's own
+  // documented link-preview/sharing crawler (see the UA's own URL --
+  // https://developers.facebook.com/docs/sharing/webmasters/crawler) was not recognized here,
+  // so it never got the GET-only rate-limit bypass in index.ts's globalLimiter and was
+  // repeatedly tripping the anonymous 500/15min budget -- confirmed via 6+ distinct Sentry
+  // event UAs across 2026-09-03 through 2026-09-17 all matching this exact substring. Same
+  // fix shape as the pre-existing GoogleBot/ClaudeBot/etc. entries above (2026-07-28).
+  { pattern: /meta-webindexer|meta-externalagent/i, name: 'MetaCrawler' },
 ];
 
 export function detectCrawler(userAgent: string): string | null {

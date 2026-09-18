@@ -11,6 +11,11 @@ const CRAWLER_PATTERNS: { pattern: RegExp; name: string }[] = [
   { pattern: /Bytespider/i, name: 'Bytespider' },
   { pattern: /Googlebot/i, name: 'GoogleBot' },
   { pattern: /bingbot/i, name: 'BingBot' },
+  // 2026-09-17: kept in sync with middleware/crawlerAnalytics.ts's own CRAWLER_PATTERNS list
+  // (this file keeps an independent duplicate copy rather than importing it -- pre-existing
+  // duplication, not fixed here, but flagged in this session's handoff). Same Meta-crawler
+  // gap and fix as that file -- see its comment for the Sentry citation.
+  { pattern: /meta-webindexer|meta-externalagent/i, name: 'MetaCrawler' },
 ];
 
 function detectCrawler(userAgent: string): string | null {
