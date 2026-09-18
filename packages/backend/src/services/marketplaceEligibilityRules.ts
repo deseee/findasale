@@ -112,7 +112,17 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'FACEBOOK',
-    nameKeywords: ['coin', 'currency', 'paper money'],
+    // Extended S-FB-COMPLIANCE-AUDIT-2026-09-18 (Patrick-requested full Commerce Policy
+    // deep-dive, see claude_docs/audits/facebook-marketplace-compliance-audit-2026-09-18.md):
+    // Meta's real-money/cash-equivalent ban is enforced in practice against bullion sold by
+    // metal weight too, not just face-value currency -- sellers report bullion/precious-metal
+    // listings getting removed even when clearly framed as collectible. Adding the same risk
+    // posture already applied to coins. Reuses the exact same excludeKeywords carve-out below
+    // (tube/holder/etc.) so bullion storage accessories stay eligible.
+    nameKeywords: [
+      'coin', 'currency', 'paper money',
+      'bullion', 'silver bar', 'gold bar', 'silver round', 'gold round', 'troy ounce',
+    ],
     excludeKeywords: [
       'tube', 'holder', 'capsule', 'flip', 'album', 'slab', 'sleeve', 'case', 'display',
       'book', 'page', 'mount', 'folder', 'box', 'organizer', 'storage',
@@ -174,6 +184,77 @@ const RULES: EligibilityRule[] = [
       'pornographic', 'sex toy',
     ],
     reason: 'Facebook Marketplace does not allow listing alcohol, tobacco, drugs, adult content, or certain animal products (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK SUPPLEMENTS/UNSAFE HEALTH PRODUCTS (added S-FB-COMPLIANCE-AUDIT-2026-09-18,
+  // Patrick-requested full Commerce Policy deep-dive after the 2026-09-03 dagger/weapons account
+  // restriction -- see claude_docs/audits/facebook-marketplace-compliance-audit-2026-09-18.md).
+  // Meta's Restricted Goods policy explicitly names anabolic steroids, human growth hormone, and
+  // several specific unsafe supplement ingredients. Low volume for an estate-sale business but a
+  // real category (vintage medicine cabinets, old supplement stock) and cheap/low-false-positive
+  // to add -- these terms essentially never appear in ordinary resale listings for other reasons.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['steroid', 'anabolic', 'human growth hormone', 'hgh', 'ephedra', 'dhea', 'comfrey'],
+    reason: 'Facebook Marketplace does not allow listing unsafe supplements or controlled hormonal products (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK RECALLED PRODUCTS (added S-FB-COMPLIANCE-AUDIT-2026-09-18) -- Meta bans listing
+  // items subject to an official safety recall. Relevant to estate-sale inventory (old baby gear,
+  // recalled small appliances). Scoped to explicit recall language only, not a guess at which
+  // products are recalled (that would need an external recall database, out of scope here).
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['recalled', 'recall notice', 'subject to recall'],
+    reason: 'Facebook Marketplace does not allow listing products subject to a safety recall (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK HAZARDOUS MATERIALS (added S-FB-COMPLIANCE-AUDIT-2026-09-18) -- mirrors the
+  // hazmat keyword CRAIGSLIST already has below; Facebook had none despite banning the same
+  // category (flammable liquids, toxic chemicals, radioactive materials, damaged/swollen
+  // batteries -- the last two are a real estate-sale/electronics-resale hazard).
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['hazmat', 'flammable', 'toxic chemical', 'radioactive', 'damaged battery', 'swollen battery'],
+    reason: 'Facebook Marketplace does not allow listing hazardous materials (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK GAMBLING (added S-FB-COMPLIANCE-AUDIT-2026-09-18) -- lottery tickets, raffle
+  // entries, and casino chips/services are explicitly restricted by Meta.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['lottery ticket', 'raffle ticket', 'casino chip'],
+    reason: 'Facebook Marketplace does not allow listing lottery tickets, raffle entries, or gambling-related items (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK COUNTERFEIT/REPLICA/STOLEN GOODS (added S-FB-COMPLIANCE-AUDIT-2026-09-18) --
+  // CRAIGSLIST already has this category below; Facebook's own Commerce Policy bans it too
+  // (counterfeit/knockoff goods, stolen property) but had no rule at all. 'replica' is
+  // deliberately included WITHOUT an excludeKeywords carve-out for things like "replica jersey" --
+  // unlike the weapons rule's culinary-knife carve-out (a clear, narrow, unambiguous safe case),
+  // there is no comparably narrow and common legitimate "replica" usage in estate/yard-sale
+  // resale inventory to justify one, and erring toward blocking matches this audit's stated bar
+  // ("false negatives are unacceptable") for a platform-ban-risk category. Revisit with a real
+  // carve-out only if false positives are actually observed in production.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['counterfeit', 'replica', 'knockoff', 'bootleg', 'stolen'],
+    reason: 'Facebook Marketplace does not allow listing counterfeit, replica, or stolen goods (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK GIFT CARDS/DIGITAL GOODS/EVENT TICKETS (added S-FB-COMPLIANCE-AUDIT-2026-09-18)
+  // -- Meta restricts/bans gift card resale, digital goods and subscription/account resale
+  // (streaming, game, software-license accounts), and unauthorized event-ticket resale.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['gift card', 'streaming account', 'game account', 'software key', 'digital download', 'event ticket resale'],
+    reason: 'Facebook Marketplace does not allow listing gift cards, digital goods/accounts, or resold event tickets (Commerce Policy).',
   },
 
   // ---- CRAIGSLIST (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- previously had ZERO eligibility

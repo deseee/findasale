@@ -33,9 +33,15 @@
   // fire wrong in practice only because popup.js's badge (driven by the backend's correct
   // exclude-aware check) already prevented those items from being queued for Facebook in the
   // first place; this fallback was simply stale/wrong the whole time. Keyword lists below are kept
-  // literally in sync with marketplaceEligibilityRules.ts's two FACEBOOK rules -- if either
-  // changes there, update here too.
-  const FB_COIN_CURRENCY_NAME_KEYWORDS = ['coin', 'currency', 'paper money'];
+  // literally in sync with marketplaceEligibilityRules.ts's FACEBOOK rules (9 as of
+  // S-FB-COMPLIANCE-AUDIT-2026-09-18) -- if any change there, update here too.
+  // Extended S-FB-COMPLIANCE-AUDIT-2026-09-18 -- bullion/precious-metal sold by weight faces
+  // the same real-money/cash-equivalent enforcement risk as coins/currency (see
+  // marketplaceEligibilityRules.ts's coin rule comment for sourcing).
+  const FB_COIN_CURRENCY_NAME_KEYWORDS = [
+    'coin', 'currency', 'paper money',
+    'bullion', 'silver bar', 'gold bar', 'silver round', 'gold round', 'troy ounce',
+  ];
   const FB_COIN_CURRENCY_EXCLUDE_KEYWORDS = [
     'tube', 'holder', 'capsule', 'flip', 'album', 'slab', 'sleeve', 'case', 'display',
     'book', 'page', 'mount', 'folder', 'box', 'organizer', 'storage',
@@ -61,8 +67,34 @@
         && !FB_WEAPON_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing weapons, ammunition, or explosives (Commerce Policy).';
     }
+    if (FB_SUPPLEMENT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing unsafe supplements or controlled hormonal products (Commerce Policy).';
+    }
+    if (FB_RECALLED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing products subject to a safety recall (Commerce Policy).';
+    }
+    if (FB_HAZMAT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing hazardous materials (Commerce Policy).';
+    }
+    if (FB_GAMBLING_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing lottery tickets, raffle entries, or gambling-related items (Commerce Policy).';
+    }
+    if (FB_COUNTERFEIT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing counterfeit, replica, or stolen goods (Commerce Policy).';
+    }
+    if (FB_GIFTCARD_DIGITAL_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing gift cards, digital goods/accounts, or resold event tickets (Commerce Policy).';
+    }
     return null;
   }
+  // Added S-FB-COMPLIANCE-AUDIT-2026-09-18 (see marketplaceEligibilityRules.ts for full
+  // sourcing/reasoning per category -- kept literally in sync here).
+  const FB_SUPPLEMENT_NAME_KEYWORDS = ['steroid', 'anabolic', 'human growth hormone', 'hgh', 'ephedra', 'dhea', 'comfrey'];
+  const FB_RECALLED_NAME_KEYWORDS = ['recalled', 'recall notice', 'subject to recall'];
+  const FB_HAZMAT_NAME_KEYWORDS = ['hazmat', 'flammable', 'toxic chemical', 'radioactive', 'damaged battery', 'swollen battery'];
+  const FB_GAMBLING_NAME_KEYWORDS = ['lottery ticket', 'raffle ticket', 'casino chip'];
+  const FB_COUNTERFEIT_NAME_KEYWORDS = ['counterfeit', 'replica', 'knockoff', 'bootleg', 'stolen'];
+  const FB_GIFTCARD_DIGITAL_NAME_KEYWORDS = ['gift card', 'streaming account', 'game account', 'software key', 'digital download', 'event ticket resale'];
   function isFacebookRestrictedItem(category, title) {
     return facebookRestrictionReason(category, title) !== null;
   }
