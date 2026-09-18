@@ -81,12 +81,21 @@
     },
     {
       "matches": [
-        "https://post.craigslist.org/*",
-        "https://www.craigslist.org/account*"
+        "https://post.craigslist.org/*"
       ],
       "js": [
         "fas-craigslist.js"
       ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://accounts.craigslist.org/login/home*"
+      ],
+      "js": [
+        "fas-craigslist-removal-frame.js"
+      ],
+      "all_frames": true,
       "run_at": "document_idle"
     },
     {

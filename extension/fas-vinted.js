@@ -2136,6 +2136,68 @@
     return candidates.find((el) => vintRemNorm(el.textContent) === wanted && el.offsetParent !== null) || null;
   }
 
+  // FEATURE 2026-09-17 (root cause fix, see
+  // claude_docs/feature-notes/adr-craigslist-vinted-removal-rootcause-2026-09-17.md): the removal
+  // tab used to land on config.js's VINTED_MANAGE_URL (the bare vinted.com homepage), which shows
+  // the general "browse other sellers' items" feed -- live-confirmed this session, NONE of the
+  // organizer's own items are ever on that page, so findVintedListingLinkByTitle below could never
+  // find a match no matter how good its selectors were. The organizer's own listings live at
+  // vinted.com/member/<their-numeric-id> instead -- live-confirmed via javascript_tool against
+  // Patrick's real account. The id isn't known/stored anywhere and isn't guessable from a static
+  // URL, so it's discovered once via the same two clicks a real person would make (open the
+  // account menu, click "Profile"), then cached in chrome.storage.local so every later removal
+  // skips straight there.
+  const VINTED_OWN_PROFILE_URL_STORAGE_KEY = 'fasVintedOwnProfileUrl';
+
+  function isOnVintedOwnProfilePage() {
+    return /^\/member\/\d+/.test(location.pathname);
+  }
+
+  function vintRemStorageGet(key) {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get([key], (r) => resolve((r && r[key]) || null));
+      } catch (e) { resolve(null); }
+    });
+  }
+  function vintRemStorageSet(key, value) {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.set({ [key]: value }, () => { void chrome.runtime.lastError; resolve(); });
+      } catch (e) { resolve(); }
+    });
+  }
+
+  // Live-confirmed selectors (javascript_tool against Patrick's real vinted.com session,
+  // 2026-09-17): the account-menu trigger is `button[data-testid="user-menu-button"]` (present in
+  // the header on every vinted.com page, including the homepage) -- clicking it reveals a menu
+  // whose "Profile" item is `<a href="/member/<id>">Profile</a>`. Both are matched here by stable
+  // attributes (data-testid, href pattern, exact button text) rather than the page's own
+  // webpack-hashed CSS module class names, which are not stable across Vinted deployments.
+  async function discoverVintedOwnProfileUrlByClick() {
+    const trigger = document.querySelector('button[data-testid="user-menu-button"]');
+    if (!trigger) return null;
+    vintRemSyntheticClick(trigger);
+    await sleep(500);
+    const profileLink = Array.from(document.querySelectorAll('a[href^="/member/"]')).find((a) => {
+      const href = a.getAttribute('href') || '';
+      return vintRemNorm(a.textContent) === 'profile' && /^\/member\/\d+$/.test(href);
+    });
+    if (!profileLink) return null;
+    return profileLink.getAttribute('href');
+  }
+
+  // Resolves the organizer's own profile URL (cached after the first successful discovery), or
+  // null if it can't be found on the current page (e.g. not logged in, or Vinted changed its menu
+  // markup) -- callers must treat null as a transient failure, never guess a fallback URL.
+  async function resolveVintedOwnProfileUrl() {
+    const cached = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
+    if (cached) return cached;
+    const discovered = await discoverVintedOwnProfileUrlByClick();
+    if (discovered) await vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, discovered);
+    return discovered;
+  }
+
   // UNVERIFIED -- Vinted's own listing pages are typically /items/<id>-<slug>; closet/wardrobe
   // pages list a seller's own active items as links. No live DOM confirmed this session.
   function findVintedListingLinkByTitle(title) {
@@ -2208,9 +2270,31 @@
     let result;
     if (onDetailAlready) {
       result = await deleteVintedListingOnDetailPage();
+    } else if (!isOnVintedOwnProfilePage()) {
+      // Not on the organizer's own listings page yet (e.g. background.js just opened this tab at
+      // config.js's VINTED_MANAGE_URL, the general homepage feed) -- land there first instead of
+      // searching a page that can never contain the organizer's own item.
+      const profileUrl = await resolveVintedOwnProfileUrl();
+      if (!profileUrl) {
+        overlayWarn('Could not find your Vinted profile/listings page to look for "' + escapeHtml(item.title) + '" (the account menu may have changed) -- please remove it yourself.' + button('fas-vin-close', 'Close', false));
+        closeBtnHandler();
+        // TRANSIENT -- Vinted may have changed its header markup, or the organizer isn't logged
+        // in on this tab right now. Background retries rather than treating this as a permanent
+        // skip (an unmatchable TITLE is permanent; an unreachable PAGE is not the same failure).
+        vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'no_own_profile_url');
+        return;
+      }
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening your Vinted listings to look for <b>' + escapeHtml(item.title) + '</b>...</div>');
+      location.href = profileUrl.indexOf('http') === 0 ? profileUrl : (location.origin + profileUrl);
+      return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
     } else {
       const link = findVintedListingLinkByTitle(item.title);
       if (!link) {
+        // Zero/ambiguous match on the organizer's OWN profile page -- could be a genuinely
+        // unmatchable title, but could also mean a stale cached profile URL (e.g. account
+        // switched). Clear the cache so the NEXT attempt rediscovers via a fresh click-through
+        // rather than repeating a possibly-wrong cached URL forever.
+        vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
         overlayWarn('Could not find a Vinted listing matching "' + escapeHtml(item.title) + '" on this page (UNVERIFIED selectors) -- please delete it yourself, then use "Mark removed" if the extension offers it.' + button('fas-vin-close', 'Close', false));
         closeBtnHandler();
         // PERMANENT failure -- zero or ambiguous title match after a real look at the page. The
