@@ -583,9 +583,20 @@
     // visible in the console whether the category-picker step is ever actually reached at all during a
     // "Post another" continuation post specifically (vs. only on the very first post of a session).
     console.log('[FAS Craigslist DIAG] detectStep evaluating: ' + location.pathname + location.search);
+    const s = norm(new URLSearchParams(location.search).get('s'));
+    // BUG FIX 2026-09-17 (S-EXT-CRAIGSLIST-RATE-LIMIT round 2, Patrick live report -- the
+    // isRateLimited check added earlier today only fires from inside waitForCraigslistPublish()
+    // after a Publish-button click, but Craigslist actually shows "You are posting too rapidly..."
+    // at a completely different checkpoint, `?s=postcount`, which this function didn't recognize
+    // at all -- it fell through to 'unknown' and run()'s default branch showed the misleading
+    // "Ready to autofill" toast directly on top of the block page (confirmed live via screenshot,
+    // twice, both times at item 21). Checked FIRST, before any other step match, so a page that
+    // happens to also match a later check (unlikely, but not provably impossible) can't shadow it.
+    // Matches on the URL param primarily; the body-text regex (same one waitForCraigslistPublish
+    // already uses) is a fallback in case Craigslist shows this block under a different `?s=` value.
+    if (s === 'postcount' || /posting too rapidly|posting too fast/i.test(bodyText())) return 'rateLimited';
     if (q('#PostingTitle') || q('input[name="PostingTitle"]')) return 'edit';
     if (fileInput()) return 'images';
-    const s = norm(new URLSearchParams(location.search).get('s'));
     if (s === 'type' || radioByLabelText('for sale by owner') || /what type of posting/i.test(bodyText())) return 'type';
     if (s === 'cat' || radioByLabelText('general for sale')) return 'cat';
     if (s === 'geoverify' || (q('#xstreet0') && (q('#postal_code') || q('input[name="postal"]')))) return 'geoverify';
@@ -1068,11 +1079,28 @@
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
+  // Fires the first time a page load lands on the rate-limit block page (detectStep() ==
+  // 'rateLimited', see the fix there for how this URL/body-text is recognized). Reports the same
+  // craigslistRateLimitHit message waitForCraigslistPublish already sends (background.js's
+  // existing handler appends it to fasCraigslistPostLog unchanged), shows a plain-language stop
+  // message that says what actually happened instead of guessing at verification, and does NOT
+  // click "Edit Again" or retry -- this is a hard stop, not a guardStop()-style retry-twice case.
+  let rateLimitStepReported = false;
+  async function doRateLimitedStep() {
+    if (!rateLimitStepReported) {
+      rateLimitStepReported = true;
+      try { chrome.runtime.sendMessage({ type: 'craigslistRateLimitHit', bodyTextSnippet: bodyText().slice(0, 300) }).catch(() => {}); } catch (e) {}
+    }
+    overlayInfo('<b style="color:#ffcf7a">Craigslist\'s posting limit was hit</b><br>Stopping here -- nothing wrong with this listing. ' +
+      'The remaining items are still queued; try resuming this batch in a few hours once Craigslist\'s limit resets.');
+  }
+
   async function run(item, index, total, autoPublish) {
     const step = detectStep();
     lastObservedStep = step; // keeps the MutationObserver re-run comparison above in sync with
                               // whatever step actually got acted on, whether this run() call came
                               // from start() or from a later mutation-triggered re-check.
+    if (step === 'rateLimited') { await doRateLimitedStep(); return; }
     if (step === 'edit') { if (!guardStop('edit')) await doEditStep(item); return; }
     if (step === 'images') { await doImagesStep(item, index, total); return; }
     if (step === 'preview') { await doPreviewStep(item, index, total, autoPublish); return; }
@@ -1088,120 +1116,12 @@
     overlayInfo('Ready to autofill. Continue through this Craigslist screen -- FindA.Sale takes over at the posting details.');
   }
 
-  // ================================================================================================
-  // CROSS-PLATFORM AUTO-REMOVE-ON-SOLD-ELSEWHERE (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22)
-  // CODE-ONLY, UNTESTED -- runs on https://www.craigslist.org/account (Patrick-confirmed this
-  // page lists every one of the organizer's own postings, 2026-08-22), a different page from the
-  // post.craigslist.org/* posting flow this file otherwise handles -- see the location gate at the
-  // very bottom of this file that routes between the two. Every selector below is a best-effort
-  // guess against Craigslist's classic account-page markup, never live-confirmed (no test account
-  // with a real posting existed this session) -- same hard-error/hands-to-human philosophy as the
-  // rest of this file: if a confident match can't be found, this stops and asks the organizer to
-  // finish it themselves rather than guessing.
-  function crRemNorm(s) { return String(s || '').toLowerCase().trim().replace(/\s+/g, ' '); }
-
-  function crRemFindButtonByText(text, root) {
-    const wanted = crRemNorm(text);
-    const scope = root || document;
-    const candidates = Array.from(scope.querySelectorAll('a, button'));
-    return candidates.find((el) => crRemNorm(el.textContent).includes(wanted)) || null;
-  }
-
-  // Craigslist's account page traditionally lists each posting as a row/list-item containing the
-  // title link plus its own "delete" action inline (no separate detail-page visit needed) --
-  // UNVERIFIED against the real current markup. Walks up from the matching title link to a
-  // reasonably-sized ancestor container and looks for a delete control inside that same container,
-  // so it doesn't accidentally click a delete link belonging to a different posting.
-  function findCraigslistPostingRowByTitle(title) {
-    const wanted = crRemNorm(title);
-    const links = Array.from(document.querySelectorAll('a'));
-    const scored = links
-      .map((a) => ({ a, t: crRemNorm(a.textContent) }))
-      .filter((x) => x.t.length > 0);
-    const exact = scored.filter((x) => x.t === wanted);
-    const contains = exact.length ? exact : scored.filter((x) => x.t.includes(wanted) || wanted.includes(x.t));
-    if (contains.length !== 1) return null; // zero or ambiguous matches -- never guess
-    let node = contains[0].a;
-    for (let i = 0; i < 6 && node.parentElement; i++) {
-      node = node.parentElement;
-      if (crRemFindButtonByText('delete', node)) return node;
-    }
-    return null; // title matched but no delete control found nearby -- hand off, don't guess further
-  }
-
-  async function deleteCraigslistPostingRow(row) {
-    const del = crRemFindButtonByText('delete', row);
-    if (!del) return 'no_delete_control';
-    del.click(); // Craigslist's classic delete flow is a full-page navigation to a confirm screen
-    return 'navigated';
-  }
-
-  // If this load IS the post-delete-click confirm screen, finish it. Best-effort text match --
-  // UNVERIFIED, never live-confirmed.
-  async function tryCompleteCraigslistDeleteConfirm() {
-    if (!/delete/i.test(location.href) && !/delete/i.test(bodyText().slice(0, 400))) return false;
-    const confirmBtn = crRemFindButtonByText('delete', document) || crRemFindButtonByText('yes', document);
-    if (!confirmBtn) return false;
-    confirmBtn.click();
-    return true;
-  }
-
-  async function reportCraigslistRemoved(item) {
-    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'CRAIGSLIST' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'CRAIGSLIST' }); } catch (e) {}
-  }
-
-  async function runCraigslistRemovalQueue(item, index, total) {
-    overlayInfo('This item sold elsewhere -- looking for the matching Craigslist posting for <b>' + escapeHtml(item.title) + '</b> to remove it...');
-    if (await tryCompleteCraigslistDeleteConfirm()) {
-      await sleep(600);
-      await reportCraigslistRemoved(item);
-      const more = (index + 1) < total;
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> (please double-check it\'s gone -- this was not live-verified).</div>' +
-        (more ? button('fas-cl-removed-next', 'Next item &#9654;', true) : '') +
-        button('fas-cl-close', 'Close', false));
-      const next = document.getElementById('fas-cl-removed-next');
-      // NOTE: CFG is not injected into this content script's world (only background.js
-      // imports config.js) -- inlined the literal URL rather than referencing CFG directly
-      // (caught before push, same class of bug found and fixed in fas-poshmark.js/
-      // fas-mercari.js/fas-grailed.js's removal blocks).
-      if (next) next.onclick = () => { location.href = 'https://www.craigslist.org/account'; };
-      const close = document.getElementById('fas-cl-close');
-      if (close) close.onclick = () => bar && bar.remove();
-      return;
-    }
-    const row = findCraigslistPostingRowByTitle(item.title);
-    if (!row) {
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Could not find a Craigslist posting matching "' + escapeHtml(item.title) + '" on this page (UNVERIFIED selectors) -- please delete it yourself.</div>' + button('fas-cl-close', 'Close', false));
-      const close = document.getElementById('fas-cl-close');
-      if (close) close.onclick = () => bar && bar.remove();
-      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'CRAIGSLIST' }); } catch (e) {}
-      return;
-    }
-    const result = await deleteCraigslistPostingRow(row);
-    if (result !== 'navigated') {
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Found the posting but no delete control (UNVERIFIED selectors -- reason: ' + result + ') -- please delete it yourself.</div>' + button('fas-cl-close', 'Close', false));
-      const close = document.getElementById('fas-cl-close');
-      if (close) close.onclick = () => bar && bar.remove();
-      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'CRAIGSLIST' }); } catch (e) {}
-    }
-    // else: the click navigated to a confirm screen -- this same function re-runs on that next
-    // load via maybeRunCraigslistRemoval() and completes via tryCompleteCraigslistDeleteConfirm().
-  }
-
-  async function maybeRunCraigslistRemoval() {
-    let queued;
-    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'CRAIGSLIST' }); } catch (e) { return false; }
-    if (!queued || !queued.ok || !queued.item) return false;
-    try {
-      await runCraigslistRemovalQueue(queued.item, queued.index, queued.total);
-    } catch (e) {
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Something went wrong removing this Craigslist posting (' + escapeHtml((e && e.message) || 'unknown error') + '). Please remove it yourself.</div>' + button('fas-cl-close', 'Close', false));
-      const close = document.getElementById('fas-cl-close');
-      if (close) close.onclick = () => bar && bar.remove();
-    }
-    return true;
-  }
+  // Craigslist removal logic (find/delete a posting on sold-elsewhere) MOVED 2026-09-17 to
+  // extension/fas-craigslist-removal-frame.js -- root cause: the postings table on
+  // www.craigslist.org/account renders inside a cross-origin iframe
+  // (accounts.craigslist.org/login/home) this file's content-script scope never covered, so
+  // the removal DOM code here could never see a single posting. See
+  // claude_docs/feature-notes/adr-craigslist-vinted-removal-rootcause-2026-09-17.md.
 
   async function start() {
     await sleep(500); // let the page settle before reading the DOM
@@ -1238,12 +1158,9 @@
     await runGuarded(currentRunArgs.item, currentRunArgs.index, currentRunArgs.total, currentRunArgs.autoPublish);
   }
 
-  // Location gate: the account/my-listings page (removal flow) is a different page from the
-  // post.craigslist.org posting flow this file otherwise handles -- only one of the two ever
-  // applies on a given load.
-  (async () => {
-    const onAccountPage = location.hostname === 'www.craigslist.org' && location.pathname.indexOf('/account') === 0;
-    if (onAccountPage) { await maybeRunCraigslistRemoval(); return; }
-    start();
-  })();
+  // 2026-09-17: this file's removal-flow branch (www.craigslist.org/account) was removed --
+  // the actual removal logic now lives in extension/fas-craigslist-removal-frame.js, scoped to
+  // the iframe that page's postings table actually renders in. This file now only ever needs to
+  // run its post.craigslist.org posting flow.
+  start();
 })();
