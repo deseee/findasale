@@ -31,7 +31,7 @@ import { getHeatmapHandler } from '../controllers/heatmapController'; // Feature
 import rippleRoutes from './ripples'; // Feature #51: Sale Ripples
 import photoOpsRoutes from './photoOps'; // Feature #39: Photo Op Stations
 import treasureHuntQRRoutes from './treasureHuntQR'; // Feature #85: Treasure Hunt QR
-import { createAlaCarteCheckout } from '../controllers/stripeController'; // #132: À La Carte
+import { createAlaCarteSquarePayment } from '../controllers/squarePaymentController'; // #132: À La Carte (2026-09-18: migrated from dead Stripe checkout to Square)
 import { getApproachNotes, updateApproachNotes, sendApproachNotification } from '../controllers/arrivalController'; // Feature #84: Approach Notes
 import { exportSaleToEbay } from '../controllers/ebayController'; // Feature #244: eBay CSV export
 import { exportCommerceManagerFeed } from '../controllers/exportController'; // Commerce Manager data feed
@@ -607,7 +607,7 @@ router.post('/:saleId/checkin', authenticate, checkInToSale); // Award XP for QR
 router.post('/:id/track-scan', trackQrScan); // public, no auth needed
 router.post('/:id/generate-qr', authenticate, generateQRCode);
 router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);
-router.post('/:id/ala-carte-checkout', authenticate, createAlaCarteCheckout); // #132: À La Carte
+router.post('/:id/ala-carte-checkout', authenticate, createAlaCarteSquarePayment); // #132: À La Carte (2026-09-18: Square)
 router.post('/:id/cancel', authenticate, cancelSale); // #120: Sale cancellation audit
 
 // Fix 1: Dedicated coordinates endpoint (must come before generic /:id routes)

@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
+import { SquarePaymentRequestForm } from './SquarePaymentRequestForm';
 
 interface AlaCartePublishModalProps {
   saleId: string;
@@ -23,22 +23,31 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
 }) => {
   const { showToast } = useToast();
   const [selectedOption, setSelectedOption] = useState<'pro' | 'ala-carte' | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
+  const [squareError, setSquareError] = useState<string | null>(null);
 
-  const checkoutMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.post(`/sales/${saleId}/ala-carte-checkout`);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    },
-    onError: (error: any) => {
-      const message = error.response?.data?.message || 'Failed to create checkout session';
+  // #132 (2026-09-18): Square replacement for the dead Stripe checkout redirect --
+  // charges synchronously via a tokenized card (Square Web Payments SDK), then calls
+  // the same onPublishSuccess the caller already wires up to PATCH the sale to
+  // PUBLISHED (edit-sale/[id].tsx's handleAlaCarteSuccess). Note: the OLD Stripe flow
+  // never actually called onPublishSuccess at all (redirected to a Stripe-hosted page
+  // whose success_url pointed at a query param the dashboard never read) -- this fixes
+  // that gap too, not just the dead payment processor.
+  const handleSquareSuccess = async (sourceId: string) => {
+    setPurchasing(true);
+    setSquareError(null);
+    try {
+      await api.post(`/sales/${saleId}/ala-carte-checkout`, { sourceId });
+      showToast('Payment successful! Publishing your sale...', 'success');
+      onPublishSuccess();
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to process payment';
+      setSquareError(message);
       showToast(message, 'error');
-    },
-  });
+    } finally {
+      setPurchasing(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -49,7 +58,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
 
   const handleAlaCarteClick = () => {
     setSelectedOption('ala-carte');
-    checkoutMutation.mutate();
+    setSquareError(null);
   };
 
   return (
@@ -104,10 +113,12 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
             </button>
 
             {/* À La Carte */}
-            <button
-              onClick={handleAlaCarteClick}
-              disabled={checkoutMutation.isPending}
-              className="p-6 border-2 border-green-200 dark:border-green-700 rounded-lg hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/10 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+            <div
+              className={`p-6 border-2 rounded-lg transition-all text-left ${
+                selectedOption === 'ala-carte'
+                  ? 'border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-900/10'
+                  : 'border-green-200 dark:border-green-700'
+              }`}
             >
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                 Pay per sale
@@ -129,10 +140,29 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
                   <span>Full sale analytics</span>
                 </li>
               </ul>
-              <div className="inline-block px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-400">
-                {checkoutMutation.isPending ? 'Processing...' : 'Continue to Payment'}
-              </div>
-            </button>
+              {selectedOption !== 'ala-carte' ? (
+                <button
+                  onClick={handleAlaCarteClick}
+                  className="inline-block px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+                >
+                  Continue to Payment
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  {squareError && (
+                    <p className="text-sm text-red-600 dark:text-red-400">{squareError}</p>
+                  )}
+                  <SquarePaymentRequestForm
+                    requestId={`ala-carte-${saleId}`}
+                    totalAmountCents={999}
+                    squareLocationId={process.env.NEXT_PUBLIC_SQUARE_PLATFORM_LOCATION_ID ?? null}
+                    onSuccess={handleSquareSuccess}
+                    onError={(msg) => setSquareError(msg)}
+                    isProcessing={purchasing}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Tip */}

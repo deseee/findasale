@@ -24,9 +24,12 @@ import {
   SquareOnboardingIncompleteError,
   buildSquareIdempotencyKey,
   createSquareCharge,
+  toSquareMoney,
 } from '../services/squarePaymentService';
 import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
 import { saveOrUpdateDefaultAddress } from '../services/addressService'; // ADR-126 (2026-09-16): opt-in address save
+import { getSquarePlatformClient, getPlatformSquareLocationId } from '../utils/square'; // #132 (2026-09-18): À La Carte Square rail, mirrors boostService.ts's platform-level flat-fee pattern
+import { SquareError } from 'square';
 
 /**
  * Square Checkout -- Wave 1 #1 (2026-09-07). Mirrors stripeController.ts's
@@ -975,5 +978,149 @@ export const createSquareTestTransaction = async (req: AuthRequest, res: Respons
   } catch (error: any) {
     console.error('[square-test-transaction] error:', error);
     return res.status(500).json({ message: 'Test transaction failed', details: error.message });
+  }
+};
+
+// #132 (2026-09-18): À La Carte Single-Sale Fee — Square replacement for the dead
+// Stripe checkout (createAlaCarteCheckout in stripeController.ts, now unreachable --
+// FindA.Sale's Stripe platform account is permanently closed). This is a PLATFORM-LEVEL
+// flat-fee charge (goes to FindA.Sale's own Square account), the same shape as
+// boostService.ts's SQUARE rail for boost purchases -- NOT an organizer-received
+// payment, so this deliberately does NOT use assertSaleCanAcceptSquarePayment (that
+// gate requires the sale already be PUBLISHED, which is backwards here: paying this
+// fee is what publishes the sale).
+export const createAlaCarteSquarePayment = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { id } = req.params;
+    const { sourceId } = req.body;
+
+    if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
+      return res.status(400).json({ message: 'A tokenized payment source is required.' });
+    }
+
+    // Verify organizer role
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    // Load organizer
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // SIMPLE tier only (same restriction as the old Stripe flow)
+    if (organizer.subscriptionTier !== 'SIMPLE') {
+      return res.status(403).json({
+        message: `À la carte pricing is only available for SIMPLE tier organizers. You are on ${organizer.subscriptionTier} tier.`,
+      });
+    }
+
+    // Load and verify sale belongs to organizer
+    const sale = await prisma.sale.findUnique({
+      where: { id },
+      select: { id: true, organizerId: true, title: true },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Access denied. This sale does not belong to you.' });
+    }
+
+    // sourceId is single-use/fresh per tokenize() call -- naturally unique per real
+    // purchase attempt, same idempotency-key reasoning as boostService.ts's SQUARE rail.
+    const idempotencyKey = buildSquareIdempotencyKey(['ala-carte', sale.id, sourceId]);
+
+    const client = getSquarePlatformClient();
+    let paymentId: string;
+    try {
+      const response = await client.payments.create({
+        idempotencyKey,
+        sourceId,
+        amountMoney: toSquareMoney(999), // $9.99
+        locationId: getPlatformSquareLocationId(),
+        autocomplete: true,
+        referenceId: `ala-carte-${sale.id}`.slice(0, 40),
+        note: `FindA.Sale A La Carte Sale Fee: ${sale.title}`,
+      } as any);
+      const payment = (response as any)?.payment;
+      if (!payment?.id || payment.status !== 'COMPLETED') {
+        return res.status(402).json({
+          message: 'Your card was declined. Please check your card details or try a different card.',
+        });
+      }
+      paymentId = payment.id;
+    } catch (err: unknown) {
+      if (err instanceof SquareError) {
+        const first = (err as any).errors?.[0];
+        console.warn(
+          `[squarePaymentController] Square CreatePayment decline/error (ala-carte): ${first?.code || 'SQUARE_ERROR'} -- ${first?.detail || err.message}`
+        );
+        return res.status(402).json({
+          message: 'Your card was declined. Please check your card details or try a different card.',
+        });
+      }
+      console.error('[squarePaymentController] Square CreatePayment failed (ala-carte):', err);
+      return res.status(500).json({ message: 'Failed to process payment. Please try again.' });
+    }
+
+    // Square already took the money at this point -- from here on, never leave a
+    // charged-but-unrecorded state (mirrors boostService.ts's auto-refund-on-DB-failure).
+    try {
+      await prisma.sale.update({
+        where: { id: sale.id },
+        data: { alaCarteFeePaid: true, purchaseModel: 'ALA_CARTE', alaCarte: true },
+      });
+
+      await prisma.purchase.create({
+        data: {
+          amount: 9.99,
+          platformFeeAmount: 9.99,
+          status: 'PAID',
+          saleId: sale.id,
+          processor: 'SQUARE',
+          squarePaymentId: paymentId,
+          source: 'ALA_CARTE',
+          isTestTransaction: false,
+        },
+      });
+    } catch (dbErr) {
+      console.error(
+        `[squarePaymentController] Sale/Purchase update FAILED after a successful Square ala-carte charge (paymentId=${paymentId}, saleId=${sale.id}) -- attempting an automatic refund:`,
+        dbErr
+      );
+      try {
+        await client.refunds.refundPayment({
+          idempotencyKey: buildSquareIdempotencyKey(['ala-carte-autorefund', paymentId]),
+          paymentId,
+          amountMoney: toSquareMoney(999),
+        });
+        console.error(`[squarePaymentController] Auto-refunded orphaned Square ala-carte payment ${paymentId} for saleId=${sale.id}.`);
+      } catch (refundErr) {
+        console.error(
+          `[squarePaymentController] AUTO-REFUND FAILED for orphaned Square ala-carte payment ${paymentId} (saleId=${sale.id}) -- needs manual review/refund:`,
+          refundErr
+        );
+      }
+      return res.status(500).json({
+        message: 'Your card was charged but the sale could not be published. It has been automatically refunded -- please try again.',
+      });
+    }
+
+    return res.json({ success: true });
+  } catch (error: unknown) {
+    console.error('[squarePaymentController] À la carte Square payment error:', error);
+    res.status(500).json({ message: 'Failed to process payment. Please try again.' });
   }
 };
