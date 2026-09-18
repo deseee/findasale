@@ -98,7 +98,13 @@ async function pushToReverb(item: MarkdownPropagationItem): Promise<MarketplaceP
 function buildHandlers(item: MarkdownPropagationItem): Array<() => Promise<MarketplacePropagationResult>> {
   const handlers: Array<() => Promise<MarketplacePropagationResult>> = [];
 
-  if (item.ebayOfferId) {
+  if (item.ebayOfferId || item.ebayListingId) {
+    // Gate widened 2026-09-18: an item can be eBay-live via the legacy Trading-API path
+    // (ebayListingId set, ebayOfferId null -- April 2026 batch listings imported via
+    // GetItem/GetMyeBaySelling, before FindA.Sale's Inventory-API push flow existed).
+    // reviseEbayOfferPrice() (called by pushToEbay below) already has a correct legacy
+    // fallback keyed on ebayListingId -- it was just never reached because this gate used
+    // to require ebayOfferId alone, silently skipping every legacy item's markdown push.
     handlers.push(() => pushToEbay(item));
   }
 
