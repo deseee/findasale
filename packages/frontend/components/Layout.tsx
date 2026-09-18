@@ -255,7 +255,17 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   };
 
   const handleInstallApp = () => {
+    // Clear every gate InstallPrompt.tsx uses to suppress its OWN automatic banner.
+    // A tap here is an explicit request, not the passive auto-prompt those gates exist for.
+    // Bug (2026-09-18): this used to clear only the 7-day "dismissed" flag. If the automatic
+    // banner had already shown once this browser session (findasale_install_shown in
+    // sessionStorage), InstallPrompt's mount effect returned before ever attaching the
+    // beforeinstallprompt listener -- so reload() below just reloaded the current page with
+    // no prompt, dialog, or visible effect at all (landing back on whatever page -- e.g. the
+    // dashboard -- the user was already on).
     localStorage.removeItem('findasale_install_dismissed_until');
+    localStorage.setItem('findasale_install_visits', '3'); // satisfy the MIN_VISITS gate
+    try { sessionStorage.removeItem('findasale_install_shown'); } catch {}
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     if (isIOS) {

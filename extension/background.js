@@ -1428,7 +1428,11 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 // CRAIGSLIST_BATCH_COOLDOWN_MS two-tier scheme below (now unused/superseded, left defined rather
 // than deleted in case a future session wants the reference) -- stacking that on top of this would
 // have pushed 20 items well past 40 minutes, contradicting the actual ask.
-const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 95000, MAX: 125000 };
+// WIDENED 2026-09-18 (Patrick): live run at the 40-minute pacing above got through 40 items before
+// Craigslist's "posting too rapidly" block, then only 12 more after resuming -- rather than chase
+// the exact rate-limiter model, Patrick's call was simple: add another 5 minutes, so 20 items now
+// takes ~45 minutes instead of ~40 (+15s/item, spread evenly across all 20).
+const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 110000, MAX: 140000 };
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 // BATCH COOLDOWN (2026-08-31, Patrick live report -- 60-75s per-item still tripped Craigslist's
