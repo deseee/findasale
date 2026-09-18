@@ -133,12 +133,21 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
   }, []);
 
   const handleInstallApp = () => {
+    // Same fix as Layout.tsx's handleInstallApp (2026-09-18, parts 1+2) -- this is a second,
+    // separate "Install App" entry point (avatar dropdown vs. mobile menu) that had the
+    // identical bug: clearing only the 7-day dismiss flag isn't enough to make the reload
+    // below actually show anything. See Layout.tsx and InstallPrompt.tsx for the full
+    // explanation (sessionStorage "already shown" gate + the 5s listener-attach delay
+    // racing against Chrome's real beforeinstallprompt timing).
     localStorage.removeItem('findasale_install_dismissed_until');
+    localStorage.setItem('findasale_install_visits', '3'); // satisfy the MIN_VISITS gate
+    try { sessionStorage.removeItem('findasale_install_shown'); } catch {}
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
     if (isIOS) {
       setShowIOSTooltip(true);
     } else {
+      try { sessionStorage.setItem('findasale_install_explicit_request', 'true'); } catch {}
       // Android/Chrome: reload to trigger beforeinstallprompt
       window.location.reload();
     }

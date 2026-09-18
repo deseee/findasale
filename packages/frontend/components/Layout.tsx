@@ -271,6 +271,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
     if (isIOS) {
       setShowIOSTooltip(true);
     } else {
+      // Bug (2026-09-18, part 2): clearing the gates above wasn't enough on its own --
+      // InstallPrompt.tsx's beforeinstallprompt listener normally only attaches after a
+      // 5-second delay (meant for the passive auto-banner), which is almost always later
+      // than when Chrome actually dispatches the event on a fresh reload. Flag this reload
+      // as an explicit request so InstallPrompt.tsx attaches its listener immediately
+      // instead of waiting, and falls back to manual instructions if Chrome still doesn't
+      // fire the event (see InstallPrompt.tsx for the full explanation).
+      try { sessionStorage.setItem('findasale_install_explicit_request', 'true'); } catch {}
       // Android/Chrome: reload to trigger beforeinstallprompt
       window.location.reload();
     }

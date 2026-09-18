@@ -80,10 +80,28 @@ function setShownThisSession() {
   }
 }
 
+// Set by Layout.tsx's handleInstallApp right before it reloads the page, so this
+// component can tell "user just clicked our own Install App button" apart from an
+// ordinary page visit. One-shot: read once, then cleared immediately below.
+const EXPLICIT_REQUEST_KEY = 'findasale_install_explicit_request';
+
+function isExplicitInstallRequest(): boolean {
+  try {
+    const flagged = sessionStorage.getItem(EXPLICIT_REQUEST_KEY) === 'true';
+    if (flagged) {
+      sessionStorage.removeItem(EXPLICIT_REQUEST_KEY);
+    }
+    return flagged;
+  } catch {
+    return false;
+  }
+}
+
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showAndroid, setShowAndroid] = useState(false);
   const [showIOS, setShowIOS] = useState(false);
+  const [showAndroidFallback, setShowAndroidFallback] = useState(false);
 
   useEffect(() => {
     // Track page visit on mount
@@ -98,12 +116,60 @@ export default function InstallPrompt() {
       return;
     }
 
+    // An explicit click on the site's own "Install App" button (Layout.tsx's
+    // handleInstallApp) reloaded the page specifically to catch a fresh
+    // beforeinstallprompt event. Chrome dispatches that event close to page
+    // load -- almost always well under the 5s SHOW_DELAY_MS below -- so for
+    // this one-shot case the listener must attach immediately, or we miss the
+    // event Chrome already fired and discarded.
+    // Bug (2026-09-18, part 2): the 5s delay exists to avoid nagging a brand
+    // new visitor with the PASSIVE auto-banner; it was wrongly also gating
+    // this ACTIVE, user-initiated path, so the "Install App" button kept
+    // silently no-op'ing even after the sessionStorage-gate fix (part 1)
+    // shipped earlier the same day.
+    if (isExplicitInstallRequest()) {
+      if (isIOS()) {
+        // Shouldn't normally happen (Layout.tsx's iOS path shows its tooltip
+        // synchronously and never reloads), but handle it defensively.
+        setShowIOS(true);
+        setShownThisSession();
+        return;
+      }
+
+      let captured = false;
+      const handler = (e: Event) => {
+        e.preventDefault();
+        captured = true;
+        setDeferredPrompt(e);
+        setShowAndroid(true);
+        setShownThisSession();
+      };
+      window.addEventListener('beforeinstallprompt', handler as EventListener);
+
+      // Root cause #3 (residual risk): per Chrome's own developer blog, Chrome
+      // uses "segmentation technology" tied to site-engagement signals to
+      // decide whether/when to fire beforeinstallprompt at all -- our page
+      // can't force it. A deliberate button press must still always produce
+      // a visible outcome, never a silent no-op, so fall back to manual
+      // instructions if nothing was captured in time.
+      const fallbackTimer = setTimeout(() => {
+        if (!captured) {
+          setShowAndroidFallback(true);
+        }
+      }, 3500);
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', handler as EventListener);
+        clearTimeout(fallbackTimer);
+      };
+    }
+
     // Already shown in this session — don't show again
     if (hasShownThisSession()) {
       return;
     }
 
-    // Wait 5 seconds before allowing the prompt to show
+    // Wait 5 seconds before allowing the passive auto-prompt to show
     const showTimer = setTimeout(() => {
       if (isIOS()) {
         // Show the iOS instructions tooltip once per dismissal period
@@ -146,8 +212,15 @@ export default function InstallPrompt() {
     setShowIOS(false);
   };
 
+  // Closing the Android manual-install fallback is not the same as dismissing
+  // the passive auto-banner for 7 days (setDismissed()) -- it only ever shows
+  // after the user's OWN explicit click, so just hide it.
+  const handleDismissFallback = () => {
+    setShowAndroidFallback(false);
+  };
+
   // Final guard: never render if dismissed or standalone (double-check at render time)
-  if ((showAndroid || showIOS) && (isDismissed() || isStandalone())) {
+  if ((showAndroid || showIOS || showAndroidFallback) && (isDismissed() || isStandalone())) {
     return null;
   }
 
@@ -213,6 +286,29 @@ export default function InstallPrompt() {
             </svg>
           </span>{' '}
           Share button, then choose <strong>"Add to Home Screen"</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  if (showAndroidFallback) {
+    return (
+      <div
+        role="dialog"
+        aria-label="Install FindA.Sale from Chrome's menu"
+        // Same bottom-sheet-over-BottomTabNav offsets as the showIOS block above.
+        className="fixed bottom-20 left-4 right-4 z-50 sm:bottom-4 bg-warm-900 text-white rounded-2xl shadow-xl px-4 py-4"
+      >
+        <button
+          onClick={handleDismissFallback}
+          className="absolute top-3 right-4 text-warm-400 hover:text-white text-xl leading-none"
+          aria-label="Dismiss"
+        >
+          &times;
+        </button>
+        <p className="font-semibold text-sm mb-1">Add FindA.Sale to your Home Screen</p>
+        <p className="text-xs text-warm-300 leading-relaxed">
+          Tap Chrome's <strong>&#8942;</strong> menu (top right), then choose <strong>"Install app"</strong>.
         </p>
       </div>
     );
