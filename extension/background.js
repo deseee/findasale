@@ -299,11 +299,22 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         // humanQueueDelay() every other platform already gets, right before the re-navigation --
         // does not change the 700ms settle-pause above (a separate, shorter DOM-render concern).
         // 2026-08-31: batch-cooldown check -- (index + 1) is the item we're about to resume on.
-        const clBatchBoundary1 = craigslistIsBatchBoundary(index + 1);
+        // SESSION CAP (2026-09-17): checked FIRST -- this is the path that actually drives a
+        // real multi-item Craigslist run (see the header comment above this block), so this is
+        // where the cap has to live, not just in the message-handler mirror of this logic further
+        // down. When it's a session boundary, pause via chrome.alarms and skip the re-navigation
+        // entirely -- the alarm handler re-navigates once the cooldown elapses.
+        const clSessionBoundary1 = craigslistIsSessionBoundary(index + 1);
+        if (clSessionBoundary1) {
+          await startCraigslistSessionCooldown(tabId);
+          continue;
+        }
+        // 2026-09-17 (round 4): no more batch-of-5 branch here -- CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
+        // alone now carries the "20 items in ~40 minutes" pacing for every item, uniformly.
         await craigslistDelayWithOverlay(
           tabId,
-          clBatchBoundary1 ? CRAIGSLIST_BATCH_COOLDOWN_MS : CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
-          clBatchBoundary1
+          CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
+          false
         ); // 2026-08-31: was humanQueueDelay() -- see injectCraigslistCountdownOverlay comment above for why sendMessage never worked here
         chrome.tabs.update(tabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
           // DIAGNOSTIC (2026-08-29, S-EXT-CRAIGSLIST-STALL round 3): this used to be
@@ -1260,6 +1271,26 @@ async function checkRenewals() {
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === FAS_CRAIGSLIST_SESSION_ALARM) {
+    // 2026-09-17: resumes a Craigslist run paused by startCraigslistSessionCooldown() (either the
+    // proactive CRAIGSLIST_SESSION_CAP boundary or the reactive craigslistRateLimitHit safety net).
+    // chrome.alarms fires this even if the service worker was killed and restarted while waiting --
+    // that's the whole reason this uses chrome.alarms instead of a raw setTimeout/sleep() for a
+    // delay this long (CRAIGSLIST_SESSION_COOLDOWN_MINUTES, currently 40 minutes).
+    const { fasCraigslistSessionPausedTabId = null } = await chrome.storage.local.get(['fasCraigslistSessionPausedTabId']);
+    await chrome.storage.local.set({ fasCraigslistSessionPaused: false, fasCraigslistSessionResumeAt: null, fasCraigslistSessionPausedTabId: null });
+    if (fasCraigslistSessionPausedTabId != null) {
+      chrome.tabs.update(fasCraigslistSessionPausedTabId, { url: FAS_CRAIGSLIST_POST_URL }, () => {
+        if (chrome.runtime.lastError) {
+          // Tab was closed while paused, most likely -- not an error worth surfacing loudly. The
+          // queue index is already correctly persisted, so the run resumes normally whenever
+          // Craigslist's post page is opened again (manually or by a future run).
+          console.warn('[FAS Craigslist] session-cooldown resume: tab', fasCraigslistSessionPausedTabId, 'unavailable -', chrome.runtime.lastError.message);
+        }
+      });
+    }
+    return;
+  }
   if (alarm.name === FAS_SAVED_SEARCH_ALARM) {
     return checkSavedSearchAlerts()
       .catch((e) => 'error:' + String((e && e.message) || e))
@@ -1387,7 +1418,17 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 // platforms. Patrick-directed: widen Craigslist specifically (now 45-60s, bumped 2026-08-31 after a live
 // "posting too rapidly" hit at 25-45s) rather than raising the
 // shared range (which would needlessly slow every other platform that wasn't hitting a limit).
-const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 15000, MAX: 25000 }; // LOWERED 2026-08-31 -- batch cooldown (added same session) is doing the real anti-throttle work now, so Patrick asked to bring per-item pacing back down near the shared 10-25s range and re-test
+// REDESIGNED 2026-09-17 (round 4, Patrick correction): "20 every 40 minutes" means the 20 items
+// should take about 40 minutes TOTAL to post, not run at the old fast pace and then get a
+// separate 40-minute cooldown tacked on afterward (that was this file's previous, wrong reading).
+// 40 min / 20 items = 120s/item average; narrowed slightly below that (95-125s, ~110s avg) to
+// leave room for each item's own real processing time (page loads, image-upload waits, step
+// clicks) on top of this deliberate pause, so the REALISTIC total lands close to 40 minutes
+// rather than under it. This replaces the old separate CRAIGSLIST_BATCH_SIZE/
+// CRAIGSLIST_BATCH_COOLDOWN_MS two-tier scheme below (now unused/superseded, left defined rather
+// than deleted in case a future session wants the reference) -- stacking that on top of this would
+// have pushed 20 items well past 40 minutes, contradicting the actual ask.
+const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 95000, MAX: 125000 };
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 // BATCH COOLDOWN (2026-08-31, Patrick live report -- 60-75s per-item still tripped Craigslist's
@@ -1396,13 +1437,56 @@ function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 // Craigslist counting total posts within some window rather than purely spacing between them.
 // Additive fix, not a replacement: keep the existing per-item delay AND add a much longer pause
 // after every batch of CRAIGSLIST_BATCH_SIZE items.
+// SUPERSEDED 2026-09-17 (round 4) -- no longer called anywhere (see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
+// above). Left defined rather than deleted: craigslistIsBatchBoundary() below is dead code now too.
 const CRAIGSLIST_BATCH_SIZE = 5;
-const CRAIGSLIST_BATCH_COOLDOWN_MS = { MIN: 360000, MAX: 420000 }; // 6-7 minutes between batches
+const CRAIGSLIST_BATCH_COOLDOWN_MS = { MIN: 360000, MAX: 420000 }; // 6-7 minutes between batches -- UNUSED, see above
 // WIDENED 2026-09-17 -- tripped "posting too rapidly" again around item 19 despite this cooldown;
 // narrowing the window slightly while adding a post-timing log (see fasCraigslistPostLog) so the
 // next occurrence has real data instead of another guess.
 function craigslistIsBatchBoundary(nextIndex) {
   return nextIndex > 0 && nextIndex % CRAIGSLIST_BATCH_SIZE === 0;
+}
+
+// SESSION CAP (2026-09-17, Patrick-directed, round 3): every prior pacing scheme -- from the
+// original near-instant posting through today's 60-75s-per-item plus 6-7min batch cooldown --
+// has still tripped Craigslist's "posting too rapidly" wall around item 19-21, regardless of how
+// much the per-item/per-batch spacing was widened. That pattern is evidence this is closer to a
+// flat count cap than a pure spacing throttle, so instead of retuning the batch-cooldown number
+// again, this caps a run at CRAIGSLIST_SESSION_CAP items (comfortably inside the historically-safe
+// zone) and forces a real CRAIGSLIST_SESSION_COOLDOWN_MINUTES-long pause using chrome.alarms
+// (NOT a raw setTimeout/sleep() -- at 40 minutes that's well past the point where an MV3 service
+// worker can be safely assumed to stay alive on a bare pending timer; chrome.alarms persists
+// across worker restarts and is the documented-correct mechanism for delays this long) before
+// resuming automatically. Independent of, and takes priority over, CRAIGSLIST_BATCH_SIZE/
+// CRAIGSLIST_BATCH_COOLDOWN_MS above -- 20 is also a multiple of 5, so the session boundary is
+// checked FIRST at every advance and the smaller per-5 batch cooldown is skipped when it fires.
+const CRAIGSLIST_SESSION_CAP = 20;
+// NOTE 2026-09-17 (round 4): this is the pause AFTER finishing a run of CRAIGSLIST_SESSION_CAP
+// items, before starting the next one -- a DIFFERENT 40 than CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
+// above (which controls how long the run of 20 itself takes). Patrick's "20 every 40 minutes"
+// specified the first number, not this one; this one is reusing the same 40 only because no
+// separate number has been given yet for the gap between runs -- change it independently if a
+// different post-run gap is wanted, it has no required relationship to the in-run pacing above.
+const CRAIGSLIST_SESSION_COOLDOWN_MINUTES = 40;
+const FAS_CRAIGSLIST_SESSION_ALARM = 'fasCraigslistSessionResume';
+function craigslistIsSessionBoundary(nextIndex) {
+  return nextIndex > 0 && nextIndex % CRAIGSLIST_SESSION_CAP === 0;
+}
+
+// Starts the long session-cooldown: persists what's needed to resume (which tab, when), schedules
+// the chrome.alarms-backed resume, and injects a visible countdown so this doesn't look like a
+// silent stall. Safe to call more than once for the same boundary (chrome.alarms.create replaces
+// an existing alarm of the same name) -- callers don't need to dedupe against each other.
+async function startCraigslistSessionCooldown(tabId) {
+  const resumeAt = Date.now() + CRAIGSLIST_SESSION_COOLDOWN_MINUTES * 60000;
+  await chrome.storage.local.set({
+    fasCraigslistSessionPaused: true,
+    fasCraigslistSessionResumeAt: resumeAt,
+    fasCraigslistSessionPausedTabId: tabId != null ? tabId : null,
+  });
+  chrome.alarms.create(FAS_CRAIGSLIST_SESSION_ALARM, { delayInMinutes: CRAIGSLIST_SESSION_COOLDOWN_MINUTES });
+  injectCraigslistSessionPauseOverlay(tabId, resumeAt); // fire-and-forget, cosmetic only
 }
 
 // FIX (2026-08-31, S-EXT-CRAIGSLIST-COUNTDOWN-VISIBILITY, Patrick live report -- "still no
@@ -1464,6 +1548,54 @@ async function injectCraigslistCountdownOverlay(tabId, ms, isBatchCooldown) {
     // Injection can legitimately fail (tab closed, mid-navigation, chrome:// page, etc.) -- this
     // overlay is cosmetic only, so swallow and let the real sleep()-based pacing continue unaffected.
     console.warn('[FAS Craigslist] countdown overlay injection failed (non-fatal):', e && e.message);
+  }
+}
+
+// Session-cooldown overlay (2026-09-17) -- separate from injectCraigslistCountdownOverlay above
+// on purpose: reusing that function's "Batch cooldown" text here would be actively misleading
+// (this isn't the 6-7min per-5-item batch pause, it's the much longer per-CRAIGSLIST_SESSION_CAP
+// stop), and Patrick has specifically called out messaging that doesn't say what's actually
+// happening. Same injection mechanism (chrome.scripting.executeScript, works on any craigslist.org
+// origin including the post-publish confirmation page) and same self-contained-closure constraint.
+async function injectCraigslistSessionPauseOverlay(tabId, resumeAtMs) {
+  if (tabId == null) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (resumeAt, cap, mins) => {
+        try {
+          const ID = 'fas-cl-session-pause-overlay';
+          let el = document.getElementById(ID);
+          if (!el) {
+            el = document.createElement('div');
+            el.id = ID;
+            el.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;' +
+              'background:#1a1a1a;color:#fff;padding:12px 16px;border-radius:8px;' +
+              'font:13px/1.4 -apple-system,Segoe UI,Arial,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.4);' +
+              'border:1px solid #f97316;max-width:300px;';
+            document.body.appendChild(el);
+          }
+          if (window.__fasClSessionOverlayInterval) clearInterval(window.__fasClSessionOverlayInterval);
+          const render = () => {
+            const remaining = Math.max(0, Math.ceil((resumeAt - Date.now()) / 1000));
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            el.innerHTML = "<b style=\"color:#ffcf7a\">" + cap + " posted this session</b><br>" +
+              "Pausing " + mins + " minutes for Craigslist's posting limit -- resuming automatically in " + m + "m " + s + "s. Safe to close this tab.";
+            if (remaining <= 0) {
+              clearInterval(window.__fasClSessionOverlayInterval);
+              window.__fasClSessionOverlayInterval = null;
+              el.textContent = 'Resuming now\u2026';
+            }
+          };
+          render();
+          window.__fasClSessionOverlayInterval = setInterval(render, 1000);
+        } catch (e) {}
+      },
+      args: [resumeAtMs, CRAIGSLIST_SESSION_CAP, CRAIGSLIST_SESSION_COOLDOWN_MINUTES],
+    });
+  } catch (e) {
+    console.warn('[FAS Craigslist] session-pause overlay injection failed (non-fatal):', e && e.message);
   }
 }
 
@@ -1658,7 +1790,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // header comment above ("never runs after a REAL publish") for why the onUpdated
           // branch's craigslistDelayWithOverlay() call is the one that matters in practice.
           const clAdvanceTabId = sender && sender.tab && sender.tab.id != null ? sender.tab.id : undefined;
-          const clBatchBoundary2 = craigslistIsBatchBoundary(next);
+          const clSessionBoundary2 = craigslistIsSessionBoundary(next); // 2026-09-17, see constant def above
           // ADDED 2026-09-17 (S-EXT-CRAIGSLIST-RATE-LIMIT diagnostic round, Patrick live report --
           // hit "posting too rapidly" again around item 19 despite the batch cooldown above)
           // -- diagnostic-only timing log so the NEXT hit has real timestamp+count data instead of
@@ -1666,15 +1798,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // Best-effort: must never break the real posting flow if storage.local has an issue.
           try {
             const { fasCraigslistPostLog: clLog0 = [] } = await chrome.storage.local.get(['fasCraigslistPostLog']);
-            const clLog1 = clLog0.concat([{ t: Date.now(), index: next, batchBoundary: clBatchBoundary2 }]);
+            const clLog1 = clLog0.concat([{ t: Date.now(), index: next, sessionBoundary: clSessionBoundary2 }]);
             await chrome.storage.local.set({ fasCraigslistPostLog: clLog1.length > 200 ? clLog1.slice(-200) : clLog1 });
           } catch (e) {}
-          await craigslistDelayWithOverlay(
-            clAdvanceTabId,
-            clBatchBoundary2 ? CRAIGSLIST_BATCH_COOLDOWN_MS : CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
-            clBatchBoundary2
-          ); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
-          sendResponse({ ok: true, item, index: next, total: queue.length });
+          if (clSessionBoundary2) {
+            // Mirrors the reliability-net branch above -- this message-handler path rarely if ever
+            // actually drives a real run (see that block's header comment) but keep the two in sync
+            // so nothing depends on which path happens to fire. No item in the response: the
+            // content script must NOT navigate on to POST_URL itself here, the alarm handler does
+            // that once the cooldown elapses.
+            await startCraigslistSessionCooldown(clAdvanceTabId);
+            sendResponse({ ok: true, sessionPaused: true, index: next, total: queue.length });
+          } else {
+            // 2026-09-17 (round 4): no more batch-of-5 branch -- see reliability-net call site above.
+            await craigslistDelayWithOverlay(
+              clAdvanceTabId,
+              CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
+              false
+            ); // S-EXT-QUEUE-PACING, widened for Craigslist -- see CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
+            sendResponse({ ok: true, item, index: next, total: queue.length });
+          }
         }
       } else if (msg.type === 'craigslistRateLimitHit') {
         // ADDED 2026-09-17 (S-EXT-CRAIGSLIST-RATE-LIMIT diagnostic round) -- reported by
@@ -1683,12 +1826,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // the advanceCraigslistQueue handler above writes to (same 200-entry cap), including the
         // current fasCraigslistIndex as `index` so this entry is directly comparable to the normal
         // advance-log entries. Diagnostic-only: must never throw back to the sender.
+        // ROUND 2 (Patrick: log came back undefined) -- catch(e) {} was swallowing any real error
+        // silently; now logs both receipt and any failure so this is visible in the service
+        // worker's OWN console (chrome://extensions -> FindA.Sale -> "service worker" -> Console),
+        // which is a DIFFERENT console than the Craigslist tab's own devtools.
+        console.log('[FAS BG] craigslistRateLimitHit received, index=' + (await chrome.storage.local.get(['fasCraigslistIndex'])).fasCraigslistIndex);
         try {
           const { fasCraigslistPostLog: clLog0 = [], fasCraigslistIndex: clIdx0 = null } =
             await chrome.storage.local.get(['fasCraigslistPostLog', 'fasCraigslistIndex']);
           const clLog1 = clLog0.concat([{ t: Date.now(), event: 'rate_limited', index: clIdx0, bodyTextSnippet: msg.bodyTextSnippet || null }]);
           await chrome.storage.local.set({ fasCraigslistPostLog: clLog1.length > 200 ? clLog1.slice(-200) : clLog1 });
-        } catch (e) {}
+          console.log('[FAS BG] craigslistRateLimitHit logged OK, log length now ' + clLog1.length);
+        } catch (e) {
+          console.error('[FAS BG] craigslistRateLimitHit FAILED to write to storage:', e && e.message);
+        }
+        // 2026-09-17 (round 3): the CRAIGSLIST_SESSION_CAP boundary above is a PROACTIVE stop --
+        // this is the REACTIVE safety net for when Craigslist's wall is hit before ever reaching
+        // that boundary (cap too loose for a given account/day, or something else trips it early).
+        // Same chrome.alarms-backed auto-resume either way, so a real hit doesn't require Patrick
+        // to notice and manually restart the queue.
+        try {
+          await startCraigslistSessionCooldown(sender && sender.tab && sender.tab.id != null ? sender.tab.id : null);
+        } catch (e) {
+          console.error('[FAS BG] craigslistRateLimitHit FAILED to start session cooldown:', e && e.message);
+        }
         sendResponse({ ok: true });
       } else if (msg.type === 'craigslistLoginStateObserved') {
         // (2026-08-08) Best-effort DOM-observed login state reported by fas-craigslist.js's

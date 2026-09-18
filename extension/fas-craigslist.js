@@ -897,7 +897,19 @@
     // runs when autoPublish is true (see the `if (!autoPublish)` guard earlier in doPreviewStep),
     // so a mid-run item must never wait on a manual click to continue.
     if (more) {
-      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
+      // 2026-09-17: this in-page continuation runs rarely if ever in real production (Craigslist's
+      // actual publish causes a hard cross-origin navigation to a regional-subdomain confirmation
+      // page that destroys this script's context before it gets here -- see background.js's
+      // tabs.onUpdated "reliability net", which is what actually drives real runs). Kept in sync
+      // with it anyway: must NOT blindly navigate to POST_URL without checking whether background.js
+      // just started a long session-cooldown pause (CRAIGSLIST_SESSION_CAP reached, or a rate-limit
+      // hit) -- doing so would fight the intentional pause instead of respecting it.
+      let advanceResp = null;
+      try { advanceResp = await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
+      if (advanceResp && advanceResp.sessionPaused) {
+        overlayInfo('Published <b>' + escapeHtml(item.title) + '</b>. Pausing for Craigslist\'s posting limit -- will resume automatically.');
+        return;
+      }
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
         '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -1087,9 +1099,19 @@
   // click "Edit Again" or retry -- this is a hard stop, not a guardStop()-style retry-twice case.
   let rateLimitStepReported = false;
   async function doRateLimitedStep() {
+    console.log('[FAS Craigslist] rate-limit page detected (s=postcount or matching text)');
     if (!rateLimitStepReported) {
       rateLimitStepReported = true;
-      try { chrome.runtime.sendMessage({ type: 'craigslistRateLimitHit', bodyTextSnippet: bodyText().slice(0, 300) }).catch(() => {}); } catch (e) {}
+      // DIAGNOSTIC 2026-09-17 round 2 (Patrick: log came back undefined after the first fix) --
+      // was a blind fire-and-forget .catch(() => {}); now logs the real outcome so a send failure
+      // (e.g. extension context invalidated) is visible here instead of silently vanishing.
+      try {
+        chrome.runtime.sendMessage({ type: 'craigslistRateLimitHit', bodyTextSnippet: bodyText().slice(0, 300) })
+          .then((r) => console.log('[FAS Craigslist] rate-limit report sent, background acked:', r))
+          .catch((e) => console.error('[FAS Craigslist] rate-limit report REJECTED:', e && e.message));
+      } catch (e) {
+        console.error('[FAS Craigslist] rate-limit report THREW synchronously:', e && e.message);
+      }
     }
     overlayInfo('<b style="color:#ffcf7a">Craigslist\'s posting limit was hit</b><br>Stopping here -- nothing wrong with this listing. ' +
       'The remaining items are still queued; try resuming this batch in a few hours once Craigslist\'s limit resets.');
