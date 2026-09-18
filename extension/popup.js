@@ -112,6 +112,7 @@ async function load() {
   onChannelChange();
   await loadAutoRemoveMode();
   await loadAutoRenewSetting();
+  await loadHideFromFriendsSetting();
   render();
 }
 
@@ -176,6 +177,23 @@ async function loadAutoRenewSetting() {
   el.onchange = async () => {
     await chrome.storage.local.set({ fasAutoRenew: el.checked });
     await send({ type: 'renewModeChanged' });
+  };
+}
+
+// S-FB-HIDE-FROM-FRIENDS (2026-09-18, Patrick's explicit request): "Hide Facebook listings from
+// friends" standing preference -- same chrome.storage.local mechanism as fasAutoRenew above, on
+// by default (Patrick: default to NOT showing listings to friends). Facebook-only in effect (no
+// other channel has a "friends" concept), but shown regardless of the currently-selected channel
+// in the popup, same as fasAutoRenew's own cross-channel-but-conditionally-relevant pattern.
+// Read directly by fas-content.js at fill-time -- no background.js alarm/message plumbing needed
+// here, unlike fasAutoRenew, since this isn't tied to a background-scheduled check.
+async function loadHideFromFriendsSetting() {
+  const el = $('hideFromFriends');
+  if (!el) return;
+  const { fasHideFromFriends = true } = await chrome.storage.local.get(['fasHideFromFriends']);
+  el.checked = fasHideFromFriends;
+  el.onchange = async () => {
+    await chrome.storage.local.set({ fasHideFromFriends: el.checked });
   };
 }
 

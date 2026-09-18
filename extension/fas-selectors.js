@@ -601,5 +601,5 @@
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
     elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards, renewButtonByTitle, loadAllListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn, isRadioChecked, weightExactLink, weightExactInputs,
-    LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
+    LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price', hideFromFriendsToggle: 'friend' } };
 })();

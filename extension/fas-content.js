@@ -3,7 +3,8 @@
  * Publish itself unless the organizer unchecked "Publish automatically" in the popup
  * (autoPublish flag, threaded from popup.js -> background.js storage -> here). Stops
  * immediately on any hard error. ADR-084 amendment 2026-07-15. Selectors come from
- * fas-selectors.js.
+ * fas-selectors.js. Also sets Facebook's "Hide from friends" privacy toggle by default
+ * (fasHideFromFriends, standing preference, S-FB-HIDE-FROM-FRIENDS 2026-09-18).
  */
 (function () {
   const SEL = window.__FAS_SEL__;
@@ -780,6 +781,45 @@
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
     await humanPause(500, 1000);
 
+    // Hide-from-friends privacy toggle (S-FB-HIDE-FROM-FRIENDS, 2026-09-18, Patrick's explicit
+    // request): default every Facebook Marketplace listing to NOT show up in the organizer's own
+    // friends' feeds -- reduces the listing's visibility into the organizer's personal social
+    // graph, which matters most for an organizer running the extension on a household/secondary
+    // account alongside a restricted primary account (see claude_docs/audits/facebook-
+    // marketplace-compliance-audit-2026-09-18.md Section 4(b), correlated-account ban-evasion
+    // risk). NOT live-DOM-verified this session -- Patrick's own FB account is Marketplace-
+    // restricted, so a real create-listing flow could not be driven live to inspect the control;
+    // Patrick described its position directly instead (Item-details/first page, after the "More
+    // details" section and the listing-promotion option). Matched via the SAME fuzzy
+    // role="switch" fragment-match already proven live for the Offer step's Allow-offers control
+    // (SEL.switchByLabel/LABELS.offerToggle) rather than a hardcoded exact label, since Facebook's
+    // exact wording is unconfirmed. Deliberately does NOT hard-error if the switch isn't found --
+    // unlike configureOfferStep's switch (confirmed to legitimately not exist for some listing
+    // types), it's unknown whether this control is universal, so a miss surfaces loudly (console
+    // warning + manual-review overlay note below) rather than blocking a real publish on an
+    // unverified assumption. NEEDS LIVE CONFIRMATION on a working (non-restricted) Facebook
+    // account before this can be trusted -- flagged in this dispatch's handoff.
+    let hideFromFriendsOk = true;
+    try {
+      const { fasHideFromFriends = true } = await chrome.storage.local.get(['fasHideFromFriends']);
+      if (fasHideFromFriends) {
+        const friendsSwitch = SEL.switchByLabel(LABELS.hideFromFriendsToggle);
+        if (friendsSwitch) {
+          if (!SEL.isSwitchOn(friendsSwitch)) { await realClick(friendsSwitch); await sleep(250); }
+          if (!SEL.isSwitchOn(friendsSwitch)) {
+            hideFromFriendsOk = false;
+            console.warn('[FAS] Hide-from-friends: clicked the switch but it did not register as on -- Facebook may have reverted it.');
+          }
+        } else {
+          hideFromFriendsOk = false;
+          console.warn('[FAS] Hide-from-friends: no matching role="switch" control found on the Item details step -- Facebook\'s layout may differ from what was described, or this listing type may not offer it. Listing will proceed WITHOUT this privacy toggle set.');
+        }
+      }
+    } catch (e) {
+      hideFromFriendsOk = false;
+      console.warn('[FAS] Hide-from-friends: unexpected error while setting the toggle -- ' + (e && e.message || e));
+    }
+
     await clickButton('Next', 'Item details'); // -> Delivery
 
     // Verify the click actually advanced Facebook's own step (its URL carries ?step=... --
@@ -855,13 +895,14 @@
         '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review everything, then click Facebook\'s <b>Publish</b> yourself.</div>' +
         (!catResult.ok ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category: picked Facebook\'s best guess automatically -- worth a glance.</div>' : '') +
         (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- check this listing.</div>' : '') +
+        (!hideFromFriendsOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Couldn\'t confirm "Hide from friends" was set -- worth a glance.</div>' : '') +
         btn('fas-next', 'I published — next item ▶', true) + btn('fas-skip', 'Skip this one', false) +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
       const nextBtn = document.getElementById('fas-next');
       const skipBtn = document.getElementById('fas-skip');
       if (nextBtn) nextBtn.onclick = async () => { await mark(item); await advanceAuto(); };
       if (skipBtn) skipBtn.onclick = async () => { await advanceAuto(); };
-      return { catResult, photosOk, autoPublished: false };
+      return { catResult, photosOk, autoPublished: false, hideFromFriendsOk };
     }
 
     overlay('<b>FindA.Sale</b> — publishing <b>' + escapeHtml(item.title) + '</b>…');
@@ -892,7 +933,7 @@
     // eligible for price-sync later).
     const remoteListingId = location.href;
 
-    return { catResult, photosOk, autoPublished: true, remoteListingId };
+    return { catResult, photosOk, autoPublished: true, remoteListingId, hideFromFriendsOk };
   }
 
   async function runQueue(item, index, total, autoPublish) {
@@ -900,11 +941,12 @@
       const result = await fillItem(item, index, total, autoPublish);
       if (!result.autoPublished) return; // fillItem already rendered the manual review UI + wired its own buttons
 
-      const { catResult, photosOk, remoteListingId } = result;
+      const { catResult, photosOk, remoteListingId, hideFromFriendsOk } = result;
       await mark(item, remoteListingId);
       let note = '';
       if (!catResult.ok) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category: picked Facebook\'s best guess automatically -- worth a glance.</div>';
       if (!photosOk) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- check this listing.</div>';
+      if (!hideFromFriendsOk) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Couldn\'t confirm "Hide from friends" was set -- worth a glance.</div>';
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' + note +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
       await humanPause(1200, 2000);
