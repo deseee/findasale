@@ -4,9 +4,14 @@
 # Policy: SKIP when a commit changed NOTHING outside documentation
 # (claude_docs/** and any *.md anywhere) OR outside paths with zero relation
 # to the frontend build (packages/backend/src, packages/backend's production
-# Dockerfile/jest config, packages/database/prisma, extension/, .github/,
+# Dockerfile/jest config, packages/database/prisma, .github/,
 # scripts/, cloudflare/, services/, ai-config/, brand/, root *.sql files,
-# railway.toml, railway.staging.toml, push.ps1). Package manifests and
+# railway.toml, railway.staging.toml, push.ps1). NOTE: repo-root extension/ was
+# REMOVED from this list 2026-09-18 -- packages/frontend/scripts/zip-extension.mjs
+# reads it directly and packages it into public/downloads/ as part of THIS
+# frontend's own build output, so an extension-only change is NOT frontend-
+# irrelevant and must always trigger a build (confirmed live bug: commit
+# fc6291846 was wrongly skipped). Package manifests and
 # lockfiles (package.json at any level, pnpm-lock.yaml, pnpm-workspace.yaml)
 # are deliberately EXCLUDED from this skip list -- they always BUILD (see
 # ADR 2026-07-19). Any other non-doc change, or any uncertainty, BUILDS.
@@ -90,7 +95,6 @@ changed_non_doc=$(git diff --name-only "$PREV" HEAD -- . \
   ":(exclude,top)packages/backend/Dockerfile.production" \
   ":(exclude,top)packages/backend/jest.config*" \
   ":(exclude,top)packages/database/prisma" \
-  ":(exclude,top)extension" \
   ":(exclude,top).github" \
   ":(exclude,top)scripts" \
   ":(exclude,top)cloudflare" \
