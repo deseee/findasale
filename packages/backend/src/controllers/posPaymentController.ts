@@ -99,6 +99,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       // trusted, closing the hole where any raw API caller (stale build, curl, an
       // attacker) could force this endpoint down the guaranteed-to-fail Stripe branch.
       processor: _requestedProcessor,
+      isTestTransaction,
     } = req.body as {
       shopperUserId?: string;
       saleId?: string;
@@ -115,9 +116,25 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       // Stripe removal (2026-09-12): accepted for backward-compatible request shapes but
       // ignored -- see the const above, processor is always SQUARE now.
       processor?: 'STRIPE' | 'SQUARE';
+      isTestTransaction?: boolean;
     };
     const processor: 'SQUARE' = 'SQUARE';
     void _requestedProcessor;
+
+    // QA Test-Transaction Harness (2026-09-17): createPaymentRequest was the one
+    // function in this file's QA-bypass trio (alongside confirmPaymentRequest and
+    // manualCardPayment) that never got this exception -- which made
+    // confirmPaymentRequest itself untestable, since it requires a pre-existing
+    // POSPaymentRequest row in ACCEPTED status, and this function is the ONLY place
+    // that row can ever be created. Same X-QA-Bypass / QA_RATE_LIMIT_BYPASS_SECRET
+    // mechanism as those two (isQABypassRequest, defined near the top of this file --
+    // not re-declared here). Computed here, AFTER resolveOrganizerOrTeamMember(req, res)
+    // above has already run -- organizer auth has already happened by this point, same
+    // authorization ordering manualCardPayment's own isTestBypassActive uses. processor
+    // is unconditionally forced to 'SQUARE' above (Stripe removal, 2026-09-12), so
+    // unlike confirmPaymentRequest's version there is no separate processor check needed
+    // here -- there is nothing left that isn't SQUARE.
+    const isTestBypassActive = isTestTransaction === true && isQABypassRequest(req);
 
     // Validation
     if (!shopperUserId || typeof shopperUserId !== 'string') {
@@ -392,17 +409,19 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     // tokenized a card via the Web Payments SDK (see squarePosPaymentAdapter.ts file header
     // for the full researched rationale, including the confirmed 7-day delayed-capture hold
     // window).
-    const preflight = await squarePos.preflightAccountStatus({
-      id: organizer.id,
-      squareOnboarded: organizer.squareOnboarded,
-      squareMerchantId: organizer.squareMerchantId,
-      squareLocationId: organizer.squareLocationId,
-    });
-    if (!preflight.ok) {
-      await prisma.pOSPaymentRequest
-        .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
-        .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after Square preflight failure:', releaseErr));
-      return res.status(preflight.status).json({ message: preflight.message });
+    if (!isTestBypassActive) {
+      const preflight = await squarePos.preflightAccountStatus({
+        id: organizer.id,
+        squareOnboarded: organizer.squareOnboarded,
+        squareMerchantId: organizer.squareMerchantId,
+        squareLocationId: organizer.squareLocationId,
+      });
+      if (!preflight.ok) {
+        await prisma.pOSPaymentRequest
+          .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
+          .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after Square preflight failure:', releaseErr));
+        return res.status(preflight.status).json({ message: preflight.message });
+      }
     }
 
     // Emit socket event to shopper
