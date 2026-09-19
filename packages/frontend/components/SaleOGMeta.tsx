@@ -156,7 +156,7 @@ export default function SaleOGMeta({
   return (
     <Head>
       {/* Standard meta tags */}
-      <title>{sale.title} – FindA.Sale</title>
+      <title>{`${sale.title} – FindA.Sale`}</title>
       <meta name="description" content={metaDescription} />
 
       {/* Open Graph (Facebook, LinkedIn, etc.) */}
