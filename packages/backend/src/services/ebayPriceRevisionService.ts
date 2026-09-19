@@ -24,6 +24,7 @@ import { ebayFetch } from './ebayPublishService';
 import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
 import { ebayProxyUrl, ebayProxyHeaders } from './ebayHttp';
 import { reanalyzeItem } from './reanalyzeService';
+import { prisma } from '../lib/prisma';
 
 export interface EbayPriceRevisionResult {
   ok: boolean;
@@ -86,6 +87,21 @@ function isCategoryAspectError(detail: string | undefined): boolean {
  * shape -- not a new design decision, just applying the same proportions at revise time
  * that already exist at initial-listing time.
  */
+// Same eBay Inventory API packageType enum ebayController.ts's publish-path payload
+// builder validates against (~line 2864) -- kept in sync manually since it's a strict
+// eBay-side enum, not a schema-driven list.
+const VALID_PACKAGE_TYPES = new Set([
+  'LETTER', 'BULKY_GOODS', 'CARAVAN', 'CARS', 'EUROPALLET', 'EXPANDABLE_TOUGH_BAGS',
+  'EXTRA_LARGE_PACK', 'FURNITURE', 'INDUSTRY_VEHICLES', 'LARGE_CANADA_POSTBOX',
+  'LARGE_CANADA_POST_BUBBLE_MAILER', 'LARGE_ENVELOPE', 'MAILING_BOX',
+  'MEDIUM_CANADA_POST_BOX', 'MEDIUM_CANADA_POST_BUBBLE_MAILER', 'MOTORBIKES',
+  'ONE_WAY_PALLET', 'PACKAGE_THICK_ENVELOPE', 'PADDED_BAGS',
+  'PARCEL_OR_PADDED_ENVELOPE', 'ROLL', 'SMALL_CANADA_POST_BOX',
+  'SMALL_CANADA_POST_BUBBLE_MAILER', 'TOUGH_BAGS', 'UPS_LETTER',
+  'USPS_FLAT_RATE_ENVELOPE', 'USPS_LARGE_PACK', 'VERY_LARGE_PACK',
+  'WINE_PRESENTATION_BOX',
+]);
+
 function computeSafeBestOfferThresholds(newPrice: number): { accept: number; minimum: number } {
   const accept = Math.max(0.99, Math.round(newPrice * 0.9 * 100) / 100);
   const minimum = Math.max(0.5, Math.round(accept * 0.75 * 100) / 100);
@@ -142,6 +158,38 @@ export async function reviseEbayOfferPrice(
     // block so the next failure (if any) tells us precisely what's wrong instead of
     // requiring another guess. Cheap and low-noise: one line per priced item per sync.
     console.log(`[eBay PriceRevision] offer=${offerId} item=${itemId ?? 'n/a'} packageWeightAndSize=${JSON.stringify(offerBody.packageWeightAndSize ?? null)}`);
+
+    // eBay-sync-issues auto-repair (2026-09-19, root-caused live via the diagnostic log
+    // above): some legacy-import offers have NO packageWeightAndSize on eBay's side at
+    // all -- confirmed empirically for the Loy Norrix vinyl-record item (offer GET
+    // returned packageWeightAndSize=null). A price-only PUT that spreads that null
+    // straight back leaves the offer with no packaging block, and eBay's full-offer
+    // re-validation then rejects the PUT for a missing/invalid Shipping Package type --
+    // even though FindA.Sale's own Item record has valid weight/dims/packageType that
+    // were simply never pushed. Rebuild the block from our own data (same enum
+    // allowlist ebayController.ts's publish payload uses) so the round-trip carries it
+    // along instead of dropping it.
+    if (!offerBody.packageWeightAndSize && itemId) {
+      try {
+        const pkg = await prisma.item.findUnique({
+          where: { id: itemId },
+          select: { packageWeightOz: true, packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true },
+        });
+        if (pkg?.packageWeightOz) {
+          const pt = pkg.packageType ? String(pkg.packageType).trim().toUpperCase().replace(/\s+/g, '_') : '';
+          offerBody.packageWeightAndSize = {
+            weight: { unit: 'OUNCE', value: Number(pkg.packageWeightOz) },
+            ...(pkg.packageLengthIn && pkg.packageWidthIn && pkg.packageHeightIn
+              ? { dimensions: { unit: 'INCH', length: Number(pkg.packageLengthIn), width: Number(pkg.packageWidthIn), height: Number(pkg.packageHeightIn) } }
+              : {}),
+            ...(pt && VALID_PACKAGE_TYPES.has(pt) ? { packageType: pt } : {}),
+          };
+          console.log(`[eBay PriceRevision] item=${itemId} rebuilt missing packageWeightAndSize from Item record before PUT`);
+        }
+      } catch (pkgErr) {
+        console.warn(`[eBay PriceRevision] item=${itemId} failed to rebuild packageWeightAndSize: ${(pkgErr as Error).message}`);
+      }
+    }
 
     // Scoped mutation: ONLY pricingSummary.price.value/currency (and, when repairing a
     // Best-Offer-threshold failure below, bestOfferTerms) change. Every other field on
@@ -262,6 +310,7 @@ async function reviseLegacyListingPrice(
     <ItemID>${ebayListingId}</ItemID>
     <StartPrice currencyID="USD">${newPrice.toFixed(2)}</StartPrice>${bestOffer ? `
     <BestOfferDetails>
+      <BestOfferEnabled>true</BestOfferEnabled>
       <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
       <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>
     </BestOfferDetails>` : ''}
@@ -316,6 +365,10 @@ async function reviseLegacyListingPrice(
     if (repairAttempt.ok) {
       return { ...repairAttempt, repaired: true, repairMethod: 'best-offer-threshold' };
     }
+    // Diagnostic (2026-09-19): repair retry #1 didn't resolve it -- log its own detail
+    // (distinct from firstAttempt.detail) so a persisting failure shows exactly what the
+    // REPAIRED thresholds were rejected for, instead of only ever seeing the original error.
+    console.warn(`[eBay PriceRevision] legacy best-offer repair FAILED item=${itemId ?? 'n/a'} listing=${ebayListingId} triedAccept=${thresholds.accept} triedMinimum=${thresholds.minimum} newPrice=${newPrice} repairDetail=${repairAttempt.detail ?? 'n/a'}`);
     return firstAttempt;
   }
 
