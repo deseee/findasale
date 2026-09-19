@@ -209,3 +209,23 @@ export function extractR2KeyFromUrl(url: string): string | null {
     return null;
   }
 }
+
+/**
+ * Derive the "subject" folder segment from an R2 object key, when the key is
+ * nested under one -- e.g. "yard-sale-oakwood/clip1.mp4" -> "yard-sale-oakwood".
+ * Returns null for a flat (non-nested) key with no folder segment at all (the
+ * common case for a normal batch, per footageClassifyService's own
+ * batchSubjectPrefix doc comment) and for any NON_FOOTAGE_KEY_PREFIXES key,
+ * since those are never a real subject name.
+ *
+ * BUG FIX (CI TS2305, 2026-09-19): footageClassifyService.ts imported and called
+ * this function -- its own doc comment describes exactly this behavior -- but it
+ * was never actually implemented/exported here. Added to match that existing
+ * caller and doc comment, not a new design decision.
+ */
+export function subjectPrefixFromKey(key: string): string | null {
+  const slash = key.indexOf('/');
+  if (slash <= 0) return null;
+  if (NON_FOOTAGE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) return null;
+  return key.slice(0, slash);
+}
