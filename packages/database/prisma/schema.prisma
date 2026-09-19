@@ -406,6 +406,13 @@ model Organizer {
   squareMerchantId                String?
   squareOnboarded                 Boolean                        @default(false)
   squareLocationId                String? // Square requires a location, not just a merchant id -- no Stripe field to mirror here
+  // Finix sandbox onboarding (2026-09-18) -- mirrors squareMerchantId/squareOnboarded
+  // above. Additive only; Finix is not yet approved for production -- these are
+  // populated by finixConnectService.ts against the sandbox API only. See
+  // claude_docs/feature-notes/stripe-removal-phase2-and-finix-sandbox-build-2026-09-18.md
+  finixIdentityId                 String?
+  finixMerchantId                 String?
+  finixOnboarded                  Boolean                        @default(false)
   // Square OAuth token storage (2026-09-07, Wave 0.5 -- closes the schema gap flagged by
   // Wave 1 #1 checkout/#2 onboarding/#3 POS/#4 refunds, all of which stubbed a resolve-token
   // seam that threw until this landed). Option 1 chosen over a shared SquareAccountToken
@@ -5342,6 +5349,11 @@ model Consignor {
   // Square migration (2026-09-07, Wave 0): mirrors stripeAccountId/stripeOnboarded.
   squareAccountId         String?
   squareOnboarded         Boolean            @default(false)
+  // Finix sandbox onboarding (2026-09-18) -- mirrors squareAccountId/squareOnboarded above.
+  // See claude_docs/feature-notes/stripe-removal-phase2-and-finix-sandbox-build-2026-09-18.md
+  finixIdentityId         String?
+  finixMerchantId         String?
+  finixOnboarded          Boolean            @default(false)
   // Square OAuth token storage (2026-09-07, Wave 0.5) -- mirrors Organizer's own fields
   // immediately above in this file; see that model's comment for full rationale.
   squareAccessTokenEncrypted  String?
@@ -6465,6 +6477,11 @@ model VendorBooth {
   // square-replaces-stripe-architecture-and-scoping-2026-09-07.md).
   squareAccountId         String?
   squareOnboarded         Boolean @default(false)
+  // Finix sandbox onboarding (2026-09-18) -- mirrors squareAccountId/squareOnboarded above.
+  // See claude_docs/feature-notes/stripe-removal-phase2-and-finix-sandbox-build-2026-09-18.md
+  finixIdentityId         String?
+  finixMerchantId         String?
+  finixOnboarded          Boolean @default(false)
   // Square OAuth token storage (2026-09-07, Wave 0.5) -- mirrors Organizer's own fields;
   // see that model's comment for full rationale. NOTE: this is onboarding-IDENTITY-scoped
   // token storage only -- BoothCartLeg (actual booth-cart-checkout money movement) is a
