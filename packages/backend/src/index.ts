@@ -293,6 +293,7 @@ import marketplacePosterRoutes from './routes/marketplacePoster'; // ADR-083: Ma
 import { scheduleMarketplacePosterCron } from './jobs/marketplacePosterCron'; // ADR-083: Marketplace Poster cron (every 10 min)
 import { scheduleEngagementMonitorCron } from './jobs/engagementMonitorCron'; // Comment/mention monitor (hourly) + approved-reply poster (every 30 min)
 import { scheduleFootageBatchSealCron } from './jobs/footageBatchSealJob'; // ADR-080 Stage 1b: quiet-seal OPEN FootageBatches (every 5 min)
+import { scheduleFootageStalledBatchCron } from './jobs/footageStalledBatchCron'; // S-BATCH-STUCK-2026-09-18: daily watchdog -- re-nags stale NEEDS_INPUT/AWAITING_REVIEW batches, reclaims batches orphaned mid-flight (ANALYZING/ASSEMBLING) by a redeploy
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -1128,6 +1129,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-080 Stage 1b: register footage-batch quiet-seal cron (every 5 min)
   scheduleFootageBatchSealCron();
+
+  // S-BATCH-STUCK-2026-09-18: register footage stalled-batch watchdog cron (daily)
+  scheduleFootageStalledBatchCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();
