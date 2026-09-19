@@ -7,9 +7,15 @@
  *      FootageAsset table — creating a row for every R2 object that does NOT yet
  *      have one, idempotently (r2Key is @unique, so a redelivered ping/event
  *      never double-creates a clip). See ADR-080 §3.3 (idempotency).
- *   2. Groups new assets into the single currently-OPEN FootageBatch (a "shoot"),
- *      opening a new batch if none is OPEN, and bumps that batch's last-activity
- *      timestamp so the quiet-seal timer (below) resets on every new clip
+ *   2. Groups new assets by SUBJECT (r2Client.subjectPrefixFromKey -- the first
+ *      path segment of a nested R2 key, e.g. "shipping/A001.mp4" -> "shipping")
+ *      and attaches each subject's assets to that subject's own OPEN
+ *      FootageBatch (a "shoot"), opening a new batch per subject if none is
+ *      OPEN yet. Bare root-level keys (e.g. "A001.mp4", today's default from
+ *      Patrick's rclone uploader) have no subject and keep going through a
+ *      single shared "unsorted" OPEN batch, exactly as before. Each affected
+ *      batch's own last-activity timestamp is bumped so its own quiet-seal
+ *      timer (below) resets independently on every new clip in that subject
  *      (ADR-080 §3.2).
  *   3. sealStaleFootageBatches(): the quiet-seal — moves an OPEN batch to SEALED
  *      once it has gone quiet for FOOTAGE_BATCH_SEAL_MINUTES. This is the END of
@@ -35,7 +41,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
-import { listRawFootage } from './r2Client';
+import { listRawFootage, subjectPrefixFromKey, type RawFootageObject } from './r2Client';
 import { classifyBatch } from './footageClassifyService';
 
 /** Result of one ingest reconciliation pass. */
@@ -43,12 +49,22 @@ export interface FootageIngestResult {
   /** Number of brand-new FootageAsset rows created this pass. */
   assetsCreated: number;
   /** The OPEN batch new assets were attached to (null only if there was no work
-   *  and no OPEN batch exists). */
+   *  and no OPEN batch exists). When new assets spanned more than one subject
+   *  (see batchIds), this is the first batch encountered this pass -- existing
+   *  callers that only read batchId keep working exactly as before. */
   batchId: string | null;
   /** Total R2 objects seen this pass (for observability). */
   r2ObjectCount: number;
   /** Object keys parsed from an R2 event body, if one was supplied (logging only). */
   triggeredByKeys: string[];
+  /**
+   * ADDITIVE, OPTIONAL. Every OPEN batch touched or created this pass, in the
+   * order encountered (batchId is always batchIds[0] when both are present).
+   * One batch per distinct subject prefix (see r2Client.subjectPrefixFromKey),
+   * plus, when any bare root-level keys were ingested, the single shared
+   * "unsorted" batch. Existing callers that only read batchId are unaffected.
+   */
+  batchIds?: string[];
 }
 
 /**
@@ -112,7 +128,13 @@ export async function ingestFootage(eventBody?: unknown): Promise<FootageIngestR
       select: { id: true },
     });
     console.log('[footage-ingest] R2 bucket empty — nothing to ingest');
-    return { assetsCreated: 0, batchId: openBatch?.id ?? null, r2ObjectCount, triggeredByKeys };
+    return {
+      assetsCreated: 0,
+      batchId: openBatch?.id ?? null,
+      r2ObjectCount,
+      triggeredByKeys,
+      batchIds: openBatch ? [openBatch.id] : [],
+    };
   }
 
   // Which keys already have a row?
@@ -131,61 +153,140 @@ export async function ingestFootage(eventBody?: unknown): Promise<FootageIngestR
       select: { id: true },
     });
     console.log(`[footage-ingest] No new footage (${r2ObjectCount} object(s) already ingested)`);
-    return { assetsCreated: 0, batchId: openBatch?.id ?? null, r2ObjectCount, triggeredByKeys };
+    return {
+      assetsCreated: 0,
+      batchId: openBatch?.id ?? null,
+      r2ObjectCount,
+      triggeredByKeys,
+      batchIds: openBatch ? [openBatch.id] : [],
+    };
   }
 
-  // Attach to the currently-OPEN batch (the "shoot"), or open a new one.
-  let batch = await prisma.footageBatch.findFirst({
-    where: { status: 'OPEN' },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true },
-  });
-  if (!batch) {
-    batch = await prisma.footageBatch.create({
-      data: { status: 'OPEN' }, // organizerId null = FindA.Sale house account (ADR-080 §3.2)
-      select: { id: true },
-    });
-    console.log(`[footage-ingest] Opened new FootageBatch ${batch.id}`);
-  }
-
-  let assetsCreated = 0;
+  // Group new objects by SUBJECT (the first path segment of a nested R2 key --
+  // see r2Client.subjectPrefixFromKey). Two unrelated shoots uploaded in the
+  // same debounce window (e.g. "shipping/A001.mp4" and "rapidfire/A002.mp4")
+  // must never merge into one batch/video. Bare root-level keys (no subject,
+  // e.g. "A001.mp4") all share ONE group keyed by `null` -- this is exactly
+  // today's "unsorted" behavior, unchanged.
+  const groups = new Map<string | null, RawFootageObject[]>();
   for (const obj of newObjects) {
-    try {
-      await prisma.footageAsset.create({
-        data: {
-          batchId: batch.id,
-          r2Key: obj.key,
-          mediaType: obj.mediaType, // 'video' | 'image' (r2Client.inferMediaTypeFromKey)
-          status: 'UPLOADED', // schema initial state (FootageAssetStatus @default(UPLOADED))
-        },
-      });
-      assetsCreated++;
-    } catch (err: any) {
-      // P2002 = unique violation on r2Key: a concurrent ingest already created it.
-      // Idempotent by design — skip, don't fail the whole pass.
-      if (err?.code === 'P2002') {
-        console.log(`[footage-ingest] Skipped ${obj.key} — already ingested (concurrent create)`);
-        continue;
-      }
-      throw err;
+    const subject = subjectPrefixFromKey(obj.key);
+    const group = groups.get(subject);
+    if (group) {
+      group.push(obj);
+    } else {
+      groups.set(subject, [obj]);
     }
   }
 
-  // Bump the batch's last-activity timestamp so the quiet-seal timer resets on
-  // every new clip (ADR-080 §3.2). FootageBatch.updatedAt is @updatedAt, which
-  // Prisma advances to now() on any update() call — this no-op status write is
-  // the touch. sealStaleFootageBatches() reads updatedAt as the quiet-since time.
-  if (assetsCreated > 0) {
+  // Load every currently-OPEN batch along with its existing assets' r2Keys so
+  // we can tell which OPEN batch (if any) already belongs to which subject.
+  const openBatches = await prisma.footageBatch.findMany({
+    where: { status: 'OPEN' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, assets: { select: { r2Key: true } } },
+  });
+
+  // Resolve each group to a batch id: reuse an OPEN batch only when every one
+  // of ITS existing assets already resolves to that same subject (or, for the
+  // unsorted group, only when every existing asset is itself unsorted). A
+  // batch with no assets yet, or with a mix of subjects (should not occur
+  // going forward, but defensive for pre-existing data), is never reused --
+  // a fresh batch is opened instead so we never silently merge two subjects.
+  const usedExistingBatchIds = new Set<string>();
+  const batchIdByGroup = new Map<string | null, string>();
+  for (const [subject, objs] of groups) {
+    const match = openBatches.find(
+      (b) => !usedExistingBatchIds.has(b.id) && batchSubjectIdentity(b.assets) === subject
+    );
+    let batchId: string;
+    if (match) {
+      batchId = match.id;
+      usedExistingBatchIds.add(batchId);
+    } else {
+      const created = await prisma.footageBatch.create({
+        data: { status: 'OPEN' }, // organizerId null = FindA.Sale house account (ADR-080 §3.2)
+        select: { id: true },
+      });
+      batchId = created.id;
+      console.log(
+        subject
+          ? `[footage-ingest] Opened new FootageBatch ${batchId} for subject "${subject}" (${objs.length} object(s))`
+          : `[footage-ingest] Opened new FootageBatch ${batchId} (unsorted, ${objs.length} object(s))`
+      );
+    }
+    batchIdByGroup.set(subject, batchId);
+  }
+
+  let assetsCreated = 0;
+  const batchesWithNewAssets = new Set<string>();
+  for (const [subject, objs] of groups) {
+    const batchId = batchIdByGroup.get(subject)!;
+    for (const obj of objs) {
+      try {
+        await prisma.footageAsset.create({
+          data: {
+            batchId,
+            r2Key: obj.key,
+            mediaType: obj.mediaType, // 'video' | 'image' (r2Client.inferMediaTypeFromKey)
+            status: 'UPLOADED', // schema initial state (FootageAssetStatus @default(UPLOADED))
+          },
+        });
+        assetsCreated++;
+        batchesWithNewAssets.add(batchId);
+      } catch (err: any) {
+        // P2002 = unique violation on r2Key: a concurrent ingest already created it.
+        // Idempotent by design — skip, don't fail the whole pass.
+        if (err?.code === 'P2002') {
+          console.log(`[footage-ingest] Skipped ${obj.key} — already ingested (concurrent create)`);
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  // Bump each AFFECTED batch's own last-activity timestamp so ITS quiet-seal
+  // timer resets independently (ADR-080 §3.2) -- every subject now has its own
+  // 20-minute window instead of one shared one. FootageBatch.updatedAt is
+  // @updatedAt, which Prisma advances to now() on any update() call -- this
+  // no-op status write is the touch. sealStaleFootageBatches() reads updatedAt
+  // as the quiet-since time.
+  for (const batchId of batchesWithNewAssets) {
     await prisma.footageBatch.update({
-      where: { id: batch.id },
+      where: { id: batchId },
       data: { status: 'OPEN' },
     });
   }
 
+  const batchIds = [...batchIdByGroup.values()];
   console.log(
-    `[footage-ingest] Created ${assetsCreated} asset(s) on batch ${batch.id} (${r2ObjectCount} R2 object(s) total)`
+    `[footage-ingest] Created ${assetsCreated} asset(s) across ${batchIds.length} batch(es) (${r2ObjectCount} R2 object(s) total)`
   );
-  return { assetsCreated, batchId: batch.id, r2ObjectCount, triggeredByKeys };
+  return { assetsCreated, batchId: batchIds[0] ?? null, r2ObjectCount, triggeredByKeys, batchIds };
+}
+
+/**
+ * Determine an OPEN batch's subject identity from its existing assets: `null`
+ * if it's the shared "unsorted" batch (every asset is a bare root-level key),
+ * a string if every asset shares one subject prefix, or `undefined` if the
+ * batch has no assets yet or a mix of subjects -- both of which mean "do not
+ * reuse this batch."
+ */
+function batchSubjectIdentity(assets: { r2Key: string }[]): string | null | undefined {
+  if (assets.length === 0) return undefined;
+  let identity: string | null = null;
+  let first = true;
+  for (const asset of assets) {
+    const subject = subjectPrefixFromKey(asset.r2Key);
+    if (first) {
+      identity = subject;
+      first = false;
+    } else if (subject !== identity) {
+      return undefined;
+    }
+  }
+  return identity;
 }
 
 /** Resolve the configurable quiet-seal window (minutes). Default 20. */

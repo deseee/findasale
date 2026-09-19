@@ -1,7 +1,7 @@
 /**
  * templates/index.ts — ADR-080 §9 template registry (data aggregation only).
  *
- * Re-exports the contract types and the five season Template definitions, plus a
+ * Re-exports the contract types and the season Template definitions, plus a
  * lookup array/record the later `inferTemplate()` (§10) and slot-fill assembler
  * (§9.2) consume. No inference or render logic here — foundation stage only.
  */
@@ -14,6 +14,7 @@ import seasonCMapToMantel from './season-C-map-to-mantel';
 import seasonD50RoomChallenge from './season-D-50-room-challenge';
 import seasonESoldNearYou from './season-E-sold-near-you';
 import seasonFAmazonFind from './season-F-amazon-find';
+import seasonGFeatureTutorial from './season-G-feature-tutorial';
 
 export {
   seasonARoomStyling,
@@ -22,6 +23,7 @@ export {
   seasonD50RoomChallenge,
   seasonESoldNearYou,
   seasonFAmazonFind,
+  seasonGFeatureTutorial,
 };
 
 /** All templates in season order. Source of truth for §10 format inference. */
@@ -32,6 +34,7 @@ export const ALL_TEMPLATES: Template[] = [
   seasonD50RoomChallenge,
   seasonESoldNearYou,
   seasonFAmazonFind,
+  seasonGFeatureTutorial,
 ];
 
 /** id -> Template lookup (e.g. FootageBatch.templateId resolution). */
