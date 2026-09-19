@@ -105,6 +105,9 @@
     'romper', 'jumpsuit', 'tracksuit', 'sweatpant',
     'short', 'shorts', 'blazer', 'tuxedo', 'vest', 'polo', 'tank', 'jersey', 'legging',
     'tie', 'glasses', 'slip-on',
+    // ROUND 2 (see marketplaceEligibilityRules.ts's GRAILED rule, same comment): fragrance is
+    // a real, active, non-fashion Grailed category confirmed live -- false-NEGATIVE fix.
+    'fragrance', 'perfume', 'cologne',
   ];
   // BUG FIX 2026-09-05 (Patrick-reported live against the popup's own eligibility check, same bug
   // ported here to keep this content-script gate in sync -- see this function's own header comment,

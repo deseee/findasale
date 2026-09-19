@@ -294,6 +294,11 @@ const RULES: EligibilityRule[] = [
       'lottery ticket', 'raffle ticket', 'slot machine', 'gambling',
       'gift card', 'government document', 'birth certificate',
       'burglary tool', 'altered serial number', 'stud service',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18-ROUND2 (Patrick asked for a second pass -- re-verified each platform's live official policy again to check for anything the first pass missed): re-fetched craigslist.org/about/prohibited again and confirmed a
+      // category not caught by the first pass: government-assistance goods (food stamps,
+      // WIC vouchers). Narrow, specific phrases -- no legitimate estate-sale item is titled
+      // this way.
+      'food stamp', 'wic voucher',
     ],
     // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
     // same bare-'gun'-substring false positive applies here (e.g. "...Gunmetal..." golf clubs).
@@ -340,6 +345,18 @@ const RULES: EligibilityRule[] = [
       'supplement', 'vitamin', 'recalled',
       'used battery', 'rebuilt battery', 'mercury battery',
       'shock collar', 'training collar',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18-ROUND2 (Patrick asked for a second pass -- re-verified each platform's live official policy again to check for anything the first pass missed): re-fetched
+      // help.gumtree.com.au's General posting rules again (the full 42-item Restricted
+      // Categories list) and confirmed several categories the first pass missed: human
+      // remains, burglary tools, government/transit/police badges-uniforms-IDs, the
+      // policy's own "controlled substance" phrasing (mirrors the same fix already applied
+      // to CRAIGSLIST), pesticides, and pornographic/adult material (Gumtree's own policy
+      // separately bans this; the first pass only carried it for Facebook/Mercari/Poshmark).
+      // 'human body part'/'human material' specifically (not bare "body part") to avoid
+      // colliding with legitimate "auto body part" listings.
+      'human body part', 'human material', 'burglary tool',
+      'government document', 'government id', 'police badge', 'police uniform', 'military uniform',
+      'controlled substance', 'pesticide', 'pornographic', 'adult',
     ],
     // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
     // same bare-'gun'-substring false positive applies here.
@@ -376,6 +393,16 @@ const RULES: EligibilityRule[] = [
       // risk, same class of bug as the tracksuit fix above.
       'short', 'shorts', 'blazer', 'tuxedo', 'vest', 'polo', 'tank', 'jersey', 'legging',
       'tie', 'glasses', 'slip-on',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18-ROUND2 (Patrick asked for a second pass -- re-verified each platform's live official policy again to check for anything the first pass missed): the unconfirmed lead from the
+      // first pass about a possible non-fashion category expansion checked out for real:
+      // grailed.com/browse/fragrance is a live, active category (designer perfume/cologne),
+      // confirmed by direct fetch this session -- another false-NEGATIVE fix, same class as
+      // the tracksuit/shorts fixes above. grailed.com/browse/home-goods also exists but its
+      // actual contents couldn't be confirmed live and Grailed is unambiguously a fashion
+      // marketplace, so a broad 'home goods' keyword was deliberately NOT added -- too high a
+      // false-positive risk of letting non-fashion items through the allowlist for an
+      // unconfirmed category.
+      'fragrance', 'perfume', 'cologne',
     ],
     // BUG FIX 2026-09-05, two rounds (Patrick-reported live, re-tested each time against real
     // items): plain substring matching let several nameKeywords above false-positive on clearly
@@ -526,6 +553,13 @@ const RULES: EligibilityRule[] = [
       'digital download', 'ebook', 'in-game item', 'dropship',
       'stock certificate', 'bond certificate', 'insurance policy', 'warranty contract',
       'mystery purchase', 'mod chip',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18-ROUND2 (Patrick asked for a second pass -- re-verified each platform's live official policy again to check for anything the first pass missed): re-fetched
+      // mercari.com/us/help_center/prohibited_items directly (the first pass used a related
+      // but different help article) and found three items explicitly named in Mercari's own
+      // policy that the first pass missed: stolen goods, recalled items, and used underwear
+      // (Mercari's policy names "used underwear" as its own example under human materials,
+      // same as Poshmark/Gumtree already carry).
+      'stolen', 'recalled', 'used underwear',
     ],
     excludeKeywords: [
       'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
@@ -566,6 +600,20 @@ const RULES: EligibilityRule[] = [
       // general furniture category to begin with, so this is moot in practice.
       'archaeological artifact', 'cultural heritage artifact', 'detergent', 'cleaning chemical',
       'used piercing', 'live animal', 'jailbroken', 'carrier blocked', 'imei blocked',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18-ROUND2 (Patrick asked for a
+      // second pass -- checked vinted.com/catalog-rules, a first-party page with a different
+      // presentation than the "Items not allowed" page the first pass used, and found real
+      // categories the first pass missed): Nazi/fascist items (explicitly named and
+      // unconditionally banned -- no legitimate carve-out, and WWII militaria is a real, if
+      // occasional, estate-sale category), armed-forces/police/emergency-services official
+      // uniforms and badges (specific phrasing to avoid catching ordinary school/sports/costume
+      // uniforms), a full ban on bikes including electric (a real estate-sale category that
+      // would otherwise slip through to Vinted only to be rejected there), and used underwear
+      // (Vinted explicitly requires new-with-tags only, same restriction Poshmark/Gumtree/
+      // Mercari all carry).
+      'nazi', 'fascist symbol',
+      'police uniform', 'police badge', 'military uniform', 'law enforcement badge',
+      'bike', 'bicycle', 'used underwear',
       // 'musical instrument' REMOVED S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 -- it matched
       // FindA.Sale's own umbrella category label "Musical Instruments & Gear" as a substring
       // ("instrument" inside "instruments"), so it blocked the ENTIRE category including gear/

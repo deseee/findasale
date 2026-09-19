@@ -66,6 +66,12 @@
     'supplement', 'vitamin', 'recalled',
     'used battery', 'rebuilt battery', 'mercury battery',
     'shock collar', 'training collar',
+    // ROUND 2 (see marketplaceEligibilityRules.ts's GUMTREE_AU rule, same comment): human
+    // remains, burglary tools, government/police ID items, controlled-substance phrasing,
+    // pesticides, pornographic/adult material.
+    'human body part', 'human material', 'burglary tool',
+    'government document', 'government id', 'police badge', 'police uniform', 'military uniform',
+    'controlled substance', 'pesticide', 'pornographic', 'adult',
   ];
   // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- this file
   // never had an excludeKeywords guard at all, unlike the backend GUMTREE_AU rule which has

@@ -2372,6 +2372,9 @@
     'digital download', 'ebook', 'in-game item', 'dropship',
     'stock certificate', 'bond certificate', 'insurance policy', 'warranty contract',
     'mystery purchase', 'mod chip',
+    // ROUND 2 (see marketplaceEligibilityRules.ts's MERCARI rule, same comment): stolen goods,
+    // recalled items, used underwear -- all explicitly named in Mercari's own policy.
+    'stolen', 'recalled', 'used underwear',
   ];
   // Any of these present anywhere in the haystack means the match is a false positive (e.g. a
   // 'kitchen knife' matches 'knife' but is not a weapon; a 'gold ring' matches 'gold' but is

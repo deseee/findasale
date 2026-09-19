@@ -2480,6 +2480,12 @@
     'cycling helmet', 'safety harness', 'heated tobacco',
     'archaeological artifact', 'cultural heritage artifact', 'detergent', 'cleaning chemical',
     'used piercing', 'live animal', 'jailbroken', 'carrier blocked', 'imei blocked',
+    // ROUND 2 (see marketplaceEligibilityRules.ts's VINTED general rule, same comment): Nazi/
+    // fascist items, police/military uniforms & badges, a full ban on bikes (incl. electric),
+    // and used underwear.
+    'nazi', 'fascist symbol',
+    'police uniform', 'police badge', 'military uniform', 'law enforcement badge',
+    'bike', 'bicycle', 'used underwear',
   ];
   // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- the backend
   // VINTED general rule's excludeKeywords gained 'tube'/'capsule'/'slab'/'flip'/'display'/

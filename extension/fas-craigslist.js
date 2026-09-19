@@ -53,6 +53,9 @@
     'lottery ticket', 'raffle ticket', 'slot machine', 'gambling',
     'gift card', 'government document', 'birth certificate',
     'burglary tool', 'altered serial number', 'stud service',
+    // ROUND 2 (see marketplaceEligibilityRules.ts's CRAIGSLIST rule, same comment): government-
+    // assistance goods (food stamps, WIC vouchers).
+    'food stamp', 'wic voucher',
   ];
   // BONUS FIX found during the 2026-09-18 mirror-sync pass (not a new audit finding --
   // pre-existing drift from S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03, which added a
