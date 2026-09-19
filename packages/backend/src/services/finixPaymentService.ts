@@ -51,7 +51,19 @@ export interface FinixTransferParams {
   source: string;
   amountCents: number;
   currency?: string; // defaults to 'USD'
-  /** Real-time split across N approved Merchants. Empty/omitted = no split, full amount to merchantId. */
+  /** Real-time split across N approved Merchants. Empty/omitted = no split, full amount to merchantId.
+   * CONFIRMED 2026-09-19 (real sandbox testing, full test suite pass): two hard constraints, both
+   * enforced server-side with a 422 BAD_REQUEST if violated -- (1) the sum of every entry's amountCents
+   * in this array MUST equal the parent transfer's amountCents exactly (a naive "splits are the
+   * platform's cut, the rest implicitly goes to merchantId" model is WRONG -- there is no implicit
+   * remainder); (2) `merchantId` (the top-level/primary merchant on this transfer) MUST also appear
+   * as one of the entries in this array with its own explicit amountCents, or Finix rejects the whole
+   * request with "the primary merchant must be present in the split_transfers". Confirmed working up
+   * through a 7-way split (primary + 6 others) with no cap hit. See claude_docs/feature-notes/
+   * finix-sandbox-smoke-test-results-2026-09-18.md, "Update (same session, fourth pass -- full test
+   * suite)" for the exact request/response evidence. Whoever wires this into ADR-127's hub design
+   * needs to build the splits array as primary-merchant-inclusive and sum-exact, not additive-on-top.
+   */
   splitTransfers?: FinixSplitTransfer[];
   idempotencyKey?: string; // CONFIRMED 2026-09-18: sent as an `idempotency_id` field in the request body (NOT an Idempotency-Key header -- that was tested and does not dedupe at all). A duplicate idempotencyKey on a second call returns a 422 ("Duplicate transfer <id> already exists...") rather than transparently replaying the original success like Stripe/Square -- the original transfer's id is included in the error body if a caller wants to recover it, but that recovery logic is not implemented here yet. See the feature note referenced in this file's header.
   tags?: Record<string, string>;
