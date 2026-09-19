@@ -30,6 +30,7 @@ import { createNotification } from '../notificationService';
 import { analyzeBatch, type ClipAnalysis, type ClipRole } from './clipAnalysisService';
 import { ALL_TEMPLATES, TEMPLATES_BY_ID, type Template } from './templates';
 import { renderBatch } from './templateRenderer';
+import { subjectPrefixFromKey } from './r2Client';
 import {
   trackAITokens,
   estimateTokensForRequest,
@@ -239,6 +240,11 @@ interface GateDecision {
   status: 'ASSEMBLING' | 'NEEDS_INPUT';
   question?: string;
   questionField?: string;
+  /** Set when ASSEMBLING proceeds despite format confidence below threshold
+   *  (task c, S-BATCH-STUCK-2026-09-18): appended to reviewNotes so a human
+   *  reviews the uncertainty at the AWAITING_REVIEW stage instead of the batch
+   *  being blocked before anything renders. */
+  lowConfidenceNote?: string;
 }
 
 function ambiguousClips(analyses: ClipAnalysis[]): ClipAnalysis[] {
@@ -251,11 +257,94 @@ function softClips(analyses: ClipAnalysis[]): ClipAnalysis[] {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Subject-folder hint (task b, S-BATCH-STUCK-2026-09-18): when a batch's clips
+// were uploaded into a named subject folder (e.g. "tutorial/A001.mp4"), that is
+// effectively Patrick pre-answering the format question. Detect it and let it
+// short-circuit inference before we ever ask.
+// ---------------------------------------------------------------------------
+
+/** Lowercase + strip everything but letters/digits, for loose id/name matching. */
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Match a subject-folder prefix to a known Template by id or displayName,
+ * case-insensitively and slug-loosely ("tutorial" should match Template id
+ * "season-G-feature-tutorial"). Exact slug equality wins first; a substring
+ * match is accepted ONLY when it resolves to exactly one candidate -- an
+ * ambiguous partial match is treated as no match rather than guessed, since a
+ * wrong human-intent match is worse than falling back to normal inference.
+ */
+function matchTemplateBySubjectPrefix(prefix: string, templates: Template[]): Template | null {
+  const prefixSlug = slugify(prefix);
+  if (prefixSlug.length < 3) return null; // too short to mean anything -- avoid false positives
+
+  const exact = templates.filter((t) => slugify(t.id) === prefixSlug || slugify(t.displayName) === prefixSlug);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null; // should not happen with distinct ids, but never guess
+
+  const loose = templates.filter((t) => {
+    const idSlug = slugify(t.id);
+    const nameSlug = slugify(t.displayName);
+    return idSlug.includes(prefixSlug) || prefixSlug.includes(idSlug)
+      || nameSlug.includes(prefixSlug) || prefixSlug.includes(nameSlug);
+  });
+  return loose.length === 1 ? loose[0] : null;
+}
+
+/**
+ * Derive the batch's subject-folder hint from the MAJORITY of its clips' r2Key
+ * values via r2Client.subjectPrefixFromKey -- majority, not unanimity, so one
+ * stray root-level clip in an otherwise-organized batch doesn't discard a real
+ * hint. Returns null when there is no clear majority, including the common case
+ * of a normal flat (non-nested) batch where every key has no subject prefix at
+ * all -- the caller falls back to untouched content-signature inference.
+ */
+function batchSubjectPrefix(analyses: ClipAnalysis[]): string | null {
+  if (analyses.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const a of analyses) {
+    const prefix = subjectPrefixFromKey(a.r2Key);
+    if (!prefix) continue;
+    const key = prefix.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  let winner: string | null = null;
+  let winnerCount = 0;
+  for (const [key, count] of counts) {
+    if (count > winnerCount) {
+      winner = key;
+      winnerCount = count;
+    }
+  }
+  return winnerCount > analyses.length / 2 ? winner : null;
+}
+
 /**
  * Decide the batch outcome per ADR-080 §6.3. Highest-leverage ambiguity first:
  * format > individual clip role. Exactly ONE question, ever.
+ *
+ * Task c (S-BATCH-STUCK-2026-09-18): a *format* question is staged ONLY when
+ * there is genuinely nothing to go on -- every template scored 0 AND there is
+ * no subject-folder hint at all (a batch whose subject-folder hint MATCHED a
+ * template never reaches this branch at all -- see the confidence-1.0 lock in
+ * classifyBatch). When the top template has real (non-zero) signal, or an
+ * unmatched-but-present subject-folder hint gives SOME human-supplied clue,
+ * proceed to ASSEMBLING with the best-guess template and record the uncertainty
+ * in reviewNotes instead -- the human then reviews an actual rendered draft at
+ * AWAITING_REVIEW rather than being asked a question before anything renders.
+ * A batch must never again sit blocked pre-render with nothing for a human to
+ * look at (the original bug: batch cmtusdrov001djrsvh5wp40pt, NEEDS_INPUT for 9
+ * days on an all-zero score with no sixth-template match available at the time).
  */
-function decideGate(analyses: ClipAnalysis[], inference: TemplateInference): GateDecision {
+function decideGate(
+  analyses: ClipAnalysis[],
+  inference: TemplateInference,
+  hasSubjectPrefixHint: boolean
+): GateDecision {
   const ambiguous = ambiguousClips(analyses);
   const formatOk = inference.confidence >= BATCH_FORMAT_THRESHOLD;
 
@@ -267,17 +356,48 @@ function decideGate(analyses: ClipAnalysis[], inference: TemplateInference): Gat
   // Otherwise stage exactly ONE question, resolving the highest-leverage ambiguity.
   // Format first — resolving it usually disambiguates the clips (§6.3).
   if (!formatOk) {
-    const top = TEMPLATES_BY_ID[inference.templateId];
-    // Present the top-two candidates as the choice.
+    const scoreValues = Object.values(inference.scores);
+    const topScore = scoreValues.length ? Math.max(...scoreValues) : 0;
+    const nothingToGoOn = topScore === 0 && !hasSubjectPrefixHint;
+
+    if (nothingToGoOn) {
+      // Genuinely nothing to go on: no content signal AND no folder-hint signal.
+      // This is the only remaining case where we block before rendering.
+      const top = TEMPLATES_BY_ID[inference.templateId];
+      const sortedIds = Object.entries(inference.scores).sort((a, b) => b[1] - a[1]).map(([id]) => id);
+      const a = TEMPLATES_BY_ID[sortedIds[0]] ?? top;
+      const b = TEMPLATES_BY_ID[sortedIds[1]];
+      const optionA = a?.displayName ?? sortedIds[0];
+      const optionB = b?.displayName ?? sortedIds[1] ?? 'a different format';
+      return {
+        status: 'NEEDS_INPUT',
+        question: `This shoot could be "${optionA}" or "${optionB}". Which is it?  [${optionA}] [${optionB}]`,
+        questionField: 'batch.templateId',
+      };
+    }
+
+    // There IS something to go on -- either real (non-zero) content signal, or a
+    // subject-folder hint that didn't cleanly resolve to a known template but
+    // still signals the shoot was intentionally organized. Proceed with the best
+    // guess and hand the uncertainty to the human at AWAITING_REVIEW.
     const sortedIds = Object.entries(inference.scores).sort((a, b) => b[1] - a[1]).map(([id]) => id);
-    const a = TEMPLATES_BY_ID[sortedIds[0]] ?? top;
-    const b = TEMPLATES_BY_ID[sortedIds[1]];
-    const optionA = a?.displayName ?? sortedIds[0];
-    const optionB = b?.displayName ?? sortedIds[1] ?? 'a different format';
+    const topId = inference.templateId;
+    const runnerId = sortedIds.find((id) => id !== topId);
+    const topT = TEMPLATES_BY_ID[topId];
+    const runnerT = runnerId ? TEMPLATES_BY_ID[runnerId] : undefined;
+    const topName = topT?.displayName ?? topId;
+    const runnerName = runnerT?.displayName ?? runnerId ?? 'no runner-up';
+    const topSc = inference.scores[topId] ?? topScore;
+    const runnerSc = runnerId ? (inference.scores[runnerId] ?? 0) : 0;
+    const zeroNote = topScore === 0
+      ? ' All templates scored 0 on content signature; proceeding only because an unmatched subject-folder hint suggested this shoot was intentionally organized.'
+      : '';
     return {
-      status: 'NEEDS_INPUT',
-      question: `This shoot could be "${optionA}" or "${optionB}". Which is it?  [${optionA}] [${optionB}]`,
-      questionField: 'batch.templateId',
+      status: 'ASSEMBLING',
+      lowConfidenceNote:
+        `Format confidence low (${inference.confidence.toFixed(2)} < ${BATCH_FORMAT_THRESHOLD.toFixed(2)} threshold) -- ` +
+        `proceeded with best-guess "${topName}" (score ${topSc.toFixed(2)}) over runner-up "${runnerName}" ` +
+        `(score ${runnerSc.toFixed(2)}).${zeroNote} Review the rendered draft carefully before approving.`,
     };
   }
 
@@ -330,8 +450,21 @@ async function notifyAdminsBatchNeedsAttention(
         ? `Footage batch ${batchId} hit an unrecoverable error during classification. Check Railway logs.`
         : `Footage batch ${batchId}: ${question ?? 'a question is staged'}.`;
     const link = '/admin/video-pipeline';
+    // Task a (S-BATCH-STUCK-2026-09-18): createNotification's sendEmail/emailSubject
+    // params (added 2026-08-08, S1195) were NEVER passed here -- a stalled or failed
+    // video batch has ONLY ever written a silent in-app row, no email, ever. Confirmed
+    // live: batch cmtusdrov001djrsvh5wp40pt sat NEEDS_INPUT for 9 days with its
+    // Notification.read still false and Patrick never told. createNotification's own
+    // try/catch (plus its internal suppression/domain-block checks) makes this safe to
+    // always request -- a notification/email failure still can never break classification.
+    const emailSubject =
+      kind === 'FAILED'
+        ? `[FindA.Sale] Video batch FAILED -- ${batchId}`
+        : `[FindA.Sale] Video batch needs your input -- ${batchId}`;
     await Promise.all(
-      admins.map((a) => createNotification(a.id, 'video_batch_attention', title, body, link, 'OPERATIONAL')),
+      admins.map((a) =>
+        createNotification(a.id, 'video_batch_attention', title, body, link, 'OPERATIONAL', true, emailSubject),
+      ),
     );
   } catch (err: any) {
     console.warn(`[footageClassify] Failed to notify admins for batch ${batchId} (${kind}):`, err?.message ?? err);
@@ -403,6 +536,21 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
       return { batchId, status: 'NEEDS_INPUT', question: 'no analyzable clips', clipCount: 0, ambiguousCount: 0, softCount: 0 };
     }
 
+    // SUBJECT-FOLDER HINT (task b, S-BATCH-STUCK-2026-09-18): derive the batch's
+    // subject prefix from the majority of its clips' r2Key values BEFORE any
+    // inference runs. When it case-insensitively/slug-matches a known template,
+    // treat it exactly like a human-answered question -- the same confidence-1.0
+    // lock semantics as the TEMPLATE LOCK above -- so a Patrick-organized folder
+    // (e.g. "tutorial/") never triggers a format question at all.
+    const subjectPrefix = batchSubjectPrefix(analyses);
+    const subjectPrefixTemplate = subjectPrefix ? matchTemplateBySubjectPrefix(subjectPrefix, ALL_TEMPLATES) : null;
+    if (subjectPrefixTemplate) {
+      console.log(
+        `[footageClassify] Batch ${batchId} subject-folder hint "${subjectPrefix}" matched template ` +
+          `${subjectPrefixTemplate.id} -- locking format at confidence 1.0, skipping inferTemplate().`
+      );
+    }
+
     const inference: TemplateInference =
       lockedTemplate?.templateId && lockedTemplate.templateConfidence === 1.0
         ? {
@@ -411,12 +559,24 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
             rationale: 'Template locked at confidence 1.0 (human-confirmed answer, or a prior unambiguous auto-detection) -- format inference skipped so it can never be silently overwritten.',
             scores: { [lockedTemplate.templateId]: 1.0 },
           }
+        : subjectPrefixTemplate
+        ? {
+            templateId: subjectPrefixTemplate.id,
+            confidence: 1.0,
+            rationale: `Subject-folder hint "${subjectPrefix}" matched template "${subjectPrefixTemplate.displayName}" (${subjectPrefixTemplate.id}) -- treated as a human-supplied answer, confidence locked at 1.0, format inference skipped.`,
+            scores: { [subjectPrefixTemplate.id]: 1.0 },
+          }
         : await inferTemplate(analyses);
-    const decision = decideGate(analyses, inference);
+    const decision = decideGate(analyses, inference, subjectPrefix !== null);
     const ambiguous = ambiguousClips(analyses);
     const soft = softClips(analyses);
 
     if (decision.status === 'ASSEMBLING') {
+      // Task c: fold a low-confidence best-guess note into reviewNotes so the
+      // human reviewing the rendered draft at AWAITING_REVIEW sees the uncertainty.
+      const reviewNotes = decision.lowConfidenceNote
+        ? `${inference.rationale} ${decision.lowConfidenceNote}`
+        : inference.rationale;
       await prisma.footageBatch.update({
         where: { id: batchId },
         data: {
@@ -425,12 +585,13 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
           templateConfidence: inference.confidence,
           openQuestion: null,
           questionField: null,
-          reviewNotes: inference.rationale,
+          reviewNotes,
         },
       });
       console.log(
         `[footageClassify] Batch ${batchId} CLASSIFIED -> ${inference.templateId} ` +
-          `(format conf ${inference.confidence}, ${analyses.length} clips, ${soft.length} soft-flagged). Ready for render stage.`
+          `(format conf ${inference.confidence}, ${analyses.length} clips, ${soft.length} soft-flagged)` +
+          `${decision.lowConfidenceNote ? ' [LOW-CONFIDENCE BEST GUESS -- see reviewNotes for AWAITING_REVIEW]' : ''}. Ready for render stage.`
       );
       // RENDER STAGE (ADR-080 §9 — templateRenderer.ts). The batch is fully
       // classified and ready to render. Trigger the render fire-and-forget AND
