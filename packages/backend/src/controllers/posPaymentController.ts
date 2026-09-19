@@ -1587,28 +1587,28 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
 };
 
 // ── CNP FEE (register-entered / manually-keyed card) ────────────────────────────────────
-// PLACEHOLDER, NOT INDEPENDENTLY VERIFIED (2026-09-12, Square rebuild of the dead Stripe
-// manual-card-entry flow -- see pos.tsx's ENABLE_MANUAL_CARD_ENTRY history / PosManualCard.tsx).
-// The old (dead, never-worked) Stripe UI showed "3.4% + $0.30" as its CNP surcharge -- that
-// was STRIPE's specific manually-keyed-card rate and cannot be carried over to Square. Square's
-// actual published rate for a manually-keyed / card-not-present transaction (Square calls this
-// "Keyed-in" in its fee schedule) was NOT independently verified this dispatch -- no live web
-// access from this tool session to confirm it against Square's own published fee-schedule page.
-// Flagged explicitly in the dev handoff. Using Square's ALREADY-VERIFIED 2.9% + $0.30 rate for
-// its regular Payments/Online API charge (see payoutController.ts's SQUARE_RATE/SQUARE_FIXED,
-// independently verified live 2026-09-09 for that exact integration surface) as a CLEARLY
-// LABELED placeholder floor here -- NOT a confirmed keyed-in number. Square's real keyed-in
-// rate is commonly HIGHER than its online-API rate on other processors' published fee
-// schedules, so this placeholder likely UNDERSTATES the true cost. Patrick or a live web check
-// must confirm the real rate before this ships to real organizers.
+// CONFIRMED (2026-09-18, live-verified against Square's own published fee schedule this
+// session): Square's real "Keyed-in" (manually-entered / card-not-present) rate is 3.5% +
+// $0.15 per transaction -- notably higher than the 2.9% + $0.30 placeholder this constant
+// previously held, which was actually Square's Payments/Online API rate for a DIFFERENT
+// integration surface (see payoutController.ts's SQUARE_RATE/SQUARE_FIXED), not the real
+// keyed-in rate. That placeholder understated the true cost, exactly as its own prior
+// comment warned it might.
+//
+// Also confirmed this session (findasale-architect investigation, 2026-09-18): this
+// endpoint's Square calls (squarePaymentService.ts's SquareChargeParams,
+// squarePosPaymentAdapter.ts's CreateAndCapturePaymentParams) never send AVS/billing-address
+// data to Square, so this transaction can't reach the card network's cheaper "qualified"
+// card-not-present interchange tier today regardless of this surcharge -- pricing for
+// Square's flat keyed-in rate is the correct, safe assumption until AVS capture is added.
 //
 // Surcharge design: the CNP fee is ADDED ON TOP of the sale subtotal and charged to the buyer
 // -- mirrors the pre-existing (dead) Stripe manual-entry flow's own design, not a new decision
 // made in this rebuild. Platform commission (appFeeCents below) is computed on the subtotal
 // only, not on this surcharge -- the surcharge exists to cover this organizer's higher
 // effective processing cost for a manually-keyed card, not to enlarge the platform's own cut.
-const CNP_FEE_RATE_PLACEHOLDER = 0.029;
-const CNP_FEE_FIXED_CENTS_PLACEHOLDER = 30;
+const CNP_FEE_RATE_PLACEHOLDER = 0.035;
+const CNP_FEE_FIXED_CENTS_PLACEHOLDER = 15;
 
 /**
  * POST /api/pos/manual-card-payment

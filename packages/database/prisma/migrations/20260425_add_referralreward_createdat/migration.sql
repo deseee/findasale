@@ -1,0 +1,22 @@
+-- No-op (2026-09-18): this migration's original body added ReferralReward.createdAt
+-- (ADD COLUMN IF NOT EXISTS ... DEFAULT CURRENT_TIMESTAMP) plus its supporting index.
+--
+-- Recovered from git history (commit 38f9e981a) during the 2026-09-09 Blocked Queue migration-
+-- drift reconciliation (claude_docs/audits/scope-checks-2026-09-18.md). Production's
+-- `_prisma_migrations` table has this exact name recorded as applied on 2026-04-25 (1 real
+-- step) -- but the local migrations folder had no matching file, flagged as "applied to DB but
+-- absent locally."
+--
+-- Unlike the organizer-claim-email/crew-invasion pair (see their own no-op files, same date),
+-- there is no evidence this one was ever renamed -- it appears to have simply been dropped from
+-- the local folder at some point without explanation. It does not need restoring for
+-- correctness, though: this exact column + index are ALSO created, idempotently, by two later
+-- migrations that are still present and still run on every fresh build --
+-- `20260817070000_reconcile_db_push_drift_2026_08_09` (`ADD COLUMN IF NOT EXISTS "createdAt"`)
+-- and `20260817140000_reconcile_prod_drift_additive` (`CREATE INDEX IF NOT EXISTS
+-- "ReferralReward_createdAt_idx"`), both from the 2026-08-17 ADR-108 drift-reconciliation pass.
+-- A fresh shadow-database build (prisma migrate dev, CI, disaster recovery) already produces
+-- the correct schema without this file's original body ever running again.
+--
+-- This file's SQL body is deliberately left empty. Its only remaining purpose is bookkeeping:
+-- giving local history a matching file for this exact name so it stops appearing as drift.

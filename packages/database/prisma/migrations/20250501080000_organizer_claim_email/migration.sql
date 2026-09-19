@@ -1,0 +1,25 @@
+-- No-op (2026-09-18): this is the ORIGINAL migration name for the OrganizerClaimEmail table.
+--
+-- Recovered from git history (commit ee05a75b2) during the 2026-09-09 Blocked Queue migration-
+-- drift reconciliation (claude_docs/audits/scope-checks-2026-09-18.md). Production's own
+-- `_prisma_migrations` table has this exact name recorded as applied on 2026-05-01 (1 real
+-- step) -- but the local migrations folder had no matching file, which is what the original
+-- 2026-09-06/2026-09-09 drift findings flagged as "applied to DB but absent locally."
+--
+-- What actually happened, confirmed via git log/git show (not guessed): on 2026-07-30, this
+-- folder was renamed locally to `20260223014341_organizer_claim_email` (which still carries
+-- the real CREATE TABLE SQL today) and that new name was separately resolved as applied via
+-- `prisma migrate resolve --applied` against production -- see that migration's sibling no-op,
+-- `20260501060000_organizer_claim_email/migration.sql`, which documents the same rename and is
+-- the exact precedent this file mirrors. Nobody ever deleted (or backfilled a placeholder for)
+-- THIS original-named row in production's `_prisma_migrations` table, so it kept showing up as
+-- orphaned drift every time someone re-ran the check.
+--
+-- This file's SQL body is deliberately left empty: production never replays an already-applied
+-- migration's body, and a fresh shadow-database build (prisma migrate dev, CI, disaster
+-- recovery) creates OrganizerClaimEmail for real via `20260223014341_organizer_claim_email`,
+-- which sorts after this one and still contains the original CREATE TABLE statement. Restoring
+-- this file's real historical SQL (also recovered from git history) would make a fresh build
+-- attempt to CREATE TABLE "OrganizerClaimEmail" twice and fail -- exactly the failure this
+-- no-op avoids. Only this file's presence (matching this exact name) is what local history
+-- needs to stop drifting from production's bookkeeping.

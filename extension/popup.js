@@ -398,7 +398,10 @@ function render() {
   let hiddenBySearchCount = 0;
   ITEMS.forEach((it) => {
     if (hideListed && currentListedFlag(it)) return;
-    if (!showAll && isIneligibleOnCurrentChannel(it)) { hiddenIneligibleCount++; return; }
+    // (2026-09-19, S-EXT-FB-COIN-HIDE) Facebook coin/currency items previously stayed visible
+    // with a disabled checkbox + badge instead of being hidden like every other channel's
+    // ineligible items -- fold facebookRestricted into the same default-hide filter.
+    if (!showAll && (isIneligibleOnCurrentChannel(it) || (currentChannel() === 'facebook' && it.facebookRestricted === true))) { hiddenIneligibleCount++; return; }
     if (q) {
       const haystack = ((it.title || '') + ' ' + (it.category || '')).toLowerCase();
       if (!haystack.includes(q)) { hiddenBySearchCount++; return; }
@@ -410,7 +413,7 @@ function render() {
   const eligNote = $('eligibilityNote');
   if (eligNote) {
     const eligKey = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
-    if (eligKey && hiddenIneligibleCount > 0 && !showAll) {
+    if ((eligKey || currentChannel() === 'facebook') && hiddenIneligibleCount > 0 && !showAll) {
       eligNote.hidden = false;
       eligNote.textContent = hiddenIneligibleCount + ' item' + (hiddenIneligibleCount === 1 ? '' : 's') +
         ' hidden — not eligible for this marketplace. Check "Show all items" above to see them.';

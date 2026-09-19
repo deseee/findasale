@@ -1,0 +1,30 @@
+-- No-op (2026-09-18): this is the ORIGINAL migration name for the Crew Invasion feature
+-- (Sale.crewInvasionEnabled + CrewInvasionCode table).
+--
+-- Recovered from git history (commit bac0e75b4) during the 2026-09-09 Blocked Queue migration-
+-- drift reconciliation (claude_docs/audits/scope-checks-2026-09-18.md). Production's own
+-- `_prisma_migrations` table has this exact name recorded as applied on 2026-05-28 (1 real
+-- step, despite the "0628"/June date embedded in the migration's own folder name -- the name
+-- itself appears to have a typo relative to when it actually ran) -- but the local migrations
+-- folder had no matching file, flagged as "applied to DB but absent locally."
+--
+-- What actually happened, confirmed via git log/git show (not guessed): on 2026-07-30, this
+-- folder was renamed locally to `20260528130000_add_crew_invasion`, which still carries the
+-- real, identical ALTER TABLE / CREATE TABLE SQL today (confirmed byte-for-byte identical to
+-- this migration's original body) and was separately resolved as applied via
+-- `prisma migrate resolve --applied` against production on the same day as the
+-- organizer-claim-email rename above (`20260223014341_organizer_claim_email` /
+-- `20260501060000_organizer_claim_email` -- see that pair's own no-op file for the matching
+-- precedent this file mirrors). Nobody ever deleted (or backfilled a placeholder for) THIS
+-- original-named row in production's `_prisma_migrations` table, so it kept showing up as
+-- orphaned drift every time someone re-ran the check.
+--
+-- This file's SQL body is deliberately left empty: production never replays an already-applied
+-- migration's body, and a fresh shadow-database build (prisma migrate dev, CI, disaster
+-- recovery) creates Sale.crewInvasionEnabled + CrewInvasionCode for real via
+-- `20260528130000_add_crew_invasion`, which sorts before this one and still contains the
+-- original SQL. Restoring this file's real historical SQL (also recovered from git history)
+-- would make a fresh build attempt the same ALTER/CREATE TABLE twice and fail on the second
+-- (duplicate column / table already exists) -- exactly the failure this no-op avoids. Only
+-- this file's presence (matching this exact name) is what local history needs to stop
+-- drifting from production's bookkeeping.

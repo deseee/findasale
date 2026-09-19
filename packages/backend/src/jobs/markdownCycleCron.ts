@@ -12,7 +12,9 @@ import { propagateMarkdownPriceToMarketplaces } from '../services/markdownPriceP
  * 1. Find items where organizerId matches (or saleId matches if cycle is sale-scoped)
  * 2. Check if item.createdAt >= daysUntilFirst days ago
  *    - If yes AND priceBeforeMarkdown is NULL: apply firstPct markdown, set priceBeforeMarkdown
- *    - If yes AND priceBeforeMarkdown is NOT NULL AND createdAt >= daysUntilSecond days ago: apply secondPct markdown
+ *    - If yes AND markdownApplied is TRUE (a real first markdown, not the manual-price-edit
+ *      display hack in itemController.ts) AND createdAt >= daysUntilSecond days ago:
+ *      apply secondPct markdown, skipping any item already at the target price
  * 3. Use updateMany for efficiency
  * 4. Log counts
  *
@@ -103,6 +105,26 @@ export function scheduleMarkdownCycleCron(): void {
                 },
               });
 
+              // Audit trail: markdownCron.ts writes an ItemPriceHistory row for every markdown it
+              // applies; this job wrote none, which is exactly why markdown-cycle discounts left
+              // no trace to reconstruct after the fact. Wrapped so a history-write failure can
+              // never break the markdown loop itself.
+              try {
+                await prisma.itemPriceHistory.create({
+                  data: {
+                    itemId: item.id,
+                    price: newPrice,
+                    changedBy: 'markdown',
+                    note: `First markdown (${effectiveFirstPct}% off, cycle ${cycle.id})`,
+                  },
+                });
+              } catch (historyErr) {
+                console.warn(
+                  `[markdown-cycle-cron] price history write failed for item ${item.id}:`,
+                  historyErr
+                );
+              }
+
               // Tell anyone who favorited this item that its price just dropped.
               notifyPriceDropAlerts(item.id, currentPrice, newPrice).catch(err =>
                 console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
@@ -151,7 +173,17 @@ export function scheduleMarkdownCycleCron(): void {
             const secondMarkdownItems = await prisma.item.findMany({
               where: {
                 ...itemFilter,
+                // `priceBeforeMarkdown` alone is NOT proof of markdown enrollment.
+                // itemController.ts's manual-price-edit path (~line 1670) sets
+                // priceBeforeMarkdown = newPrice together with markdownApplied = false purely
+                // so the strikethrough display has a reference price. Selecting on
+                // `priceBeforeMarkdown: { not: null }` alone therefore swept every
+                // manually-repriced item straight into the SECOND (deeper) markdown, while the
+                // first-markdown filter above (`priceBeforeMarkdown: null`) permanently excluded
+                // those same items from the first. `markdownApplied` is the real enrollment
+                // flag — only a genuine first markdown sets it true.
                 priceBeforeMarkdown: { not: null }, // Already has first markdown
+                markdownApplied: true, // ...and that first markdown was a REAL one, not the display hack
                 createdAt: {
                   lte: new Date(now.getTime() - cycle.daysUntilSecond * 24 * 60 * 60 * 1000),
                 },
@@ -170,6 +202,23 @@ export function scheduleMarkdownCycleCron(): void {
                 const originalPrice = item.priceBeforeMarkdown!;
                 const newPrice = Math.max(0, originalPrice * (1 - effectiveSecondPct / 100));
 
+                // Idempotency guard. Unlike the first-markdown loop — whose
+                // `priceBeforeMarkdown: null` filter stops an item being re-selected once it has
+                // been marked down — this loop's filter (`priceBeforeMarkdown NOT NULL` +
+                // `createdAt <= now - daysUntilSecond`) stays true forever, so the same items are
+                // re-selected every single night. Without this skip each one is re-written,
+                // re-pushed to the eBay API, and has `priceUpdatedAt` re-stamped nightly in
+                // perpetuity — and that nightly re-stamp is what keeps items permanently flagged
+                // "unsynced" downstream in ebayListingSyncCron.ts. If the item already sits at the
+                // target price there is nothing to do: skip the update, the price-drop alert and
+                // the marketplace propagation alike.
+                // item.price is nullable in the schema (the query filters `price: { gt: 0 }`, so
+                // in practice it is always set); a null price cannot match and falls through.
+                const currentPrice = item.price;
+                if (currentPrice != null && Math.abs(currentPrice - newPrice) < 0.005) {
+                  continue;
+                }
+
                 await prisma.item.update({
                   where: { id: item.id },
                   data: {
@@ -179,6 +228,25 @@ export function scheduleMarkdownCycleCron(): void {
                     priceUpdatedAt: new Date(),
                   },
                 });
+
+                // Audit trail: same ItemPriceHistory row markdownCron.ts writes, and the same
+                // reason as the first-markdown loop above. Wrapped so a history-write failure can
+                // never break the markdown loop itself.
+                try {
+                  await prisma.itemPriceHistory.create({
+                    data: {
+                      itemId: item.id,
+                      price: newPrice,
+                      changedBy: 'markdown',
+                      note: `Second markdown (${effectiveSecondPct}% off, cycle ${cycle.id})`,
+                    },
+                  });
+                } catch (historyErr) {
+                  console.warn(
+                    `[markdown-cycle-cron] price history write failed for item ${item.id}:`,
+                    historyErr
+                  );
+                }
 
                 // Tell anyone who favorited this item that its price just dropped.
                 // Uses this item's own pre-write price as "old", and this item's own
