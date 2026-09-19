@@ -46,7 +46,9 @@ async function pushToEbay(item: MarkdownPropagationItem): Promise<MarketplacePro
     if (!accessToken) {
       return { platform: 'EBAY', ok: false, reason: 'no-token' };
     }
-    const result = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken, item.ebayListingId);
+    // itemId passed (2026-09-19) so a category-aspect repair retry inside
+    // reviseEbayOfferPrice can call reanalyzeItem for this specific item.
+    const result = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken, item.ebayListingId, item.id);
     if (!result.ok) {
       console.warn(
         `[markdown-propagation] item ${item.id} eBay push failed: ${result.reason}${result.detail ? ` — ${result.detail}` : ''}`

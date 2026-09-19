@@ -90,7 +90,12 @@ export function scheduleMarkdownCycleCron(): void {
             // items already marked down were excluded from firstMarkdownItems.
             for (const item of firstMarkdownItems) {
               const currentPrice = item.price!;
-              const newPrice = Math.max(0, currentPrice * (1 - effectiveFirstPct / 100));
+              // ADR-128 follow-up (2026-09-19, fixed for real this time -- see markdown-sync-issues audit):
+              // eBay rejects any listing price below $0.99 (errorId 25016). A price cut computed
+              // without this floor gets stuck in the eBay sync-issues queue forever, since nothing
+              // about the stale value changes between retries. Never push the organizer's price
+              // below eBay's own minimum.
+              const newPrice = Math.max(0.99, currentPrice * (1 - effectiveFirstPct / 100));
 
               await prisma.item.update({
                 where: { id: item.id },
@@ -200,7 +205,9 @@ export function scheduleMarkdownCycleCron(): void {
               // every item — same class of bug the first-markdown loop above avoids.
               for (const item of secondMarkdownItems) {
                 const originalPrice = item.priceBeforeMarkdown!;
-                const newPrice = Math.max(0, originalPrice * (1 - effectiveSecondPct / 100));
+                // ADR-128 follow-up (2026-09-19): same $0.99 eBay minimum-price floor as the
+                // first-markdown loop above -- see that comment for the full rationale.
+                const newPrice = Math.max(0.99, originalPrice * (1 - effectiveSecondPct / 100));
 
                 // Idempotency guard. Unlike the first-markdown loop — whose
                 // `priceBeforeMarkdown: null` filter stops an item being re-selected once it has

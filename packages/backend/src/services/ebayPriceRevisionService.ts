@@ -23,6 +23,7 @@
 import { ebayFetch } from './ebayPublishService';
 import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
 import { ebayProxyUrl, ebayProxyHeaders } from './ebayHttp';
+import { reanalyzeItem } from './reanalyzeService';
 
 export interface EbayPriceRevisionResult {
   ok: boolean;
@@ -41,6 +42,54 @@ export interface EbayPriceRevisionResult {
   detail?: string;
   /** Which code path actually handled this revision -- absent on failures before either path ran. */
   method?: 'inventory-api' | 'trading-api-legacy';
+  // eBay-sync-issues auto-repair (2026-09-19): set when the FIRST plain-price revision
+  // attempt failed and a repair retry succeeded. Absent on a first-try success (the common
+  // case) and absent (not false) when no repair was attempted at all.
+  repaired?: boolean;
+  repairMethod?: 'best-offer-threshold' | 'category-aspect';
+}
+
+// ── eBay-sync-issues auto-repair helpers (2026-09-19) ──────────────────────────
+// Root-caused via live Railway logs against 35 items stuck in the eBay sync-issues
+// queue (markdown-sync-issues audit, 2026-09-19): 26/35 were a live eBay listing's
+// EXISTING BestOfferAutoAcceptPrice/MinimumBestOfferPrice (set once at initial listing
+// time, never recomputed since) sitting above a newly-markdown'd price; 4/35 were
+// category-aspect/required-field errors (some likely eBay taxonomy drift, some
+// possibly missing at listing time); the rest are the $0.99 floor (see
+// markdownCycleCron.ts/markdownCron.ts fixes) or one-off data issues this file does
+// not attempt to auto-repair (invalid Shipping Package type, a VideoID the seller
+// account doesn't own -- these need someone to look at that specific listing, not an
+// automatic retry, since retrying an unchanged bad field never succeeds).
+
+function isBestOfferThresholdError(detail: string | undefined): boolean {
+  if (!detail) return false;
+  return (
+    /best offer auto accept/i.test(detail) ||
+    /auto decline amount/i.test(detail) ||
+    /minimum best offer price/i.test(detail)
+  );
+}
+
+function isCategoryAspectError(detail: string | undefined): boolean {
+  if (!detail) return false;
+  return (
+    /required field/i.test(detail) ||
+    /item specific/i.test(detail) ||
+    /aspects for this category/i.test(detail)
+  );
+}
+
+/**
+ * Recompute safe Best-Offer thresholds proportional to a new (lower) price, so a
+ * markdown never leaves BestOfferAutoAcceptPrice/MinimumBestOfferPrice sitting above
+ * the new Buy-It-Now price. Ratios mirror ebayController.ts's publish-path Best-Offer
+ * shape -- not a new design decision, just applying the same proportions at revise time
+ * that already exist at initial-listing time.
+ */
+function computeSafeBestOfferThresholds(newPrice: number): { accept: number; minimum: number } {
+  const accept = Math.max(0.99, Math.round(newPrice * 0.9 * 100) / 100);
+  const minimum = Math.max(0.5, Math.round(accept * 0.75 * 100) / 100);
+  return { accept, minimum };
 }
 
 /**
@@ -56,12 +105,19 @@ export async function reviseEbayOfferPrice(
   offerId: string | null | undefined,
   newPrice: number,
   accessToken: string,
-  ebayListingId?: string | null
+  ebayListingId?: string | null,
+  itemId?: string
 ): Promise<EbayPriceRevisionResult> {
   // Don't spend eBay calls when rate-limited — skip and let the caller defer to next cycle.
   if (isEbayRateLimited()) {
     return { ok: false, reason: 'rate-limited' };
   }
+  // eBay-sync-issues auto-repair (2026-09-19): never even attempt a sub-$0.99 price --
+  // eBay rejects it outright (errorId 25016) and retrying the identical value forever
+  // never succeeds. The real fix is at the caller (markdownCycleCron.ts/markdownCron.ts
+  // both floor at $0.99 now too); this is a defensive last-resort floor for any other
+  // future caller of this function.
+  const safeNewPrice = Math.max(0.99, newPrice);
   if (!offerId) {
     if (!ebayListingId) {
       return { ok: false, reason: 'no-offer-id' };
@@ -69,7 +125,7 @@ export async function reviseEbayOfferPrice(
     // Legacy listing: no Offer object exists (never pushed through the Inventory-API
     // publish flow), but a live eBay listing (Item.ebayListingId) does. Revise its price
     // in place via the Trading API -- same ItemID, never a new listing, never a delete.
-    return reviseLegacyListingPrice(ebayListingId, newPrice, accessToken);
+    return reviseLegacyListingPrice(ebayListingId, safeNewPrice, accessToken, itemId);
   }
 
   try {
@@ -81,36 +137,83 @@ export async function reviseEbayOfferPrice(
     }
     const offerBody = (await getRes.json()) as Record<string, unknown>;
 
-    // Scoped mutation: ONLY pricingSummary.price.value/currency change. Every other
-    // field on the offer is preserved exactly as eBay returned it — this is a
-    // price-only revision, not a full offer rewrite (that's heal25005's job, a
-    // different blast radius for a different failure class).
-    const updatedOffer: Record<string, unknown> = {
-      ...offerBody,
-      pricingSummary: {
-        ...(offerBody.pricingSummary as Record<string, unknown> | undefined),
-        price: {
-          currency: 'USD',
-          value: newPrice.toFixed(2),
+    // Scoped mutation: ONLY pricingSummary.price.value/currency (and, when repairing a
+    // Best-Offer-threshold failure below, bestOfferTerms) change. Every other field on
+    // the offer is preserved exactly as eBay returned it — this is a price-only
+    // revision, not a full offer rewrite (that's heal25005's job, a different blast
+    // radius for a different failure class).
+    const buildUpdatedOffer = (bestOffer?: { accept: number; minimum: number }): Record<string, unknown> => {
+      const offer: Record<string, unknown> = {
+        ...offerBody,
+        pricingSummary: {
+          ...(offerBody.pricingSummary as Record<string, unknown> | undefined),
+          price: {
+            currency: 'USD',
+            value: safeNewPrice.toFixed(2),
+          },
         },
-      },
+      };
+      if (bestOffer) {
+        // Shape mirrors ebayController.ts's publish-path bestOfferTerms exactly.
+        offer.bestOfferTerms = {
+          bestOfferEnabled: true,
+          autoAcceptPrice: { value: bestOffer.accept.toFixed(2), currency: 'USD' },
+          autoDeclinePrice: { value: bestOffer.minimum.toFixed(2), currency: 'USD' },
+        };
+      }
+      // Same read-only-field strip heal25005 already applies before PUTting a GET body back
+      // (services/ebayPublishService.ts heal25005) — eBay rejects these if echoed back.
+      for (const ro of ['offerId', 'status', 'listing', 'listingId', 'listingStatus', 'marketplaceId']) {
+        delete offer[ro];
+      }
+      return offer;
     };
-    // Same read-only-field strip heal25005 already applies before PUTting a GET body back
-    // (services/ebayPublishService.ts heal25005) — eBay rejects these if echoed back.
-    for (const ro of ['offerId', 'status', 'listing', 'listingId', 'listingStatus', 'marketplaceId']) {
-      delete updatedOffer[ro];
+
+    const putOffer = async (offer: Record<string, unknown>): Promise<{ ok: boolean; detail?: string }> => {
+      const putRes = await ebayFetch(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`, accessToken, {
+        method: 'PUT',
+        body: offer,
+      });
+      trackEbayCall();
+      if (!putRes.ok && putRes.status !== 204) {
+        const bodyText = await putRes.text().catch(() => '');
+        return { ok: false, detail: `HTTP ${putRes.status} ${bodyText.slice(0, 200)}` };
+      }
+      return { ok: true };
+    };
+
+    const firstAttempt = await putOffer(buildUpdatedOffer());
+    if (firstAttempt.ok) {
+      return { ok: true, method: 'inventory-api' };
     }
 
-    const putRes = await ebayFetch(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`, accessToken, {
-      method: 'PUT',
-      body: updatedOffer,
-    });
-    trackEbayCall();
-    if (!putRes.ok && putRes.status !== 204) {
-      const bodyText = await putRes.text().catch(() => '');
-      return { ok: false, reason: 'put-failed', detail: `HTTP ${putRes.status} ${bodyText.slice(0, 200)}` };
+    // ── eBay-sync-issues auto-repair (2026-09-19) ──────────────────────────────────
+    // Repair retry #1: Best-Offer threshold conflict.
+    if (isBestOfferThresholdError(firstAttempt.detail)) {
+      const thresholds = computeSafeBestOfferThresholds(safeNewPrice);
+      const repairAttempt = await putOffer(buildUpdatedOffer(thresholds));
+      if (repairAttempt.ok) {
+        return { ok: true, method: 'inventory-api', repaired: true, repairMethod: 'best-offer-threshold' };
+      }
+      // Repair itself failed too -- report the ORIGINAL failure, not the repair
+      // attempt's (possibly different) error, so existing logging/notifications stay
+      // meaningful.
+      return { ok: false, reason: 'put-failed', detail: firstAttempt.detail };
     }
-    return { ok: true, method: 'inventory-api' };
+
+    // Repair retry #2: category-aspect / required-field conflict.
+    if (isCategoryAspectError(firstAttempt.detail) && itemId) {
+      const reanalysis = await reanalyzeItem(itemId, { apply: true, syncEbay: false });
+      if ('ok' in reanalysis && reanalysis.ok) {
+        const repairAttempt = await putOffer(buildUpdatedOffer());
+        if (repairAttempt.ok) {
+          return { ok: true, method: 'inventory-api', repaired: true, repairMethod: 'category-aspect' };
+        }
+      }
+      return { ok: false, reason: 'put-failed', detail: firstAttempt.detail };
+    }
+
+    return { ok: false, reason: 'put-failed', detail: firstAttempt.detail };
   } catch (err) {
     return { ok: false, reason: 'error', detail: (err as Error).message };
   }
@@ -138,46 +241,89 @@ function xmlVal(block: string, tag: string): string | null {
 async function reviseLegacyListingPrice(
   ebayListingId: string,
   newPrice: number,
-  accessToken: string
+  accessToken: string,
+  itemId?: string
 ): Promise<EbayPriceRevisionResult> {
-  try {
-    const reviseXml = `<?xml version="1.0" encoding="utf-8"?>
+  // eBay-sync-issues auto-repair (2026-09-19): this is the path that hit 26/35 of the
+  // stuck items in the 2026-09-19 audit, all with the SAME root cause -- these legacy
+  // (April-2026-batch, pre-Inventory-API) listings' existing BestOfferAutoAcceptPrice /
+  // MinimumBestOfferPrice (set once at initial listing time, never recomputed since)
+  // sitting above a newly-markdown'd StartPrice. bestOffer, when supplied, adds a
+  // <BestOfferDetails> block to the ReviseItemRequest so both move together.
+  const buildReviseXml = (bestOffer?: { accept: number; minimum: number }): string => `<?xml version="1.0" encoding="utf-8"?>
 <ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <Item>
     <ItemID>${ebayListingId}</ItemID>
-    <StartPrice currencyID="USD">${newPrice.toFixed(2)}</StartPrice>
+    <StartPrice currencyID="USD">${newPrice.toFixed(2)}</StartPrice>${bestOffer ? `
+    <BestOfferDetails>
+      <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
+      <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>
+    </BestOfferDetails>` : ''}
   </Item>
 </ReviseItemRequest>`;
 
-    const reviseRes = await fetch(ebayProxyUrl('/ws/api.dll'), {
-      method: 'POST',
-      headers: {
-        'X-EBAY-API-CALL-NAME': 'ReviseItem',
-        'X-EBAY-API-SITEID': '0',
-        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
-        'X-EBAY-API-IAF-TOKEN': accessToken,
-        'Content-Type': 'text/xml',
-        ...ebayProxyHeaders(),
-      },
-      body: reviseXml,
-    });
-    trackEbayCall();
+  const sendRevise = async (xml: string): Promise<EbayPriceRevisionResult> => {
+    try {
+      const reviseRes = await fetch(ebayProxyUrl('/ws/api.dll'), {
+        method: 'POST',
+        headers: {
+          'X-EBAY-API-CALL-NAME': 'ReviseItem',
+          'X-EBAY-API-SITEID': '0',
+          'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+          'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+          'X-EBAY-API-IAF-TOKEN': accessToken,
+          'Content-Type': 'text/xml',
+          ...ebayProxyHeaders(),
+        },
+        body: xml,
+      });
+      trackEbayCall();
 
-    if (!reviseRes.ok) {
-      const bodyText = await reviseRes.text().catch(() => '');
-      return { ok: false, reason: 'legacy-revise-failed', detail: `HTTP ${reviseRes.status} ${bodyText.slice(0, 200)}` };
+      if (!reviseRes.ok) {
+        const bodyText = await reviseRes.text().catch(() => '');
+        return { ok: false, reason: 'legacy-revise-failed', detail: `HTTP ${reviseRes.status} ${bodyText.slice(0, 200)}` };
+      }
+
+      const reviseText = await reviseRes.text();
+      const ack = xmlVal(reviseText, 'Ack');
+      if (ack && ack !== 'Success' && ack !== 'Warning') {
+        const errMsg = xmlVal(reviseText, 'LongMessage') || xmlVal(reviseText, 'ShortMessage') || 'Unknown error';
+        return { ok: false, reason: 'legacy-revise-failed', detail: `${ack}:${errMsg}`.slice(0, 200) };
+      }
+
+      return { ok: true, method: 'trading-api-legacy' };
+    } catch (err) {
+      return { ok: false, reason: 'legacy-revise-failed', detail: (err as Error).message };
     }
+  };
 
-    const reviseText = await reviseRes.text();
-    const ack = xmlVal(reviseText, 'Ack');
-    if (ack && ack !== 'Success' && ack !== 'Warning') {
-      const errMsg = xmlVal(reviseText, 'LongMessage') || xmlVal(reviseText, 'ShortMessage') || 'Unknown error';
-      return { ok: false, reason: 'legacy-revise-failed', detail: `${ack}:${errMsg}`.slice(0, 200) };
-    }
-
-    return { ok: true, method: 'trading-api-legacy' };
-  } catch (err) {
-    return { ok: false, reason: 'legacy-revise-failed', detail: (err as Error).message };
+  const firstAttempt = await sendRevise(buildReviseXml());
+  if (firstAttempt.ok) {
+    return firstAttempt;
   }
+
+  // Repair retry #1: Best-Offer threshold conflict (the dominant failure class found in
+  // the 2026-09-19 sync-issues audit).
+  if (isBestOfferThresholdError(firstAttempt.detail)) {
+    const thresholds = computeSafeBestOfferThresholds(newPrice);
+    const repairAttempt = await sendRevise(buildReviseXml(thresholds));
+    if (repairAttempt.ok) {
+      return { ...repairAttempt, repaired: true, repairMethod: 'best-offer-threshold' };
+    }
+    return firstAttempt;
+  }
+
+  // Repair retry #2: category-aspect / required-field conflict.
+  if (isCategoryAspectError(firstAttempt.detail) && itemId) {
+    const reanalysis = await reanalyzeItem(itemId, { apply: true, syncEbay: false });
+    if ('ok' in reanalysis && reanalysis.ok) {
+      const repairAttempt = await sendRevise(buildReviseXml());
+      if (repairAttempt.ok) {
+        return { ...repairAttempt, repaired: true, repairMethod: 'category-aspect' };
+      }
+    }
+    return firstAttempt;
+  }
+
+  return firstAttempt;
 }

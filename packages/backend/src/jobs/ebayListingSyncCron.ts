@@ -153,7 +153,9 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
         (!item.ebayPriceSyncedAt || item.priceUpdatedAt.getTime() > item.ebayPriceSyncedAt.getTime());
 
       if (pendingLocalPriceChange && item.price != null) {
-        const pushResult = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken, item.ebayListingId);
+        // itemId passed (2026-09-19) so a category-aspect repair retry inside
+        // reviseEbayOfferPrice can call reanalyzeItem for this specific item.
+        const pushResult = await reviseEbayOfferPrice(item.ebayOfferId, item.price, accessToken, item.ebayListingId, item.id);
         if (pushResult.ok) {
           const syncedAt = new Date();
           await prisma.item.update({

@@ -78,9 +78,13 @@ export function scheduleMarkdownCron(): void {
 
         for (const item of itemsToMarkdown) {
           const originalPrice = item.price!;
+          // ADR-128 follow-up (2026-09-19): add eBay's own $0.99 minimum-price floor alongside
+          // the organizer's own markdownFloor -- an organizer-set floor of $0 (or none) used to
+          // let this cron compute a sub-$0.99 price that eBay silently rejects forever after.
           const newPrice = Math.max(
             originalPrice * (1 - discount),
-            sale.markdownFloor ?? 0
+            sale.markdownFloor ?? 0,
+            0.99
           );
 
           // Update item
