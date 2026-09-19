@@ -16,6 +16,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import VendorBoothFeeBillingSetup from '../../components/VendorBoothFeeBillingSetup';
+import FinixBoothOnboardingForm from '../../components/FinixBoothOnboardingForm';
 
 // Booth rent auto-pay (2026-09-14, claude_docs/feature-notes/
 // booth-rent-autopay-square-design-2026-09-13.md): the Stripe SetupIntent-based stopgap
@@ -569,6 +570,11 @@ const VendorBoothTokenPage: React.FC = () => {
                     </button>
                   </div>
                 )}
+
+                {/* Finix hub payments (ADR-127 SS5.3, 2026-09-19) -- additive, sandbox-only,
+                    separate from the Square payout setup above. Only rendered once we know
+                    which booth this vendor operates. */}
+                {myBoothId && <FinixBoothOnboardingForm vendorBoothId={myBoothId} />}
               </div>
             )}
           </div>

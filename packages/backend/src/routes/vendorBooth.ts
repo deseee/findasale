@@ -29,6 +29,10 @@ import {
   revokeBoothRegisterAccess,
 } from '../controllers/vendorBoothController';
 import {
+  getVendorBoothFinixStatus,
+  startVendorBoothFinixOnboarding,
+} from '../controllers/finixConnectController';
+import {
   startBoothCart,
   addBoothCartItems,
   removeBoothCartItem,
@@ -99,6 +103,12 @@ router.get('/api/vendor-booth/:vendorBoothId/stripe/status', authenticate, getVe
 // POST /api/square-connect/callback endpoint (squareConnectController.ts), not here.
 router.post('/api/vendor-booth/:vendorBoothId/square/onboard', authenticate, startVendorBoothSquareOnboarding);
 router.get('/api/vendor-booth/:vendorBoothId/square/status', authenticate, getVendorBoothSquareStatus);
+// Finix onboarding (2026-09-19, ADR-127 SS5.3/SS5.4 step 4 -- Maple Lake Mall hub
+// chargeback-liability wiring prerequisite). SANDBOX ONLY, additive to Square above --
+// see finixConnectController.ts's own header comment. Not a redirect: onboard is a
+// single POST carrying the vendor's business/personal/bank info directly.
+router.post('/api/vendor-booth/:vendorBoothId/finix/onboard', authenticate, startVendorBoothFinixOnboarding);
+router.get('/api/vendor-booth/:vendorBoothId/finix/status', authenticate, getVendorBoothFinixStatus);
 router.get('/api/vendor-booth/:vendorBoothId/payouts', authenticate, getVendorBoothPayouts);
 
 // ADR-090 Phase 4 (S-hubs-followup): vendor payment-method collection for recurring

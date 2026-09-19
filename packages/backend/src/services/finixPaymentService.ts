@@ -65,7 +65,7 @@ export interface FinixTransferParams {
    * needs to build the splits array as primary-merchant-inclusive and sum-exact, not additive-on-top.
    */
   splitTransfers?: FinixSplitTransfer[];
-  idempotencyKey?: string; // CONFIRMED 2026-09-18: sent as an `idempotency_id` field in the request body (NOT an Idempotency-Key header -- that was tested and does not dedupe at all). A duplicate idempotencyKey on a second call returns a 422 ("Duplicate transfer <id> already exists...") rather than transparently replaying the original success like Stripe/Square -- the original transfer's id is included in the error body if a caller wants to recover it, but that recovery logic is not implemented here yet. See the feature note referenced in this file's header.
+  idempotencyKey?: string; // CONFIRMED 2026-09-18: sent as an `idempotency_id` field in the request body (NOT an Idempotency-Key header -- that was tested and does not dedupe at all). A duplicate idempotencyKey on a second call returns a 422 ("Duplicate transfer <id> already exists...") rather than transparently replaying the original success like Stripe/Square. RECOVERY IMPLEMENTED 2026-09-19: createFinixTransfer()'s catch block now detects this specific error shape, fetches the original transfer via GET, and returns its real ok/state instead of a generic failure -- see the recovery block in createFinixTransfer() below and the feature note referenced in this file's header.
   tags?: Record<string, string>;
 }
 
@@ -96,6 +96,16 @@ const DECLINE_MESSAGE = 'Your card was declined. Please check your card details 
  *
  * NOT wired into any controller/route yet -- this is isolated new code per this
  * dispatch's scope, not yet reachable from any live checkout path.
+ *
+ * IDEMPOTENCY RECOVERY -- CONFIRMED and IMPLEMENTED 2026-09-19 (real sandbox testing, full
+ * test suite pass): Finix does not transparently replay a duplicate idempotency_id the way
+ * Stripe/Square do -- it always 422s. Without recovery, a caller retrying after a timed-out
+ * request (where Finix actually processed the original charge) would wrongly see ok:false.
+ * The catch block below now detects this specific error shape (a `transfer` id present on
+ * the error), fetches that transfer's real current state via GET, and returns the ACTUAL
+ * result instead of a generic failure. See claude_docs/feature-notes/
+ * finix-sandbox-smoke-test-results-2026-09-18.md, "Update (same session, fourth pass -- full
+ * test suite)", "Idempotency-duplicate error shape" for the exact confirmed evidence.
  */
 export async function createFinixTransfer(params: FinixTransferParams): Promise<FinixTransferResult> {
   const client = getFinixClient();
@@ -162,11 +172,45 @@ export async function createFinixTransfer(params: FinixTransferParams): Promise<
       raw: data,
     };
   } catch (err: any) {
-    // Finix's error response shape is UNCONFIRMED against a live failure -- this catch
-    // deliberately does not try to parse a specific error-code field yet (unlike Square's
-    // structured SquareError.errors array, which this codebase already knows how to
-    // unpack). Logs the raw error for whoever does the real sandbox validation pass.
     const raw = err?.response?.data ?? err?.message ?? err;
+
+    // CONFIRMED IDEMPOTENCY RECOVERY 2026-09-19 (real sandbox testing, full test suite pass):
+    // a duplicate idempotency_id on a retried call does not transparently replay the original
+    // result -- Finix always 422s, with the original transfer's id recoverable from
+    // `err.response.data._embedded.errors[0].transfer`. Matched on that field being present (a
+    // stable structural signal), not the message text, since Finix could reword it. Without
+    // this, a caller retrying after a timed-out request (where Finix actually processed the
+    // charge) would wrongly see ok:false -- risk of double-charging the buyer with a fresh
+    // idempotency key, or showing a false decline. See claude_docs/feature-notes/
+    // finix-sandbox-smoke-test-results-2026-09-18.md, "Update (same session, fourth pass --
+    // full test suite)", "Idempotency-duplicate error shape".
+    const duplicateTransferId = err?.response?.data?._embedded?.errors?.[0]?.transfer;
+    if (typeof duplicateTransferId === 'string' && duplicateTransferId.length > 0) {
+      try {
+        const recovered = await client.get(`/transfers/${duplicateTransferId}`);
+        const recoveredData = recovered.data as any;
+        if (recoveredData?.id) {
+          if (recoveredData.state !== 'SUCCEEDED') {
+            return {
+              ok: false,
+              code: recoveredData.failure_code || 'TRANSFER_NOT_SUCCEEDED',
+              message: DECLINE_MESSAGE,
+              raw: recoveredData,
+            };
+          }
+          return {
+            ok: true,
+            transferId: recoveredData.id,
+            status: recoveredData.state || recoveredData.status || 'UNKNOWN',
+            raw: recoveredData,
+          };
+        }
+      } catch {
+        // Best-effort recovery only -- if the GET itself fails (network issue, unexpected id,
+        // etc.), fall through to the generic failure below rather than throwing.
+      }
+    }
+
     return {
       ok: false,
       code: 'FINIX_REQUEST_FAILED',
