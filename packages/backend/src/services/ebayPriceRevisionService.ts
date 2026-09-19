@@ -136,6 +136,12 @@ export async function reviseEbayOfferPrice(
       return { ok: false, reason: 'get-failed', detail: `HTTP ${getRes.status} ${bodyText.slice(0, 200)}` };
     }
     const offerBody = (await getRes.json()) as Record<string, unknown>;
+    // Diagnostic (2026-09-19): the Loy Norrix vinyl-record shipping-package-type
+    // rejection is a GET-then-PUT round-trip failure we haven't been able to see the
+    // literal shape of yet -- log exactly what eBay's GET returns for the packaging
+    // block so the next failure (if any) tells us precisely what's wrong instead of
+    // requiring another guess. Cheap and low-noise: one line per priced item per sync.
+    console.log(`[eBay PriceRevision] offer=${offerId} item=${itemId ?? 'n/a'} packageWeightAndSize=${JSON.stringify(offerBody.packageWeightAndSize ?? null)}`);
 
     // Scoped mutation: ONLY pricingSummary.price.value/currency (and, when repairing a
     // Best-Offer-threshold failure below, bestOfferTerms) change. Every other field on

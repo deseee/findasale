@@ -21,7 +21,7 @@ import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } fr
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
-import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast, getEbaySyncIssues } from '../controllers/platformStatsController';
+import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast, getEbaySyncIssues, retryEbaySync } from '../controllers/platformStatsController';
 import { startStandardMigration, getHubOwnerStripeStatus, initiateHubOwnerStripeOnboarding } from '../controllers/stripeConnectController';
 
 const router = Router();
@@ -115,6 +115,7 @@ router.get('/me/ebay-insertions-forecast', authenticate, getEbayInsertionsForeca
 // ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2, Dev Handoff Note #4:
 // list of currently-open eBay price sync issues for the platforms.tsx mini-panel.
 router.get('/me/ebay-sync-issues', authenticate, getEbaySyncIssues);
+router.post('/me/ebay-sync-issues/retry', authenticate, retryEbaySync);
 
 // Authenticated: get revenue analytics for the current organizer
 router.post('/me/stripe/start-standard-migration', authenticate, startStandardMigration);

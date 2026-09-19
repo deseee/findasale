@@ -91,7 +91,7 @@ interface EbayOffer {
 /**
  * Pull-sync eBay listings for a single organizer.
  */
-async function pullSyncForOrganizer(organizerId: string): Promise<void> {
+export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
   // Fetch organizer's AVAILABLE items that have been pushed to eBay
   const items = await prisma.item.findMany({
     where: {

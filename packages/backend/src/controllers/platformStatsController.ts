@@ -16,7 +16,7 @@ import { pushItemsToEbayQueueOnly } from './ebayController';
 import { computeEbayInsertionsForecast } from '../lib/ebayInsertionsForecast';
 import { getNextMonthStart } from '../lib/ebayInsertionsQuotaTracker';
 import { EBAY_FREE_INSERTIONS_CAP } from '../config/ebayInsertionLimits';
-import { SYNC_FAILURE_THRESHOLD_MS } from '../jobs/ebayListingSyncCron';
+import { SYNC_FAILURE_THRESHOLD_MS, pullSyncForOrganizer } from '../jobs/ebayListingSyncCron';
 
 // ─── Helper: resolve organizerId from authenticated user ──────────────────────
 
@@ -196,6 +196,32 @@ export async function getEbaySyncIssues(req: AuthRequest, res: Response): Promis
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[platformStats] getEbaySyncIssues error:', msg);
     return res.status(500).json({ message: 'Failed to compute eBay sync issues' });
+  }
+}
+
+// ─── POST /api/organizers/me/ebay-sync-issues/retry ──────────────────────────
+// On-demand retry of the same push-first sync step ebayListingSyncCron.ts runs
+// every 4 hours -- scoped to the calling organizer only, so an organizer can
+// verify a fix (or a manual repair, e.g. removing a bad eBay video attachment)
+// immediately instead of waiting for the next 2/6/10/14/18/22 UTC cron slot.
+// Self-service, own-account-only, idempotent (re-running just re-checks each
+// item's current state) -- no new privilege beyond the existing organizer auth.
+export async function retryEbaySync(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    if (!requireOrganizer(req, res)) return res;
+
+    const organizerId = await resolveOrganizerId(req);
+    if (!organizerId) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    await pullSyncForOrganizer(organizerId);
+
+    return res.json({ message: 'eBay sync retried' });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[platformStats] retryEbaySync error:', msg);
+    return res.status(500).json({ message: 'Failed to retry eBay sync' });
   }
 }
 
