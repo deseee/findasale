@@ -1126,7 +1126,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         // CSR fallback: used only when getStaticProps didn't return ogData
         sale ? (
           <Head>
-            <title>{sale.title} | FindA.Sale</title>
+            <title>{`${sale.title} | FindA.Sale`}</title>
             <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} key="canonical" />
             <meta name="description" content={`${displaySaleTypeLabel || 'Sale'} in ${sale.city}, ${sale.state}. Browse items and get directions on FindA.Sale.`} />
             <meta property="og:title" content={`${sale.title}. FindA.Sale`} />
@@ -2007,7 +2007,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       Add Your First Item
                     </Link>
                   ) : (
-                    user ? <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={false} /> : null
+                    user ? (
+                      <RemindMeButton saleId={sale.id} saleName={sale.title} disabled={false} />
+                    ) : (
+                      <Link href={`/login?redirect=${encodeURIComponent(`/sales/${sale.id}`)}`} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 text-white font-medium transition-colors">
+                        Sign in for a reminder
+                      </Link>
+                    )
                   )}
                 </div>
               ) : (() => {
