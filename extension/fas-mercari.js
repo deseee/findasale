@@ -2354,6 +2354,10 @@
   // run(), further below -- none of them have run yet at the point this is checked). Keyword and
   // exclude lists sourced verbatim from packages/backend/src/services/marketplaceEligibilityRules.ts
   // MERCARI rule (itself sourced from Mercari's own official Prohibited Items page).
+  // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+  // cross-marketplace-compliance-audit-2026-09-18.md, kept in sync verbatim with the same-day
+  // MERCARI backend registry edit). Deliberately did NOT add hazmat/battery/aerosol keywords --
+  // confirmed those are a Mercari SHIPPING-LABEL requirement, not a listing prohibition.
   const MERCARI_PROHIBITED_NAME_KEYWORDS = [
     'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'blade', 'explosive',
     'taser', 'stun gun', 'self defense',
@@ -2363,6 +2367,11 @@
     'unset diamond', 'gemstone', 'cryptocurrency', 'crypto', 'gift card', 'prepaid card',
     'counterfeit', 'replica', 'taxidermy', 'ivory', 'adult', 'pornographic', 'sex toy',
     'fetish', 'lottery ticket', 'pull tab', 'raffle',
+    'live animal', 'human body part', 'human material',
+    'account credential', 'login information', 'malware', 'virus', 'spyware',
+    'digital download', 'ebook', 'in-game item', 'dropship',
+    'stock certificate', 'bond certificate', 'insurance policy', 'warranty contract',
+    'mystery purchase', 'mod chip',
   ];
   // Any of these present anywhere in the haystack means the match is a false positive (e.g. a
   // 'kitchen knife' matches 'knife' but is not a weapon; a 'gold ring' matches 'gold' but is
@@ -2370,6 +2379,10 @@
   const MERCARI_PROHIBITED_EXCLUDE_KEYWORDS = [
     'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
     'ring', 'necklace', 'bracelet', 'earring', 'pendant', 'jewelry', 'jewellery', 'mounted',
+    // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- the backend
+    // MERCARI rule has carried these excludes since S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03,
+    // never ported here).
+    'gunmetal', 'bladerunner',
   ];
   function mercariRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();

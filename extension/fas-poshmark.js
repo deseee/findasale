@@ -363,9 +363,13 @@
       // Prohibited categories / unvetted electronics (backend rule, added S-CROSS-MARKETPLACE-
       // AUDIT): Poshmark's Electronics is a curated/vetted catalog per Poshmark's own 2021 policy
       // post, not a general secondhand-electronics marketplace.
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: added 'used sock' (v4.1
+      // policy also bans used socks, not just used underwear). Electronics blanket-block left
+      // AS-IS despite v4.1 listing it as "Restricted" not "Prohibited" -- Patrick's business
+      // decision, not an automatic code fix (see the backend rule's own comment).
       nameKeywords: [
         'food', 'opened beauty', 'used beauty', 'opened cosmetic', 'used cosmetic',
-        'used personal care', 'used underwear', 'counterfeit', 'replica', 'recalled',
+        'used personal care', 'used underwear', 'used sock', 'counterfeit', 'replica', 'recalled',
         'electronics', 'computer', 'laptop', 'television', 'appliance', 'printer', 'camera',
       ],
       excludeKeywords: ['sealed', 'unopened', 'new,', 'nwt', 'nwot'],
@@ -379,8 +383,26 @@
         'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'switchblade',
         'alcohol', 'liquor', 'wine', 'beer',
       ],
-      excludeKeywords: ['kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife'],
+      // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- the
+      // backend POSHMARK weapons/alcohol rule has carried a 'gunmetal' exclude since
+      // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03, never ported here).
+      excludeKeywords: ['kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife', 'gunmetal'],
       reason: 'Poshmark prohibits firearms, weapons, knives, ammunition, and alcohol (Prohibited Items Policy).',
+    },
+    // NEW RULE added S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+    // cross-marketplace-compliance-audit-2026-09-18.md), mirrors the new third POSHMARK
+    // backend rule verbatim: v4.1 policy (effective 2026-08-27) separately bans drugs/tobacco/
+    // paraphernalia, certain medical devices, hazardous materials, and endangered-animal
+    // products -- none of the rules above covered any of this.
+    {
+      nameKeywords: [
+        'drug', 'cannabis', 'hemp', 'cbd', 'paraphernalia', 'baby formula',
+        'medical device', 'contact lens', 'breast pump', 'pill press',
+        'hazardous material', 'aerosol', 'combustible', 'pesticide', 'radioactive',
+        'turtle shell', 'pangolin', 'big cat fur',
+      ],
+      excludeKeywords: [],
+      reason: 'Poshmark prohibits drugs/paraphernalia, certain medical devices, hazardous materials, and endangered-animal products (Prohibited Items Policy, v4.1).',
     },
   ];
   function poshmarkRestrictionReason(category, title) {

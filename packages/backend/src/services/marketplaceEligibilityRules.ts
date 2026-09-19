@@ -271,15 +271,29 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'CRAIGSLIST',
+    // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (companion pass to the
+    // Facebook-specific audit the same day, see claude_docs/audits/cross-marketplace-
+    // compliance-audit-2026-09-18.md) -- re-fetched craigslist.org/about/prohibited live.
+    // Added: gambling (lottery/raffle/slot machines), gift/ticket transfer-restricted items,
+    // government documents, burglary tools/altered serial numbers, stud service. Also widened
+    // 'hazmat'->'hazardous material' and 'narcotic'->'controlled substance' to match the
+    // policy's own broader phrasing. Deliberately SKIPPED: "undemilitarized military items"
+    // (no reliable way to keyword-detect demilitarized vs. not from title/category text --
+    // ordinary military-surplus/collectible items are common, legitimate estate-sale
+    // inventory) and "adulterated food/cosmetics"/"medical devices" (low volume/relevance for
+    // this business, not worth the false-positive surface).
     nameKeywords: [
       'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'gunpowder', 'firework', 'explosive',
       'stun gun', 'spear gun', 'taser',
-      'prescription', 'narcotic',
+      'prescription', 'narcotic', 'controlled substance',
       'alcohol', 'liquor', 'wine', 'beer', 'tobacco', 'cigarette', 'cigar',
-      'recalled', 'hazmat',
+      'recalled', 'hazmat', 'hazardous material',
       'ivory',
       'counterfeit', 'replica', 'pirated',
       'stolen',
+      'lottery ticket', 'raffle ticket', 'slot machine', 'gambling',
+      'gift card', 'government document', 'birth certificate',
+      'burglary tool', 'altered serial number', 'stud service',
     ],
     // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
     // same bare-'gun'-substring false positive applies here (e.g. "...Gunmetal..." golf clubs).
@@ -302,6 +316,14 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'GUMTREE_AU',
+    // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+    // cross-marketplace-compliance-audit-2026-09-18.md) -- re-fetched help.gumtree.com.au's
+    // General posting rules live. Added: gambling, supplement/vitamin (mirrors FACEBOOK's
+    // supplement rule), recalled products, used/rebuilt/mercury batteries, electric dog
+    // training/shock collars, nitrous-oxide slang terms. Deliberately SKIPPED as low-relevance
+    // for an estate-sale platform: single-use plastics, MLM merchandise, dating/massage
+    // services, stocks/securities/crypto -- real Gumtree restrictions, but not worth the
+    // false-positive surface for this business's inventory mix.
     nameKeywords: [
       'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'paintball gun', 'gel blaster',
       'spear gun', 'tear gas', 'taser', 'stun gun', 'knife', 'switchblade',
@@ -313,7 +335,11 @@ const RULES: EligibilityRule[] = [
       'stolen',
       'hazmat', 'narcotic', 'prescription',
       'used cosmetic', 'used underwear',
-      'nitrous oxide',
+      'nitrous oxide', 'nang', 'cream charger',
+      'lottery', 'sweepstakes', 'slot machine', 'gambling',
+      'supplement', 'vitamin', 'recalled',
+      'used battery', 'rebuilt battery', 'mercury battery',
+      'shock collar', 'training collar',
     ],
     // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
     // same bare-'gun'-substring false positive applies here.
@@ -344,6 +370,12 @@ const RULES: EligibilityRule[] = [
       // no other keyword match. Added the missing term plus its common sibling, both obviously
       // fashion/apparel and equally likely to be missed the same way.
       'tracksuit', 'sweatpant',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: real Grailed sub-categories
+      // (grailed.com taxonomy, confirmed live) with no keyword match at all -- these are
+      // false-NEGATIVE fixes (wrongly hiding legitimate fashion listings), not a compliance
+      // risk, same class of bug as the tracksuit fix above.
+      'short', 'shorts', 'blazer', 'tuxedo', 'vest', 'polo', 'tank', 'jersey', 'legging',
+      'tie', 'glasses', 'slip-on',
     ],
     // BUG FIX 2026-09-05, two rounds (Patrick-reported live, re-tested each time against real
     // items): plain substring matching let several nameKeywords above false-positive on clearly
@@ -374,6 +406,9 @@ const RULES: EligibilityRule[] = [
       'clothing rack', 'garment rack', // retail fixtures -- not clothing itself
       'cooler', // "Backpack Cooler" -- a cooler, not a fashion backpack
       'training aid', // "Swim Cuffs with Belts" -- swim gear, not a fashion belt
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: same false-positive class as
+      // the fixes above, applied to the new 'vest'-adjacent keyword 'belt' risk noted this audit.
+      'belt sander', 'conveyor belt', 'seatbelt',
     ],
     reason: 'Grailed is a fashion/streetwear-only marketplace -- this item’s category doesn’t look like apparel, footwear, or accessories.',
   },
@@ -387,9 +422,19 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'POSHMARK',
+    // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+    // cross-marketplace-compliance-audit-2026-09-18.md): re-fetched Poshmark's Prohibited Items
+    // Policy live -- current version is v4.1, "Effective August 27 2026", which POSTDATES this
+    // rule's original 2026-08-19 confirmation. That newer version lists Electronics under
+    // "Restricted Items" (allowed if factory-reset), NOT "Prohibited" -- our blanket block below
+    // is stricter than the current written policy. Deliberately LEFT AS-IS: this was Patrick's
+    // original conservative choice (Poshmark's Electronics is a curated/vetted catalog per their
+    // own 2021 policy post, not a general secondhand-electronics category), and relaxing it is a
+    // business decision for Patrick, not an automatic code fix. Added 'used sock' (policy also
+    // bans used socks, not just used underwear).
     nameKeywords: [
       'food', 'opened beauty', 'used beauty', 'opened cosmetic', 'used cosmetic',
-      'used personal care', 'used underwear', 'counterfeit', 'replica', 'recalled',
+      'used personal care', 'used underwear', 'used sock', 'counterfeit', 'replica', 'recalled',
       // Conservative default -- Poshmark's Electronics is a curated/vetted catalog, not general
       // secondhand electronics (see comment above).
       'electronics', 'computer', 'laptop', 'television', 'appliance', 'printer', 'camera',
@@ -408,6 +453,12 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'POSHMARK',
+    // FLAGGED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: Poshmark's current v4.1 policy
+    // text states the knife exception narrowly as "table knives" only -- the excludeKeywords
+    // below (kitchen/cutlery/multitool/butter knife) are broader than that stated exception and
+    // may be over-permissive. Left AS-IS pending Patrick's decision (tightening this risks
+    // blocking legitimate kitchenware listings that may in practice be fine) -- not changed by
+    // this dispatch.
     nameKeywords: [
       'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'switchblade',
       'alcohol', 'liquor', 'wine', 'beer',
@@ -418,6 +469,24 @@ const RULES: EligibilityRule[] = [
       'gunmetal',
     ],
     reason: 'Poshmark prohibits firearms, weapons, knives, ammunition, and alcohol (Prohibited Items Policy).',
+  },
+
+  // ---- POSHMARK DRUGS/HAZMAT/MEDICAL/ANIMAL PRODUCTS (added S-CROSS-MARKETPLACE-COMPLIANCE-
+  // AUDIT-2026-09-18, see claude_docs/audits/cross-marketplace-compliance-audit-2026-09-18.md) --
+  // v4.1 policy (poshmark.com/prohibited_items_policy, effective 2026-08-27) separately bans
+  // drugs/tobacco/paraphernalia, certain medical devices, hazardous materials, and endangered-
+  // animal-derived products -- none of which the rules above cover at all. Split into its own
+  // rule (same pattern as the weapons/alcohol split above) so the shown reason is accurate.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'POSHMARK',
+    nameKeywords: [
+      'drug', 'cannabis', 'hemp', 'cbd', 'paraphernalia', 'baby formula',
+      'medical device', 'contact lens', 'breast pump', 'pill press',
+      'hazardous material', 'aerosol', 'combustible', 'pesticide', 'radioactive',
+      'turtle shell', 'pangolin', 'big cat fur',
+    ],
+    reason: 'Poshmark prohibits drugs/paraphernalia, certain medical devices, hazardous materials, and endangered-animal products (Prohibited Items Policy, v4.1).',
   },
 
   // ---- MERCARI -- broadest of the four (general marketplace). Blocklist sourced directly from
@@ -441,6 +510,19 @@ const RULES: EligibilityRule[] = [
       'unset diamond', 'gemstone', 'cryptocurrency', 'crypto', 'gift card', 'prepaid card',
       'counterfeit', 'replica', 'taxidermy', 'ivory', 'adult', 'pornographic', 'sex toy',
       'fetish', 'lottery ticket', 'pull tab', 'raffle',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+      // cross-marketplace-compliance-audit-2026-09-18.md) -- re-fetched Mercari's Prohibited
+      // Items page live. Deliberately did NOT add hazmat/battery/aerosol/flammable-liquid
+      // keywords -- confirmed those are a Mercari SHIPPING-LABEL requirement, not a listing
+      // prohibition (items ARE sellable with the right hazmat shipping label); adding them here
+      // would wrongly block sellable inventory. Used specific phrases ("stock certificate" not
+      // bare "security", "warranty contract" not bare "warranty") to avoid false-positiving on
+      // common resale items like security cameras/systems or extended-warranty paperwork.
+      'live animal', 'human body part', 'human material',
+      'account credential', 'login information', 'malware', 'virus', 'spyware',
+      'digital download', 'ebook', 'in-game item', 'dropship',
+      'stock certificate', 'bond certificate', 'insurance policy', 'warranty contract',
+      'mystery purchase', 'mod chip',
     ],
     excludeKeywords: [
       'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
@@ -468,10 +550,19 @@ const RULES: EligibilityRule[] = [
     nameKeywords: [
       'hazmat', 'food', 'drink', 'beverage',
       'medicine', 'medicinal', 'supplement', 'cosmetic', 'sanitary', 'tampon', 'recalled',
-      'counterfeit', 'replica', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
-      'fur', 'ivory', 'reptile skin', 'vape', 'e-cigarette', 'fetish', 'furniture',
+      'counterfeit', 'replica', 'bootleg', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
+      'fur', 'ivory', 'reptile skin', 'shell', 'vape', 'e-cigarette', 'fetish', 'furniture',
       // Confirmed on Vinted's own page this session, not previously covered:
       'cycling helmet', 'safety harness', 'heated tobacco',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+      // cross-marketplace-compliance-audit-2026-09-18.md): archaeological/cultural-heritage
+      // artifacts, cleaning chemicals, used piercings, live animals, and stolen/blocked
+      // electronics devices -- all confirmed on Vinted's current "Items not allowed" page with
+      // zero prior keyword coverage. NOTE: the plain 'furniture' keyword above is technically
+      // broader than Vinted's real "adult furniture only" ban, but left as-is -- Vinted has no
+      // general furniture category to begin with, so this is moot in practice.
+      'archaeological artifact', 'cultural heritage artifact', 'detergent', 'cleaning chemical',
+      'used piercing', 'live animal', 'jailbroken', 'carrier blocked', 'imei blocked',
       // 'musical instrument' REMOVED S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 -- it matched
       // FindA.Sale's own umbrella category label "Musical Instruments & Gear" as a substring
       // ("instrument" inside "instruments"), so it blocked the ENTIRE category including gear/
@@ -489,6 +580,11 @@ const RULES: EligibilityRule[] = [
       // because 'tube' wasn't excluded (its "Quarter" sibling escaped only by luck, via a
       // differently-mapped category "Holders" that happened to hit the existing 'holder' exclude).
       'tube', 'capsule', 'slab', 'flip', 'display', 'mount', 'folder', 'box', 'organizer', 'storage',
+      // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: Vinted explicitly allows NEW
+      // water filter cartridges (only used/refrigerant-adjacent ones are banned) -- excluded here
+      // rather than added as a block. Also excluding common jewelry/craft uses of 'shell' (the
+      // new animal-product keyword added below) so seashell jewelry/decor isn't wrongly caught.
+      'water filter', 'seashell', 'shell necklace', 'shell jewelry',
     ],
     reason: 'This category isn’t allowed on Vinted (Items Not Allowed policy).',
   },

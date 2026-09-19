@@ -2460,14 +2460,36 @@
   // (advances the queue without marking it listed, so it stays available for other marketplaces)
   // instead of proceeding into run()/fillListing(). Vinted is unusually strict on rule 2: it bans
   // even ordinary kitchen knives, unlike every other marketplace in this codebase.
+  // BONUS FIX found during the 2026-09-18 mirror-sync pass: this file's own 'musical
+  // instrument' keyword was STALE -- it was removed from the backend VINTED general rule back
+  // on S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 (it matched FindA.Sale's own umbrella
+  // category label "Musical Instruments & Gear" as a substring, wrongly blocking 11 of 13 real
+  // gear/accessory items live-queried that session) and replaced with a dedicated, narrower
+  // VINTED MUSICAL INSTRUMENTS rule -- but that replacement was never ported to this content
+  // script, so the confirmed live bug was still active here. Removed 'musical instrument'
+  // below and added the dedicated rule as its own entry in the `rules` array further down.
+  // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+  // cross-marketplace-compliance-audit-2026-09-18.md, kept in sync verbatim with the same-day
+  // VINTED backend registry edit): added bootleg, shell, archaeological/cultural-heritage
+  // artifact, detergent, used piercing, live animal, and jailbroken/carrier-blocked keywords.
   const VINTED_NOT_ALLOWED_NAME_KEYWORDS = [
     'hazmat', 'food', 'drink', 'beverage',
     'medicine', 'medicinal', 'supplement', 'cosmetic', 'sanitary', 'tampon', 'recalled',
-    'counterfeit', 'replica', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
-    'fur', 'ivory', 'reptile skin', 'vape', 'e-cigarette', 'fetish', 'furniture',
-    'musical instrument', 'cycling helmet', 'safety harness', 'heated tobacco',
+    'counterfeit', 'replica', 'bootleg', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
+    'fur', 'ivory', 'reptile skin', 'shell', 'vape', 'e-cigarette', 'fetish', 'furniture',
+    'cycling helmet', 'safety harness', 'heated tobacco',
+    'archaeological artifact', 'cultural heritage artifact', 'detergent', 'cleaning chemical',
+    'used piercing', 'live animal', 'jailbroken', 'carrier blocked', 'imei blocked',
   ];
-  const VINTED_NOT_ALLOWED_EXCLUDE_KEYWORDS = ['sealed', 'unopened', 'unused', 'new,', 'album', 'holder', 'case', 'sleeve'];
+  // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- the backend
+  // VINTED general rule's excludeKeywords gained 'tube'/'capsule'/'slab'/'flip'/'display'/
+  // 'mount'/'folder'/'box'/'organizer'/'storage' back on S-EXT-ELIGIBILITY-SUBSTRING-FIX-
+  // 2026-09-03, never ported here) plus today's new water-filter/seashell excludes.
+  const VINTED_NOT_ALLOWED_EXCLUDE_KEYWORDS = [
+    'sealed', 'unopened', 'unused', 'new,', 'album', 'holder', 'case', 'sleeve',
+    'tube', 'capsule', 'slab', 'flip', 'display', 'mount', 'folder', 'box', 'organizer', 'storage',
+    'water filter', 'seashell', 'shell necklace', 'shell jewelry',
+  ];
   const VINTED_NOT_ALLOWED_REASON = "This category isn't allowed on Vinted (Items Not Allowed policy).";
   const VINTED_WEAPONS_NAME_KEYWORDS = [
     'knife', 'blade', 'dagger', 'sword', 'bayonet', 'machete', 'axe', 'chainsaw',
@@ -2476,13 +2498,32 @@
     'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'explosive',
     'taser', 'stun gun', 'nunchuck', 'nunchaku', 'baton', 'brass knuckle', 'pepper spray',
   ];
-  const VINTED_WEAPONS_EXCLUDE_KEYWORDS = ['butter knife', 'table knife', 'electric razor', 'cartridge razor'];
+  // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- the backend
+  // VINTED weapons rule has carried these excludes since S-EXT-ELIGIBILITY-SUBSTRING-FIX-
+  // 2026-09-03, never ported here).
+  const VINTED_WEAPONS_EXCLUDE_KEYWORDS = ['butter knife', 'table knife', 'electric razor', 'cartridge razor', 'gunmetal', 'bladerunner'];
   const VINTED_WEAPONS_REASON = 'Vinted prohibits all sharp knives and bladed tools with a pointed tip (including kitchen knives), plus firearms, ammunition, and other weapons (Items Not Allowed policy). Only dull/rounded table knives and sealed electric or cartridge razors are allowed.';
+  // BONUS FIX found during the 2026-09-18 mirror-sync pass: dedicated MUSICAL INSTRUMENTS rule
+  // added to the backend registry on S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 but never
+  // ported here (see the removed stale 'musical instrument' keyword's comment above) --
+  // mirrored verbatim from marketplaceEligibilityRules.ts's VINTED MUSICAL INSTRUMENTS rule.
+  const VINTED_INSTRUMENTS_NAME_KEYWORDS = [
+    'guitar', 'piano', 'violin', 'viola', 'cello', 'double bass', 'upright bass',
+    'drum kit', 'drum set', 'saxophone', 'trumpet', 'trombone', 'clarinet', 'flute',
+    'banjo', 'ukulele', 'mandolin', 'harmonica', 'accordion', 'synthesizer', 'keyboard piano',
+    'harp', 'bagpipe', 'cornet', 'french horn', 'tuba', 'oboe', 'bassoon', 'xylophone',
+  ];
+  const VINTED_INSTRUMENTS_EXCLUDE_KEYWORDS = [
+    'strap', 'amplifier', 'combo amplifier', 'speaker', 'pickup', 'cable', 'tuner', 'case',
+    'pedal', 'effects', 'stand', 'string set', 'capo', 'gig bag', 'pedalboard', 'pedal board',
+  ];
+  const VINTED_INSTRUMENTS_REASON = 'Vinted does not allow listing musical instruments (Items Not Allowed policy).';
   function vintedRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
     const rules = [
       { nameKeywords: VINTED_NOT_ALLOWED_NAME_KEYWORDS, excludeKeywords: VINTED_NOT_ALLOWED_EXCLUDE_KEYWORDS, reason: VINTED_NOT_ALLOWED_REASON },
+      { nameKeywords: VINTED_INSTRUMENTS_NAME_KEYWORDS, excludeKeywords: VINTED_INSTRUMENTS_EXCLUDE_KEYWORDS, reason: VINTED_INSTRUMENTS_REASON },
       { nameKeywords: VINTED_WEAPONS_NAME_KEYWORDS, excludeKeywords: VINTED_WEAPONS_EXCLUDE_KEYWORDS, reason: VINTED_WEAPONS_REASON },
     ];
     for (const rule of rules) {

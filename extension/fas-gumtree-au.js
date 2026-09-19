@@ -46,6 +46,10 @@
   // list, Nov 2024. Unlike the Craigslist list, this one deliberately bans 'knife'/'switchblade'
   // outright with NO kitchen/culinary exclusion -- Gumtree's own policy text states no exception for
   // knives.
+  // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+  // cross-marketplace-compliance-audit-2026-09-18.md, kept in sync verbatim with the same-day
+  // GUMTREE_AU backend registry edit). Added gambling, supplement/vitamin, recalled, battery,
+  // and dog-training-collar keywords, plus nitrous-oxide slang terms.
   const GT_PROHIBITED_NAME_KEYWORDS = [
     'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'paintball gun', 'gel blaster',
     'spear gun', 'tear gas', 'taser', 'stun gun', 'knife', 'switchblade',
@@ -57,11 +61,21 @@
     'stolen',
     'hazmat', 'narcotic', 'prescription',
     'used cosmetic', 'used underwear',
-    'nitrous oxide',
+    'nitrous oxide', 'nang', 'cream charger',
+    'lottery', 'sweepstakes', 'slot machine', 'gambling',
+    'supplement', 'vitamin', 'recalled',
+    'used battery', 'rebuilt battery', 'mercury battery',
+    'shock collar', 'training collar',
   ];
+  // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- this file
+  // never had an excludeKeywords guard at all, unlike the backend GUMTREE_AU rule which has
+  // carried a 'gunmetal' exclude since S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03). Without
+  // this, a golf club titled e.g. "...Gunmetal Black" would be wrongly blocked here.
+  const GT_PROHIBITED_EXCLUDE_KEYWORDS = ['gunmetal'];
   function gumtreeAuRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
+    if (GT_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) return null;
     if (GT_PROHIBITED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Gumtree Australia does not allow this category of item (weapons including knives, alcohol/tobacco, drugs, counterfeit/replica goods, and several other restricted categories are prohibited).';
     }

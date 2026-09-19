@@ -92,6 +92,10 @@
   // the opposite default from the other platforms' blocklists (which pass through on empty data).
   // Runs as early as possible in start(), before any DOM interaction (no field filling, no
   // clicking) -- see start()'s own call site below.
+  // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+  // cross-marketplace-compliance-audit-2026-09-18.md, kept in sync verbatim with the same-day
+  // GRAILED backend registry edit): real grailed.com sub-categories with no prior keyword
+  // match -- false-NEGATIVE fixes, same class as the tracksuit fix above.
   const GRAILED_FASHION_KEYWORDS = [
     'clothing', 'apparel', 'shirt', 't-shirt', 'tee', 'pant', 'trouser', 'jean', 'denim',
     'jacket', 'coat', 'outerwear', 'dress', 'skirt', 'suit', 'sportswear', 'activewear',
@@ -99,6 +103,8 @@
     'sandal', 'bag', 'backpack', 'wallet', 'belt', 'accessory', 'accessories', 'jewelry', 'jewellery', 'watch',
     'sunglasses', 'hat', 'cap', 'beanie', 'scarf', 'scarves', 'glove', 'sock', 'underwear', 'swimwear',
     'romper', 'jumpsuit', 'tracksuit', 'sweatpant',
+    'short', 'shorts', 'blazer', 'tuxedo', 'vest', 'polo', 'tank', 'jersey', 'legging',
+    'tie', 'glasses', 'slip-on',
   ];
   // BUG FIX 2026-09-05 (Patrick-reported live against the popup's own eligibility check, same bug
   // ported here to keep this content-script gate in sync -- see this function's own header comment,
@@ -111,6 +117,9 @@
   // the full DB-confirmed incident list -- ported here verbatim so the two never drift apart again.
   const GRAILED_FASHION_EXCLUDE_KEYWORDS = [
     'push-fit', 'push to connect', 'clothing rack', 'garment rack', 'cooler', 'training aid',
+    // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: false-positive guard for the
+    // new 'vest'-adjacent 'belt' risk noted this audit (same class as the fixes above).
+    'belt sander', 'conveyor belt', 'seatbelt',
   ];
   function grailedHasWholeWordMatch(haystack, keyword) {
     const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

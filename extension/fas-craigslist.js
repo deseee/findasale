@@ -36,19 +36,36 @@
   // fas-content.js's own coin/weapon check) -- keyword lists sourced directly from
   // craigslist.org/about/prohibited, fetched live this session. Deliberately does NOT ban generic
   // knives/swords -- see the backend rule's own comment for why.
+  // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
+  // cross-marketplace-compliance-audit-2026-09-18.md and the same-day backend registry edit
+  // to marketplaceEligibilityRules.ts's CRAIGSLIST rule -- kept in sync with that rule
+  // verbatim). Added gambling/gift-ticket/government-document/burglary-tool/stud-service
+  // keywords and widened 'hazmat'/'narcotic' to also match the policy's own broader phrasing.
   const CL_PROHIBITED_NAME_KEYWORDS = [
     'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'gunpowder', 'firework', 'explosive',
     'stun gun', 'spear gun', 'taser',
-    'prescription', 'narcotic',
+    'prescription', 'narcotic', 'controlled substance',
     'alcohol', 'liquor', 'wine', 'beer', 'tobacco', 'cigarette', 'cigar',
-    'recalled', 'hazmat',
+    'recalled', 'hazmat', 'hazardous material',
     'ivory',
     'counterfeit', 'replica', 'pirated',
     'stolen',
+    'lottery ticket', 'raffle ticket', 'slot machine', 'gambling',
+    'gift card', 'government document', 'birth certificate',
+    'burglary tool', 'altered serial number', 'stud service',
   ];
+  // BONUS FIX found during the 2026-09-18 mirror-sync pass (not a new audit finding --
+  // pre-existing drift from S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03, which added a
+  // 'gunmetal' excludeKeywords guard to every other platform's backend rule and this file's
+  // own weapon-keyword check, but was never ported to this file specifically). Without this,
+  // a golf club titled e.g. "...Gunmetal Black" would be wrongly blocked here on Craigslist's
+  // content-script gate (bare 'gun' substring match) even though the backend registry already
+  // excludes it.
+  const CL_PROHIBITED_EXCLUDE_KEYWORDS = ['gunmetal'];
   function craigslistRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
+    if (CL_PROHIBITED_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) return null;
     if (CL_PROHIBITED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Craigslist does not allow this category of item (weapons, alcohol/tobacco, drugs, counterfeit/replica goods, and several other restricted categories are prohibited).';
     }
