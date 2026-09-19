@@ -6053,6 +6053,14 @@ model MarketplaceListingJob {
   // open product question, ADR-100 §7 Q1, currently placeholder constants). Null for
   // every other row (REMOVE rows, SKIPPED rows, and any row predating this migration).
   renewDueAt       DateTime?
+  // ADR-129 (2026-09-19): stamped when this row's platform is confirmed to show the item's
+  // CURRENT price -- either the content script confirms it updated a live listing, or (initial
+  // POST rows) it's set at creation time since a brand-new listing always carries the price it
+  // was just posted with. Mirrors Item.ebayPriceSyncedAt's role, but per (item, platform) job
+  // row instead of per-item, since these 6 platforms have no single "the" listing per item.
+  // Null or older than Item.priceUpdatedAt means this platform's live price has not caught up
+  // yet -- see getPriceSyncQueue (extensionController.ts).
+  priceSyncedAt    DateTime?
   createdAt        DateTime                  @default(now())
   updatedAt        DateTime                  @updatedAt
 

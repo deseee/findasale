@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -40,5 +40,10 @@ router.get('/pending-renewals', authenticate, requireOrganizer, requireTier('PRO
 // live on every call, no job rows, no claim/lock semantics. Same auth/tier gating as every other
 // route in this file.
 router.get('/autolist-queue', authenticate, requireOrganizer, requireTier('PRO'), getAutolistQueue);
+
+// ADR-129 (2026-09-19): price-sync detection for the 5 content-script-tier platforms ADR-086's
+// pending-updates/price-synced above doesn't cover (Facebook has its own). Same auth/tier gating.
+router.get('/price-sync-queue', authenticate, requireOrganizer, requireTier('PRO'), getPriceSyncQueue);
+router.post('/items/:id/price-synced-for-platform', authenticate, requireOrganizer, requireTier('PRO'), markItemPriceSyncedForPlatform);
 
 export default router;

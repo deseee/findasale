@@ -1918,3 +1918,142 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
 
   res.json({ ok: true, queues });
 };
+
+// FACEBOOK excluded -- see getPriceSyncQueue's doc comment for why it already has its own
+// dedicated ADR-086 mechanism above and isn't duplicated here.
+type PriceSyncPlatform = Exclude<AutoListPlatform, 'FACEBOOK'>;
+
+/**
+ * GET /api/extension/price-sync-queue -- ADR-129 (2026-09-19), Patrick: "ebay, facebook, and
+ * all other markets need to do things automatically ... no rollbacks -- fix the issues."
+ *
+ * DETECTS which already-listed items have a local price change (Item.priceUpdatedAt) that
+ * hasn't reached a given content-script-tier platform's live listing yet. Deliberately covers
+ * only the 5 platforms getPendingUpdates/markItemPriceSynced above does NOT already handle --
+ * Facebook already has its own dedicated ADR-086 detector (Item.marketplaceListedPrice, a
+ * single-column signal that only ever made sense for one platform). CRAIGSLIST, GUMTREE_AU,
+ * GRAILED, POSHMARK, MERCARI have no equivalent at all -- Craigslist/Gumtree AU only get an
+ * incidental, DELAYED price refresh as a side effect of their renewal repost cycle
+ * (autoRenewDueItems in background.js), not an immediate one, and Grailed/Poshmark/Mercari have
+ * no renewal automation either, so a markdown on an item live there could go stale indefinitely
+ * with nothing to ever notice. Reuses the exact same "latest MarketplaceListingJob row per
+ * item+platform wins" signal getAutolistQueue's isAlreadyListed already computes, generalized
+ * via the new priceSyncedAt column (per (item, platform) job row, not a single Item-level
+ * scalar, since these 5 platforms need to be tracked independently of each other and of
+ * Facebook) -- a platform needs a sync when its latest POST/POSTED row's priceSyncedAt is null
+ * or older than the item's priceUpdatedAt.
+ *
+ * Deliberately does NOT attempt to auto-edit the live listing -- that would mean driving each
+ * platform's own "edit my listing" DOM flow (a different, higher-risk flow than the initial-post
+ * automation these content scripts already do, and unverified against any live account this
+ * session had access to) -- same Phase-A-detection-only posture ADR-086 already established for
+ * Facebook, extended here rather than reinvented. background.js's poller merges this into
+ * chrome.storage.local and popup.js surfaces it as a plain "N items need a price update on X"
+ * notice so the organizer knows exactly what to go fix by hand until a verified Phase B ships.
+ */
+export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const emptyQueues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null }[]> = {
+    CRAIGSLIST: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
+  };
+
+  // Any item with a pending local price change -- not gated on the organizer's
+  // *AutoListEnabled toggles (unlike getAutolistQueue above), because this is about keeping an
+  // ALREADY-live listing honest, not about creating a new one the organizer never opted into.
+  const items = await prisma.item.findMany({
+    where: {
+      sale: { organizerId: organizer.id, deletedAt: null },
+      status: 'AVAILABLE',
+      priceUpdatedAt: { not: null },
+    },
+    take: 2000,
+    select: { id: true, title: true, price: true, priceUpdatedAt: true },
+  });
+
+  if (items.length === 0) {
+    res.json({ ok: true, queues: emptyQueues });
+    return;
+  }
+
+  const itemIds = items.map((i) => i.id);
+  const jobs = await prisma.marketplaceListingJob.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, priceSyncedAt: true },
+  });
+  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; priceSyncedAt: Date | null }>();
+  for (const j of jobs) {
+    const key = `${j.itemId}:${j.platform}`;
+    const existing = latestByItemPlatform.get(key);
+    if (!existing || j.createdAt > existing.createdAt) {
+      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, priceSyncedAt: j.priceSyncedAt });
+    }
+  }
+
+  const PRICE_SYNC_PLATFORMS: PriceSyncPlatform[] = ['CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI'];
+  const queues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null }[]> = {
+    CRAIGSLIST: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
+  };
+
+  for (const it of items) {
+    for (const platform of PRICE_SYNC_PLATFORMS) {
+      const latest = latestByItemPlatform.get(`${it.id}:${platform}`);
+      const isLive = !!latest && latest.action === 'POST' && latest.status === 'POSTED';
+      if (!isLive) continue;
+      const needsSync = latest!.priceSyncedAt == null || (it.priceUpdatedAt != null && latest!.priceSyncedAt < it.priceUpdatedAt);
+      if (!needsSync) continue;
+      queues[platform].push({ id: it.id, title: it.title, price: it.price != null ? Number(it.price.toFixed(2)) : null });
+    }
+  }
+
+  res.json({ ok: true, queues });
+};
+
+/**
+ * POST /api/extension/items/:id/price-synced-for-platform -- content-script (or, for now, the
+ * organizer manually) confirms a SPECIFIC platform's live listing now matches Item.price.
+ * Separate route/name from ADR-086's existing markItemPriceSynced (Facebook-only, no platform
+ * param, writes Item.marketplaceListedPrice) -- this one requires an explicit platform and
+ * writes to MarketplaceListingJob.priceSyncedAt instead, per getPriceSyncQueue's doc comment.
+ * Idempotent -- calling this when there's nothing to sync (no live job for that pair) is a 404,
+ * not an error to retry around.
+ */
+const PRICE_SYNC_FOR_PLATFORM_PLATFORMS: PriceSyncPlatform[] = ['CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI'];
+
+export const markItemPriceSyncedForPlatform = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  // Scoped to this endpoint's own 5 platforms, not the broader VALID_LISTING_PLATFORMS --
+  // FACEBOOK has its own dedicated markItemPriceSynced above, and VINTED is excluded from
+  // every auto-feature per the standing ToS decision. A FACEBOOK/VINTED value here is a caller
+  // bug, not a valid request.
+  const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : null;
+  if (!platformRaw || !(PRICE_SYNC_FOR_PLATFORM_PLATFORMS as string[]).includes(platformRaw)) {
+    res.status(400).json({ message: 'A valid platform (CRAIGSLIST, GUMTREE_AU, GRAILED, POSHMARK, or MERCARI) is required' });
+    return;
+  }
+  const platform = platformRaw as PriceSyncPlatform;
+
+  const latest = await prisma.marketplaceListingJob.findFirst({
+    where: { itemId, platform, action: 'POST', status: 'POSTED' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (!latest) { res.status(404).json({ message: 'No live listing found for this item on that platform' }); return; }
+
+  await prisma.marketplaceListingJob.update({
+    where: { id: latest.id },
+    data: { priceSyncedAt: new Date() },
+  });
+  res.json({ ok: true });
+};

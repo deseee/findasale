@@ -1,0 +1,16 @@
+-- ADR-129 -- price-sync detection for the 6 extension-tier marketplaces (2026-09-19)
+--   claude_docs/feature-notes/ADR-129-extension-tier-price-sync-detection.md
+--
+-- WHY: propagateMarkdownPriceToMarketplaces only ever pushed a markdown price to eBay,
+-- Discogs, and Reverb -- the only 3 platforms FindA.Sale has a server-side write API for.
+-- Craigslist/Facebook/Gumtree AU/Grailed/Poshmark/Mercari are content-script (extension) tier:
+-- there is no API call to push a price to, and no existing column anywhere tracks whether a
+-- given platform's live listing still shows the item's current price. This migration adds the
+-- minimum column needed to DETECT the gap (a new GET /extension/price-sync-queue reads it);
+-- closing the gap (actually editing a live listing's price on each platform) is a separate,
+-- not-yet-built follow-up that needs live per-platform DOM verification before it ships.
+--
+-- SAFETY: additive only. No DROP, no ALTER of an existing column, no backfill, no data
+-- movement. Nullable with no default -- same "fast default"-free shape as
+-- 20260919000000_adr128_ebay_sync_state's nullable columns on this same table's sibling, Item.
+ALTER TABLE "MarketplaceListingJob" ADD COLUMN "priceSyncedAt" TIMESTAMP(3);

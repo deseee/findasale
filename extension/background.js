@@ -437,6 +437,40 @@ async function checkPendingUpdates() {
   return 'notified:' + items.length;
 }
 
+// ---- Price-sync detection for the other 5 content-script platforms (ADR-129 -- 2026-09-19) ----
+// Same Phase-A "detect + notify, never guess a live-edit DOM flow" posture ADR-086 established
+// for Facebook above (checkPendingUpdates) -- extended here to CRAIGSLIST/GUMTREE_AU/GRAILED/
+// POSHMARK/MERCARI via the new GET /extension/price-sync-queue (backend tracks readiness
+// per-platform via MarketplaceListingJob.priceSyncedAt, not a single Item-level column, since
+// these need to be independent of each other and of Facebook's own existing tracking). Folded
+// into the SAME FAS_REMOVAL_ALARM tick as checkPendingUpdates, not a new poller -- same reasoning
+// ADR-086 already gave for doing that with Facebook's own check.
+async function checkPriceSyncQueue() {
+  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  if (fasAutoRemoveMode === 'off') return 'off';
+  const resp = await apiFetch('/extension/price-sync-queue');
+  if (!resp.ok) return 'error:' + (resp.error || resp.status);
+  const queues = (resp.data && resp.data.queues) || {};
+  const PLATFORM_LABELS = { CRAIGSLIST: 'Craigslist', GUMTREE_AU: 'Gumtree Australia', GRAILED: 'Grailed', POSHMARK: 'Poshmark', MERCARI: 'Mercari' };
+  const outcomes = [];
+  for (const platform of Object.keys(PLATFORM_LABELS)) {
+    const items = queues[platform];
+    if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
+    const label = PLATFORM_LABELS[platform];
+    chrome.notifications.create('fasPriceSyncQueue_' + platform, {
+      type: 'basic',
+      iconUrl: 'icon128.png',
+      title: 'FindA.Sale',
+      message: items.length === 1
+        ? '1 item\'s price changed on FindA.Sale -- update it on ' + label + ' too.'
+        : items.length + ' items\' prices changed on FindA.Sale -- update them on ' + label + ' too.',
+      priority: 1
+    });
+    outcomes.push(platform + ':notified_' + items.length);
+  }
+  return outcomes.join(',') || 'no_platforms';
+}
+
 // (2026-07-26) Items the backend has given up retrying (see MAX_REMOVAL_SKIP_ATTEMPTS in
 // extensionController.ts) come back separately as needsManualReview instead of items -- notify
 // about them ONCE per distinct set, not every ~20-min cycle, so a permanently-unmatchable item
@@ -1328,11 +1362,13 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   const removalOutcome = await checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e));
   const independentSoldCheckOutcome = await checkReverseSoldDetectionIndependently().catch((e) => 'error:' + String((e && e.message) || e));
   const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
+  const priceSyncOutcome = await checkPriceSyncQueue().catch((e) => 'error:' + String((e && e.message) || e));
   return chrome.storage.local.set({
     fasLastAlarmFiredAt: Date.now(),
     fasLastAlarmRemovalOutcome: removalOutcome,
     fasLastAlarmUpdateOutcome: updateOutcome,
-    fasLastAlarmIndependentSoldCheckOutcome: independentSoldCheckOutcome
+    fasLastAlarmIndependentSoldCheckOutcome: independentSoldCheckOutcome,
+    fasLastAlarmPriceSyncOutcome: priceSyncOutcome
   });
 });
 
