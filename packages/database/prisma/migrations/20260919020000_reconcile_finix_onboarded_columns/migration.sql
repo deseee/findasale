@@ -1,1 +1,12 @@
-LS0gUmVjb25jaWxlIHNjaGVtYSBkcmlmdDogZmluaXhPbmJvYXJkZWQgY29sdW1ucyBleGlzdCBpbiBzY2hlbWEucHJpc21hIChhbmQgaW4KLS0gcHJvZHVjdGlvbiwgYXBwbGllZCBvdXQtb2YtYmFuZCBwcmV2aW91c2x5KSBidXQgaGFkIG5vIGNvcnJlc3BvbmRpbmcgbWlncmF0aW9uCi0tIGZpbGUsIHNvIGBwcmlzbWEgbWlncmF0ZSBkZXBsb3lgIGFnYWluc3QgYSBmcmVzaCBkYXRhYmFzZSAoZS5nLiBDSSdzIHRlc3QgREIpCi0tIG5ldmVyIGNyZWF0ZWQgdGhlbSwgY2F1c2luZyBzdHJpcGUuZTJlLnRlc3QudHMgdG8gZmFpbCB3aXRoICJjb2x1bW4gZmluaXhPbmJvYXJkZWQKLS0gZG9lcyBub3QgZXhpc3QiIChDSSBUeXBlY2hlY2sgJiBUZXN0cyBydW4gMzU0MTg5NDgxMjUsIDIwMjYtMDktMTkpLiBBdXRvLWZpeGVkCi0tIGJ5IHRoZSBmaW5kYXNhbGUtY2ktc2VudHJ5LWhlYWx0aCBzY2hlZHVsZWQgdGFzay4gSUYgTk9UIEVYSVNUUyBtYWtlcyB0aGlzIHNhZmUKLS0gdG8gcnVuIGFnYWluc3QgcHJvZHVjdGlvbiwgd2hlcmUgdGhlIGNvbHVtbnMgYWxyZWFkeSBleGlzdCAoY29uZmlybWVkIHZpYSBkaXJlY3QKLS0gcXVlcnk6IGFsbCB0aHJlZSBhcmUgYm9vbGVhbiBOT1QgTlVMTCBERUZBVUxUIGZhbHNlKS4KCkFMVEVSIFRBQkxFICJPcmdhbml6ZXIiIEFERCBDT0xVTU4gSUYgTk9UIEVYSVNUUyAiZmluaXhPbmJvYXJkZWQiIEJPT0xFQU4gTk9UIE5VTEwgREVGQVVMVCBmYWxzZTsKQUxURVIgVEFCTEUgIkNvbnNpZ25vciIgQUREIENPTFVNTiBJRiBOT1QgRVhJU1RTICJmaW5peE9uYm9hcmRlZCIgQk9PTEVBTiBOT1QgTlVMTCBERUZBVUxUIGZhbHNlOwpBTFRFUiBUQUJMRSAiVmVuZG9yQm9vdGgiIEFERCBDT0xVTU4gSUYgTk9UIEVYSVNUUyAiZmluaXhPbmJvYXJkZWQiIEJPT0xFQU4gTk9UIE5VTEwgREVGQVVMVCBmYWxzZTsK
+-- Reconcile schema drift: finixOnboarded columns exist in schema.prisma (and in
+-- production, applied out-of-band previously) but had no corresponding migration
+-- file, so `prisma migrate deploy` against a fresh database (e.g. CI's test DB)
+-- never created them, causing stripe.e2e.test.ts to fail with "column finixOnboarded
+-- does not exist" (CI Typecheck & Tests run 35418948125, 2026-09-19). Auto-fixed
+-- by the findasale-ci-sentry-health scheduled task. IF NOT EXISTS makes this safe
+-- to run against production, where the columns already exist (confirmed via direct
+-- query: all three are boolean NOT NULL DEFAULT false).
+
+ALTER TABLE "Organizer" ADD COLUMN IF NOT EXISTS "finixOnboarded" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Consignor" ADD COLUMN IF NOT EXISTS "finixOnboarded" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "VendorBooth" ADD COLUMN IF NOT EXISTS "finixOnboarded" BOOLEAN NOT NULL DEFAULT false;
