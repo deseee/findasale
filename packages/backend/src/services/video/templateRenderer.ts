@@ -6,10 +6,15 @@
  * per-clip ClipAnalysis persisted). `renderBatch(batchId)`:
  *   1. Loads the ASSEMBLING batch + its analyzed FootageAssets + the selected
  *      Template (templates/index.ts).
+ *   1a. Suppresses duplicate clips (e.g. a Windows copy-paste "<name> (2).mp4"
+ *      re-upload of the same take) before slot-fill ever sees them.
  *   2. Runs SLOT-FILL (ADR-080 §9.2): maps each ClipAnalysis to the template's
- *      ordered SlotSpecs by role + ordering hints; handles missing/extra clips
- *      gracefully; fails loud (NEEDS_INPUT, one question) on a missing REQUIRED,
- *      non-synthesizable slot — never ships a blank scene.
+ *      ordered SlotSpecs by role + ordering hints; when more than one surviving
+ *      clip can legally fill a slot, deterministically picks the best take
+ *      (roleConfidence -> duration fit -> transcript length -> upload order);
+ *      handles missing/extra clips gracefully; fails loud (NEEDS_INPUT, one
+ *      question) on a missing REQUIRED, non-synthesizable slot — never ships a
+ *      blank scene.
  *   3. Assembles a 9:16 vertical MP4 via ffmpeg with the template's polish rules:
  *      ordered clips scaled to the vertical frame, animated on-screen captions
  *      from each clip's OCR text, price-pop overlays on PRICE_REVEAL finds, a
@@ -273,6 +278,125 @@ async function buildCtaCard(destPath: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// TASK (a) -- duplicate suppression, run before slot-fill so ADR-080 §9.2 never
+// sees a re-uploaded copy of a take it already has. Real incident this guards
+// against (batch cmtusdrov001djrsvh5wp40pt): Patrick's Windows copy-paste
+// duplicate "A001_09081353_C040 (2).mp4" reached R2 as its own key and its own
+// FootageAsset -- byte-identical durationMs and a character-identical
+// transcript to the original "A001_09081353_C040.mp4". Conservative by design:
+// duration alone never collapses two clips (two genuinely different takes can
+// share a length by coincidence) -- a drop requires the filename copy-suffix
+// PLUS at least one content signal, or BOTH content signals (duration AND
+// transcript) together. This is why four deliberate alternate hook takes with
+// very similar wording (durations 9.2s / 10.6s / 15.6s / 73.9s apart) are never
+// flagged as duplicates of each other -- their durations aren't near-identical.
+// ---------------------------------------------------------------------------
+
+const DUPLICATE_DURATION_ABS_TOLERANCE_MS = 300;
+const DUPLICATE_DURATION_REL_TOLERANCE = 0.01; // 1% of the longer clip's duration
+const DUPLICATE_TRANSCRIPT_SIMILARITY_THRESHOLD = 0.92;
+
+interface DuplicateDrop {
+  dropped: ClipAnalysis;
+  keptAsDuplicateOf: ClipAnalysis;
+  reason: string;
+}
+
+function normalizeTranscript(t: string | null | undefined): string {
+  return (t || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Cheap character-bigram Dice coefficient — good enough to catch ASR-jitter or
+ *  punctuation-only differences between two transcripts of the SAME take,
+ *  without pulling in a fuzzy-match dependency for a handful of clips per batch. */
+function transcriptSimilarity(a: string, b: string): number {
+  const na = normalizeTranscript(a);
+  const nb = normalizeTranscript(b);
+  if (!na && !nb) return 1;
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const bigrams = (s: string): Map<string, number> => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < s.length - 1; i++) {
+      const bg = s.slice(i, i + 2);
+      m.set(bg, (m.get(bg) ?? 0) + 1);
+    }
+    return m;
+  };
+  const ba = bigrams(na);
+  const bb = bigrams(nb);
+  let intersection = 0;
+  for (const [bg, count] of ba) {
+    const other = bb.get(bg);
+    if (other) intersection += Math.min(count, other);
+  }
+  const total = [...ba.values()].reduce((s, c) => s + c, 0) + [...bb.values()].reduce((s, c) => s + c, 0);
+  return total === 0 ? 1 : (2 * intersection) / total;
+}
+
+function durationsNearIdentical(a: number, b: number): boolean {
+  if (a <= 0 || b <= 0) return false;
+  const diff = Math.abs(a - b);
+  const tol = Math.max(DUPLICATE_DURATION_ABS_TOLERANCE_MS, DUPLICATE_DURATION_REL_TOLERANCE * Math.max(a, b));
+  return diff <= tol;
+}
+
+/** Basename (no extension) of an r2Key's last path segment, e.g.
+ *  ".../A001_09081353_C040 (2).mp4" -> "A001_09081353_C040 (2)". */
+function r2KeyBasename(r2Key: string): string {
+  const last = r2Key.split('/').pop() ?? r2Key;
+  const dot = last.lastIndexOf('.');
+  return dot > 0 ? last.slice(0, dot) : last;
+}
+
+/** True when `candidateBase` is exactly `originalBase` plus a Windows
+ *  copy-paste suffix -- "name (2)", "name (3)", etc. */
+function isCopySuffixOf(candidateBase: string, originalBase: string): boolean {
+  const m = candidateBase.match(/^(.*) \((\d+)\)$/);
+  return m ? m[1] === originalBase : false;
+}
+
+/** Drops near-duplicate re-uploads before slot-fill, keeping the earliest
+ *  created member of any duplicate cluster. `analyses` must already be in
+ *  createdAt-ascending order (renderBatch loads FootageAsset orderBy createdAt
+ *  asc), so the first already-kept clip a later one matches IS the earliest. */
+function suppressDuplicateAssets(analyses: ClipAnalysis[]): { kept: ClipAnalysis[]; drops: DuplicateDrop[] } {
+  const kept: ClipAnalysis[] = [];
+  const drops: DuplicateDrop[] = [];
+
+  for (const candidate of analyses) {
+    const match = kept.find((existing) => {
+      const durationMatch = durationsNearIdentical(candidate.durationMs, existing.durationMs);
+      const similarity = transcriptSimilarity(candidate.transcript, existing.transcript);
+      const transcriptMatch =
+        similarity >= DUPLICATE_TRANSCRIPT_SIMILARITY_THRESHOLD && normalizeTranscript(candidate.transcript).length > 0;
+      const filenameMatch = isCopySuffixOf(r2KeyBasename(candidate.r2Key), r2KeyBasename(existing.r2Key));
+      if (filenameMatch && (durationMatch || transcriptMatch)) return true;
+      if (durationMatch && transcriptMatch) return true;
+      return false;
+    });
+
+    if (!match) {
+      kept.push(candidate);
+      continue;
+    }
+
+    const signals: string[] = [];
+    if (isCopySuffixOf(r2KeyBasename(candidate.r2Key), r2KeyBasename(match.r2Key))) signals.push('filename copy-suffix');
+    if (durationsNearIdentical(candidate.durationMs, match.durationMs)) signals.push('duration match');
+    const similarity = transcriptSimilarity(candidate.transcript, match.transcript);
+    if (similarity >= DUPLICATE_TRANSCRIPT_SIMILARITY_THRESHOLD) signals.push(`transcript match (${similarity.toFixed(2)})`);
+    drops.push({
+      dropped: candidate,
+      keptAsDuplicateOf: match,
+      reason: `duplicate of clip ${match.ordering.uploadIndex + 1} (${signals.join(' + ')})`,
+    });
+  }
+
+  return { kept, drops };
+}
+
+// ---------------------------------------------------------------------------
 // Slot fill (ADR-080 §9.2).
 // ---------------------------------------------------------------------------
 
@@ -282,12 +406,35 @@ interface FilledSlot {
   synthetic: 'title_card' | 'cta_card' | null;
 }
 
+/** Per-candidate outcome recorded for the staged review file (TASK c). */
+interface SlotCandidateOutcome {
+  assetId: string;
+  uploadIndex: number;
+  role: ClipRole;
+  roleConfidence: number;
+  chosen: boolean;
+  reason: string; // 'chosen', or why it lost (already used / low confidence / outside duration window / lost on tiebreak)
+}
+
+interface SlotDecision {
+  slot: SlotSpec;
+  chosenAssetId: string | null;
+  chosenUploadIndex: number | null;
+  synthetic: 'title_card' | 'cta_card' | null;
+  candidates: SlotCandidateOutcome[];
+}
+
 interface SlotFillResult {
   filled: FilledSlot[];
   /** Required, non-synthesizable slots with no clip -> fail loud (§9.2 step 5). */
   missingRequired: SlotSpec[];
   /** Clips that no slot accepted (extra footage) — dropped from the cut, noted. */
   unused: ClipAnalysis[];
+  /** TASK (c): per-slot audit trail — which take was chosen and why every other
+   *  role-matching candidate was rejected. Consumed by writeStagedBatchReviewFile
+   *  so Patrick can see (and disagree with) the pick at AWAITING_REVIEW without
+   *  re-deriving it from raw ClipAnalysis rows. */
+  decisions: SlotDecision[];
 }
 
 /** Order clips by ADR-080 §5.4 precedence: saleOrdinal -> opener/closer -> uploadIndex. */
@@ -304,34 +451,175 @@ function orderedAnalyses(analyses: ClipAnalysis[]): ClipAnalysis[] {
   });
 }
 
+// TASK (b) -- deterministic best-take selection. Mirrors footageClassifyService.ts's
+// CLIP_AMBIGUOUS_THRESHOLD (same env var, same default) -- duplicated rather than
+// imported so the render stage's slot-fill selection stays decoupled from
+// classify-stage internals. Keep numerically in sync if that default ever changes.
+function envThreshold(envName: string, def: number): number {
+  const raw = process.env[envName];
+  const parsed = raw ? parseFloat(raw) : NaN;
+  return Number.isFinite(parsed) ? parsed : def;
+}
+const CLIP_AMBIGUOUS_THRESHOLD = envThreshold('FOOTAGE_CLIP_AMBIGUOUS_THRESHOLD', 0.5);
+
+/** A candidate whose raw duration would need to be trimmed/stretched by more
+ *  than this multiple of the slot's window to fit is a bad practical choice
+ *  even when the classifier is confident about its role -- the segment ffmpeg
+ *  actually cuts (segDurationSec clamps to [minMs,maxMs]) would show a sliver
+ *  of a much longer take, not the moment that earned the role. */
+const GROSS_FIT_OVERAGE_MULTIPLIER = 3;
+
+function fitDistanceMs(slot: SlotSpec, durationMs: number): number {
+  const min = slot.minMs ?? 0;
+  const max = slot.maxMs ?? Infinity;
+  if (durationMs < min) return min - durationMs;
+  if (durationMs > max) return durationMs - max;
+  return 0;
+}
+
+function isGrosslyMismatched(slot: SlotSpec, durationMs: number): boolean {
+  if (typeof slot.maxMs === 'number' && slot.maxMs > 0 && durationMs > slot.maxMs * GROSS_FIT_OVERAGE_MULTIPLIER) return true;
+  if (typeof slot.minMs === 'number' && slot.minMs > 0 && durationMs < slot.minMs / GROSS_FIT_OVERAGE_MULTIPLIER) return true;
+  return false;
+}
+
+function usableTranscriptLength(a: ClipAnalysis): number {
+  return normalizeTranscript(a.transcript).length;
+}
+
+function windowDescription(slot: SlotSpec): string {
+  const min = slot.minMs;
+  const max = slot.maxMs;
+  if (min != null && max != null) return `${min}-${max}ms window`;
+  if (max != null) return `max ${max}ms`;
+  if (min != null) return `min ${min}ms`;
+  return 'no duration window set';
+}
+
 /**
- * Greedy slot fill (ADR-080 §9.2): assign each clip to the first unfilled slot
- * whose acceptsRoles includes its role, respecting order. A title/cta slot with
- * no matching clip is SYNTHESIZED as a brand card (never a hard-fail). Any other
- * required-but-unfilled slot is a missing-required fail-loud. Extra clips are
- * collected as unused.
+ * Deterministic best-take pick among candidates that all legally match a
+ * slot's acceptsRoles (TASK b). Tiered so a hard practical problem (below-
+ * ambiguous-confidence, or a duration that would need drastic trimming) always
+ * loses to any candidate without that problem; within a tier, ranks by
+ * highest roleConfidence -> best duration-window fit -> longest usable
+ * transcript -> earliest uploaded. Falls back to a worse tier only when no
+ * candidate in a better tier exists, so this preference alone never empties a
+ * slot (missingRequired below still governs that).
+ */
+function selectBestCandidate(slot: SlotSpec, candidates: ClipAnalysis[]): ClipAnalysis {
+  const tierOf = (a: ClipAnalysis): number => {
+    const belowAmbiguous = a.roleConfidence < CLIP_AMBIGUOUS_THRESHOLD;
+    const mismatched = isGrosslyMismatched(slot, a.durationMs);
+    if (!belowAmbiguous && !mismatched) return 0;
+    if (!belowAmbiguous && mismatched) return 1;
+    if (belowAmbiguous && !mismatched) return 2;
+    return 3;
+  };
+  const bestTier = Math.min(...candidates.map(tierOf));
+  const pool = candidates.filter((a) => tierOf(a) === bestTier);
+  pool.sort((a, b) => {
+    if (b.roleConfidence !== a.roleConfidence) return b.roleConfidence - a.roleConfidence;
+    const fitA = fitDistanceMs(slot, a.durationMs);
+    const fitB = fitDistanceMs(slot, b.durationMs);
+    if (fitA !== fitB) return fitA - fitB;
+    const lenA = usableTranscriptLength(a);
+    const lenB = usableTranscriptLength(b);
+    if (lenB !== lenA) return lenB - lenA;
+    return a.ordering.uploadIndex - b.ordering.uploadIndex;
+  });
+  return pool[0];
+}
+
+/** Explains, in the same terms selectBestCandidate ranks by, why `candidate`
+ *  lost to `winner` for this slot (TASK c — the staged review's audit trail). */
+function describeRejection(slot: SlotSpec, winner: ClipAnalysis, candidate: ClipAnalysis): string {
+  const cBelowAmbiguous = candidate.roleConfidence < CLIP_AMBIGUOUS_THRESHOLD;
+  const wBelowAmbiguous = winner.roleConfidence < CLIP_AMBIGUOUS_THRESHOLD;
+  const cMismatched = isGrosslyMismatched(slot, candidate.durationMs);
+  const wMismatched = isGrosslyMismatched(slot, winner.durationMs);
+
+  const problems: string[] = [];
+  if (cBelowAmbiguous && !wBelowAmbiguous) {
+    problems.push(`low confidence (${candidate.roleConfidence.toFixed(2)} below ambiguous threshold ${CLIP_AMBIGUOUS_THRESHOLD.toFixed(2)})`);
+  }
+  if (cMismatched && !wMismatched) {
+    problems.push(`outside duration window (${candidate.durationMs}ms vs slot's ${windowDescription(slot)})`);
+  }
+  if (problems.length > 0) return problems.join(' and ');
+
+  if (candidate.roleConfidence !== winner.roleConfidence) {
+    return `lost on tiebreak: lower roleConfidence (${candidate.roleConfidence.toFixed(2)} vs ${winner.roleConfidence.toFixed(2)})`;
+  }
+  const fitC = fitDistanceMs(slot, candidate.durationMs);
+  const fitW = fitDistanceMs(slot, winner.durationMs);
+  if (fitC !== fitW) {
+    return `lost on tiebreak: worse duration fit (${candidate.durationMs}ms is ${fitC}ms outside the ${windowDescription(slot)} vs ${fitW}ms for the chosen take)`;
+  }
+  const lenC = usableTranscriptLength(candidate);
+  const lenW = usableTranscriptLength(winner);
+  if (lenC !== lenW) {
+    return `lost on tiebreak: shorter usable transcript (${lenC} vs ${lenW} chars)`;
+  }
+  return `lost on tiebreak: uploaded later (clip ${candidate.ordering.uploadIndex + 1} vs clip ${winner.ordering.uploadIndex + 1})`;
+}
+
+/**
+ * Slot fill (ADR-080 §9.2): assign each clip to the best-fitting unfilled slot
+ * whose acceptsRoles includes its role (TASK b — deterministic best-take pick
+ * when several legal candidates exist, not just the first in narrative order).
+ * A title/cta slot with no matching clip is SYNTHESIZED as a brand card (never
+ * a hard-fail). Any other required-but-unfilled slot is a missing-required
+ * fail-loud. Extra clips are collected as unused. Also builds the per-slot
+ * `decisions` audit trail (TASK c).
  */
 function slotFill(template: Template, analyses: ClipAnalysis[]): SlotFillResult {
   const ordered = orderedAnalyses(analyses);
-  const used = new Set<string>();
+  const used = new Map<string, string>(); // assetId -> the slot.key that claimed it
   const missingRequired: SlotSpec[] = [];
   const resultBySlot = new Map<SlotSpec, FilledSlot | null>();
+  const decisionBySlot = new Map<SlotSpec, SlotDecision>();
 
-  // Type the role variable as the full ClipRole union (never a narrowed literal)
-  // so acceptsRoles.includes(role) is a union-vs-union check — avoids TS2367.
   const tryFill = (slot: SlotSpec): FilledSlot | null => {
-    const match = ordered.find((a) => {
+    // Every clip whose role this slot accepts, in narrative order, whether or
+    // not it is still available -- the full picture for the audit trail below.
+    const roleMatches = ordered.filter((a) => {
       const role: ClipRole = a.role;
-      return !used.has(a.assetId) && slot.acceptsRoles.includes(role);
+      return slot.acceptsRoles.includes(role);
     });
-    if (match) {
-      used.add(match.assetId);
-      return { slot, analysis: match, synthetic: null };
+    const available = roleMatches.filter((a) => !used.has(a.assetId));
+
+    let winner: ClipAnalysis | null = null;
+    if (available.length > 0) {
+      winner = selectBestCandidate(slot, available);
+      used.set(winner.assetId, slot.key);
     }
+
+    const candidates: SlotCandidateOutcome[] = roleMatches.map((a) => {
+      if (winner && a.assetId === winner.assetId) {
+        return { assetId: a.assetId, uploadIndex: a.ordering.uploadIndex, role: a.role, roleConfidence: a.roleConfidence, chosen: true, reason: 'chosen' };
+      }
+      const claimedBy = used.get(a.assetId);
+      const reason =
+        claimedBy && claimedBy !== slot.key
+          ? `already used by slot "${claimedBy}"`
+          : winner
+            ? describeRejection(slot, winner, a)
+            : 'no usable candidate was available for this slot';
+      return { assetId: a.assetId, uploadIndex: a.ordering.uploadIndex, role: a.role, roleConfidence: a.roleConfidence, chosen: false, reason };
+    });
+
+    decisionBySlot.set(slot, {
+      slot,
+      chosenAssetId: winner ? winner.assetId : null,
+      chosenUploadIndex: winner ? winner.ordering.uploadIndex : null,
+      synthetic: winner ? null : slot.overlay === 'title_card' ? 'title_card' : slot.overlay === 'cta_card' ? 'cta_card' : null,
+      candidates,
+    });
+
+    if (winner) return { slot, analysis: winner, synthetic: null };
     // No clip matched. Title/CTA slots are synthesizable brand cards.
-    const overlay = slot.overlay;
-    if (overlay === 'title_card') return { slot, analysis: null, synthetic: 'title_card' };
-    if (overlay === 'cta_card') return { slot, analysis: null, synthetic: 'cta_card' };
+    if (slot.overlay === 'title_card') return { slot, analysis: null, synthetic: 'title_card' };
+    if (slot.overlay === 'cta_card') return { slot, analysis: null, synthetic: 'cta_card' };
     return null;
   };
 
@@ -358,13 +646,16 @@ function slotFill(template: Template, analyses: ClipAnalysis[]): SlotFillResult 
   }
 
   const filled: FilledSlot[] = [];
+  const decisions: SlotDecision[] = [];
   for (const slot of template.slots) {
     const result = resultBySlot.get(slot);
     if (result) filled.push(result);
+    const decision = decisionBySlot.get(slot);
+    if (decision) decisions.push(decision);
   }
 
   const unused = ordered.filter((a) => !used.has(a.assetId));
-  return { filled, missingRequired, unused };
+  return { filled, missingRequired, unused, decisions };
 }
 
 // ---------------------------------------------------------------------------
@@ -863,6 +1154,8 @@ interface StageBatchInput {
   durationSeconds: number;
   fill: SlotFillResult;
   analyses: ClipAnalysis[];
+  /** TASK (a) audit trail: clips suppressed as duplicates before slot-fill ran. */
+  duplicateDrops: DuplicateDrop[];
   rationale: string | null;
 }
 
@@ -890,6 +1183,37 @@ async function writeStagedBatchReviewFile(input: StageBatchInput): Promise<strin
   const unusedNote = input.fill.unused.length
     ? `\n**Unused clips (not in this cut):** ${input.fill.unused.map((a) => `clip ${a.ordering.uploadIndex + 1} (${a.role})`).join(', ')}\n`
     : '';
+  // TASK (a) audit trail -- duplicates never reach `analyses`/slot-fill at all,
+  // so they need their own note rather than showing up in missingNote/unusedNote.
+  const duplicateNote = input.duplicateDrops.length
+    ? `\n**Duplicates excluded before slot-fill:** ${input.duplicateDrops
+        .map((d) => `clip ${d.dropped.ordering.uploadIndex + 1} (${d.reason})`)
+        .join('; ')}\n`
+    : '';
+
+  // TASK (c) -- per-slot take-selection audit trail: what was chosen and why
+  // every other role-matching candidate lost (already used / low confidence /
+  // outside duration window / lost on tiebreak). Lets Patrick disagree and
+  // swap at AWAITING_REVIEW instead of re-deriving the pick from raw rows.
+  const takeSelectionSection = input.fill.decisions.length
+    ? `\n## Take selection (per slot)\n\n${input.fill.decisions
+        .map((d) => {
+          const header =
+            d.chosenUploadIndex != null
+              ? `**${d.slot.key}** — chose clip ${d.chosenUploadIndex + 1}`
+              : d.synthetic
+                ? `**${d.slot.key}** — synthesized ${d.synthetic === 'title_card' ? 'title card' : 'CTA card'} (no matching clip)`
+                : `**${d.slot.key}** — ${d.slot.required ? 'MISSING (required)' : 'skipped (optional, no matching clip)'}`;
+          const rejected = d.candidates.filter((c) => !c.chosen);
+          const rejectedLines = rejected.length
+            ? rejected
+                .map((c) => `  - clip ${c.uploadIndex + 1} (${c.role}, conf ${c.roleConfidence.toFixed(2)}): ${c.reason}`)
+                .join('\n')
+            : "  - (no other candidates matched this slot's accepted roles)";
+          return `${header}\n${rejectedLines}`;
+        })
+        .join('\n\n')}\n`
+    : '';
 
   const body = `STATUS: AWAITING EDIT
 
@@ -908,13 +1232,13 @@ ${input.rationale ? `**Why this format:** ${scrubBrand(input.rationale)}\n` : ''
 ${input.description}
 
 **Finished video (${input.durationSeconds.toFixed(1)}s):** ${input.videoUrl}
-${input.thumbnailUrl ? `**Thumbnail:** ${input.thumbnailUrl}\n` : ''}${missingNote}${unusedNote}
+${input.thumbnailUrl ? `**Thumbnail:** ${input.thumbnailUrl}\n` : ''}${duplicateNote}${missingNote}${unusedNote}
 ## Clips read (OCR / role / confidence)
 
 | Clip | Role | Confidence | On-screen captions read |
 |---|---|---|---|
 ${clipRows}
-
+${takeSelectionSection}
 ---
 
 _Generated by templateRenderer.ts (ADR-080 §9 render stage). Staged for human
@@ -1077,13 +1401,13 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
       },
     })) as PersistedAsset[];
 
-    const analyses: ClipAnalysis[] = [];
+    const loadedAnalyses: ClipAnalysis[] = [];
     assets.forEach((asset, i) => {
       const a = analysisFromAsset(asset, i);
-      if (a) analyses.push(a);
+      if (a) loadedAnalyses.push(a);
     });
 
-    if (analyses.length === 0) {
+    if (loadedAnalyses.length === 0) {
       await prisma.footageBatch.update({
         where: { id: batchId },
         data: {
@@ -1093,6 +1417,15 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
         },
       });
       return { batchId, status: 'NEEDS_INPUT', templateId: template.id, reason: 'no analyzable clips' };
+    }
+
+    // TASK (a): duplicate suppression before slot-fill ever sees the clips.
+    const { kept: analyses, drops: duplicateDrops } = suppressDuplicateAssets(loadedAnalyses);
+    if (duplicateDrops.length > 0) {
+      console.log(
+        `[templateRenderer] Batch ${batchId}: suppressed ${duplicateDrops.length} duplicate clip(s) before slot-fill: ` +
+          duplicateDrops.map((d) => `clip ${d.dropped.ordering.uploadIndex + 1} -> ${d.reason}`).join('; '),
+      );
     }
 
     // Slot fill (ADR-080 §9.2).
@@ -1183,6 +1516,7 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
       durationSeconds: rendered.durationSeconds,
       fill,
       analyses,
+      duplicateDrops,
       rationale: batch.reviewNotes,
     });
 
