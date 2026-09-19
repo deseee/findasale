@@ -383,11 +383,13 @@
         'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'switchblade',
         'alcohol', 'liquor', 'wine', 'beer',
       ],
-      // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- the
-      // backend POSHMARK weapons/alcohol rule has carried a 'gunmetal' exclude since
-      // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03, never ported here).
-      excludeKeywords: ['kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife', 'gunmetal'],
-      reason: 'Poshmark prohibits firearms, weapons, knives, ammunition, and alcohol (Prohibited Items Policy).',
+      // RESOLVED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (Patrick decision
+      // 2026-09-18, mirrored verbatim from the same-day marketplaceEligibilityRules.ts edit):
+      // tightened to match Poshmark's v4.1 "table knives" (dull blade) exception exactly --
+      // kitchen/cutlery/multitool are no longer exempt, so ordinary chef/kitchen knives are now
+      // blocked here same as any other knife, reducing account-strike risk.
+      excludeKeywords: ['table knife', 'butter knife', 'gunmetal'],
+      reason: 'Poshmark prohibits firearms, weapons, knives, and ammunition (only dull-bladed table knives are allowed), plus alcohol (Prohibited Items Policy, v4.1).',
     },
     // NEW RULE added S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
     // cross-marketplace-compliance-audit-2026-09-18.md), mirrors the new third POSHMARK

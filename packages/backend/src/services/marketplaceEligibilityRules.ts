@@ -422,16 +422,15 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'POSHMARK',
-    // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
-    // cross-marketplace-compliance-audit-2026-09-18.md): re-fetched Poshmark's Prohibited Items
-    // Policy live -- current version is v4.1, "Effective August 27 2026", which POSTDATES this
-    // rule's original 2026-08-19 confirmation. That newer version lists Electronics under
-    // "Restricted Items" (allowed if factory-reset), NOT "Prohibited" -- our blanket block below
-    // is stricter than the current written policy. Deliberately LEFT AS-IS: this was Patrick's
-    // original conservative choice (Poshmark's Electronics is a curated/vetted catalog per their
-    // own 2021 policy post, not a general secondhand-electronics category), and relaxing it is a
-    // business decision for Patrick, not an automatic code fix. Added 'used sock' (policy also
-    // bans used socks, not just used underwear).
+    // RESOLVED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (Patrick decision 2026-09-18):
+    // re-fetched Poshmark's Prohibited Items Policy live -- current version is v4.1, "Effective
+    // August 27 2026", which lists Electronics under "Restricted Items" (allowed if factory-reset),
+    // NOT "Prohibited". CONFIRMED KEPT as the intentional default anyway: factory-reset status
+    // can't be verified from listing category/title text, so there's no reliable way to only let
+    // through the electronics Poshmark's own policy would actually allow -- staying blocked avoids
+    // guessing. Poshmark's Electronics is also a curated/vetted catalog per their 2021 policy post,
+    // not a general secondhand-electronics category, which was the original reasoning for this
+    // block. Added 'used sock' (policy also bans used socks, not just used underwear).
     nameKeywords: [
       'food', 'opened beauty', 'used beauty', 'opened cosmetic', 'used cosmetic',
       'used personal care', 'used underwear', 'used sock', 'counterfeit', 'replica', 'recalled',
@@ -453,22 +452,26 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'POSHMARK',
-    // FLAGGED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18: Poshmark's current v4.1 policy
-    // text states the knife exception narrowly as "table knives" only -- the excludeKeywords
-    // below (kitchen/cutlery/multitool/butter knife) are broader than that stated exception and
-    // may be over-permissive. Left AS-IS pending Patrick's decision (tightening this risks
-    // blocking legitimate kitchenware listings that may in practice be fine) -- not changed by
-    // this dispatch.
+    // RESOLVED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (Patrick decision 2026-09-18):
+    // flagged this session that Poshmark's v4.1 policy states the knife exception narrowly as
+    // "table knives" only, while the old excludeKeywords (kitchen/cutlery/multitool) were broader
+    // than that -- exempting ordinary chef/kitchen knives Poshmark's own policy does not exempt.
+    // Given the whole reason this audit chain exists is an account-strike risk from an
+    // under-restricted weapon rule (the original Facebook dagger incident), tightened this to
+    // match the policy's actual "table knives" (dull blade) exception instead of leaving the
+    // broader, more permissive exclude in place. Real behavior change: ordinary kitchen/chef
+    // knives, cutlery sets, and multitools are now blocked on Poshmark same as any other knife --
+    // only literal table/butter knives are exempt.
     nameKeywords: [
       'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'switchblade',
       'alcohol', 'liquor', 'wine', 'beer',
     ],
     excludeKeywords: [
-      'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
+      'table knife', 'butter knife',
       // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above.
       'gunmetal',
     ],
-    reason: 'Poshmark prohibits firearms, weapons, knives, ammunition, and alcohol (Prohibited Items Policy).',
+    reason: 'Poshmark prohibits firearms, weapons, knives, and ammunition (only dull-bladed table knives are allowed), plus alcohol (Prohibited Items Policy, v4.1).',
   },
 
   // ---- POSHMARK DRUGS/HAZMAT/MEDICAL/ANIMAL PRODUCTS (added S-CROSS-MARKETPLACE-COMPLIANCE-
