@@ -162,12 +162,18 @@ function CoverageRing({ score }: { score: number }) {
 
 // ── eBay limit bar ────────────────────────────────────────────────────────
 
-function EbayLimitBar({ listed, limit, warningLevel }: { listed: number; limit: number; warningLevel: string }) {
-  const pct = Math.min((listed / limit) * 100, 100);
+// ADR-129 fix (2026-09-19): color now derives from this bar's OWN listed/limit
+// ratio, not the ebay.warningLevel prop -- that prop now reflects the real
+// monthly free-insertion forecast (see platformStatsService.ts), a different
+// metric from "how full is my active-listing capacity." Mixing the two made
+// the bar's fill % and its color tell two unrelated stories.
+function EbayLimitBar({ listed, limit }: { listed: number; limit: number }) {
+  const rawPct = limit > 0 ? listed / limit : 0;
+  const pct = Math.min(rawPct * 100, 100);
   const barColor =
-    warningLevel === 'ok' ? 'bg-green-500'
-    : warningLevel === 'warning' ? 'bg-yellow-500'
-    : 'bg-red-500';
+    rawPct >= 1.0 ? 'bg-red-500'
+    : rawPct >= 0.8 ? 'bg-yellow-500'
+    : 'bg-green-500';
   return (
     <div className="mt-3">
       <div className="flex justify-between text-xs text-warm-500 dark:text-warm-400 mb-1">
@@ -459,24 +465,20 @@ export default function PlatformsPage() {
                   </p>
                   <p className="text-xs text-warm-500 dark:text-warm-400">items listed</p>
 
-                  <EbayLimitBar listed={ebay.listed} limit={ebay.limit} warningLevel={ebay.warningLevel} />
+                  <EbayLimitBar listed={ebay.listed} limit={ebay.limit} />
 
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                     {ebay.listed} / {ebay.storeDetected ? `${ebay.limit}+ (store)` : `${ebay.limit} free listings`} used
                     {ebay.limitSource === 'ESTIMATED' && ' (estimated)'}
                   </p>
 
-                  {ebay.warningLevel === 'warning' && (
-                    <div className="mt-2 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-xs text-yellow-800 dark:text-yellow-200">
-                      80% used: {ebay.freeSlots} free slots left
-                    </div>
-                  )}
-                  {(ebay.warningLevel === 'critical' || ebay.warningLevel === 'over') && (
-                    <div className="mt-2 px-2 py-1 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-200">
-                      Limit reached: paying $0.35 per new listing
-                    </div>
-                  )}
-
+                  {/* ADR-129 fix (2026-09-19): the old capacity-based "80% used" /
+                      "$0.35 limit reached" banners here were removed -- they were
+                      driven by total active-listing count vs. a flat cap, not real
+                      monthly insertion usage, and could show a false "limit reached"
+                      warning while EbayForecastBlock below correctly showed plenty of
+                      free insertions left for the month. EbayForecastBlock is now the
+                      sole warning source for this card. */}
                   {forecastData && <EbayForecastBlock forecast={forecastData} />}
 
                   {ebay.queueMode && (

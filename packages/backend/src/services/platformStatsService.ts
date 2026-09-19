@@ -10,6 +10,7 @@
 import { prisma } from '../lib/prisma';
 import { getCacheMeta } from './googleMerchantFeedService';
 import { refreshEbayAccessToken } from '../controllers/ebayController';
+import { computeEbayInsertionsForecast, EbayInsertionsForecastStatus } from '../lib/ebayInsertionsForecast';
 
 // ─── eBay proxy helpers (mirrors ebayController — Railway blocks api.ebay.com at DNS) ──
 
@@ -155,11 +156,25 @@ function resolveEbayLimit(org: { ebayStoreUrl: string | null }): {
   return { limit: 250, limitSource: 'ESTIMATED', storeDetected: false };
 }
 
-function ebayWarningLevel(listed: number, limit: number): EbayPlatformCount['warningLevel'] {
-  if (listed > limit) return 'over';
-  const pct = listed / limit;
-  if (pct >= 1.0) return 'critical';
-  if (pct >= 0.8) return 'warning';
+// ADR-129 fix (2026-09-19): warningLevel now reflects the REAL monthly free-
+// insertion forecast (computeEbayInsertionsForecast, lib/ebayInsertionsForecast.ts),
+// not total active-listing count against a flat capacity constant. The old
+// ebayWarningLevel() (removed here) compared ALL currently-active eBay listings
+// -- including long-lived GTC listings that already consumed their insertion
+// fee in a prior month -- against the monthly free-insertion cap. That's a
+// category error: it produced a false "limit reached, paying $0.35/listing"
+// warning for any organizer with a large active-listing count, regardless of
+// actual monthly insertion usage. Confirmed live 2026-09-19 (Artifact
+// organizer): the old metric said 246/250 "80% used, 4 free slots left" while
+// the accurate forecast said 0 used + ~32 projected renewals of 250 -- nowhere
+// near the real limit. See ebayInsertionLimits.ts's own file-header comment,
+// which already named the old calculation "already-broken."
+function mapForecastStatusToWarningLevel(
+  status: EbayInsertionsForecastStatus | undefined
+): EbayPlatformCount['warningLevel'] {
+  if (!status) return 'ok'; // no forecast available (e.g. eBay not connected) -- nothing to warn about
+  if (status === 'over') return 'over';
+  if (status === 'approaching') return 'warning';
   return 'ok';
 }
 
@@ -193,6 +208,14 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
   if (!org) {
     throw new Error(`Organizer ${organizerId} not found`);
   }
+
+  // ADR-129 fix (2026-09-19): real monthly free-insertion forecast, used below
+  // to compute ebay.warningLevel. Skipped for organizers with no eBay
+  // connection -- there's nothing to warn about and no reason to spend the
+  // (local-only, no eBay API call) DB queries.
+  const ebayForecast = org.ebayConnection
+    ? await computeEbayInsertionsForecast(organizerId)
+    : null;
 
   const baseWhere = { organizerId, deletedAt: null } as const;
   const availableWhere = { ...baseWhere, status: 'AVAILABLE', isActive: true } as const;
@@ -381,7 +404,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       queued: ebayQueued,
       activeSlots: ebayListed,
       freeSlots: ebayFreeSlots,
-      warningLevel: ebayWarningLevel(ebayListed, ebayLimit),
+      warningLevel: mapForecastStatusToWarningLevel(ebayForecast?.status),
       liveCountAvailable: ebayLiveCountAvailable,
       storeUrl: ebayStoreUrl,
     },
