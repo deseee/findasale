@@ -295,14 +295,22 @@ export const buildSquareAuthorizeUrl = (
   ownerId: string,
   userId: string
 ): { url: string; state: string } => {
-  const clientId = process.env.SQUARE_APPLICATION_ID;
+  const isProdSquareEnv = getSquareEnvironment() === SquareEnvironment.Production;
+  const clientId = isProdSquareEnv
+    ? process.env.SQUARE_APPLICATION_ID
+    : process.env.SQUARE_SANDBOX_APPLICATION_ID;
   if (!clientId) {
     throw new Error(
-      '[squareConnectService] SQUARE_APPLICATION_ID is not set. Patrick must create a Square ' +
-        'application in the Developer Dashboard and set SQUARE_APPLICATION_ID/' +
-        'SQUARE_APPLICATION_SECRET/SQUARE_ENVIRONMENT on the Railway backend service, and ' +
-        'register the OAuth redirect URL there (Square does not accept a per-request ' +
-        'redirect_uri the way some OAuth providers do -- it is fixed per application).'
+      isProdSquareEnv
+        ? '[squareConnectService] SQUARE_APPLICATION_ID is not set. Patrick must create a Square ' +
+            'application in the Developer Dashboard and set SQUARE_APPLICATION_ID/' +
+            'SQUARE_APPLICATION_SECRET/SQUARE_ENVIRONMENT on the Railway backend service, and ' +
+            'register the OAuth redirect URL there (Square does not accept a per-request ' +
+            'redirect_uri the way some OAuth providers do -- it is fixed per application).'
+        : '[squareConnectService] SQUARE_SANDBOX_APPLICATION_ID is not set. Patrick must set ' +
+            'SQUARE_SANDBOX_APPLICATION_ID (and SQUARE_SANDBOX_APPLICATION_SECRET, for the code ' +
+            "exchange step) on the Railway backend service or local env, from Square's " +
+            'Developer Dashboard sandbox app, and register the sandbox OAuth redirect URL there.'
     );
   }
   // SECURITY FIX (2026-09-07, findasale-hacker pass): state is now bound to the initiating
@@ -339,10 +347,19 @@ export interface SquareTokenResult {
  * note at the top of this file).
  */
 export const exchangeSquareAuthorizationCode = async (code: string): Promise<SquareTokenResult> => {
-  const clientId = process.env.SQUARE_APPLICATION_ID;
-  const clientSecret = process.env.SQUARE_APPLICATION_SECRET;
+  const isProdSquareEnv = getSquareEnvironment() === SquareEnvironment.Production;
+  const clientId = isProdSquareEnv
+    ? process.env.SQUARE_APPLICATION_ID
+    : process.env.SQUARE_SANDBOX_APPLICATION_ID;
+  const clientSecret = isProdSquareEnv
+    ? process.env.SQUARE_APPLICATION_SECRET
+    : process.env.SQUARE_SANDBOX_APPLICATION_SECRET;
   if (!clientId || !clientSecret) {
-    throw new Error('[squareConnectService] SQUARE_APPLICATION_ID/SQUARE_APPLICATION_SECRET not set.');
+    throw new Error(
+      isProdSquareEnv
+        ? '[squareConnectService] SQUARE_APPLICATION_ID/SQUARE_APPLICATION_SECRET not set.'
+        : '[squareConnectService] SQUARE_SANDBOX_APPLICATION_ID/SQUARE_SANDBOX_APPLICATION_SECRET not set.'
+    );
   }
   const response = await getSquareOAuthClient().oAuth.obtainToken({
     clientId,
@@ -367,10 +384,19 @@ export const exchangeSquareAuthorizationCode = async (code: string): Promise<Squ
  * needs to wire persistence, not also write this function under time pressure later.
  */
 export const refreshSquareAccessToken = async (refreshToken: string): Promise<SquareTokenResult> => {
-  const clientId = process.env.SQUARE_APPLICATION_ID;
-  const clientSecret = process.env.SQUARE_APPLICATION_SECRET;
+  const isProdSquareEnv = getSquareEnvironment() === SquareEnvironment.Production;
+  const clientId = isProdSquareEnv
+    ? process.env.SQUARE_APPLICATION_ID
+    : process.env.SQUARE_SANDBOX_APPLICATION_ID;
+  const clientSecret = isProdSquareEnv
+    ? process.env.SQUARE_APPLICATION_SECRET
+    : process.env.SQUARE_SANDBOX_APPLICATION_SECRET;
   if (!clientId || !clientSecret) {
-    throw new Error('[squareConnectService] SQUARE_APPLICATION_ID/SQUARE_APPLICATION_SECRET not set.');
+    throw new Error(
+      isProdSquareEnv
+        ? '[squareConnectService] SQUARE_APPLICATION_ID/SQUARE_APPLICATION_SECRET not set.'
+        : '[squareConnectService] SQUARE_SANDBOX_APPLICATION_ID/SQUARE_SANDBOX_APPLICATION_SECRET not set.'
+    );
   }
   const response = await getSquareOAuthClient().oAuth.obtainToken({
     clientId,
