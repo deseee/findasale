@@ -231,7 +231,11 @@ export async function reviseEbayOfferPrice(
       trackEbayCall();
       if (!putRes.ok && putRes.status !== 204) {
         const bodyText = await putRes.text().catch(() => '');
-        return { ok: false, detail: `HTTP ${putRes.status} ${bodyText.slice(0, 200)}` };
+        // Widened from 200->600 chars (2026-09-19): the truncated 200-char version was
+        // cutting off eBay's "parameters" array on 25002 errors, hiding exactly which
+        // field name it considers invalid (e.g. the Loy Norrix Shipping-Package-type
+        // rejection that persisted even after rebuilding packageWeightAndSize).
+        return { ok: false, detail: `HTTP ${putRes.status} ${bodyText.slice(0, 600)}` };
       }
       return { ok: true };
     };
@@ -304,6 +308,22 @@ async function reviseLegacyListingPrice(
   // MinimumBestOfferPrice (set once at initial listing time, never recomputed since)
   // sitting above a newly-markdown'd StartPrice. bestOffer, when supplied, adds a
   // <BestOfferDetails> block to the ReviseItemRequest so both move together.
+  //
+  // Structure fix (2026-09-19, root-caused via the repair-failure diagnostic log added
+  // earlier today): BestOfferAutoAcceptPrice and MinimumBestOfferPrice are Item-level
+  // fields in eBay's Trading API schema, NOT children of BestOfferDetails -- only
+  // BestOfferEnabled/BestOfferCount/etc belong inside that block. The original code
+  // nested all three together, so eBay silently ignored the two misplaced price
+  // elements on every revise; only BestOfferEnabled (validly placed) was ever applied.
+  // That explains the exact symptom sequence observed live: before this fix, eBay kept
+  // enforcing the OLD unchanged thresholds (identical repeating error); after adding
+  // BestOfferEnabled alone (previous deploy), eBay started enforcing BestOfferEnabled
+  // but the accept/minimum prices were STILL stuck at their original (pre-markdown, much
+  // higher) values -- now failing against the NEW lower StartPrice instead, producing a
+  // different but still-broken error ("Auto Accept Price must be less than the Buy It
+  // Now price" / "Auto decline amount cannot be greater than or equal to..."). Moving
+  // both price elements to be direct Item siblings (matching BestOfferEnabled's own
+  // correct placement) is the actual fix.
   const buildReviseXml = (bestOffer?: { accept: number; minimum: number }): string => `<?xml version="1.0" encoding="utf-8"?>
 <ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <Item>
@@ -311,9 +331,9 @@ async function reviseLegacyListingPrice(
     <StartPrice currencyID="USD">${newPrice.toFixed(2)}</StartPrice>${bestOffer ? `
     <BestOfferDetails>
       <BestOfferEnabled>true</BestOfferEnabled>
-      <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
-      <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>
-    </BestOfferDetails>` : ''}
+    </BestOfferDetails>
+    <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
+    <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>` : ''}
   </Item>
 </ReviseItemRequest>`;
 
