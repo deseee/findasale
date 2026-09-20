@@ -382,6 +382,10 @@ export const handleSquareConnectCallback = async (req: AuthRequest, res: Respons
 
     const flaggedForReview = await isPayoutFlaggedForReview(ownerType, ownerId);
 
+    console.log(
+      `[SquareConnect] Onboarding callback completed for ${ownerType} ${ownerId}: merchant ${status.merchantId}, active=${status.active}.`
+    );
+
     return res.json({
       ownerType,
       ownerId,
@@ -391,8 +395,18 @@ export const handleSquareConnectCallback = async (req: AuthRequest, res: Respons
       payoutsFlaggedForReview: flaggedForReview,
       tokenPersisted: true, // Wave 0.5 (2026-09-07) -- see the persistence block above
     });
-  } catch (error) {
-    console.error('handleSquareConnectCallback error:', error);
+  } catch (error: any) {
+    // Never log the raw error object here -- this flow exchanges a real OAuth
+    // authorization code for a real access/refresh token (exchangeSquareAuthorizationCode /
+    // getSquareAccountStatus), and an SDK/HTTP error can carry the outgoing request
+    // (headers, body) alongside Square's response. Log only a safe, minimal subset --
+    // never error.config, error.request, error.body, error.result in full, the raw `code`
+    // query param, or any token value.
+    console.error(
+      '[SquareConnect] handleSquareConnectCallback failed:',
+      error?.statusCode ?? error?.response?.status,
+      error?.result?.errors?.[0]?.category || error?.result?.errors?.[0]?.code || error?.message || 'Unknown error'
+    );
     return res.status(500).json({ message: 'Failed to complete Square onboarding.' });
   }
 };
