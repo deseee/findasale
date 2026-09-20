@@ -116,6 +116,7 @@ export const reclaimStalePurchases = async (): Promise<void> => {
         squareOrderId: true,
         squarePaymentLinkId: true,
         isTestTransaction: true,
+        stripeAccountId: true,
         userId: true,
         itemId: true,
         createdAt: true,
@@ -129,7 +130,7 @@ export const reclaimStalePurchases = async (): Promise<void> => {
     // Group by PaymentIntent ID (not unique on Purchase -- multi-item carts / POS sales
     // can share one PI across several Purchase rows) so each PI is verified against
     // Stripe exactly once.
-    const byPi = new Map<string, { ids: string[]; isTestTransaction: boolean; userIds: (string | null)[]; itemIds: (string | null)[] }>();
+    const byPi = new Map<string, { ids: string[]; isTestTransaction: boolean; stripeAccountId: string | null; userIds: (string | null)[]; itemIds: (string | null)[] }>();
     const noPi: typeof candidates = [];
     // Square reconciliation (2026-09-09 follow-up): grouped by squareOrderId, mirroring byPi's
     // grouping-by-PaymentIntent-ID pattern exactly -- a Square Order (like a Stripe
@@ -166,6 +167,11 @@ export const reclaimStalePurchases = async (): Promise<void> => {
       }
       const group = byPi.get(p.stripePaymentIntentId);
       if (group) {
+        if (p.stripeAccountId && group.stripeAccountId && p.stripeAccountId !== group.stripeAccountId) {
+          // Data anomaly: two Purchase rows sharing one PaymentIntent should always agree on
+          // which connected account it lives on. Don't silently pick one -- surface it.
+          console.warn(`[purchaseExpiryJob] STRIPE-ACCOUNT-MISMATCH pi=${p.stripePaymentIntentId} purchase=${p.id} stripeAccountId=${p.stripeAccountId} != group stripeAccountId=${group.stripeAccountId} -- keeping the first-seen value.`);
+        }
         group.ids.push(p.id);
         group.userIds.push(p.userId);
         group.itemIds.push(p.itemId);
@@ -173,6 +179,7 @@ export const reclaimStalePurchases = async (): Promise<void> => {
         byPi.set(p.stripePaymentIntentId, {
           ids: [p.id],
           isTestTransaction: p.isTestTransaction,
+          stripeAccountId: p.stripeAccountId,
           userIds: [p.userId],
           itemIds: [p.itemId],
         });
@@ -201,7 +208,14 @@ export const reclaimStalePurchases = async (): Promise<void> => {
     for (const [piId, group] of byPi) {
       try {
         const stripeClient = group.isTestTransaction ? getTestStripe() : getStripe();
-        const paymentIntent = await stripeClient.paymentIntents.retrieve(piId);
+        // Direct-Charge purchases live on the organizer's own connected Stripe account, not
+        // the platform account -- retrieving without { stripeAccount } always 404s for those
+        // even though the PaymentIntent is completely real (same failure mode already fixed
+        // once for charges.retrieve() in stripeController.ts's resolveDisputeContext).
+        // DESTINATION-charge / platform-level rows (ALA_CARTE, etc.) have no stripeAccountId
+        // and keep behaving exactly as before (no stripeAccount option).
+        const retrieveOpts = group.stripeAccountId ? { stripeAccount: group.stripeAccountId } : undefined;
+        const paymentIntent = await stripeClient.paymentIntents.retrieve(piId, retrieveOpts);
 
         if (paymentIntent.status === 'succeeded') {
           // Stripe shows the payment actually succeeded -- the webhook was
