@@ -174,7 +174,7 @@ async function nagStalledHumanBlockedBatches(nagDays: number): Promise<number> {
 }
 
 /** Part (b): reclaim batches orphaned mid-flight (ANALYZING/ASSEMBLING) by a redeploy. */
-async function reclaimStuckInFlightBatches(reclaimMinutes: number): Promise<number> {
+export async function reclaimStuckInFlightBatches(reclaimMinutes: number): Promise<number> {
   const cutoff = new Date(Date.now() - reclaimMinutes * 60 * 1000);
 
   const candidates = await prisma.footageBatch.findMany({
@@ -230,6 +230,60 @@ async function reclaimStuckInFlightBatches(reclaimMinutes: number): Promise<numb
     reclaimed++;
   }
   return reclaimed;
+}
+
+/**
+ * Reclaim window used by boot-time reconciliation (see runFootageBootReconciliation
+ * below) -- deliberately much shorter than the daily sweep's 90-minute window,
+ * safe only because this service runs a single replica (see that function's doc
+ * comment). Default 1 minute: real orphaned batches are always at least several
+ * minutes stale by the time a new process finishes booting, so 1 minute is not a
+ * tight enough window to ever catch a batch this same process itself just started
+ * working on, while still being effectively "immediate" recovery.
+ */
+function getBootReclaimMinutes(): number {
+  const raw = process.env.FOOTAGE_BOOT_RECLAIM_MINUTES;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+/**
+ * S-BATCH-STUCK-2026-09-18 follow-up: boot-time reconciliation.
+ *
+ * The daily 4:15 AM sweep above (reclaimStuckInFlightBatches) is the only thing
+ * that ever recovers a batch orphaned in ANALYZING/ASSEMBLING by a mid-render
+ * Railway redeploy -- worst case, up to ~24h of silent stall before recovery.
+ * Railway's `backend` service runs a single replica (multiRegionConfig ->
+ * numReplicas: 1, confirmed via the Railway API at the time this was written), so
+ * at the instant this process starts there is exactly one backend process in
+ * existence: anything still sitting in ANALYZING or ASSEMBLING is unambiguously
+ * left over from whatever process died before this one started, not real
+ * in-flight work a second replica might be doing (a multi-replica setup would
+ * need a more careful claim window -- this one is deliberately tight because it
+ * doesn't have to account for that).
+ *
+ * Reuses reclaimStuckInFlightBatches() itself (same concurrency-safe guarded
+ * claim, same fire-and-forget classifyBatch() re-trigger, same admin
+ * notification) with a short reclaim window instead of the daily 90-minute one,
+ * so a redeploy-orphaned batch heals within seconds of the new process coming up
+ * instead of waiting for the next 4:15 AM sweep. Fire-and-forget + failure-
+ * isolated on purpose -- a DB hiccup here must never block server startup.
+ */
+export function runFootageBootReconciliation(): void {
+  const minutes = getBootReclaimMinutes();
+  reclaimStuckInFlightBatches(minutes)
+    .then((reclaimed) => {
+      if (reclaimed > 0) {
+        console.warn(
+          `[footage-stall] Boot reconciliation reclaimed ${reclaimed} batch(es) orphaned by a prior redeploy.`
+        );
+      } else {
+        console.log('[footage-stall] Boot reconciliation: no orphaned ANALYZING/ASSEMBLING batches found.');
+      }
+    })
+    .catch((err: any) => {
+      console.error('[footage-stall] Boot reconciliation sweep failed (non-fatal):', err?.message ?? err);
+    });
 }
 
 export function scheduleFootageStalledBatchCron(): void {

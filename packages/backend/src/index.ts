@@ -293,7 +293,7 @@ import marketplacePosterRoutes from './routes/marketplacePoster'; // ADR-083: Ma
 import { scheduleMarketplacePosterCron } from './jobs/marketplacePosterCron'; // ADR-083: Marketplace Poster cron (every 10 min)
 import { scheduleEngagementMonitorCron } from './jobs/engagementMonitorCron'; // Comment/mention monitor (hourly) + approved-reply poster (every 30 min)
 import { scheduleFootageBatchSealCron } from './jobs/footageBatchSealJob'; // ADR-080 Stage 1b: quiet-seal OPEN FootageBatches (every 5 min)
-import { scheduleFootageStalledBatchCron } from './jobs/footageStalledBatchCron'; // S-BATCH-STUCK-2026-09-18: daily watchdog -- re-nags stale NEEDS_INPUT/AWAITING_REVIEW batches, reclaims batches orphaned mid-flight (ANALYZING/ASSEMBLING) by a redeploy
+import { scheduleFootageStalledBatchCron, runFootageBootReconciliation } from './jobs/footageStalledBatchCron'; // S-BATCH-STUCK-2026-09-18: daily watchdog -- re-nags stale NEEDS_INPUT/AWAITING_REVIEW batches, reclaims batches orphaned mid-flight (ANALYZING/ASSEMBLING) by a redeploy; runFootageBootReconciliation does the same reclaim immediately at boot instead of waiting for the daily sweep
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -1132,6 +1132,15 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // S-BATCH-STUCK-2026-09-18: register footage stalled-batch watchdog cron (daily)
   scheduleFootageStalledBatchCron();
+
+  // S-BATCH-STUCK-2026-09-18 follow-up: also reconcile immediately at boot (single-replica
+  // service -- see runFootageBootReconciliation's doc comment) instead of waiting up to ~24h
+  // for the daily sweep to catch a batch orphaned by this exact redeploy.
+  try {
+    runFootageBootReconciliation();
+  } catch (err: any) {
+    console.error('[footage-stall] Non-fatal startup error — boot reconciliation not run:', err?.message);
+  }
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();
