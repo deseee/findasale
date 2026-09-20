@@ -8,13 +8,22 @@
  * decision, not a silent addition here):
  *
  *   1. For every AVAILABLE item with a non-null ebayRenewalAnchorAt, recompute
- *      ebayNextRenewalAt as the next 30-day GTC renewal boundary strictly
- *      after now: anchor + 30d * (floor((now - anchor) / 30d) + 1). Using
- *      floor(...)+1 rather than the ADR's own ceil((now-anchor)/30d) shorthand
- *      avoids a same-instant edge case (diff exactly 0 or an exact multiple of
- *      30 days) where ceil() would return a boundary that is not strictly in
- *      the future — floor()+1 always is. Same arithmetic result whenever diff
- *      is not an exact 30-day multiple.
+ *      ebayNextRenewalAt as the next CALENDAR-MONTH GTC renewal boundary
+ *      strictly after now — not a fixed 30-day cycle. eBay's own help page
+ *      (ebay.com/help/selling/fees-credits-invoices/selling-fees, "Insertion
+ *      fees", confirmed 2026-09-20) states GTC listings "renew automatically
+ *      once per calendar month," so a listing anchored on the 15th renews on
+ *      the 15th of each following month, not every 30 days — a fixed-30-day
+ *      cycle drifts against eBay's real renewal date every cycle, since
+ *      calendar months run 28-31 days. computeNextRenewal() now advances by
+ *      whole calendar months (native JS Date month arithmetic) from an
+ *      efficient starting guess, until strictly after `now`, clamping to the
+ *      last valid day of a shorter target month per standard JS Date
+ *      rollover semantics (e.g. an anchor on Jan 31 lands on Feb 28/29, not a
+ *      March rollover) — eBay's own docs don't spell out this exact clamp
+ *      behavior, so this is a reasoned inference (standard billing-system
+ *      convention), not an eBay-confirmed rule; flagging it here the same
+ *      conservative way the rest of this file flags its own inferences.
  *
  *   2. Per the UX spec's Piece 3 (ebay-markdown-budget-warnings-ux-spec-
  *      2026-09-15) and this dispatch's Dev Handoff Note #7: after recomputing,
@@ -56,16 +65,60 @@ import { cronGuard } from '../utils/cronGuard';
 import { getMonthStart } from '../lib/ebayInsertionsQuotaTracker';
 import { computeEbayInsertionsForecast } from '../lib/ebayInsertionsForecast';
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const CHUNK_SIZE = 50; // matches arrivalController.ts's existing chunked-write convention
 
 /**
- * Next 30-day GTC boundary strictly after `now`, anchored at `anchor`.
+ * Add `months` whole calendar months to `date` (UTC), clamping to the last
+ * valid day of the target month when the source day-of-month doesn't exist
+ * there (e.g. Jan 31 + 1 month -> Feb 28/29, not a March 3 rollover). Uses
+ * the Date.UTC(year, monthIndex+1, 0) idiom ("day 0" = last day of the
+ * previous month) to compute that clamp deliberately, rather than relying on
+ * JS's default overflow-rollover behavior for setUTCMonth, which would
+ * silently roll Jan 31 + 1 month into early March.
+ */
+function addCalendarMonthsUtc(date: Date, months: number): Date {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth(); // 0-indexed
+  const day = date.getUTCDate();
+  const targetMonthIndex = month + months;
+  const lastDayOfTargetMonth = new Date(Date.UTC(year, targetMonthIndex + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(day, lastDayOfTargetMonth);
+  return new Date(
+    Date.UTC(
+      year,
+      targetMonthIndex,
+      clampedDay,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds(),
+    ),
+  );
+}
+
+/**
+ * Next calendar-month GTC boundary strictly after `now`, anchored at
+ * `anchor`. See the file header doc comment for why calendar-month (not
+ * fixed-30-day) arithmetic is correct here, and for the end-of-month clamp
+ * caveat.
  */
 function computeNextRenewal(anchor: Date, now: Date): Date {
-  const diffMs = now.getTime() - anchor.getTime();
-  const cyclesElapsed = Math.floor(diffMs / THIRTY_DAYS_MS) + 1;
-  return new Date(anchor.getTime() + cyclesElapsed * THIRTY_DAYS_MS);
+  const anchorYear = anchor.getUTCFullYear();
+  const anchorMonth = anchor.getUTCMonth();
+  const nowYear = now.getUTCFullYear();
+  const nowMonth = now.getUTCMonth();
+  const monthsBetween = (nowYear - anchorYear) * 12 + (nowMonth - anchorMonth);
+  // Efficient starting guess: at least 1 month ahead, so a same-or-earlier
+  // anchor day-of-month this calendar month doesn't return a past date.
+  let monthsAdded = Math.max(1, monthsBetween);
+  let candidate = addCalendarMonthsUtc(anchor, monthsAdded);
+  // Bounded walk forward in case the starting guess still lands at/before
+  // `now` (e.g. anchor's day-of-month this month is later than now's day).
+  while (candidate.getTime() <= now.getTime()) {
+    monthsAdded += 1;
+    candidate = addCalendarMonthsUtc(anchor, monthsAdded);
+  }
+  return candidate;
 }
 
 /**
