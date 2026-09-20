@@ -160,8 +160,15 @@ export const startVendorBoothFinixOnboarding = async (req: AuthRequest, res: Res
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
 
     if (booth.finixOnboarded && booth.finixMerchantId) {
+      console.log(`[Finix] Booth ${booth.id} already onboarded (merchant ${booth.finixMerchantId}) -- skipping.`);
       return res.status(200).json({ alreadyOnboarded: true, finixMerchantId: booth.finixMerchantId });
     }
+
+    console.log(
+      `[Finix] Starting onboarding for booth ${booth.id}` +
+        (booth.finixIdentityId ? ` (resuming with existing identity ${booth.finixIdentityId})` : '') +
+        '.'
+    );
 
     const body = req.body as FinixOnboardBody;
     const validationError = validateFinixOnboardBody(body);
@@ -222,8 +229,13 @@ export const startVendorBoothFinixOnboarding = async (req: AuthRequest, res: Res
         const identity = await createFinixIdentity(identityParams);
         identityId = identity.id;
         await prisma.vendorBooth.update({ where: { id: booth.id }, data: { finixIdentityId: identityId } });
+        console.log(`[Finix] Identity created for booth ${booth.id}: ${identityId}`);
       } catch (err: any) {
-        console.error('[startVendorBoothFinixOnboarding] createFinixIdentity failed:', err?.response?.data || err);
+        console.error(
+          `[Finix] createFinixIdentity failed for booth ${booth.id}:`,
+          err?.response?.status,
+          err?.response?.data?.message || err?.response?.data?.code || err?.message || err
+        );
         return res.status(502).json({
           error: "We couldn't submit your business information to Finix. Please check your details and try again.",
         });
@@ -247,9 +259,14 @@ export const startVendorBoothFinixOnboarding = async (req: AuthRequest, res: Res
         country: body.bankAccountCountry!,
         name: body.bankAccountHolderName!,
       };
-      await createFinixPaymentInstrument(identityId, paymentInstrumentParams);
+      const paymentInstrument = await createFinixPaymentInstrument(identityId, paymentInstrumentParams);
+      console.log(`[Finix] Payment instrument created for booth ${booth.id} (identity ${identityId}): ${paymentInstrument.id}`);
     } catch (err: any) {
-      console.error('[startVendorBoothFinixOnboarding] createFinixPaymentInstrument failed:', err?.response?.data || err);
+      console.error(
+        `[Finix] createFinixPaymentInstrument failed for booth ${booth.id} (identity ${identityId}):`,
+        err?.response?.status,
+        err?.response?.data?.message || err?.response?.data?.code || err?.message || err
+      );
       return res.status(502).json({
         error:
           "We couldn't save your bank account with Finix. Your business information is saved -- please check your bank details and try again.",
@@ -260,13 +277,18 @@ export const startVendorBoothFinixOnboarding = async (req: AuthRequest, res: Res
     try {
       const merchant = await createFinixMerchant(identityId);
       await persistFinixOnboarding('VENDOR_BOOTH', booth.id, identityId, merchant.id, true);
+      console.log(`[Finix] Onboarding complete for booth ${booth.id}: merchant ${merchant.id} (status ${merchant.status}).`);
       return res.status(200).json({
         onboarded: true,
         finixMerchantId: merchant.id,
         merchantStatus: merchant.status,
       });
     } catch (err: any) {
-      console.error('[startVendorBoothFinixOnboarding] createFinixMerchant failed:', err?.response?.data || err);
+      console.error(
+        `[Finix] createFinixMerchant failed for booth ${booth.id} (identity ${identityId}):`,
+        err?.response?.status,
+        err?.response?.data?.message || err?.response?.data?.code || err?.message || err
+      );
       return res.status(502).json({
         error:
           "We couldn't finish setting up your Finix merchant account. Your business and bank information are saved -- please try again.",
