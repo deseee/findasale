@@ -23,6 +23,19 @@
  * and the FeeSummary/Fee type references), not from a live test call. Flagged
  * in the Dev Handoff for a real integration check before this gates production
  * traffic at volume.
+ *
+ * UPDATE (2026-09-20, Patrick-reported mismatch): the Fee type
+ * (developer.ebay.com/api-docs/sell/inventory/types/slr:Fee) documents a
+ * `promotionalDiscount` field alongside `amount` on each Fee entry -- "any
+ * eBay promotional discount applied toward the listing fee type." This was
+ * previously ignored, so an organizer with remaining monthly free-listing
+ * quota could be shown the raw pre-discount InsertionFee (e.g. $0.35) as if
+ * it were a real charge, when eBay's own account page showed free slots still
+ * available. Below now nets amount - promotionalDiscount before deciding
+ * free vs fee. This net-of-discount computation is ALSO still unverified
+ * against a live eBay response from this codebase's integration -- it is the
+ * best reading of eBay's documented field semantics, not a confirmed-correct
+ * observation. Needs a real-account smoke test before being trusted at scale.
  */
 
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders } from '../services/ebayHttp';
@@ -54,7 +67,11 @@ export async function checkEbayListingFee(
 
     const data = (await resp.json()) as {
       feeSummaries?: Array<{
-        fees?: Array<{ feeType?: string; amount?: { value?: string; currency?: string } }>;
+        fees?: Array<{
+          feeType?: string;
+          amount?: { value?: string; currency?: string };
+          promotionalDiscount?: { value?: string; currency?: string };
+        }>;
       }>;
     };
 
@@ -67,10 +84,18 @@ export async function checkEbayListingFee(
           if (Number.isNaN(amount)) {
             return { status: 'unknown', reason: `InsertionFee.amount.value unparseable: ${raw}` };
           }
-          if (amount <= 0) {
+          // eBay's Fee type carries a separate `promotionalDiscount` (e.g. the seller's
+          // remaining monthly free-listing credit applied to this InsertionFee) -- a
+          // missing/absent discount field is treated as 0 (no discount), not as unknown,
+          // per eBay's own docs noting many fee types/fields are returned even at 0.0.
+          const rawDiscount = fee.promotionalDiscount?.value;
+          const parsedDiscount = rawDiscount != null ? parseFloat(rawDiscount) : 0;
+          const discount = Number.isNaN(parsedDiscount) ? 0 : parsedDiscount;
+          const netAmount = amount - discount;
+          if (netAmount <= 0.001) {
             return { status: 'free' };
           }
-          return { status: 'fee', amount, currency: fee.amount?.currency ?? 'USD' };
+          return { status: 'fee', amount: netAmount, currency: fee.amount?.currency ?? 'USD' };
         }
       }
     }
