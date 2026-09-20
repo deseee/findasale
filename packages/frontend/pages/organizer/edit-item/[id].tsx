@@ -38,6 +38,7 @@ import BarcodeScanner from '../../../components/BarcodeScanner';
 import CatalogSuggestionPanel from '../../../components/CatalogSuggestionPanel';
 import { ShippingNetPreview } from '../../../components/ShippingNetPreview';
 import { EbayFeeCheckBadge } from '../../../components/EbayFeeCheckBadge';
+import { EbayMonthlyQuotaCounter } from '../../../components/EbayMonthlyQuotaCounter';
 import { Mic } from 'lucide-react';
 
 // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
@@ -2614,6 +2615,7 @@ const EditItemPage = () => {
                       Pending Publish
                     </div>
                     <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
+                    <EbayMonthlyQuotaCounter enabled={ebayConnected} />
                     <button
                       type="button"
                       onClick={handlePublishNow}
@@ -2631,6 +2633,7 @@ const EditItemPage = () => {
                 ) : (
                   <div className="space-y-2">
                     <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
+                    <EbayMonthlyQuotaCounter enabled={ebayConnected} />
                     <button
                       type="button"
                       onClick={handlePushToEbay}

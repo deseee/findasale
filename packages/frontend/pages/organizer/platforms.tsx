@@ -114,6 +114,10 @@ type GapPlatform = 'ebay' | 'google' | 'facebook' | 'shopify';
 interface EbayInsertionsForecast {
   usedThisMonth: number;
   freeInsertionsCap: number;
+  // 2026-09-20: 'CACHED' = a real, eBay-confirmed cap for this organizer's
+  // actual Store tier; 'ESTIMATED' = no live lookup has succeeded yet, so
+  // freeInsertionsCap is the flat fallback guess.
+  capSource: 'CACHED' | 'ESTIMATED';
   projectedRenewalsBeforeReset: number;
   projectedTotalUsage: number;
   resetAt: string;
@@ -221,7 +225,9 @@ function EbayForecastBlock({ forecast }: { forecast: EbayInsertionsForecast }) {
         <span className="text-xs font-medium text-warm-700 dark:text-warm-300">
           Free eBay insertions this month
         </span>
-        <span className="text-xs text-warm-500 dark:text-warm-400">(estimated)</span>
+        {forecast.capSource === 'ESTIMATED' && (
+          <span className="text-xs text-warm-500 dark:text-warm-400">(estimated)</span>
+        )}
         <span
           className="text-warm-400 dark:text-warm-500 cursor-help text-xs"
           title="Based on your GTC listings' renewal dates. Doesn't call eBay live, so it can drift if you relist directly on eBay's own dashboard."
