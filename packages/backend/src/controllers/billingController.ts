@@ -18,78 +18,13 @@ import {
 
 const stripe = getStripe();
 
-/**
- * POST /api/billing/checkout
- * Create a Stripe Checkout Session for organizer subscription upgrade
- */
-export const createCheckoutSession = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user?.id) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const { priceId, billingInterval } = req.body as { priceId: string; billingInterval: 'monthly' | 'annual' };
-
-    const validPriceIds = [
-      process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
-      process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
-      process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID,
-      process.env.STRIPE_TEAMS_ANNUAL_PRICE_ID,
-    ].filter(Boolean);
-
-    if (!priceId || !validPriceIds.includes(priceId)) {
-      return res.status(400).json({ message: 'Invalid price ID' });
-    }
-
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId: req.user.id },
-      include: { user: true },
-    });
-
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
-    }
-
-    const isNewSubscriber = !organizer.stripeCustomerId;
-
-    let customerId = organizer.stripeCustomerId;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: organizer.user.email,
-        metadata: { organizerId: organizer.id },
-      });
-      customerId = customer.id;
-
-      await prisma.organizer.update({
-        where: { id: organizer.id },
-        data: { stripeCustomerId: customerId },
-      });
-    }
-
-    const sessionConfig: any = {
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      mode: 'subscription',
-      success_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/organizer/upgrade?success=true`,
-      cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/organizer/upgrade?canceled=true`,
-    };
-
-    if (isNewSubscriber && process.env.STRIPE_TRIAL_COUPON_ID) {
-      sessionConfig.discounts = [{ coupon: process.env.STRIPE_TRIAL_COUPON_ID }];
-    }
-
-    const session = await stripe.checkout.sessions.create(sessionConfig);
-
-    if (!session.url) {
-      return res.status(500).json({ message: 'Failed to create checkout session' });
-    }
-
-    res.json({ url: session.url });
-  } catch (error) {
-    console.error('Checkout session error:', error);
-    res.status(500).json({ message: 'Failed to create checkout session' });
-  }
-};
+// createCheckoutSession (dead Stripe subscription-checkout endpoint) removed 2026-09-20 --
+// zero live frontend callers (pricing.tsx redirects to the Square billing flow instead,
+// see createSquareBillingSubscription below), and Stripe's platform account is permanently
+// closed so this always failed Stripe-side if hit directly. Patrick's decision, in chat:
+// "theres no stripe at all get rid of it". `stripe` (getStripe()) stays imported -- still
+// used below by handleStripeWebhook/getSubscription/cancelSubscription/createBillingPortal
+// for existing legacy Stripe subscribers.
 
 /**
  * POST /api/billing/webhook

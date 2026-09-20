@@ -4,7 +4,6 @@ import {
   getPendingPayment,
   createRefund,
   recoverPaymentIntent,
-  createCheckoutSession,
   testTransaction,
   testCheckoutSession,
   testInAppPayment,
@@ -31,8 +30,8 @@ router.post('/recover-payment-intent', authenticate, paymentLimiter, recoverPaym
 // Organizer refund
 router.post('/refund/:purchaseId', authenticate, createRefund);
 
-// Subscription checkout (#23: Pricing page)
-router.post('/checkout-session', authenticate, paymentLimiter, createCheckoutSession);
+// Subscription checkout (#23: Pricing page) -- POST /checkout-session removed 2026-09-20,
+// dead Stripe endpoint, zero callers. Square Plan B (/api/billing/square/subscribe) is live.
 
 // V2: Instant payouts — balance + on-demand payouts + schedule management
 router.get('/balance', authenticate, getBalance);

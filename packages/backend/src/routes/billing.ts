@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { paymentLimiter } from '../middleware/rateLimiter';
 import {
-  createCheckoutSession,
   getSubscription,
   cancelSubscription,
   createBillingPortal,
@@ -18,7 +17,9 @@ import {
 const router = Router();
 
 // Protected routes (require authentication)
-router.post('/checkout', authenticate, paymentLimiter, createCheckoutSession);
+// POST /checkout (Stripe subscription-checkout) removed 2026-09-20 -- dead, zero callers,
+// see billingController.ts's removal note. Square Plan B below (/square/subscribe) is the
+// live path.
 router.get('/subscription', authenticate, getSubscription);
 router.post('/cancel', authenticate, cancelSubscription);
 router.post('/portal', authenticate, paymentLimiter, createBillingPortal);
