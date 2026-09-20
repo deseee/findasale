@@ -98,6 +98,7 @@ export async function getEbayInsertionsForecast(req: AuthRequest, res: Response)
       return res.json({
         usedThisMonth: 0,
         freeInsertionsCap: EBAY_FREE_INSERTIONS_CAP,
+        capSource: 'ESTIMATED',
         projectedRenewalsBeforeReset: 0,
         projectedTotalUsage: 0,
         resetAt: getNextMonthStart().toISOString(),

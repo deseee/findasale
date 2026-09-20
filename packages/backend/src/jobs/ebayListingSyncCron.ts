@@ -40,6 +40,7 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken } from '../controllers/ebayController';
 import { reviseEbayOfferPrice } from '../services/ebayPriceRevisionService';
+import { fetchAndCacheEbayStoreSubscription, isEbayStoreSubscriptionStale } from '../services/ebayStoreSubscriptionService';
 
 // ADR markdown-cycle-ebay-price-sync (2026-09-15), UX spec Piece 2: an item counts as
 // "sync-failed" (not just mid-retry) once this much time has passed since
@@ -128,6 +129,22 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
   if (!accessToken) {
     console.error(`[eBay PullSync] Failed to get access token for organizer ${organizerId}`);
     return;
+  }
+
+  // Opportunistic store-tier refresh (2026-09-20, ADR ebay-store-tier-cap):
+  // piggybacks on this already-scheduled, already-authenticated eBay call
+  // rather than adding a new one to the (zero-eBay-call-constrained) forecast
+  // path -- see ebayStoreSubscriptionService.ts's header comment. This is
+  // also how already-connected organizers (from before this feature existed)
+  // get backfilled, since it re-checks every 4h cycle until it succeeds once.
+  const connectionForTierCheck = await prisma.ebayConnection.findUnique({
+    where: { organizerId },
+    select: { storeSubscriptionCheckedAt: true },
+  });
+  if (isEbayStoreSubscriptionStale(connectionForTierCheck?.storeSubscriptionCheckedAt ?? null)) {
+    fetchAndCacheEbayStoreSubscription(organizerId, accessToken).catch((err) =>
+      console.error(`[eBay PullSync] organizer ${organizerId}: store-tier refresh failed:`, err)
+    );
   }
 
   const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';

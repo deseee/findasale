@@ -11,18 +11,28 @@
  *
  * Pure local computation, zero eBay API calls, per the ADR's own Decision
  * section and Constraint: "The forecast cron and endpoint must not add new
- * eBay API calls."
+ * eBay API calls." freeInsertionsCap (2026-09-20 update) now comes from
+ * getCachedEbayFreeInsertionsCap() -- a real per-organizer number when
+ * available, cached by ebayStoreSubscriptionService.ts, but still only ever
+ * a DB read from this file's perspective -- this constraint still holds.
  */
 
 import { prisma } from './prisma';
 import { getEbayInsertionsUsed, getNextMonthStart } from './ebayInsertionsQuotaTracker';
-import { EBAY_FREE_INSERTIONS_CAP } from '../config/ebayInsertionLimits';
+import { getCachedEbayFreeInsertionsCap } from '../services/ebayStoreSubscriptionService';
 
 export type EbayInsertionsForecastStatus = 'ok' | 'approaching' | 'over';
 
 export interface EbayInsertionsForecast {
   usedThisMonth: number;
   freeInsertionsCap: number;
+  // ADR ebay-store-tier-cap (2026-09-20): 'CACHED' means freeInsertionsCap is a
+  // real, eBay-confirmed number for this organizer's actual Store subscription
+  // tier (see services/ebayStoreSubscriptionService.ts); 'ESTIMATED' means no
+  // live lookup has succeeded yet for this organizer, so freeInsertionsCap is
+  // the flat fallback guess -- surfaced here (not hidden) so the UI can be
+  // honest about which one it's showing.
+  capSource: 'CACHED' | 'ESTIMATED';
   projectedRenewalsBeforeReset: number;
   projectedTotalUsage: number;
   resetAt: string; // ISO string
@@ -53,7 +63,11 @@ function computeStatus(projectedTotalUsage: number, cap: number): EbayInsertions
 export async function computeEbayInsertionsForecast(organizerId: string): Promise<EbayInsertionsForecast> {
   const resetAt = getNextMonthStart();
 
-  const [usedThisMonth, projectedRenewalsBeforeReset] = await Promise.all([
+  // getCachedEbayFreeInsertionsCap is a pure DB read -- no eBay API call --
+  // per this file's own "zero eBay API calls" constraint (see
+  // ebayStoreSubscriptionService.ts's header comment for where the live
+  // lookup that populates this cache actually runs instead).
+  const [usedThisMonth, projectedRenewalsBeforeReset, capResult] = await Promise.all([
     getEbayInsertionsUsed(organizerId),
     prisma.item.count({
       where: {
@@ -65,16 +79,19 @@ export async function computeEbayInsertionsForecast(organizerId: string): Promis
         ],
       },
     }),
+    getCachedEbayFreeInsertionsCap(organizerId),
   ]);
 
+  const freeInsertionsCap = capResult.cap;
   const projectedTotalUsage = usedThisMonth + projectedRenewalsBeforeReset;
 
   return {
     usedThisMonth,
-    freeInsertionsCap: EBAY_FREE_INSERTIONS_CAP,
+    freeInsertionsCap,
+    capSource: capResult.source,
     projectedRenewalsBeforeReset,
     projectedTotalUsage,
     resetAt: resetAt.toISOString(),
-    status: computeStatus(projectedTotalUsage, EBAY_FREE_INSERTIONS_CAP),
+    status: computeStatus(projectedTotalUsage, freeInsertionsCap),
   };
 }

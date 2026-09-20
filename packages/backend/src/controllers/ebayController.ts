@@ -60,6 +60,7 @@ import { resolveItemShipping } from '../services/ebayShippingResolver';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
 import { estimatePackageProfile, isNeverShippableItem } from '../services/ebayPackageEstimateService';
 import { modelTokenFrom } from '../services/ebayCatalogLookup';
+import { fetchAndCacheEbayStoreSubscription } from '../services/ebayStoreSubscriptionService';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -1643,6 +1644,13 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
     // Fire-and-forget: fetch and store organizer's business policies
     fetchAndStoreEbayPolicies(organizer.id, accessToken).catch(err =>
       console.error('[eBay] Failed to fetch policies after OAuth:', err)
+    );
+
+    // Fire-and-forget (2026-09-20): detect this organizer's real eBay Store
+    // subscription tier and cache the real free-insertion cap, replacing the
+    // old flat 250/1000 guess. See ebayStoreSubscriptionService.ts.
+    fetchAndCacheEbayStoreSubscription(organizer.id, accessToken).catch(err =>
+      console.error('[eBay] Failed to fetch store subscription after OAuth:', err)
     );
 
     // Fire-and-forget: create ORDER_CONFIRMATION subscription using organizer's user token
