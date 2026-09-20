@@ -24,7 +24,7 @@ interface EbayStats {
   connected: boolean;
   listed: number;
   limit: number;
-  limitSource: 'ESTIMATED' | 'KNOWN';
+  limitSource: 'ESTIMATED' | 'KNOWN' | 'FORECAST';
   overLimit: boolean;
   utilizationPct: number;
   storeDetected: boolean;
@@ -461,7 +461,7 @@ export default function PlatformsPage() {
               {ebay?.connected ? (
                 <>
                   <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">
-                    {ebay.listed}
+                    {ebay.activeSlots}
                   </p>
                   <p className="text-xs text-warm-500 dark:text-warm-400">items listed</p>
 
@@ -469,7 +469,7 @@ export default function PlatformsPage() {
 
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                     {ebay.listed} / {ebay.storeDetected ? `${ebay.limit}+ (store)` : `${ebay.limit} free listings`} used
-                    {ebay.limitSource === 'ESTIMATED' && ' (estimated)'}
+                    {(ebay.limitSource === 'ESTIMATED' || ebay.limitSource === 'FORECAST') && ' (estimated)'}
                   </p>
 
                   {/* ADR-129 fix (2026-09-19): the old capacity-based "80% used" /
@@ -487,7 +487,7 @@ export default function PlatformsPage() {
                       Queue Mode ON: {ebay.queued} items waiting
                     </div>
                   )}
-                  {!ebay.queueMode && ebay.listed > 200 && (
+                  {!ebay.queueMode && ebay.activeSlots > 200 && (
                     <button
                       onClick={() => queueSettingsMutation.mutate({ ebayQueueMode: true })}
                       disabled={queueSettingsMutation.isPending}

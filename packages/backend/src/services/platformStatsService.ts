@@ -64,7 +64,7 @@ export interface PlatformCount {
   connected: boolean;
   listed: number;
   limit: number | null;
-  limitSource: 'KNOWN' | 'ESTIMATED' | 'UNKNOWN';
+  limitSource: 'KNOWN' | 'ESTIMATED' | 'FORECAST' | 'UNKNOWN';
   overLimit: boolean;
   utilizationPct: number | null;
   storeUrl: string | null; // Direct link to the organizer's page/store on this platform, when known
@@ -371,10 +371,42 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
     : null;
 
   // eBay limit resolution
-  const { limit: ebayLimit, limitSource, storeDetected } = resolveEbayLimit(org);
+  const { limit: ebayLimit, limitSource: ebayEstimatedLimitSource, storeDetected } = resolveEbayLimit(org);
   const ebayFreeSlots = Math.max(0, ebayLimit - ebayListed);
   const ebayOverLimit = ebayListed > ebayLimit;
   const ebayUtilPct = Math.round((ebayListed / ebayLimit) * 100);
+
+  // ADR ebay-renewal-forecasting fix (2026-09-20, Patrick-reported dashboard
+  // mismatch): the fields actually displayed on /organizer/platforms --
+  // listed/limit/freeSlots/utilizationPct/limitSource/overLimit -- used to
+  // come from ebayListed (a raw active-listing DB count) against ebayLimit
+  // (a hardcoded 250/1000 guess from resolveEbayLimit), a completely
+  // different metric from "free monthly insertions used," while the page's
+  // own EbayForecastBlock (fed by this same forecast machinery, via the
+  // separate /ebay-insertions-forecast endpoint) showed the real number
+  // right below it -- e.g. this file's own prior comment: "246/250 80%
+  // used" here vs. "0 used + ~32 projected renewals of 250" there, for the
+  // same organizer, same moment. When a real forecast is available these
+  // fields now derive from it instead, so the two numbers on the page
+  // agree. freeSlots subtracts projectedTotalUsage (used-so-far + projected
+  // renewals before reset), not just usedThisMonth -- accounting for
+  // renewals still to come this month is the whole point of forecasting
+  // ahead, and is what Queue Mode's own "free slots" stat needs to be
+  // accurate for Queue Mode testing. Falls back to the old ESTIMATED
+  // DB-count metric when there's no eBay connection or the forecast wasn't
+  // computed (ebayForecast === null).
+  const ebayDisplayListed = ebayForecast ? ebayForecast.usedThisMonth : ebayListed;
+  const ebayDisplayLimit = ebayForecast ? ebayForecast.freeInsertionsCap : ebayLimit;
+  const ebayDisplayLimitSource: EbayPlatformCount['limitSource'] = ebayForecast
+    ? 'FORECAST'
+    : ebayEstimatedLimitSource;
+  const ebayDisplayFreeSlots = ebayForecast
+    ? Math.max(0, ebayForecast.freeInsertionsCap - ebayForecast.projectedTotalUsage)
+    : ebayFreeSlots;
+  const ebayDisplayOverLimit = ebayDisplayListed > ebayDisplayLimit;
+  const ebayDisplayUtilPct = ebayForecast
+    ? Math.round((ebayForecast.projectedTotalUsage / ebayForecast.freeInsertionsCap) * 100)
+    : ebayUtilPct;
 
   // Coverage score
   // Google Merchant feed: use nightly-cached item count as the live "in feed" count
@@ -392,18 +424,18 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
 
     ebay: {
       connected: !!org.ebayConnection,
-      listed: ebayListed,
-      limit: ebayLimit,
-      limitSource,
-      overLimit: ebayOverLimit,
-      utilizationPct: ebayUtilPct,
+      listed: ebayDisplayListed,
+      limit: ebayDisplayLimit,
+      limitSource: ebayDisplayLimitSource,
+      overLimit: ebayDisplayOverLimit,
+      utilizationPct: ebayDisplayUtilPct,
       storeDetected,
       queueMode: org.ebayQueueMode,
       queueRotation: org.ebayQueueRotation,
       subscriptionTier: org.subscriptionTier,
       queued: ebayQueued,
       activeSlots: ebayListed,
-      freeSlots: ebayFreeSlots,
+      freeSlots: ebayDisplayFreeSlots,
       warningLevel: mapForecastStatusToWarningLevel(ebayForecast?.status),
       liveCountAvailable: ebayLiveCountAvailable,
       storeUrl: ebayStoreUrl,
