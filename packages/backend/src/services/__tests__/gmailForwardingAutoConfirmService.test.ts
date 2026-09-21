@@ -22,7 +22,7 @@
  * messageFlagsAdd / logout) plus a no-op lock.
  */
 
-jest.mock('../lib/prisma', () => ({ prisma: {} }));
+jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 
 import {
   processGmailForwardingConfirmationEmail,
@@ -235,7 +235,7 @@ describe('pollGmailForwardingConfirmations', () => {
   }
 
   it('marks each processed UID \\Seen so an is:unread re-poll would not return it again', async () => {
-    jest.mock('../lib/prisma', () => ({ prisma: {} }));
+    jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 
     const fakeClient = makeFakeImapClient({
       uids: [101],
@@ -265,7 +265,7 @@ describe('pollGmailForwardingConfirmations', () => {
   });
 
   it('processes zero messages when the IMAP search returns nothing new (already-\\Seen messages excluded upstream)', async () => {
-    jest.mock('../lib/prisma', () => ({ prisma: {} }));
+    jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 
     const fakeClient = makeFakeImapClient({ uids: [], sources: {} });
     const fakeLock = { release: jest.fn() };
@@ -283,7 +283,7 @@ describe('pollGmailForwardingConfirmations', () => {
   });
 
   it('leaves a message unread for retry when processing throws, instead of marking it \\Seen', async () => {
-    jest.mock('../lib/prisma', () => ({ prisma: {} }));
+    jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 
     const fakeClient = makeFakeImapClient({ uids: [202], sources: {} });
     const fakeLock = { release: jest.fn() };
