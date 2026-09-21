@@ -269,6 +269,7 @@ import { startEbayRenewalForecastCron } from './jobs/ebayRenewalForecastCron'; /
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { startFacebookMarketplaceEmailPollCron } from './jobs/facebookMarketplaceEmailPollCron'; // ADR-131: Facebook Marketplace order-confirmation-email IMAP poll (gated by FACEBOOK_SOLD_EMAIL_POLL_ENABLED)
+import { startGmailForwardingAutoConfirmCron } from './jobs/gmailForwardingAutoConfirmCron'; // Gmail forwarding-confirmation auto-confirm IMAP poll (gated by GMAIL_FORWARDING_AUTOCONFIRM_ENABLED)
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
 import { scheduleFoundingOrgBadgeCron } from './jobs/foundingOrgBadgeJob'; // Feature #405: Founding Organizer Badge — nightly award
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature: Retail Mode auto-renewal
@@ -1184,6 +1185,15 @@ httpServer.listen(PORT, '0.0.0.0', () => {
     startFacebookMarketplaceEmailPollCron();
   } catch (err: any) {
     console.error('[facebookMarketplaceEmailPollCron] Non-fatal startup error -- cron not scheduled:', err?.message);
+  }
+
+  // Gmail forwarding-confirmation auto-confirm IMAP poll (every 15 min, gated by
+  // GMAIL_FORWARDING_AUTOCONFIRM_ENABLED -- ships disabled by default, same opt-in idiom
+  // as the FB poll cron above). Defensive try/catch for the same reason.
+  try {
+    startGmailForwardingAutoConfirmCron();
+  } catch (err: any) {
+    console.error('[gmailForwardingAutoConfirmCron] Non-fatal startup error -- cron not scheduled:', err?.message);
   }
 
 });

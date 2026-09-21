@@ -74,7 +74,7 @@ interface ImapSession {
   lock: Awaited<ReturnType<ImapFlow['getMailboxLock']>>;
 }
 
-async function openImapSession(): Promise<ImapSession> {
+export async function openImapSession(): Promise<ImapSession> {
   const user = process.env.FACEBOOK_SOLD_IMAP_USER;
   const pass = process.env.FACEBOOK_SOLD_IMAP_APP_PASSWORD;
   if (!user || !pass) {
