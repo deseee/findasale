@@ -268,6 +268,7 @@ import { startEbayStuckOfferRetryCron } from './jobs/ebayStuckOfferRetryCron'; /
 import { startEbayRenewalForecastCron } from './jobs/ebayRenewalForecastCron'; // ADR ebay-renewal-forecasting (2026-09-15): nightly GTC renewal-date forecast + approaching-cap-warning notification, zero eBay API calls
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
+import { startFacebookMarketplaceEmailPollCron } from './jobs/facebookMarketplaceEmailPollCron'; // ADR-131: Facebook Marketplace order-confirmation-email IMAP poll (gated by FACEBOOK_SOLD_EMAIL_POLL_ENABLED)
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
 import { scheduleFoundingOrgBadgeCron } from './jobs/foundingOrgBadgeJob'; // Feature #405: Founding Organizer Badge — nightly award
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature: Retail Mode auto-renewal
@@ -1173,5 +1174,16 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-074 Phase 2: Initialize category sync cron (gated by CATEGORY_SYNC_ENABLED env var)
   initCategorySyncCron();
+
+  // ADR-131: Register Facebook Marketplace order-confirmation-email IMAP poll cron (every
+  // 20 min, gated by FACEBOOK_SOLD_EMAIL_POLL_ENABLED -- ships disabled by default, same
+  // opt-in idiom as SCRAPER_ENABLED/METRO_SYNC_ENABLED above). Defensive try/catch so a
+  // missing/corrupt compiled module can't crash-loop the whole server at startup (same
+  // precedent as scraperCron/geocodeBacklog above).
+  try {
+    startFacebookMarketplaceEmailPollCron();
+  } catch (err: any) {
+    console.error('[facebookMarketplaceEmailPollCron] Non-fatal startup error -- cron not scheduled:', err?.message);
+  }
 
 });

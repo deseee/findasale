@@ -3,10 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
-import { applyNeverShippableOverride, computeEffectivePackageWeight, endEbayListingIfExists } from './ebayController';
-import { markShopifyItemSold } from '../services/shopifyService';
-import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
-import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
+import { applyNeverShippableOverride, computeEffectivePackageWeight } from './ebayController';
+import { commitFacebookNativeSale } from '../services/facebookNativeSaleService';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
@@ -1342,60 +1340,22 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
 // money-relevant mutation reachable from an extension endpoint; ownership is mandatory here,
 // not optional.
 //
-// Idempotent by design: the content script's scan re-runs on the same ~20-min alarm cadence
-// and can report the SAME item sold-on-Facebook more than once before this endpoint's write is
-// reflected back out of getPendingSoldChecks (that list only re-queries AVAILABLE items, so a
-// repeat report can arrive for an item this endpoint already flipped to SOLD moments earlier).
-// commitItemSale's own atomic guard (ADR-098) is what makes a repeat call safe: it can't match
-// `status IN ('AVAILABLE')` a second time and throws ItemAlreadyCommittedError, which this
-// handler treats as a successful no-op -- never an error -- exactly like a second call for an
-// item already sold via any other channel (POS, checkout, eBay sync, etc.).
-//
-// Cascade mirrors itemController.ts's updateItem SOLD-transition block (same ADR-098 call
-// site, same commitItemSale helper) with ONE deliberate omission: notifyFacebookExportedItemSold
-// is NEVER called here. That hook's entire job is telling the extension to go remove the
-// matching Facebook listing -- meaningless in this direction, since the sale happened ON
-// Facebook; there is nothing left to remove there, it is already gone/Sold. eBay + Shopify
-// withdrawal fire exactly as they do for every other SOLD-transition call site (fire-and-forget,
-// same `.catch(err => console.warn(...))` style, never blocking the response).
+// (2026-09-20, ADR-131) The actual commit-and-cascade (ADR-098 commitItemSale, the
+// lastSoldVia tag, and the eBay/Shopify/Discogs withdrawal fan-out, including the
+// ItemAlreadyCommittedError idempotency handling) now lives in the shared
+// commitFacebookNativeSale helper (services/facebookNativeSaleService.ts) -- extracted so
+// the new order-confirmation-email detection path (services/facebookMarketplaceEmailSoldDetection.ts)
+// can call the exact same cascade with a different soldVia tag instead of duplicating it a
+// third time (routes/internal.ts's /mark-item-sold-elsewhere is the second, still-inline copy).
+// Zero behavior change here: this endpoint calls that helper with soldVia='FB_NATIVE', same
+// value and same idempotent-success-on-repeat response shape as before extraction.
 export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const itemId = req.params.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
-  try {
-    await commitItemSale(itemId, 'SOLD', ['AVAILABLE']);
-  } catch (err: any) {
-    if (err instanceof ItemAlreadyCommittedError) {
-      // Already SOLD (this call, a prior poll cycle, or any other channel) -- idempotent
-      // success, never an error. See idempotency note above.
-      res.json({ ok: true });
-      return;
-    }
-    throw err;
-  }
-
-  // Sold-channel observability (2026-08-05): tag this item as sold via the FB-native
-  // detection cascade. Deliberately a separate follow-up write, NOT folded into
-  // commitItemSale() -- that helper is the single ADR-098 atomic status-transition guard
-  // shared by other call sites (itemController.ts, posController.ts) and is documented as
-  // the ONLY function that should write a sale-completing status; widening its signature
-  // for one call site's metadata field is out of scope here. This line only runs on a
-  // genuine fresh transition (the ItemAlreadyCommittedError branch above already returned),
-  // so a repeat/idempotent report never re-stamps the field.
-  await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: 'FB_NATIVE' } });
-
-  endEbayListingIfExists(itemId).catch((err: any) =>
-    console.warn(`[eBay] withdraw-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
-  );
-  markShopifyItemSold(itemId).catch((err: any) =>
-    console.warn(`[Shopify] mark-sold-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
-  );
-  withdrawDiscogsListingIfExists(itemId).catch((err: any) =>
-    console.warn(`[Discogs] withdraw-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
-  );
-
+  await commitFacebookNativeSale(itemId, 'FB_NATIVE');
   res.json({ ok: true });
 };
 

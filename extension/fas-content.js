@@ -125,12 +125,32 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  // S-EXT-BOT-FINGERPRINT-REMEDIATION (2026-09-20, confirmed bot fingerprint -- Facebook
+  // account checkpointed for "automated behavior" this session): a single instant native-setter
+  // write + two synthetic events filled Title/Price/Description in 0ms, which no real user does.
+  // Types the value in one character at a time via the same native setter, firing a
+  // keydown/input/keyup triplet per character with a randomized 40-120ms gap between characters
+  // (this file's existing humanPause helper, defined below -- function declarations are hoisted,
+  // so it's already available here), then a trailing 'change' event once typing finishes so
+  // React's final onChange still fires exactly as before.
   async function fillText(labelText, value) {
     if (value === undefined || value === null || value === '') return true;
     const el = SEL.fieldByLabel(labelText);
     if (!el) return false;
     el.focus();
-    setNativeValue(el, String(value));
+    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+    const text = String(value);
+    let typed = '';
+    for (const ch of text) {
+      typed += ch;
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+      setter.call(el, typed);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }));
+      await humanPause(40, 120);
+    }
+    el.dispatchEvent(new Event('change', { bubbles: true }));
     await sleep(120);
     return true;
   }
