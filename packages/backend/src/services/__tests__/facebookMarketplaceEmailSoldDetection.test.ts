@@ -1,1 +1,210 @@
-LyoqCiAqIGZhY2Vib29rTWFya2V0cGxhY2VFbWFpbFNvbGREZXRlY3Rpb24udHMg4oCUIHVuaXQgdGVzdHMgKEFEUi0xMzEpLgogKgogKiBNT0NLSU5HIE5PVEU6ICcuLi8uLi9saWIvcHJpc21hJyBpcyBtb2NrZWQgdG8gYSBuby1vcCBvYmplY3Qgc28gdGhpcwogKiBzdWl0ZSBuZXZlciBuZWVkcyBhIHJlYWwgZGF0YWJhc2UgY29ubmVjdGlvbi4gVGhlIHNpYmxpbmcKICogZmFjZWJvb2tOYXRpdmVTYWxlU2VydmljZSBtb2R1bGUgKHdoaWNoIGl0c2VsZiBwdWxscyBpbiBlYmF5Q29udHJvbGxlciwKICogc2hvcGlmeVNlcnZpY2UsIGFuZCB0aGUgRGlzY29ncyBjb25uZWN0b3IpIGlzIGFsc28gbW9ja2VkIG91dCBhdCB0aGUgbW9kdWxlCiAqIGJvdW5kYXJ5IC0tIGV2ZXJ5IHRlc3QgYmVsb3cgc3VwcGxpZXMgaXRzIG93biBgcmVzb2x2ZUl0ZW1JZEZvckxpc3RpbmdJZGAgLwogKiBgY29tbWl0U2FsZWAgdmlhIHRoZSBgZGVwc2AgcGFyYW1ldGVyLCBzbyB0aGUgcmVhbCBkZWZhdWx0IGltcGxlbWVudGF0aW9ucyAoYW5kCiAqIHRoZWlyIGhlYXZ5IHRyYW5zaXRpdmUgaW1wb3J0cykgYXJlIG5ldmVyIGV4ZXJjaXNlZCBoZXJlLiBUaGlzIGtlZXBzIHRoZSBzdWl0ZSBhCiAqIHRydWUgdW5pdCB0ZXN0IG9mIHRoZSBwYXJzaW5nL21hdGNoaW5nL2ZhaWwtY2xvc2VkIGxvZ2ljIG9ubHkuCiAqCiAqIEZpeHR1cmVzIGJlbG93IGFyZSBtb2RlbGVkIGRpcmVjdGx5IG9uIEFEUi0xMzEncyByZWFsLCBsaXZlLXZlcmlmaWVkIGV4YW1wbGU6CiAqIHN1YmplY3QgIk5ldyBNYXJrZXRwbGFjZSBvcmRlciBmb3Ige2l0ZW0gdGl0bGV9IiBhbmQgbGluawogKiAiLi4uL21hcmtldHBsYWNlL3lvdS9zaGlwcGluZ19vcmRlcnMvMTAxNzUzNTE4MzcxOTU1OTQvP3JlZmVycmFsX3N1cmZhY2U9CiAqIGMyY19zZWxsZXJfb3JkZXJfcGxhY2VkX2VtYWlsJmxpc3RpbmdfaWQ9MTQ3MzU1NjUzMTQ4NTc1NCIgLS0gMTAxNzUzNTE4MzcxOTU1OTQgaXMKICogdGhlIHNoaXBwaW5nL29yZGVyIGlkIChwYXRoIHNlZ21lbnQpLCAxNDczNTU2NTMxNDg1NzU0IGlzIHRoZSBsaXN0aW5nIGlkIChxdWVyeQogKiBwYXJhbSkgLS0gdGhlIHR3byBtdXN0IG5ldmVyIGJlIGNvbmZ1c2VkLCB3aGljaCBzZXZlcmFsIGFzc2VydGlvbnMgYmVsb3cgY2hlY2sgZm9yLgogKi8KCmplc3QubW9jaygnLi4vLi4vbGliL3ByaXNtYScsICgpID0+ICh7IHByaXNtYToge30gfSkpOwpqZXN0Lm1vY2soJy4uL2ZhY2Vib29rTmF0aXZlU2FsZVNlcnZpY2UnLCAoKSA9PiAoewogIGNvbW1pdEZhY2Vib29rTmF0aXZlU2FsZTogamVzdC5mbigpLAp9KSk7CgppbXBvcnQgewogIHByb2Nlc3NGYWNlYm9va01hcmtldHBsYWNlT3JkZXJFbWFpbCwKICBGQUNFQk9PS19PUkRFUl9FTUFJTF9TRU5ERVIsCiAgU09MRF9WSUFfRkJfRU1BSUxfT1JERVIsCiAgSW5ib3VuZEZhY2Vib29rT3JkZXJFbWFpbCwKfSBmcm9tICcuLi9mYWNlYm9va01hcmtldHBsYWNlRW1haWxTb2xkRGV0ZWN0aW9uJzsKCmNvbnN0IFJFQUxfT1JERVJfSUQgPSAnMTAxNzUzNTE4MzcxOTU1OTQnOwpjb25zdCBSRUFMX0xJU1RJTkdfSUQgPSAnMTQ3MzU1NjUzMTQ4NTc1NCc7CmNvbnN0IFJFQUxfSFJFRiA9IGAvbWFya2V0cGxhY2UveW91L3NoaXBwaW5nX29yZGVycy8ke1JFQUxfT1JERVJfSUR9Lz9yZWZlcnJhbF9zdXJmYWNlPWMyY19zZWxsZXJfb3JkZXJfcGxhY2VkX2VtYWlsJmxpc3RpbmdfaWQ9JHtSRUFMX0xJU1RJTkdfSUR9YDsKCmZ1bmN0aW9uIG9yZGVyRW1haWwob3ZlcnJpZGVzOiBQYXJ0aWFsPEluYm91bmRGYWNlYm9va09yZGVyRW1haWw+ID0ge30pOiBJbmJvdW5kRmFjZWJvb2tPcmRlckVtYWlsIHsKICByZXR1cm4gewogICAgZnJvbTogRkFDRUJPT0tfT1JERVJfRU1BSUxfU0VOREVSLAogICAgc3ViamVjdDogJ05ldyBNYXJrZXRwbGFjZSBvcmRlciBmb3IgVmludGFnZSBPYWsgRHJlc3NlcicsCiAgICBsaW5rczogW1JFQUxfSFJFRl0sCiAgICAuLi5vdmVycmlkZXMsCiAgfTsKfQoKZGVzY3JpYmUoJ3Byb2Nlc3NGYWNlYm9va01hcmtldHBsYWNlT3JkZXJFbWFpbCAoQURSLTEzMSknLCAoKSA9PiB7CiAgZGVzY3JpYmUoJ3NlbmRlci9zdWJqZWN0IGZpbHRlcmluZycsICgpID0+IHsKICAgIGl0KCdpZ25vcmVzIGFuIGVtYWlsIGZyb20gYW55IHNlbmRlciBvdGhlciB0aGFuIHRoZSBleGFjdCBGYWNlYm9vayBNYXJrZXRwbGFjZSBhZGRyZXNzJywgYXN5bmMgKCkgPT4gewogICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBwcm9jZXNzRmFjZWJvb2tNYXJrZXRwbGFjZU9yZGVyRW1haWwoCiAgICAgICAgb3JkZXJFbWFpbCh7IGZyb206ICdhdHRhY2tlckBldmlsLmV4YW1wbGUuY29tJyB9KSwKICAgICAgKTsKICAgICAgZXhwZWN0KHJlc3VsdC5raW5kKS50b0JlKCdpZ25vcmVkJyk7CiAgICB9KTsKCiAgICBpdCgnaWdub3JlcyBhIHNpYmxpbmcgZW1haWwgZnJvbSB0aGUgcmVhbCBzZW5kZXIgd2l0aCBhIGRpZmZlcmVudCBzdWJqZWN0IChvZmZlciwgbm90IGFuIG9yZGVyKScsIGFzeW5jICgpID0+IHsKICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgcHJvY2Vzc0ZhY2Vib29rTWFya2V0cGxhY2VPcmRlckVtYWlsKAogICAgICAgIG9yZGVyRW1haWwoeyBzdWJqZWN0OiAnTmV3IE1hcmtldHBsYWNlIG9mZmVyIG9mICQ0NSBmb3IgVmludGFnZSBPYWsgRHJlc3NlcicgfSksCiAgICAgICk7CiAgICAgIGV4cGVjdChyZXN1bHQua2luZCkudG9CZSgnaWdub3JlZCcpOwogICAgfSk7CgogICAgaXQoJ2lnbm9yZXMgYSBzaGlwcGluZy1sYWJlbCBzaWJsaW5nIGVtYWlsIGZyb20gdGhlIHJlYWwgc2VuZGVyJywgYXN5bmMgKCkgPT4gewogICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBwcm9jZXNzRmFjZWJvb2tNYXJrZXRwbGFjZU9yZGVyRW1haWwoCiAgICAgICAgb3JkZXJFbWFpbCh7IHN1YmplY3Q6ICdTaGlwcGluZyBsYWJlbCBmb3IgeW91ciBNYXJrZXRwbGFjZSBvcmRlcicgfSksCiAgICAgICk7CiAgICAgIGV4cGVjdChyZXN1bHQua2luZCkudG9CZSgnaWdub3JlZCcpOwogICAgfSk7CgogICAgaXQoJ2lnbm9yZXMgYSBkZWxpdmVyeS1jb25maXJtYXRpb24gc2libGluZyBlbWFpbCBmcm9tIHRoZSByZWFsIHNlbmRlcicsIGFzeW5jICgpID0+IHsKICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgcHJvY2Vzc0ZhY2Vib29rTWFya2V0cGxhY2VPcmRlckVtYWlsKAogICAgICAgIG9yZGVyRW1haWwoeyBzdWJqZWN0OiAnWW91ciBvcmRlciBoYXMgYXJyaXZlZCcgfSksCiAgICAgICk7CiAgICAgIGV4cGVjdChyZXN1bHQua2luZCkudG9CZSgnaWdub3JlZCcpOwogICAgfSk7CgogICAgaXQoJ2FjY2VwdHMgdGhlIHJlYWwgc2VuZGVyIGFkZHJlc3MgcmVnYXJkbGVzcyBvZiBjYXNpbmcnLCBhc3luYyAoKSA9PiB7CiAgICAgIGNvbnN0IHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQgPSBqZXN0LmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoJ2l0ZW1fMTIzJyk7CiAgICAgIGNvbnN0IGNvbW1pdFNhbGUgPSBqZXN0LmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoeyBhbHJlYWR5Q29tbWl0dGVkOiBmYWxzZSB9KTsKCiAgICAgIGNvbnN0IHJlc3VsdCA9IGF3YWl0IHByb2Nlc3NGYWNlYm9va01hcmtldHBsYWNlT3JkZXJFbWFpbCgKICAgICAgICBvcmRlckVtYWlsKHsgZnJvbTogJ05vUmVwbHlATWFya2V0cGxhY2UuRmFjZWJvb2suQ29tJyB9KSwKICAgICAgICB7IHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQsIGNvbW1pdFNhbGUgfSwKICAgICAgKTsKCiAgICAgIGV4cGVjdChyZXN1bHQua2luZCkudG9CZSgnbWF0Y2hlZCcpOwogICAgfSk7CiAgfSk7CgogIGRlc2NyaWJlKCdsaXN0aW5nX2lkIGV4dHJhY3Rpb24nLCAoKSA9PiB7CiAgICBpdCgnZXh0cmFjdHMgbGlzdGluZ19pZCBmcm9tIHRoZSBocmVmIHF1ZXJ5IHN0cmluZywgbm90IHRoZSBwYXRoLXNlZ21lbnQgb3JkZXIgaWQnLCBhc3luYyAoKSA9PiB7CiAgICAgIGNvbnN0IHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQgPSBqZXN0LmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoJ2l0ZW1fMTIzJyk7CiAgICAgIGNvbnN0IGNvbW1pdFNhbGUgPSBqZXN0LmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoeyBhbHJlYWR5Q29tbWl0dGVkOiBmYWxzZSB9KTsKCiAgICAgIGNvbnN0IHJlc3VsdCA9IGF3YWl0IHByb2Nlc3NGYWNlYm9va01hcmtldHBsYWNlT3JkZXJFbWFpbChvcmRlckVtYWlsKCksIHsKICAgICAgICByZXNvbHZlSXRlbUlkRm9yTGlzdGluZ0lkLAogICAgICAgIGNvbW1pdFNhbGUsCiAgICAgIH0pOwoKICAgICAgZXhwZWN0KHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQpLnRvSGF2ZUJlZW5DYWxsZWRXaXRoKFJFQUxfTElTVElOR19JRCk7CiAgICAgIGV4cGVjdChyZXNvbHZlSXRlbUlkRm9yTGlzdGluZ0lkKS5ub3QudG9IYXZlQmVlbkNhbGxlZFdpdGgoUkVBTF9PUkRFUl9JRCk7CiAgICAgIGlmIChyZXN1bHQua2luZCA9PT0gJ21hdGNoZWQnKSB7CiAgICAgICAgZXhwZWN0KHJlc3VsdC5yZW1vdGVMaXN0aW5nSWQpLnRvQmUoUkVBTF9MSVNUSU5HX0lEKTsKICAgICAgICBleHBlY3QocmVzdWx0LnJlbW90ZU9yZGVySWQpLnRvQmUoUkVBTF9PUkRFUl9JRCk7CiAgICAgIH0gZWxzZSB7CiAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBleHBlY3RlZCBtYXRjaGVkLCBnb3QgJHtyZXN1bHQua2luZH1gKTsKICAgICAgfQogICAgfSk7CgogICAgaXQoJ2V4dHJhY3RzIGxpc3RpbmdfaWQgZnJvbSByYXdCb2R5IHdoZW4gbm8gbGlua3MgYXJyYXkgaXMgcHJvdmlkZWQnLCBhc3luYyAoKSA9PiB7CiAgICAgIGNvbnN0IHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQgPSBqZXN0LmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoJ2l0ZW1fMTIzJyk7CiAgICAgIGNvbnN0IGNvbW1pdFNhbGUgPSBqZXN0LmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoeyBhbHJlYWR5Q29tbWl0dGVkOiBmYWxzZSB9KTsKCiAgICAgIGNvbnN0IHJlc3VsdCA9IGF3YWl0IHByb2Nlc3NGYWNlYm9va01hcmtldHBsYWNlT3JkZXJFbWFpbCgKICAgICAgICBvcmRlckVtYWlsKHsgbGlua3M6IHVuZGVmaW5lZCwgcmF3Qm9keTogYDxhIGhyZWY9IiR7UkVBTF9IUkVGfSI+VmlldyBvcmRlcjwvYT5gIH0pLAogICAgICAgIHsgcmVzb2x2ZUl0ZW1JZEZvckxpc3RpbmdJZCwgY29tbWl0U2FsZSB9LAogICAgICApOwoKICAgICAgZXhwZWN0KHJlc3VsdC5raW5kKS50b0JlKCdtYXRjaGVkJyk7CiAgICAgIGV4cGVjdChyZXNvbHZlSXRlbUlkRm9yTGlzdGluZ0lkKS50b0hhdmVCZWVuQ2FsbGVkV2l0aChSRUFMX0xJU1RJTkdfSUQpOwogICAgfSk7CgogICAgaXQoJ2RvZXMgTk9UIGV4dHJhY3QgYSBsaXN0aW5nIGlkIGZyb20gdmlzaWJsZSBsaW5rIHRleHQgYWxvbmUgKG9ubHkgaHJlZi9yYXdCb2R5KScsIGFzeW5jICgpID0+IHsKICAgICAgLy8gU2ltdWxhdGVzIGEgY2FsbGVyIHRoYXQgb25seSBjYXB0dXJlZCByZW5kZXJlZCB0ZXh0LCBub3QgdGhlIGFuY2hvcidzIHJlYWwgaHJlZiAtLQogICAgICAvLyBubyBxdWVyeSBzdHJpbmcgcHJlc2VudCBhbnl3aGVyZSwgc28gZXh0cmFjdGlvbiBtdXN0IGZhaWwgY2xvc2VkIHRvICd1bm1hdGNoZWQnLgogICAgICBjb25zdCByZXNvbHZlSXRlbUlkRm9yTGlzdGluZ0lkID0gamVzdC5mbigpOwogICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBwcm9jZXNzRmFjZWJvb2tNYXJrZXRwbGFjZU9yZGVyRW1haWwoCiAgICAgICAgb3JkZXJFbWFpbCh7IGxpbmtzOiBbJ1ZpZXcgeW91ciBvcmRlciddIH0pLAogICAgICAgIHsgcmVzb2x2ZUl0ZW1JZEZvckxpc3RpbmdJZCB9LAogICAgICApOwoKICAgICAgZXhwZWN0KHJlc3VsdC5raW5kKS50b0JlKCd1bm1hdGNoZWQnKTsKICAgICAgZXhwZWN0KHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQpLm5vdC50b0hhdmVCZWVuQ2FsbGVkKCk7CiAgICB9KTsKICB9KTsKCiAgZGVzY3JpYmUoJ2ZhaWwtY2xvc2VkIG1hdGNoaW5nIChBRFItMTMxIMKnMyAtLSBub24tbmVnb3RpYWJsZSknLCAoKSA9PiB7CiAgICBpdCgncmV0dXJucyB1bm1hdGNoZWQgd2l0aCBvcmRlciBpZCArIHN1YmplY3QgdGl0bGUgd2hlbiBubyBNYXJrZXRwbGFjZUxpc3RpbmdKb2Igcm93IG1hdGNoZXMsIGFuZCBuZXZlciBjYWxscyBjb21taXRTYWxlJywgYXN5bmMgKCkgPT4gewogICAgICBjb25zdCByZXNvbHZlSXRlbUlkRm9yTGlzdGluZ0lkID0gamVzdC5mbigpLm1vY2tSZXNvbHZlZFZhbHVlKG51bGwpOwogICAgICBjb25zdCBjb21taXRTYWxlID0gamVzdC5mbigpOwoKICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgcHJvY2Vzc0ZhY2Vib29rTWFya2V0cGxhY2VPcmRlckVtYWlsKG9yZGVyRW1haWwoKSwgewogICAgICAgIHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQsCiAgICAgICAgY29tbWl0U2FsZSwKICAgICAgfSk7CgogICAgICBleHBlY3QocmVzdWx0LmtpbmQpLnRvQmUoJ3VubWF0Y2hlZCcpOwogICAgICBpZiAocmVzdWx0LmtpbmQgPT09ICd1bm1hdGNoZWQnKSB7CiAgICAgICAgZXhwZWN0KHJlc3VsdC5yZW1vdGVPcmRlcklkKS50b0JlKFJFQUxfT1JERVJfSUQpOwogICAgICAgIGV4cGVjdChyZXN1bHQucmVtb3RlTGlzdGluZ0lkKS50b0JlKFJFQUxfTElTVElOR19JRCk7CiAgICAgICAgZXhwZWN0KHJlc3VsdC5pdGVtVGl0bGVGcm9tU3ViamVjdCkudG9CZSgnVmludGFnZSBPYWsgRHJlc3NlcicpOwogICAgICB9CiAgICAgIGV4cGVjdChjb21taXRTYWxlKS5ub3QudG9IYXZlQmVlbkNhbGxlZCgpOwogICAgfSk7CgogICAgaXQoJ25ldmVyIGZhbGxzIGJhY2sgdG8gYSB0aXRsZS1iYXNlZCBtYXRjaCB3aGVuIHRoZSBsaXN0aW5nIGlkIGl0c2VsZiBjYW5ub3QgYmUgZXh0cmFjdGVkJywgYXN5bmMgKCkgPT4gewogICAgICBjb25zdCByZXNvbHZlSXRlbUlkRm9yTGlzdGluZ0lkID0gamVzdC5mbigpOwogICAgICBjb25zdCBjb21taXRTYWxlID0gamVzdC5mbigpOwoKICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgcHJvY2Vzc0ZhY2Vib29rTWFya2V0cGxhY2VPcmRlckVtYWlsKAogICAgICAgIG9yZGVyRW1haWwoeyBsaW5rczogW10sIHJhd0JvZHk6ICdubyB1c2VmdWwgbGluayBpbiB0aGlzIGJvZHkgYXQgYWxsJyB9KSwKICAgICAgICB7IHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQsIGNvbW1pdFNhbGUgfSwKICAgICAgKTsKCiAgICAgIGV4cGVjdChyZXN1bHQua2luZCkudG9CZSgndW5tYXRjaGVkJyk7CiAgICAgIGlmIChyZXN1bHQua2luZCA9PT0gJ3VubWF0Y2hlZCcpIHsKICAgICAgICBleHBlY3QocmVzdWx0LnJlbW90ZUxpc3RpbmdJZCkudG9CZU51bGwoKTsKICAgICAgICBleHBlY3QocmVzdWx0Lml0ZW1UaXRsZUZyb21TdWJqZWN0KS50b0JlKCdWaW50YWdlIE9hayBEcmVzc2VyJyk7CiAgICAgIH0KICAgICAgZXhwZWN0KHJlc29sdmVJdGVtSWRGb3JMaXN0aW5nSWQpLm5vdC50b0hhdmVCZWVuQ2FsbGVkKCk7CiAgICAgIGV4cGVjdChjb21taXRTYWxlKS5ub3QudG9IYXZlQmVlbkNhbGxlZCgpOwogICAgfSk7CiAgfSk7CgogIGRlc2NyaWJlKCdvbiBhIHJlYWwgbWF0Y2gnLCAoKSA9PiB7CiAgICBpdCgnY29tbWl0cyB0aGUgc2FsZSB3aXRoIHNvbGRWaWE9RkJfRU1BSUxfT1JERVIgYW5kIHJldHVybnMgdGhlIG1hdGNoZWQgaXRlbUlkJywgYXN5bmMgKCkgPT4gewogICAgICBjb25zdCByZXNvbHZlSXRlbUlkRm9yTGlzdGluZ0lkID0gamVzdC5mbigpLm1vY2tSZXNvbHZlZFZhbHVlKCdpdGVtX2FiYycpOwogICAgICBjb25zdCBjb21taXRTYWxlID0gamVzdC5mbigpLm1vY2tSZXNvbHZlZFZhbHVlKHsgYWxyZWFkeUNvbW1pdHRlZDogZmFsc2UgfSk7CgogICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBwcm9jZXNzRmFjZWJvb2tNYXJrZXRwbGFjZU9yZGVyRW1haWwob3JkZXJFbWFpbCgpLCB7CiAgICAgICAgcmVzb2x2ZUl0ZW1JZEZvckxpc3RpbmdJZCwKICAgICAgICBjb21taXRTYWxlLAogICAgICB9KTsKCiAgICAgIGV4cGVjdChjb21taXRTYWxlKS50b0hhdmVCZWVuQ2FsbGVkV2l0aCgnaXRlbV9hYmMnLCBTT0xEX1ZJQV9GQl9FTUFJTF9PUkRFUik7CiAgICAgIGV4cGVjdChyZXN1bHQpLnRvTWF0Y2hPYmplY3QoewogICAgICAgIGtpbmQ6ICdtYXRjaGVkJywKICAgICAgICBpdGVtSWQ6ICdpdGVtX2FiYycsCiAgICAgICAgcmVtb3RlTGlzdGluZ0lkOiBSRUFMX0xJU1RJTkdfSUQsCiAgICAgICAgcmVtb3RlT3JkZXJJZDogUkVBTF9PUkRFUl9JRCwKICAgICAgICBzb2xkVmlhOiBTT0xEX1ZJQV9GQl9FTUFJTF9PUkRFUiwKICAgICAgICBhbHJlYWR5Q29tbWl0dGVkOiBmYWxzZSwKICAgICAgfSk7CiAgICB9KTsKCiAgICBpdCgnc3VyZmFjZXMgYWxyZWFkeUNvbW1pdHRlZD10cnVlIGZyb20gYW4gaWRlbXBvdGVudCByZXBlYXQgd2l0aG91dCB0cmVhdGluZyBpdCBhcyBhbiBlcnJvcicsIGFzeW5jICgpID0+IHsKICAgICAgY29uc3QgcmVzb2x2ZUl0ZW1JZEZvckxpc3RpbmdJZCA9IGplc3QuZm4oKS5tb2NrUmVzb2x2ZWRWYWx1ZSgnaXRlbV9hYmMnKTsKICAgICAgY29uc3QgY29tbWl0U2FsZSA9IGplc3QuZm4oKS5tb2NrUmVzb2x2ZWRWYWx1ZSh7IGFscmVhZHlDb21taXR0ZWQ6IHRydWUgfSk7CgogICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBwcm9jZXNzRmFjZWJvb2tNYXJrZXRwbGFjZU9yZGVyRW1haWwob3JkZXJFbWFpbCgpLCB7CiAgICAgICAgcmVzb2x2ZUl0ZW1JZEZvckxpc3RpbmdJZCwKICAgICAgICBjb21taXRTYWxlLAogICAgICB9KTsKCiAgICAgIGV4cGVjdChyZXN1bHQua2luZCkudG9CZSgnbWF0Y2hlZCcpOwogICAgICBpZiAocmVzdWx0LmtpbmQgPT09ICdtYXRjaGVkJykgewogICAgICAgIGV4cGVjdChyZXN1bHQuYWxyZWFkeUNvbW1pdHRlZCkudG9CZSh0cnVlKTsKICAgICAgfQogICAgfSk7CiAgfSk7Cn0pOwo=
+/**
+ * facebookMarketplaceEmailSoldDetection.ts — unit tests (ADR-131).
+ *
+ * MOCKING NOTE: '../../lib/prisma' is mocked to a no-op object so this
+ * suite never needs a real database connection. The sibling
+ * facebookNativeSaleService module (which itself pulls in ebayController,
+ * shopifyService, and the Discogs connector) is also mocked out at the module
+ * boundary -- every test below supplies its own `resolveItemIdForListingId` /
+ * `commitSale` via the `deps` parameter, so the real default implementations (and
+ * their heavy transitive imports) are never exercised here. This keeps the suite a
+ * true unit test of the parsing/matching/fail-closed logic only.
+ *
+ * Fixtures below are modeled directly on ADR-131's real, live-verified example:
+ * subject "New Marketplace order for {item title}" and link
+ * ".../marketplace/you/shipping_orders/10175351837195594/?referral_surface=
+ * c2c_seller_order_placed_email&listing_id=1473556531485754" -- 10175351837195594 is
+ * the shipping/order id (path segment), 1473556531485754 is the listing id (query
+ * param) -- the two must never be confused, which several assertions below check for.
+ */
+
+jest.mock('../../lib/prisma', () => ({ prisma: {} }));
+jest.mock('../facebookNativeSaleService', () => ({
+  commitFacebookNativeSale: jest.fn(),
+}));
+
+import {
+  processFacebookMarketplaceOrderEmail,
+  FACEBOOK_ORDER_EMAIL_SENDER,
+  SOLD_VIA_FB_EMAIL_ORDER,
+  InboundFacebookOrderEmail,
+} from '../facebookMarketplaceEmailSoldDetection';
+
+const REAL_ORDER_ID = '10175351837195594';
+const REAL_LISTING_ID = '1473556531485754';
+const REAL_HREF = `/marketplace/you/shipping_orders/${REAL_ORDER_ID}/?referral_surface=c2c_seller_order_placed_email&listing_id=${REAL_LISTING_ID}`;
+
+function orderEmail(overrides: Partial<InboundFacebookOrderEmail> = {}): InboundFacebookOrderEmail {
+  return {
+    from: FACEBOOK_ORDER_EMAIL_SENDER,
+    subject: 'New Marketplace order for Vintage Oak Dresser',
+    links: [REAL_HREF],
+    ...overrides,
+  };
+}
+
+describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
+  describe('sender/subject filtering', () => {
+    it('ignores an email from any sender other than the exact Facebook Marketplace address', async () => {
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ from: 'attacker@evil.example.com' }),
+      );
+      expect(result.kind).toBe('ignored');
+    });
+
+    it('ignores a sibling email from the real sender with a different subject (offer, not an order)', async () => {
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ subject: 'New Marketplace offer of $45 for Vintage Oak Dresser' }),
+      );
+      expect(result.kind).toBe('ignored');
+    });
+
+    it('ignores a shipping-label sibling email from the real sender', async () => {
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ subject: 'Shipping label for your Marketplace order' }),
+      );
+      expect(result.kind).toBe('ignored');
+    });
+
+    it('ignores a delivery-confirmation sibling email from the real sender', async () => {
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ subject: 'Your order has arrived' }),
+      );
+      expect(result.kind).toBe('ignored');
+    });
+
+    it('accepts the real sender address regardless of casing', async () => {
+      const resolveItemIdForListingId = jest.fn().mockResolvedValue('item_123');
+      const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: false });
+
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ from: 'NoReply@Marketplace.Facebook.Com' }),
+        { resolveItemIdForListingId, commitSale },
+      );
+
+      expect(result.kind).toBe('matched');
+    });
+  });
+
+  describe('listing_id extraction', () => {
+    it('extracts listing_id from the href query string, not the path-segment order id', async () => {
+      const resolveItemIdForListingId = jest.fn().mockResolvedValue('item_123');
+      const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: false });
+
+      const result = await processFacebookMarketplaceOrderEmail(orderEmail(), {
+        resolveItemIdForListingId,
+        commitSale,
+      });
+
+      expect(resolveItemIdForListingId).toHaveBeenCalledWith(REAL_LISTING_ID);
+      expect(resolveItemIdForListingId).not.toHaveBeenCalledWith(REAL_ORDER_ID);
+      if (result.kind === 'matched') {
+        expect(result.remoteListingId).toBe(REAL_LISTING_ID);
+        expect(result.remoteOrderId).toBe(REAL_ORDER_ID);
+      } else {
+        throw new Error(`expected matched, got ${result.kind}`);
+      }
+    });
+
+    it('extracts listing_id from rawBody when no links array is provided', async () => {
+      const resolveItemIdForListingId = jest.fn().mockResolvedValue('item_123');
+      const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: false });
+
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ links: undefined, rawBody: `<a href="${REAL_HREF}">View order</a>` }),
+        { resolveItemIdForListingId, commitSale },
+      );
+
+      expect(result.kind).toBe('matched');
+      expect(resolveItemIdForListingId).toHaveBeenCalledWith(REAL_LISTING_ID);
+    });
+
+    it('does NOT extract a listing id from visible link text alone (only href/rawBody)', async () => {
+      // Simulates a caller that only captured rendered text, not the anchor's real href --
+      // no query string present anywhere, so extraction must fail closed to 'unmatched'.
+      const resolveItemIdForListingId = jest.fn();
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ links: ['View your order'] }),
+        { resolveItemIdForListingId },
+      );
+
+      expect(result.kind).toBe('unmatched');
+      expect(resolveItemIdForListingId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fail-closed matching (ADR-131 §3 -- non-negotiable)', () => {
+    it('returns unmatched with order id + subject title when no MarketplaceListingJob row matches, and never calls commitSale', async () => {
+      const resolveItemIdForListingId = jest.fn().mockResolvedValue(null);
+      const commitSale = jest.fn();
+
+      const result = await processFacebookMarketplaceOrderEmail(orderEmail(), {
+        resolveItemIdForListingId,
+        commitSale,
+      });
+
+      expect(result.kind).toBe('unmatched');
+      if (result.kind === 'unmatched') {
+        expect(result.remoteOrderId).toBe(REAL_ORDER_ID);
+        expect(result.remoteListingId).toBe(REAL_LISTING_ID);
+        expect(result.itemTitleFromSubject).toBe('Vintage Oak Dresser');
+      }
+      expect(commitSale).not.toHaveBeenCalled();
+    });
+
+    it('never falls back to a title-based match when the listing id itself cannot be extracted', async () => {
+      const resolveItemIdForListingId = jest.fn();
+      const commitSale = jest.fn();
+
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ links: [], rawBody: 'no useful link in this body at all' }),
+        { resolveItemIdForListingId, commitSale },
+      );
+
+      expect(result.kind).toBe('unmatched');
+      if (result.kind === 'unmatched') {
+        expect(result.remoteListingId).toBeNull();
+        expect(result.itemTitleFromSubject).toBe('Vintage Oak Dresser');
+      }
+      expect(resolveItemIdForListingId).not.toHaveBeenCalled();
+      expect(commitSale).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('on a real match', () => {
+    it('commits the sale with soldVia=FB_EMAIL_ORDER and returns the matched itemId', async () => {
+      const resolveItemIdForListingId = jest.fn().mockResolvedValue('item_abc');
+      const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: false });
+
+      const result = await processFacebookMarketplaceOrderEmail(orderEmail(), {
+        resolveItemIdForListingId,
+        commitSale,
+      });
+
+      expect(commitSale).toHaveBeenCalledWith('item_abc', SOLD_VIA_FB_EMAIL_ORDER);
+      expect(result).toMatchObject({
+        kind: 'matched',
+        itemId: 'item_abc',
+        remoteListingId: REAL_LISTING_ID,
+        remoteOrderId: REAL_ORDER_ID,
+        soldVia: SOLD_VIA_FB_EMAIL_ORDER,
+        alreadyCommitted: false,
+      });
+    });
+
+    it('surfaces alreadyCommitted=true from an idempotent repeat without treating it as an error', async () => {
+      const resolveItemIdForListingId = jest.fn().mockResolvedValue('item_abc');
+      const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: true });
+
+      const result = await processFacebookMarketplaceOrderEmail(orderEmail(), {
+        resolveItemIdForListingId,
+        commitSale,
+      });
+
+      expect(result.kind).toBe('matched');
+      if (result.kind === 'matched') {
+        expect(result.alreadyCommitted).toBe(true);
+      }
+    });
+  });
+});
