@@ -209,7 +209,17 @@ describe('processGmailForwardingConfirmationEmail', () => {
         { resolveOrganizerId, confirmForwarding },
       );
 
-      expect(resolveOrganizerId).toHaveBeenCalledWith(KNOWN_TOKEN);
+      // The token is extracted verbatim from whatever case the surrounding text happens
+      // to have -- extraction itself does not (and cannot) recover the "original" case
+      // once the body has re-cased it (here, entirely upper-cased). What actually makes
+      // this case-insensitive end to end is resolveOrganizerIdByForwardingToken's
+      // case-insensitive DB lookup (mode: 'insensitive'), which this test intentionally
+      // bypasses via the injected `resolveOrganizerId` mock -- so the assertion here only
+      // checks that SOME casing of the right token was extracted and handed off, not that
+      // it matches KNOWN_TOKEN's exact original case.
+      expect(resolveOrganizerId).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(`^${KNOWN_TOKEN}$`, 'i')),
+      );
       expect(result.kind).toBe('confirmed');
     });
   });

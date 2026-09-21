@@ -68,8 +68,13 @@ export async function ensureFacebookSoldEmailToken(organizerId: string): Promise
 
   const token = generateRawToken();
 
-  const existing = await prisma.organizer.findUnique({
-    where: { facebookSoldEmailToken: token },
+  // mode: 'insensitive' here matches resolveOrganizerIdByForwardingToken's own
+  // case-insensitive lookup below -- without it, two organizers could end up with
+  // tokens that differ only by case, which would make that case-insensitive
+  // resolution ambiguous (Prisma's findFirst on a non-unique-under-this-comparison
+  // condition just returns whichever row it finds first).
+  const existing = await prisma.organizer.findFirst({
+    where: { facebookSoldEmailToken: { equals: token, mode: 'insensitive' } },
     select: { id: true },
   });
 
@@ -100,8 +105,13 @@ export function buildFacebookSoldForwardingAddress(token: string): string {
  */
 export async function resolveOrganizerIdByForwardingToken(token: string): Promise<string | null> {
   if (!token) return null;
-  const organizer = await prisma.organizer.findUnique({
-    where: { facebookSoldEmailToken: token },
+  // Case-insensitive on purpose: the token travels through an inbound email's raw text
+  // (Gmail's own confirmation email, and any organizer's mail client along the way), and
+  // nothing guarantees that text preserves the exact case it was generated/issued with.
+  // See gmailForwardingAutoConfirmService.test.ts's "extracts the target address
+  // case-insensitively" test -- this is the layer that guarantee actually lives at.
+  const organizer = await prisma.organizer.findFirst({
+    where: { facebookSoldEmailToken: { equals: token, mode: 'insensitive' } },
     select: { id: true },
   });
   return organizer?.id ?? null;
