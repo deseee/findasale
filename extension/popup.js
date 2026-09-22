@@ -260,6 +260,11 @@ function onChannelChange() {
   // caution. Vinted stays fill-and-stop only: real, current, escalating platform enforcement
   // specifically against crosslisting/automation software (see fas-vinted.js's own file header) --
   // autoPublishRow stays hidden for Vinted, same as Gumtree Australia.
+  // REVERSED for Mercari 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
+  // marketplace-ban-risk-playbook.md Part 4/Mercari): the "no evidence Mercari bans for
+  // automation" premise above didn't survive deeper research -- Mercari's own Prohibited Conduct
+  // policy names automated posting tools directly. Mercari now gets the exact same carve-out as
+  // Vinted: autoPublishRow hidden, no toggle, hardcoded fill-and-stop. Poshmark/Grailed untouched.
   const posh = ch === 'poshmark';
   const merc = ch === 'mercari';
   const vinted = ch === 'vinted';
@@ -276,9 +281,11 @@ function onChannelChange() {
   const mercNote = $('mercPostNote'); if (mercNote) mercNote.hidden = !merc;
   const vintedNote = $('vintedPostNote'); if (vintedNote) vintedNote.hidden = !vinted;
   const grailedNote = $('grailedPostNote'); if (grailedNote) grailedNote.hidden = !grailed;
-  // (2026-08-22) Only Gumtree AU (no publish step built yet) and Vinted (real ban-risk carve-out)
-  // hide the shared checkbox now -- Poshmark/Mercari/Grailed show it same as FB/Craigslist.
-  const autoPublishRow = $('autoPublishRow'); if (autoPublishRow) autoPublishRow.hidden = gt || vinted;
+  // (2026-08-22) Gumtree AU (no publish step built yet), Vinted, and Mercari (both real
+  // ban-risk carve-outs -- see each content script's own file header) hide the shared checkbox
+  // now -- Poshmark/Grailed still show it same as FB/Craigslist. Mercari added 2026-09-22
+  // (S-EXT-MERCARI-NO-AUTOPUBLISH).
+  const autoPublishRow = $('autoPublishRow'); if (autoPublishRow) autoPublishRow.hidden = gt || vinted || merc;
   const removeSetting = document.querySelector('.removeSetting'); if (removeSetting) removeSetting.hidden = !fb;
   // (2026-08-08 fix) The item list's LISTED badges/hide-filter are channel-specific (see
   // currentListedFlag above) but this handler never used to re-render on channel switch, so
@@ -658,9 +665,20 @@ async function startQueue() {
     window.close();
     return;
   }
-  // Poshmark/Mercari/Grailed now thread the shared #autoPublish checkbox through, same as
-  // Craigslist above -- corrected 2026-08-22, see each content script's file header.
-  const AUTOPUBLISH_CHANNEL_MSG = { poshmark: 'setPoshmarkQueue', mercari: 'setMercariQueue', grailed: 'setGrailedQueue' };
+  // REVERSED 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
+  // marketplace-ban-risk-playbook.md Part 4/Mercari): Mercari now has no autoPublish param
+  // either -- same carve-out as Vinted above. Mercari's own Prohibited Conduct policy explicitly
+  // bans automated posting tools and its Safety Guidelines separately bar third-party account
+  // access. See fas-mercari.js's file header.
+  if (currentChannel() === 'mercari') {
+    await send({ type: 'setMercariQueue', queue });
+    window.close();
+    return;
+  }
+  // Poshmark/Grailed still thread the shared #autoPublish checkbox through, same as Craigslist
+  // above -- corrected 2026-08-22, see each content script's file header. Mercari removed from
+  // this map 2026-09-22 -- see the Mercari-specific branch above.
+  const AUTOPUBLISH_CHANNEL_MSG = { poshmark: 'setPoshmarkQueue', grailed: 'setGrailedQueue' };
   if (AUTOPUBLISH_CHANNEL_MSG[currentChannel()]) {
     const autoPublish = $('autoPublish').checked;
     await send({ type: AUTOPUBLISH_CHANNEL_MSG[currentChannel()], queue, autoPublish });

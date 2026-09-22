@@ -4,20 +4,19 @@
  * confirmed DOM anchor. Same hard rules as fas-poshmark.js / fas-selectors.js (ADR-084):
  *   1. NEVER select by obfuscated CSS class -- label text / aria-label / role / structural
  *      anchors only.
- *   2. Auto-publish (clicking the final "List this item" button) is a PRO/TEAMS-only, opt-in
- *      toggle threaded from popup.js -> background.js (fasMercariAutoPublish) -> here, the SAME
- *      mechanism fas-craigslist.js already uses -- NOT a blanket "never" rule. Corrected
- *      2026-08-22 (S-EXT-AUTOPUBLISH-POLICY, Patrick-directed): this file previously hard-coded
- *      "never auto-click the final publish action" for every organizer regardless of the
- *      2026-07-17 locked decision (full automation including auto-publish is non-negotiable,
- *      PRO/TEAMS-only opt-in) -- that was a real deviation, not a faithful implementation of extra
- *      caution Patrick asked for. Research this session found no evidence Mercari bans accounts
- *      for listing-automation software specifically (established tools like Nifty/List Perfectly/
- *      Vendoo operate openly on Mercari; Mercari's own aggressive automated-ban system targets
- *      prohibited items, suspicious activity, verification issues, and multi-accounting, not
- *      listing automation). When the toggle is off (organizer's own choice, or an automatic
- *      fallback if the List this item button can't be found), this script still fills and stops
- *      exactly as before.
+ *   2. NEVER auto-click the final "List this item" button -- fills and stops, always, for every
+ *      organizer regardless of plan tier. REVERSED 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per
+ *      claude_docs/architecture/marketplace-ban-risk-playbook.md Part 4/Mercari, Patrick-directed):
+ *      this file briefly shipped a PRO/TEAMS-only opt-in auto-publish toggle (2026-08-22,
+ *      S-EXT-AUTOPUBLISH-POLICY) on the theory that no evidence tied Mercari bans to automation
+ *      specifically -- that theory did not survive deeper research. Mercari's own Prohibited
+ *      Conduct policy explicitly bans "any robot, spambot, spider, crawler, scraper or other
+ *      automated means or interface not provided by us," and its Safety Guidelines separately
+ *      instruct sellers to never share account access with third-party tools -- Mercari's own
+ *      written policy, not an inferred risk, and Mercari has no public seller API to make an
+ *      automated final-submit click a sanctioned path. This now matches fas-vinted.js exactly:
+ *      hardcoded, no toggle, no PRO/TEAMS gate -- fill the form, leave the final List click to the
+ *      organizer, every time.
  *   3. HARD-STOP on any CAPTCHA/identity-verification/unrecognized interstitial -- hand off to
  *      the human, never attempt to solve or bypass.
  *   4. Every selector lookup is null-checked; a missing field logs console.warn and is skipped.
@@ -1939,7 +1938,7 @@
   function showReviewOverlay(item, index, total, photosOk) {
     const more = (index + 1) < total;
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), double-check the <b>Smart Pricing floor price</b> we set, then click Mercari\'s own <b>List this item</b> yourself.</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), double-check the <b>Smart Pricing floor price</b> we set, then click Mercari\'s own <b>List this item</b> yourself -- this extension never publishes for you and never auto-relists on Mercari.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-merc-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-merc-close', 'Close', false) +
@@ -2110,168 +2109,22 @@
     return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
   }
 
-  // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
-  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-5, P0, live-Chrome-confirmed): the exact-text match
-  // against "list this item" NEVER matched -- live DOM read of the real Sell page (button list
-  // pulled directly via javascript_tool, not guessed) shows the real button is
-  // `<button data-testid="ListButton" type="submit">List</button>`, plain text "List", not
-  // "List this item". This is why auto-publish silently fell back to the manual-review overlay
-  // every time -- Patrick correctly reported "it didn't click List with auto publish checked."
-  // Real testid checked first (most robust), exact-text "list" kept as a fallback in case Mercari
-  // ever drops the testid.
-  // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-PUBLISH-BLOCKED-BY-MODAL, Patrick-directed,
-  // live-screenshot-confirmed): a real live screenshot showed this file attempt the final List
-  // click WHILE Mercari's own Category modal was still visibly open and blocking the page (the
-  // overlay Patrick saw, "Clicked List but couldn't confirm it went through", is the direct
-  // downstream symptom of that click landing on a covered/blocked page -- nothing behind an open
-  // modal is normally clickable). Checks for any visible dialog/modal-shaped element -- or the
-  // Category picker's own still-mounted "Search category" input specifically -- before ever
-  // attempting a publish click. Reuses the same `offsetParent !== null` visibility signal
-  // closeCategoryModal() and isBlockingCaptchaIframe() already use elsewhere in this file,
-  // consistent with this file's "never click past an unexpected state" discipline (same philosophy
-  // as the CAPTCHA/interstitial hard-stop).
-  function isBlockingModalOpen() {
-    const dialog = qa('[role="dialog"], [role="alertdialog"]').find((d) => d.offsetParent !== null);
-    if (dialog) return true;
-    const catSearch = document.querySelector('input[placeholder="Search category" i]');
-    if (catSearch && catSearch.offsetParent !== null) return true;
-    return false;
-  }
-  function findMercariPublishButton() {
-    return document.querySelector('[data-testid="ListButton"]')
-      || qa('button').find((b) => norm(b.textContent) === 'list');
-  }
+  // REMOVED 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
+  // marketplace-ban-risk-playbook.md Part 4/Mercari): this file used to auto-click Mercari's own
+  // final "List" button behind a PRO/TEAMS opt-in toggle (isBlockingModalOpen() /
+  // findMercariPublishButton() / waitForMercariPublishConfirmation() / tryMercariPublishStrategy()
+  // / doMercariAutoPublish(), ~160 lines). Removed entirely, hardcoded -- not just defaulted off --
+  // because Mercari's own Prohibited Conduct policy explicitly bans "any robot, spambot, spider,
+  // crawler, scraper or other automated means or interface not provided by us," and its Safety
+  // Guidelines separately instruct sellers to never share account access with third-party tools.
+  // Mercari has no public seller API, so any automated final-submit click is outside Mercari's own
+  // sanctioned path by construction, not a gray area. This brings fas-mercari.js in line with
+  // fas-vinted.js, which has never had an auto-publish path at all -- run() below now always ends
+  // in showReviewOverlay(): fill the form, never click List. Do not re-add this without a
+  // Patrick + findasale-legal sign-off, same bar as the original 2026-07-17 FB Marketplace
+  // decision (ADR-084) that this change does NOT extend to Mercari.
 
-  // Confirms a real publish by polling for the sell form to disappear -- no live-confirmed success
-  // marker exists yet (CODE-ONLY/UNTESTED, file header), same conservative signal
-  // fas-craigslist.js/fas-poshmark.js use for their own publish confirmation.
-  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-6, P0): was a plain boolean over a single 6000ms
-  // window, checking only "the Title field/photo input disappeared". Two real gaps live-confirmed
-  // by Patrick's own testing: (1) it had no idea a payment-required modal could appear after
-  // clicking List and would just time out silently against it, reporting a generic "couldn't
-  // confirm" instead of the real, specific reason; (2) a second real run -- WITH a payment method
-  // already on file, so that modal wasn't the cause -- still failed to confirm, and 6000ms may
-  // simply not be enough for a full page transition (route change + API round trip) on a slower
-  // connection. Now returns one of three outcomes instead of a boolean ('published' /
-  // 'needsPayment' / 'timeout'), checks for the payment modal on every poll, adds a second,
-  // independent success signal (the URL leaving /sell entirely -- a real navigation is stronger
-  // evidence than "a field disappeared", which could also happen from an unrelated re-render), and
-  // extends the window to 12000ms. The run-2 "still didn't confirm" case is not fully explained by
-  // this alone (no live evidence of what that second run's actual failure looked like) -- this is a
-  // reasoned hardening of a signal the file's own comments already flagged as weak/UNVERIFIED, not
-  // a claim that the exact cause is now known.
-  async function waitForMercariPublishConfirmation(maxWaitMs) {
-    const start = Date.now();
-    while (Date.now() - start < maxWaitMs) {
-      if (looksLikeNeedsPaymentMethod()) return 'needsPayment';
-      if (!location.pathname.replace(/\/+$/, '').startsWith('/sell')) return 'published';
-      if (!looksLikeSellForm()) return 'published';
-      await sleep(400);
-    }
-    return 'timeout';
-  }
-
-  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-7, P0, evidence-grounded): Patrick's Network tab
-  // capture, taken immediately after clicking List, shows NO listing-creation API request at all --
-  // only unrelated blocked analytics/session-data calls and one unrelated "sync" beacon. A real
-  // publish attempt (successful OR rejected) would show SOME request to Mercari's own API; seeing
-  // none means the click itself likely never reached Mercari's real submit handler, not that the
-  // request fired and failed. This is the exact same failure class already root-caused and fixed
-  // for the Size option this session (Round 4): a plain synthetic realClick() didn't reliably
-  // trigger a React handler that DID work for a sibling widget (Category), and the fix there was to
-  // try multiple real interaction strategies and verify after each rather than trust the first one.
-  // Applying the same proven pattern here, escalating through three independent ways to submit:
-  // (1) the existing pointer-based realClick(): (2) keyboard Enter/Space on the focused button
-  // (matches how Size's real fix likely worked); (3) HTMLFormElement.requestSubmit(button) --
-  // the browser's own native API for triggering a real form submission via a specific submitter
-  // button, which goes through the browser's actual submit machinery instead of depending on a
-  // synthetic event being correctly interpreted, only applicable if the button lives inside a real
-  // <form> (checked before use, never assumed). Each strategy gets its own confirmation poll and
-  // this only moves to the next strategy if the previous one produced neither 'published' nor
-  // 'needsPayment' (both of which stop immediately -- there is no reason to try more, sometimes
-  // harder, click strategies once we already know why it hasn't gone through).
-  async function tryMercariPublishStrategy(publishBtn, doIt, maxWaitMs) {
-    await doIt();
-    return waitForMercariPublishConfirmation(maxWaitMs);
-  }
-
-  async function doMercariAutoPublish(item, index, total, photosOk) {
-    const publishBtn = findMercariPublishButton();
-    if (!publishBtn) {
-      // Auto-publish is on but the button couldn't be found (UNVERIFIED selector, file header) --
-      // never guess past this; fall back to the exact same manual-review path as autoPublish=false.
-      showReviewOverlay(item, index, total, photosOk);
-      return;
-    }
-    // BUG FIX 2026-08-29 (round 14, S-EXT-MERCARI-PUBLISH-BLOCKED-BY-MODAL): refuse the publish
-    // click outright if a blocking modal (most likely Category's own picker, per the live
-    // screenshot evidence) is still open -- see isBlockingModalOpen()'s comment. Falls back to the
-    // same manual-review overlay as a not-found button, never a guessed/doomed click.
-    if (isBlockingModalOpen()) {
-      console.warn('[FAS Mercari] A modal is still open (likely the Category picker) -- refusing to click List while the page is blocked. Falling back to manual review instead of a doomed/no-op click.');
-      showReviewOverlay(item, index, total, photosOk);
-      return;
-    }
-    overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
-    await humanPause(500, 900);
-
-    let result = await tryMercariPublishStrategy(publishBtn, () => realClick(publishBtn), 5000);
-
-    if (result === 'timeout') {
-      result = await tryMercariPublishStrategy(publishBtn, async () => {
-        try { if (typeof publishBtn.focus === 'function') publishBtn.focus(); } catch (e) { /* non-fatal */ }
-        const base = { bubbles: true, cancelable: true, composed: true, view: window };
-        for (const key of [{ key: 'Enter', code: 'Enter' }, { key: ' ', code: 'Space' }]) {
-          publishBtn.dispatchEvent(new KeyboardEvent('keydown', Object.assign({}, base, key)));
-          await sleep(60);
-          publishBtn.dispatchEvent(new KeyboardEvent('keyup', Object.assign({}, base, key)));
-          await sleep(300);
-        }
-      }, 5000);
-    }
-
-    if (result === 'timeout' && publishBtn.form && typeof publishBtn.form.requestSubmit === 'function') {
-      result = await tryMercariPublishStrategy(publishBtn, async () => {
-        try { publishBtn.form.requestSubmit(publishBtn); } catch (e) { /* non-fatal -- next check just sees no change */ }
-      }, 5000);
-    }
-    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-6, P0, live-confirmed via Patrick's own screenshots):
-    // FindA.Sale never enters payment/card details itself -- hard rule, not just a preference --
-    // so this only reports the real, specific blocker and stops, exactly like every other
-    // interstitial in this file. The organizer adding a payment method is a one-time, Mercari-side
-    // step; once it's done this modal won't reappear on future items.
-    if (result === 'needsPayment') {
-      overlayWarn('Mercari is asking this account to add a payment method before it will let anything be listed ("Help us keep our marketplace safer by adding a payment method"). FindA.Sale never enters payment or card details -- please add a payment method on Mercari yourself, then re-run this item.' + button('fas-merc-close', 'Close', false));
-      closeBtnHandler();
-      return;
-    }
-    if (result === 'timeout') {
-      overlayWarn('Clicked <b>List</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Mercari yourself before assuming it posted.' + button('fas-merc-close', 'Close', false));
-      closeBtnHandler();
-      return;
-    }
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'MERCARI' }); } catch (e) {}
-    try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: item.id }); } catch (e) {}
-    const more = (index + 1) < total;
-    // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET, Patrick live report: "mercari seemed to
-    // have the same thing" -- same root cause as fas-poshmark.js's identical fix shipped same
-    // session): this function only runs when autoPublish is true, so a mid-run item must never
-    // wait on a manual click to continue -- auto-navigate when one remains.
-    if (more) {
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
-        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>' +
-        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
-      await humanPause(600, 1200);
-      location.href = SELL_URL_HINT;
-      return;
-    }
-    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
-      button('fas-merc-close', 'Close', false) +
-      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
-    closeBtnHandler();
-  }
-
-  async function run(item, index, total, autoPublish) {
+  async function run(item, index, total) {
     // BUG FIX 2026-08-20 (S-EXT-BATCH-9, P0, live-Chrome-confirmed): this used to open with an
     // immediate, single, no-retry looksLikeInterstitial() check before anything else ran -- Patrick
     // live-confirmed (2026-08-20) Mercari's Sell page can transiently show verification/security-
@@ -2326,7 +2179,8 @@
       closeBtnHandler();
       return;
     }
-    if (autoPublish) { await doMercariAutoPublish(item, index, total, photosOk); return; }
+    // Mercari never auto-publishes -- see file header (2026-09-22, marketplace-ban-risk-playbook.md
+    // Part 4/Mercari). Always ends in manual review, same design as fas-vinted.js.
     showReviewOverlay(item, index, total, photosOk);
   }
 
@@ -2411,19 +2265,17 @@
       console.warn('[FAS Mercari] skipping listing (Prohibited Items policy):', queued.item.id, queued.item.title, restrictionReason);
       const restrictionMore = (queued.index + 1) < queued.total;
       try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: queued.item.id }); } catch (e) {}
-      if (restrictionMore && queued.autoPublish !== false) {
-        overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- ' + escapeHtml(restrictionReason) + '</div>' +
-          '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+      // 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH): always auto-advances now -- a skip never fills
+      // or publishes anything, so there is no publish-risk in moving on automatically (same as
+      // fas-vinted.js's own restriction-skip behavior). No more autoPublish-gated branch.
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- ' + escapeHtml(restrictionReason) + '</div>' +
+        (restrictionMore ? '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Moving to the next item...</div>' : ''));
+      if (restrictionMore) {
         await humanPause(600, 1200);
         location.href = SELL_URL_HINT;
-        return;
+      } else {
+        setTimeout(() => bar && bar.remove(), 4000);
       }
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- ' + escapeHtml(restrictionReason) + '</div>' +
-        (restrictionMore ? button('fas-merc-next', 'Next item &#9654;', true) : '') +
-        button('fas-merc-close', 'Close', false));
-      const restrictionNext = document.getElementById('fas-merc-next');
-      if (restrictionNext) restrictionNext.onclick = () => { location.href = SELL_URL_HINT; };
-      closeBtnHandler();
       return;
     }
 
@@ -2436,26 +2288,21 @@
       if (statusRes && statusRes.ok && statusRes.listed) {
         const more = (queued.index + 1) < queued.total;
         try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: queued.item.id }); } catch (e) {}
-        // BUG FIX 2026-08-28 (S-EXT-AUTOPUBLISH-STALL-FLEET): same fix as doMercariAutoPublish
-        // above -- auto-publish must not wait on a manual click past a skipped item either.
-        if (more && queued.autoPublish !== false) {
-          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Mercari, so it was not filled or published again (avoiding a duplicate listing).</div>' +
-            '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Auto-publish is on -- moving to the next item...</div>');
+        // 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH): always auto-advances now, same reasoning as
+        // the restriction-skip block above -- a skip never publishes anything.
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Mercari, so it was not filled or published again (avoiding a duplicate listing).</div>' +
+          (more ? '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Moving to the next item...</div>' : ''));
+        if (more) {
           await humanPause(600, 1200);
           location.href = SELL_URL_HINT;
-          return;
+        } else {
+          setTimeout(() => bar && bar.remove(), 4000);
         }
-        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Mercari, so it was not filled or published again (avoiding a duplicate listing).</div>' +
-          (more ? button('fas-merc-next', 'Next item &#9654;', true) : '') +
-          button('fas-merc-close', 'Close', false));
-        const next = document.getElementById('fas-merc-next');
-        if (next) next.onclick = () => { location.href = SELL_URL_HINT; };
-        closeBtnHandler();
         return;
       }
     } catch (e) { /* best-effort -- fall through to normal fill/publish flow */ }
     try {
-      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
+      await run(queued.item, queued.index, queued.total);
     } catch (e) {
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();

@@ -75,6 +75,53 @@
     return null;
   }
 
+  // ---- 48-hour same-item/category/area repost guard (S-EXT-CRAIGSLIST-48H-REPOST-GUARD, added
+  // 2026-09-22, per claude_docs/architecture/marketplace-ban-risk-playbook.md Part 4/Craigslist) --
+  // Craigslist's own help page states the one official, citable posting-cadence rule: "Post each
+  // item/offering no more than once every 48 hours" (same item/category/area). No official
+  // per-day/per-hour cap exists, and none is assumed or hardcoded here -- this guard enforces ONLY
+  // that one official 48h rule, nothing more. Tracked directly in chrome.storage.local (the same
+  // direct-from-content-script storage pattern fas-vinted.js/fas-poshmark.js already use, not
+  // routed through background.js), keyed by itemId+category+area so a genuinely different
+  // category or area for the same physical item is not wrongly blocked -- matching Craigslist's
+  // own rule text exactly. Pruned on every read/write so this object never grows unbounded across
+  // a long-running organizer account. Blocks (skips, same UX as the Prohibited Items gate above)
+  // rather than only warning, per the fix spec -- the organizer should never have to remember this
+  // rule themselves.
+  const CL_REPOST_WINDOW_MS = 48 * 60 * 60 * 1000;
+  const CL_REPOST_STORAGE_KEY = 'fasCraigslistRecentPosts';
+  function craigslistRepostKey(item) {
+    const area = norm((item && (item.saleCity || item.city || item.geographicArea)) || '');
+    const category = norm((item && item.category) || '');
+    return String((item && item.id) || '') + '|' + category + '|' + area;
+  }
+  async function craigslistRepostBlockReason(item) {
+    let recent;
+    try {
+      const got = await chrome.storage.local.get([CL_REPOST_STORAGE_KEY]);
+      recent = got[CL_REPOST_STORAGE_KEY] || {};
+    } catch (e) { return null; } // best-effort -- never block a real post over a storage read failure
+    const now = Date.now();
+    const last = recent[craigslistRepostKey(item)];
+    if (last && (now - last) < CL_REPOST_WINDOW_MS) {
+      const hoursAgo = Math.max(1, Math.floor((now - last) / 3600000));
+      const hoursLeft = Math.max(1, Math.ceil((CL_REPOST_WINDOW_MS - (now - last)) / 3600000));
+      return 'Craigslist only allows reposting the same item/category/area once every 48 hours (Craigslist\'s own posting rule) -- this item was posted here about ' + hoursAgo + 'h ago. Try again in about ' + hoursLeft + ' more hour' + (hoursLeft === 1 ? '' : 's') + ', or change the category/area first if that\'s genuinely different this time.';
+    }
+    return null;
+  }
+  async function recordCraigslistPost(item) {
+    try {
+      const got = await chrome.storage.local.get([CL_REPOST_STORAGE_KEY]);
+      const recent = got[CL_REPOST_STORAGE_KEY] || {};
+      const now = Date.now();
+      const pruned = {};
+      for (const k of Object.keys(recent)) { if (now - recent[k] < CL_REPOST_WINDOW_MS) pruned[k] = recent[k]; }
+      pruned[craigslistRepostKey(item)] = now;
+      await chrome.storage.local.set({ [CL_REPOST_STORAGE_KEY]: pruned });
+    } catch (e) { /* best-effort -- never block a real, already-confirmed publish over a storage write failure */ }
+  }
+
   function hardError(step, detail) {
     const e = new Error(detail || ('Could not find what I expected on the ' + step + ' step.'));
     e.fasStep = step;
@@ -785,6 +832,7 @@
       // too (Craigslist's posting flow never exposes a listing id/url to read back, same as the
       // automated path).
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+      try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
       clearAttempts();
       try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: item.id }); } catch (e) {}
       if (more) { location.href = POST_URL; } else { bar && bar.remove(); }
@@ -909,6 +957,7 @@
     // message type already handled in background.js -- not a new message. Best-effort: a
     // failure here must never undo or block the publish that already happened.
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+    try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
 
     clearAttempts();
     const more = (index + 1) < total;
@@ -964,6 +1013,7 @@
     clearAttempts();
 
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+    try { await recordCraigslistPost(item); } catch (e) {} // S-EXT-CRAIGSLIST-48H-REPOST-GUARD
 
     const more = (index + 1) < total;
     if (!more) {
@@ -1189,6 +1239,22 @@
       try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: queued.item.id }); } catch (e) {}
       const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return null; } })();
       if (next && next.ok && next.item) { location.href = POST_URL; } else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      return;
+    }
+
+    // 48-hour same-item/category/area repost guard (S-EXT-CRAIGSLIST-48H-REPOST-GUARD) -- see
+    // craigslistRepostBlockReason()'s comment above. Checked right after the Prohibited Items
+    // gate, same placement/skip-and-advance UX, before any DOM interaction. markListed is NEVER
+    // called here, so the item stays available to push on other channels; recordCraigslistPost()
+    // is only ever called from a CONFIRMED publish (the 3 markListed call sites below), never here.
+    const clRepostReason = await craigslistRepostBlockReason(queued.item);
+    if (clRepostReason) {
+      console.warn('[FAS Craigslist] skipping listing (48h repost guard):', queued.item.id, queued.item.title, clRepostReason);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(queued.item.title || 'this item') + '</b> -- ' + escapeHtml(clRepostReason) + '</div>');
+      await humanPause(1200, 1800);
+      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue', itemId: queued.item.id }); } catch (e) {}
+      const repostNext = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return null; } })();
+      if (repostNext && repostNext.ok && repostNext.item) { location.href = POST_URL; } else { overlay('<b>FindA.Sale</b> — all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
       return;
     }
 

@@ -950,7 +950,12 @@ const FAS_AUTOLIST_QUEUE_CFG = {
   GUMTREE_AU: { queue: 'fasGumtreeAuQueue', index: 'fasGumtreeAuIndex' },
   GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish' },
   POSHMARK: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', autoPublish: 'fasPoshmarkAutoPublish' },
-  MERCARI: { queue: 'fasMercariQueue', index: 'fasMercariIndex', autoPublish: 'fasMercariAutoPublish' },
+  // autoPublish omitted 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
+  // marketplace-ban-risk-playbook.md Part 4/Mercari) -- same reason GUMTREE_AU above has none:
+  // this poller's own default-TRUE-when-unset merge logic below (st[cfg.autoPublish] !== false)
+  // would otherwise silently re-enable Mercari auto-publish on a fresh/never-set account, undoing
+  // the hardcoded-off fix in the setMercariQueue/getMercariQueueItem handlers above.
+  MERCARI: { queue: 'fasMercariQueue', index: 'fasMercariIndex' },
 };
 
 async function ensureAutoListQueueAlarm() {
@@ -1908,18 +1913,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // 2026-08-18 dispatch (fas-mercari.js): same queue-storage shape as
         // setGumtreeAuQueue above. Not wired into autoRenewDueItems()/checkRenewals() above --
         // posting only, no renewal automation for this dispatch.
-        // autoPublish (2026-08-22, S-EXT-AUTOPUBLISH-POLICY): fas-mercari.js's blanket
-        // "never auto-publish" was a real deviation from the 2026-07-17 locked decision (full
-        // automation including auto-publish is a PRO/TEAMS-only opt-in, not disabled outright) --
-        // corrected. Same fasAutoPublish pattern as the FB/Craigslist queues, defaults true.
+        // REVERSED 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH, per claude_docs/architecture/
+        // marketplace-ban-risk-playbook.md Part 4/Mercari): the 2026-08-22 S-EXT-AUTOPUBLISH-POLICY
+        // correction below this comment (now removed) threaded msg.autoPublish through same as
+        // FB/Craigslist -- that premise didn't hold up. Mercari's own Prohibited Conduct policy
+        // explicitly bans automated posting tools and its Safety Guidelines separately bar
+        // third-party account access, so fasMercariAutoPublish is now hardcoded false regardless
+        // of what the popup sends -- this background handler no longer honors an auto-publish-on
+        // request for Mercari specifically (every other platform's toggle here is untouched).
         // fasMercariQueueTabId cleared first (fail-closed) then set to the real tab id once
         // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener above.
-        await chrome.storage.local.set({ fasMercariQueue: msg.queue || [], fasMercariIndex: 0, fasMercariAutoPublish: msg.autoPublish !== false, fasMercariQueueTabId: null });
+        await chrome.storage.local.set({ fasMercariQueue: msg.queue || [], fasMercariIndex: 0, fasMercariAutoPublish: false, fasMercariQueueTabId: null });
         const mercQueueTab = await chrome.tabs.create({ url: CFG.MERC_POST_URL });
         await chrome.storage.local.set({ fasMercariQueueTabId: mercQueueTab && mercQueueTab.id != null ? mercQueueTab.id : null });
         sendResponse({ ok: true });
       } else if (msg.type === 'getMercariQueueItem') {
-        const { fasMercariQueue = [], fasMercariIndex = 0, fasMercariAutoPublish = true } =
+        // fasMercariAutoPublish default flipped to false 2026-09-22 (S-EXT-MERCARI-NO-AUTOPUBLISH)
+        // -- fas-mercari.js no longer reads this field at all (hardcoded manual-review-only, same
+        // as fas-vinted.js), kept in the response only for any older cached content-script build.
+        const { fasMercariQueue = [], fasMercariIndex = 0, fasMercariAutoPublish = false } =
           await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex', 'fasMercariAutoPublish']);
         sendResponse({ ok: true, item: fasMercariQueue[fasMercariIndex] || null, index: fasMercariIndex, total: fasMercariQueue.length, autoPublish: fasMercariAutoPublish });
       } else if (msg.type === 'advanceMercariQueue') {
