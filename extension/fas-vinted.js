@@ -2174,8 +2174,20 @@
   // whose "Profile" item is `<a href="/member/<id>">Profile</a>`. Both are matched here by stable
   // attributes (data-testid, href pattern, exact button text) rather than the page's own
   // webpack-hashed CSS module class names, which are not stable across Vinted deployments.
+  // BUG FIX 2026-09-22 (S-EXT-VINTED-REMOVAL-RACE, dead-lettered job cmucl9j4j0371g2q3xzqf3m7h,
+  // error no_own_profile_url x3): the account-menu trigger was queried exactly once with zero
+  // wait, racing Vinted's SPA header hydration on a cold removal tab -- manifest.json's
+  // "document_idle" only guarantees DOMContentLoaded, not that the header's JS framework has
+  // rendered yet, so a fast automated queue can query before the button exists even though a
+  // slower human click always finds it. Poll for the trigger instead of a single immediate query.
   async function discoverVintedOwnProfileUrlByClick() {
-    const trigger = document.querySelector('button[data-testid="user-menu-button"]');
+    let trigger = null;
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+      trigger = document.querySelector('button[data-testid="user-menu-button"]');
+      if (trigger) break;
+      await sleep(250);
+    }
     if (!trigger) return null;
     vintRemSyntheticClick(trigger);
     await sleep(500);
@@ -2218,32 +2230,130 @@
     return null; // zero or ambiguous matches -- never guess
   }
 
-  // UNVERIFIED -- Vinted's item detail page for the seller's own listing typically exposes a
-  // kebab/"..." menu (aria-label containing "menu" or "options") with a "Delete" action inside.
+  // FEATURE 2026-09-22 (S-EXT-VINTED-DELETE-NATIVE-CONFIRM, see fas-vinted-bridge.js file header
+  // for the full live-DOM evidence this session): Vinted's real delete button very likely raises
+  // a NATIVE window.confirm() dialog, which this isolated-world script cannot see or answer --
+  // only a MAIN-world script sharing the page's real window.confirm reference can.
+  // fas-vinted-bridge.js is that MAIN-world companion (manifest.json, "world": "MAIN", same
+  // vinted.com match pattern), following the exact request/response CustomEvent pattern already
+  // proven by fas-poshmark-bridge.js / fas-poshmark.js's bridgeCall(). Mirrors that helper's
+  // shape; see that file for the original.
+  function vintRemBridgeCall(action, payload, timeoutMs) {
+    return new Promise((resolve) => {
+      const requestId = 'fas-vin-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      let done = false;
+      const timeout = setTimeout(() => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('fas-vinted-bridge-response', onResponse);
+        resolve({ ok: false, error: 'bridge-timeout', requestId: requestId });
+      }, timeoutMs || 1000);
+      function onResponse(e) {
+        const detail = (e && e.detail) || {};
+        if (detail.requestId !== requestId) return;
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
+        window.removeEventListener('fas-vinted-bridge-response', onResponse);
+        resolve(Object.assign({ ok: true, requestId: requestId }, detail.result));
+      }
+      window.addEventListener('fas-vinted-bridge-response', onResponse);
+      window.dispatchEvent(new CustomEvent('fas-vinted-bridge-request', { detail: { requestId: requestId, action: action, payload: payload || {} } }));
+    });
+  }
+
+  // Waits for the MAIN-world bridge to report what happened to the (expected) native confirm --
+  // 'confirmFired' (a confirm() call was observed and auto-accepted), 'timeout' (the bridge's own
+  // arm window elapsed with no confirm() call at all), or 'no-signal' (this wait's own hard upper
+  // bound elapsed without either -- should not normally happen, since the bridge's arm timeout
+  // always fires one event before this wait's longer timeout, but this is a hard ceiling so a
+  // caller never waits forever if the MAIN-world script somehow never installed a listener).
+  function vintRemWaitForBridgeEvent(requestId, timeoutMs) {
+    return new Promise((resolve) => {
+      let done = false;
+      const timeout = setTimeout(() => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('fas-vinted-bridge-event', onEvent);
+        resolve('no-signal');
+      }, timeoutMs || 3500);
+      function onEvent(e) {
+        const detail = (e && e.detail) || {};
+        if (detail.requestId !== requestId) return;
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
+        window.removeEventListener('fas-vinted-bridge-event', onEvent);
+        resolve(detail.event || 'no-signal');
+      }
+      window.addEventListener('fas-vinted-bridge-event', onEvent);
+    });
+  }
+
+  // Live-confirmed selectors (javascript_tool against Patrick's real vinted.com item-detail
+  // page, 2026-09-22): the seller's own item-detail sidebar has NO kebab/options menu -- it is a
+  // flat list of action buttons directly in the DOM, confirmed via a live
+  // document.querySelectorAll query against a real listing at
+  // https://www.vinted.com/items/10025131218-.... The delete control is
+  // `button[data-testid="item-delete-button"]` (stable data-testid attribute, same pattern
+  // confirmed on the sidebar's sibling controls: `item-edit-button`, `item-bump-button`,
+  // `mark-as-sold-button`, `mark-as-reserved-button`, `item-hide-button`).
+  //
+  // BUG FIX 2026-09-22 (S-EXT-VINTED-REMOVAL-NO-KEBAB-MENU, root cause of Patrick's "not
+  // removing, telling me to do it manually" report -- see
+  // claude_docs/feature-notes/adr-vinted-craigslist-mercari-removal-selector-verification-2026-09-22.md):
+  // the previous code below required finding a kebab/options menu button BEFORE it would even
+  // look for a Delete action -- that selector (`button[aria-label*="menu" i], ...`) matches
+  // NOTHING on the real page (there is no such menu on this layout), so this function always
+  // returned 'no_menu_button' and every single Vinted removal failed at the very first step, no
+  // matter what. Go straight to the real delete button instead.
   async function deleteVintedListingOnDetailPage() {
     if (looksLikeInterstitial()) return 'interstitial';
-    const kebab = document.querySelector('button[aria-label*="menu" i], button[aria-label*="options" i], [data-testid*="actions" i] button');
-    if (!kebab) return 'no_menu_button';
-    vintRemSyntheticClick(kebab);
-    await sleep(400);
-    const deleteBtn = vintRemFindButtonByText('Delete');
+    const deleteBtn = document.querySelector('button[data-testid="item-delete-button"]');
     if (!deleteBtn) return 'no_delete_action';
+
+    // FEATURE 2026-09-22 (S-EXT-VINTED-DELETE-NATIVE-CONFIRM): live evidence this session (see
+    // fas-vinted-bridge.js's file header for the full writeup) strongly suggests this click
+    // raises a NATIVE window.confirm() dialog that only a MAIN-world script can see or answer.
+    // Arm the MAIN-world bridge's narrowly-scoped auto-accept BEFORE clicking, and fail closed
+    // (never click) if it can't be confirmed armed -- clicking into an unhandled native confirm
+    // would freeze this tab's render thread with no way for the unattended removal queue to ever
+    // recover from it.
+    const armResult = await vintRemBridgeCall('armConfirmOverride', { timeoutMs: 2500 }, 1000);
+    if (!armResult || !armResult.ok || !armResult.armed) {
+      return 'no_confirm_bridge';
+    }
+    const bridgeEventPromise = vintRemWaitForBridgeEvent(armResult.requestId, 3500);
+
     vintRemSyntheticClick(deleteBtn);
-    await sleep(600);
-    // HONESTY FIX 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION): this lookup used to be
-    // vintRemFindButtonByText('Delete') || ... -- which re-found the SAME delete control just
-    // clicked (still in the DOM), clicked it a second time, and reported success regardless -- the
-    // caller took that as a completed removal and told FindA.Sale so. That is the worst
-    // outcome this feature has: FindA.Sale records the item as gone and stops trying while the
-    // listing is still live and still selling. A confirmation control must therefore be a
-    // DIFFERENT node from the one already clicked -- and with no distinct confirmation there is no
-    // confirmation at all, so nothing may be reported as removed.
-    const confirmBtn = ['Delete', 'Yes', 'Confirm']
-      .map((label) => vintRemFindButtonByText(label))
-      .find((el) => el && el !== deleteBtn) || null;
-    if (!confirmBtn) return 'no_confirm_button';
-    vintRemSyntheticClick(confirmBtn);
-    await sleep(400);
+
+    // Purely observability -- does not change the outcome (the MAIN-world override already
+    // decided, synchronously, whether to auto-accept any confirm() it saw, before this promise
+    // resolves): did Vinted's real click actually raise a confirm() this time, or not (e.g. a UI
+    // change, or no dialog at all for this flow)? Logged so a real failure is diagnosable from
+    // the console instead of only from the generic reason code below.
+    const bridgeOutcome = await bridgeEventPromise;
+    if (bridgeOutcome === 'confirmFired') {
+      console.log('[FAS Vinted] delete: native confirm() observed and auto-accepted by the MAIN-world bridge.');
+    } else {
+      console.log('[FAS Vinted] delete: no confirm() observed within the armed window (bridge outcome: ' + bridgeOutcome + ') -- Vinted may not have shown one this time.');
+    }
+
+    // HONESTY FIX 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION), preserved here: never
+    // report success by re-finding the SAME control just clicked -- that was the exact prior bug
+    // class this comment originally documented (re-finds the still-present Delete button,
+    // reports "deleted" regardless of whether anything actually happened). There is no
+    // live-confirmed post-delete page shape yet (redirect vs. in-place removal -- see this dev's
+    // handoff, flagged for the live verification test), so the only honest signal available
+    // without guessing is that the delete control itself is actually gone -- checked twice with a
+    // short gap to rule out a transient re-render, not a single immediate read.
+    await sleep(700);
+    if (document.querySelector('button[data-testid="item-delete-button"]')) {
+      await sleep(700);
+      if (document.querySelector('button[data-testid="item-delete-button"]')) {
+        return 'delete_not_confirmed';
+      }
+    }
     return 'deleted';
   }
 

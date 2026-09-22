@@ -154,6 +154,16 @@
         "https://www.vinted.com/*"
       ],
       "js": [
+        "fas-vinted-bridge.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.vinted.com/*"
+      ],
+      "js": [
         "fas-vinted.js"
       ],
       "run_at": "document_idle"
