@@ -950,7 +950,12 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
 // getMarketplaceReviewBacklog so the admin view and every organizer-facing computation
 // (getPendingRemovals, getSyncHealth above) can never drift to a second divergent value.
 export const MAX_REMOVAL_SKIP_ATTEMPTS = 3;
-const RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h between retries once past the fast-fail cap
+// COOLDOWN LOWERED 2026-09-22 (Patrick direct instruction: "we're actively working and it
+// needs to be pulled from other sites" -- 24h was too slow for active removal-fix work in
+// progress). 1h still meaningfully throttles a genuinely broken item (12x less hammering than
+// the ~20min poll alone would do), while letting a same-day fix get a same-day retry instead
+// of waiting until tomorrow.
+const RETRY_COOLDOWN_MS = 60 * 60 * 1000; // 1h between retries once past the fast-fail cap
 
 export const getPendingRemovals = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
