@@ -15,6 +15,19 @@
  * getCachedEbayFreeInsertionsCap() -- a real per-organizer number when
  * available, cached by ebayStoreSubscriptionService.ts, but still only ever
  * a DB read from this file's perspective -- this constraint still holds.
+ *
+ * RECONCILIATION (2026-09-21, "ADR Update -- Flagged Question #1 Reopened"
+ * in this same ADR file): usedThisMonth below is unchanged as a computation
+ * (still getEbayInsertionsUsed() reading Organizer.ebayInsertionsThisMonth)
+ * -- but that underlying field is now periodically OVERWRITTEN with a real
+ * eBay-reconciled count by ebayInsertionsQuotaTracker.ts's
+ * reconcileEbayInsertionsUsage() (see that file), so usedThisMonth
+ * automatically reflects the reconciled value once one has succeeded, with
+ * zero change needed to this file's own arithmetic. This function now also
+ * surfaces ebayInsertionsReconciledAt (still a pure DB read, no new eBay
+ * call from this path -- the constraint above still holds) so the UI can
+ * show organizers how fresh that reconciliation is, per
+ * claude_docs/ux-spotchecks/ebay-insertions-freshness-note-2026-09-21.md.
  */
 
 import { prisma } from './prisma';
@@ -37,6 +50,12 @@ export interface EbayInsertionsForecast {
   projectedTotalUsage: number;
   resetAt: string; // ISO string
   status: EbayInsertionsForecastStatus;
+  // 2026-09-21: when usedThisMonth was last confirmed against eBay's real
+  // account data (ebayInsertionsQuotaTracker.ts's reconcileEbayInsertionsUsage()).
+  // Null means usedThisMonth is still the FAS-push-only estimate -- no
+  // reconciliation has succeeded yet for this organizer. Pure DB read, no new
+  // eBay API call added to this path.
+  ebayInsertionsReconciledAt: string | null;
 }
 
 // Matches platformStatsService.ts's ebayWarningLevel() thresholds (>=1.0 / >=0.8)
@@ -67,7 +86,7 @@ export async function computeEbayInsertionsForecast(organizerId: string): Promis
   // per this file's own "zero eBay API calls" constraint (see
   // ebayStoreSubscriptionService.ts's header comment for where the live
   // lookup that populates this cache actually runs instead).
-  const [usedThisMonth, projectedRenewalsBeforeReset, capResult] = await Promise.all([
+  const [usedThisMonth, projectedRenewalsBeforeReset, capResult, organizerReconcileInfo] = await Promise.all([
     getEbayInsertionsUsed(organizerId),
     prisma.item.count({
       where: {
@@ -80,6 +99,10 @@ export async function computeEbayInsertionsForecast(organizerId: string): Promis
       },
     }),
     getCachedEbayFreeInsertionsCap(organizerId),
+    prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { ebayInsertionsReconciledAt: true },
+    }),
   ]);
 
   const freeInsertionsCap = capResult.cap;
@@ -93,5 +116,6 @@ export async function computeEbayInsertionsForecast(organizerId: string): Promis
     projectedTotalUsage,
     resetAt: resetAt.toISOString(),
     status: computeStatus(projectedTotalUsage, freeInsertionsCap),
+    ebayInsertionsReconciledAt: organizerReconcileInfo?.ebayInsertionsReconciledAt?.toISOString() ?? null,
   };
 }

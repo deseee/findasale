@@ -1,0 +1,37 @@
+-- ADR ebay-renewal-forecasting (2026-09-15), "ADR Update -- Flagged Question #1
+-- Reopened" (2026-09-21) -- real eBay insertion-usage reconciliation.
+--
+-- WHY: the existing Organizer.ebayInsertionsThisMonth counter only tracked
+-- FindA.Sale-initiated $0 publishes and had zero visibility into eBay's own
+-- silent GTC (Good-Til-Cancelled) auto-renewals, which turned out to be the
+-- large majority of real consumption for a mature listing base. Confirmed via
+-- Patrick's own eBay Seller Hub screenshot (2026-09-21): real usage 207/250
+-- (83%) vs. this app's computed forecast of 32/250 (13%) for the same
+-- organizer, same day -- a ~6.5x undercount. Full root cause:
+-- claude_docs/audits/ebay-insertions-forecast-undercounting-2026-09-21.md.
+--
+-- FIX: a nightly per-organizer live reconciliation (Trading API GetAccount,
+-- same proven OAuth/XML pattern already used elsewhere in ebayController.ts
+-- for GetMyeBaySelling/GetItem/ReviseItem) overwrites
+-- Organizer.ebayInsertionsThisMonth with eBay's real count when it succeeds.
+-- This column stamps WHEN that last happened, so the forecast/UI can tell the
+-- difference between "verified against eBay recently" and "FAS-push-only
+-- estimate, never reconciled" -- see ebayInsertionsQuotaTracker.ts's
+-- reconcileEbayInsertionsUsage().
+--
+-- SAFETY: additive only. One nullable column, no default, no backfill, no
+-- data movement. Every existing row reads NULL ("never reconciled yet"),
+-- which is exactly today's status quo (nothing regresses on deploy) -- the
+-- forecast falls back to the existing FAS-push-only estimate until the first
+-- nightly reconciliation succeeds for that organizer. Organizer is not a
+-- high-row-count or hot-write table; this is a metadata-only change on
+-- PostgreSQL.
+--
+-- ROLLBACK: ALTER TABLE "Organizer" DROP COLUMN "ebayInsertionsReconciledAt";
+-- Playbook: if a future deploy's reconciliation code fails, this column
+-- simply stays NULL for affected organizers -- no rollback of this migration
+-- itself is needed for a code-side failure, only for the schema change itself
+-- being wrong, which is not expected given the additive/nullable shape.
+
+-- AlterTable
+ALTER TABLE "Organizer" ADD COLUMN IF NOT EXISTS "ebayInsertionsReconciledAt" TIMESTAMP(3);

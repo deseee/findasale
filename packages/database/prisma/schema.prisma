@@ -555,8 +555,9 @@ model Organizer {
   // (NOT a gate — the live getListingFees check in ebayListingQueueCron.ts is the gate.
   // This is for dashboard display only. Uses the same lazy-reset pattern as
   // aiTagsUsedThisMonth/aiTagsResetAt above — see ebayInsertionsQuotaTracker.ts.)
-  ebayInsertionsThisMonth         Int                            @default(0) // Count of $0 eBay insertions this calendar month (observability only)
+  ebayInsertionsThisMonth         Int                            @default(0) // Count of $0 eBay insertions this calendar month. Was FAS-push-only (observability only); as of the 2026-09-21 reconciliation fix (adr-ebay-renewal-forecasting-2026-09-15.md, "ADR Update" section), this is OVERWRITTEN by a real Trading API GetAccount reconciliation when one has succeeded — see ebayInsertionsReconciledAt.
   ebayInsertionsResetAt           DateTime? // When the monthly eBay insertions counter was last reset
+  ebayInsertionsReconciledAt      DateTime? // When ebayInsertionsThisMonth was last successfully overwritten with eBay's real reconciled count (Trading API GetAccount). Null = never reconciled yet, value is FAS-push-only estimate. See ebayInsertionsQuotaTracker.ts reconcileEbayInsertionsUsage().
   // eBay Push — publish-mode cascade + shipping smart-pick (organizer-level defaults)
   // @deprecated S725 — DRAFT mode removed; field unused, retained to avoid migration.
   // eBay Inventory API unpublished offers cannot be viewed/published from the

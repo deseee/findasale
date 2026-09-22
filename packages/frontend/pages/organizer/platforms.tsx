@@ -123,6 +123,44 @@ interface EbayInsertionsForecast {
   resetAt: string;
   status: 'ok' | 'approaching' | 'over';
   degraded?: boolean;
+  // 2026-09-21: when usedThisMonth was last confirmed against eBay's real
+  // account data. Null = never reconciled yet (FAS-push-only estimate). See
+  // claude_docs/ux-spotchecks/ebay-insertions-freshness-note-2026-09-21.md.
+  ebayInsertionsReconciledAt: string | null;
+}
+
+// Relative-time phrasing for the freshness note -- mirrors this codebase's
+// existing local timeAgo() pattern (e.g. NotificationBell.tsx) rather than
+// pulling in a date library (none installed in packages/frontend).
+function relativeTimeSince(iso: string): string {
+  const then = new Date(iso).getTime();
+  const diffMs = Date.now() - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffMins < 1) return 'moments ago';
+  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  if (diffDays === 1) return 'yesterday';
+  return `${diffDays} days ago`;
+}
+
+// STALE_HOURS: reconciliation is throttled to run at most once per 24h per
+// organizer (ebayInsertionsQuotaTracker.ts), so anywhere up to ~30h old is
+// normal cron cadence, not a problem. 48h+ means the reconciliation job
+// itself is stuck, not just between runs -- worth a mild visual flag.
+const STALE_HOURS = 48;
+
+function freshnessNote(reconciledAt: string | null): { text: string; stale: boolean } {
+  if (!reconciledAt) {
+    return { text: 'not yet checked against eBay directly', stale: false };
+  }
+  const hoursOld = (Date.now() - new Date(reconciledAt).getTime()) / (1000 * 60 * 60);
+  const rel = relativeTimeSince(reconciledAt);
+  if (hoursOld >= STALE_HOURS) {
+    return { text: `last checked against eBay ${rel}, may be out of date`, stale: true };
+  }
+  return { text: `checked against eBay ${rel}`, stale: false };
 }
 
 // ebay-markdown-budget-warnings-ux-spec-2026-09-15.md Piece 2 -- mirrors
@@ -210,7 +248,7 @@ function EbayForecastBlock({ forecast }: { forecast: EbayInsertionsForecast }) {
     );
   }
 
-  const { usedThisMonth, freeInsertionsCap, projectedRenewalsBeforeReset, projectedTotalUsage, resetAt, status } = forecast;
+  const { usedThisMonth, freeInsertionsCap, projectedRenewalsBeforeReset, projectedTotalUsage, resetAt, status, ebayInsertionsReconciledAt } = forecast;
   const pct = freeInsertionsCap > 0 ? Math.min((projectedTotalUsage / freeInsertionsCap) * 100, 100) : 0;
   const projectedPct = freeInsertionsCap > 0 ? Math.round((projectedTotalUsage / freeInsertionsCap) * 100) : 0;
   const barColor =
@@ -218,6 +256,7 @@ function EbayForecastBlock({ forecast }: { forecast: EbayInsertionsForecast }) {
     : status === 'approaching' ? 'bg-yellow-500'
     : 'bg-red-500';
   const resetLabel = new Date(resetAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const freshness = freshnessNote(ebayInsertionsReconciledAt);
 
   return (
     <div className="mt-3 pt-3 border-t border-warm-100 dark:border-gray-700">
@@ -244,7 +283,11 @@ function EbayForecastBlock({ forecast }: { forecast: EbayInsertionsForecast }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Resets {resetLabel}</p>
+      <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+        Resets {resetLabel}
+        {' -- '}
+        <span className={freshness.stale ? 'text-amber-700 dark:text-amber-400' : undefined}>{freshness.text}</span>
+      </p>
 
       {status === 'approaching' && (
         <div className="mt-2 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-xs text-yellow-800 dark:text-yellow-200">

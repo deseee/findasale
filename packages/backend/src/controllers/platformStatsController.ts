@@ -104,6 +104,10 @@ export async function getEbayInsertionsForecast(req: AuthRequest, res: Response)
         resetAt: getNextMonthStart().toISOString(),
         status: 'ok',
         degraded: true,
+        // 2026-09-21: keep the degraded fallback shape identical to the real
+        // forecast object (ebayInsertionsForecast.ts) so frontend consumers
+        // never have to special-case a missing field.
+        ebayInsertionsReconciledAt: null,
       });
     }
   } catch (err) {

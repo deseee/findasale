@@ -41,6 +41,8 @@ import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken } from '../controllers/ebayController';
 import { reviseEbayOfferPrice } from '../services/ebayPriceRevisionService';
 import { fetchAndCacheEbayStoreSubscription, isEbayStoreSubscriptionStale } from '../services/ebayStoreSubscriptionService';
+import { reconcileEbayInsertionsUsage, isEbayInsertionsReconciliationStale } from '../lib/ebayInsertionsQuotaTracker';
+import { isEbayRateLimited } from '../lib/ebayRateLimiter';
 
 // ADR markdown-cycle-ebay-price-sync (2026-09-15), UX spec Piece 2: an item counts as
 // "sync-failed" (not just mid-retry) once this much time has passed since
@@ -144,6 +146,27 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
   if (isEbayStoreSubscriptionStale(connectionForTierCheck?.storeSubscriptionCheckedAt ?? null)) {
     fetchAndCacheEbayStoreSubscription(organizerId, accessToken).catch((err) =>
       console.error(`[eBay PullSync] organizer ${organizerId}: store-tier refresh failed:`, err)
+    );
+  }
+
+  // Opportunistic insertions-usage reconciliation (2026-09-21, adr-ebay-
+  // renewal-forecasting-2026-09-15.md "ADR Update -- Flagged Question #1
+  // Reopened"): same piggyback reasoning as the store-tier refresh directly
+  // above -- reuses this already-scheduled, already-authenticated eBay call
+  // instead of adding a new one to the forecast/dashboard path. Throttled to
+  // 24h per organizer (isEbayInsertionsReconciliationStale) and guarded by
+  // the platform-wide soft cap, same as this codebase's other opportunistic
+  // eBay calls.
+  const organizerForReconcileCheck = await prisma.organizer.findUnique({
+    where: { id: organizerId },
+    select: { ebayInsertionsReconciledAt: true },
+  });
+  if (
+    !isEbayRateLimited() &&
+    isEbayInsertionsReconciliationStale(organizerForReconcileCheck?.ebayInsertionsReconciledAt ?? null)
+  ) {
+    reconcileEbayInsertionsUsage(organizerId, accessToken).catch((err) =>
+      console.error(`[eBay PullSync] organizer ${organizerId}: insertions reconciliation failed:`, err)
     );
   }
 
