@@ -3747,7 +3747,7 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         message: item.draftStatus === 'PUBLISHED'
           ? 'Item is already published.'
-          : 'Item not ready — AI analysis still in progress.'
+          : 'Item not ready. Smart tagging still in progress.'
       });
     }
 
@@ -4520,7 +4520,7 @@ export const closeAuctionEndpoint = async (req: AuthRequest, res: Response) => {
         outcome: 'SOLD',
         sold: true,
         highestBid: bid,
-        message: `Auction closed. Winning bid $${bid.toFixed(2)} — a payment link has been sent to the winner.`,
+        message: `Auction closed. Winning bid $${bid.toFixed(2)}. A payment link has been sent to the winner.`,
       });
     }
 

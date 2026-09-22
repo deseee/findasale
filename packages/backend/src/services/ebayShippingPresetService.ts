@@ -106,7 +106,7 @@ export interface PresetShippingService {
 export const PRESET_SHIPPING_SERVICES: PresetShippingService[] = [
   {
     key: 'CALC_USPS_GROUND',
-    label: 'USPS Ground Advantage — eBay works out the rate',
+    label: 'USPS Ground Advantage (eBay works out the rate)',
     helpText:
       "eBay calculates the real rate for each buyer's address at checkout. Recommended: the price is always current, so it can never go stale.",
     costType: 'CALCULATED',
@@ -115,7 +115,7 @@ export const PRESET_SHIPPING_SERVICES: PresetShippingService[] = [
   },
   {
     key: 'CALC_USPS_PRIORITY',
-    label: 'USPS Priority Mail — eBay works out the rate',
+    label: 'USPS Priority Mail (eBay works out the rate)',
     helpText:
       'Faster service. eBay still calculates the real rate for each buyer at checkout.',
     costType: 'CALCULATED',
@@ -124,7 +124,7 @@ export const PRESET_SHIPPING_SERVICES: PresetShippingService[] = [
   },
   {
     key: 'FLAT_STANDARD',
-    label: 'Standard shipping — one flat price',
+    label: 'Standard shipping: one flat price',
     helpText:
       'Every buyer pays the same price you set, wherever they are. Use this when you already know what the label costs.',
     costType: 'FLAT_RATE',
@@ -462,7 +462,7 @@ export function validatePresetName(input: PresetInput): PresetNameValidation {
         field: 'name',
         message:
           `This name does not match what you set up. ${CLASSIFICATION_MEANING[classification]} ` +
-          `Rename it — "${suggestedName}" matches your settings.`,
+          `Rename it: "${suggestedName}" matches your settings.`,
       });
     }
   }
@@ -502,7 +502,7 @@ export function validatePresetName(input: PresetInput): PresetNameValidation {
       issues.push({
         code: 'NAME_PRICE_MISSING',
         field: 'name',
-        message: `Put the price in the name, at the end — for example "${suggestedName}". Weight-based presets advertise the price from their name on your Google Shopping listings.`,
+        message: `Put the price in the name, at the end, for example "${suggestedName}". Weight-based presets advertise the price from their name on your Google Shopping listings.`,
       });
     }
   }
@@ -520,7 +520,7 @@ export function validatePresetName(input: PresetInput): PresetNameValidation {
       issues.push({
         code: 'NAME_WEIGHT_MISMATCH',
         field: 'name',
-        message: `The name works out to ${parsedMaxOz} oz but you set the max weight to ${input.maxWeightOz} oz. Items are routed by the figure in the name, so these have to match — "${suggestedName}" does.`,
+        message: `The name works out to ${parsedMaxOz} oz but you set the max weight to ${input.maxWeightOz} oz. Items are routed by the figure in the name, so these have to match: "${suggestedName}" does.`,
       });
     }
   } else if (
@@ -1062,7 +1062,7 @@ export async function createPreset(organizerId: string, input: PresetInput): Pro
               // organizer needs to know THAT is why the number looks high, or the
               // guard reads as broken and gets acknowledged away reflexively.
               message:
-                `At $${priceCheck.enteredPrice.toFixed(2)} you keep $${priceCheck.netToSeller.toFixed(2)} after eBay's fee on shipping, but the label for this package costs about $${priceCheck.labelCost.toFixed(2)} — you would pay $${priceCheck.shortfall.toFixed(2)} out of pocket on every sale. Raise the price, or confirm you meant to.` +
+                `At $${priceCheck.enteredPrice.toFixed(2)} you keep $${priceCheck.netToSeller.toFixed(2)} after eBay's fee on shipping, but the label for this package costs about $${priceCheck.labelCost.toFixed(2)}. You would pay $${priceCheck.shortfall.toFixed(2)} out of pocket on every sale. Raise the price, or confirm you meant to.` +
                 (estimate.originNote ? ` ${estimate.originNote}` : ''),
             },
           ],

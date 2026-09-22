@@ -379,7 +379,7 @@ export async function addToEbayQueue(req: AuthRequest, res: Response): Promise<R
     const bySaleId = new Map<string, string[]>();
     for (const item of toCreateOffer) {
       if (!item.saleId) {
-        failed.push({ itemId: item.id, message: 'Item is not attached to a sale — cannot create an eBay offer for it.' });
+        failed.push({ itemId: item.id, message: 'Item is not attached to a sale, so an eBay offer cannot be created for it.' });
         continue;
       }
       const list = bySaleId.get(item.saleId) ?? [];

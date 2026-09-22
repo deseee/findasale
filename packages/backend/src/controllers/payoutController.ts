@@ -405,7 +405,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         totalNetPayout: parseFloat(totals.totalNetPayout.toFixed(2)),
       },
       count: items.length,
-      note: "Processor fee is estimated per sale at that sale's own processor's published rate (Stripe: 2.9% + $0.30; Square Online API: 2.9% + $0.30, confirmed 2026-09-09). Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS, on every sale including auctions. On an auction the winning bidder also pays a separate buyer premium on top of their bid — 5% by default, or whatever rate you set on that sale. It comes out of their pocket, not yours, so it is not included in the sale price or fees shown here.",
+      note: "Processor fee is estimated per sale at that sale's own processor's published rate (Stripe: 2.9% + $0.30; Square Online API: 2.9% + $0.30, confirmed 2026-09-09). Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS, on every sale including auctions. On an auction the winning bidder also pays a separate buyer premium on top of their bid: 5% by default, or whatever rate you set on that sale. It comes out of their pocket, not yours, so it is not included in the sale price or fees shown here.",
       // Cash POS: accumulated fees awaiting payout deduction
       cashFeeBalance: organizer.cashFeeBalance,
       cashFeeBalanceUpdatedAt: organizer.cashFeeBalanceUpdatedAt,

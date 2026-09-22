@@ -3161,7 +3161,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             sku,
             ebayListingId: null,
             status: 'queued',
-            message: 'Offer created — queued for eBay Queue Mode to publish once a free listing slot is confirmed.',
+            message: 'Offer created: queued for eBay Queue Mode to publish once a free listing slot is confirmed.',
           });
           continue;
         }
@@ -3284,13 +3284,13 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ? {
                 amount: manualFeeCheck.amount,
                 currency: manualFeeCheck.currency,
-                message: `This listing incurred a $${manualFeeCheck.amount.toFixed(2)} eBay insertion fee — you're outside your free monthly eBay listing allotment.`,
+                message: `This listing incurred a $${manualFeeCheck.amount.toFixed(2)} eBay insertion fee. You're outside your free monthly eBay listing allotment.`,
               }
             : manualFeeCheck.status === 'unknown'
             ? {
                 amount: null,
                 currency: null,
-                message: `Could not confirm whether this listing was within your free eBay allotment (${manualFeeCheck.reason}) — it may have incurred a fee.`,
+                message: `Could not confirm whether this listing was within your free eBay allotment (${manualFeeCheck.reason}). It may have incurred a fee.`,
               }
             : null;
 
@@ -4091,13 +4091,13 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ? {
             amount: manualFeeCheck.amount,
             currency: manualFeeCheck.currency,
-            message: `This listing incurred a $${manualFeeCheck.amount.toFixed(2)} eBay insertion fee — you're outside your free monthly eBay listing allotment.`,
+            message: `This listing incurred a $${manualFeeCheck.amount.toFixed(2)} eBay insertion fee. You're outside your free monthly eBay listing allotment.`,
           }
         : manualFeeCheck.status === 'unknown'
         ? {
             amount: null,
             currency: null,
-            message: `Could not confirm whether this listing was within your free eBay allotment (${manualFeeCheck.reason}) — it may have incurred a fee.`,
+            message: `Could not confirm whether this listing was within your free eBay allotment (${manualFeeCheck.reason}). It may have incurred a fee.`,
           }
         : null;
 
@@ -6555,7 +6555,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         total: 0,
         message: username
           ? `No active listings found for eBay seller "${username}". If you have listings, they may be in a different seller account or all items are already imported.`
-          : 'No items found. eBay account username could not be resolved — try disconnecting and reconnecting your eBay account, then sync again.'
+          : 'No items found. eBay account username could not be resolved: try disconnecting and reconnecting your eBay account, then sync again.'
       });
     }
 

@@ -36,9 +36,9 @@ export async function estimatePriceController(req: Request, res: Response): Prom
       if (result.tier === 1) {
         reasoning = `Based on ${result.compsFound} comparable listing${result.compsFound === 1 ? '' : 's'} from live market sources.`;
       } else if (result.tier === 2) {
-        reasoning = 'Based on limited market data — treat as a rough estimate.';
+        reasoning = 'Based on limited market data. Treat as a rough estimate.';
       } else {
-        reasoning = 'Based on very limited data — treat as a rough estimate.';
+        reasoning = 'Based on very limited data. Treat as a rough estimate.';
       }
     }
 

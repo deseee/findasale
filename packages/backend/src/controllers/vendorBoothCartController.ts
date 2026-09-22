@@ -290,7 +290,7 @@ export async function transferHubOwnerShareForLeg(legId: string): Promise<void> 
         amount: amountCents,
         currency: 'usd',
         destination: hubOwnerOrganizer.stripeConnectId,
-        description: `Hub owner revenue share — booth cart leg ${leg.id}`,
+        description: `Hub owner revenue share: booth cart leg ${leg.id}`,
         metadata: {
           source: 'booth_cart_leg_hub_owner_share',
           vendorBoothId: leg.vendorBoothId,

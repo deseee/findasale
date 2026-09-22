@@ -291,12 +291,12 @@ function EbayForecastBlock({ forecast }: { forecast: EbayInsertionsForecast }) {
 
       {status === 'approaching' && (
         <div className="mt-2 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-xs text-yellow-800 dark:text-yellow-200">
-          Projected to use {projectedPct}% of your free insertions &mdash; consider pausing new eBay pushes this month
+          Projected to use {projectedPct}% of your free insertions. Consider pausing new eBay pushes this month
         </div>
       )}
       {status === 'over' && (
         <div className="mt-2 px-2 py-1 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-200">
-          Projected to exceed your free eBay insertions this month &mdash; new listings past {freeInsertionsCap} will incur eBay&apos;s insertion fee.
+          Projected to exceed your free eBay insertions this month. New listings past {freeInsertionsCap} will incur eBay&apos;s insertion fee.
         </div>
       )}
     </div>

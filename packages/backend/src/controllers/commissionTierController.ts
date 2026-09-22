@@ -269,7 +269,7 @@ export const deleteCommissionTier = async (req: AuthRequest, res: Response) => {
     if (projected.length === 0) {
       return res.status(400).json({
         error:
-          'This is the only band left. A ladder needs at least one band — edit this one instead of removing it.',
+          'This is the only band left. A ladder needs at least one band: edit this one instead of removing it.',
         code: 'INVALID_LADDER',
       });
     }

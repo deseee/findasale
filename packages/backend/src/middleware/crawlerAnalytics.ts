@@ -75,7 +75,7 @@ async function sendFirstCrawlNotification(saleId: string): Promise<void> {
         '<li>Accurate dates and location</li>' +
         '</ul>' +
         '<p><a href="' + saleUrl + '">View your listing &rarr;</a></p>' +
-        '<p>&mdash; The FindA.Sale Team</p>',
+        '<p>The FindA.Sale Team</p>',
     });
   } catch (err) {
     // Never let email failures surface — log only

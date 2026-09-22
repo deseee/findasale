@@ -306,10 +306,10 @@ export const submitScan = async (req: AuthRequest, res: Response): Promise<Respo
     };
     if (hardCapped) {
       responseBody.degraded = true;
-      responseBody.message = 'Value estimate temporarily unavailable — try again shortly';
+      responseBody.message = 'Value estimate temporarily unavailable. Try again shortly';
     } else if (degradedThresholdHit) {
       responseBody.degraded = true;
-      responseBody.message = "Running a lighter scan right now — most of today's free budget is in use";
+      responseBody.message = "Running a lighter scan right now: most of today's free budget is in use";
     }
 
     return res.status(200).json(responseBody);

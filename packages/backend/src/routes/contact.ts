@@ -67,7 +67,7 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
             <p>We've received your message and will get back to you within 1–2 business days.</p>
             <p style="color:#6b7280;font-size:13px;">Your message: <em>${subject}</em></p>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
-            <p style="color:#9ca3af;font-size:12px;">FindA.Sale &mdash; <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}">finda.sale</a></p>
+            <p style="color:#9ca3af;font-size:12px;">FindA.Sale: <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}">finda.sale</a></p>
           </div>
         `,
       });
