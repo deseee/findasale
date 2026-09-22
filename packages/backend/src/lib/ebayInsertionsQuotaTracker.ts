@@ -211,6 +211,22 @@ function xmlAll(block: string, tag: string): string[] {
   return results;
 }
 
+// eBay Trading API's GetAccount BeginDate/EndDate only accept "YYYY-MM-DD" or
+// "YYYY-MM-DD HH:mm:ss" (see this function's call site for the doc citation
+// and the 2026-09-22 bug this fixes) -- NOT ISO 8601. Formats in UTC, which
+// is the convention used elsewhere in this codebase's other Trading API date
+// fields (ebayController.ts).
+function formatEbayDateTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const y = d.getUTCFullYear();
+  const mo = pad(d.getUTCMonth() + 1);
+  const da = pad(d.getUTCDate());
+  const h = pad(d.getUTCHours());
+  const mi = pad(d.getUTCMinutes());
+  const s = pad(d.getUTCSeconds());
+  return `${y}-${mo}-${da} ${h}:${mi}:${s}`;
+}
+
 /**
  * True when this organizer's last successful reconciliation is missing or
  * older than RECONCILE_THROTTLE_MS. Callers (ebayListingSyncCron.ts) use this
@@ -244,17 +260,34 @@ export async function reconcileEbayInsertionsUsage(
     const monthStart = getMonthStart();
     const nextMonthStart = getNextMonthStart();
 
-    // eBay Trading API GetAccount -- NOT independently verified against a
-    // live response this session (see header comment). BetweenSpecifiedDates
-    // + explicit Begin/EndDate scopes this to exactly the current billing
-    // period, matching what the Seller Hub's own "Used/Left" widget shows.
+    // BUG FIX (2026-09-22, confirmed via eBay's own GetAccount docs after the
+    // first live call failed with Ack=Failure "Account Status can show your
+    // account activity for the last four months only..."): two problems in
+    // the original request, both documented on eBay's GetAccount reference
+    // page (developer.ebay.com/devzone/xml/docs/reference/ebay/GetAccount.html):
+    //   1. "The EndDate value can not be set for a future date." -- we were
+    //      always sending nextMonthStart (e.g. Oct 1) as EndDate, which is in
+    //      the future for any request made before the month actually ends.
+    //      Fixed by capping EndDate at "now" when the calendar month is still
+    //      in progress.
+    //   2. "The allowed date formats are YYYY-MM-DD and YYYY-MM-DD HH:mm:ss"
+    //      -- we were sending Date.toISOString() (e.g.
+    //      "2026-09-01T07:00:00.000Z"), which matches neither allowed format
+    //      (wrong separator, has milliseconds, has a trailing Z). Fixed with
+    //      formatEbayDateTime() below, using UTC components in eBay's exact
+    //      "YYYY-MM-DD HH:mm:ss" format.
+    const effectiveEndDate = nextMonthStart.getTime() > Date.now() ? new Date() : nextMonthStart;
+
+    // eBay Trading API GetAccount -- BetweenSpecifiedDates + explicit
+    // Begin/EndDate scopes this to exactly the current billing period,
+    // matching what the Seller Hub's own "Used/Left" widget shows.
     const requestXml =
       `<?xml version="1.0" encoding="utf-8"?>` +
       `<GetAccountRequest xmlns="urn:ebay:apis:eBLBaseComponents">` +
       `<RequesterCredentials></RequesterCredentials>` +
       `<AccountHistorySelection>BetweenSpecifiedDates</AccountHistorySelection>` +
-      `<BeginDate>${monthStart.toISOString()}</BeginDate>` +
-      `<EndDate>${nextMonthStart.toISOString()}</EndDate>` +
+      `<BeginDate>${formatEbayDateTime(monthStart)}</BeginDate>` +
+      `<EndDate>${formatEbayDateTime(effectiveEndDate)}</EndDate>` +
       `<ExcludeBalance>true</ExcludeBalance>` +
       `<ErrorLanguage>en_US</ErrorLanguage>` +
       `</GetAccountRequest>`;
