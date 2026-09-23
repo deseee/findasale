@@ -2109,7 +2109,26 @@
   // a real seller does by hand the moment something sells elsewhere. If this reasoning is ever
   // revisited, re-read the file-header boundary comment above first -- that boundary is about
   // creating/repeating listings, not deleting a genuinely-sold one.
-  function vintRemNorm(s) { return String(s || '').toLowerCase().trim().replace(/\s+/g, ' '); }
+  // SHARED TITLE FOLDING (2026-09-23, cross-platform removal title-guard fix). Duplicated verbatim in
+  // fas-vinted.js / fas-poshmark.js / fas-mercari.js because manifest.json loads each of those as its
+  // own lone content script (no shared module is injected alongside them). Applied IDENTICALLY to
+  // both sides of every title comparison: NFKC, curly quotes -> straight, en/em dash -> '-', NBSP ->
+  // space, U+2026 -> '...', whitespace collapsed, lowercased. Folding only ever makes two strings
+  // that differ by typography compare equal -- it never turns a partial title into a match.
+  function fasFoldTitle(s) {
+    let t = String(s == null ? '' : s);
+    try { t = t.normalize('NFKC'); } catch (e) { /* very old engines: fold the rest anyway */ }
+    return t
+      .replace(/[‘’‚‛ʼ′]/g, "'")
+      .replace(/[“”„‟″]/g, '"')
+      .replace(/[‐‑‒–—―−]/g, '-')
+      .replace(/…/g, '...')
+      .replace(/[   ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+  function vintRemNorm(s) { return fasFoldTitle(s); }
 
   function vintRemSyntheticClick(target) {
     if (!target) return false;
@@ -2223,6 +2242,15 @@
   //       "<title>, brand: <brand>, condition: <cond>, size: <size>, $8.00, $9.10 includes Buyer Protection"
   //     The card's `--description-title` element holds the BRAND, not the listing title. Two
   //     different listings can carry identical titles.
+  //     RE-CAPTURED 2026-09-23 on Patrick's OWN LOGGED-IN profile: the owner view drops BOTH the
+  //     ", brand: ..." segment (when the item has no brand) AND the "includes Buyer Protection"
+  //     tail, e.g. "Season's Greetings from Perry Como, Vinyl LP, RCA Victor LPM-2066, condition:
+  //     Good, $3.00" and "XLR to 1/4 inch TRS (or TS) Audio Cable, brand: Accessories, condition:
+  //     Good, $14.00". The profile page also renders only the first 20 items (35 listed; scrolling
+  //     loads no more), so card scraping alone can never see most of a real wardrobe.
+  //  A2) Same-origin JSON API (live-confirmed 2026-09-23 from the logged-in page):
+  //     GET /api/v2/wardrobe/<memberId>/items?page=N&per_page=20 returns every wardrobe item with
+  //     its id and exact title. This is now the PRIMARY lookup; card scraping is the fallback.
   //  B) Item detail page: URL `/items/<numericId>-<lossy-slug>` -- the numeric id is the
   //     authoritative identity. document.title is "<exact item title> | Vinted"; the page has a
   //     single <h1> holding the bare title.
@@ -2252,11 +2280,14 @@
   }
 
   // Extracts the bare listing title from a profile card's composite title/alt string (fact A).
-  // Greedy capture + anchoring on the trailing ", brand: ..., condition: ... includes Buyer
-  // Protection" structure means the split happens at the LAST ", brand: " that is followed by
-  // that structure, so titles that themselves contain commas survive intact. Returns null when
-  // the string does not have that structure (never a best-effort guess).
-  const VINT_REM_CARD_TITLE_RE = /^([\s\S]+), brand: [\s\S]*?, condition: [\s\S]*includes buyer protection\s*$/i;
+  // FIX 2026-09-23: the old pattern REQUIRED ", brand: " and "includes Buyer Protection", neither of
+  // which the logged-in owner view renders for an unbranded item, so it returned null for every real
+  // card. Now anchors on the trailing "(, brand: ...)?, condition: ...(, size: ...)?, $price(, $price
+  // includes Buyer Protection)?" tail -- brand, size and the buyer-protection price all optional --
+  // and requires that tail to run to the END of the string. The title capture is lazy so the split
+  // is at the FIRST ", condition: " whose remainder is exactly that tail; titles containing commas
+  // survive intact. Returns null when the string does not have that structure (never a guess).
+  const VINT_REM_CARD_TITLE_RE = /^([\s\S]+?)(?:, brand: [\s\S]*?)?, condition: [^,]*(?:, size: [^,]*)?, \$\s?[\d.,]+(?:, \$\s?[\d.,]+ includes buyer protection)?\s*$/i;
   function vintRemParseCardTitle(composite) {
     const m = VINT_REM_CARD_TITLE_RE.exec(String(composite || '').trim());
     return m ? vintRemNorm(m[1]) : null;
@@ -2267,13 +2298,10 @@
     return m ? m[1] : null;
   }
 
-  // Profile-page matcher. Returns { id } for exactly one distinct /items/<id> whose parsed card
-  // title equals the queued title, or { id: null, reason } -- 'ambiguous_duplicate_title' when
-  // MORE THAN ONE distinct listing id matches (identical titles are real, fact A: never guess),
-  // 'no_confident_listing_match' when none does.
-  function findVintedListingIdByTitle(title) {
-    const wanted = vintRemNorm(title);
-    if (!wanted || wanted.length < VINT_REM_MIN_SAFE_TITLE_LEN) return { id: null, reason: 'no_confident_listing_match' };
+  // Profile-page CARD matcher (fallback path). Returns the Set of distinct /items/<id> whose parsed
+  // card title equals the (already normalized) wanted title. Identical titles are real (fact A), so
+  // the caller treats more than one id as ambiguous -- never a guess.
+  function vintRemCardMatchIds(wanted) {
     const ids = new Set();
     for (const a of Array.from(document.querySelectorAll('a[href*="/items/"]'))) {
       const id = vintRemItemIdFromHref(a.getAttribute('href') || a.href);
@@ -2286,6 +2314,95 @@
       ];
       if (sources.some((t) => t && t === wanted)) ids.add(id);
     }
+    return ids;
+  }
+
+  // Back-compat synchronous card-only matcher (same contract as before 2026-09-23).
+  function findVintedListingIdByTitle(title) {
+    const wanted = vintRemNorm(title);
+    if (!wanted || wanted.length < VINT_REM_MIN_SAFE_TITLE_LEN) return { id: null, reason: 'no_confident_listing_match' };
+    const ids = vintRemCardMatchIds(wanted);
+    if (ids.size === 1) return { id: ids.values().next().value, reason: null };
+    if (ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
+    return { id: null, reason: 'no_confident_listing_match' };
+  }
+
+  // PRIMARY lookup (fact A2, 2026-09-23): page through the organizer's own wardrobe via Vinted's
+  // same-origin JSON API with the page's own session cookies. Returns
+  //   { ok: true, ids: Set<exact-title-match ids>, complete: bool }  when every page read parsed, or
+  //   { ok: false, why }                                                on any non-200 / non-JSON /
+  // unrecognized shape, so the caller falls back to card scraping instead of trusting a partial read.
+  // `complete` is false only when the page cap was hit with more pages still pending -- a single
+  // match in an incomplete read cannot rule out an identically-titled listing further on.
+  const VINT_REM_API_PER_PAGE = 20;
+  const VINT_REM_API_MAX_PAGES = 25; // 500 items; beyond that we refuse rather than guess
+  function vintRemMemberIdFromLocation() {
+    const m = /^\/member\/(\d+)/.exec(location.pathname);
+    return m ? m[1] : null;
+  }
+  async function vintRemFetchWardrobeMatchIds(wanted, memberId) {
+    const ids = new Set();
+    for (let page = 1; page <= VINT_REM_API_MAX_PAGES; page++) {
+      const url = location.origin + '/api/v2/wardrobe/' + encodeURIComponent(memberId) +
+        '/items?page=' + page + '&per_page=' + VINT_REM_API_PER_PAGE;
+      let res;
+      try {
+        res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+      } catch (e) { return { ok: false, why: 'fetch_error' }; }
+      if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+      let data;
+      try { data = await res.json(); } catch (e) { return { ok: false, why: 'non_json' }; }
+      const items = data && Array.isArray(data.items) ? data.items : null;
+      if (!items) return { ok: false, why: 'no_items_array' };
+      let recognized = 0;
+      for (const it of items) {
+        if (!it || typeof it !== 'object') continue;
+        const id = it.id != null ? String(it.id) : '';
+        if (!/^\d+$/.test(id) || typeof it.title !== 'string') continue;
+        recognized++;
+        if (vintRemNorm(it.title) === wanted) ids.add(id);
+      }
+      // Items present but none with a numeric id + string title -> the shape changed; do not trust it.
+      if (items.length > 0 && recognized === 0) return { ok: false, why: 'unrecognized_item_shape' };
+      const totalPages = data.pagination ? Number(data.pagination.total_pages) : NaN;
+      const lastPage = (Number.isFinite(totalPages) && totalPages > 0)
+        ? page >= totalPages
+        : items.length < VINT_REM_API_PER_PAGE;
+      if (lastPage) return { ok: true, ids, complete: true };
+      await sleep(250 + Math.floor(Math.random() * 250));
+    }
+    return { ok: true, ids, complete: false };
+  }
+
+  // Async resolver used by the removal flow: API first, then (only when the API read was unusable or
+  // found nothing) a card scan after waiting up to ~8s for cards to render. Exactly one distinct id
+  // -> { id }; more than one -> 'ambiguous_duplicate_title'; none / incomplete -> 
+  // 'no_confident_listing_match'. The detail page still re-verifies URL id + exact title before any
+  // delete (runVintedRemovalQueue).
+  async function resolveVintedListingIdByTitle(title) {
+    const wanted = vintRemNorm(title);
+    if (!wanted || wanted.length < VINT_REM_MIN_SAFE_TITLE_LEN) return { id: null, reason: 'no_confident_listing_match' };
+    const memberId = vintRemMemberIdFromLocation();
+    let api = null;
+    if (memberId) {
+      try { api = await vintRemFetchWardrobeMatchIds(wanted, memberId); } catch (e) { api = { ok: false, why: 'exception' }; }
+      console.log('[FAS Vinted] removal: wardrobe API lookup ->', api && api.ok
+        ? ('ok, ' + api.ids.size + ' exact match(es), complete=' + api.complete)
+        : ('unusable (' + (api && api.why) + ') -- falling back to profile cards'));
+    }
+    if (api && api.ok) {
+      if (api.ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
+      if (api.ids.size === 1) {
+        if (api.complete) return { id: api.ids.values().next().value, reason: null };
+        console.log('[FAS Vinted] removal: one API match but the wardrobe read hit the page cap -- a duplicate title could exist further on; refusing.');
+        return { id: null, reason: 'no_confident_listing_match' };
+      }
+    }
+    // Fallback: profile cards. Poll (250ms, up to ~8s) for cards to exist before concluding anything.
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline && !document.querySelector('a[href*="/items/"]')) await sleep(250);
+    const ids = vintRemCardMatchIds(wanted);
+    if (api && api.ok) api.ids.forEach((id) => ids.add(id));
     if (ids.size === 1) return { id: ids.values().next().value, reason: null };
     if (ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
     return { id: null, reason: 'no_confident_listing_match' };
@@ -2487,6 +2604,15 @@
     // accepted any listing whose page title merely contained the queued title.
     const onItemDetailPage = /^\/items\/\d+/.test(location.pathname);
     let onDetailAlready = onItemDetailPage && vintRemDetailPageTitleMatches(wantedTitle);
+    if (onItemDetailPage && !onDetailAlready) {
+      // 2026-09-23: poll (250ms, up to ~8s) for the SPA to render its <h1>/document.title before
+      // concluding the page does not match -- still exact-match only.
+      const detailDeadline = Date.now() + 8000;
+      while (!onDetailAlready && Date.now() < detailDeadline) {
+        await sleep(250);
+        onDetailAlready = vintRemDetailPageTitleMatches(wantedTitle);
+      }
+    }
     if (onItemDetailPage) {
       // ID check (primary on this page): if the profile page chose a listing id for THIS queued
       // item, the current URL's numeric id must equal it exactly -- identical titles exist (fact A).
@@ -2529,7 +2655,7 @@
       location.href = profileUrl.indexOf('http') === 0 ? profileUrl : (location.origin + profileUrl);
       return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
     } else {
-      const match = findVintedListingIdByTitle(item.title);
+      const match = await resolveVintedListingIdByTitle(item.title);
       if (!match.id) {
         // Zero/ambiguous match on the organizer's OWN profile page -- could be a genuinely
         // unmatchable title, but could also mean a stale cached profile URL (e.g. account

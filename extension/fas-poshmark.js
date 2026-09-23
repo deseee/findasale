@@ -2418,7 +2418,26 @@
   // fas-remove.js's Facebook removal flow -- zero or ambiguous matches are skipped and reported,
   // never guessed) so a wrong guess fails safe instead of touching the wrong listing.
 
-  function poshRemNorm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+  // SHARED TITLE FOLDING (2026-09-23, cross-platform removal title-guard fix). Duplicated verbatim in
+  // fas-vinted.js / fas-poshmark.js / fas-mercari.js because manifest.json loads each of those as its
+  // own lone content script (no shared module is injected alongside them). Applied IDENTICALLY to
+  // both sides of every title comparison: NFKC, curly quotes -> straight, en/em dash -> '-', NBSP ->
+  // space, U+2026 -> '...', whitespace collapsed, lowercased. Folding only ever makes two strings
+  // that differ by typography compare equal -- it never turns a partial title into a match.
+  function fasFoldTitle(s) {
+    let t = String(s == null ? '' : s);
+    try { t = t.normalize('NFKC'); } catch (e) { /* very old engines: fold the rest anyway */ }
+    return t
+      .replace(/[‘’‚‛ʼ′]/g, "'")
+      .replace(/[“”„‟″]/g, '"')
+      .replace(/[‐‑‒–—―−]/g, '-')
+      .replace(/…/g, '...')
+      .replace(/[   ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+  function poshRemNorm(s) { return fasFoldTitle(s); }
 
   // BUG FIX 2026-09-04 (S-EXT-POSHMARK-OWN-CLOSET-RESOLUTION): the old version took the FIRST
   // a[href*="/closet/"] in document order. Live DOM evidence: several /closet/ links can be
@@ -2454,40 +2473,131 @@
     return null;
   }
 
-  // BUG FIX 2026-09-04 (S-EXT-POSHMARK-CLOSET-MATCH-BY-LISTING-ID): replaces the previous
-  // .closest()-based tile resolution + separate dedupe pass. Live DOM evidence: every closet
-  // listing href carries a 24-hex listing id (48/48 confirmed), and each listing renders exactly
-  // two anchors -- a covershot whose text is just a view-count digit, and a meta-link whose text
-  // is "<title> $<price> <size>". Grouping the anchors by that id is both the dedupe AND the card
-  // resolution, and it never climbs to an ancestor that could span several listings (the failure
-  // mode .closest('div') allowed). Returns { id, href } so the caller can navigate straight to
-  // the edit page by id -- Poshmark resolves a listing by id and ignores the slug (live-confirmed).
-  function findPoshmarkClosetMatchByTitle(title) {
-    const want = poshRemNorm(title);
-    if (!want) return null;
-    const MIN_TRUNCATED_PREFIX_LEN = 8; // shorter than this is a badge/label, not a real title prefix
+  // ---- Title matching (REWRITTEN 2026-09-23, cross-platform removal title-guard fix) ------------
+  // LIVE DOM (Patrick's logged-in closet, 2026-09-23): each closet listing renders two anchors to the
+  // same /listing/...-<24hex id> -- a covershot and a meta-link whose innerText is
+  // "<title>\n$90\nOS"; the clean title lives in `.tile-grid-redesign__title` (its innerText is
+  // clean, its textContent is whitespace-padded). The closet renders only 48 of 105 listings, while
+  // `/closet/<user>?query=<words>` finds the rest. FindA.Sale's Item.title for the reference repro
+  // is 80 chars ("Martha Living 7.5 ft Pre-Lit Sparkling Pine Christmas Tree, 600 LED Warm White L")
+  // but Poshmark shows it as 78 chars with the dangling " L" dropped.
+  //
+  // The OLD matcher accepted any >=8-char prefix or containment of the queued title, which (a) could
+  // never match the Martha case (card text carried a "$90 OS" tail) and (b) was unsafely loose. A
+  // card title now matches the queued title ONLY when, after identical folding on both sides:
+  //   1. it equals the queued title, or equals truncatePoshmarkTitle(queued) (the exact transform
+  //      applied when the listing was posted); or
+  //   2. the queued title is >= 75 chars (i.e. at the platform limit), the card title is >= 60
+  //      chars, and the card title is the queued title minus exactly ONE trailing token at a word
+  //      boundary (Poshmark's own dangling-fragment trim).
+  // And the caller still requires exactly one distinct listing id.
+  function poshRemStripTrailingEllipsis(s) { return String(s || '').replace(/\s*\.{3,}\s*$/, '').trim(); }
+
+  // Card text -> bare title: fold, drop a "$price [size ...]" tail (meta-link text), then a trailing
+  // "..."/U+2026 display ellipsis. A title that itself contains "$" is cut short here and so can
+  // never match -- that fails closed.
+  function poshRemCleanCardText(s) {
+    let t = poshRemNorm(s);
+    t = t.replace(/\s*\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s[\s\S]*)?$/, '').trim();
+    return poshRemStripTrailingEllipsis(t);
+  }
+
+  function poshRemTitleMatches(candidateText, queuedTitle) {
+    const c = poshRemCleanCardText(candidateText);
+    if (!c) return false;
+    const targets = [];
+    [queuedTitle, truncatePoshmarkTitle(queuedTitle)].forEach((q) => {
+      const t = poshRemStripTrailingEllipsis(poshRemNorm(q));
+      if (t && targets.indexOf(t) === -1) targets.push(t);
+    });
+    for (const q of targets) {
+      if (c === q) return true;
+      if (q.length >= 75 && c.length >= 60 && q.length > c.length && q.indexOf(c) === 0) {
+        // Remainder must be: optional , ; : then whitespace (a word boundary), then exactly ONE
+        // whitespace-free token -- e.g. " l" or ", l". Anything longer is not a platform trim.
+        if (/^[,;:]?\s+\S+$/.test(q.slice(c.length))) return true;
+      }
+    }
+    return false;
+  }
+
+  // Groups every candidate title text on the page by 24-hex listing id. Sources, cleanest first:
+  // the `.tile-grid-redesign__title` span's innerText, card img alt, the meta-link's first
+  // innerText line, and its folded textContent (price/size tail stripped). Covershot anchor TEXT is
+  // skipped (it is a view-count badge) but its img alt is used.
+  function poshRemCollectClosetCards() {
     const byId = new Map();
+    const entryFor = (id, href) => {
+      if (!byId.has(id)) byId.set(id, { id, href, texts: [] });
+      return byId.get(id);
+    };
+    const pushText = (entry, raw) => { const s = String(raw == null ? '' : raw); if (s.trim()) entry.texts.push(s); };
     qa('a[href*="/listing/"]').forEach((a) => {
-      if (/covershot/i.test(a.className)) return; // covershot text is a view-count badge, never a title
-      const href = a.getAttribute('href') || a.href || '';
-      const id = extractPoshmarkListingId(href);
+      const id = extractPoshmarkListingId(a.getAttribute('href') || a.href || '');
       if (!id) return;
-      const text = poshRemNorm(a.textContent).replace(/\.{3,}$/, '').trim();
-      if (!text) return;
-      if (!byId.has(id)) byId.set(id, { id, href: a.href, texts: [] });
-      byId.get(id).texts.push(text);
+      const entry = entryFor(id, a.href);
+      a.querySelectorAll('.tile-grid-redesign__title').forEach((el) => pushText(entry, el.innerText || el.textContent));
+      a.querySelectorAll('img[alt]').forEach((img) => pushText(entry, img.getAttribute('alt')));
+      if (/covershot/i.test(a.className)) return;
+      const inner = typeof a.innerText === 'string' ? a.innerText : '';
+      if (inner.trim()) pushText(entry, inner.trim().split('\n')[0]);
+      pushText(entry, a.textContent);
     });
+    // A title span outside any listing anchor: attribute it only to a card ancestor (<= 5 levels
+    // up) whose listing anchors all carry ONE id -- never to a container spanning several listings.
+    qa('.tile-grid-redesign__title').forEach((el) => {
+      if (el.closest('a[href*="/listing/"]')) return;
+      let node = el.parentElement;
+      for (let i = 0; i < 5 && node; i++, node = node.parentElement) {
+        const ids = new Set(Array.from(node.querySelectorAll('a[href*="/listing/"]'))
+          .map((x) => extractPoshmarkListingId(x.getAttribute('href') || x.href || '')).filter(Boolean));
+        if (ids.size === 1) {
+          const id = ids.values().next().value;
+          const a = node.querySelector('a[href*="/listing/"]');
+          pushText(entryFor(id, a ? a.href : ''), el.innerText || el.textContent);
+          break;
+        }
+        if (ids.size > 1) break;
+      }
+    });
+    return byId;
+  }
+
+  // Returns { id, href } for exactly one distinct listing id whose card title matches (rules above),
+  // else null (zero or ambiguous -- logged). Navigates straight to the edit page by id afterwards;
+  // Poshmark resolves /edit-listing/<id> by id and ignores the slug (live-confirmed 2026-09-04).
+  function findPoshmarkClosetMatchByTitle(title) {
+    if (!poshRemNorm(title)) return null;
     const matches = [];
-    byId.forEach((entry) => {
-      const hit = entry.texts.some((t) => {
-        // Poshmark can render a genuinely truncated title in the DOM, so accept a length-gated
-        // real prefix of the wanted title as well as full containment.
-        const isPlausibleTruncatedPrefix = t.length >= MIN_TRUNCATED_PREFIX_LEN && want.indexOf(t) === 0;
-        return isPlausibleTruncatedPrefix || t.indexOf(want) !== -1;
-      });
-      if (hit) matches.push(entry);
+    poshRemCollectClosetCards().forEach((entry) => {
+      if (entry.texts.some((t) => poshRemTitleMatches(t, title))) matches.push(entry);
     });
-    return matches.length === 1 ? matches[0] : null;
+    if (matches.length !== 1) {
+      console.log('[FAS Poshmark] removal: ' + matches.length + ' closet listing(s) matched "' + title + '"' + (matches.length > 1 ? ' -- ambiguous, refusing.' : '.'));
+      return null;
+    }
+    return matches[0];
+  }
+
+  // Short closet-search query (2026-09-23): the old retry searched the FULL 80-char title, which
+  // Poshmark's search does not reliably match. Uses the first ~5 significant words, cut at a word
+  // boundary to <= 40 chars; `maxWords` lets the caller widen the search on a second pass. The
+  // exact/one-token-trim rules above keep the result safe however broad the query is.
+  const POSH_REM_SEARCH_STOPWORDS = ['a', 'an', 'the', 'and', 'of', 'for', 'with', 'in', 'on', '&'];
+  function poshRemSearchQuery(title, maxWords) {
+    const words = String(title || '').split(/\s+/)
+      .map((w) => w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''))
+      .filter((w) => w && POSH_REM_SEARCH_STOPWORDS.indexOf(w.toLowerCase()) === -1);
+    let q = '';
+    let n = 0;
+    for (const w of words) {
+      if (n >= (maxWords || 5)) break;
+      const next = q ? q + ' ' + w : w;
+      if (next.length > 40) break;
+      q = next;
+      n++;
+    }
+    return q || String(title || '').slice(0, 40).trim();
   }
 
   // BUG FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-WRONG-PAGE, Patrick-directed live investigation --
@@ -2640,7 +2750,7 @@
     // block above). The normal closet path below skips this hop entirely.
     if (location.pathname.indexOf('/listing/') === 0 || location.pathname.indexOf('/listing/') > 0) {
       const pageTitleEl = findPoshmarkListingTitleEl();
-      const onRightPage = pageTitleEl && poshRemNorm(pageTitleEl.textContent).indexOf(poshRemNorm(item.title)) !== -1;
+      const onRightPage = !!pageTitleEl && poshRemTitleMatches(pageTitleEl.innerText || pageTitleEl.textContent, item.title);
       if (onRightPage) {
         const listingId = extractPoshmarkListingId(location.href);
         if (listingId) {
@@ -2665,7 +2775,19 @@
 
     // Otherwise: on the closet (or some other page) -- find the matching listing and go straight
     // to its edit page.
-    let match = findPoshmarkClosetMatchByTitle(item.title);
+    // 2026-09-23: (1) wait (250ms polls, up to ~8s) for listing tiles to render before the first
+    // scan -- document_idle does not mean Poshmark's grid has hydrated; (2) a match is only TRUSTED
+    // on a `?query=` search page. The unfiltered closet renders only the first 48 listings, so a
+    // "unique" match there cannot rule out an identically-titled listing further down; the search
+    // results page lists every listing matching the query, so uniqueness there is meaningful.
+    const onClosetPage = location.pathname.indexOf('/closet/') !== -1;
+    const onClosetSearch = onClosetPage && /[?&]query=/.test(location.search);
+    let match = null;
+    if (onClosetPage) {
+      const tilesDeadline = Date.now() + 8000;
+      while (Date.now() < tilesDeadline && !document.querySelector('a[href*="/listing/"]')) await sleep(250);
+    }
+    if (onClosetSearch) match = findPoshmarkClosetMatchByTitle(item.title);
     if (!match) {
       if (!closetUrl) {
         // No closet URL resolvable from this page OR from the cache -- there is no page this flow
@@ -2679,43 +2801,23 @@
         } catch (e) {}
         return;
       }
-      if (location.href.indexOf('/closet/') === -1) {
-        await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING) -- see comment above
-        location.href = closetUrl; // navigate to closet, fresh load will retry the match there
-        return;
-      }
-      // BUG FIX 2026-09-04, REVISED same day (S-EXT-POSHMARK-CLOSET-SEARCH-NEVER-EXECUTES,
-      // Patrick live report: "the search puts the text in but doesn't execute the search so the
-      // stupid thing never finds it"). Root cause, confirmed live via javascript_tool against
-      // Patrick's real Poshmark closet: the prior same-day fix (searchPoshmarkClosetByTitle, now
-      // removed) filled the "Search in closet" input correctly, then dispatched synthetic
-      // KeyboardEvent keydown/keyup for "Enter" hoping to trigger the search. Polled the live grid
-      // every 300ms for 6 full seconds after that dispatch: tile count never moved off the full
-      // unfiltered 48 and the URL never gained a query param -- confirmed NOT a timing/race issue,
-      // the synthetic Enter simply never triggers anything. Poshmark's closet search is a real
-      // `<form action="">` wrapping the input; live-confirmed the actual trigger is a genuine form
-      // submission -- calling `form.requestSubmit()` on the real live page immediately navigated
-      // the tab to `<closet-url>?query=<title>` and the grid correctly filtered to the matching
-      // listing. A real form submit is a full page navigation (confirmed live -- the JS context
-      // that called requestSubmit() did not survive it), so replicate that navigation directly via
-      // `location.href` instead of trying to keep working in the current context: this matches the
-      // same re-entry pattern already used everywhere else in this queue (the bottom-of-file IIFE
-      // re-runs runPoshmarkRemovalQueue on every fresh page load, so the fresh
-      // /closet/...?query=... load re-scans with the now-filtered grid). Guarded by a
-      // sessionStorage flag keyed on this item's title so a genuinely unmatchable item (still
-      // zero/ambiguous after a real search) falls through to the "no confident match" branch below
-      // on the second pass instead of navigating in a loop.
-      // BUG FIX 2026-09-04 (S-EXT-POSHMARK-SEARCH-URL-FROM-WRONG-PAGE): the search URL is built
-      // from the RESOLVED CLOSET URL's own origin+pathname, not from location.pathname. The old
-      // version used location.pathname, which produced a nonsense URL like
-      // "poshmark.com/feed?query=..." any time this branch was reached from a page that was not
-      // already the closet.
-      const alreadySearchedFor = sessionStorage.getItem('fasPoshClosetSearchedFor');
-      if (alreadySearchedFor !== item.title) {
-        sessionStorage.setItem('fasPoshClosetSearchedFor', item.title);
+      // Closet search (see the 2026-09-04 S-EXT-POSHMARK-CLOSET-SEARCH-NEVER-EXECUTES and
+      // S-EXT-POSHMARK-SEARCH-URL-FROM-WRONG-PAGE notes in version history: a real form submit is a
+      // full navigation to <closet-url>?query=..., so navigate there directly; the fresh load re-runs
+      // this function). 2026-09-23: the query is now the first ~5 significant words (<= 40 chars)
+      // instead of the full title, with ONE wider pass (first 2 words) if that finds nothing.
+      // Guarded by a sessionStorage stage flag keyed on this item's title so an unmatchable item
+      // falls through to the "no confident match" branch instead of navigating in a loop.
+      let searchState = null;
+      try { searchState = JSON.parse(sessionStorage.getItem('fasPoshClosetSearchedFor') || 'null'); } catch (e) { searchState = null; }
+      const stage = (searchState && searchState.title === item.title) ? (searchState.stage | 0) : 0;
+      const stageQueries = [poshRemSearchQuery(item.title, 5), poshRemSearchQuery(item.title, 2)]
+        .filter((q, i, arr) => q && arr.indexOf(q) === i);
+      if (stage < stageQueries.length) {
+        sessionStorage.setItem('fasPoshClosetSearchedFor', JSON.stringify({ title: item.title, stage: stage + 1 }));
         const closetLoc = new URL(closetUrl);
-        const searchUrl = closetLoc.origin + closetLoc.pathname + '?query=' + encodeURIComponent(item.title);
-        await humanPause(1200, 2200);
+        const searchUrl = closetLoc.origin + closetLoc.pathname + '?query=' + encodeURIComponent(stageQueries[stage]);
+        await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING)
         location.href = searchUrl; // fresh load re-runs this function against the filtered grid
         return;
       }
@@ -2745,6 +2847,7 @@
     // carries the real 24-hex listing id and that Poshmark resolves /edit-listing/<id> by id while
     // ignoring the slug, so the detail page was a pure extra failure point in this flow.
     sessionStorage.setItem('fasPoshDeleteTargetId', match.id);
+    sessionStorage.removeItem('fasPoshClosetSearchedFor'); // 2026-09-23: a later retry of this item must search again
     await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING) -- see comment above
     location.href = 'https://poshmark.com/edit-listing/' + match.id; // fresh load lands in the /edit-listing/ branch above
   }

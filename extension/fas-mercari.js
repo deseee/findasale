@@ -2314,7 +2314,26 @@
   // Patrick's explicit directive: "it must be built for all of them, that's part of the extension."
   // CODE-ONLY / UNVERIFIED: no sold Mercari item exists yet to confirm these selectors against.
 
-  function mercRemNorm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+  // SHARED TITLE FOLDING (2026-09-23, cross-platform removal title-guard fix). Duplicated verbatim in
+  // fas-vinted.js / fas-poshmark.js / fas-mercari.js because manifest.json loads each of those as its
+  // own lone content script (no shared module is injected alongside them). Applied IDENTICALLY to
+  // both sides of every title comparison: NFKC, curly quotes -> straight, en/em dash -> '-', NBSP ->
+  // space, U+2026 -> '...', whitespace collapsed, lowercased. Folding only ever makes two strings
+  // that differ by typography compare equal -- it never turns a partial title into a match.
+  function fasFoldTitle(s) {
+    let t = String(s == null ? '' : s);
+    try { t = t.normalize('NFKC'); } catch (e) { /* very old engines: fold the rest anyway */ }
+    return t
+      .replace(/[‘’‚‛ʼ′]/g, "'")
+      .replace(/[“”„‟″]/g, '"')
+      .replace(/[‐‑‒–—―−]/g, '-')
+      .replace(/…/g, '...')
+      .replace(/[   ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+  function mercRemNorm(s) { return fasFoldTitle(s); }
 
   function mercRemFindButtonByText(text) {
     const want = mercRemNorm(text);
@@ -2334,35 +2353,75 @@
     return qa('[class*="title" i]').find((el) => !/subtitle/i.test(el.className)) || null;
   }
 
-  // UNVERIFIED -- Mercari's "Selling" tab under My Page typically lists active listings with an
-  // edit/delete affordance per item; the exact tile/link structure has not been confirmed live.
+  // LIVE-CONFIRMED DOM (Patrick's logged-in /mypage/listings/active/, captured 2026-09-23 -- replaces
+  // the earlier UNVERIFIED note): each active listing renders a title anchor
+  //   <a data-testid="ItemLink" href="/us/item/m<digits>/...">TITLE</a>
+  // AND a separate thumbnail anchor a[data-testid="ProductThumbWrapper"] with the SAME href. The old
+  // matcher counted ANCHORS, so one listing = two anchors = "ambiguous" -> null, every time. It also
+  // accepted any >=8-char prefix, which was unsafely loose.
+  // Now: candidates are grouped by the Mercari item id parsed from the href (/item/(m\d+)), the
+  // title text comes from a[data-testid="ItemLink"] (falling back to any /item/ anchor text and img
+  // alt only when no ItemLink exists), a trailing price is stripped, both sides are folded
+  // identically (fasFoldTitle), and a card matches only on EXACT equality -- or, for a queued title
+  // longer than Mercari's 80-char title limit, equality with its first 80 characters (what a
+  // maxlength=80 input keeps). Exactly one distinct item id is required.
+  function mercRemItemIdFromHref(href) {
+    const m = /\/item\/(m\d+)/i.exec(String(href || ''));
+    return m ? m[1].toLowerCase() : null;
+  }
+  function mercRemCleanCardText(s) {
+    let t = mercRemNorm(s);
+    t = t.replace(/\s*\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s[\s\S]*)?$/, '').trim(); // trailing "$12.00 ..." price
+    return t.replace(/\s*\.{3,}\s*$/, '').trim();
+  }
+  function mercRemTitleMatches(candidateText, queuedTitle) {
+    const c = mercRemCleanCardText(candidateText);
+    if (!c) return false;
+    const raw = String(queuedTitle == null ? '' : queuedTitle);
+    const targets = [mercRemNorm(raw).replace(/\s*\.{3,}\s*$/, '').trim()];
+    if (raw.length > 80) targets.push(mercRemNorm(raw.slice(0, 80)));
+    return targets.some((t) => t && t === c);
+  }
+  const MERC_REM_MIN_SAFE_TITLE_LEN = 8;
   function findMercariListingLinkByTitle(title) {
     const want = mercRemNorm(title);
-    if (!want) return null;
-    const links = qa('a[href*="/item/"], a[href*="/us/item/"]');
-    // S-EXT-REMOVAL-MATCH-TRUNCATION-2026-09-03: same fix as Poshmark's equivalent function --
-    // Mercari's own "my listings" cards can truncate a long title in the DOM itself, so requiring
-    // the card to contain the item's FULL stored title as a substring can false-negative exactly
-    // like it did on Poshmark (live-confirmed there, same one-directional pattern here). Stripping
-    // a trailing "..." and still accepting a truncated card is correct; what is NOT correct is
-    // accepting ANY substring in either direction.
-    // BUG FIX 2026-09-04 (S-EXT-REMOVAL-UNSAFE-TITLE-MATCH, propagated from the live-confirmed
-    // Poshmark fix -- this is a DESTRUCTIVE-ACTION bug, not a cosmetic one): the old unguarded
-    // bidirectional test `want.indexOf(t) !== -1 || t.indexOf(want) !== -1` put NO minimum length
-    // on `t` and never required a truncated card's text to actually START the title, so any short
-    // incidental anchor text appearing anywhere inside the stored title matched. Live-confirmed on
-    // Poshmark: a view-count badge reading "6" matched a title ending in "...1976". If such a
-    // spurious anchor is the ONLY match, this function returns it and the caller navigates to and
-    // DELETES that unrelated listing. A match is now accepted only when the anchor text contains
-    // the full wanted title, or is a genuine length-gated PREFIX of it (anchored at index 0).
-    const MIN_TRUNCATED_PREFIX_LEN = 8; // shorter than this is a badge/label, not a real title prefix
-    const matches = links.filter((a) => {
-      const t = mercRemNorm(a.textContent).replace(/\.{3,}$/, '').trim();
-      if (!t) return false;
-      const isPlausibleTruncatedPrefix = t.length >= MIN_TRUNCATED_PREFIX_LEN && want.indexOf(t) === 0;
-      return isPlausibleTruncatedPrefix || t.indexOf(want) !== -1;
-    });
-    return matches.length === 1 ? matches[0] : null;
+    if (!want || want.length < MERC_REM_MIN_SAFE_TITLE_LEN) return null;
+    const itemLinks = qa('a[data-testid="ItemLink"]').filter((a) => mercRemItemIdFromHref(a.getAttribute('href') || a.href));
+    const byId = new Map();
+    const add = (id, a, text) => {
+      if (!byId.has(id)) byId.set(id, { id, anchor: a, texts: [] });
+      if (text && String(text).trim()) byId.get(id).texts.push(String(text));
+    };
+    if (itemLinks.length) {
+      itemLinks.forEach((a) => {
+        const id = mercRemItemIdFromHref(a.getAttribute('href') || a.href);
+        const inner = typeof a.innerText === 'string' ? a.innerText.trim() : '';
+        add(id, a, inner ? inner.split('\n')[0] : '');
+        add(id, a, a.textContent);
+      });
+    } else {
+      // Fallback for a different layout: any /item/ anchor (thumbnail wrappers contribute only
+      // their img alt, never their text), still deduped by item id.
+      qa('a[href*="/item/"]').forEach((a) => {
+        const id = mercRemItemIdFromHref(a.getAttribute('href') || a.href);
+        if (!id) return;
+        a.querySelectorAll('img[alt]').forEach((img) => add(id, a, img.getAttribute('alt')));
+        if (a.getAttribute('data-testid') === 'ProductThumbWrapper') { add(id, a, ''); return; }
+        const inner = typeof a.innerText === 'string' ? a.innerText.trim() : '';
+        add(id, a, inner ? inner.split('\n')[0] : '');
+        add(id, a, a.textContent);
+      });
+    }
+    const matches = [];
+    byId.forEach((entry) => { if (entry.texts.some((t) => mercRemTitleMatches(t, title))) matches.push(entry); });
+    if (matches.length !== 1) {
+      console.log('[FAS Mercari] removal: ' + matches.length + ' listing(s) matched "' + title + '"' + (matches.length > 1 ? ' -- ambiguous, refusing.' : '.'));
+      return null;
+    }
+    // Prefer the ItemLink anchor when present (same href as the thumbnail).
+    const m = matches[0];
+    m.anchor.fasMercItemId = m.id;
+    return m.anchor;
   }
 
   // BUG FIX 2026-09-04 (S-EXT-REMOVAL-FALSE-REMOVED, propagated from the live-confirmed Poshmark
@@ -2420,9 +2479,28 @@
   // just race the navigation that tears this content script down.
   async function runMercariRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
-    const pageTitleEl = mercRemFindListingTitleEl();
-    const onListingDetailPage = pageTitleEl && mercRemNorm(pageTitleEl.textContent).indexOf(mercRemNorm(item.title)) !== -1;
+    // 2026-09-23: on an item page, wait (250ms polls, up to ~8s) for the <h1> to hydrate, then
+    // require an EXACT folded title match (was: containment, which accepted a longer different
+    // title) AND, when this queue entry picked a specific item id on the listings page, that the URL
+    // is that item.
+    const hereItemId = mercRemItemIdFromHref(location.pathname);
+    let onListingDetailPage = false;
+    if (hereItemId) {
+      const h1Deadline = Date.now() + 8000;
+      while (!onListingDetailPage && Date.now() < h1Deadline) {
+        const pageTitleEl = mercRemFindListingTitleEl();
+        onListingDetailPage = !!pageTitleEl && mercRemTitleMatches(pageTitleEl.innerText || pageTitleEl.textContent, item.title);
+        if (!onListingDetailPage) await sleep(250);
+      }
+      let targetId = null;
+      try { targetId = sessionStorage.getItem('fasMercDeleteTargetId'); } catch (e) {}
+      if (onListingDetailPage && targetId && targetId !== hereItemId) {
+        console.log('[FAS Mercari] removal: on item ' + hereItemId + ' but the matched listing was ' + targetId + ' -- refusing.');
+        onListingDetailPage = false;
+      }
+    }
     if (onListingDetailPage) {
+      try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
       const result = await deleteMercariListingOnDetailPage();
       if (result === 'deleted') {
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Mercari.</div>');
@@ -2433,12 +2511,16 @@
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'MERCARI', itemId: item.id, reason: result, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
+    // 2026-09-23: wait (250ms polls, up to ~8s) for listing cards to render before the first scan.
+    const cardsDeadline = Date.now() + 8000;
+    while (Date.now() < cardsDeadline && !document.querySelector('a[data-testid="ItemLink"], a[href*="/item/"]')) await sleep(250);
     const link = findMercariListingLinkByTitle(item.title);
     if (!link) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Mercari listings (zero or more than one found) -- skipped, not guessed.' + button('fas-merc-close', 'Close', false));
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'no_confident_listing_match', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
+    try { sessionStorage.setItem('fasMercDeleteTargetId', link.fasMercItemId || mercRemItemIdFromHref(link.href) || ''); } catch (e) {}
     location.href = link.href;
   }
 
