@@ -868,13 +868,27 @@ function parseMissingRequiredAspectNames(errorBody: string, errorId: number): st
  * Pick a safe default value for a dynamically-resolved required aspect, mirroring the
  * neutral-value preference in ebayController's fillRequiredAspects (never fabricate a
  * specific-sounding value like an enum's first entry when a neutral option exists).
+ *
+ * Fix (2026-09-22, evidence: item cmnzf780a0009pf19ru5qppqn -- a "Guitar Speaker Cabinet"
+ * stuck failing on category 38072's required "Amplifier Type" aspect, whose real enum
+ * values -- Combo/Head/Cabinet/Stack per eBay's own site -- have no neutral option, so
+ * this used to silently fall back to enumValues[0], i.e. an arbitrary guess that could
+ * mislabel the item, e.g. as "Combo"). Before falling back to that blind guess, check
+ * the item's own title for a substring match against a real enum value -- "Cabinet" is
+ * literally in this item's title, so that's what should be injected, not whatever eBay
+ * happens to list first.
  */
-function pickSafeAspectDefault(aspectSpec: RequiredAspect | undefined): string {
+function pickSafeAspectDefault(aspectSpec: RequiredAspect | undefined, itemTitle?: string | null): string {
   if (!aspectSpec || aspectSpec.enumValues.length === 0) return 'Does Not Apply';
   const neutral = aspectSpec.enumValues.find((v) =>
     /^(universal|other|not\s*specified|unspecified|any|multiple|n\/?a|various)$/i.test(v)
   );
-  return neutral || aspectSpec.enumValues[0];
+  if (neutral) return neutral;
+  const titleLower = (itemTitle || '').toLowerCase();
+  const titleMatch = titleLower
+    ? aspectSpec.enumValues.find((v) => titleLower.includes(v.toLowerCase()))
+    : undefined;
+  return titleMatch || aspectSpec.enumValues[0];
 }
 
 /**
@@ -956,7 +970,7 @@ const heal25002: Healer = async (ctx, errorBody) => {
         console.log(`[eBay SelfHeal 25002] ${ctx.sku}: discarding dynamic aspect "${name}" — no matching real category aspect`);
         continue;
       }
-      const defaultValue = pickSafeAspectDefault(aspectSpec);
+      const defaultValue = pickSafeAspectDefault(aspectSpec, item.title);
       aspectsObj[aspectSpec.name] = [defaultValue];
       console.log(`[eBay SelfHeal 25002] ${ctx.sku}: dynamically injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
     }

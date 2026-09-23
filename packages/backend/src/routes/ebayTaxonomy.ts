@@ -9,12 +9,15 @@ import {
   catalogSearchHandler,
   suggestIdentifiersHandler,
   suggestCategoriesHandler,
+  getListingDebugInfo,
 } from '../controllers/ebayTaxonomyController';
 
 const router = Router();
 
 // All endpoints require organizer auth
 router.get('/taxonomy/aspects/:categoryId', authenticate, requireOrganizer, getAspectsHandler);
+// Diagnostic-only, read-only, organizer-scoped (2026-09-22 -- see handler doc comment).
+router.get('/listing-debug/:itemId', authenticate, requireOrganizer, getListingDebugInfo);
 router.get('/taxonomy/suggest', authenticate, requireOrganizer, suggestCategoriesHandler);
 router.get('/catalog/search', authenticate, requireOrganizer, catalogSearchHandler);
 router.post('/suggest/identifiers', authenticate, requireOrganizer, suggestIdentifiersHandler);

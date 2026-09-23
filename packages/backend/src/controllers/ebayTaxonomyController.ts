@@ -17,6 +17,7 @@ import {
   suggestCategories,
 } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from './ebayController';
+import { ebayProxyUrl, ebayProxyHeaders } from '../services/ebayHttp';
 
 // ── Vercel Proxy Helpers ────────────────────────────────────────────────────
 // Railway DNS cannot resolve api.ebay.com directly, so all eBay API calls route
@@ -96,6 +97,83 @@ async function getOrganizerEbayToken(organizerId: string): Promise<string | null
 
 // ── Handler 1: GET /api/ebay/taxonomy/aspects/:categoryId ───────────────────
 
+/**
+ * GET /api/ebay/listing-debug/:itemId — diagnostic-only, organizer-scoped.
+ *
+ * Added 2026-09-22 to verify (not guess) why ebayPriceRevisionService.ts's Best-Offer-
+ * threshold repair keeps failing on legacy listing 136164918832 with "Auto Accept Price
+ * must be less than the Buy It Now price" even though the repair's own math is correct
+ * (accept < revised StartPrice). Hypothesis under test: this listing type carries a
+ * separate BuyItNowPrice field our revise call never touches, left stale below the new
+ * accept threshold. Read-only -- no eBay or DB mutation. Item must belong to the calling
+ * organizer (same OR-scoping pattern platformStatsController.ts's getEbaySyncIssues uses).
+ * Token never leaves the server -- fetched via the existing getOrganizerEbayToken helper,
+ * same as every other handler in this file.
+ */
+export async function getListingDebugInfo(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const organizerId = (req.user as any).organizer?.id;
+    if (!organizerId) {
+      res.status(403).json({ error: 'Organizer profile not found' });
+      return;
+    }
+
+    const { itemId } = req.params;
+    const item = await prisma.item.findFirst({
+      where: { id: itemId, OR: [{ organizerId }, { sale: { organizerId } }] },
+      select: { id: true, ebayListingId: true },
+    });
+    if (!item || !item.ebayListingId) {
+      res.status(404).json({ error: 'Item not found, not yours, or not on eBay' });
+      return;
+    }
+
+    const token = await getOrganizerEbayToken(organizerId);
+    if (!token) {
+      res.status(401).json({ error: 'eBay connection not authorized' });
+      return;
+    }
+
+    const xml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${item.ebayListingId}</ItemID><OutputSelector>Item.ListingType</OutputSelector><OutputSelector>Item.StartPrice</OutputSelector><OutputSelector>Item.BuyItNowPrice</OutputSelector><OutputSelector>Item.SellingStatus.CurrentPrice</OutputSelector><OutputSelector>Item.BestOfferDetails</OutputSelector></GetItemRequest>`;
+
+    const ebayRes = await fetch(ebayProxyUrl('/ws/api.dll'), {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'GetItem',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-IAF-TOKEN': token,
+        'Content-Type': 'text/xml',
+        ...ebayProxyHeaders(),
+      },
+      body: xml,
+    });
+    const text = await ebayRes.text();
+    const xmlVal = (block: string, tag: string): string | null => {
+      const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`));
+      return m ? m[1].trim() : null;
+    };
+
+    res.json({
+      itemId: item.ebayListingId,
+      ack: xmlVal(text, 'Ack'),
+      listingType: xmlVal(text, 'ListingType'),
+      startPrice: xmlVal(text, 'StartPrice'),
+      buyItNowPrice: xmlVal(text, 'BuyItNowPrice'),
+      currentPrice: xmlVal(text, 'CurrentPrice'),
+      bestOfferEnabled: xmlVal(text, 'BestOfferEnabled'),
+      errorMessage: xmlVal(text, 'LongMessage') || xmlVal(text, 'ShortMessage'),
+    });
+  } catch (error: any) {
+    console.error('[ebayTaxonomy] getListingDebugInfo error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 export async function getAspectsHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
     if (!req.user) {
@@ -115,10 +193,16 @@ export async function getAspectsHandler(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // Get eBay access token
-    const token = await getOrganizerEbayToken(organizerId);
+    // Get eBay app-level access token. Fix (2026-09-22, evidence-backed --
+    // Railway logs showed this endpoint 403ing on every call): eBay's Taxonomy
+    // API get_item_aspects_for_category is a public catalog endpoint requiring
+    // only the base app-level client-credentials token (same one suggestCategories
+    // already uses successfully below) -- NOT the organizer's own user OAuth
+    // token, which doesn't carry the scope this call needs. Swapping the token
+    // source is the fix; nothing else about this handler changes.
+    const token = await getEbayAccessToken();
     if (!token) {
-      res.status(401).json({ error: 'eBay connection not authorized' });
+      res.status(503).json({ error: 'eBay app token unavailable' });
       return;
     }
 
