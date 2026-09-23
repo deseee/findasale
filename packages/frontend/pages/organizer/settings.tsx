@@ -983,10 +983,10 @@ const OrganizerSettingsPage = () => {
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Off-Platform Sales</h2>
-                  <Tooltip content="Mark an item sold when a shopper pays you directly -- cash, Venmo, your own card reader -- instead of through FindA.Sale checkout." position="right" />
+                  <Tooltip content="Mark an item sold when a shopper pays you directly (cash, Venmo, your own card reader) instead of through FindA.Sale checkout." position="right" />
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-4">
-                  Sometimes a shopper pays you directly instead of through FindA.Sale -- cash at the sale, Venmo, your own card reader. Off-Platform Sales lets you mark that item sold in FindA.Sale anyway, so your inventory stays accurate. FindA.Sale never sees or processes that payment; instead, we bill you a separate flat fee for items marked sold this way.
+                  Sometimes a shopper pays you directly instead of through FindA.Sale: cash at the sale, Venmo, your own card reader. Off-Platform Sales lets you mark that item sold in FindA.Sale anyway, so your inventory stays accurate. FindA.Sale never sees or processes that payment; instead, we bill you a separate flat fee for items marked sold this way.
                 </p>
                 <p className="text-sm text-warm-500 dark:text-gray-500 mb-4">
                   Pricing details coming soon. We&apos;ll show the fee here before it applies to any sale.
@@ -2338,7 +2338,7 @@ const OrganizerSettingsPage = () => {
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Default Best-Offer Thresholds</h2>
-                  <Tooltip content="Pre-fills the Best Offer accept/decline percentages on new items -- it never overrides a percentage you've already set on an individual item." position="right" />
+                  <Tooltip content="Pre-fills the Best Offer accept/decline percentages on new items. It never overrides a percentage you've already set on an individual item." position="right" />
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-4">
                   When you turn on Best Offers for an item that has never had a threshold set, these percentages
@@ -2442,7 +2442,7 @@ const OrganizerSettingsPage = () => {
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-4">
                   When a Facebook Marketplace buyer asks &quot;still available?&quot; or makes an offer, this can
-                  automatically confirm the price, decline a too-low offer, or confirm availability -- without you
+                  automatically confirm the price, decline a too-low offer, or confirm availability, without you
                   typing a reply. Anything the parser isn&apos;t confident about (a range, a vague number, an
                   in-between offer, or a status change) is left as a draft for you to send yourself. This
                   involves confirming or declining real prices to real buyers, so it&apos;s off by default even if

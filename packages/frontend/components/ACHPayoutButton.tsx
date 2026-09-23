@@ -73,7 +73,7 @@ const ACHPayoutButton: React.FC<ACHPayoutButtonProps> = ({
       setInviteSent(
         data.emailSentToConsignor
           ? `We emailed ${consignorName} a link to set up automatic payout.`
-          : `Link opened -- ${consignorName} has no email on file, so share this link with them directly.`
+          : `Link opened. ${consignorName} has no email on file, so share this link with them directly.`
       );
       setTimeout(() => setInviteSent(null), 6000);
 

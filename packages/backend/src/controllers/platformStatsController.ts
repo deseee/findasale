@@ -4,6 +4,7 @@
  */
 
 import { Response } from 'express';
+import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import {
@@ -211,6 +212,45 @@ export async function getEbaySyncIssues(req: AuthRequest, res: Response): Promis
 // immediately instead of waiting for the next 2/6/10/14/18/22 UTC cron slot.
 // Self-service, own-account-only, idempotent (re-running just re-checks each
 // item's current state) -- no new privilege beyond the existing organizer auth.
+// Sentry FINDASALE-NODEJS-88: pullSyncForOrganizer walks every eBay-listed item
+// serially, so for a real inventory it routinely runs past the global 30s
+// requestTimeout (middleware/requestTimeout.ts). Awaiting it inside the request
+// made the middleware send a 503 first, after which this handler's own
+// res.json / res.status(500) threw "Cannot set headers after they are sent".
+// The sync now runs in the background and the endpoint answers 202 right away.
+//
+// In-process lock keyed by the AUTHENTICATED organizer id (resolved from
+// req.user, never from client input), so repeated clicks can't stack multiple
+// full syncs for one organizer. Single-instance scope only: it does not
+// coordinate with the 4-hourly cron or across multiple backend replicas.
+const ebayRetryInFlight = new Set<string>();
+
+function runEbayRetryInBackground(organizerId: string): void {
+  ebayRetryInFlight.add(organizerId);
+  const startedAt = Date.now();
+  void pullSyncForOrganizer(organizerId)
+    .then(() => {
+      console.log(
+        `[platformStats] retryEbaySync background run finished for organizer ${organizerId} in ${Date.now() - startedAt}ms`,
+      );
+    })
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[platformStats] retryEbaySync background run failed for organizer ${organizerId}:`, msg);
+      try {
+        Sentry.captureException(err instanceof Error ? err : new Error(msg), {
+          tags: { area: 'ebay-sync-retry' },
+          extra: { organizerId, durationMs: Date.now() - startedAt },
+        });
+      } catch {
+        // Sentry reporting must never crash the process.
+      }
+    })
+    .finally(() => {
+      ebayRetryInFlight.delete(organizerId);
+    });
+}
+
 export async function retryEbaySync(req: AuthRequest, res: Response): Promise<Response> {
   try {
     if (!requireOrganizer(req, res)) return res;
@@ -220,12 +260,25 @@ export async function retryEbaySync(req: AuthRequest, res: Response): Promise<Re
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    await pullSyncForOrganizer(organizerId);
+    if (ebayRetryInFlight.has(organizerId)) {
+      return res.status(202).json({
+        started: false,
+        alreadyRunning: true,
+        message: 'An eBay sync is already running for your account. Results will update here when it finishes.',
+      });
+    }
 
-    return res.json({ message: 'eBay sync retried' });
+    runEbayRetryInBackground(organizerId);
+
+    return res.status(202).json({
+      started: true,
+      alreadyRunning: false,
+      message: 'Sync started. This can take a few minutes; results will update here.',
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[platformStats] retryEbaySync error:', msg);
+    if (res.headersSent) return res;
     return res.status(500).json({ message: 'Failed to retry eBay sync' });
   }
 }

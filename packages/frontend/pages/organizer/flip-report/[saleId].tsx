@@ -118,7 +118,7 @@ export default function FlipReportPage() {
   return (
     <>
       <Head>
-        <title>Flip Report: {flipReport.saleTitle}</title>
+        <title>{`Flip Report: ${flipReport.saleTitle ?? ''}`}</title>
         <meta name="description" content={`Post-sale analytics report for ${flipReport.saleTitle}`} />
       </Head>
 

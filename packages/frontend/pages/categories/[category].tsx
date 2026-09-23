@@ -152,7 +152,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>{label}. FindA.Sale</title>
+        <title>{`${label ?? ''}. FindA.Sale`}</title>
         <link rel="canonical" href={`https://finda.sale/categories/${category}`} key="canonical" />
         <meta
           name="description"

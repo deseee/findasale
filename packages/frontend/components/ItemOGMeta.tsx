@@ -143,7 +143,7 @@ export default function ItemOGMeta({
   return (
     <Head>
       {/* Standard meta tags */}
-      <title>{item.title} – {saleName} | FindA.Sale</title>
+      <title>{`${item.title ?? ''} – ${saleName ?? ''} | FindA.Sale`}</title>
       <meta name="description" content={metaDescription} />
 
       {/* Open Graph (Facebook, LinkedIn, etc.) */}

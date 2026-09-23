@@ -400,7 +400,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <ShoppingCart size={16} className="text-amber-500" />
               <span>POS / Checkout</span>
             </Link>
-            <Link href="/organizer/send-invoice" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Email a one-off invoice to anyone -- no hold, no account required">
+            <Link href="/organizer/send-invoice" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Email a one-off invoice to anyone. No hold, no account required">
               <Send size={16} className="text-amber-500" />
               <span>Email Invoice</span>
             </Link>

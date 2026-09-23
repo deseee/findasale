@@ -72,7 +72,7 @@ const ChecklistPage = () => {
   return (
     <>
       <Head>
-        <title>Sale Checklist: {sale.title} | FindA.Sale</title>
+        <title>{`Sale Checklist: ${sale.title ?? ''} | FindA.Sale`}</title>
         <meta name="description" content="Organize your sale with our day-of checklist" />
       </Head>
 

@@ -774,7 +774,7 @@ const AdminDashboard = () => {
 
         <Link href="/admin/fraud-signals" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-red-50 dark:bg-red-900/20 border border-red-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Fraud Signals</h3>
-          <p className="text-warm-600 dark:text-warm-400 text-sm">Collusion / wash-trade queue -- self-dealing, shared device, shared card, across every sale</p>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Collusion / wash-trade queue: self-dealing, shared device, shared card, across every sale</p>
         </Link>
 
         <Link href="/admin/referral-fraud-signals" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-red-50 dark:bg-red-900/20 border border-red-100 transition">
@@ -789,12 +789,12 @@ const AdminDashboard = () => {
 
         <Link href="/admin/xp-velocity" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-red-50 dark:bg-red-900/20 border border-red-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">XP Velocity</h3>
-          <p className="text-warm-600 dark:text-warm-400 text-sm">Users with abnormal XP gains (&gt;500/hr) in the last 7 days -- exploit detection</p>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Users with abnormal XP gains (&gt;500/hr) in the last 7 days (exploit detection)</p>
         </Link>
 
         <Link href="/admin/marketplace-review-backlog" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-amber-50 dark:bg-amber-900/20 border border-amber-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Marketplace Review Backlog</h3>
-          <p className="text-warm-600 dark:text-warm-400 text-sm">Sold items the FB extension couldn't confidently remove -- platform-wide, across every organizer</p>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Sold items the FB extension couldn't confidently remove, platform-wide, across every organizer</p>
         </Link>
       </div>
 

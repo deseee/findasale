@@ -27,7 +27,7 @@ const ZipCodePage = () => {
   return (
     <>
       <Head>
-        <title>Sales in {zip} - FindA.Sale</title>
+        <title>{`Sales in ${zip ?? ''} - FindA.Sale`}</title>
         <meta name="description" content={`Find sales in ZIP code ${zip} - browse estate sales, garage sales, auctions, and flea markets`} />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">

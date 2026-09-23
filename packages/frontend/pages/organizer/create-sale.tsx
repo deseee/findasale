@@ -1212,7 +1212,7 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
       const failedCount = uploadResults.filter(r => r.status === 'rejected').length;
 
       if (failedCount > 0) {
-        showToast(`${failedCount} photo${failedCount !== 1 ? 's' : ''} failed to upload. The rest were added -- try the failed one${failedCount !== 1 ? 's' : ''} again.`, 'error');
+        showToast(`${failedCount} photo${failedCount !== 1 ? 's' : ''} failed to upload. The rest were added. Try the failed one${failedCount !== 1 ? 's' : ''} again.`, 'error');
       }
       setPhotoUrls(prev => [...prev, ...urls].slice(0, 20));
     } catch {

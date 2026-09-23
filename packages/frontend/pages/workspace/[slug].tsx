@@ -336,7 +336,7 @@ export default function WorkspacePage() {
     return (
       <>
         <Head>
-          <title>Day of, {workspace.name} | FindA.Sale</title>
+          <title>{`Day of, ${workspace.name ?? ''} | FindA.Sale`}</title>
           <meta name="description" content={`Morning briefing for ${workspace.name}`} />
         </Head>
         <MorningBriefing
@@ -360,7 +360,7 @@ export default function WorkspacePage() {
   return (
     <>
       <Head>
-        <title>{workspace.name} Workspace | FindA.Sale</title>
+        <title>{`${workspace.name ?? ''} Workspace | FindA.Sale`}</title>
         <meta name="description" content={`Team collaboration workspace for ${workspace.name}`} />
       </Head>
 

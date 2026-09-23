@@ -252,7 +252,7 @@ const SaleDetailPage = () => {
   return (
     <>
       <Head>
-        <title>{sale.title} | FindA.Sale</title>
+        <title>{`${sale.title ?? ''} | FindA.Sale`}</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">

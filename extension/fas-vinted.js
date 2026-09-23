@@ -2140,7 +2140,7 @@
   // claude_docs/feature-notes/adr-craigslist-vinted-removal-rootcause-2026-09-17.md): the removal
   // tab used to land on config.js's VINTED_MANAGE_URL (the bare vinted.com homepage), which shows
   // the general "browse other sellers' items" feed -- live-confirmed this session, NONE of the
-  // organizer's own items are ever on that page, so findVintedListingLinkByTitle below could never
+  // organizer's own items are ever on that page, so the title matcher below (now findVintedListingIdByTitle) could never
   // find a match no matter how good its selectors were. The organizer's own listings live at
   // vinted.com/member/<their-numeric-id> instead -- live-confirmed via javascript_tool against
   // Patrick's real account. The id isn't known/stored anywhere and isn't guessable from a static
@@ -2210,25 +2210,92 @@
     return discovered;
   }
 
-  // UNVERIFIED -- Vinted's own listing pages are typically /items/<id>-<slug>; closet/wardrobe
-  // pages list a seller's own active items as links. No live DOM confirmed this session.
-  function findVintedListingLinkByTitle(title) {
-    const wanted = vintRemNorm(title);
-    const links = Array.from(document.querySelectorAll('a[href*="/items/"]'));
-    const scored = links
-      .map((a) => ({ a, t: vintRemNorm(a.textContent || a.getAttribute('title') || '') }))
-      .filter((x) => x.t.length > 0);
-    const exact = scored.filter((x) => x.t === wanted);
-    if (exact.length === 1) return exact[0].a;
-    // MIN-LENGTH GUARD 2026-09-04: an anchor whose own text is under 8 characters is never
-    // accepted as a truncated title. Live-confirmed false-match class: a "6" view-count badge
-    // anchor satisfied wanted.includes(x.t) against a title ending in "...1976" and was treated as
-    // a confident match. Short anchor text on a Vinted listing card is a badge or counter, never
-    // a title. The "exactly one match or null -- never guess" discipline below is unchanged.
-    const contains = scored.filter((x) => x.t.length >= 8 && (x.t.includes(wanted) || wanted.includes(x.t)));
-    if (contains.length === 1) return contains[0].a;
-    return null; // zero or ambiguous matches -- never guess
+  // F4 (2026-09-22): a queued title shorter than this (normalized) is never matched at all --
+  // empty/short titles either match everything or collide with unrelated listings.
+  const VINT_REM_MIN_SAFE_TITLE_LEN = 8;
+
+  // ------------------------------------------------------------------------------------------
+  // REAL VINTED DOM (read-only live capture of vinted.com, en-US locale, 2026-09-22) -- the facts
+  // every matcher below is built on. Re-capture before changing any of them.
+  //  A) Own-profile listing cards (/member/<sellerId>): the card link is
+  //     `a[data-testid="product-item-id-<ID>--overlay-link"]`, href `/items/<ID>` (NO slug). Its
+  //     innerText is EMPTY. Its `title` attribute (and the card img's alt) is a COMPOSITE string:
+  //       "<title>, brand: <brand>, condition: <cond>, size: <size>, $8.00, $9.10 includes Buyer Protection"
+  //     The card's `--description-title` element holds the BRAND, not the listing title. Two
+  //     different listings can carry identical titles.
+  //  B) Item detail page: URL `/items/<numericId>-<lossy-slug>` -- the numeric id is the
+  //     authoritative identity. document.title is "<exact item title> | Vinted"; the page has a
+  //     single <h1> holding the bare title.
+  //  C) Delete (Vinted component ItemPageDeleteActionPlugin): clicking
+  //     `button[data-testid="item-delete-button"]` raises EITHER a native window.confirm("Are you
+  //     sure?") (only when the item is closed) OR, otherwise, an IN-PAGE modal
+  //     `[data-testid="item-delete-modal"]` (title "Delete item") whose confirm button is
+  //     `[data-testid="item-delete-confirmation-button"]` ("Confirm and delete") and cancel button
+  //     `[data-testid="item-delete-cancelation-button"]`. On success Vinted POSTs
+  //     /items/<id>/delete and navigates to `/member/<sellerId>`.
+  //  IDENTITY: FindA.Sale does NOT store the Vinted listing id -- fas-vinted.js reports
+  //  markListed with remoteListingId: null (DB check 2026-09-22: 30 VINTED POST/POSTED rows,
+  //  0 with remoteListingId). So the profile page is matched by exact parsed title (A), refusing
+  //  duplicates, and the numeric id of that ONE card is then carried to the detail page and
+  //  required to equal location.pathname's id before anything is deleted.
+  // ------------------------------------------------------------------------------------------
+
+  // Exact detail-page title check (fact B). Strips EXACTLY a trailing " | Vinted" from
+  // document.title (normalized: lowercased, whitespace collapsed) and nothing else; the page's
+  // own <h1> is accepted as a second exact source. Any other extra text -> no match -> fail closed.
+  function vintRemDetailPageTitleMatches(wanted) {
+    if (!wanted) return false;
+    const docTitle = vintRemNorm(document.title).replace(/ \| vinted$/, '');
+    if (docTitle === wanted) return true;
+    const h1 = document.querySelector('h1');
+    return !!h1 && vintRemNorm(h1.textContent) === wanted;
   }
+
+  // Extracts the bare listing title from a profile card's composite title/alt string (fact A).
+  // Greedy capture + anchoring on the trailing ", brand: ..., condition: ... includes Buyer
+  // Protection" structure means the split happens at the LAST ", brand: " that is followed by
+  // that structure, so titles that themselves contain commas survive intact. Returns null when
+  // the string does not have that structure (never a best-effort guess).
+  const VINT_REM_CARD_TITLE_RE = /^([\s\S]+), brand: [\s\S]*?, condition: [\s\S]*includes buyer protection\s*$/i;
+  function vintRemParseCardTitle(composite) {
+    const m = VINT_REM_CARD_TITLE_RE.exec(String(composite || '').trim());
+    return m ? vintRemNorm(m[1]) : null;
+  }
+
+  function vintRemItemIdFromHref(href) {
+    const m = /\/items\/(\d+)(?:[-/?#]|$)/.exec(String(href || ''));
+    return m ? m[1] : null;
+  }
+
+  // Profile-page matcher. Returns { id } for exactly one distinct /items/<id> whose parsed card
+  // title equals the queued title, or { id: null, reason } -- 'ambiguous_duplicate_title' when
+  // MORE THAN ONE distinct listing id matches (identical titles are real, fact A: never guess),
+  // 'no_confident_listing_match' when none does.
+  function findVintedListingIdByTitle(title) {
+    const wanted = vintRemNorm(title);
+    if (!wanted || wanted.length < VINT_REM_MIN_SAFE_TITLE_LEN) return { id: null, reason: 'no_confident_listing_match' };
+    const ids = new Set();
+    for (const a of Array.from(document.querySelectorAll('a[href*="/items/"]'))) {
+      const id = vintRemItemIdFromHref(a.getAttribute('href') || a.href);
+      if (!id) continue;
+      const img = a.parentElement ? a.parentElement.querySelector('img[alt]') : null;
+      const sources = [
+        vintRemParseCardTitle(a.getAttribute('title')),
+        img ? vintRemParseCardTitle(img.getAttribute('alt')) : null,
+        vintRemNorm(a.textContent) || null, // empty on today's DOM; exact-only if Vinted ever fills it
+      ];
+      if (sources.some((t) => t && t === wanted)) ids.add(id);
+    }
+    if (ids.size === 1) return { id: ids.values().next().value, reason: null };
+    if (ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
+    return { id: null, reason: 'no_confident_listing_match' };
+  }
+
+  // The listing id chosen on the profile page is handed to the detail-page load through
+  // chrome.storage.local, keyed to the FindA.Sale item id, so the detail page can require
+  // location.pathname to be exactly that listing -- title matching alone cannot tell two
+  // identically-titled listings apart once on a detail page.
+  const VINTED_REMOVAL_TARGET_STORAGE_KEY = 'fasVintedRemovalTarget';
 
   // FEATURE 2026-09-22 (S-EXT-VINTED-DELETE-NATIVE-CONFIRM, see fas-vinted-bridge.js file header
   // for the full live-DOM evidence this session): Vinted's real delete button very likely raises
@@ -2238,9 +2305,11 @@
   // vinted.com match pattern), following the exact request/response CustomEvent pattern already
   // proven by fas-poshmark-bridge.js / fas-poshmark.js's bridgeCall(). Mirrors that helper's
   // shape; see that file for the original.
-  function vintRemBridgeCall(action, payload, timeoutMs) {
+  function vintRemBridgeCall(action, payload, timeoutMs, explicitRequestId) {
     return new Promise((resolve) => {
-      const requestId = 'fas-vin-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      // explicitRequestId: used by 'disarm', which the bridge only honours for the SAME request id
+      // that armed the window.
+      const requestId = explicitRequestId || ('fas-vin-' + Date.now() + '-' + Math.random().toString(36).slice(2));
       let done = false;
       const timeout = setTimeout(() => {
         if (done) return;
@@ -2312,49 +2381,76 @@
     const deleteBtn = document.querySelector('button[data-testid="item-delete-button"]');
     if (!deleteBtn) return 'no_delete_action';
 
-    // FEATURE 2026-09-22 (S-EXT-VINTED-DELETE-NATIVE-CONFIRM): live evidence this session (see
-    // fas-vinted-bridge.js's file header for the full writeup) strongly suggests this click
-    // raises a NATIVE window.confirm() dialog that only a MAIN-world script can see or answer.
-    // Arm the MAIN-world bridge's narrowly-scoped auto-accept BEFORE clicking, and fail closed
-    // (never click) if it can't be confirmed armed -- clicking into an unhandled native confirm
-    // would freeze this tab's render thread with no way for the unattended removal queue to ever
-    // recover from it.
-    const armResult = await vintRemBridgeCall('armConfirmOverride', { timeoutMs: 2500 }, 1000);
+    // Two real confirmation paths (fact C above): a native window.confirm("Are you sure?") for a
+    // closed item, or the in-page `item-delete-modal` otherwise. Arm the MAIN-world bridge BEFORE
+    // clicking so the native path can be answered at all, and fail closed (never click) if it
+    // can't be confirmed armed -- an unhandled native confirm would freeze this tab's render
+    // thread. The bridge only auto-accepts a delete-shaped message, once, within <=5s.
+    const armResult = await vintRemBridgeCall('armConfirmOverride', { timeoutMs: 3500 }, 1000);
     if (!armResult || !armResult.ok || !armResult.armed) {
       return 'no_confirm_bridge';
     }
-    const bridgeEventPromise = vintRemWaitForBridgeEvent(armResult.requestId, 3500);
+    const armId = armResult.requestId;
+    let bridgeOutcome = null;
+    vintRemWaitForBridgeEvent(armId, 4500).then((o) => { bridgeOutcome = o; });
 
     vintRemSyntheticClick(deleteBtn);
 
-    // Purely observability -- does not change the outcome (the MAIN-world override already
-    // decided, synchronously, whether to auto-accept any confirm() it saw, before this promise
-    // resolves): did Vinted's real click actually raise a confirm() this time, or not (e.g. a UI
-    // change, or no dialog at all for this flow)? Logged so a real failure is diagnosable from
-    // the console instead of only from the generic reason code below.
-    const bridgeOutcome = await bridgeEventPromise;
-    if (bridgeOutcome === 'confirmFired') {
-      console.log('[FAS Vinted] delete: native confirm() observed and auto-accepted by the MAIN-world bridge.');
-    } else {
-      console.log('[FAS Vinted] delete: no confirm() observed within the armed window (bridge outcome: ' + bridgeOutcome + ') -- Vinted may not have shown one this time.');
+    // Wait up to ~3s for EITHER path to show itself.
+    let modal = null;
+    const promptDeadline = Date.now() + 3000;
+    while (Date.now() < promptDeadline) {
+      if (bridgeOutcome === 'confirmFired' || bridgeOutcome === 'confirmMismatch') break;
+      modal = document.querySelector('[data-testid="item-delete-modal"]');
+      if (modal) break;
+      await sleep(150);
     }
 
-    // HONESTY FIX 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION), preserved here: never
-    // report success by re-finding the SAME control just clicked -- that was the exact prior bug
-    // class this comment originally documented (re-finds the still-present Delete button,
-    // reports "deleted" regardless of whether anything actually happened). There is no
-    // live-confirmed post-delete page shape yet (redirect vs. in-place removal -- see this dev's
-    // handoff, flagged for the live verification test), so the only honest signal available
-    // without guessing is that the delete control itself is actually gone -- checked twice with a
-    // short gap to rule out a transient re-render, not a single immediate read.
-    await sleep(700);
-    if (document.querySelector('button[data-testid="item-delete-button"]')) {
-      await sleep(700);
-      if (document.querySelector('button[data-testid="item-delete-button"]')) {
-        return 'delete_not_confirmed';
+    let confirmedBy = null;
+    if (bridgeOutcome === 'confirmMismatch') {
+      // The bridge saw a confirm() that did not read as a delete prompt, declined it and
+      // disarmed. Nothing was confirmed -> FAILED attempt, never success.
+      console.log('[FAS Vinted] delete: confirm() text did not look like a delete prompt -- declined, NOT deleted.');
+      return 'confirm_mismatch';
+    } else if (bridgeOutcome === 'confirmFired') {
+      confirmedBy = 'native_confirm';
+      console.log('[FAS Vinted] delete: native confirm() observed and auto-accepted by the MAIN-world bridge.');
+    } else if (modal) {
+      // In-page modal path: the native override is not needed -- disarm it now rather than leave
+      // it armed while this tab keeps running.
+      await vintRemBridgeCall('disarm', {}, 1000, armId);
+      const confirmBtn = modal.querySelector('[data-testid="item-delete-confirmation-button"]') ||
+        document.querySelector('[data-testid="item-delete-confirmation-button"]');
+      if (!confirmBtn) return 'no_modal_confirm_button';
+      if (!/delete/i.test(String(confirmBtn.textContent || ''))) {
+        // Not the "Confirm and delete" control we captured -- back out via cancel, never guess.
+        const cancelBtn = document.querySelector('[data-testid="item-delete-cancelation-button"]');
+        if (cancelBtn) vintRemSyntheticClick(cancelBtn);
+        console.log('[FAS Vinted] delete: modal confirm button text "' + String(confirmBtn.textContent || '').trim() + '" does not contain "delete" -- aborted, NOT deleted.');
+        return 'modal_confirm_text_mismatch';
       }
+      vintRemSyntheticClick(confirmBtn);
+      confirmedBy = 'modal';
+      console.log('[FAS Vinted] delete: in-page delete modal confirmed.');
+    } else {
+      await vintRemBridgeCall('disarm', {}, 1000, armId);
+      console.log('[FAS Vinted] delete: neither a native confirm nor the delete modal appeared within 3s (bridge outcome: ' + bridgeOutcome + ').');
     }
-    return 'deleted';
+
+    // HONESTY FIX 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION), preserved: never report
+    // success on a click that was merely attempted. Success = Vinted navigated to /member/ (fact C)
+    // OR (the delete button is gone AND the delete modal is gone), observed on TWO consecutive
+    // checks ~700ms apart, within a ~5.6s budget for the POST + navigation.
+    const successNow = () => /^\/member\//.test(location.pathname) ||
+      (!document.querySelector('button[data-testid="item-delete-button"]') &&
+       !document.querySelector('[data-testid="item-delete-modal"]'));
+    let consecutive = 0;
+    for (let i = 0; i < 8; i++) {
+      await sleep(700);
+      consecutive = successNow() ? consecutive + 1 : 0;
+      if (consecutive >= 2) return 'deleted';
+    }
+    return confirmedBy ? 'delete_not_confirmed' : 'no_confirmation_prompt';
   }
 
   // TRANSITION OWNERSHIP 2026-09-04 (S-EXT-REMOVAL-BACKGROUND-OWNED-TRANSITION): the removal-report
@@ -2376,7 +2472,42 @@
 
   async function runVintedRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">This item sold elsewhere -- removing the matching Vinted listing for <b>' + escapeHtml(item.title) + '</b>...</div>');
-    const onDetailAlready = /\/items\//.test(location.pathname) && vintRemNorm(document.title).includes(vintRemNorm(item.title));
+    // SECURITY FIX 2026-09-22 (F4): refuse outright when the queued title is too short to
+    // identify one listing safely (an empty title used to match every page). Permanent skip so
+    // the backend stops re-serving it and the rest of the queue continues.
+    const wantedTitle = vintRemNorm(item.title);
+    if (wantedTitle.length < VINT_REM_MIN_SAFE_TITLE_LEN) {
+      overlayWarn('The title "' + escapeHtml(item.title) + '" is too short to safely identify one Vinted listing -- nothing was deleted. Please remove it yourself.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      vintRemSignalBackground('crossPlatformRemovalSkipped', item, 'title_too_short_for_safe_match');
+      return;
+    }
+    // F4: an item-detail page (/items/<numeric id>...) must match the queued title EXACTLY
+    // (normalized, Vinted site suffix stripped) -- the former document.title.includes() check
+    // accepted any listing whose page title merely contained the queued title.
+    const onItemDetailPage = /^\/items\/\d+/.test(location.pathname);
+    let onDetailAlready = onItemDetailPage && vintRemDetailPageTitleMatches(wantedTitle);
+    if (onItemDetailPage) {
+      // ID check (primary on this page): if the profile page chose a listing id for THIS queued
+      // item, the current URL's numeric id must equal it exactly -- identical titles exist (fact A).
+      const target = await vintRemStorageGet(VINTED_REMOVAL_TARGET_STORAGE_KEY);
+      if (target && target.itemId === item.id && target.vintedId) {
+        const here = vintRemItemIdFromHref(location.pathname);
+        if (here !== String(target.vintedId)) {
+          console.log('[FAS Vinted] removal: on /items/' + here + ' but the matched listing was /items/' + target.vintedId + ' -- refusing.');
+          onDetailAlready = false;
+        }
+      }
+    }
+    if (onItemDetailPage && !onDetailAlready) {
+      // Fail promptly instead of navigating back to the profile page -- re-clicking the same link
+      // would land here again and loop. Transient report: background counts it toward
+      // FAS_REMOVAL_MAX_ATTEMPTS and then skips permanently, so it cannot wedge the queue.
+      overlayWarn('This Vinted listing page does not exactly match "' + escapeHtml(item.title) + '" -- nothing was deleted. Please remove it yourself.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'detail_page_title_mismatch');
+      return;
+    }
     let result;
     if (onDetailAlready) {
       result = await deleteVintedListingOnDetailPage();
@@ -2398,25 +2529,31 @@
       location.href = profileUrl.indexOf('http') === 0 ? profileUrl : (location.origin + profileUrl);
       return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
     } else {
-      const link = findVintedListingLinkByTitle(item.title);
-      if (!link) {
+      const match = findVintedListingIdByTitle(item.title);
+      if (!match.id) {
         // Zero/ambiguous match on the organizer's OWN profile page -- could be a genuinely
         // unmatchable title, but could also mean a stale cached profile URL (e.g. account
         // switched). Clear the cache so the NEXT attempt rediscovers via a fresh click-through
         // rather than repeating a possibly-wrong cached URL forever.
-        vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
-        overlayWarn('Could not find a Vinted listing matching "' + escapeHtml(item.title) + '" on this page (UNVERIFIED selectors) -- please delete it yourself, then use "Mark removed" if the extension offers it.' + button('fas-vin-close', 'Close', false));
+        if (match.reason !== 'ambiguous_duplicate_title') vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
+        overlayWarn((match.reason === 'ambiguous_duplicate_title'
+          ? 'More than one of your Vinted listings is titled "' + escapeHtml(item.title) + '" -- nothing was deleted because the right one cannot be told apart safely. Please delete it yourself.'
+          : 'Could not find a Vinted listing titled exactly "' + escapeHtml(item.title) + '" on your profile -- nothing was deleted. Please delete it yourself, then use "Mark removed" if the extension offers it.') + button('fas-vin-close', 'Close', false));
         closeBtnHandler();
         // PERMANENT failure -- zero or ambiguous title match after a real look at the page. The
         // background reports the skip so the backend stops re-serving it, then advances and
         // continues: an unmatchable item must never wedge the rest of the platform's backlog.
-        vintRemSignalBackground('crossPlatformRemovalSkipped', item, 'no_confident_listing_match');
+        vintRemSignalBackground('crossPlatformRemovalSkipped', item, match.reason);
         return;
       }
-      link.click();
+      // Go straight to the one matched listing by its numeric id; the detail-page load re-checks
+      // that the URL id equals this id (and the title) before deleting anything.
+      await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, { itemId: item.id, vintedId: match.id, at: Date.now() });
+      location.href = location.origin + '/items/' + match.id;
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Vinted listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
       return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
     }
+    vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
     if (result === 'deleted') {
       // Only reachable once a DISTINCT confirmation control was found and clicked, so the hedge
       // this overlay used to carry ("please double-check it's gone -- this was not live-verified")

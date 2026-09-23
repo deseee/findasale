@@ -874,8 +874,8 @@ const ReviewPage = () => {
       open: true,
       title: forceGrounding ? 'Look up this item\u2019s exact identity?' : 'Re-run Smart tagging?',
       message: forceGrounding
-        ? 'This re-runs identity lookup from this item\u2019s photos even if it was already identified, and refreshes the suggested title, description, category, condition, and tags. Any edits you made to those fields will be replaced. Your price is kept -- we\u2019ll check for an updated price suggestion below, but it\u2019s never applied automatically.'
-        : 'This refreshes the suggested title, description, category, condition, and tags from this item\u2019s photos. Any edits you made to those fields will be replaced. Your price is kept -- we\u2019ll check for an updated price suggestion below, but it\u2019s never applied automatically.',
+        ? 'This re-runs identity lookup from this item\u2019s photos even if it was already identified, and refreshes the suggested title, description, category, condition, and tags. Any edits you made to those fields will be replaced. Your price is kept. We\u2019ll check for an updated price suggestion below, but it\u2019s never applied automatically.'
+        : 'This refreshes the suggested title, description, category, condition, and tags from this item\u2019s photos. Any edits you made to those fields will be replaced. Your price is kept. We\u2019ll check for an updated price suggestion below, but it\u2019s never applied automatically.',
       onConfirm: () => {
         setConfirmState((s) => ({ ...s, open: false }));
         handleReanalyze(item, { forceGrounding });

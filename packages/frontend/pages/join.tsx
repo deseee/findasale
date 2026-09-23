@@ -107,7 +107,7 @@ const JoinPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900 py-12 px-4">
       <Head>
-        <title>Join {inviteDetails.workspaceName} - FindA.Sale</title>
+        <title>{`Join ${inviteDetails.workspaceName ?? ''} - FindA.Sale`}</title>
       </Head>
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">

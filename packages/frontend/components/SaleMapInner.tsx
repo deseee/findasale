@@ -1,6 +1,7 @@
 // SaleMapInner.tsx: actual Leaflet implementation (browser-only, loaded dynamically)
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet';
+import '../lib/leafletSafePatch'; // Sentry FINDASALE-NEXTJS-15: guards panBy on a removed map
 import EntranceMarker from './EntranceMarker'; // Feature 35: Front Door Locator
 import HeatmapOverlay from './HeatmapOverlay'; // Feature #28
 import PhotoOpMarker from './PhotoOpMarker'; // Feature #39: Photo Op Stations

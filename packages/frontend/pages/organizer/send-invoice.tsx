@@ -191,7 +191,7 @@ function SendInvoiceForm() {
       } else {
         showToast(
           data.linkedExistingAccount
-            ? 'Invoice sent -- this email matches an existing FindA.Sale account, so they also got an in-app notification.'
+            ? 'Invoice sent. This email matches an existing FindA.Sale account, so they also got an in-app notification.'
             : 'Invoice emailed. They can pay from that email with no FindA.Sale account needed.',
           'success'
         );
@@ -234,7 +234,7 @@ function SendInvoiceForm() {
           <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Email Invoice</h1>
         </div>
         <p className="text-sm text-warm-700 dark:text-warm-300 mb-6">
-          Bill anyone by email -- a Christmas tree with a separate shipping quote, a special
+          Bill anyone by email: a Christmas tree with a separate shipping quote, a special
           request, anything. No hold, no catalog listing, and the customer doesn't need a
           FindA.Sale account: they get a payable link by email and pay there.
         </p>
@@ -272,7 +272,7 @@ function SendInvoiceForm() {
               />
               {lookupMatchesCurrentEmail && recipientLookup?.exists && (
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                  Matches an existing FindA.Sale account -- payment will link to it{recipientLookup.phone ? ' and their phone was pre-filled below' : ''}.
+                  Matches an existing FindA.Sale account. Payment will link to it{recipientLookup.phone ? ' and their phone was pre-filled below' : ''}.
                 </p>
               )}
             </div>
@@ -352,13 +352,13 @@ function SendInvoiceForm() {
               )}
             </div>
             <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
-              For anything you'll ship -- like a Christmas tree needing a shipping quote.
+              For anything you'll ship, like a Christmas tree needing a shipping quote.
               Leave blank for local pickup.
               {addressAutoFilled && recipientLookup?.addressSource === 'saved' && (
-                <span className="text-amber-700 dark:text-amber-400"> Pre-filled from their saved address -- edit or clear it above.</span>
+                <span className="text-amber-700 dark:text-amber-400"> Pre-filled from their saved address. Edit or clear it above.</span>
               )}
               {addressAutoFilled && recipientLookup?.addressSource === 'guest_history' && (
-                <span className="text-amber-700 dark:text-amber-400"> Pre-filled from their most recent order -- edit or clear it above.</span>
+                <span className="text-amber-700 dark:text-amber-400"> Pre-filled from their most recent order. Edit or clear it above.</span>
               )}
             </p>
             <div className="space-y-2">
@@ -416,7 +416,7 @@ function SendInvoiceForm() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-warm-900 dark:text-warm-100">
-                Extra line items (shipping, etc.) -- optional
+                Extra line items (optional: shipping, etc.)
               </label>
               <button
                 type="button"
@@ -494,8 +494,8 @@ function SendInvoiceForm() {
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-5">
             <h2 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">Last invoice sent</h2>
             <p className="text-sm text-warm-700 dark:text-warm-300 mb-2">
-              Total ${(lastResult.totalAmount / 100).toFixed(2)} -- status {lastResult.status}
-              {lastResult.linkedExistingAccount ? ' -- linked to an existing FindA.Sale account' : ' -- guest, no account'}
+              Total ${(lastResult.totalAmount / 100).toFixed(2)}. Status: {lastResult.status}
+              {lastResult.linkedExistingAccount ? '. Linked to an existing FindA.Sale account.' : '. Guest, no account.'}
             </p>
             <a
               href={lastResult.checkoutUrl}
@@ -527,7 +527,7 @@ export default function SendInvoicePage() {
       <TierGate
         requiredTier="PRO"
         featureName="Email Invoices"
-        description="Bill any customer by email -- no hold, no catalog listing, and they don't need a FindA.Sale account. Upgrade to PRO to send one-off invoices like this."
+        description="Bill any customer by email. No hold, no catalog listing, and they don't need a FindA.Sale account. Upgrade to PRO to send one-off invoices like this."
       >
         <SendInvoiceForm />
       </TierGate>

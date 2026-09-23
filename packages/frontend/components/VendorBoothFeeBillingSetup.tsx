@@ -173,7 +173,7 @@ export default function VendorBoothFeeBillingSetup({
     <form onSubmit={handleSubmit} className="space-y-3">
       <p className="text-sm text-warm-600 dark:text-warm-400">
         Save a card to auto-pay your ${Number(boothFee).toFixed(2)}/month booth rent. Billed
-        automatically each month -- no manual payment needed.
+        automatically each month. No manual payment needed.
       </p>
       <div className="p-3 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900">
         <div ref={cardContainerRef} />

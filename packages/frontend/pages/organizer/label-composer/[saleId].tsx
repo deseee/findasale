@@ -593,7 +593,7 @@ export default function LabelComposerPage() {
   return (
     <>
       <Head>
-        <title>Label Composer, {sale?.title || 'Loading'} | finda.sale</title>
+        <title>{`Label Composer, ${sale?.title || 'Loading'} | finda.sale`}</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">

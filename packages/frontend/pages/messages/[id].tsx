@@ -118,7 +118,7 @@ const MessageThreadPage = () => {
   return (
     <div className="flex flex-col h-full bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>{otherName}. Messages. FindA.Sale</title>
+        <title>{`${otherName ?? ''}. Messages. FindA.Sale`}</title>
       </Head>
 
       {/* Header */}

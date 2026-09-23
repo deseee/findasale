@@ -2041,7 +2041,7 @@ const AddItemsDetailPage = () => {
   return (
     <>
       <Head>
-        <title>{sale?.title ? `Add Items to ${sale.title}` : 'Add Items'} - FindA.Sale</title>
+        <title>{`${sale?.title ? `Add Items to ${sale.title ?? ''}` : 'Add Items'} - FindA.Sale`}</title>
       </Head>
 
       <main className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">

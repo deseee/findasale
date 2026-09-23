@@ -91,7 +91,7 @@ export default function TrailDetailPage() {
   return (
     <>
       <Head>
-        <title>{trail.name} | My Trails | FindA.Sale</title>
+        <title>{`${trail.name ?? ''} | My Trails | FindA.Sale`}</title>
       </Head>
 
       <div className="max-w-2xl mx-auto px-4 py-8">

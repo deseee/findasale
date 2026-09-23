@@ -775,7 +775,7 @@ const OrganizerHoldsPage = () => {
                                     <button
                                       onClick={() => setPendingReleasePaymentLink(hold)}
                                       disabled={releasePaymentLinkMutation.isPending}
-                                      title="Cancel the checkout link you sent this shopper. It stops working and the item goes back on hold for them -- don't wait on the automatic ~10-minute cleanup."
+                                      title="Cancel the checkout link you sent this shopper. It stops working and the item goes back on hold for them. Don't wait on the automatic ~10-minute cleanup."
                                       className="text-xs border border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1 rounded disabled:opacity-50"
                                     >
                                       {releasePaymentLinkMutation.isPending ? 'Cancelling...' : 'Cancel payment request'}

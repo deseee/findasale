@@ -262,7 +262,7 @@ const FAQ_DATA = [
     category: 'In-Person Payments',
     question: 'Can I use a physical card reader at my sale?',
     answer:
-      'Card-reader hardware support is being updated, so we can\'t recommend ordering a reader right now -- please hold off on any purchase until this is confirmed working again. In the meantime, your POS page supports cash, QR/link payments, Venmo, and Zelle for in-person sales, no hardware required.',
+      'Card-reader hardware support is being updated, so we can\'t recommend ordering a reader right now. Please hold off on any purchase until this is confirmed working again. In the meantime, your POS page supports cash, QR/link payments, Venmo, and Zelle for in-person sales, no hardware required.',
   },
   {
     id: 'pos-hardware-2',

@@ -151,9 +151,7 @@ const CheckInPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>
-          {isNewCheckIn ? '✅ Checked In!' : 'Already Checked In'}, {checkInResult.saleTitle}
-        </title>
+        <title>{`${isNewCheckIn ? '✅ Checked In!' : 'Already Checked In'}, ${checkInResult.saleTitle ?? ''}`}</title>
       </Head>
       <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900 p-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full">

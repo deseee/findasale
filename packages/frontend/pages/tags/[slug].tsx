@@ -60,7 +60,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
   return (
     <>
       <Head>
-        <title>{formattedTag} for Sale | FindA.Sale</title>
+        <title>{`${formattedTag ?? ''} for Sale | FindA.Sale`}</title>
         <meta
           name="description"
           content={`Browse ${itemCount} ${tag} items available at upcoming sales near you. Updated weekly.`}

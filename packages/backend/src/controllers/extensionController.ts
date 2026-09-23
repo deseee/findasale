@@ -314,6 +314,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // from that single latest row alone.
   const latestByItemPlatform = new Map<string, { itemId: string; action: string; status: string; createdAt: Date }>();
   for (const j of jobs) {
+    // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): a REMOVE/SKIPPED row is a failed removal
+    // ATTEMPT, not the end of the listing -- letting it win "newest row" made a still-live
+    // listing read as not-listed here, so the popup offered it for posting again (duplicate
+    // listing). Same exclusion as getPendingRemovals/getSyncHealth -- change all together.
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
     const key = `${j.itemId}:${j.platform}`;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
@@ -999,6 +1004,18 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // instead of a second divergent implementation of "is this platform's listing still live".
   const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
   for (const j of jobs) {
+    // BUG FIX 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): a REMOVE/SKIPPED row is a failed
+    // removal ATTEMPT, not a state change -- the listing is still live. markItemRemovalSkipped
+    // writes one on every skip, so letting it win "newest row" dropped the platform from
+    // stillListedPlatformsByItem after the FIRST skip, and the skip-cap / RETRY_COOLDOWN_MS /
+    // needsManualReview logic below never got a chance to run. Confirmed live: item
+    // cmtizddor02ru3bwwqrjktvkw (VINTED) and cmt3ak88q01lea4xvvj0zh0ax (VINTED/MERCARI/FACEBOOK)
+    // stuck with POST/POSTED followed only by REMOVE/SKIPPED rows -- silently never retried and
+    // never reported. SKIPPED rows are excluded from the newest-row pick ONLY; they are still
+    // counted by skipCountByItemPlatform below (separate loop over the same `jobs`). A
+    // REMOVE/REMOVED row still ends the listing. Mirrored in getSyncHealth and adminController's
+    // getMarketplaceReviewBacklog -- change all three together.
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
     const key = j.itemId + ':' + j.platform;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
@@ -1538,6 +1555,9 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   // lastAttemptAt) is unchanged for MarketplaceSyncHealthCard.tsx; `platforms` is purely additive.
   const latestByRemovalItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
   for (const j of removalJobs) {
+    // 2026-09-22: same REMOVE/SKIPPED exclusion as getPendingRemovals (S-EXT-REMOVAL-SKIP-ENDS-LISTING)
+    // -- a skip is a failed attempt, not the end of the listing; it is still counted below.
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
     const key = j.itemId + ':' + j.platform;
     const existing = latestByRemovalItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
@@ -1799,6 +1819,9 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   });
   const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
   for (const j of jobs) {
+    // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): ignore REMOVE/SKIPPED (failed removal attempt,
+    // listing still live) -- otherwise isAlreadyListed returned false and auto-list re-posted it.
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
     const key = `${j.itemId}:${j.platform}`;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
@@ -1955,6 +1978,9 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   });
   const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; priceSyncedAt: Date | null }>();
   for (const j of jobs) {
+    // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): ignore REMOVE/SKIPPED (failed removal attempt,
+    // listing still live) -- otherwise a still-live platform silently dropped out of price sync.
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
     const key = `${j.itemId}:${j.platform}`;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {

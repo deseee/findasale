@@ -39,7 +39,7 @@ export default function PublicTrailPage() {
   return (
     <>
       <Head>
-        <title>{trail.name} | Treasure Trail | FindA.Sale</title>
+        <title>{`${trail.name ?? ''} | Treasure Trail | FindA.Sale`}</title>
         <meta name="description" content={trail.description || 'A curated treasure trail of sales'} />
       </Head>
 

@@ -203,7 +203,7 @@ const EncyclopediaEntryPage = () => {
   return (
     <>
       <Head>
-        <title>{entry.title} | Resale Encyclopedia</title>
+        <title>{`${entry.title ?? ''} | Resale Encyclopedia`}</title>
         <meta name="description" content={entry.subtitle || entry.title} />
         <meta property="og:title" content={entry.title} />
         <meta property="og:description" content={entry.subtitle || entry.title} />

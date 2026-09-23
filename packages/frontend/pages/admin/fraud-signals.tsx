@@ -309,7 +309,7 @@ const AdminFraudSignals = () => {
                           <button
                             onClick={() => handleClearHold(record.sale!.id)}
                             disabled={actionLoading === `hold-${record.sale!.id}`}
-                            title="Sale is currently blocking ALL purchases -- clears once every CONFIRMED signal on it is dismissed"
+                            title="Sale is currently blocking ALL purchases. Clears once every CONFIRMED signal on it is dismissed"
                             className="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white text-xs px-2 py-1 rounded"
                           >
                             {actionLoading === `hold-${record.sale!.id}` ? '...' : 'Clear Sale Hold'}

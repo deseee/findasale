@@ -1188,7 +1188,7 @@ const EbayPolicySetupPage = () => {
                             fee that covers eBay's cut of the shipping charge -- so you're never
                             paying to ship out of pocket. Replaces the flat-rate-only copy above. */}
                         Your buyer pays eBay's real shipping rate at checkout, plus a small handling
-                        fee that covers eBay's cut -- so you're never paying to ship out of pocket.
+                        fee that covers eBay's cut, so you're never paying to ship out of pocket.
                         You just confirm the weight and box size; we handle the rest.
                       </p>
                     </button>
@@ -1263,7 +1263,7 @@ const EbayPolicySetupPage = () => {
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Your buyers are charged the real computed rate</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                     FindA.Sale automatically finds the cheapest USPS/UPS/FedEx rate for each item's
-                    weight and box size, every time -- no tiers to maintain, so it never goes stale.
+                    weight and box size, every time. No tiers to maintain, so it never goes stale.
                     Here's roughly what buyers pay at a few sample weights, shipping from your
                     sale's origin address.
                   </p>

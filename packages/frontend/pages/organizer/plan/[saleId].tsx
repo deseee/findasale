@@ -491,7 +491,7 @@ const SalePlanPage = () => {
                                   <button
                                     onClick={handlePosTest}
                                     disabled={posTestLoading || !ENABLE_LEGACY_STRIPE_TEST_TOOLS}
-                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated -- check back soon' : undefined}
+                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated. Check back soon' : undefined}
                                     className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     {posTestLoading ? '…' : 'Run Test'}
@@ -501,7 +501,7 @@ const SalePlanPage = () => {
                                   <button
                                     onClick={handleOnlineCheckout}
                                     disabled={onlineCheckoutLoading || !ENABLE_LEGACY_STRIPE_TEST_TOOLS}
-                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated -- check back soon' : undefined}
+                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated. Check back soon' : undefined}
                                     className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     {onlineCheckoutLoading ? '…' : 'Run Test'}
@@ -511,7 +511,7 @@ const SalePlanPage = () => {
                                   <button
                                     onClick={handleAuctionCheckout}
                                     disabled={auctionCheckoutLoading || !ENABLE_LEGACY_STRIPE_TEST_TOOLS}
-                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated -- check back soon' : undefined}
+                                    title={!ENABLE_LEGACY_STRIPE_TEST_TOOLS ? 'Payment testing tools are being updated. Check back soon' : undefined}
                                     className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     {auctionCheckoutLoading ? '…' : 'Run Test'}
@@ -520,7 +520,7 @@ const SalePlanPage = () => {
                                 {!task.completed && task.id === 'pre_in_app_payment' && (
                                   <button
                                     disabled={!ENABLE_LEGACY_STRIPE_TEST_TOOLS}
-                                    title="Payment testing tools are being updated -- check back soon"
+                                    title="Payment testing tools are being updated. Check back soon"
                                     className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 disabled:cursor-not-allowed text-white transition"
                                   >
                                     Run Test

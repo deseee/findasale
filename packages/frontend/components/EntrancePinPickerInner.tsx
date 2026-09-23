@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvent, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import '../lib/leafletSafePatch'; // Sentry FINDASALE-NEXTJS-15: guards panBy on a removed map
 
 // Fix Leaflet's default icon paths
 delete (L.Icon.Default.prototype as any)._getIconUrl;

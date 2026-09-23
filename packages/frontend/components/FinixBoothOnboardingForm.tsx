@@ -205,10 +205,10 @@ export default function FinixBoothOnboardingForm({ vendorBoothId }: FinixBoothOn
 
   return (
     <div className="mt-4 p-4 bg-warm-50 dark:bg-gray-900/40 border border-warm-200 dark:border-gray-700 rounded-lg">
-      <p className="text-sm font-bold text-warm-900 dark:text-warm-100">Finix hub payments (Maple Lake Mall) -- optional</p>
+      <p className="text-sm font-bold text-warm-900 dark:text-warm-100">Finix hub payments (Maple Lake Mall), optional</p>
       <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">
         This is a separate, optional setup for selling through Maple Lake Mall's shared hub register. It does not
-        affect your regular Square payouts. This feature is still in testing and not live yet -- you can set it up
+        affect your regular Square payouts. This feature is still in testing and not live yet. You can set it up
         now so you're ready when it launches.
       </p>
 

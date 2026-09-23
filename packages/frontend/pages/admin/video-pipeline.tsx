@@ -112,7 +112,7 @@ const AdminVideoPipelinePage = () => {
       return `Next question staged: ${result.question ?? '(see list)'}`;
     }
     if (result.status === 'FAILED') {
-      return 'Batch failed again -- check Railway logs.';
+      return 'Batch failed again. Check Railway logs.';
     }
     return `Result: ${result.status ?? 'unknown'}`;
   };
@@ -213,9 +213,9 @@ const AdminVideoPipelinePage = () => {
             </Link>
           </div>
           <p className="text-warm-600 dark:text-warm-400 text-sm mb-6">
-            Footage batches blocked on a human -- either a staged question (NEEDS_INPUT) or an
+            Footage batches blocked on a human: either a staged question (NEEDS_INPUT) or an
             unrecoverable error (FAILED). Answering/retrying re-runs real classification (Vision +
-            Whisper + OCR + Haiku) -- not free, not instant.
+            Whisper + OCR + Haiku), which is not free and not instant.
           </p>
 
           {isLoadingBatches ? (
@@ -352,7 +352,7 @@ const AdminVideoPipelinePage = () => {
             <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">Awaiting Review</h2>
             <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
               Batches that finished rendering. Review the video + staged notes, then approve or
-              reject. Approving only records the decision -- there is no automatic publish yet.
+              reject. Approving only records the decision. There is no automatic publish yet.
             </p>
           </div>
 

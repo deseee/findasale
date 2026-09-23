@@ -8,6 +8,15 @@ Sentry.init({
   // Replay captures sessions when an error occurs — 0% normally, 100% on error
   replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1.0,
+  // Drop errors whose stack frames come from outside FindA.Sale's own code
+  // (FINDASALE-NEXTJS-16): adware that injects scripts from tausearch.com, and
+  // browser extension scripts. Not actionable.
+  denyUrls: [
+    /tausearch\.com/i,
+    /^chrome-extension:\/\//i,
+    /^moz-extension:\/\//i,
+    /^safari-(web-)?extension:\/\//i,
+  ],
   beforeSend(event, hint) {
     const msg = String(hint?.originalException ?? '');
     // Known noise: Sentry SDK internal object lookup failure

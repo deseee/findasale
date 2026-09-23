@@ -101,8 +101,8 @@ export const EbayMonthlyQuotaCounter: React.FC<{ enabled: boolean }> = ({ enable
     <p className={`text-[11px] ${color} mt-1`}>
       {usedThisMonth} used + ~{projectedRenewalsBeforeReset} projected renewals = ~{projectedTotalUsage} of {freeInsertionsCap} free eBay insertions this month
       {capSource === 'ESTIMATED' && ' (estimated)'}
-      {' -- '}
-      <span className={freshnessColor}>{freshness.text}</span>
+      {'. '}
+      <span className={freshnessColor}>{freshness.text.charAt(0).toUpperCase() + freshness.text.slice(1)}.</span>
     </p>
   );
 };

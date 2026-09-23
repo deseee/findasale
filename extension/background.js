@@ -663,7 +663,11 @@ async function checkCrossPlatformRemovals(pendingItems) {
     const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
     const itemsForPlatform = pendingItems.filter((i) => Array.isArray(i.platforms) && i.platforms.includes(platform));
     if (!itemsForPlatform.length) continue;
-    if (fasAutoRemoveMode === 'silent' && await silentCrossPlatformRemovalInProgress(platform)) {
+    // SECURITY FIX 2026-09-22 (F2, hacker+architect review of Vinted auto-removal): notify mode
+    // now ALSO records a dedicated removal tab id (on notification click, see onClicked below),
+    // so the in-progress guard applies in both modes -- otherwise a poll mid-run would reset this
+    // platform's queue index to 0 underneath a removal the organizer already approved.
+    if (await silentCrossPlatformRemovalInProgress(platform)) {
       outcomes.push(platform + ':skipped_in_progress');
       continue;
     }
@@ -1311,7 +1315,11 @@ chrome.notifications.onClicked.addListener((notifId) => {
     const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
     if (cfg) {
       chrome.notifications.clear(notifId);
-      chrome.tabs.create({ url: CFG[cfg.manageUrlKey], active: true });
+      // SECURITY FIX 2026-09-22 (F2): open the removal tab through the SAME helper silent mode
+      // uses, so its id is recorded under cfg.tabIdKey. getRemovalQueueItemFor only serves a
+      // queued item to that exact tab -- any other tab (the organizer browsing the marketplace
+      // normally) gets item:null and the content script never attempts a delete there.
+      openSilentCrossPlatformRemovalTab(platform).catch((e) => console.log('[FAS removal tab open FAILED]', platform, e && e.message));
     }
     return;
   }
@@ -2125,10 +2133,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform];
         if (!cfg) { sendResponse({ ok: false, error: 'unknown_platform' }); }
         else {
-          const st = await chrome.storage.local.get([cfg.queueKey, cfg.indexKey]);
+          const st = await chrome.storage.local.get([cfg.queueKey, cfg.indexKey, cfg.tabIdKey]);
           const queue = st[cfg.queueKey] || [];
           const index = st[cfg.indexKey] || 0;
-          sendResponse({ ok: true, item: queue[index] || null, index, total: queue.length });
+          // SECURITY FIX 2026-09-22 (F2): only the dedicated removal tab this worker itself opened
+          // (openSilentCrossPlatformRemovalTab -- silent-mode auto-open or notify-mode click) may
+          // receive a queued item. Every other tab on the same marketplace -- including one the
+          // organizer opened by hand while a queue happens to be filled -- gets item:null, so no
+          // content script can auto-delete outside the approved removal tab. Iframes inside the
+          // removal tab (Craigslist's accounts.craigslist.org frame) report the same sender.tab.id.
+          const senderTabId = (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null;
+          const removalTabId = st[cfg.tabIdKey] != null ? st[cfg.tabIdKey] : null;
+          if (senderTabId == null || removalTabId == null || senderTabId !== removalTabId) {
+            sendResponse({ ok: true, item: null, index, total: queue.length, reason: 'not_removal_tab' });
+          } else {
+            sendResponse({ ok: true, item: queue[index] || null, index, total: queue.length });
+          }
         }
       } else if (msg.type === 'advanceRemovalQueueFor') {
         const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform];

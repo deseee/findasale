@@ -81,7 +81,7 @@ const SharedWishlistPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>{wishlist.name} - FindA.Sale</title>
+        <title>{`${wishlist.name ?? ''} - FindA.Sale`}</title>
         <meta name="description" content={`Check out ${wishlist.user.name}'s "${wishlist.name}" wishlist on FindA.Sale`} />
       </Head>
 

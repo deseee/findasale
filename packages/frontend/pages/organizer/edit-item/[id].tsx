@@ -2115,7 +2115,7 @@ const EditItemPage = () => {
                     </div>
                   )}
                   <p className="text-xs text-gray-500 mt-1">
-                    Charged to the buyer at checkout. Estimated prices already include our platform fee so you don&apos;t come up short. This is an estimate, not a live carrier quote -- actual cost depends on where the buyer lives.
+                    Charged to the buyer at checkout. Estimated prices already include our platform fee so you don&apos;t come up short. This is an estimate, not a live carrier quote. Actual cost depends on where the buyer lives.
                   </p>
                   {/* ADR-115 Phase 3, Part B: one genuine live Shippo quote to sanity-check the
                       estimate above against. Not the actual future price (that depends on the
@@ -2320,7 +2320,7 @@ const EditItemPage = () => {
                           onClick={() => setWeightTouched(true)}
                           className="text-sm font-medium text-green-600 dark:text-green-400 hover:underline"
                         >
-                          {weightTouched ? '✓ Confirmed -- will save' : 'This is correct as shown'}
+                          {weightTouched ? '✓ Confirmed, will save' : 'This is correct as shown'}
                         </button>
                       )}
                     </div>
@@ -2754,7 +2754,7 @@ const EditItemPage = () => {
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
                 <p className="text-sm text-warm-600 dark:text-gray-400">
-                  Reverb is for musical instruments &amp; gear only -- this item&apos;s category
+                  Reverb is for musical instruments &amp; gear only. This item&apos;s category
                   {formData.category ? ` ("${formData.category}")` : ''} isn&apos;t eligible.
                 </p>
               </div>
@@ -2902,8 +2902,8 @@ const EditItemPage = () => {
             title={reanalyzeConfirm.forceGrounding ? "Look up this item's exact identity?" : 'Re-run Smart tagging?'}
             message={
               reanalyzeConfirm.forceGrounding
-                ? "This re-runs identity lookup from this item's photos even if it was already identified, and refreshes the suggested title, description, category, condition, and tags. Any edits you made to those fields will be replaced. Your price is kept -- we'll check for an updated price suggestion below, but it's never applied automatically."
-                : "This refreshes the suggested title, description, category, condition, and tags from this item's photos. Any edits you made to those fields will be replaced. Your price is kept -- we'll check for an updated price suggestion below, but it's never applied automatically."
+                ? "This re-runs identity lookup from this item's photos even if it was already identified, and refreshes the suggested title, description, category, condition, and tags. Any edits you made to those fields will be replaced. Your price is kept. We'll check for an updated price suggestion below, but it's never applied automatically."
+                : "This refreshes the suggested title, description, category, condition, and tags from this item's photos. Any edits you made to those fields will be replaced. Your price is kept. We'll check for an updated price suggestion below, but it's never applied automatically."
             }
             confirmLabel={reanalyzeConfirm.forceGrounding ? 'Identify precisely' : 'Re-analyze'}
             onConfirm={() => {

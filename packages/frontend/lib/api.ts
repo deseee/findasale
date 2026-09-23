@@ -104,7 +104,7 @@ api.interceptors.response.use(
           // login.tsx already renders (Roadmap #422) rather than inventing a new mechanism. Kept
           // generic since this interceptor has no way to know WHY tokenVersion changed.
           const params = new URLSearchParams({
-            message: 'Your session ended -- please log back in to continue. (This can happen right after your account is upgraded.)',
+            message: 'Your session ended. Please log back in to continue. (This can happen right after your account is upgraded.)',
           });
           window.location.href = '/login?' + params.toString();
         }

@@ -299,7 +299,7 @@ export default function BlogPostPage({ post, relatedPosts }: BlogPostPageProps) 
   return (
     <>
       <Head>
-        <title>{post.title} | FindA.Sale Blog</title>
+        <title>{`${post.title ?? ''} | FindA.Sale Blog`}</title>
         <meta name="description" content={post.metaDescription} />
         <meta property="og:title" content={post.title} />
         <meta property="og:description" content={post.metaDescription} />

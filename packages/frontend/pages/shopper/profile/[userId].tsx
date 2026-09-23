@@ -93,7 +93,7 @@ export default function ShopperProfilePage() {
   return (
     <>
       <Head>
-        <title>{profile.user.name}'s Profile - FindA.Sale</title>
+        <title>{`${profile.user.name ?? ''}'s Profile - FindA.Sale`}</title>
         <meta name="description" content={`Explore ${profile.user.name}'s collection interests and recent finds on FindA.Sale`} />
       </Head>
 

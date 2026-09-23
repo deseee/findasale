@@ -143,7 +143,7 @@ const OrganizerOrdersPage = () => {
         )}
         {item.deliveryMethod === 'SHIP' && item.shippingLabelPurchasedAt && (
           <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-            ✔ Label purchased ({item.shippingCarrier}) -- tracking{' '}
+            ✔ Label purchased ({item.shippingCarrier}), tracking{' '}
             <span className="font-mono">{item.shippingTrackingNumber}</span>
             {item.shippingLabelUrl && (
               <>
@@ -222,7 +222,7 @@ const OrganizerOrdersPage = () => {
               Needs Action
             </h2>
             <p className="text-xs text-gray-400 mb-4">
-              Sold items waiting on you -- ship it, hand it over, or refund it.
+              Sold items waiting on you: ship it, hand it over, or refund it.
             </p>
 
             {earningsLoading ? (

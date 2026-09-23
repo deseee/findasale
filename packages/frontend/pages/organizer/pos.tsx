@@ -817,7 +817,7 @@ export default function POSPage() {
   const initTerminal = useCallback(async () => {
     if (!ENABLE_STRIPE_TERMINAL_CARD_READER) {
       setReaderStatus('error');
-      setErrorMessage('Card-reader hardware support is being updated -- cash, QR, and Venmo/Zelle are available now.');
+      setErrorMessage('Card-reader hardware support is being updated. Cash, QR, and Venmo/Zelle are available now.');
       return;
     }
     if (sdkLoadedRef.current) return;
@@ -1294,7 +1294,7 @@ export default function POSPage() {
         // "will not start until reopened" -- same distinction hubs/[hubId]/cart.tsx's
         // describeFailure makes for the old register page (canRetry: false + the server's
         // own wording for a 403).
-        const message = failureMessage || 'Register is still starting -- wait a moment and try again.';
+        const message = failureMessage || 'Register is still starting. Wait a moment and try again.';
         setErrorMessage(message);
         return { added: false, message };
       }
@@ -1435,7 +1435,7 @@ export default function POSPage() {
     setConfirmState({
       open: true,
       title: 'Cancel this cart',
-      message: 'This releases every item in this cart back to available. Nothing is charged. Use this to clear a stray or abandoned cart -- for example after a previous cashier session was left open.',
+      message: 'This releases every item in this cart back to available. Nothing is charged. Use this to clear a stray or abandoned cart, for example after a previous cashier session was left open.',
       onConfirm: async () => {
         try {
           await api.post(
@@ -1820,7 +1820,7 @@ export default function POSPage() {
         // diverge from server truth (item invisible in UI but still reserved
         // server-side, blocking search -- the exact bug this fix closes).
         setCart(prev => [...prev, removedItem]);
-        setErrorMessage(err?.response?.data?.error || 'Could not remove item -- please try again.');
+        setErrorMessage(err?.response?.data?.error || 'Could not remove item. Please try again.');
       });
     }
   };
@@ -2533,7 +2533,7 @@ export default function POSPage() {
     if (match) {
       handleLoadHold(match);
     } else {
-      showToast('Could not find that hold to load -- it may have expired or already been settled.', 'error');
+      showToast('Could not find that hold to load. It may have expired or already been settled.', 'error');
     }
 
     // Clear the query param so a refresh doesn't try to re-load it.
@@ -2767,7 +2767,7 @@ export default function POSPage() {
           {/* Reader status */}
           {!ENABLE_STRIPE_TERMINAL_CARD_READER ? (
             <span
-              title="Card-reader hardware support is being updated -- cash, QR, and Venmo/Zelle are available now."
+              title="Card-reader hardware support is being updated. Cash, QR, and Venmo/Zelle are available now."
               className="text-xs px-3 py-1 rounded-full font-medium bg-warm-200 text-warm-700 dark:bg-gray-700 dark:text-warm-300"
             >
               Card reader unavailable
@@ -3516,7 +3516,7 @@ export default function POSPage() {
                   // (see its own comment above) rather than a new flag, since it's the same
                   // underlying dead capability, not a separate stopgap.
                   disabled={!!venueStartFailure || !ENABLE_STRIPE_TERMINAL_CARD_READER}
-                  title={!ENABLE_STRIPE_TERMINAL_CARD_READER ? 'Card-reader hardware support is being updated -- cash and Square QR are available now.' : undefined}
+                  title={!ENABLE_STRIPE_TERMINAL_CARD_READER ? 'Card-reader hardware support is being updated. Cash and Square QR are available now.' : undefined}
                   className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
                     venueStartFailure || !ENABLE_STRIPE_TERMINAL_CARD_READER
                       ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
@@ -3760,7 +3760,7 @@ export default function POSPage() {
                 // freshly-opened venue register could still land here before any selection.
                 // Mirrors the non-venue "Card-reader hardware..." message exactly.
                 <div className="p-4 rounded-xl bg-warm-100 dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-sm text-warm-600 dark:text-warm-400 text-center">
-                  Card-reader hardware support is being updated -- cash and Square QR are available now.
+                  Card-reader hardware support is being updated. Cash and Square QR are available now.
                 </div>
               ) : (
                 <button
@@ -3795,7 +3795,7 @@ export default function POSPage() {
                 setCashNumpadValue('');
               }}
               disabled={!!loadedHold}
-              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
+              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 loadedHold
                   ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
@@ -3818,7 +3818,7 @@ export default function POSPage() {
             <button
               onClick={() => setPaymentMode('qr')}
               disabled={cart.length === 0 || !!loadedHold}
-              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
+              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 paymentMode === 'qr'
                   ? 'bg-sage-700 text-white'
@@ -3839,9 +3839,9 @@ export default function POSPage() {
               disabled={!ENABLE_STRIPE_TERMINAL_CARD_READER || readerStatus !== 'connected' || !!loadedHold}
               title={
                 !ENABLE_STRIPE_TERMINAL_CARD_READER
-                  ? 'Card-reader hardware support is being updated -- cash, QR, and Venmo/Zelle are available now.'
+                  ? 'Card-reader hardware support is being updated. Cash, QR, and Venmo/Zelle are available now.'
                   : loadedHold
-                  ? 'Item is on hold -- use Invoice to complete this sale'
+                  ? 'Item is on hold. Use Invoice to complete this sale'
                   : readerStatus !== 'connected'
                   ? 'Tap the status indicator in the top corner to connect your reader'
                   : ''
@@ -3874,7 +3874,7 @@ export default function POSPage() {
             <button
               onClick={() => setPaymentMode('venmo')}
               disabled={!!loadedHold}
-              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
+              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 loadedHold
                   ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
@@ -3890,7 +3890,7 @@ export default function POSPage() {
             <button
               onClick={() => setPaymentMode('zelle')}
               disabled={!!loadedHold}
-              title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : ''}
+              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 loadedHold
                   ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
@@ -3907,7 +3907,7 @@ export default function POSPage() {
               <button
                 onClick={handleSendToPhone}
                 disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold}
-                title={loadedHold ? 'Item is on hold -- use Invoice to complete this sale' : cart.length === 0 ? 'Add items to cart first' : `Send $${cartTotal.toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
+                title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : cart.length === 0 ? 'Add items to cart first' : `Send $${cartTotal.toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
                 className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 col-span-2 ${
                   cart.length === 0 || paymentStatus === 'creating' || loadedHold
                     ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
@@ -3941,7 +3941,7 @@ export default function POSPage() {
                 setNumpadOpen(false);
               }}
               disabled={!ENABLE_MANUAL_CARD_ENTRY}
-              title={!ENABLE_MANUAL_CARD_ENTRY ? 'Manual card entry is being updated -- cash, QR, and Venmo/Zelle are available now.' : ''}
+              title={!ENABLE_MANUAL_CARD_ENTRY ? 'Manual card entry is being updated. Cash, QR, and Venmo/Zelle are available now.' : ''}
               className={
                 ENABLE_MANUAL_CARD_ENTRY
                   ? 'text-xs text-sage-700 dark:text-sage-400 hover:underline'
@@ -4281,7 +4281,7 @@ export default function POSPage() {
           {paymentMode === 'card' && (
             !ENABLE_STRIPE_TERMINAL_CARD_READER ? (
               <div className="p-4 rounded-xl bg-warm-100 dark:bg-gray-800 border border-warm-200 dark:border-gray-700 text-sm text-warm-600 dark:text-warm-400 text-center">
-                Card-reader hardware support is being updated -- cash, QR, and Venmo/Zelle are available now.
+                Card-reader hardware support is being updated. Cash, QR, and Venmo/Zelle are available now.
               </div>
             ) : (
               <>

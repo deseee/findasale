@@ -284,9 +284,8 @@ function EbayForecastBlock({ forecast }: { forecast: EbayInsertionsForecast }) {
         />
       </div>
       <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-        Resets {resetLabel}
-        {' -- '}
-        <span className={freshness.stale ? 'text-amber-700 dark:text-amber-400' : undefined}>{freshness.text}</span>
+        Resets {resetLabel}.{' '}
+        <span className={freshness.stale ? 'text-amber-700 dark:text-amber-400' : undefined}>{freshness.text.charAt(0).toUpperCase() + freshness.text.slice(1)}.</span>
       </p>
 
       {status === 'approaching' && (

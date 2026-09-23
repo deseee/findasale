@@ -139,7 +139,7 @@ const PerSaleAnalyticsPage = () => {
   return (
     <>
       <Head>
-        <title>{analytics.saleName} - Analytics - FindA.Sale</title>
+        <title>{`${analytics.saleName ?? ''} - Analytics - FindA.Sale`}</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">

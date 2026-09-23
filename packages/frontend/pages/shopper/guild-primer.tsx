@@ -830,7 +830,7 @@ const GuildPrimerPage = () => {
               Seasonal Adventures
             </h2>
             <p className="text-warm-600 dark:text-warm-400 mb-8">
-              Every season brings new challenges, cosmetics, and a fresh leaderboard. Your rank never resets -- your competition does.
+              Every season brings new challenges, cosmetics, and a fresh leaderboard. Your rank never resets. Your competition does.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -915,7 +915,7 @@ const GuildPrimerPage = () => {
                 },
                 {
                   q: 'Is this worth it if I only go to 5 sales a month?',
-                  a: 'Yes. 5 visits = 25 XP/month. Add a purchase or two and a referral -- you\'ll reach Scout inside a year.',
+                  a: 'Yes. 5 visits = 25 XP/month. Add a purchase or two and a referral, and you\'ll reach Scout inside a year.',
                 },
                 {
                   q: 'What happens when I reach Grandmaster?',

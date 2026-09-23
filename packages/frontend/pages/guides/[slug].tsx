@@ -211,7 +211,7 @@ export default function GuidePage({ guide, relatedGuides }: GuidePageProps) {
   return (
     <>
       <Head>
-        <title>{guide.title} | FindA.Sale Help</title>
+        <title>{`${guide.title ?? ''} | FindA.Sale Help`}</title>
         <meta
           name="description"
           content={`${guide.title}. A step-by-step guide from FindA.Sale.`}

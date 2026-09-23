@@ -2366,31 +2366,67 @@ export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Respons
     const itemIds = soldItems.map((i) => i.id);
     const jobs = await prisma.marketplaceListingJob.findMany({
       where: { itemId: { in: itemIds } },
-      select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true },
+      select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true },
     });
 
-    const postedByItem = new Set<string>();
-    const removedByItem = new Set<string>();
-    const skipCountByItem = new Map<string, number>();
-    const lastSkipReasonByItem = new Map<string, string | null>();
-    const lastSkipAtByItem = new Map<string, Date>();
+    // BUG FIX 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING, consistency pass): this used to be the
+    // pre-2026-09-04 ITEM-level logic (any POST/POSTED ever + no REMOVE/REMOVED ever + item-wide
+    // skip count), which extensionController's getPendingRemovals/getSyncHealth replaced with
+    // per-platform logic on 2026-09-04 -- so one platform's successful removal hid another
+    // platform's stuck listing from this admin view, and skips from different platforms were
+    // pooled. Now mirrors getSyncHealth's manualReviewBacklog exactly: the newest non-
+    // (REMOVE,SKIPPED) row per item+platform decides whether that platform is still live
+    // (POST/POSTED); REMOVE/SKIPPED rows are failed attempts, counted per item+platform; an item
+    // is in the backlog when ANY still-listed platform has hit MAX_REMOVAL_SKIP_ATTEMPTS, and
+    // reports the worst-affected platform. Response fields unchanged; `platforms` is additive.
+    const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
     for (const j of jobs) {
-      if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
-      if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+      if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
+      const key = j.itemId + ':' + j.platform;
+      const existing = latestByItemPlatform.get(key);
+      if (!existing || j.createdAt > existing.createdAt) {
+        latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
+      }
+    }
+    const stillListedPlatformsByItem = new Map<string, string[]>();
+    for (const [key, latest] of latestByItemPlatform) {
+      if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
+      const sepIdx = key.lastIndexOf(':'); // item ids are cuids -- no colon
+      const rowItemId = key.slice(0, sepIdx);
+      const arr = stillListedPlatformsByItem.get(rowItemId) || [];
+      arr.push(key.slice(sepIdx + 1));
+      stillListedPlatformsByItem.set(rowItemId, arr);
+    }
+    const skipCountByItemPlatform = new Map<string, number>();
+    const lastSkipReasonByItemPlatform = new Map<string, string | null>();
+    const lastSkipAtByItemPlatform = new Map<string, Date>();
+    for (const j of jobs) {
       if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
-        skipCountByItem.set(j.itemId, (skipCountByItem.get(j.itemId) || 0) + 1);
-        lastSkipReasonByItem.set(j.itemId, j.lastErrorMessage ?? null);
+        const skipKey = j.itemId + ':' + j.platform;
+        skipCountByItemPlatform.set(skipKey, (skipCountByItemPlatform.get(skipKey) || 0) + 1);
+        lastSkipReasonByItemPlatform.set(skipKey, j.lastErrorMessage ?? null);
         const attemptedAt = j.lastAttemptAt;
-        if (attemptedAt && (!lastSkipAtByItem.has(j.itemId) || attemptedAt > lastSkipAtByItem.get(j.itemId)!)) {
-          lastSkipAtByItem.set(j.itemId, attemptedAt);
+        if (attemptedAt && (!lastSkipAtByItemPlatform.has(skipKey) || attemptedAt > lastSkipAtByItemPlatform.get(skipKey)!)) {
+          lastSkipAtByItemPlatform.set(skipKey, attemptedAt);
         }
       }
     }
 
-    const stillPendingRemoval = soldItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
-    const backlogItems = stillPendingRemoval.filter(
-      (i) => (skipCountByItem.get(i.id) || 0) >= MAX_REMOVAL_SKIP_ATTEMPTS
-    );
+    // Worst-affected stuck platform per item (highest skip count), plus all stuck platform names.
+    const stuckByItem = new Map<string, { worstKey: string; skipCount: number; platforms: string[] }>();
+    for (const i of soldItems) {
+      const stuck = (stillListedPlatformsByItem.get(i.id) || [])
+        .map((p) => ({ platform: p, skipCount: skipCountByItemPlatform.get(i.id + ':' + p) || 0 }))
+        .filter((p) => p.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS)
+        .sort((a, b) => b.skipCount - a.skipCount);
+      if (!stuck.length) continue;
+      stuckByItem.set(i.id, {
+        worstKey: i.id + ':' + stuck[0].platform,
+        skipCount: stuck[0].skipCount,
+        platforms: stuck.map((p) => p.platform),
+      });
+    }
+    const backlogItems = soldItems.filter((i) => stuckByItem.has(i.id));
 
     if (!backlogItems.length) {
       return res.json({ items: [] });
@@ -2410,14 +2446,16 @@ export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Respons
     const items = backlogItems
       .map((i) => {
         const saleInfo = i.saleId ? saleInfoById.get(i.saleId) : undefined;
+        const stuck = stuckByItem.get(i.id)!;
         return {
           itemId: i.id,
           itemTitle: i.title,
           saleTitle: saleInfo?.saleTitle || '(deleted sale)',
           organizerName: saleInfo?.organizerName || '(unknown organizer)',
-          skipCount: skipCountByItem.get(i.id) || 0,
-          lastErrorMessage: lastSkipReasonByItem.get(i.id) || null,
-          lastAttemptAt: lastSkipAtByItem.get(i.id)?.toISOString() || null,
+          skipCount: stuck.skipCount,
+          lastErrorMessage: lastSkipReasonByItemPlatform.get(stuck.worstKey) || null,
+          lastAttemptAt: lastSkipAtByItemPlatform.get(stuck.worstKey)?.toISOString() || null,
+          platforms: stuck.platforms,
         };
       })
       // Most recently stuck first -- surfaces the freshest failures at the top.

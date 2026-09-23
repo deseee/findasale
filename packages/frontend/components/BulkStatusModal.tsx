@@ -168,7 +168,7 @@ const BulkStatusModal: React.FC<BulkStatusModalProps> = ({
                 {status.label}
               </option>
             ))}
-            <option value={OFF_PLATFORM_STATUS_VALUE}>Sold -- outside FindA.Sale (cash, Venmo, etc.)</option>
+            <option value={OFF_PLATFORM_STATUS_VALUE}>Sold outside FindA.Sale (cash, Venmo, etc.)</option>
           </select>
         </div>
 
@@ -176,7 +176,7 @@ const BulkStatusModal: React.FC<BulkStatusModalProps> = ({
         {isOffPlatform && !offPlatformEnabled && (
           <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg text-sm">
             <p className="text-blue-800 dark:text-blue-200 mb-2">
-              Off-Platform Sales isn&apos;t turned on for your account yet. Turn it on to mark items sold when a shopper pays you directly -- cash, Venmo, your own card reader -- instead of through FindA.Sale.
+              Off-Platform Sales isn&apos;t turned on for your account yet. Turn it on to mark items sold when a shopper pays you directly (cash, Venmo, your own card reader) instead of through FindA.Sale.
             </p>
             <Link
               href={offPlatformSettingsHref}
@@ -191,7 +191,7 @@ const BulkStatusModal: React.FC<BulkStatusModalProps> = ({
         {isOffPlatform && offPlatformEnabled && (
           <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700/50 border border-warm-200 dark:border-gray-600 rounded-lg">
             <p className="text-xs text-warm-600 dark:text-gray-400 mb-3">
-              This marks the item{selectedCount !== 1 ? 's' : ''} sold without a FindA.Sale-processed payment -- for cash, Venmo, or other outside-the-app sales. Everything below is optional, for your own records.
+              This marks the item{selectedCount !== 1 ? 's' : ''} sold without a FindA.Sale-processed payment, for cash, Venmo, or other outside-the-app sales. Everything below is optional, for your own records.
             </p>
             <div className="space-y-3">
               <div>

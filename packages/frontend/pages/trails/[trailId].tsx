@@ -278,7 +278,7 @@ export default function TrailDetailPage() {
   return (
     <Layout>
       <Head>
-        <title>{trail.name} | Treasure Trails | FindA.Sale</title>
+        <title>{`${trail.name ?? ''} | Treasure Trails | FindA.Sale`}</title>
         <meta name="description" content={trail.description || trail.name} />
       </Head>
 

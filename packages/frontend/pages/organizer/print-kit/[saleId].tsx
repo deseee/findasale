@@ -258,7 +258,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
   return (
     <>
       <Head>
-        <title>Print Kit - {sale?.title} - FindA.Sale</title>
+        <title>{`Print Kit - ${sale?.title ?? ''} - FindA.Sale`}</title>
       </Head>
 
       <style>{`

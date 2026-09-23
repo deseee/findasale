@@ -118,7 +118,7 @@ const ConsignorDetailPage: React.FC = () => {
       description="View consignor details, items, and payouts."
     >
       <Head>
-        <title>{consignor.name} | FindA.Sale</title>
+        <title>{`${consignor.name ?? ''} | FindA.Sale`}</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4 md:p-8">

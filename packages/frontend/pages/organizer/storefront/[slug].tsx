@@ -338,7 +338,7 @@ const OrganizerStorefront = () => {
   return (
     <>
       <Head>
-        <title>{brandKit.businessName} - FindA.Sale</title>
+        <title>{`${brandKit.businessName ?? ''} - FindA.Sale`}</title>
         <meta name="description" content={brandKit.bio || `Shop sales from ${brandKit.businessName}`} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

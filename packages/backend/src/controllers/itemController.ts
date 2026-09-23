@@ -4117,12 +4117,28 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     };
 
     // This page's items only: which are currently POSTED per platform.
+    // BUG FIX 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING, consistency pass): this used to treat
+    // ANY POSTED row ever as "published now", so an item whose listing was later removed
+    // (REMOVE/REMOVED) still showed a green channel dot. Now uses the same newest-row-per-
+    // item+platform-wins rule as extensionController's getExtensionItems/getPendingRemovals:
+    // published only if the newest row is POST/POSTED, with REMOVE/SKIPPED rows (failed removal
+    // attempts -- the listing is still live) excluded from the newest-row pick.
     const pagePostedJobs = await prisma.marketplaceListingJob.findMany({
-      where: { itemId: { in: itemIds }, status: 'POSTED', platform: { in: [...EXTENSION_PLATFORMS] } },
-      select: { itemId: true, platform: true },
+      where: { itemId: { in: itemIds }, platform: { in: [...EXTENSION_PLATFORMS] } },
+      select: { itemId: true, platform: true, action: true, status: true, createdAt: true },
     });
-    const publishedExtensionPlatformsByItemId: PublishedExtensionPlatformsByItemId = new Map();
+    const latestPageJobByItemPlatform = new Map<string, { itemId: string; platform: string; action: string; status: string; createdAt: Date }>();
     for (const job of pagePostedJobs) {
+      if (job.action === 'REMOVE' && job.status === 'SKIPPED') continue;
+      const key = `${job.itemId}:${job.platform}`;
+      const existing = latestPageJobByItemPlatform.get(key);
+      if (!existing || job.createdAt > existing.createdAt) {
+        latestPageJobByItemPlatform.set(key, job);
+      }
+    }
+    const publishedExtensionPlatformsByItemId: PublishedExtensionPlatformsByItemId = new Map();
+    for (const job of latestPageJobByItemPlatform.values()) {
+      if (job.action !== 'POST' || job.status !== 'POSTED') continue;
       if (!publishedExtensionPlatformsByItemId.has(job.itemId)) {
         publishedExtensionPlatformsByItemId.set(job.itemId, new Set());
       }

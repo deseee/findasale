@@ -632,7 +632,7 @@ const OrganizerPayoutsPage = () => {
                                     that's genuinely earnings-relevant context. */}
                                 {item.shippingLabelPurchasedAt ? (
                                   <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                                    ✔ Label purchased ({item.shippingCarrier}) -- tracking{' '}
+                                    ✔ Label purchased ({item.shippingCarrier}), tracking{' '}
                                     <span className="font-mono">{item.shippingTrackingNumber}</span>
                                     {item.shippingLabelUrl && (
                                       <>
