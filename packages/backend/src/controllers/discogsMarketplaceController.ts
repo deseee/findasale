@@ -11,7 +11,7 @@
  *
  * Security posture (CLAUDE.md §9 Security-QA Gate — this is an "applicable
  * feature"): `resolveOwnedOrganizerAndItem` re-derives ownership from `userId`
- * on every item route; `createDiscogsListing`/`deleteDiscogsListing` in the
+ * on every item route; `upsertDiscogsListingForItem`/`deleteDiscogsListing` in the
  * connector re-check `item.organizerId` again as defense in depth. The full
  * adversarial pass happens at QA time per the Security-QA Gate.
  *
@@ -26,7 +26,7 @@ import {
   connectDiscogsAccount,
   disconnectDiscogsAccount,
   checkDiscogsConnection,
-  createDiscogsListing,
+  upsertDiscogsListingForItem,
   deleteDiscogsListing,
   checkDiscogsEligibility,
   DiscogsApiError,
@@ -192,25 +192,18 @@ export const pushItemToDiscogs = async (req: AuthRequest, res: Response) => {
     // 2026-09-03: Discogs's own "Allow offers" toggle -- a real, documented API param
     // (allow_offers), organizer opt-in per push, same pattern as `publish` just above.
     const allowOffers = req.body?.allowOffers === true;
-    const listing = await createDiscogsListing(organizer.id, item, { publish, allowOffers });
-    // 2026-08-27: persist the real Discogs listing id so the frontend can show "already
-    // pushed" on a later page load instead of forgetting the moment the organizer refreshes.
-    // listing_id is Discogs' own documented Marketplace API field name (POST
-    // /marketplace/listings response) -- createDiscogsListing returns the raw parsed API
-    // response untyped (Promise<any>), so this is read defensively rather than assumed.
-    const discogsListingId = listing && listing.listing_id != null ? String(listing.listing_id) : null;
-    if (discogsListingId) {
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { discogsListingId, discogsListedAt: new Date() },
-      }).catch((e) => {
-        // Non-fatal: the real Discogs listing already exists at this point: failing the
-        // whole request over a persistence write would leave the organizer thinking the
-        // push itself failed when it didn't.
-        console.error('[Discogs] Failed to persist discogsListingId after a successful push:', e);
-      });
-    }
-    res.json({ success: true, listing });
+    // 2026-09-22 (duplicate-listing fix): never call createDiscogsListing directly here. The
+    // upsert updates the existing listing when Item.discogsListingId is already set (only
+    // re-creating if Discogs says that listing is gone), serializes concurrent pushes for the
+    // same item, and persists discogsListingId/discogsListedAt after a create.
+    const result = await upsertDiscogsListingForItem(organizer.id, item.id, { publish, allowOffers });
+    res.json({
+      success: true,
+      action: result.action,
+      listingId: result.listingId,
+      message: result.action === 'updated' ? 'Price updated on Discogs' : 'Listed on Discogs',
+      listing: result.listing ?? null,
+    });
   } catch (error: any) {
     respondDiscogsError(res, error, 'Failed to create Discogs listing');
   }

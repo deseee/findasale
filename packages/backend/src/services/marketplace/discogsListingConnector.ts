@@ -501,12 +501,24 @@ export interface DiscogsPriceUpdateResult {
   ok: boolean;
   reason?: 'no-connection' | 'fetch-failed' | 'fetch-parse-failed' | 'incomplete-listing-data' | 'post-failed' | 'threw';
   detail?: string;
+  /** 2026-09-22: raw Discogs HTTP status on fetch-failed/post-failed, so callers can tell a
+   * 404 (listing no longer exists on Discogs) apart from any other failure. Additive/optional. */
+  httpStatus?: number;
+}
+
+/** 2026-09-22: optional extras for updateDiscogsListingPrice, used by the upsert path below. */
+export interface DiscogsListingUpdateOptions {
+  /** true: promote a Draft listing to 'For Sale'. Never touches any other status (e.g. Sold). */
+  publish?: boolean;
+  /** Only sent when explicitly true, matching createDiscogsListing's own posture. */
+  allowOffers?: boolean;
 }
 
 export async function updateDiscogsListingPrice(
   organizerId: string,
   discogsListingId: string,
-  newPrice: number
+  newPrice: number,
+  updateOptions: DiscogsListingUpdateOptions = {}
 ): Promise<DiscogsPriceUpdateResult> {
   try {
     const account = await getActiveDiscogsAccount(organizerId);
@@ -523,7 +535,12 @@ export async function updateDiscogsListingPrice(
       accessToken
     );
     if (getResp.status < 200 || getResp.status >= 300) {
-      return { ok: false, reason: 'fetch-failed', detail: parseDiscogsError(getResp.status, getResp.text) };
+      return {
+        ok: false,
+        reason: 'fetch-failed',
+        detail: parseDiscogsError(getResp.status, getResp.text),
+        httpStatus: getResp.status,
+      };
     }
 
     let current: any;
@@ -549,8 +566,10 @@ export async function updateDiscogsListingPrice(
         body: JSON.stringify({
           release_id: releaseId,
           condition,
-          status,
+          // 2026-09-22: only a Draft is ever promoted, and only on an explicit publish.
+          status: updateOptions.publish === true && status === 'Draft' ? 'For Sale' : status,
           price: newPrice,
+          ...(updateOptions.allowOffers === true ? { allow_offers: true } : {}),
         }),
       }
     );
@@ -566,13 +585,113 @@ export async function updateDiscogsListingPrice(
         .catch(() => {
           /* non-fatal -- don't let error-logging itself break the caller's error handling */
         });
-      return { ok: false, reason: 'post-failed', detail: message };
+      return { ok: false, reason: 'post-failed', detail: message, httpStatus: postStatus };
     }
 
     return { ok: true };
   } catch (err) {
     return { ok: false, reason: 'threw', detail: (err as Error).message };
   }
+}
+
+// ============================================================================
+// Upsert (create-or-update) -- the ONLY sanctioned entry point for pushing an item
+// ============================================================================
+
+/**
+ * 2026-09-22 (duplicate-listing fix): real items (cmtsyy855007g6p9vwgg9x8hh, cmtk31l0x0eic3bww7vwequob)
+ * ended up with TWO live Discogs listings because every push called createDiscogsListing
+ * unconditionally and then overwrote Item.discogsListingId, orphaning the first live listing.
+ * Every caller that wants "put this item on Discogs" (manual push route, auto-fanout) must go
+ * through this function instead of calling createDiscogsListing directly.
+ *
+ * Behavior:
+ *   - Serialized per item id in-process (double clicks / concurrent publish + manual push queue
+ *     behind each other instead of racing two creates). Each run re-reads the item fresh from
+ *     the DB inside the lock, so the second caller sees the id the first one persisted.
+ *   - Item already has discogsListingId: update that listing (price, plus Draft -> For Sale on
+ *     publish, plus allow_offers when true). Never creates.
+ *   - Update says 404 (listing gone on Discogs): clear the stale id, then create a fresh listing.
+ *   - Any other update failure: throws DiscogsApiError. Never falls through to a create.
+ *   - No discogsListingId: create, then persist discogsListingId/discogsListedAt.
+ */
+export interface DiscogsUpsertResult {
+  action: 'created' | 'updated';
+  listingId: string | null;
+  /** Raw Discogs create response (only on action 'created'). */
+  listing?: any;
+}
+
+const discogsItemLocks = new Map<string, Promise<unknown>>();
+
+async function withDiscogsItemLock<T>(itemId: string, fn: () => Promise<T>): Promise<T> {
+  const previous = discogsItemLocks.get(itemId) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(fn);
+  const tail = run.catch(() => undefined);
+  discogsItemLocks.set(itemId, tail);
+  try {
+    return await run;
+  } finally {
+    // Only clear if nothing queued behind us.
+    if (discogsItemLocks.get(itemId) === tail) {
+      discogsItemLocks.delete(itemId);
+    }
+  }
+}
+
+export async function upsertDiscogsListingForItem(
+  organizerId: string,
+  itemId: string,
+  options: DiscogsListingOptions = {}
+): Promise<DiscogsUpsertResult> {
+  return withDiscogsItemLock(itemId, async () => {
+    const item = await prisma.item.findUnique({ where: { id: itemId } });
+    if (!item) {
+      throw new Error('[Discogs] Item not found');
+    }
+    // Defense-in-depth ownership check (createDiscogsListing repeats it on the create path).
+    if (item.organizerId && item.organizerId !== organizerId) {
+      throw new Error('[Discogs] Item does not belong to this organizer');
+    }
+
+    if (item.discogsListingId) {
+      const result = await updateDiscogsListingPrice(organizerId, item.discogsListingId, item.price ?? 0, {
+        publish: options.publish,
+        allowOffers: options.allowOffers,
+      });
+      if (result.ok) {
+        return { action: 'updated', listingId: item.discogsListingId };
+      }
+      if (result.httpStatus !== 404) {
+        const status = result.httpStatus && result.httpStatus >= 400 ? result.httpStatus : 502;
+        throw new DiscogsApiError(status, result.detail || `Could not update the Discogs listing (${result.reason})`);
+      }
+      // Listing no longer exists on Discogs: clear the stale id, then fall through to a
+      // legitimate re-list below.
+      console.warn(`[Discogs] Listing ${item.discogsListingId} for item ${itemId} returned 404, re-listing`);
+      await prisma.item.update({
+        where: { id: itemId },
+        data: { discogsListingId: null, discogsListedAt: null },
+      });
+    }
+
+    const listing = await createDiscogsListing(organizerId, item, options);
+    // listing_id is Discogs's own documented POST /marketplace/listings response field; the
+    // response is untyped, so read it defensively.
+    const listingId = listing && listing.listing_id != null ? String(listing.listing_id) : null;
+    if (listingId) {
+      await prisma.item
+        .update({
+          where: { id: itemId },
+          data: { discogsListingId: listingId, discogsListedAt: new Date() },
+        })
+        .catch((e) => {
+          // Non-fatal: the real Discogs listing already exists at this point.
+          console.error(`[Discogs] Failed to persist discogsListingId for item ${itemId} after a successful create:`, e);
+        });
+    }
+    return { action: 'created', listingId, listing };
+  });
 }
 
 /** Permanently remove a Discogs listing (DELETE /marketplace/listings/{listing_id}). */

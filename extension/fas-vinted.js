@@ -2374,6 +2374,57 @@
     return { ok: true, ids, complete: false };
   }
 
+  // DELETE VERIFICATION 2026-09-23 (S-EXT-VINTED-DELETE-VERIFY): answers "is listing <listingId>
+  // still in member <memberId>'s wardrobe?" from the same same-origin wardrobe API (fact A2).
+  // Returns { ok: true, present: true } as soon as the id is seen on any page (presence is
+  // definitive), { ok: true, present: false } ONLY after a COMPLETE read found no such id, or
+  // { ok: false, why } for any non-200 / non-JSON / unrecognized shape / page-cap-hit read -- absence
+  // is never inferred from a partial read.
+  async function vintRemWardrobeHasListingId(listingId, memberId) {
+    const want = String(listingId == null ? '' : listingId);
+    const member = String(memberId == null ? '' : memberId);
+    if (!/^\d+$/.test(want) || !/^\d+$/.test(member)) return { ok: false, why: 'bad_args' };
+    for (let page = 1; page <= VINT_REM_API_MAX_PAGES; page++) {
+      const url = location.origin + '/api/v2/wardrobe/' + encodeURIComponent(member) +
+        '/items?page=' + page + '&per_page=' + VINT_REM_API_PER_PAGE;
+      let res;
+      try {
+        res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+      } catch (e) { return { ok: false, why: 'fetch_error' }; }
+      if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+      let data;
+      try { data = await res.json(); } catch (e) { return { ok: false, why: 'non_json' }; }
+      const items = data && Array.isArray(data.items) ? data.items : null;
+      if (!items) return { ok: false, why: 'no_items_array' };
+      let recognized = 0;
+      for (const it of items) {
+        if (!it || typeof it !== 'object') continue;
+        const id = it.id != null ? String(it.id) : '';
+        if (!/^\d+$/.test(id)) continue;
+        recognized++;
+        if (id === want) return { ok: true, present: true };
+      }
+      if (items.length > 0 && recognized === 0) return { ok: false, why: 'unrecognized_item_shape' };
+      const totalPages = data.pagination ? Number(data.pagination.total_pages) : NaN;
+      const lastPage = (Number.isFinite(totalPages) && totalPages > 0)
+        ? page >= totalPages
+        : items.length < VINT_REM_API_PER_PAGE;
+      if (lastPage) return { ok: true, present: false };
+      await sleep(250 + Math.floor(Math.random() * 250));
+    }
+    return { ok: false, why: 'incomplete_page_cap' };
+  }
+
+  // The organizer's own member id for delete verification: the current /member/<id> page (Vinted
+  // navigates there after a delete, fact C), else the cached own-profile URL. null if neither.
+  async function vintRemOwnMemberIdForVerify() {
+    const here = vintRemMemberIdFromLocation();
+    if (here) return here;
+    const cached = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
+    const m = /\/member\/(\d+)/.exec(String(cached || ''));
+    return m ? m[1] : null;
+  }
+
   // Async resolver used by the removal flow: API first, then (only when the API read was unusable or
   // found nothing) a card scan after waiting up to ~8s for cards to render. Exactly one distinct id
   // -> { id }; more than one -> 'ambiguous_duplicate_title'; none / incomplete -> 
@@ -2405,7 +2456,9 @@
     if (api && api.ok) api.ids.forEach((id) => ids.add(id));
     if (ids.size === 1) return { id: ids.values().next().value, reason: null };
     if (ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
-    return { id: null, reason: 'no_confident_listing_match' };
+    // apiComplete (2026-09-23): lets the caller tell "the wardrobe API fully read this member's
+    // listings and none matched" apart from "the API was unusable and only cards were scanned".
+    return { id: null, reason: 'no_confident_listing_match', apiComplete: !!(api && api.ok && api.complete) };
   }
 
   // The listing id chosen on the profile page is handed to the detail-page load through
@@ -2413,6 +2466,25 @@
   // location.pathname to be exactly that listing -- title matching alone cannot tell two
   // identically-titled listings apart once on a detail page.
   const VINTED_REMOVAL_TARGET_STORAGE_KEY = 'fasVintedRemovalTarget';
+
+  // BUG FIX 2026-09-23 (S-EXT-VINTED-DELETE-VERIFY): a confirmed delete makes Vinted navigate the
+  // tab to /member/<sellerId> (fact C), which can tear this content script down before it sends
+  // crossPlatformRemovalDeleted. The next load then saw the item still queued, found no listing by
+  // title (it was gone) and reported a false SKIPPED 'no_confident_listing_match'. So the target
+  // record is stamped with deleteSubmittedAt BEFORE the final confirmation click, and the next load
+  // verifies the deletion via the wardrobe API instead of re-matching (runVintedRemovalQueue).
+  const VINT_REM_DELETE_VERIFY_WINDOW_MS = 10 * 60 * 1000;
+  async function vintRemMarkDeleteSubmitted(item) {
+    const prev = await vintRemStorageGet(VINTED_REMOVAL_TARGET_STORAGE_KEY);
+    const here = vintRemItemIdFromHref(location.pathname);
+    const samePrev = !!(prev && prev.itemId === item.id);
+    await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, {
+      itemId: item.id,
+      vintedId: here || (samePrev ? prev.vintedId : null),
+      at: (samePrev && prev.at) || Date.now(),
+      deleteSubmittedAt: Date.now(),
+    });
+  }
 
   // FEATURE 2026-09-22 (S-EXT-VINTED-DELETE-NATIVE-CONFIRM, see fas-vinted-bridge.js file header
   // for the full live-DOM evidence this session): Vinted's real delete button very likely raises
@@ -2493,7 +2565,7 @@
   // NOTHING on the real page (there is no such menu on this layout), so this function always
   // returned 'no_menu_button' and every single Vinted removal failed at the very first step, no
   // matter what. Go straight to the real delete button instead.
-  async function deleteVintedListingOnDetailPage() {
+  async function deleteVintedListingOnDetailPage(item) {
     if (looksLikeInterstitial()) return 'interstitial';
     const deleteBtn = document.querySelector('button[data-testid="item-delete-button"]');
     if (!deleteBtn) return 'no_delete_action';
@@ -2511,6 +2583,9 @@
     let bridgeOutcome = null;
     vintRemWaitForBridgeEvent(armId, 4500).then((o) => { bridgeOutcome = o; });
 
+    // Native-confirm path: the MAIN-world bridge answers confirm() synchronously inside this click,
+    // so this click IS the final confirmation on that path -- persist the marker first.
+    await vintRemMarkDeleteSubmitted(item);
     vintRemSyntheticClick(deleteBtn);
 
     // Wait up to ~3s for EITHER path to show itself.
@@ -2546,6 +2621,7 @@
         console.log('[FAS Vinted] delete: modal confirm button text "' + String(confirmBtn.textContent || '').trim() + '" does not contain "delete" -- aborted, NOT deleted.');
         return 'modal_confirm_text_mismatch';
       }
+      await vintRemMarkDeleteSubmitted(item); // in-page modal path: final confirmation click next
       vintRemSyntheticClick(confirmBtn);
       confirmedBy = 'modal';
       console.log('[FAS Vinted] delete: in-page delete modal confirmed.');
@@ -2589,6 +2665,54 @@
 
   async function runVintedRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">This item sold elsewhere -- removing the matching Vinted listing for <b>' + escapeHtml(item.title) + '</b>...</div>');
+    // DELETE VERIFICATION 2026-09-23 (S-EXT-VINTED-DELETE-VERIFY): if a previous load already
+    // clicked the final delete confirmation for THIS item (and was torn down by Vinted's
+    // post-delete navigation before it could report), verify via the wardrobe API instead of
+    // re-matching by title. Never clicks delete in this path.
+    const pendingTarget = await vintRemStorageGet(VINTED_REMOVAL_TARGET_STORAGE_KEY);
+    if (pendingTarget && pendingTarget.deleteSubmittedAt) {
+      const age = Date.now() - Number(pendingTarget.deleteSubmittedAt);
+      const fresh = Number.isFinite(age) && age >= 0 && age <= VINT_REM_DELETE_VERIFY_WINDOW_MS;
+      if (!fresh) {
+        console.log('[FAS Vinted] removal: ignoring stale delete-submitted marker (age ' + age + 'ms) -- cleared.');
+        await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
+      } else if (pendingTarget.itemId === item.id) {
+        const vintedId = String(pendingTarget.vintedId == null ? '' : pendingTarget.vintedId);
+        const memberId = await vintRemOwnMemberIdForVerify();
+        let verify = { ok: false, why: memberId ? 'no_listing_id' : 'no_member_id' };
+        if (memberId && /^\d+$/.test(vintedId)) {
+          for (let tries = 0; tries < 2; tries++) {
+            try { verify = await vintRemWardrobeHasListingId(vintedId, memberId); } catch (e) { verify = { ok: false, why: 'exception' }; }
+            // One re-read after a short pause if the listing still shows, in case the wardrobe
+            // listing lags the delete POST by a moment.
+            if (!(verify.ok && verify.present)) break;
+            if (tries === 0) await sleep(3000);
+          }
+        }
+        console.log('[FAS Vinted] removal: verifying earlier delete of /items/' + vintedId + ' via wardrobe ' + memberId + ' ->', verify.ok ? (verify.present ? 'STILL PRESENT' : 'absent (deleted)') : ('unusable (' + verify.why + ')'));
+        if (verify.ok && !verify.present) {
+          await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed the Vinted listing for <b>' + escapeHtml(item.title) + '</b>.</div>' +
+            button('fas-vin-close', 'Close', false));
+          closeBtnHandler();
+          vintRemSignalBackground('crossPlatformRemovalDeleted', item, null);
+          return;
+        }
+        if (verify.ok && verify.present) {
+          // The delete did not take. Clear the marker so the next attempt runs the normal flow.
+          await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
+          overlayWarn('The Vinted listing for "' + escapeHtml(item.title) + '" is still in your wardrobe after the delete was submitted -- it will be retried.' + button('fas-vin-close', 'Close', false));
+          closeBtnHandler();
+          vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'delete_not_confirmed');
+          return;
+        }
+        // Unusable read: keep the marker so the next load retries verification (until it goes stale).
+        overlayWarn('A delete was submitted for the Vinted listing "' + escapeHtml(item.title) + '" but it could not be verified yet -- will re-check.' + button('fas-vin-close', 'Close', false));
+        closeBtnHandler();
+        vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'delete_verify_unavailable');
+        return;
+      }
+    }
     // SECURITY FIX 2026-09-22 (F4): refuse outright when the queued title is too short to
     // identify one listing safely (an empty title used to match every page). Permanent skip so
     // the backend stops re-serving it and the rest of the queue continues.
@@ -2636,7 +2760,7 @@
     }
     let result;
     if (onDetailAlready) {
-      result = await deleteVintedListingOnDetailPage();
+      result = await deleteVintedListingOnDetailPage(item);
     } else if (!isOnVintedOwnProfilePage()) {
       // Not on the organizer's own listings page yet (e.g. background.js just opened this tab at
       // config.js's VINTED_MANAGE_URL, the general homepage feed) -- land there first instead of
@@ -2661,7 +2785,18 @@
         // unmatchable title, but could also mean a stale cached profile URL (e.g. account
         // switched). Clear the cache so the NEXT attempt rediscovers via a fresh click-through
         // rather than repeating a possibly-wrong cached URL forever.
-        if (match.reason !== 'ambiguous_duplicate_title') vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
+        // FIX 2026-09-23 (S-EXT-VINTED-DELETE-VERIFY): do NOT clear it when this page is
+        // demonstrably the cached own profile (URL member id == cached member id) AND the wardrobe
+        // API fully read it -- clearing there forced a racy click-rediscovery on the next load
+        // ("Could not find your Vinted profile/listings page"). Only clear when the API read was
+        // unusable/incomplete or this page is not the cached profile.
+        if (match.reason !== 'ambiguous_duplicate_title') {
+          const cachedProfile = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
+          const cm = /\/member\/(\d+)/.exec(String(cachedProfile || ''));
+          const hereMember = vintRemMemberIdFromLocation();
+          const demonstrablyOwn = !!(match.apiComplete && cm && hereMember && cm[1] === hereMember);
+          if (!demonstrablyOwn) vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
+        }
         overlayWarn((match.reason === 'ambiguous_duplicate_title'
           ? 'More than one of your Vinted listings is titled "' + escapeHtml(item.title) + '" -- nothing was deleted because the right one cannot be told apart safely. Please delete it yourself.'
           : 'Could not find a Vinted listing titled exactly "' + escapeHtml(item.title) + '" on your profile -- nothing was deleted. Please delete it yourself, then use "Mark removed" if the extension offers it.') + button('fas-vin-close', 'Close', false));
@@ -2679,7 +2814,9 @@
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Vinted listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
       return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
     }
-    vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
+    // 'delete_not_confirmed' means the final confirmation WAS clicked but success wasn't observed
+    // in time -- keep the deleteSubmittedAt marker so the next load verifies via the wardrobe API.
+    if (result !== 'delete_not_confirmed') vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, null);
     if (result === 'deleted') {
       // Only reachable once a DISTINCT confirmation control was found and clicked, so the hedge
       // this overlay used to carry ("please double-check it's gone -- this was not live-verified")

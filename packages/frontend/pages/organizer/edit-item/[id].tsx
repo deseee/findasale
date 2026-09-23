@@ -703,7 +703,12 @@ const EditItemPage = () => {
     },
     onSuccess: (response, variables) => {
       if (response.data?.success) {
-        showToast(variables.publish ? 'Published to Discogs' : 'Pushed to Discogs', 'success');
+        // 2026-09-22: the backend now updates an already-linked listing instead of creating a
+        // duplicate, and says which one it did ("Price updated on Discogs" / "Listed on Discogs").
+        showToast(
+          response.data?.message || (variables.publish ? 'Published to Discogs' : 'Pushed to Discogs'),
+          'success'
+        );
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       } else {
         showToast('Discogs push failed', 'error');
@@ -2690,7 +2695,7 @@ const EditItemPage = () => {
                         disabled={discogsPushPending}
                         className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        {discogsPushPending ? 'Publishing...' : 'Re-push to Discogs'}
+                        {discogsPushPending ? 'Updating...' : 'Update Discogs listing'}
                       </button>
                     </div>
                   </div>
