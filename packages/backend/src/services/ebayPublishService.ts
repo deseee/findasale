@@ -1024,20 +1024,19 @@ const heal25002: Healer = async (ctx, errorBody) => {
   // 25002-shaped parse comes up empty -- this only matters when this healer was actually
   // dispatched for a 25129 error (see the HEALERS registry entry above); for a real 25002
   // error this block is always a no-op since missingNames is already non-empty.
-  if (missingNames.length === 0) {
-    try {
-      const parsed = JSON.parse(errorBody) as { errors?: Array<{ errorId?: number; message?: string }> };
-      for (const err of parsed.errors || []) {
-        if (err.errorId !== 25129 || !err.message) continue;
-        const m = err.message.match(/no longer support custom values for ([A-Za-z][A-Za-z0-9/ ]{0,40}?)\.\s/);
-        if (m) {
-          missingNames = [m[1].trim()];
-          console.log(`[eBay SelfHeal 25002] ${ctx.sku}: errorId 25129 (Size standardization) -- extracted aspect name "${m[1].trim()}" from error message`);
-          break;
-        }
-      }
-    } catch {
-      // errorBody wasn't parseable JSON -- missingNames stays empty, same as the 25002 path.
+  if (missingNames.length === 0 && /"errorId":25129\b/.test(errorBody)) {
+    // 2026-09-23 regression fix -- mirrors the fix in ebayPriceRevisionService.ts's
+    // injectMissingCategoryAspects(), applied here defensively too. attemptPublish()'s
+    // errorBody is NOT truncated today (raw res.text(), confirmed by reading it), so the
+    // JSON.parse version of this fallback isn't currently broken the way the
+    // price-revision path's was -- but matching the aspect name directly against the raw
+    // text instead of requiring a full JSON.parse removes the same latent failure mode if
+    // that ever changes (a shorter timeout, a proxy that truncates, etc.), and keeps both
+    // 25129 fallbacks identical in shape rather than silently diverging.
+    const m = errorBody.match(/no longer support custom values for ([A-Za-z][A-Za-z0-9/ ]{0,40}?)\.\s/);
+    if (m) {
+      missingNames = [m[1].trim()];
+      console.log(`[eBay SelfHeal 25002] ${ctx.sku}: errorId 25129 (Size standardization) -- extracted aspect name "${m[1].trim()}" from error message (raw-text match)`);
     }
   }
   const dynamicNames = missingNames.filter((name) => !/^brand ?mpn$/i.test(name) && !hasKey(name));

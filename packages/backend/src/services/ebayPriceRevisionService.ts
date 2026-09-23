@@ -158,20 +158,25 @@ async function injectMissingCategoryAspects(
   // error's own message text: "...no longer support custom values for Size. Your listing..."
   // (repeats 3x per message, same name every time -- confirmed identically on both items
   // above). Extract it from there when the 25002-shaped parse comes up empty.
-  if (missingNames.length === 0) {
-    try {
-      const parsed = JSON.parse(rawErrorBody) as { errors?: Array<{ errorId?: number; message?: string }> };
-      for (const err of parsed.errors || []) {
-        if (err.errorId !== 25129 || !err.message) continue;
-        const m = err.message.match(/no longer support custom values for ([A-Za-z][A-Za-z0-9/ ]{0,40}?)\.\s/);
-        if (m) {
-          missingNames = [m[1].trim()];
-          console.log(`[eBay PriceRevision] sku=${sku}: errorId 25129 (Size standardization) -- extracted aspect name "${m[1].trim()}" from error message`);
-          break;
-        }
-      }
-    } catch {
-      // rawErrorBody wasn't parseable JSON -- fall through to the same empty-result bail below.
+  if (missingNames.length === 0 && /"errorId":25129\b/.test(rawErrorBody)) {
+    // 2026-09-23 regression fix, confirmed live (deployment b1b4a3fe, items
+    // cmo3etpx2005hjqsuvzlkt8qz / cmo3et2pb002djqsuyta1cslc, 06:00 + 10:00 UTC cycles):
+    // the original version of this fallback required a full JSON.parse(rawErrorBody) to
+    // succeed before it could read err.message -- but rawErrorBody here is putOffer()'s
+    // detail string, which is HARD-TRUNCATED to 600 chars (bodyText.slice(0, 600)) before
+    // it ever reaches this function. eBay's real 25129 response body is 617+ chars (message
+    // + 4-entry parameters array), so the truncation always lands mid-string inside
+    // parameters[3], leaving invalid/unterminated JSON -- JSON.parse always threw, the
+    // catch swallowed it, and missingNames stayed permanently empty. Reproduced exactly:
+    // JSON.parse on the real truncated body throws "Unterminated string". Fix: match the
+    // aspect name directly against the raw text instead of requiring valid JSON -- the
+    // "message" field (and the "no longer support custom values for X." phrase inside it)
+    // always survives the 600-char truncation since it appears near the start of the body,
+    // well before the parameters array that gets cut off.
+    const m = rawErrorBody.match(/no longer support custom values for ([A-Za-z][A-Za-z0-9/ ]{0,40}?)\.\s/);
+    if (m) {
+      missingNames = [m[1].trim()];
+      console.log(`[eBay PriceRevision] sku=${sku}: errorId 25129 (Size standardization) -- extracted aspect name "${m[1].trim()}" from error message (raw-text match, JSON may be truncated)`);
     }
   }
   if (missingNames.length === 0) {
