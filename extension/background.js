@@ -1672,6 +1672,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!r.ok) console.log('[FAS setRemoteListingId]', JSON.stringify({ itemId: msg.itemId, source: msg.source || null, status: r.status, reason: r.data && r.data.reason }));
           sendResponse(r);
         }
+      } else if (msg.type === 'reportVintedSold') {
+        // S-EXT-VINTED-SOLD-DETECT (2026-09-23): fas-vinted.js reports the organizer's own Vinted
+        // listings that Vinted shows as sold (complete wardrobe read only). Only a vinted.com
+        // content script may send it; entries are shape-checked here and again server-side, where
+        // they are resolved strictly within this organizer's items. When anything was newly sold,
+        // run the normal (30s-throttled) pending-removals check right away so the item's other live
+        // listings come down now instead of on the next ~20-min alarm. The Vinted listing itself is
+        // closed on the server before the sale commits, so it is never queued for deletion.
+        const senderUrl = String((sender && (sender.url || (sender.tab && sender.tab.url))) || '');
+        const entries = Array.isArray(msg.items)
+          ? msg.items
+              .filter((e) => e && /^\d{1,20}$/.test(String(e.vintedId)) && typeof e.title === 'string')
+              .slice(0, 200)
+              .map((e) => ({ vintedId: String(e.vintedId), title: e.title.slice(0, 500) }))
+          : [];
+        if (!/^https:\/\/www\.vinted\.com\//.test(senderUrl) || !entries.length) {
+          sendResponse({ ok: false, status: 400, error: 'invalid_request' });
+        } else {
+          const r = await apiFetch('/extension/vinted-sold', { method: 'POST', body: { items: entries } });
+          console.log('[FAS reportVintedSold]', JSON.stringify({ sent: entries.length, status: r.status, summary: r.data && r.data.summary }));
+          sendResponse(r);
+          if (r.ok && r.data && r.data.summary && r.data.summary.sold > 0) {
+            throttledCheckPendingRemovals().catch(() => {});
+          }
+        }
       } else if (msg.type === 'markRemoved') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: {} }));

@@ -15,6 +15,11 @@
  *  - services/facebookMarketplaceEmailSoldDetection.ts processFacebookMarketplaceOrderEmail
  *    -- soldVia='FB_EMAIL_ORDER' (order-confirmation email detection, ADR-131). New as of
  *    this change; see that file for the vendor-agnostic parsing/matching core.
+ *  - routes/internal.ts /mark-item-sold-elsewhere -- caller-supplied soldVia (2026-09-23: its
+ *    inline copy of this cascade was replaced by a call to this helper).
+ *  - services/vintedSoldDetectionService.ts processVintedSoldReport -- soldVia='VINTED'
+ *    (2026-09-23, extension wardrobe sold-detection; closes the item's VINTED listing record
+ *    itself before calling this, since this helper touches no MarketplaceListingJob rows).
  *
  * Deliberately does NOT call notifyFacebookExportedItemSold for either call site: that
  * hook's job is telling the extension to go remove the matching Facebook listing, which

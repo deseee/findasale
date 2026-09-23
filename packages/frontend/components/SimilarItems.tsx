@@ -8,6 +8,8 @@ import { getThumbnailUrl, getItemImageUrl } from '../lib/imageUtils';
 interface SimilarItemsProps {
   itemId: string;
   category: string;
+  /** Optional outbound eBay search link, rendered as a small subdued link at the bottom of the card. */
+  ebaySearchUrl?: string;
 }
 
 interface SimilarItem {
@@ -41,7 +43,7 @@ const SimilarItemsSkeleton: React.FC = () => (
   </div>
 );
 
-const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
+const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category, ebaySearchUrl }) => {
   const { data, isLoading, error } = useQuery<SimilarItemsResponse>({
     queryKey: ['similarItems', itemId],
     queryFn: async () => {
@@ -145,6 +147,22 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
           ))}
         </div>
       </div>
+
+      {ebaySearchUrl && (
+        <div className="mt-4 pt-3 border-t border-black/8 dark:border-white/8">
+          <a
+            href={ebaySearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-warm-500 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-200 hover:underline"
+          >
+            Find similar items on eBay
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width={12} height={12} aria-hidden="true">
+              <path fillRule="evenodd" d="M4.22 11.78a.75.75 0 0 1 0-1.06L9.44 5.5H5.75a.75.75 0 0 1 0-1.5h5.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0V6.56l-5.22 5.22a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
+            </svg>
+          </a>
+        </div>
+      )}
     </div>
     </section>
   );

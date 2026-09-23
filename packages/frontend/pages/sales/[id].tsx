@@ -183,6 +183,7 @@ interface Sale {
     markdownApplied?: boolean; // Feature #91: Whether auto-markdown has been applied
     roomTag?: string | null; // #416: Floor map room routing
     rarity?: string | null; // Explorer Guild rarity tier
+    tags?: string[] | null; // searched when present on the payload
   }[];
   isAuctionSale: boolean;
   // Feature 35: Front Door Locator
@@ -368,6 +369,27 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const [itemsPerPage, setItemsPerPage] = useState<number>(24);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null); // #416: floor map filter
   const [currentItemPage, setCurrentItemPage] = useState(1);
+  // In-sale item search: the full inventory (up to 1000 items) is loaded client-side by
+  // GET /sales/:id, so search filters in memory. Input is debounced; matching is case-insensitive.
+  const [itemSearchInput, setItemSearchInput] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setItemSearch(itemSearchInput.trim().toLowerCase()), 250);
+    return () => clearTimeout(t);
+  }, [itemSearchInput]);
+  useEffect(() => { setCurrentItemPage(1); }, [itemSearch]);
+  const clearItemSearch = () => { setItemSearchInput(''); setItemSearch(''); };
+  const itemMatchesSearch = (item: { title?: string | null; description?: string | null; category?: string | null; tags?: string[] | null }) => {
+    if (!itemSearch) return true;
+    const haystack = [
+      item.title || '',
+      item.description || '',
+      item.category || '',
+      item.category ? formatCategoryLabel(item.category) : '',
+      ...(Array.isArray(item.tags) ? item.tags : []),
+    ].join(' ').toLowerCase();
+    return itemSearch.split(/\s+/).every((term) => haystack.includes(term));
+  };
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const { openCart } = useCart();
   const [showLeaveWarning, setShowLeaveWarning] = useState(false);
@@ -1874,32 +1896,6 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 )}
               </div>
 
-              {/* eBay discovery link */}
-              {sale.items.length > 0 && (() => {
-                const rawTerms = (sale.tags && sale.tags.length > 0)
-                  ? sale.tags.join(' ')
-                  : sale.title;
-                const searchQuery = rawTerms.split(/\s+/).slice(0, 3).join(' ');
-                // Current EPN link format: params appended directly to the ebay.com URL
-                // (rover.ebay.com redirect links are deprecated and rejected by eBay).
-                const ebaySearchUrl =
-                  'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(searchQuery) +
-                  '&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339148447&customid=&toolid=10001&mkevt=1';
-                return (
-                  <a
-                    href={ebaySearchUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline mb-4"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width={14} height={14} aria-hidden="true">
-                      <path fillRule="evenodd" d="M4.22 11.78a.75.75 0 0 1 0-1.06L9.44 5.5H5.75a.75.75 0 0 1 0-1.5h5.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0V6.56l-5.22 5.22a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
-                    </svg>
-                    Find similar items on <span className="font-semibold">eBay</span>
-                  </a>
-                );
-              })()}
-
               {/* Tags / category chip strip */}
               {sale.tags && sale.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4 items-center">
@@ -1935,9 +1931,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 </div>
               )}
 
-              {/* Category filter + per-page (if no tags) */}
-              {(!sale.tags || sale.tags.length === 0) && sale.items.some((item) => item.category) && (
-                <div className="flex items-center gap-3 mb-4 relative">
+              {/* Category filter + item search + per-page */}
+              {sale.items.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  {(!sale.tags || sale.tags.length === 0) && sale.items.some((item) => item.category) && (
+                  <div className="relative">
                   <button onClick={() => setCategoryDropdownOpen(o => !o)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-warm-700 dark:text-gray-200 hover:bg-warm-50 transition-colors">
                     {selectedCategory ? formatCategoryLabel(selectedCategory) : 'Filter by category'}
                     {selectedCategory && <span onClick={(e) => { e.stopPropagation(); setSelectedCategory(null); setCurrentItemPage(1); }} className="ml-1 font-bold">×</span>}
@@ -1953,6 +1951,23 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       ))}
                     </div>
                   )}
+                  </div>
+                  )}
+                  <div className="relative w-full sm:w-64 sm:flex-none">
+                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-warm-400 dark:text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"/></svg>
+                    <input
+                      type="search"
+                      value={itemSearchInput}
+                      onChange={(e) => setItemSearchInput(e.target.value)}
+                      placeholder="Search this sale"
+                      aria-label="Search items in this sale"
+                      enterKeyHint="search"
+                      className="w-full pl-8 pr-8 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-base sm:text-sm text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    {itemSearchInput && (
+                      <button type="button" onClick={clearItemSearch} className="absolute right-2 top-1/2 -translate-y-1/2 px-1 text-warm-500 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-100" aria-label="Clear search">×</button>
+                    )}
+                  </div>
                   {sale.items.length > 12 && (
                     <div className="flex items-center gap-2 ml-auto">
                       <label className="text-sm text-warm-500 dark:text-gray-400 whitespace-nowrap">Show:</label>
@@ -1966,19 +1981,32 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
               {/* Scarcity bar */}
               {sale.items.length > 0 && (() => {
-                const availableCount = sale.items.filter(i => i.status === 'AVAILABLE').length;
-                const soldCount = sale.items.filter(i => i.status === 'SOLD').length;
-                const reservedCount = sale.items.filter(i => i.status === 'RESERVED').length;
-                const isLowStock = availableCount > 0 && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
+                // While a search is active, counts reflect the matching items only.
+                const countItems = itemSearch
+                  ? sale.items
+                      .filter((item) => selectedCategory === null || item.category?.toLowerCase() === selectedCategory)
+                      .filter((item) => selectedRoom === null || item.roomTag === selectedRoom)
+                      .filter(itemMatchesSearch)
+                  : sale.items;
+                if (itemSearch && countItems.length === 0) return null;
+                const availableCount = countItems.filter(i => i.status === 'AVAILABLE').length;
+                const soldCount = countItems.filter(i => i.status === 'SOLD').length;
+                const reservedCount = countItems.filter(i => i.status === 'RESERVED').length;
+                const isLowStock = !itemSearch && availableCount > 0 && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
                 const isSoldOut = availableCount === 0;
                 const saleIsEnded = sale.status?.toUpperCase() === 'ENDED' || saleHasEnded;
                 return (
                   <div className="flex flex-wrap items-center gap-3 mb-4">
+                    {itemSearch && (
+                      <span className="text-xs font-medium text-warm-700 dark:text-gray-200">
+                        {countItems.length} match{countItems.length !== 1 ? 'es' : ''} for &ldquo;{itemSearchInput.trim()}&rdquo;
+                      </span>
+                    )}
                     {saleIsEnded ? (
                       <span className="inline-flex items-center gap-1 bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-full">
-                        {sale.items.length} item{sale.items.length !== 1 ? 's' : ''}{soldCount > 0 ? ` · ${soldCount} sold` : ''}{availableCount > 0 ? ` · ${availableCount} available` : ''}{reservedCount > 0 ? ` · ${reservedCount} on hold` : ''}
+                        {countItems.length} item{countItems.length !== 1 ? 's' : ''}{soldCount > 0 ? ` · ${soldCount} sold` : ''}{availableCount > 0 ? ` · ${availableCount} available` : ''}{reservedCount > 0 ? ` · ${reservedCount} on hold` : ''}
                       </span>
-                    ) : isSoldOut ? <span className="inline-flex items-center gap-1 bg-warm-100 text-warm-600 text-xs font-semibold px-3 py-1.5 rounded-full">All items sold or reserved</span>
+                    ) : isSoldOut ? <span className="inline-flex items-center gap-1 bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-full">{itemSearch ? 'All matches sold or reserved' : 'All items sold or reserved'}</span>
                       : isLowStock ? <span className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 text-xs font-bold px-3 py-1.5 rounded-full ring-1 ring-red-200 animate-pulse">🔥 Only {availableCount} left!</span>
                       : <span className="inline-flex items-center gap-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 text-xs font-semibold px-3 py-1.5 rounded-full">✓ {availableCount} available</span>}
                     {!saleIsEnded && soldCount > 0 && <span className="text-xs text-warm-500 dark:text-gray-300">{soldCount} sold</span>}
@@ -2020,6 +2048,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 const filteredSorted = sale.items
                   .filter((item) => selectedCategory === null || item.category?.toLowerCase() === selectedCategory)
                   .filter((item) => selectedRoom === null || item.roomTag === selectedRoom) // #416: floor map filter
+                  .filter(itemMatchesSearch) // in-sale text search
                   .sort((a, b) => {
                     if (a.status === 'SOLD' && b.status !== 'SOLD') return 1;
                     if (a.status !== 'SOLD' && b.status === 'SOLD') return -1;
@@ -2028,9 +2057,27 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 const effectivePerPage = itemsPerPage === 0 ? filteredSorted.length : itemsPerPage;
                 const totalPages = effectivePerPage > 0 ? Math.ceil(filteredSorted.length / effectivePerPage) : 1;
                 const pagedItems = filteredSorted.slice((currentItemPage - 1) * effectivePerPage, currentItemPage * effectivePerPage);
+                if (itemSearch && filteredSorted.length === 0) {
+                  return (
+                    <div className="py-12 text-center flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]" aria-hidden="true"><path d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"/></svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">No items match &ldquo;{itemSearchInput.trim()}&rdquo;</p>
+                        <p className="text-xs mt-1 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">
+                          {selectedCategory || selectedRoom ? 'Try a different word, or clear your filters.' : 'Try a different word or a shorter search.'}
+                        </p>
+                      </div>
+                      <button type="button" onClick={clearItemSearch} className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center text-sm transition-colors">
+                        Clear search
+                      </button>
+                    </div>
+                  );
+                }
                 return (
                   <>
-                    {filteredSorted.length > 12 && (
+                    {(filteredSorted.length > 12 || !!itemSearch) && (
                       <p className="text-xs mb-4 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">
                         Showing {Math.min(currentItemPage * effectivePerPage, filteredSorted.length) - (currentItemPage - 1) * effectivePerPage} of {filteredSorted.length} items
                       </p>
@@ -2351,7 +2398,22 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
             {/* ── SIMILAR ITEMS ── */}
             {sale.items.length > 0 && sale.items[0] && (
-              <SimilarItems itemId={sale.items[0].id} category={sale.items[0].category || 'general'} />
+              <SimilarItems
+                itemId={sale.items[0].id}
+                category={sale.items[0].category || 'general'}
+                ebaySearchUrl={(() => {
+                  // eBay discovery link (moved here from the inventory header): renders only inside the
+                  // "You might also like" card. Same query + EPN params as before.
+                  const rawTerms = (sale.tags && sale.tags.length > 0)
+                    ? sale.tags.join(' ')
+                    : sale.title;
+                  const searchQuery = rawTerms.split(/\s+/).slice(0, 3).join(' ');
+                  // Current EPN link format: params appended directly to the ebay.com URL
+                  // (rover.ebay.com redirect links are deprecated and rejected by eBay).
+                  return 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(searchQuery) +
+                    '&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339148447&customid=&toolid=10001&mkevt=1';
+                })()}
+              />
             )}
 
             {/* Bug #160: Reviews: shoppers can submit a review after the sale */}

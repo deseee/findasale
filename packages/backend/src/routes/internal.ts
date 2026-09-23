@@ -134,10 +134,7 @@ import { runWestVirginiaPhase2Scraper } from '../services/scraper/sources/westVi
 import * as Sentry from '@sentry/node';
 import { resyncShippingDriftSweep } from '../jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: bulk rate-drift re-pin
 import { backfillStaleWeightTierPoliciesSweep } from '../jobs/backfillStaleWeightTierPolicies'; // ADR-102 one-time backfill: re-pin items still on pre-migration weight-tier eBay policies
-import { endEbayListingIfExists } from '../controllers/ebayController'; // used by /mark-item-sold-elsewhere below
-import { markShopifyItemSold } from '../services/shopifyService';
-import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
-import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
+import { commitFacebookNativeSale } from '../services/facebookNativeSaleService'; // shared sold-elsewhere cascade, used by /mark-item-sold-elsewhere below
 
 const router = express.Router();
 
@@ -1182,33 +1179,13 @@ router.post('/mark-item-sold-elsewhere', requireSecret, async (req: express.Requ
     }
     const soldVia = typeof req.body?.soldVia === 'string' && req.body.soldVia.length > 0 ? req.body.soldVia : 'FB_NATIVE';
 
-    try {
-      await commitItemSale(itemId, 'SOLD', ['AVAILABLE']);
-    } catch (err: any) {
-      if (err instanceof ItemAlreadyCommittedError) {
-        // Already SOLD (this call, a prior poll cycle, or any other channel) -- idempotent
-        // success, never an error. Same handling as markItemSoldOnFacebook.
-        res.json({ ok: true, alreadyCommitted: true });
-        return;
-      }
-      throw err;
-    }
-
-    // Sold-channel observability -- same follow-up write markItemSoldOnFacebook performs on a
-    // genuine fresh transition (the ItemAlreadyCommittedError branch above already returned).
-    await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
-
-    endEbayListingIfExists(itemId).catch((err: any) =>
-      console.warn(`[eBay] withdraw-on-SOLD (mark-item-sold-elsewhere) failed for item ${itemId}:`, err.message)
-    );
-    markShopifyItemSold(itemId).catch((err: any) =>
-      console.warn(`[Shopify] mark-sold-on-SOLD (mark-item-sold-elsewhere) failed for item ${itemId}:`, err.message)
-    );
-    withdrawDiscogsListingIfExists(itemId).catch((err: any) =>
-      console.warn(`[Discogs] withdraw-on-SOLD (mark-item-sold-elsewhere) failed for item ${itemId}:`, err.message)
-    );
-
-    res.json({ ok: true, alreadyCommitted: false });
+    // 2026-09-23 (S-EXT-VINTED-SOLD-DETECT): the inline copy of the commit-and-cascade that used to
+    // live here (commitItemSale AVAILABLE->SOLD, ItemAlreadyCommittedError as idempotent success,
+    // lastSoldVia on a fresh transition only, then the eBay/Shopify/Discogs withdraw fan-out) is
+    // now the one shared helper, also used by markItemSoldOnFacebook, the Facebook order-email
+    // path and the extension's Vinted sold-detection. Same response shape as before.
+    const result = await commitFacebookNativeSale(itemId, soldVia);
+    res.json({ ok: true, alreadyCommitted: result.alreadyCommitted });
   } catch (err: any) {
     console.error('[MarkItemSoldElsewhere] route error:', err?.message || err);
     res.status(500).json({ error: 'mark-item-sold-elsewhere failed', detail: String(err?.message || err) });

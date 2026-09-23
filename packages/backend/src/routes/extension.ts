@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -14,6 +14,10 @@ router.post('/items/:id/listed', authenticate, requireOrganizer, requireTier('PR
 // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23): set-once numeric marketplace listing id on the item's
 // live POST/POSTED job (Vinted only today) -- see extensionController.ts setItemRemoteListingId.
 router.post('/items/:id/remote-listing-id', authenticate, requireOrganizer, requireTier('PRO'), setItemRemoteListingId);
+// S-EXT-VINTED-SOLD-DETECT (2026-09-23): batch of the organizer's own Vinted listings that Vinted
+// shows as sold -> resolve to their FindA.Sale items and commit the sale (lastSoldVia 'VINTED').
+// See extensionController.ts reportVintedSold.
+router.post('/vinted-sold', authenticate, requireOrganizer, requireTier('PRO'), reportVintedSold);
 router.post('/items/:id/removed', authenticate, requireOrganizer, requireTier('PRO'), markItemRemoved);
 router.post('/items/:id/removal-skipped', authenticate, requireOrganizer, requireTier('PRO'), markItemRemovalSkipped);
 router.get('/pending-removals', authenticate, requireOrganizer, requireTier('PRO'), getPendingRemovals);

@@ -5,6 +5,7 @@ import { getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryW
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { applyNeverShippableOverride, computeEffectivePackageWeight } from './ebayController';
 import { commitFacebookNativeSale } from '../services/facebookNativeSaleService';
+import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENTRIES } from '../services/vintedSoldDetectionService';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
@@ -1237,6 +1238,43 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
   res.json({ ok: true });
 };
 
+// POST /api/extension/vinted-sold -- S-EXT-VINTED-SOLD-DETECT (2026-09-23). fas-vinted.js reads the
+// organizer's own Vinted wardrobe (same-origin API, their own session) and reports every listing
+// Vinted shows as sold (is_closed + item_closing_action 'sold') as { vintedId, title }. Each entry is
+// resolved ONLY against the calling organizer's items (VINTED job remoteListingId first, then a
+// unique normalized-title match; ambiguous titles are never guessed) and committed through the
+// same shared sale helper as markItemSoldOnFacebook / internal mark-item-sold-elsewhere, with
+// lastSoldVia 'VINTED'. The item's own VINTED listing record is closed (REMOVE/REMOVED) first so
+// the cross-platform removal engine never tries to delete the listing that just sold on Vinted;
+// every other still-posted platform then shows up in getPendingRemovals as usual.
+// See services/vintedSoldDetectionService.ts. Idempotent: a repeat report returns alreadySold.
+export const reportVintedSold = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const raw = req.body?.items;
+  if (!Array.isArray(raw)) { res.status(400).json({ message: 'items must be an array', reason: 'invalid_items' }); return; }
+  if (raw.length > VINTED_SOLD_MAX_ENTRIES) {
+    res.status(400).json({ message: 'Too many items in one report', reason: 'too_many_items' });
+    return;
+  }
+  const entries = sanitizeVintedSoldEntries(raw);
+  try {
+    const results = await processVintedSoldReport(organizer.id, entries);
+    const summary: Record<string, number> = { sold: 0, alreadySold: 0, notAvailable: 0, ambiguous: 0, notFound: 0, error: 0 };
+    for (const r of results) summary[r.result] = (summary[r.result] || 0) + 1;
+    if (summary.sold || summary.ambiguous || summary.error) {
+      console.log('[VintedSoldDetection]', JSON.stringify({ organizerId: organizer.id, received: raw.length, accepted: entries.length, summary }));
+    }
+    res.json({ ok: true, results, summary });
+  } catch (err: any) {
+    console.error('[VintedSoldDetection] report failed:', err?.message || err);
+    res.status(500).json({ message: 'Vinted sold report failed' });
+  }
+};
+
 // GET /api/extension/pending-updates — ADR-086: items whose FindA.Sale price has drifted from
 // the price last successfully synced to their live Facebook post. Same "poll, not push" pattern
 // as getPendingRemovals (Facebook has no API for a live edit either) -- pure read composed from
@@ -1460,7 +1498,7 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
 // commitFacebookNativeSale helper (services/facebookNativeSaleService.ts) -- extracted so
 // the new order-confirmation-email detection path (services/facebookMarketplaceEmailSoldDetection.ts)
 // can call the exact same cascade with a different soldVia tag instead of duplicating it a
-// third time (routes/internal.ts's /mark-item-sold-elsewhere is the second, still-inline copy).
+// third time (routes/internal.ts's /mark-item-sold-elsewhere now calls the same helper, 2026-09-23).
 // Zero behavior change here: this endpoint calls that helper with soldVia='FB_NATIVE', same
 // value and same idempotent-success-on-repeat response shape as before extraction.
 export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): Promise<void> => {

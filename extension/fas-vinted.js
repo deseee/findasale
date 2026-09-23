@@ -3103,6 +3103,109 @@
     } finally { vintCapBusy = false; }
   }
 
+  // ------------------------------------------------------------------------------------------
+  // VINTED SOLD-DETECTION (2026-09-23, S-EXT-VINTED-SOLD-DETECT). Nothing told FindA.Sale that an
+  // item sold on Vinted, so it stayed AVAILABLE and live on Facebook / Poshmark / Craigslist /
+  // Mercari. Live-verified from Patrick's own session: the same-origin wardrobe API
+  // (/api/v2/wardrobe/<memberId>/items) returns sold listings with is_closed === true AND
+  // item_closing_action === 'sold'. Runs here (content script, page origin, the organizer's own
+  // cookies -- the proven path every other wardrobe read in this file uses) rather than from the
+  // background worker, whose cross-site fetch to vinted.com is not proven to carry the session or
+  // pass Vinted's bot checks. Read-only on Vinted, opens no tabs, clicks nothing: it only runs when
+  // the own member id is already cached, at most once per VINT_SOLD_CHECK_INTERVAL_MS across all
+  // Vinted tabs, and sends nothing unless the whole wardrobe was read. Each sold listing id is
+  // reported once (VINT_SOLD_REPORTED_KEY); the backend resolves it to the organizer's item and
+  // commits the sale (extensionController.ts reportVintedSold).
+  const VINT_SOLD_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+  const VINT_SOLD_LAST_CHECK_KEY = 'fasVintedSoldCheckLastAt';
+  const VINT_SOLD_REPORTED_KEY = 'fasVintedSoldReportedIds';
+  const VINT_SOLD_LAST_OUTCOME_KEY = 'fasVintedSoldCheckLastOutcome';
+  const VINT_SOLD_REPORTED_CAP = 2000;
+  const VINT_SOLD_PER_PAGE = 96;
+  const VINT_SOLD_MAX_PAGES = 30;
+
+  // Complete read of the wardrobe -> { ok: true, sold: [{ vintedId, title }], total } or
+  // { ok: false, why }. Any failed/odd page, or hitting the page cap, is { ok: false }.
+  async function vintSoldReadWardrobe(memberId) {
+    const sold = [];
+    let total = 0;
+    for (let page = 1; page <= VINT_SOLD_MAX_PAGES; page++) {
+      const url = location.origin + '/api/v2/wardrobe/' + encodeURIComponent(memberId) +
+        '/items?page=' + page + '&per_page=' + VINT_SOLD_PER_PAGE;
+      let res;
+      try {
+        res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+      } catch (e) { return { ok: false, why: 'fetch_error' }; }
+      if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+      let data;
+      try { data = await res.json(); } catch (e) { return { ok: false, why: 'non_json' }; }
+      const items = data && Array.isArray(data.items) ? data.items : null;
+      if (!items) return { ok: false, why: 'no_items_array' };
+      let recognized = 0;
+      for (const it of items) {
+        if (!it || typeof it !== 'object') continue;
+        const id = it.id != null ? String(it.id) : '';
+        if (!/^\d{1,20}$/.test(id) || typeof it.title !== 'string') continue;
+        recognized++;
+        total++;
+        if (it.is_closed === true && it.item_closing_action === 'sold') sold.push({ vintedId: id, title: it.title });
+      }
+      if (items.length > 0 && recognized === 0) return { ok: false, why: 'unrecognized_item_shape' };
+      const totalPages = data.pagination ? Number(data.pagination.total_pages) : NaN;
+      const lastPage = (Number.isFinite(totalPages) && totalPages > 0)
+        ? page >= totalPages
+        : items.length < VINT_SOLD_PER_PAGE;
+      if (lastPage) return { ok: true, sold, total };
+      await sleep(400 + Math.floor(Math.random() * 400));
+    }
+    return { ok: false, why: 'incomplete_page_cap' };
+  }
+
+  async function vintSoldMaybeCheck() {
+    try {
+      const last = Number(await vintRemStorageGet(VINT_SOLD_LAST_CHECK_KEY)) || 0;
+      if (Date.now() - last < VINT_SOLD_CHECK_INTERVAL_MS) return;
+      const memberId = await vintCapOwnMemberId();
+      if (!memberId) {
+        console.log('[FAS Vinted] sold-check: own member id not cached yet -- skipped.');
+        return;
+      }
+      // Claimed before the read so a second Vinted tab loading meanwhile does not read too.
+      await vintRemStorageSet(VINT_SOLD_LAST_CHECK_KEY, Date.now());
+      const read = await vintSoldReadWardrobe(memberId);
+      if (!read.ok) {
+        console.log('[FAS Vinted] sold-check: wardrobe read incomplete (' + read.why + ') -- nothing sent.');
+        await vintRemStorageSet(VINT_SOLD_LAST_OUTCOME_KEY, { at: Date.now(), outcome: 'read_incomplete:' + read.why });
+        return;
+      }
+      const reported = new Set((await vintRemStorageGet(VINT_SOLD_REPORTED_KEY)) || []);
+      const fresh = read.sold.filter((s) => !reported.has(s.vintedId));
+      console.log('[FAS Vinted] sold-check: ' + read.total + ' wardrobe listing(s), ' + read.sold.length + ' sold, ' + fresh.length + ' not yet reported.');
+      if (!fresh.length) {
+        await vintRemStorageSet(VINT_SOLD_LAST_OUTCOME_KEY, { at: Date.now(), outcome: 'nothing_new', total: read.total, sold: read.sold.length });
+        return;
+      }
+      let resp = null;
+      try { resp = await chrome.runtime.sendMessage({ type: 'reportVintedSold', items: fresh }); } catch (e) { resp = null; }
+      if (!resp || !resp.ok || !resp.data || !Array.isArray(resp.data.results)) {
+        console.log('[FAS Vinted] sold-check: report not accepted (' + ((resp && (resp.error || resp.status)) || 'no response') + ') -- will retry next check.');
+        await vintRemStorageSet(VINT_SOLD_LAST_OUTCOME_KEY, { at: Date.now(), outcome: 'report_failed' });
+        return;
+      }
+      for (const r of resp.data.results) {
+        console.log('[FAS Vinted] sold-check: Vinted ' + r.vintedId + ' "' + r.title + '" -> ' + r.result +
+          (r.itemId ? ' (item ' + r.itemId + ', via ' + r.via + ')' : '') + (r.reason ? ' [' + r.reason + ']' : '') +
+          (r.candidateCount ? ' [' + r.candidateCount + ' candidates]' : ''));
+        // 'error' is a server-side failure for that one entry: leave it unreported so it retries.
+        if (r && r.vintedId && r.result !== 'error') reported.add(String(r.vintedId));
+      }
+      await vintRemStorageSet(VINT_SOLD_REPORTED_KEY, Array.from(reported).slice(-VINT_SOLD_REPORTED_CAP));
+      await vintRemStorageSet(VINT_SOLD_LAST_OUTCOME_KEY, { at: Date.now(), outcome: 'reported', summary: resp.data.summary || null });
+    } catch (e) {
+      console.warn('[FAS Vinted] sold-check threw:', e && e.message);
+    }
+  }
+
   // Runs on every load and on every SPA path change (watchForVintedNavigationAway), once per path.
   async function vintCapMaybeCapture() {
     const path = location.pathname + location.search;
@@ -3397,6 +3500,8 @@
 
 (async () => {
     vintCapMaybeCapture(); // fire-and-forget; no-op unless this tab filled a listing in the last 15 min
+    // S-EXT-VINTED-SOLD-DETECT: fire-and-forget, read-only, throttled to once per 30 min across tabs.
+    setTimeout(() => { vintSoldMaybeCheck(); }, 3000 + Math.floor(Math.random() * 4000));
     const ranRemoval = await maybeRunVintedRemoval();
     if (!ranRemoval) start();
     watchForVintedNavigationAway();
