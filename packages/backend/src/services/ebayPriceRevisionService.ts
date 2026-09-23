@@ -20,7 +20,7 @@
  * than being re-implemented at every call site — matches the ADR's constraint that every
  * new eBay call added under this work must respect the existing soft-cap guard.
  */
-import { ebayFetch } from './ebayPublishService';
+import { ebayFetch, getRequiredAspectsForCategory, parseMissingRequiredAspectNames, pickSafeAspectDefault, resolveCoinConditionOverride } from './ebayPublishService';
 import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
 import { ebayProxyUrl, ebayProxyHeaders } from './ebayHttp';
 import { reanalyzeItem } from './reanalyzeService';
@@ -117,6 +117,64 @@ function computeSafeBestOfferThresholds(newPrice: number): { accept: number; min
  * @param accessToken A valid eBay user access token for this offer's organizer
  *                     (refreshEbayAccessToken(organizerId) — caller's responsibility).
  */
+/**
+ * Category-aspect repair, 2026-09-23 (Gap 1) -- item cmnzf780a0009pf19ru5qppqn "Amplifier
+ * Type is missing" stuck in the sync-issues queue even after the 2026-09-22 fix to
+ * ebayPublishService.ts's pickSafeAspectDefault(). That fix lives in the PUBLISH self-heal
+ * chain (heal25002), which this price-only revision never goes through -- reviseEbayOfferPrice
+ * only ever GETs/PUTs the OFFER object, never the inventory item where product.aspects
+ * actually lives, so the earlier fix never had a chance to run here. This adapts heal25002's
+ * approach (ebayPublishService.ts's heal25002: GET inventory item, inject product.aspects,
+ * PUT back) reusing the same helpers, but stops short of heal25002's attemptPublish() call --
+ * a price revision must never trigger a full republish. Returns true only when the inventory
+ * item PUT itself succeeded; the caller still has to retry the offer PUT afterward.
+ */
+async function injectMissingCategoryAspects(
+  sku: string | null | undefined,
+  categoryId: string | null | undefined,
+  itemTitle: string | null | undefined,
+  errorDetail: string | undefined,
+  accessToken: string
+): Promise<boolean> {
+  if (!sku || !categoryId) return false;
+  const missingNames = parseMissingRequiredAspectNames(errorDetail || '', 25002);
+  if (missingNames.length === 0) return false;
+
+  const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, { method: 'GET' });
+  trackEbayCall();
+  if (!invGet.ok) return false;
+  const invBody = (await invGet.json()) as any;
+
+  if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
+  const aspectsObj: Record<string, string[]> =
+    invBody.product.aspects && typeof invBody.product.aspects === 'object' ? invBody.product.aspects : {};
+  const hasKey = (key: string): boolean => Object.keys(aspectsObj).some((k) => k.toLowerCase() === key.toLowerCase());
+
+  const spec = await getRequiredAspectsForCategory(categoryId);
+  let injected = false;
+  for (const name of missingNames) {
+    if (hasKey(name)) continue;
+    const aspectSpec = spec?.find((a) => a.name.toLowerCase() === name.toLowerCase());
+    if (!aspectSpec) {
+      console.log(`[eBay PriceRevision] sku=${sku}: discarding aspect "${name}" -- no matching real category ${categoryId} aspect`);
+      continue;
+    }
+    const defaultValue = pickSafeAspectDefault(aspectSpec, itemTitle);
+    aspectsObj[aspectSpec.name] = [defaultValue];
+    injected = true;
+    console.log(`[eBay PriceRevision] sku=${sku}: injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
+  }
+  if (!injected) return false;
+  invBody.product.aspects = aspectsObj;
+
+  const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, {
+    method: 'PUT',
+    body: invBody,
+  });
+  trackEbayCall();
+  return retryInvRes.ok || retryInvRes.status === 204;
+}
+
 export async function reviseEbayOfferPrice(
   offerId: string | null | undefined,
   newPrice: number,
@@ -261,6 +319,21 @@ export async function reviseEbayOfferPrice(
 
     // Repair retry #2: category-aspect / required-field conflict.
     if (isCategoryAspectError(firstAttempt.detail) && itemId) {
+      // Gap 1 fix (2026-09-23): actually inject the missing eBay aspect before retrying --
+      // see injectMissingCategoryAspects doc comment. Falls back to the pre-existing
+      // reanalyzeItem-then-retry afterward regardless (it still keeps FindA.Sale's own Item
+      // record in sync, and covers any category-aspect failure this narrower aspect-name
+      // parse doesn't catch).
+      const itemRecord = await prisma.item.findUnique({ where: { id: itemId }, select: { title: true, ebayCategoryId: true } });
+      const sku = typeof offerBody.sku === 'string' ? offerBody.sku : null;
+      const categoryId = (typeof offerBody.categoryId === 'string' ? offerBody.categoryId : null) || itemRecord?.ebayCategoryId || null;
+      const aspectInjected = await injectMissingCategoryAspects(sku, categoryId, itemRecord?.title ?? null, firstAttempt.detail, accessToken);
+      if (aspectInjected) {
+        const repairAttempt = await putOffer(buildUpdatedOffer());
+        if (repairAttempt.ok) {
+          return { ok: true, method: 'inventory-api', repaired: true, repairMethod: 'category-aspect' };
+        }
+      }
       const reanalysis = await reanalyzeItem(itemId, { apply: true, syncEbay: false });
       if ('ok' in reanalysis && reanalysis.ok) {
         const repairAttempt = await putOffer(buildUpdatedOffer());
@@ -296,6 +369,36 @@ function xmlVal(block: string, tag: string): string | null {
  * or delete-then-recreate one (that burns eBay's free-listing-slot quota); ReviseItem does
  * neither -- it is a pure in-place field update on an ItemID that already exists.
  */
+/**
+ * Coin/Card Condition Descriptor repair, 2026-09-23 (Gap 2) -- confirmed live via 3 items
+ * in the sync-issues queue (cmo3euaz1008djqsu9p5gpa4p, cmo3et8oj0035jqsukotk3dft,
+ * cmo3etrl4005pjqsulrojltne, all coins): once the ListingDetails Best-Offer fix stopped
+ * masking it, eBay's real rejection for these legacy listings was "Coin Condition (2) is
+ * a required field" -- errorId 25064, the SAME Coin/Card Condition Requirements policy
+ * ebayPublishService.ts's heal25064 already resolves for Inventory-API items via
+ * resolveCoinConditionOverride(), but these legacy (Trading-API, no ebayOfferId) listings
+ * had no path to supply it on revise at all. Confirmed via eBay's own Trading API docs
+ * (ConditionDescriptorType / ConditionDescriptorsType, fetched live 2026-09-23): ReviseItem
+ * DOES support <ConditionDescriptors>, and its Name/Value fields take the SAME numeric
+ * conditionDescriptorId/conditionDescriptorValueId that resolveCoinConditionOverride already
+ * resolves via the Metadata API -- so its {name, values} output maps directly onto
+ * <ConditionDescriptor><Name>/<Value>. Returns null (never a guess) when
+ * resolveCoinConditionOverride can't confidently resolve a value, matching its own
+ * "never silently default a certified coin" design.
+ */
+async function resolveLegacyConditionDescriptors(
+  itemId: string | undefined
+): Promise<Array<{ name: string; values: string[] }> | null> {
+  if (!itemId) return null;
+  const item = await prisma.item.findUnique({
+    where: { id: itemId },
+    select: { title: true, description: true, tags: true, ebayCategoryId: true },
+  });
+  if (!item?.ebayCategoryId) return null;
+  const resolution = await resolveCoinConditionOverride(item.ebayCategoryId, item);
+  return resolution.status === 'resolved' ? resolution.conditionDescriptors : null;
+}
+
 async function reviseLegacyListingPrice(
   ebayListingId: string,
   newPrice: number,
@@ -325,7 +428,14 @@ async function reviseLegacyListingPrice(
   // check regardless of the (correctly-computed, always <StartPrice) accept price tried.
   // Nesting under <ListingDetails> is the real fix; StartPrice and BestOfferDetails
   // placement were already correct and are unchanged.
-  const buildReviseXml = (bestOffer?: { accept: number; minimum: number }): string => `<?xml version="1.0" encoding="utf-8"?>
+  // conditionDescriptors param added 2026-09-23 (Gap 2) -- see resolveLegacyConditionDescriptors
+  // doc comment. Name/Value are eBay's numeric conditionDescriptorId/conditionDescriptorValueId,
+  // confirmed via eBay's own ConditionDescriptorType docs to be the same IDs
+  // resolveCoinConditionOverride already resolves for the Inventory-API path.
+  const buildReviseXml = (
+    bestOffer?: { accept: number; minimum: number },
+    conditionDescriptors?: Array<{ name: string; values: string[] }>
+  ): string => `<?xml version="1.0" encoding="utf-8"?>
 <ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <Item>
     <ItemID>${ebayListingId}</ItemID>
@@ -336,7 +446,13 @@ async function reviseLegacyListingPrice(
     <ListingDetails>
       <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
       <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>
-    </ListingDetails>` : ''}
+    </ListingDetails>` : ''}${conditionDescriptors && conditionDescriptors.length > 0 ? `
+    <ConditionDescriptors>${conditionDescriptors.map((d) => `
+      <ConditionDescriptor>
+        <Name>${d.name}</Name>
+        <Value>${d.values[0]}</Value>
+      </ConditionDescriptor>`).join('')}
+    </ConditionDescriptors>` : ''}
   </Item>
 </ReviseItemRequest>`;
 
@@ -388,6 +504,20 @@ async function reviseLegacyListingPrice(
     if (repairAttempt.ok) {
       return { ...repairAttempt, repaired: true, repairMethod: 'best-offer-threshold' };
     }
+    // Gap 2 fix (2026-09-23): the repair retry can separately fail on a missing Coin/Card
+    // Condition descriptor (errorId 25064, e.g. "Coin Condition (2) is a required field") --
+    // previously always masked by the ListingDetails placement bug failing first. Try once
+    // more with BOTH the price/threshold fix and a resolved condition descriptor together.
+    if (isCategoryAspectError(repairAttempt.detail)) {
+      const descriptors = await resolveLegacyConditionDescriptors(itemId);
+      if (descriptors) {
+        const conditionRepairAttempt = await sendRevise(buildReviseXml(thresholds, descriptors));
+        if (conditionRepairAttempt.ok) {
+          return { ...conditionRepairAttempt, repaired: true, repairMethod: 'best-offer-threshold' };
+        }
+        console.warn(`[eBay PriceRevision] legacy coin-condition repair FAILED item=${itemId ?? 'n/a'} listing=${ebayListingId} repairDetail=${conditionRepairAttempt.detail ?? 'n/a'}`);
+      }
+    }
     // Diagnostic (2026-09-19): repair retry #1 didn't resolve it -- log its own detail
     // (distinct from firstAttempt.detail) so a persisting failure shows exactly what the
     // REPAIRED thresholds were rejected for, instead of only ever seeing the original error.
@@ -397,6 +527,18 @@ async function reviseLegacyListingPrice(
 
   // Repair retry #2: category-aspect / required-field conflict.
   if (isCategoryAspectError(firstAttempt.detail) && itemId) {
+    // Gap 2 fix (2026-09-23): try a resolved Coin/Card Condition descriptor first -- see
+    // resolveLegacyConditionDescriptors doc comment. Falls back to the pre-existing
+    // reanalyzeItem-then-retry when no descriptor can be confidently resolved (not a coin,
+    // or a coin whose condition text can't be parsed -- reanalyzeItem still keeps FindA.Sale's
+    // own Item record in sync either way).
+    const descriptors = await resolveLegacyConditionDescriptors(itemId);
+    if (descriptors) {
+      const conditionRepairAttempt = await sendRevise(buildReviseXml(undefined, descriptors));
+      if (conditionRepairAttempt.ok) {
+        return { ...conditionRepairAttempt, repaired: true, repairMethod: 'category-aspect' };
+      }
+    }
     const reanalysis = await reanalyzeItem(itemId, { apply: true, syncEbay: false });
     if ('ok' in reanalysis && reanalysis.ok) {
       const repairAttempt = await sendRevise(buildReviseXml());

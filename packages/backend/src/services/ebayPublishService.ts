@@ -820,7 +820,7 @@ const heal25021: Healer = async (ctx) => {
  * name (e.g. "Form Factor" on category 29946; "Coin Condition (2)" on category 11981
  * via 25064) for any other missing required aspect.
  */
-function parseMissingRequiredAspectNames(errorBody: string, errorId: number): string[] {
+export function parseMissingRequiredAspectNames(errorBody: string, errorId: number): string[] {
   try {
     const parsed = JSON.parse(errorBody) as {
       errors?: Array<{ errorId?: number; parameters?: Array<{ name?: string; value?: string }> }>;
@@ -878,7 +878,7 @@ function parseMissingRequiredAspectNames(errorBody: string, errorId: number): st
  * literally in this item's title, so that's what should be injected, not whatever eBay
  * happens to list first.
  */
-function pickSafeAspectDefault(aspectSpec: RequiredAspect | undefined, itemTitle?: string | null): string {
+export function pickSafeAspectDefault(aspectSpec: RequiredAspect | undefined, itemTitle?: string | null): string {
   if (!aspectSpec || aspectSpec.enumValues.length === 0) return 'Does Not Apply';
   const neutral = aspectSpec.enumValues.find((v) =>
     /^(universal|other|not\s*specified|unspecified|any|multiple|n\/?a|various)$/i.test(v)
