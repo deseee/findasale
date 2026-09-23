@@ -309,21 +309,22 @@ async function reviseLegacyListingPrice(
   // sitting above a newly-markdown'd StartPrice. bestOffer, when supplied, adds a
   // <BestOfferDetails> block to the ReviseItemRequest so both move together.
   //
-  // Structure fix (2026-09-19, root-caused via the repair-failure diagnostic log added
-  // earlier today): BestOfferAutoAcceptPrice and MinimumBestOfferPrice are Item-level
-  // fields in eBay's Trading API schema, NOT children of BestOfferDetails -- only
-  // BestOfferEnabled/BestOfferCount/etc belong inside that block. The original code
-  // nested all three together, so eBay silently ignored the two misplaced price
-  // elements on every revise; only BestOfferEnabled (validly placed) was ever applied.
-  // That explains the exact symptom sequence observed live: before this fix, eBay kept
-  // enforcing the OLD unchanged thresholds (identical repeating error); after adding
-  // BestOfferEnabled alone (previous deploy), eBay started enforcing BestOfferEnabled
-  // but the accept/minimum prices were STILL stuck at their original (pre-markdown, much
-  // higher) values -- now failing against the NEW lower StartPrice instead, producing a
-  // different but still-broken error ("Auto Accept Price must be less than the Buy It
-  // Now price" / "Auto decline amount cannot be greater than or equal to..."). Moving
-  // both price elements to be direct Item siblings (matching BestOfferEnabled's own
-  // correct placement) is the actual fix.
+  // Structure fix v2 (2026-09-23, root-caused via getListingDebugInfo live GetItem
+  // pull against listing 136164918832 + eBay's own official Trading API docs, fetched
+  // live this session: developer.ebay.com/DevZone/xml/docs/Reference/eBay/types/
+  // ListingDetailsType.html and .../reference/ebay/ReviseItem.html). The 2026-09-19
+  // "fix" below (Item-level siblings) was itself wrong -- eBay's own schema docs
+  // confirm BestOfferAutoAcceptPrice and MinimumBestOfferPrice are children of
+  // ListingDetailsType, i.e. they belong nested under an <Item><ListingDetails> block,
+  // NOT as direct Item siblings and NOT under BestOfferDetails (BestOfferDetails only
+  // takes BestOfferEnabled/BestOfferCount/etc, same as the 09-19 comment correctly
+  // noted -- just the alternative placement it chose was also wrong). Live evidence
+  // (GetItem via the new listing-debug endpoint) confirmed this listing's BuyItNowPrice
+  // reads back 0.0 -- consistent with the misplaced Item-level fields never having been
+  // accepted by eBay at all, so every repair attempt kept failing the same threshold
+  // check regardless of the (correctly-computed, always <StartPrice) accept price tried.
+  // Nesting under <ListingDetails> is the real fix; StartPrice and BestOfferDetails
+  // placement were already correct and are unchanged.
   const buildReviseXml = (bestOffer?: { accept: number; minimum: number }): string => `<?xml version="1.0" encoding="utf-8"?>
 <ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <Item>
@@ -332,8 +333,10 @@ async function reviseLegacyListingPrice(
     <BestOfferDetails>
       <BestOfferEnabled>true</BestOfferEnabled>
     </BestOfferDetails>
-    <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
-    <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>` : ''}
+    <ListingDetails>
+      <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
+      <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>
+    </ListingDetails>` : ''}
   </Item>
 </ReviseItemRequest>`;
 
