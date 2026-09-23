@@ -250,6 +250,18 @@ async function injectMissingCategoryAspects(
     return false;
   }
   invBody.product.aspects = aspectsObj;
+  // 2026-09-23 fix: mirror heal25101 (ebayPublishService.ts) -- this PUT carries eBay's own
+  // GET response for the WHOLE inventory item back verbatim except for product.aspects, so an
+  // existing packageWeightAndSize.packageType that's incompatible with this item's live
+  // fulfillment-policy routing (confirmed live, errorId 25101, items cmo3etpx2005hjqsuvzlkt8qz
+  // "MailingBoxes" and cmo3et2pb002djqsuyta1cslc "PaddedBags") gets re-validated and rejected on
+  // every retry, permanently blocking the aspect fix from ever landing. Strip packageType the
+  // same proven way heal25101 already does for the publish path.
+  if (invBody.packageWeightAndSize && typeof invBody.packageWeightAndSize === 'object') {
+    const strippedPkg = { ...(invBody.packageWeightAndSize as Record<string, unknown>) };
+    delete (strippedPkg as any).packageType;
+    invBody.packageWeightAndSize = strippedPkg;
+  }
 
   const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, {
     method: 'PUT',
@@ -332,15 +344,22 @@ export async function reviseEbayOfferPrice(
           select: { packageWeightOz: true, packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true },
         });
         if (pkg?.packageWeightOz) {
-          const pt = pkg.packageType ? String(pkg.packageType).trim().toUpperCase().replace(/\s+/g, '_') : '';
+          // 2026-09-23 fix: never include packageType in a rebuilt packageWeightAndSize here.
+          // Confirmed live (item cmp5t9ti70011aez9qhibef89, errorId 25002 "Please provide a
+          // valid Shipping Package type", err:216314) -- this is the same LSAS-calculated-
+          // shipping incompatibility ebayController.ts's publish payload builder already guards
+          // against (~line 2845: "LSAS computes rates from weight+dims alone and rejects
+          // incompatible packageType values (err 216314)"), but this price-revision rebuild has
+          // no access to routing info to apply that guard conditionally. Weight+dims alone
+          // satisfy eBay's requirement, so always omitting packageType here is the safe choice
+          // rather than guessing whether this item's fulfillment policy tolerates it.
           offerBody.packageWeightAndSize = {
             weight: { unit: 'OUNCE', value: Number(pkg.packageWeightOz) },
             ...(pkg.packageLengthIn && pkg.packageWidthIn && pkg.packageHeightIn
               ? { dimensions: { unit: 'INCH', length: Number(pkg.packageLengthIn), width: Number(pkg.packageWidthIn), height: Number(pkg.packageHeightIn) } }
               : {}),
-            ...(pt && VALID_PACKAGE_TYPES.has(pt) ? { packageType: pt } : {}),
           };
-          console.log(`[eBay PriceRevision] item=${itemId} rebuilt missing packageWeightAndSize from Item record before PUT`);
+          console.log(`[eBay PriceRevision] item=${itemId} rebuilt missing packageWeightAndSize from Item record before PUT (packageType omitted -- see 2026-09-23 fix comment)`);
         }
       } catch (pkgErr) {
         console.warn(`[eBay PriceRevision] item=${itemId} failed to rebuild packageWeightAndSize: ${(pkgErr as Error).message}`);
