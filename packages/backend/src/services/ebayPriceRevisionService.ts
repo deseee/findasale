@@ -136,9 +136,21 @@ async function injectMissingCategoryAspects(
   errorDetail: string | undefined,
   accessToken: string
 ): Promise<boolean> {
-  if (!sku || !categoryId) return false;
-  const missingNames = parseMissingRequiredAspectNames(errorDetail || '', 25002);
-  if (missingNames.length === 0) return false;
+  if (!sku || !categoryId) {
+    console.log(`[eBay PriceRevision] category-aspect repair skipped: sku=${sku ?? 'null'} categoryId=${categoryId ?? 'null'}`);
+    return false;
+  }
+  // 2026-09-23 fix (confirmed live -- item cmnzf780a0009pf19ru5qppqn kept failing identically
+  // after this repair shipped, with ZERO log output from this function): putOffer()'s `detail`
+  // string is "HTTP <status> <body>", not raw JSON. parseMissingRequiredAspectNames does its own
+  // JSON.parse in a try/catch and silently returns [] on unparseable input, so the "HTTP 400 "
+  // prefix was making every single call here a silent no-op. Strip the prefix before parsing.
+  const rawErrorBody = (errorDetail || '').replace(/^HTTP\s+\d+\s+/, '');
+  const missingNames = parseMissingRequiredAspectNames(rawErrorBody, 25002);
+  if (missingNames.length === 0) {
+    console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair found no parseable missing-aspect name in error detail (raw="${rawErrorBody.slice(0, 200)}")`);
+    return false;
+  }
 
   const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, { method: 'GET' });
   trackEbayCall();
