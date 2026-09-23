@@ -25,7 +25,7 @@
  * actually closes that gap -- it runs BEFORE anything else in this file, including before the
  * removal-queue check, and unconditionally bails if any credential-entry surface is present.
  */
-(function () {
+(async function () {
   // ================================================================================================
   // MANDATORY FIRST CHECK -- do not move anything above this block, do not add any code before it.
   // If this frame is showing (or could plausibly be showing) a real credential-entry form, stop
@@ -45,12 +45,25 @@
     if (sensitiveForm) return true;
     return false;
   }
-  if (fasHasCredentialSurface()) {
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+  // BUG FIX 2026-09-23: a confirmed-logged-in account (verified live: real postings dashboard,
+  // 224 active listings) still tripped this guard on an automated removal tab -- a timing race
+  // against accounts.craigslist.org's cross-origin auth/session settling, same class as the
+  // Vinted hydration race fixed earlier today in fas-vinted.js's discoverVintedOwnProfileUrlByClick().
+  // Poll instead of a single zero-wait check; a REAL logged-out session still gets refused once
+  // 4s proves the credential surface is persistent, not transient. None of the three detection
+  // criteria in fasHasCredentialSurface() above were touched -- only WHEN the bail decision is
+  // made. Patrick-authorized 2026-09-23 ("fix it" / "do it yourself").
+  let fasCredentialSurfaceDeadline = Date.now() + 4000;
+  let fasStillHasCredentialSurface = fasHasCredentialSurface();
+  while (fasStillHasCredentialSurface && Date.now() < fasCredentialSurfaceDeadline) {
+    await sleep(250);
+    fasStillHasCredentialSurface = fasHasCredentialSurface();
+  }
+  if (fasStillHasCredentialSurface) {
     console.warn('[FAS Craigslist Removal Frame] credential-entry surface detected on this page -- refusing to run, exiting immediately.');
     return;
   }
-
-  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
   // ---- overlay UI (mirrors fas-craigslist.js's own bottom-right bar) ----
