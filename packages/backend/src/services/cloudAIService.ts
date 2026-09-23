@@ -22,6 +22,7 @@ import { getEbayImageMatch, buildEbayMatchContext, EbayImageMatch } from './ebay
 import { estimatePrice } from './pricingEngine';
 import { isAudioFormatMatch } from './pricingEngine/adapters/discogs';
 import { applyCharmPricing } from '../utils/charmPricing';
+import type { AIRecordIdentity } from './marketplace/recordIdentity';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -307,6 +308,10 @@ export interface AITagResult {
   estimatedPackageType?: string; // eBay packageType enum (MAILING_BOX | PACKAGE_THICK_ENVELOPE | LARGE_PACKAGE | etc.)
   packageConfidence?: number; // 0.0-1.0 confidence in the package estimate
   ocrIsbn?: string; // ADR-089: checksum-valid ISBN extracted from the full Vision OCR block (books)
+  // ADR-132 (2026-09-23): structured record identity for vinyl/CD/cassette items, returned by the SAME
+  // tagging call (no extra API call). null for everything else. Evidence-only for label/catalogNumber/year.
+  // Persisted via mergeAiRecordIdentity (organizer values always win; low-confidence rules applied there).
+  recordIdentity?: AIRecordIdentity | null;
   detectedPrintedText?: string; // ADR 2026-08-29: Haiku's own literal transcription of visible printed text, output before composing the title -- reduces phrase-substitution errors (e.g. "Time and Chance" mis-titled as "Time and Change")
 }
 
@@ -691,7 +696,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
       'https://api.anthropic.com/v1/messages',
       {
         model: ANTHROPIC_MODEL,
-        max_tokens: 400,
+        max_tokens: 500, // ADR-132: +100 headroom for the optional recordIdentity object
         messages: [
           {
             role: 'user',
@@ -723,6 +728,7 @@ Model number: If a model number or part number is actually VISIBLE on a label, p
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy") — but this must be the brand of THIS PRODUCT as sold, not a brand incidentally referenced elsewhere. UPCYCLED/REPURPOSED ITEMS (live-confirmed gap, 2026-08-31: a lamp made from a Bell's Brewery Oberon Ale bottle got brand="Bells" purely because the beer's brand was mentioned in the description): if the item is handmade or repurposed from a branded raw material — e.g. a lamp made from a beer bottle, furniture made from a shipping crate, jewelry made from a coin — the raw material's original brand is NOT this product's brand. Mentioning it in the title/description for searchability is fine and encouraged, but "brand" must reflect who made the actual product being sold (the crafter, if stated, otherwise null/omitted for unbranded handmade work) — never the brand printed on the raw material. Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory, product brand only): if you state a brand/maker name in the title, tags, or description as THIS PRODUCT's own identity, you MUST also set that same value in the "brand" field — never state a product's brand in prose while leaving "brand" null or omitted. A raw-material brand mentioned only as origin/material context (see upcycled case above) is explicitly exempt from this consistency check.
 Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
+Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recordIdentity" from text printed on the cover, spine, back or center label: artist (performer as printed; "Various" allowed), releaseTitle (the album/single title as printed, not your listing title), label (record label as printed), catalogNumber (exactly as printed, e.g. "SD 7293"), year (only if a date is printed, e.g. a (P)/(C) line), format (LP | 7in | 10in | 12in_single | CD | Cassette | Box | Other), script (latin | cjk | cyrillic | other: the dominant script of the printed title). catalogNumber, label and year must be literally visible -- never recall them from memory; use null for anything not visible. For every other kind of item set "recordIdentity" to null.
 Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
@@ -739,6 +745,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
   "upc": null,
   "brand": null,
   "color": null,
+  "recordIdentity": null,
   "estimatedWeightOz": 24,
   "estimatedDimensionsIn": { "length": 10, "width": 8, "height": 6 },
   "estimatedPackageType": "MAILING_BOX",
@@ -1441,6 +1448,7 @@ Model number: If a model number or part number is actually VISIBLE on a label, p
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy") — but this must be the brand of THIS PRODUCT as sold, not a brand incidentally referenced elsewhere. UPCYCLED/REPURPOSED ITEMS (live-confirmed gap, 2026-08-31: a lamp made from a Bell's Brewery Oberon Ale bottle got brand="Bells" purely because the beer's brand was mentioned in the description): if the item is handmade or repurposed from a branded raw material — e.g. a lamp made from a beer bottle, furniture made from a shipping crate, jewelry made from a coin — the raw material's original brand is NOT this product's brand. Mentioning it in the title/description for searchability is fine and encouraged, but "brand" must reflect who made the actual product being sold (the crafter, if stated, otherwise null/omitted for unbranded handmade work) — never the brand printed on the raw material. Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory, product brand only): if you state a brand/maker name in the title, tags, or description as THIS PRODUCT's own identity, you MUST also set that same value in the "brand" field — never state a product's brand in prose while leaving "brand" null or omitted. A raw-material brand mentioned only as origin/material context (see upcycled case above) is explicitly exempt from this consistency check.
 Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
+Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recordIdentity" from text printed on the cover, spine, back or center label: artist (performer as printed; "Various" allowed), releaseTitle (the album/single title as printed, not your listing title), label (record label as printed), catalogNumber (exactly as printed, e.g. "SD 7293"), year (only if a date is printed, e.g. a (P)/(C) line), format (LP | 7in | 10in | 12in_single | CD | Cassette | Box | Other), script (latin | cjk | cyrillic | other: the dominant script of the printed title). catalogNumber, label and year must be literally visible -- never recall them from memory; use null for anything not visible. For every other kind of item set "recordIdentity" to null.
 
 {
   "detectedPrintedText": "literal transcription of any visible printed title/name/text, or null if none visible",
@@ -1455,7 +1463,8 @@ Color: State the item's own actual/dominant surface color as a short common colo
   "mpn": null,
   "upc": null,
   "brand": null,
-  "color": null
+  "color": null,
+  "recordIdentity": null
 }`,
     });
 
@@ -1463,7 +1472,7 @@ Color: State the item's own actual/dominant surface color as a short common colo
       'https://api.anthropic.com/v1/messages',
       {
         model: ANTHROPIC_MODEL,
-        max_tokens: 400,
+        max_tokens: 500, // ADR-132: +100 headroom for the optional recordIdentity object
         messages: [
           {
             role: 'user',

@@ -1,0 +1,226 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "ADR-132 9.3 #1",
+  "item": {
+    "id": "cmtsyhsbz004x6p9vbluevgvp",
+    "title": "Styx, Pieces of Eight, Vinyl Album",
+    "description": "Styx 'Pieces of Eight' studio album on vinyl LP, still sealed in original shrink wrap. Classic progressive rock album from the 1970s in new/unplayed condition. Minimal surface wear to packaging.",
+    "brand": "Styx",
+    "upc": null,
+    "ean": null,
+    "tags": [
+      "Styx",
+      "Pieces of Eight",
+      "Vinyl LP",
+      "1970s",
+      "Progressive Rock",
+      "Album"
+    ]
+  },
+  "wrongReleaseId": 7001009,
+  "listedRelease": {
+    "id": 7001009,
+    "artist": "Styx",
+    "title": "Babe",
+    "description": "Styx - Babe",
+    "format": "Vinyl, 7\", Single",
+    "label": "A&M Records",
+    "catalog_number": "AMP-1076",
+    "year": 1979,
+    "thumbnail": ""
+  },
+  "searches": [
+    {
+      "params": {
+        "artist": "Styx",
+        "release_title": "Pieces of Eight",
+        "format": "Vinyl"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7001001,
+            "type": "release",
+            "title": "Styx - Pieces Of Eight",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "A&M Records"
+            ],
+            "catno": "SP-4724",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7001000,
+            "thumb": "",
+            "uri": "/release/7001001",
+            "barcode": [],
+            "community": {
+              "have": 2400,
+              "want": 90
+            }
+          },
+          {
+            "id": 7001002,
+            "type": "release",
+            "title": "Styx - Pieces Of Eight",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "A&M Records"
+            ],
+            "catno": "SP-4724",
+            "year": "1978",
+            "country": "Canada",
+            "master_id": 7001000,
+            "thumb": "",
+            "uri": "/release/7001002",
+            "barcode": [],
+            "community": {
+              "have": 600,
+              "want": 20
+            }
+          },
+          {
+            "id": 7001003,
+            "type": "release",
+            "title": "Styx - Pieces Of Eight",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album",
+              "Club Edition"
+            ],
+            "label": [
+              "A&M Records"
+            ],
+            "catno": "SP-4724",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7001000,
+            "thumb": "",
+            "uri": "/release/7001003",
+            "barcode": [],
+            "community": {
+              "have": 150,
+              "want": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "params": {
+        "artist": "Styx",
+        "release_title": "Pieces of Eight"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7001001,
+            "type": "release",
+            "title": "Styx - Pieces Of Eight",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "A&M Records"
+            ],
+            "catno": "SP-4724",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7001000,
+            "thumb": "",
+            "uri": "/release/7001001",
+            "barcode": [],
+            "community": {
+              "have": 2400,
+              "want": 90
+            }
+          },
+          {
+            "id": 7001002,
+            "type": "release",
+            "title": "Styx - Pieces Of Eight",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "A&M Records"
+            ],
+            "catno": "SP-4724",
+            "year": "1978",
+            "country": "Canada",
+            "master_id": 7001000,
+            "thumb": "",
+            "uri": "/release/7001002",
+            "barcode": [],
+            "community": {
+              "have": 600,
+              "want": 20
+            }
+          },
+          {
+            "id": 7001003,
+            "type": "release",
+            "title": "Styx - Pieces Of Eight",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album",
+              "Club Edition"
+            ],
+            "label": [
+              "A&M Records"
+            ],
+            "catno": "SP-4724",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7001000,
+            "thumb": "",
+            "uri": "/release/7001003",
+            "barcode": [],
+            "community": {
+              "have": 150,
+              "want": 5
+            }
+          },
+          {
+            "id": 7001009,
+            "type": "release",
+            "title": "Styx = スティクス - Babe = ベイブ",
+            "format": [
+              "Vinyl",
+              "7\"",
+              "45 RPM",
+              "Single"
+            ],
+            "label": [
+              "A&M Records"
+            ],
+            "catno": "AMP-1076",
+            "year": "1979",
+            "country": "Japan",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7001009",
+            "barcode": [],
+            "community": {
+              "have": 90,
+              "want": 10
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

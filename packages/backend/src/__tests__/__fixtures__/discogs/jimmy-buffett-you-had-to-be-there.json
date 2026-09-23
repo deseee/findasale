@@ -1,0 +1,186 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "ADR-132 9.3 #5",
+  "item": {
+    "id": "cmtvik9bv023a13wpuklufldg",
+    "title": "Jimmy Buffett, You Had to Be There Vinyl Album, 1978",
+    "description": "Side 4 has a scratch.  Double LP vinyl record album by Jimmy Buffett featuring live recordings from 1978, produced by Norbert Putnam. Includes gatefold jacket with band photos, track listing on all four sides, and interior images of various US locations. Cover shows wear consistent with age; vinyl condition not fully visible but appears playable. Catalog number AK 1008/2.",
+    "brand": "ABC Records",
+    "upc": null,
+    "ean": null,
+    "tags": [
+      "Jimmy Buffett",
+      "Vinyl Record",
+      "1970s",
+      "Live Album",
+      "Double LP",
+      "Recorded Live"
+    ]
+  },
+  "wrongReleaseId": 7005009,
+  "listedRelease": {
+    "id": 7005009,
+    "artist": "Jimmy Buffett",
+    "title": "Jimmy Buffett",
+    "description": "Jimmy Buffett - Jimmy Buffett",
+    "format": "Vinyl, LP, Compilation, Reissue",
+    "label": "MCA Records",
+    "catalog_number": "MCA-37028",
+    "year": 1980,
+    "thumbnail": ""
+  },
+  "searches": [
+    {
+      "params": {
+        "catno": "AK 1008/2",
+        "label": "ABC"
+      },
+      "response": {
+        "results": []
+      }
+    },
+    {
+      "params": {
+        "catno": "AK1008/2"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7005001,
+            "type": "release",
+            "title": "Jimmy Buffett - You Had To Be There",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "ABC Records"
+            ],
+            "catno": "AK-1008/2",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7005000,
+            "thumb": "",
+            "uri": "/release/7005001",
+            "barcode": [],
+            "community": {
+              "have": 1800,
+              "want": 30
+            }
+          },
+          {
+            "id": 7005002,
+            "type": "release",
+            "title": "Jimmy Buffett - You Had To Be There",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album",
+              "Gatefold"
+            ],
+            "label": [
+              "ABC Records"
+            ],
+            "catno": "AK-1008/2",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7005000,
+            "thumb": "",
+            "uri": "/release/7005002",
+            "barcode": [],
+            "community": {
+              "have": 400,
+              "want": 8
+            }
+          }
+        ]
+      }
+    },
+    {
+      "params": {
+        "artist": "Jimmy Buffett",
+        "release_title": "You Had to Be There",
+        "format": "Vinyl"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7005001,
+            "type": "release",
+            "title": "Jimmy Buffett - You Had To Be There",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "ABC Records"
+            ],
+            "catno": "AK-1008/2",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7005000,
+            "thumb": "",
+            "uri": "/release/7005001",
+            "barcode": [],
+            "community": {
+              "have": 1800,
+              "want": 30
+            }
+          },
+          {
+            "id": 7005002,
+            "type": "release",
+            "title": "Jimmy Buffett - You Had To Be There",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album",
+              "Gatefold"
+            ],
+            "label": [
+              "ABC Records"
+            ],
+            "catno": "AK-1008/2",
+            "year": "1978",
+            "country": "US",
+            "master_id": 7005000,
+            "thumb": "",
+            "uri": "/release/7005002",
+            "barcode": [],
+            "community": {
+              "have": 400,
+              "want": 8
+            }
+          },
+          {
+            "id": 7005009,
+            "type": "release",
+            "title": "Jimmy Buffett - Jimmy Buffett",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Compilation",
+              "Reissue"
+            ],
+            "label": [
+              "MCA Records"
+            ],
+            "catno": "MCA-37028",
+            "year": "1980",
+            "country": "US",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7005009",
+            "barcode": [],
+            "community": {
+              "have": 70,
+              "want": 2
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

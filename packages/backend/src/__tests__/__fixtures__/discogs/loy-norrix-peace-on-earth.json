@@ -1,0 +1,93 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "ADR-132 9.3 #3",
+  "item": {
+    "id": "cmtizfycp02t73bwwso4oqvlc",
+    "title": "Peace on Earth, Loy Norrix High School Choirs & Orchestra Vinyl Records, Delta R",
+    "description": "Stereo vinyl LP featuring the Loy Norrix High School Choirs and Orchestra from Kalamazoo, Michigan, conducted by Thomas Kasdorf and James W. Roach. Contains Christmas choral music including traditional carols and sacred works. Original Delta Records pressing with gatefold jacket featuring embroidered dove design; record shows normal surface wear consistent with age and play.",
+    "brand": "Delta Records",
+    "upc": null,
+    "ean": null,
+    "tags": [
+      "Vinyl LP",
+      "Christmas Music",
+      "High School Choir",
+      "1970s",
+      "Delta Records",
+      "Classical",
+      "Kalamazoo Michigan"
+    ]
+  },
+  "wrongReleaseId": 7003001,
+  "listedRelease": {
+    "id": 7003001,
+    "artist": "Tower (3)",
+    "title": "Peace On Earth",
+    "description": "Tower (3) - Peace On Earth",
+    "format": "Vinyl, 7\", Single",
+    "label": "Tower Records",
+    "catalog_number": "T-1044",
+    "year": 1975,
+    "thumbnail": ""
+  },
+  "searches": [
+    {
+      "params": {
+        "q": "Peace on Earth"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7003001,
+            "type": "release",
+            "title": "Tower (3) - Peace On Earth",
+            "format": [
+              "Vinyl",
+              "7\"",
+              "45 RPM",
+              "Single"
+            ],
+            "label": [
+              "Tower Records"
+            ],
+            "catno": "T-1044",
+            "year": "1975",
+            "country": "US",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7003001",
+            "barcode": [],
+            "community": {
+              "have": 8,
+              "want": 1
+            }
+          },
+          {
+            "id": 7003002,
+            "type": "release",
+            "title": "Various - Peace On Earth",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Compilation"
+            ],
+            "label": [
+              "Columbia Special Products"
+            ],
+            "catno": "CSS 1499",
+            "year": "1970",
+            "country": "US",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7003002",
+            "barcode": [],
+            "community": {
+              "have": 40,
+              "want": 2
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

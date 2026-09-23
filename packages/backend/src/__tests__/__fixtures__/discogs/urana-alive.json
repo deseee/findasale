@@ -1,0 +1,93 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "ADR-132 9.3 #6",
+  "item": {
+    "id": "cmtvuvszj02im13wpsjo9gunc",
+    "title": "ALIVE! Vinyl Record LP, Urana Records 1979",
+    "description": "Vintage 1979 vinyl LP album titled \"ALIVE!\" released on Urana Records (Wise Women Enterprises). Two-sided record featuring music produced by Alfred Woltes with recording and mixing by Alfred and Attred Woltes. Album includes tracks such as \"Somebody's Talkin' to You,\" \"Rhiannon,\" \"Part of Me/Changes,\" and \"Spirit Healer.\" Cover features black and white photograph of five women laughing together. Record and sleeve show signs of age with light wear; vinyl appears playable.",
+    "brand": "Urana Records",
+    "upc": null,
+    "ean": null,
+    "tags": [
+      "Vinyl Record",
+      "1979",
+      "LP Album",
+      "Urana Records",
+      "Wise Women Enterprises",
+      "Vintage Music",
+      "Folk"
+    ]
+  },
+  "wrongReleaseId": 7006001,
+  "listedRelease": {
+    "id": 7006001,
+    "artist": "Kiss",
+    "title": "Alive!",
+    "description": "Kiss - Alive!",
+    "format": "Vinyl, LP, Album",
+    "label": "Casablanca",
+    "catalog_number": "NBLP 7020",
+    "year": 1975,
+    "thumbnail": ""
+  },
+  "searches": [
+    {
+      "params": {
+        "q": "ALIVE!"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7006001,
+            "type": "release",
+            "title": "Kiss - Alive!",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "Casablanca"
+            ],
+            "catno": "NBLP 7020",
+            "year": "1975",
+            "country": "US",
+            "master_id": 7006000,
+            "thumb": "",
+            "uri": "/release/7006001",
+            "barcode": [],
+            "community": {
+              "have": 9000,
+              "want": 500
+            }
+          },
+          {
+            "id": 7006002,
+            "type": "release",
+            "title": "Kiss - Alive!",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album",
+              "Reissue"
+            ],
+            "label": [
+              "Casablanca"
+            ],
+            "catno": "NBLP 7020-2",
+            "year": "1976",
+            "country": "US",
+            "master_id": 7006000,
+            "thumb": "",
+            "uri": "/release/7006002",
+            "barcode": [],
+            "community": {
+              "have": 2100,
+              "want": 80
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

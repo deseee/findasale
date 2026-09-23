@@ -31,6 +31,7 @@ import {
   checkDiscogsEligibility,
   DiscogsApiError,
   DiscogsNotEligibleError,
+  DiscogsHttpError,
 } from '../services/marketplace/discogsListingConnector';
 
 /** Mirrors reverbMarketplaceController.ts's resolveOwnedOrganizerAndItem exactly — kept
@@ -46,6 +47,11 @@ async function resolveOwnedOrganizerAndItem(userId: string, itemId: string) {
 }
 
 function respondDiscogsError(res: Response, error: any, fallbackMessage: string) {
+  // ADR-132: needs_selection / listing_release_mismatch / not_connected (409) etc.
+  if (error instanceof DiscogsHttpError) {
+    res.status(error.httpStatus).json({ message: error.message, code: error.code });
+    return;
+  }
   if (error instanceof DiscogsNotEligibleError) {
     res.status(422).json({ message: error.message, eligible: false });
     return;
@@ -244,7 +250,7 @@ export const removeItemFromDiscogs = async (req: AuthRequest, res: Response) => 
     // to showing the eligibility/push UI instead of a stale "already pushed" state.
     await prisma.item.update({
       where: { id: item.id },
-      data: { discogsListingId: null, discogsListedAt: null },
+      data: { discogsListingId: null, discogsListedAt: null, discogsListingReleaseId: null },
     }).catch((e) => {
       console.error('[Discogs] Failed to clear discogsListingId after a successful delete:', e);
     });

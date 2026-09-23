@@ -22,11 +22,15 @@
  *     be affected by an auto-fanout failure on either platform.
  *   - publish: true -- these are the only two tiers that go straight to a live listing
  *     with no organizer review step, per the handoff's explicit contract.
+ *   - ADR-132 Phase 0 (2026-09-23): Discogs publishes For Sale ONLY on a stored
+ *     auto_high/confirmed release match. A "most-collected pressing" auto-pick (Patrick D3)
+ *     is pushed as a Draft. needs_selection / not_in_discogs are never pushed. The old
+ *     title-only 'fuzzy' tier no longer exists.
  */
 
 import type { Item } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { checkDiscogsEligibility, upsertDiscogsListingForItem } from './discogsListingConnector';
+import { resolveDiscogsMatch, upsertDiscogsListingForItem } from './discogsListingConnector';
 import { createReverbListing } from './reverbConnector';
 import { checkEligibility } from '../marketplaceEligibilityRules';
 
@@ -48,11 +52,14 @@ export async function dispatchApiTierAutoFanout(organizerId: string, item: Item)
     try {
       // 2026-09-22 (duplicate-listing fix): if the item is already on Discogs, the upsert
       // updates that listing (price, Draft -> For Sale) instead of creating a second one, and
-      // it persists discogsListingId/discogsListedAt after a create (this path previously
-      // dropped the new listing id on the floor). Eligibility is only needed for a create.
-      const eligible = item.discogsListingId ? true : (await checkDiscogsEligibility(organizerId, item)).eligible;
-      if (eligible) {
-        await upsertDiscogsListingForItem(organizerId, item.id, { publish: true });
+      // it persists discogsListingId/discogsListedAt after a create.
+      // ADR-132 Phase 0: gate on the stored release match (matcher v2 runs only when there is
+      // no stored result or its inputs changed). The upsert re-enforces the same rule.
+      const match = await resolveDiscogsMatch(organizerId, item.id);
+      if (match.canPush && (match.status === 'auto_high' || match.status === 'confirmed')) {
+        await upsertDiscogsListingForItem(organizerId, item.id, { publish: !match.draftOnly });
+      } else if (match.status === 'needs_selection') {
+        console.info(`[AutoFanout] Discogs skipped for item ${item.id}: organizer must choose the release (${match.reason ?? 'needs_selection'})`);
       }
     } catch (err) {
       console.error('[AutoFanout] Discogs auto-list failed for item', item.id, err);

@@ -12,6 +12,7 @@ import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 import axios from 'axios';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
+import { mergeAiRecordIdentity } from '../services/marketplace/recordIdentity'; // ADR-132
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
@@ -400,6 +401,12 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         brand: !userEdited.includes('brand') ? (aiResult.brand || item.brand) : item.brand,
         // Color: mirrors brand's exact same organizer-intent-respecting write pattern.
         color: !userEdited.includes('color') ? (aiResult.color || item.color) : item.color,
+        // ADR-132: structured record identity from the SAME tagging call (no extra API call).
+        // mergeAiRecordIdentity keeps organizer-entered fields and applies the low-confidence rules.
+        ...(() => {
+          const merged = mergeAiRecordIdentity(item.recordIdentity, aiResult.recordIdentity, { confidence: aiResult.confidence ?? null });
+          return merged ? { recordIdentity: merged as unknown as Prisma.InputJsonValue } : {};
+        })(),
         // Catalog Enrichment: persist AI-read model/part number when organizer hasn't set one.
         // aiResult.mpn is evidence-only (Vision reads it from visible labels — never inferred).
         // Barcode enrichment below still wins if it provides a more authoritative mpn.

@@ -52,7 +52,24 @@
 
 import { prisma } from '../../lib/prisma';
 import { encryptToken, decryptToken } from '../../utils/tokenCrypto';
-import type { Item, MarketplaceAccount } from '@prisma/client';
+import type { Item, MarketplaceAccount, Prisma } from '@prisma/client';
+// ADR-132: release matcher v2 + structured record identity.
+import {
+  matchDiscogsRelease,
+  computeMatchInputHash,
+  parseDiscogsReleaseUrl,
+  rawFromListingRelease,
+  rawFromRelease,
+  scoreCandidate,
+  MATCHER_VERSION,
+} from './discogsReleaseMatcher';
+import type { DiscogsCandidate, DiscogsMatchStatus } from './discogsReleaseMatcher';
+import {
+  deriveRecordIdentityFromText,
+  effectiveRecordIdentity,
+  applyOrganizerRecordIdentity,
+} from './recordIdentity';
+import type { RecordIdentitySources, RecordIdentityValues } from './recordIdentity';
 
 const DISCOGS_API_BASE = 'https://api.discogs.com';
 const DISCOGS_USER_AGENT = 'FindA.Sale/1.0 +https://finda.sale';
@@ -112,6 +129,41 @@ export class DiscogsNotEligibleError extends Error {
   constructor(message = 'No matching Discogs catalog release found for this item') {
     super(message);
     this.name = 'DiscogsNotEligibleError';
+  }
+}
+
+/** ADR-132: base for errors that map straight to an HTTP status + machine-readable code. */
+export class DiscogsHttpError extends Error {
+  httpStatus: number;
+  code: string;
+  constructor(httpStatus: number, code: string, message: string) {
+    super(message);
+    this.name = 'DiscogsHttpError';
+    this.httpStatus = httpStatus;
+    this.code = code;
+  }
+}
+
+/** ADR-132 section 7: push refused until the organizer picks the Discogs release. */
+export class DiscogsNeedsSelectionError extends DiscogsHttpError {
+  constructor(message = 'Choose the matching Discogs release first') {
+    super(409, 'needs_selection', message);
+    this.name = 'DiscogsNeedsSelectionError';
+  }
+}
+
+/** ADR-132: the live Discogs listing uses a different release than the organizer confirmed. */
+export class DiscogsListingMismatchError extends DiscogsHttpError {
+  constructor(message = 'Your Discogs listing is for a different release than the one you confirmed. Use "Fix Discogs listing" to correct it.') {
+    super(409, 'listing_release_mismatch', message);
+    this.name = 'DiscogsListingMismatchError';
+  }
+}
+
+export class DiscogsNotConnectedError extends DiscogsHttpError {
+  constructor() {
+    super(409, 'not_connected', 'Connect your Discogs account first');
+    this.name = 'DiscogsNotConnectedError';
   }
 }
 
@@ -337,6 +389,10 @@ function bestScoringCandidate(
 }
 
 /**
+ * LEGACY (pre-ADR-132) title-only matcher. No push path calls this any more -- pushes use the
+ * stored Item.discogsReleaseId (see resolveDiscogsMatch / discogsReleaseMatcher.ts). Kept only
+ * for backward compatibility of the export; remove once nothing imports it.
+ *
  * Search Discogs's catalog for a release matching this item's title. Returns
  * the best-scoring match (with a confidence tier) or null if nothing cleared
  * the fuzzy threshold -- a null result means the item is NOT eligible to be
@@ -422,8 +478,12 @@ export interface DiscogsListingOptions {
 
 /**
  * Create a Discogs marketplace listing for a FindA.Sale item. Looks up the
- * organizer's active DISCOGS MarketplaceAccount, resolves a catalog release_id
- * (throws DiscogsNotEligibleError if none found), and POSTs to /marketplace/listings.
+ * organizer's active DISCOGS MarketplaceAccount and POSTs to /marketplace/listings.
+ *
+ * ADR-132 section 7: the release_id is ONLY the stored, already-decided Item.discogsReleaseId
+ * (status auto_high or confirmed). No search happens here. not_in_discogs throws
+ * DiscogsNotEligibleError; needs_selection / no match throws DiscogsNeedsSelectionError.
+ * A D3 "most-collected pressing" auto-match is always created as a Draft.
  */
 export async function createDiscogsListing(
   organizerId: string,
@@ -440,16 +500,22 @@ export async function createDiscogsListing(
   }
 
   const accessToken = decryptAccessToken(account);
-  const match = await findDiscogsReleaseId(accessToken, item);
-  if (match == null) {
-    throw new DiscogsNotEligibleError();
+  if (item.discogsMatchStatus === 'not_in_discogs') {
+    throw new DiscogsNotEligibleError('Marked as not in Discogs');
   }
+  if (
+    (item.discogsMatchStatus !== 'auto_high' && item.discogsMatchStatus !== 'confirmed') ||
+    item.discogsReleaseId == null
+  ) {
+    throw new DiscogsNeedsSelectionError();
+  }
+  const publish = options.publish === true && !isDraftOnlyMatch(item);
 
   const body: Record<string, any> = {
-    release_id: match.releaseId,
+    release_id: item.discogsReleaseId,
     condition: resolveDiscogsCondition(item.condition ?? null),
     price: item.price ?? 0, // Discogs takes a plain decimal in the seller's currency, not cents
-    status: options.publish === true ? 'For Sale' : 'Draft',
+    status: publish ? 'For Sale' : 'Draft',
     comments: item.description || undefined,
     external_id: item.id,
     // 2026-09-03: only send allow_offers when explicitly true -- omitting it entirely when
@@ -499,19 +565,26 @@ export async function createDiscogsListing(
  */
 export interface DiscogsPriceUpdateResult {
   ok: boolean;
-  reason?: 'no-connection' | 'fetch-failed' | 'fetch-parse-failed' | 'incomplete-listing-data' | 'post-failed' | 'threw';
+  reason?: 'no-connection' | 'fetch-failed' | 'fetch-parse-failed' | 'incomplete-listing-data' | 'post-failed' | 'threw' | 'release-mismatch';
   detail?: string;
   /** 2026-09-22: raw Discogs HTTP status on fetch-failed/post-failed, so callers can tell a
    * 404 (listing no longer exists on Discogs) apart from any other failure. Additive/optional. */
   httpStatus?: number;
+  /** ADR-132: the release_id the live listing uses (from the GET). Additive/optional. */
+  listingReleaseId?: number;
+  /** ADR-132: the listing's status as read by the GET. Additive/optional. */
+  listingStatus?: string;
 }
 
 /** 2026-09-22: optional extras for updateDiscogsListingPrice, used by the upsert path below. */
 export interface DiscogsListingUpdateOptions {
   /** true: promote a Draft listing to 'For Sale'. Never touches any other status (e.g. Sold). */
   publish?: boolean;
-  /** Only sent when explicitly true, matching createDiscogsListing's own posture. */
+  /** true forces allow_offers on; otherwise the listing's existing allow_offers value is echoed. */
   allowOffers?: boolean;
+  /** ADR-132: when set and the live listing's release differs, nothing is POSTed and the result
+   * is { ok: false, reason: 'release-mismatch', listingReleaseId }. */
+  expectedReleaseId?: number | null;
 }
 
 export async function updateDiscogsListingPrice(
@@ -550,27 +623,41 @@ export async function updateDiscogsListingPrice(
       return { ok: false, reason: 'fetch-parse-failed' };
     }
 
-    const releaseId = current?.release?.id;
-    const condition = current?.condition;
-    const status = current?.status;
+    const snap = snapshotDiscogsListing(current);
+    const releaseId = snap.releaseId;
+    const condition = snap.condition;
+    const status = snap.status;
     if (releaseId == null || !condition || !status) {
       return { ok: false, reason: 'incomplete-listing-data' };
     }
+    if (updateOptions.expectedReleaseId != null && releaseId !== updateOptions.expectedReleaseId) {
+      return {
+        ok: false,
+        reason: 'release-mismatch',
+        detail: `Listing uses release ${releaseId}, expected ${updateOptions.expectedReleaseId}`,
+        listingReleaseId: releaseId,
+        listingStatus: status,
+      };
+    }
 
+    // ADR-132 6.3 fix: echo EVERY field the GET returned (comments, sleeve_condition,
+    // allow_offers, location, weight, format_quantity, external_id) -- the edit endpoint is not a
+    // documented partial update, so omitting them risks clearing them on Discogs.
     const { status: postStatus, text } = await discogsRequest(
       `/marketplace/listings/${encodeURIComponent(discogsListingId)}`,
       accessToken,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          release_id: releaseId,
-          condition,
-          // 2026-09-22: only a Draft is ever promoted, and only on an explicit publish.
-          status: updateOptions.publish === true && status === 'Draft' ? 'For Sale' : status,
-          price: newPrice,
-          ...(updateOptions.allowOffers === true ? { allow_offers: true } : {}),
-        }),
+        body: JSON.stringify(
+          buildDiscogsListingBody(snap, {
+            releaseId,
+            // 2026-09-22: only a Draft is ever promoted, and only on an explicit publish.
+            status: updateOptions.publish === true && status === 'Draft' ? 'For Sale' : status,
+            price: newPrice,
+            allowOffers: updateOptions.allowOffers,
+          })
+        ),
       }
     );
 
@@ -585,10 +672,10 @@ export async function updateDiscogsListingPrice(
         .catch(() => {
           /* non-fatal -- don't let error-logging itself break the caller's error handling */
         });
-      return { ok: false, reason: 'post-failed', detail: message, httpStatus: postStatus };
+      return { ok: false, reason: 'post-failed', detail: message, httpStatus: postStatus, listingReleaseId: releaseId };
     }
 
-    return { ok: true };
+    return { ok: true, listingReleaseId: releaseId, listingStatus: status };
   } catch (err) {
     return { ok: false, reason: 'threw', detail: (err as Error).message };
   }
@@ -645,7 +732,7 @@ export async function upsertDiscogsListingForItem(
   options: DiscogsListingOptions = {}
 ): Promise<DiscogsUpsertResult> {
   return withDiscogsItemLock(itemId, async () => {
-    const item = await prisma.item.findUnique({ where: { id: itemId } });
+    let item = await prisma.item.findUnique({ where: { id: itemId } });
     if (!item) {
       throw new Error('[Discogs] Item not found');
     }
@@ -654,13 +741,64 @@ export async function upsertDiscogsListingForItem(
       throw new Error('[Discogs] Item does not belong to this organizer');
     }
 
+    // ADR-132 section 7: decide the release from the STORED match (runs matcher v2 only when
+    // there is no stored result or its inputs changed). Push never searches on its own.
+    const match = await resolveDiscogsMatchForItem(organizerId, item);
+    item = (await prisma.item.findUnique({ where: { id: itemId } })) ?? item;
+    const pushable = match.canPush;
+    // Phase 0 / D3: never promote to For Sale unless the match is auto_high/confirmed and not a
+    // "most-collected pressing" auto-pick.
+    const publish = options.publish === true && pushable && !match.draftOnly;
+
     if (item.discogsListingId) {
       const result = await updateDiscogsListingPrice(organizerId, item.discogsListingId, item.price ?? 0, {
-        publish: options.publish,
+        publish,
         allowOffers: options.allowOffers,
+        expectedReleaseId: pushable ? match.releaseId : null,
       });
       if (result.ok) {
+        if (result.listingReleaseId != null && result.listingReleaseId !== item.discogsListingReleaseId) {
+          await prisma.item
+            .update({ where: { id: itemId }, data: { discogsListingReleaseId: result.listingReleaseId } })
+            .catch(e => console.error(`[Discogs] Failed to persist discogsListingReleaseId for item ${itemId}:`, e));
+        }
         return { action: 'updated', listingId: item.discogsListingId };
+      }
+      if (result.reason === 'release-mismatch') {
+        const listedReleaseId = result.listingReleaseId ?? null;
+        if (match.status === 'confirmed') {
+          await prisma.item.update({ where: { id: itemId }, data: { discogsListingReleaseId: listedReleaseId } });
+          throw new DiscogsListingMismatchError();
+        }
+        // auto_high without a human confirm: never auto-correct. Flag for the organizer.
+        const env = readCandidatesEnvelope(item.discogsCandidates);
+        const listedCandidate: DiscogsCandidate[] =
+          listedReleaseId != null && !env.candidates.some(c => c.releaseId === listedReleaseId)
+            ? [{
+                releaseId: listedReleaseId, masterId: null, artist: '', title: `Release ${listedReleaseId}`, formats: [],
+                formatClass: null, labels: [], catno: null, year: null, country: null, thumb: null,
+                uri: `https://www.discogs.com/release/${listedReleaseId}`, tier: 0, composite: 0,
+                fieldScores: { artist: null, title: null, catno: false, label: null, yearDelta: null },
+                vetoes: [], warnings: ['Currently listed'], community: null, currentlyListed: true,
+              }]
+            : [];
+        const candidates = env.candidates.map(c => (c.releaseId === listedReleaseId ? { ...c, currentlyListed: true } : c));
+        await prisma.item.update({
+          where: { id: itemId },
+          data: {
+            discogsMatchStatus: 'needs_selection',
+            discogsReleaseId: null,
+            discogsListingReleaseId: listedReleaseId,
+            discogsCandidates: {
+              ...env,
+              reason: 'listing_release_mismatch',
+              candidates: [...candidates, ...listedCandidate].slice(0, MAX_STORED_CANDIDATES),
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
+        throw new DiscogsNeedsSelectionError(
+          'Your Discogs listing uses a different release than the one we matched. Choose the right release.'
+        );
       }
       if (result.httpStatus !== 404) {
         const status = result.httpStatus && result.httpStatus >= 400 ? result.httpStatus : 502;
@@ -671,11 +809,17 @@ export async function upsertDiscogsListingForItem(
       console.warn(`[Discogs] Listing ${item.discogsListingId} for item ${itemId} returned 404, re-listing`);
       await prisma.item.update({
         where: { id: itemId },
-        data: { discogsListingId: null, discogsListedAt: null },
+        data: { discogsListingId: null, discogsListedAt: null, discogsListingReleaseId: null },
       });
     }
 
-    const listing = await createDiscogsListing(organizerId, item, options);
+    if (match.status === 'not_in_discogs') {
+      throw new DiscogsNotEligibleError('Marked as not in Discogs');
+    }
+    if (!pushable) {
+      throw new DiscogsNeedsSelectionError();
+    }
+    const listing = await createDiscogsListing(organizerId, item, { ...options, publish });
     // listing_id is Discogs's own documented POST /marketplace/listings response field; the
     // response is untyped, so read it defensively.
     const listingId = listing && listing.listing_id != null ? String(listing.listing_id) : null;
@@ -683,7 +827,7 @@ export async function upsertDiscogsListingForItem(
       await prisma.item
         .update({
           where: { id: itemId },
-          data: { discogsListingId: listingId, discogsListedAt: new Date() },
+          data: { discogsListingId: listingId, discogsListedAt: new Date(), discogsListingReleaseId: item.discogsReleaseId },
         })
         .catch((e) => {
           // Non-fatal: the real Discogs listing already exists at this point.
@@ -751,7 +895,7 @@ export async function withdrawDiscogsListingIfExists(itemId: string): Promise<vo
     await prisma.item
       .update({
         where: { id: itemId },
-        data: { discogsListingId: null, discogsListedAt: null },
+        data: { discogsListingId: null, discogsListedAt: null, discogsListingReleaseId: null },
       })
       .catch((e) => {
         console.error(`[Discogs] Failed to clear discogsListingId after withdraw-on-SOLD for item ${itemId}:`, e);
@@ -763,24 +907,816 @@ export async function withdrawDiscogsListingIfExists(itemId: string): Promise<vo
 }
 
 /**
- * Eligibility pre-check for the frontend: is this item in Discogs's catalog at
- * all? Requires an active Discogs connection (reuses the organizer's own
- * authenticated rate-limit budget rather than the unauthenticated tier).
+ * Eligibility pre-check (ADR-132 shim for GET /items/:id/eligibility, kept for one release).
+ * Uses the stored match (running matcher v2 only when needed). eligible = auto_high|confirmed.
+ * matchConfidence is 'high' for those, null otherwise ('fuzzy' no longer exists).
  */
 export async function checkDiscogsEligibility(
   organizerId: string,
   item: Item
-): Promise<{ eligible: boolean; releaseId: number | null; matchConfidence: 'high' | 'fuzzy' | null; matchedTitle: string | null }> {
-  const account = await getActiveDiscogsAccount(organizerId);
-  if (!account) {
-    throw new Error('[Discogs] No active Discogs connection for this organizer');
-  }
-  const accessToken = decryptAccessToken(account);
-  const match = await findDiscogsReleaseId(accessToken, item);
+): Promise<{
+  eligible: boolean;
+  releaseId: number | null;
+  matchConfidence: 'high' | null;
+  matchedTitle: string | null;
+  matchStatus: DiscogsMatchStatus | null;
+  draftOnly: boolean;
+}> {
+  const view = await resolveDiscogsMatch(organizerId, item.id);
+  const sel = view.selected;
   return {
-    eligible: match != null,
-    releaseId: match?.releaseId ?? null,
-    matchConfidence: match?.matchConfidence ?? null,
-    matchedTitle: match?.matchedTitle ?? null,
+    eligible: view.canPush,
+    releaseId: view.canPush ? view.releaseId : null,
+    matchConfidence: view.canPush ? 'high' : null,
+    matchedTitle: sel ? `${sel.artist} - ${sel.title}` : null,
+    matchStatus: view.status,
+    draftOnly: view.draftOnly,
+  };
+}
+
+// ============================================================================
+// ADR-132: release matching, persistence, confirmation, correction, sweep
+// ============================================================================
+
+const PUSHABLE_MATCH_STATUSES: DiscogsMatchStatus[] = ['auto_high', 'confirmed'];
+const MAX_STORED_CANDIDATES = 4;
+
+/** Item.discogsCandidates JSON envelope. */
+export interface DiscogsCandidatesEnvelope {
+  matcherVersion: number;
+  reason: string | null;
+  rule: string | null;
+  candidates: DiscogsCandidate[];
+}
+
+export function readCandidatesEnvelope(raw: unknown): DiscogsCandidatesEnvelope {
+  if (Array.isArray(raw)) {
+    return { matcherVersion: MATCHER_VERSION, reason: null, rule: null, candidates: raw as DiscogsCandidate[] };
+  }
+  if (raw && typeof raw === 'object' && Array.isArray((raw as any).candidates)) {
+    const r = raw as any;
+    return {
+      matcherVersion: Number(r.matcherVersion) || MATCHER_VERSION,
+      reason: typeof r.reason === 'string' ? r.reason : null,
+      rule: typeof r.rule === 'string' ? r.rule : null,
+      candidates: r.candidates as DiscogsCandidate[],
+    };
+  }
+  return { matcherVersion: MATCHER_VERSION, reason: null, rule: null, candidates: [] };
+}
+
+function dedupeCandidates(list: DiscogsCandidate[]): DiscogsCandidate[] {
+  const seen = new Set<number>();
+  const out: DiscogsCandidate[] = [];
+  for (const c of list) {
+    if (!c || seen.has(c.releaseId)) continue;
+    seen.add(c.releaseId);
+    out.push(c);
+  }
+  return out;
+}
+
+export interface DiscogsMatchView {
+  itemId: string;
+  status: DiscogsMatchStatus | null;
+  releaseId: number | null;
+  selected: DiscogsCandidate | null;
+  candidates: DiscogsCandidate[];
+  reason: string | null;
+  rule: string | null;
+  /** D3 relaxed: auto-picked most-collected pressing -- may only be pushed as a Draft. */
+  draftOnly: boolean;
+  canPush: boolean;
+  matchedAt: string | null;
+  recordIdentity: RecordIdentityValues;
+  recordIdentitySources: RecordIdentitySources;
+  listing: { listingId: string | null; listingReleaseId: number | null; releaseMismatch: boolean };
+}
+
+type MatchItemFields = Pick<
+  Item,
+  | 'id' | 'title' | 'description' | 'brand' | 'tags' | 'upc' | 'ean' | 'recordIdentity'
+  | 'discogsReleaseId' | 'discogsMatchStatus' | 'discogsCandidates' | 'discogsMatchedAt'
+  | 'discogsMatchInputHash' | 'discogsListingId' | 'discogsListingReleaseId'
+>;
+
+function computeEffectiveIdentity(item: MatchItemFields) {
+  const derived = deriveRecordIdentityFromText({
+    title: item.title,
+    description: item.description,
+    brand: item.brand,
+    tags: item.tags,
+  });
+  const eff = effectiveRecordIdentity(item.recordIdentity, derived);
+  const hash = computeMatchInputHash(eff.values, item);
+  return { ...eff, hash };
+}
+
+function isDraftOnlyMatch(item: Pick<Item, 'discogsMatchStatus' | 'discogsReleaseId' | 'discogsCandidates'>): boolean {
+  if (item.discogsMatchStatus !== 'auto_high' || item.discogsReleaseId == null) return false;
+  const env = readCandidatesEnvelope(item.discogsCandidates);
+  const sel = env.candidates.find(c => c.releaseId === item.discogsReleaseId);
+  return !!sel?.autoSelectedPressing;
+}
+
+export function buildDiscogsMatchView(item: MatchItemFields): DiscogsMatchView {
+  const env = readCandidatesEnvelope(item.discogsCandidates);
+  const status = (item.discogsMatchStatus as DiscogsMatchStatus | null) ?? null;
+  const releaseId = item.discogsReleaseId ?? null;
+  const selected = releaseId != null ? env.candidates.find(c => c.releaseId === releaseId) ?? null : null;
+  const eff = computeEffectiveIdentity(item);
+  const pushable = status != null && PUSHABLE_MATCH_STATUSES.includes(status) && releaseId != null;
+  const listingReleaseId = item.discogsListingReleaseId ?? null;
+  const releaseMismatch =
+    !!item.discogsListingId &&
+    ((listingReleaseId != null && releaseId != null && listingReleaseId !== releaseId) ||
+      (status === 'needs_selection' && env.candidates.some(c => c.currentlyListed)));
+  return {
+    itemId: item.id,
+    status,
+    releaseId,
+    selected,
+    candidates: env.candidates,
+    reason: env.reason,
+    rule: env.rule,
+    draftOnly: isDraftOnlyMatch(item),
+    canPush: pushable,
+    matchedAt: item.discogsMatchedAt ? new Date(item.discogsMatchedAt).toISOString() : null,
+    recordIdentity: eff.values,
+    recordIdentitySources: eff.sources,
+    listing: { listingId: item.discogsListingId ?? null, listingReleaseId, releaseMismatch },
+  };
+}
+
+/** GET /database/search (authenticated). Returns the results array, or null on failure. */
+export async function searchDiscogsReleases(accessToken: string, params: Record<string, string>): Promise<any[] | null> {
+  const qs = new URLSearchParams(params).toString();
+  const { status, text } = await discogsRequest(`/database/search?${qs}`, accessToken);
+  if (status !== 200) return null;
+  try {
+    const data = JSON.parse(text) as any;
+    return Array.isArray(data?.results) ? data.results : [];
+  } catch {
+    return null;
+  }
+}
+
+/** GET /releases/{id}. Returns null on 404, throws DiscogsApiError on other failures. */
+export async function fetchDiscogsRelease(accessToken: string, releaseId: number): Promise<any | null> {
+  const { status, text } = await discogsRequest(`/releases/${encodeURIComponent(String(releaseId))}`, accessToken);
+  if (status === 404) return null;
+  if (status < 200 || status >= 300) throw new DiscogsApiError(status, parseDiscogsError(status, text));
+  return JSON.parse(text);
+}
+
+/** GET /marketplace/listings/{id}. `listing` is null on 404. */
+export async function fetchDiscogsListing(
+  accessToken: string,
+  listingId: string
+): Promise<{ status: number; listing: any | null; error?: string }> {
+  const { status, text } = await discogsRequest(`/marketplace/listings/${encodeURIComponent(listingId)}`, accessToken);
+  if (status === 404) return { status, listing: null };
+  if (status < 200 || status >= 300) return { status, listing: null, error: parseDiscogsError(status, text) };
+  try {
+    return { status, listing: JSON.parse(text) };
+  } catch {
+    return { status: 502, listing: null, error: 'Could not parse Discogs listing' };
+  }
+}
+
+async function requireAccessToken(organizerId: string): Promise<{ account: MarketplaceAccount; accessToken: string }> {
+  const account = await getActiveDiscogsAccount(organizerId);
+  if (!account) throw new DiscogsNotConnectedError();
+  return { account, accessToken: decryptAccessToken(account) };
+}
+
+async function loadOwnedItem(organizerId: string, itemId: string): Promise<Item> {
+  const item = await prisma.item.findUnique({ where: { id: itemId }, include: { sale: { select: { organizerId: true } } } });
+  if (!item) throw new DiscogsHttpError(404, 'item_not_found', 'Item not found');
+  const owner = item.organizerId ?? (item as any).sale?.organizerId ?? null;
+  if (owner !== organizerId) throw new DiscogsHttpError(404, 'item_not_found', 'Item not found');
+  return item;
+}
+
+interface ResolveOptions {
+  /** Re-run the matcher even when the stored result is fresh. confirmed/not_in_discogs keep their
+   * status + id; only their candidate list is refreshed. */
+  force?: boolean;
+  /** Clear confirmed/not_in_discogs back to a fresh auto match (organizer "Undo"). */
+  reset?: boolean;
+}
+
+async function resolveDiscogsMatchForItem(
+  organizerId: string,
+  item: Item,
+  opts: ResolveOptions = {}
+): Promise<DiscogsMatchView> {
+  const eff = computeEffectiveIdentity(item);
+  const status = (item.discogsMatchStatus as DiscogsMatchStatus | null) ?? null;
+  const locked = !opts.reset && (status === 'confirmed' || status === 'not_in_discogs');
+  if (locked && !opts.force) return buildDiscogsMatchView(item);
+  if (!locked && !opts.force && !opts.reset && status && item.discogsMatchInputHash === eff.hash) {
+    return buildDiscogsMatchView(item);
+  }
+
+  const { accessToken } = await requireAccessToken(organizerId);
+  const res = await matchDiscogsRelease(
+    { identity: eff.values, sources: eff.sources, upc: item.upc, ean: item.ean, fallbackTitle: item.title },
+    { search: params => searchDiscogsReleases(accessToken, params) }
+  );
+  if (res.reason === 'search_failed') {
+    throw new DiscogsApiError(502, 'Discogs search failed. Try again in a minute.');
+  }
+
+  const old = readCandidatesEnvelope(item.discogsCandidates);
+  const keep = old.candidates.filter(
+    c => c.currentlyListed || c.fromPastedUrl || (locked && c.releaseId === item.discogsReleaseId)
+  );
+  const envelope: DiscogsCandidatesEnvelope = {
+    matcherVersion: MATCHER_VERSION,
+    reason: locked ? old.reason : res.reason,
+    rule: locked ? old.rule : res.rule,
+    candidates: dedupeCandidates(
+      locked ? [...keep, ...res.candidates] : [...res.candidates, ...keep]
+    ).slice(0, MAX_STORED_CANDIDATES),
+  };
+
+  const data: Prisma.ItemUpdateInput = locked
+    ? {
+        recordIdentity: eff.identity as unknown as Prisma.InputJsonValue,
+        discogsCandidates: envelope as unknown as Prisma.InputJsonValue,
+        discogsMatchedAt: new Date(),
+        discogsMatchInputHash: eff.hash,
+      }
+    : {
+        recordIdentity: eff.identity as unknown as Prisma.InputJsonValue,
+        discogsReleaseId: res.releaseId,
+        discogsMatchStatus: res.status,
+        discogsCandidates: envelope as unknown as Prisma.InputJsonValue,
+        discogsMatchedAt: new Date(),
+        discogsMatchInputHash: eff.hash,
+      };
+  const updated = await prisma.item.update({ where: { id: item.id }, data });
+  return buildDiscogsMatchView(updated);
+}
+
+/**
+ * ADR-132 section 5: the stored match for an item, running matcher v2 only when there is no
+ * stored result or its inputs changed (or `force`). Ownership is re-checked here.
+ */
+export async function resolveDiscogsMatch(
+  organizerId: string,
+  itemId: string,
+  opts: ResolveOptions = {}
+): Promise<DiscogsMatchView> {
+  return withDiscogsItemLock(itemId, async () => {
+    const item = await loadOwnedItem(organizerId, itemId);
+    return resolveDiscogsMatchForItem(organizerId, item, opts);
+  });
+}
+
+/**
+ * ADR-132 section 5: organizer confirms a release, either one of the stored candidates
+ * (`releaseId`) or a pasted discogs.com release URL (`url`, parsed strictly to a numeric id and
+ * validated with GET /releases/{id}; the URL itself is never fetched).
+ */
+export async function confirmDiscogsRelease(
+  organizerId: string,
+  itemId: string,
+  input: { releaseId?: unknown; url?: unknown }
+): Promise<DiscogsMatchView> {
+  const hasId = input.releaseId !== undefined && input.releaseId !== null;
+  const hasUrl = input.url !== undefined && input.url !== null && input.url !== '';
+  if (hasId === hasUrl) {
+    throw new DiscogsHttpError(400, 'invalid_input', 'Send exactly one of releaseId or url');
+  }
+  return withDiscogsItemLock(itemId, async () => {
+    const item = await loadOwnedItem(organizerId, itemId);
+    const env = readCandidatesEnvelope(item.discogsCandidates);
+    const eff = computeEffectiveIdentity(item);
+    let chosen: DiscogsCandidate;
+
+    if (hasId) {
+      const id = typeof input.releaseId === 'number' ? input.releaseId : Number.NaN;
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        throw new DiscogsHttpError(400, 'invalid_release_id', 'releaseId must be a positive integer');
+      }
+      const found = env.candidates.find(c => c.releaseId === id);
+      if (!found) {
+        throw new DiscogsHttpError(400, 'not_a_candidate', 'Pick one of the listed releases, or paste a Discogs release link');
+      }
+      chosen = found;
+    } else {
+      const parsed = parseDiscogsReleaseUrl(input.url);
+      if ('error' in parsed) {
+        throw new DiscogsHttpError(
+          400,
+          parsed.error,
+          parsed.error === 'master_url'
+            ? 'That is a Discogs master page. Open it and choose the specific pressing (a /release/ link).'
+            : 'Paste a Discogs release link, like https://www.discogs.com/release/1234567'
+        );
+      }
+      const existing = env.candidates.find(c => c.releaseId === parsed.releaseId);
+      if (existing) {
+        chosen = existing;
+      } else {
+        const { accessToken } = await requireAccessToken(organizerId);
+        const release = await fetchDiscogsRelease(accessToken, parsed.releaseId);
+        const raw = release ? rawFromRelease(release) : null;
+        if (!raw) throw new DiscogsHttpError(422, 'release_not_found', 'Discogs has no release with that id');
+        chosen = { ...scoreCandidate(raw, eff.values, 0, item.title), fromPastedUrl: true };
+      }
+    }
+
+    const envelope: DiscogsCandidatesEnvelope = {
+      matcherVersion: MATCHER_VERSION,
+      reason: 'organizer_confirmed',
+      rule: null,
+      candidates: dedupeCandidates([{ ...chosen, autoSelectedPressing: undefined }, ...env.candidates]).slice(0, MAX_STORED_CANDIDATES),
+    };
+    const updated = await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        discogsReleaseId: chosen.releaseId,
+        discogsMatchStatus: 'confirmed',
+        discogsCandidates: envelope as unknown as Prisma.InputJsonValue,
+        discogsMatchedAt: new Date(),
+        discogsMatchInputHash: eff.hash,
+      },
+    });
+    return buildDiscogsMatchView(updated);
+  });
+}
+
+/** ADR-132 section 5: organizer says the record is not in Discogs. Blocks Discogs push. */
+export async function markItemNotInDiscogs(organizerId: string, itemId: string): Promise<DiscogsMatchView> {
+  return withDiscogsItemLock(itemId, async () => {
+    const item = await loadOwnedItem(organizerId, itemId);
+    const updated = await prisma.item.update({
+      where: { id: item.id },
+      data: { discogsMatchStatus: 'not_in_discogs', discogsReleaseId: null, discogsMatchedAt: new Date() },
+    });
+    return buildDiscogsMatchView(updated);
+  });
+}
+
+/** Organizer edit of the record identity panel. Re-matches unless the status is locked. */
+export async function updateItemRecordIdentity(
+  organizerId: string,
+  itemId: string,
+  body: Record<string, unknown>
+): Promise<DiscogsMatchView> {
+  return withDiscogsItemLock(itemId, async () => {
+    const item = await loadOwnedItem(organizerId, itemId);
+    const applied = applyOrganizerRecordIdentity(item.recordIdentity, body);
+    if ('error' in applied) throw new DiscogsHttpError(400, 'invalid_record_identity', applied.error);
+    const updated = await prisma.item.update({
+      where: { id: item.id },
+      data: { recordIdentity: applied.identity as unknown as Prisma.InputJsonValue },
+    });
+    const status = updated.discogsMatchStatus;
+    if (status === 'confirmed' || status === 'not_in_discogs') return buildDiscogsMatchView(updated);
+    const account = await getActiveDiscogsAccount(organizerId);
+    if (!account) return buildDiscogsMatchView(updated);
+    return resolveDiscogsMatchForItem(organizerId, updated, { force: true });
+  });
+}
+
+// ─── Listing field snapshot (ADR-132 6.3) ────────────────────────────────────
+
+export interface DiscogsListingSnapshot {
+  status: string;
+  releaseId: number | null;
+  price: number | null;
+  condition: string | null;
+  sleeve_condition: string | null;
+  comments: string | null;
+  allow_offers: boolean | null;
+  location: string | null;
+  weight: number | string | null;
+  format_quantity: number | string | null;
+  external_id: string | null;
+}
+
+export function snapshotDiscogsListing(listing: any): DiscogsListingSnapshot {
+  const priceValue = listing?.price?.value ?? listing?.price;
+  return {
+    status: String(listing?.status ?? ''),
+    releaseId: listing?.release?.id != null ? Number(listing.release.id) : null,
+    price: priceValue != null && !Number.isNaN(Number(priceValue)) ? Number(priceValue) : null,
+    condition: listing?.condition ? String(listing.condition) : null,
+    sleeve_condition: listing?.sleeve_condition ? String(listing.sleeve_condition) : null,
+    comments: typeof listing?.comments === 'string' ? listing.comments : null,
+    allow_offers: typeof listing?.allow_offers === 'boolean' ? listing.allow_offers : null,
+    location: typeof listing?.location === 'string' && listing.location ? listing.location : null,
+    weight: listing?.weight != null && listing.weight !== '' ? listing.weight : null,
+    format_quantity: listing?.format_quantity != null && listing.format_quantity !== '' ? listing.format_quantity : null,
+    external_id: listing?.external_id != null && listing.external_id !== '' ? String(listing.external_id) : null,
+  };
+}
+
+/** Full edit/create body that carries every existing field forward (never a partial POST). */
+export function buildDiscogsListingBody(
+  snap: DiscogsListingSnapshot,
+  overrides: { releaseId: number; status: string; price?: number; allowOffers?: boolean }
+): Record<string, any> {
+  const body: Record<string, any> = {
+    release_id: overrides.releaseId,
+    condition: snap.condition,
+    status: overrides.status,
+    price: overrides.price ?? snap.price,
+  };
+  if (snap.sleeve_condition) body.sleeve_condition = snap.sleeve_condition;
+  if (snap.comments != null) body.comments = snap.comments;
+  if (overrides.allowOffers === true) body.allow_offers = true;
+  else if (snap.allow_offers != null) body.allow_offers = snap.allow_offers;
+  if (snap.location) body.location = snap.location;
+  if (snap.weight != null) body.weight = snap.weight;
+  if (snap.format_quantity != null) body.format_quantity = snap.format_quantity;
+  if (snap.external_id) body.external_id = snap.external_id;
+  return body;
+}
+
+// ─── Correction executor (ADR-132 6.2-6.3; Patrick D2 + D4) ──────────────────
+
+export type DiscogsCorrectionAction =
+  | 'already_correct'
+  | 'edited_in_place'
+  | 'recreated'
+  | 'recreated_old_listing_not_deleted'
+  | 'listing_gone';
+
+export interface DiscogsCorrectionResult {
+  action: DiscogsCorrectionAction;
+  listingId: string | null;
+  previousListingId: string;
+  listingReleaseId: number | null;
+  listingStatus: string | null;
+  message: string;
+}
+
+const CORRECTABLE_LISTING_STATUSES = ['For Sale', 'Draft', 'Expired'];
+
+/**
+ * Re-point one item's Discogs listing at the organizer-confirmed release. Runs ONLY when an
+ * organizer/admin explicitly invokes it for this item (Patrick D2) -- nothing calls it in bulk.
+ *   1. Preconditions: status 'confirmed', discogsReleaseId + discogsListingId set, FAS item AVAILABLE.
+ *   2. GET listing; abort unless For Sale / Draft / Expired (Sold = a Discogs order exists).
+ *   3. Snapshot every field. Try an in-place edit with the new release_id (keeping the listing's
+ *      current status), GET again to verify. If refused or silently ignored: create a new Draft
+ *      with the snapshot, persist it, DELETE the old listing, then promote the new one.
+ *   4. Final status (Patrick D4): For Sale / Draft -> For Sale; Expired stays Expired.
+ */
+export async function correctDiscogsListingRelease(organizerId: string, itemId: string): Promise<DiscogsCorrectionResult> {
+  return withDiscogsItemLock(itemId, async () => {
+    const item = await loadOwnedItem(organizerId, itemId);
+    if (item.discogsMatchStatus !== 'confirmed' || item.discogsReleaseId == null) {
+      throw new DiscogsHttpError(409, 'not_confirmed', 'Confirm the right Discogs release before fixing the listing');
+    }
+    if (!item.discogsListingId) {
+      throw new DiscogsHttpError(409, 'no_listing', 'This item has no Discogs listing to fix');
+    }
+    if (item.status !== 'AVAILABLE') {
+      throw new DiscogsHttpError(409, 'item_not_available', `This item is ${String(item.status).toLowerCase()} in FindA.Sale, so its Discogs listing was not changed`);
+    }
+    const newReleaseId = item.discogsReleaseId;
+    const oldListingId = item.discogsListingId;
+    const { account, accessToken } = await requireAccessToken(organizerId);
+
+    const current = await fetchDiscogsListing(accessToken, oldListingId);
+    if (current.status === 404) {
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { discogsListingId: null, discogsListedAt: null, discogsListingReleaseId: null },
+      });
+      return {
+        action: 'listing_gone', listingId: null, previousListingId: oldListingId, listingReleaseId: null, listingStatus: null,
+        message: 'The Discogs listing no longer exists. Push the item again to list it with the confirmed release.',
+      };
+    }
+    if (!current.listing) throw new DiscogsApiError(current.status >= 400 ? current.status : 502, current.error || 'Could not read the Discogs listing');
+
+    const snap = snapshotDiscogsListing(current.listing);
+    if (!CORRECTABLE_LISTING_STATUSES.includes(snap.status)) {
+      console.warn(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'abort_status', itemId, listingId: oldListingId, status: snap.status })}`);
+      throw new DiscogsHttpError(
+        409,
+        snap.status === 'Sold' ? 'sold_on_discogs' : 'listing_not_editable',
+        snap.status === 'Sold'
+          ? 'This listing already sold on Discogs as the wrong release. It was not changed; contact the buyer on Discogs.'
+          : `This Discogs listing is "${snap.status}" and cannot be edited through the API.`
+      );
+    }
+    if (!snap.condition || snap.price == null) {
+      throw new DiscogsHttpError(502, 'incomplete_listing', 'The Discogs listing is missing its price or condition');
+    }
+    const finalStatus = snap.status === 'Expired' ? 'Expired' : 'For Sale';
+    console.info(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'snapshot', itemId, listingId: oldListingId, newReleaseId, snapshot: snap })}`);
+
+    const postEdit = (listingId: string, body: Record<string, any>) =>
+      discogsRequest(`/marketplace/listings/${encodeURIComponent(listingId)}`, accessToken, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    // Already on the right release: only restore the status (D4).
+    if (snap.releaseId === newReleaseId) {
+      if (snap.status !== finalStatus) {
+        const r = await postEdit(oldListingId, buildDiscogsListingBody(snap, { releaseId: newReleaseId, status: finalStatus }));
+        if (r.status < 200 || r.status >= 300) throw new DiscogsApiError(r.status, parseDiscogsError(r.status, r.text));
+      }
+      await prisma.item.update({ where: { id: item.id }, data: { discogsListingReleaseId: newReleaseId } });
+      return {
+        action: 'already_correct', listingId: oldListingId, previousListingId: oldListingId, listingReleaseId: newReleaseId,
+        listingStatus: finalStatus, message: 'The Discogs listing already uses the confirmed release.',
+      };
+    }
+
+    // 1) In-place edit, keeping the current status until the release change is verified.
+    const edit = await postEdit(oldListingId, buildDiscogsListingBody(snap, { releaseId: newReleaseId, status: snap.status }));
+    if (edit.status >= 200 && edit.status < 300) {
+      const verify = await fetchDiscogsListing(accessToken, oldListingId);
+      const verifiedRelease = verify.listing?.release?.id != null ? Number(verify.listing.release.id) : null;
+      if (verifiedRelease === newReleaseId) {
+        if (snap.status !== finalStatus) {
+          const promote = await postEdit(oldListingId, buildDiscogsListingBody(snapshotDiscogsListing(verify.listing), { releaseId: newReleaseId, status: finalStatus }));
+          if (promote.status < 200 || promote.status >= 300) {
+            console.error(`[Discogs] Promote after in-place correction failed for listing ${oldListingId}: ${promote.status} ${promote.text}`);
+          }
+        }
+        await prisma.item.update({ where: { id: item.id }, data: { discogsListingReleaseId: newReleaseId } });
+        console.info(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'edited_in_place', itemId, listingId: oldListingId, newReleaseId })}`);
+        return {
+          action: 'edited_in_place', listingId: oldListingId, previousListingId: oldListingId, listingReleaseId: newReleaseId,
+          listingStatus: finalStatus, message: 'Discogs listing now uses the confirmed release.',
+        };
+      }
+    }
+    console.info(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'in_place_not_applied', itemId, listingId: oldListingId, editStatus: edit.status })}`);
+
+    // 2) Recreate: new Draft -> persist -> delete old -> promote.
+    const create = await discogsRequest('/marketplace/listings', accessToken, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildDiscogsListingBody(snap, { releaseId: newReleaseId, status: 'Draft' })),
+    });
+    if (create.status < 200 || create.status >= 300) {
+      const message = parseDiscogsError(create.status, create.text);
+      await prisma.marketplaceAccount
+        .update({ where: { id: account.id }, data: { lastErrorAt: new Date(), lastErrorMessage: message.slice(0, 500) } })
+        .catch(() => undefined);
+      throw new DiscogsApiError(create.status, message);
+    }
+    let newListingId: string | null = null;
+    try {
+      const parsed = JSON.parse(create.text) as any;
+      newListingId = parsed?.listing_id != null ? String(parsed.listing_id) : null;
+    } catch {
+      newListingId = null;
+    }
+    if (!newListingId) throw new DiscogsApiError(502, 'Discogs created the listing but returned no listing id');
+    await prisma.item.update({
+      where: { id: item.id },
+      data: { discogsListingId: newListingId, discogsListedAt: new Date(), discogsListingReleaseId: newReleaseId },
+    });
+    console.info(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'recreated_draft', itemId, oldListingId, newListingId, newReleaseId })}`);
+
+    const del = await discogsRequest(`/marketplace/listings/${encodeURIComponent(oldListingId)}`, accessToken, { method: 'DELETE' });
+    if ((del.status < 200 || del.status >= 300) && del.status !== 404) {
+      console.error(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'old_delete_failed', itemId, oldListingId, newListingId, status: del.status })}`);
+      return {
+        action: 'recreated_old_listing_not_deleted', listingId: newListingId, previousListingId: oldListingId, listingReleaseId: newReleaseId,
+        listingStatus: 'Draft',
+        message: `Created a corrected Draft listing, but Discogs refused to delete the old listing ${oldListingId}. Delete it on discogs.com, then publish the new Draft.`,
+      };
+    }
+
+    const promote = await postEdit(newListingId, buildDiscogsListingBody(snap, { releaseId: newReleaseId, status: finalStatus }));
+    const promoted = promote.status >= 200 && promote.status < 300;
+    if (!promoted) console.error(`[Discogs] Promote of recreated listing ${newListingId} failed: ${promote.status} ${promote.text}`);
+    return {
+      action: 'recreated', listingId: newListingId, previousListingId: oldListingId, listingReleaseId: newReleaseId,
+      listingStatus: promoted ? finalStatus : 'Draft',
+      message: promoted
+        ? 'Replaced the Discogs listing with one for the confirmed release.'
+        : 'Replaced the Discogs listing; the new listing is still a Draft (publishing it failed).',
+    };
+  });
+}
+
+// ─── Rematch sweep (ADR-132 6.1) -- dry-run by default, never writes to Discogs ──
+
+export type DiscogsSweepClassification =
+  | 'AGREE'
+  | 'MISMATCH'
+  | 'NEEDS_SELECTION'
+  | 'CONFIRMED_AGREE'
+  | 'CONFIRMED_MISMATCH'
+  | 'NOT_IN_DISCOGS'
+  | 'LISTING_GONE'
+  | 'ERROR';
+
+export interface DiscogsSweepRow {
+  itemId: string;
+  title: string;
+  organizerId: string | null;
+  listingId: string;
+  listingStatus: string | null;
+  listedRelease: Pick<DiscogsCandidate, 'releaseId' | 'artist' | 'title' | 'formatClass' | 'vetoes' | 'fieldScores'> | null;
+  listedHasHardVeto: boolean;
+  proposed: {
+    status: string;
+    releaseId: number | null;
+    reason: string;
+    rule: string | null;
+    draftOnly: boolean;
+    candidates: Array<Pick<DiscogsCandidate, 'releaseId' | 'artist' | 'title' | 'formatClass' | 'composite' | 'vetoes' | 'catno' | 'year' | 'country'>>;
+  } | null;
+  recordIdentity: RecordIdentityValues | null;
+  classification: DiscogsSweepClassification;
+  error?: string;
+  wrote: boolean;
+}
+
+export interface DiscogsSweepReport {
+  dryRun: boolean;
+  offset: number;
+  limit: number;
+  total: number;
+  nextOffset: number | null;
+  summary: Record<DiscogsSweepClassification, number>;
+  rows: DiscogsSweepRow[];
+}
+
+const SWEEP_MAX_LIMIT = 25;
+const SWEEP_ITEM_DELAY_MS = 1000;
+
+function slimCandidate(c: DiscogsCandidate) {
+  return {
+    releaseId: c.releaseId, artist: c.artist, title: c.title, formatClass: c.formatClass, composite: c.composite,
+    vetoes: c.vetoes, catno: c.catno, year: c.year, country: c.country,
+  };
+}
+
+/**
+ * Re-match every item that has a Discogs listing (optionally scoped to one organizer), compare
+ * against the release the live listing actually uses, and report. Dry-run (default) performs
+ * Discogs READS only (GET listing + searches) and writes nothing anywhere. With dryRun=false it
+ * writes the match fields to FindA.Sale's DB only -- never to Discogs, and never overwrites a
+ * confirmed / not_in_discogs decision (only discogsListingReleaseId is refreshed for those).
+ */
+export async function runDiscogsRematchSweep(opts: {
+  organizerId?: string | null;
+  dryRun?: boolean;
+  limit?: number;
+  offset?: number;
+  delayMs?: number;
+}): Promise<DiscogsSweepReport> {
+  const dryRun = opts.dryRun !== false;
+  const limit = Math.min(Math.max(Math.trunc(Number(opts.limit) || 10), 1), SWEEP_MAX_LIMIT);
+  const offset = Math.max(Math.trunc(Number(opts.offset) || 0), 0);
+  const delayMs = opts.delayMs ?? SWEEP_ITEM_DELAY_MS;
+
+  const where: Prisma.ItemWhereInput = {
+    discogsListingId: { not: null },
+    ...(opts.organizerId
+      ? { OR: [{ organizerId: opts.organizerId }, { organizerId: null, sale: { organizerId: opts.organizerId } }] }
+      : {}),
+  };
+  const total = await prisma.item.count({ where });
+  const items = await prisma.item.findMany({
+    where,
+    orderBy: { id: 'asc' },
+    skip: offset,
+    take: limit,
+    include: { sale: { select: { organizerId: true } } },
+  });
+
+  const summary = {
+    AGREE: 0, MISMATCH: 0, NEEDS_SELECTION: 0, CONFIRMED_AGREE: 0, CONFIRMED_MISMATCH: 0,
+    NOT_IN_DISCOGS: 0, LISTING_GONE: 0, ERROR: 0,
+  } as Record<DiscogsSweepClassification, number>;
+  const rows: DiscogsSweepRow[] = [];
+  const tokenCache = new Map<string, string | null>();
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (i > 0 && delayMs > 0) await new Promise(r => setTimeout(r, delayMs));
+    const ownerId: string | null = item.organizerId ?? (item as any).sale?.organizerId ?? null;
+    const row: DiscogsSweepRow = {
+      itemId: item.id, title: item.title, organizerId: ownerId, listingId: item.discogsListingId!,
+      listingStatus: null, listedRelease: null, listedHasHardVeto: false, proposed: null, recordIdentity: null,
+      classification: 'ERROR', wrote: false,
+    };
+    try {
+      if (!ownerId) throw new Error('Could not resolve the item organizer');
+      if (!tokenCache.has(ownerId)) {
+        const account = await getActiveDiscogsAccount(ownerId);
+        tokenCache.set(ownerId, account ? decryptAccessToken(account) : null);
+      }
+      const accessToken = tokenCache.get(ownerId);
+      if (!accessToken) throw new Error('Organizer has no active Discogs connection');
+
+      const eff = computeEffectiveIdentity(item);
+      row.recordIdentity = eff.values;
+
+      const got = await fetchDiscogsListing(accessToken, item.discogsListingId!);
+      if (got.status === 404) {
+        row.classification = 'LISTING_GONE';
+        if (!dryRun) {
+          await prisma.item.update({
+            where: { id: item.id },
+            data: { discogsListingId: null, discogsListedAt: null, discogsListingReleaseId: null },
+          });
+          row.wrote = true;
+        }
+        summary[row.classification]++;
+        rows.push(row);
+        continue;
+      }
+      if (!got.listing) throw new Error(got.error || `Discogs listing fetch failed (${got.status})`);
+      row.listingStatus = got.listing.status ?? null;
+      const listedRaw = rawFromListingRelease(got.listing.release);
+      const listed = listedRaw ? { ...scoreCandidate(listedRaw, eff.values, 0, item.title), currentlyListed: true } : null;
+      const listedReleaseId = listed?.releaseId ?? null;
+      if (listed) {
+        row.listedRelease = {
+          releaseId: listed.releaseId, artist: listed.artist, title: listed.title, formatClass: listed.formatClass,
+          vetoes: listed.vetoes, fieldScores: listed.fieldScores,
+        };
+        row.listedHasHardVeto = listed.vetoes.length > 0;
+      }
+
+      const status = item.discogsMatchStatus as DiscogsMatchStatus | null;
+      if (status === 'confirmed' || status === 'not_in_discogs') {
+        row.classification =
+          status === 'not_in_discogs'
+            ? 'NOT_IN_DISCOGS'
+            : listedReleaseId === item.discogsReleaseId ? 'CONFIRMED_AGREE' : 'CONFIRMED_MISMATCH';
+        row.proposed = {
+          status, releaseId: item.discogsReleaseId ?? null, reason: 'organizer_decision', rule: null, draftOnly: false,
+          candidates: [],
+        };
+        if (!dryRun && listedReleaseId !== item.discogsListingReleaseId) {
+          await prisma.item.update({ where: { id: item.id }, data: { discogsListingReleaseId: listedReleaseId } });
+          row.wrote = true;
+        }
+        summary[row.classification]++;
+        rows.push(row);
+        continue;
+      }
+
+      const res = await matchDiscogsRelease(
+        { identity: eff.values, sources: eff.sources, upc: item.upc, ean: item.ean, fallbackTitle: item.title },
+        { search: params => searchDiscogsReleases(accessToken, params) }
+      );
+      if (res.reason === 'search_failed') throw new Error('Discogs search failed');
+      row.proposed = {
+        status: res.status, releaseId: res.releaseId, reason: res.reason, rule: res.rule,
+        draftOnly: res.autoSelectedPressing, candidates: res.candidates.map(slimCandidate),
+      };
+      if (res.status === 'auto_high' && res.releaseId === listedReleaseId) row.classification = 'AGREE';
+      else if (res.status === 'auto_high') row.classification = 'MISMATCH';
+      else row.classification = 'NEEDS_SELECTION';
+
+      if (!dryRun) {
+        const agree = row.classification === 'AGREE';
+        const candidates = dedupeCandidates(
+          agree ? res.candidates : [...(listed ? [listed] : []), ...res.candidates]
+        ).slice(0, MAX_STORED_CANDIDATES);
+        const envelope: DiscogsCandidatesEnvelope = {
+          matcherVersion: MATCHER_VERSION,
+          reason: agree ? res.reason : row.classification === 'MISMATCH' ? 'listing_release_mismatch' : res.reason,
+          rule: agree ? res.rule : null,
+          candidates,
+        };
+        await prisma.item.update({
+          where: { id: item.id },
+          data: {
+            recordIdentity: eff.identity as unknown as Prisma.InputJsonValue,
+            discogsReleaseId: agree ? res.releaseId : null,
+            discogsMatchStatus: agree ? 'auto_high' : 'needs_selection',
+            discogsCandidates: envelope as unknown as Prisma.InputJsonValue,
+            discogsMatchedAt: new Date(),
+            discogsMatchInputHash: eff.hash,
+            discogsListingReleaseId: listedReleaseId,
+          },
+        });
+        row.wrote = true;
+      }
+    } catch (err: any) {
+      row.classification = 'ERROR';
+      row.error = String(err?.message || err).slice(0, 300);
+    }
+    summary[row.classification]++;
+    rows.push(row);
+  }
+
+  return {
+    dryRun, offset, limit, total,
+    nextOffset: offset + items.length < total ? offset + items.length : null,
+    summary, rows,
   };
 }

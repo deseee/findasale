@@ -4018,6 +4018,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         ebayNeedsReview: true, // S791: #295 fix — badge persists across page loads
         // Add Items collapsed-row multi-channel status (2026-09-14)
         discogsListingId: true,
+        discogsMatchStatus: true, // ADR-132: "Discogs: needs your pick" badge on the sale items list
         reverbListingId: true,
         shopifyListing: { select: { id: true } },
         // Feature #91: Auto-Markdown (P3: Fix 2)

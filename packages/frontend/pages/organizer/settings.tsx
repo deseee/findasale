@@ -31,6 +31,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io as socketIO } from 'socket.io-client';
 import WebsiteEmbedTab from '../../components/WebsiteEmbedTab';
+import DiscogsListingCheck from '../../components/DiscogsListingCheck'; // ADR-132 dry-run listing check
 
 const OrganizerSettingsPage = () => {
   const router = useRouter();
@@ -2619,6 +2620,7 @@ const OrganizerSettingsPage = () => {
                     >
                       {disconnectDiscogsMutation.isPending ? 'Disconnecting...' : 'Disconnect Discogs'}
                     </button>
+                    <DiscogsListingCheck />
                   </div>
                 ) : (
                   <div className="flex flex-col sm:flex-row gap-3">

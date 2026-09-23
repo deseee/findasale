@@ -1,0 +1,67 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "ADR-132 9.3 #7",
+  "item": {
+    "id": "cmtizlx6i02xi3bww8wvk6xf9",
+    "title": "The 100 Voices of Christmas, Vinyl LP, The Christianaires Choir, Hi-Fidelity Ron",
+    "description": "Vinyl LP featuring The Christianaires Choir conducted by John Gustafson, released on Rondo Records (Hi-Fidelity). Christmas choral collection with colorful illustrated jacket featuring three figures in religious vestments. Record shows normal wear consistent with age; jacket has minor edge wear. Plays on standard turntable at 33⅓ RPM.",
+    "brand": "Rondo Records",
+    "upc": null,
+    "ean": null,
+    "tags": [
+      "Vinyl Record",
+      "LP",
+      "Christmas Music",
+      "Choral",
+      "1960s",
+      "Rondo Records"
+    ]
+  },
+  "wrongReleaseId": 7007009,
+  "listedRelease": {
+    "id": 7007009,
+    "artist": "Various",
+    "title": "The Sound Of Christmas",
+    "description": "Various - The Sound Of Christmas",
+    "format": "Vinyl, LP, Compilation",
+    "label": "Rondo-Lette",
+    "catalog_number": "A 25",
+    "year": 1959,
+    "thumbnail": ""
+  },
+  "searches": [
+    {
+      "params": {
+        "q": "The 100 Voices of Christmas"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7007009,
+            "type": "release",
+            "title": "Various - The Sound Of Christmas",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Compilation"
+            ],
+            "label": [
+              "Rondo-Lette"
+            ],
+            "catno": "A 25",
+            "year": "1959",
+            "country": "US",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7007009",
+            "barcode": [],
+            "community": {
+              "have": 15,
+              "want": 1
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

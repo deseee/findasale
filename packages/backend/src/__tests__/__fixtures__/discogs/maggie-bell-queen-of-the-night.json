@@ -1,0 +1,178 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "ADR-132 9.3 #4",
+  "item": {
+    "id": "cmtvurv9g02ha13wpio3cc9rk",
+    "title": "Maggie Bell, Queen of the Night, Vinyl LP Record, 1974",
+    "description": "Maggie Bell Queen of the Night LP vinyl record on Atlantic Records (SD 7293), 1974. Two-disc stereo pressing with original gatefold cover featuring portrait photography. Record shows light surface wear consistent with played condition; cover has minor edge and corner wear from storage.",
+    "brand": "Atlantic Records",
+    "upc": null,
+    "ean": null,
+    "tags": [
+      "Vinyl Record",
+      "LP Album",
+      "1970s",
+      "Maggie Bell",
+      "Atlantic Records",
+      "Soul Rock"
+    ]
+  },
+  "wrongReleaseId": 7004009,
+  "listedRelease": {
+    "id": 7004009,
+    "artist": "Maggie Bell",
+    "title": "Hazell",
+    "description": "Maggie Bell - Hazell",
+    "format": "Vinyl, 7\", Single",
+    "label": "Swan Song",
+    "catalog_number": "SSK 19411",
+    "year": 1978,
+    "thumbnail": ""
+  },
+  "searches": [
+    {
+      "params": {
+        "catno": "SD 7293",
+        "label": "Atlantic"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7004001,
+            "type": "release",
+            "title": "Maggie Bell - Queen Of The Night",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "Atlantic"
+            ],
+            "catno": "SD 7293",
+            "year": "1974",
+            "country": "US",
+            "master_id": 7004000,
+            "thumb": "",
+            "uri": "/release/7004001",
+            "barcode": [],
+            "community": {
+              "have": 310,
+              "want": 40
+            }
+          },
+          {
+            "id": 7004002,
+            "type": "release",
+            "title": "Maggie Bell - Queen Of The Night",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album",
+              "Specialty Pressing"
+            ],
+            "label": [
+              "Atlantic"
+            ],
+            "catno": "SD 7293",
+            "year": "1974",
+            "country": "US",
+            "master_id": 7004000,
+            "thumb": "",
+            "uri": "/release/7004002",
+            "barcode": [],
+            "community": {
+              "have": 95,
+              "want": 10
+            }
+          }
+        ]
+      }
+    },
+    {
+      "params": {
+        "artist": "Maggie Bell",
+        "release_title": "Queen of the Night",
+        "format": "Vinyl"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7004001,
+            "type": "release",
+            "title": "Maggie Bell - Queen Of The Night",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "Atlantic"
+            ],
+            "catno": "SD 7293",
+            "year": "1974",
+            "country": "US",
+            "master_id": 7004000,
+            "thumb": "",
+            "uri": "/release/7004001",
+            "barcode": [],
+            "community": {
+              "have": 310,
+              "want": 40
+            }
+          },
+          {
+            "id": 7004002,
+            "type": "release",
+            "title": "Maggie Bell - Queen Of The Night",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album",
+              "Specialty Pressing"
+            ],
+            "label": [
+              "Atlantic"
+            ],
+            "catno": "SD 7293",
+            "year": "1974",
+            "country": "US",
+            "master_id": 7004000,
+            "thumb": "",
+            "uri": "/release/7004002",
+            "barcode": [],
+            "community": {
+              "have": 95,
+              "want": 10
+            }
+          },
+          {
+            "id": 7004009,
+            "type": "release",
+            "title": "Maggie Bell - Hazell",
+            "format": [
+              "Vinyl",
+              "7\"",
+              "45 RPM",
+              "Single"
+            ],
+            "label": [
+              "Swan Song"
+            ],
+            "catno": "SSK 19411",
+            "year": "1978",
+            "country": "UK",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7004009",
+            "barcode": [],
+            "community": {
+              "have": 60,
+              "want": 4
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

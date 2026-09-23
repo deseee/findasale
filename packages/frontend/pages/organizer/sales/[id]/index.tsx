@@ -29,6 +29,7 @@ interface Item {
   ebayListingId?: string | null;
   ebayOfferId?: string | null; // S725: drives "Pending Publish" badge + Publish-now button
   ebayNeedsReview?: boolean;
+  discogsMatchStatus?: string | null; // ADR-132: 'needs_selection' shows the "Needs your pick" badge
   saleId: string;
 }
 
@@ -336,6 +337,16 @@ const SaleDetailPage = () => {
                       <div className="mb-3 inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
                         eBay Category Needed
                       </div>
+                    )}
+
+                    {item.discogsMatchStatus === 'needs_selection' && (
+                      <Link
+                        href={`/organizer/edit-item/${item.id}`}
+                        title="Pick the matching Discogs release in the item editor"
+                        className="mb-3 ml-1 inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+                      >
+                        Discogs: needs your pick
+                      </Link>
                     )}
 
                     {/* Action Buttons */}

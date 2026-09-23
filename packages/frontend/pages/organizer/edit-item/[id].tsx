@@ -15,6 +15,8 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useEbayConnection } from '../../../lib/useEbayConnection';
 import { useDiscogsConnection } from '../../../lib/useDiscogsConnection';
+import DiscogsMatchPanel from '../../../components/DiscogsMatchPanel'; // ADR-132 release picker
+import { DiscogsMatchView, discogsErrorCode, discogsErrorMessage } from '../../../types/discogsMatch';
 import { useReverbConnection } from '../../../lib/useReverbConnection';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
@@ -678,23 +680,24 @@ const EditItemPage = () => {
   // -- see discogsListingConnector.ts). Organizer opt-in per push, defaults off (matches
   // Discogs's own API default).
   const [discogsAllowOffers, setDiscogsAllowOffers] = useState(false);
+  // ADR-132 (2026-09-23): the stored release match replaces the old /eligibility check. It is
+  // fetched even when a listing already exists, because it also reports whether that listing
+  // sits on a different release (listing.releaseMismatch). DiscogsMatchPanel writes fresh
+  // results back into this cache entry after every picker action.
+  const discogsMatchKey = ['discogs-match', id];
   const {
-    data: discogsEligibility,
-    isLoading: discogsEligibilityLoading,
-    isError: discogsEligibilityError,
-    refetch: refetchDiscogsEligibility,
+    data: discogsMatch,
+    isLoading: discogsMatchLoading,
+    error: discogsMatchError,
+    refetch: refetchDiscogsMatch,
   } = useQuery({
-    queryKey: ['discogs-eligibility', id],
+    queryKey: discogsMatchKey,
     queryFn: async () => {
-      const response = await api.get(`/discogs/items/${id}/eligibility`);
-      return response.data as {
-        eligible: boolean;
-        releaseId: number | null;
-        matchConfidence: 'high' | 'fuzzy' | null;
-        matchedTitle: string | null;
-      };
+      const response = await api.get(`/discogs/items/${id}/match`);
+      return (response.data as { match: DiscogsMatchView }).match;
     },
-    enabled: discogsConnected && !!id && !item?.discogsListingId,
+    enabled: discogsConnected && !!id,
+    retry: false,
   });
 
   const discogsPushMutation = useMutation({
@@ -710,14 +713,21 @@ const EditItemPage = () => {
           'success'
         );
         queryClient.invalidateQueries({ queryKey: ['item', id] });
+        queryClient.invalidateQueries({ queryKey: ['discogs-match', id] });
       } else {
         showToast('Discogs push failed', 'error');
       }
       setDiscogsPushPending(false);
     },
     onError: (error: any) => {
-      const msg = error.response?.data?.message || 'Failed to push item to Discogs';
-      showToast(msg, 'error');
+      // ADR-132: 409 needs_selection / listing_release_mismatch / not_connected and
+      // 422 not_eligible come back as { message, code }; show plain guidance and refresh the
+      // match so the picker or mismatch banner reflects the server's view.
+      showToast(discogsErrorMessage(error, 'Failed to push item to Discogs'), 'error');
+      const code = discogsErrorCode(error);
+      if (code === 'needs_selection' || code === 'listing_release_mismatch' || code === 'not_eligible') {
+        queryClient.invalidateQueries({ queryKey: ['discogs-match', id] });
+      }
       setDiscogsPushPending(false);
     },
   });
@@ -2675,12 +2685,26 @@ const EditItemPage = () => {
                   />
                   Allow buyers to make offers
                 </label>
+                {/* ADR-132: release card, picker, record details and mismatch banner. */}
+                {id && (
+                  <div className="mb-3">
+                    <DiscogsMatchPanel
+                      itemId={String(id)}
+                      match={discogsMatch}
+                      isLoading={discogsMatchLoading}
+                      error={discogsMatchError}
+                      onRetry={() => refetchDiscogsMatch()}
+                      onMatchUpdated={(m) => queryClient.setQueryData(discogsMatchKey, m)}
+                      onListingChanged={() => queryClient.invalidateQueries({ queryKey: ['item', id] })}
+                    />
+                  </div>
+                )}
                 {item?.discogsListingId ? (
                   <div className="space-y-2">
                     <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
                       Pushed to Discogs
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <a
                         href={`https://www.discogs.com/sell/item/${item.discogsListingId}`}
                         target="_blank"
@@ -2689,63 +2713,68 @@ const EditItemPage = () => {
                       >
                         View listing
                       </a>
-                      <button
-                        type="button"
-                        onClick={() => handlePushToDiscogs(true)}
-                        disabled={discogsPushPending}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {discogsPushPending ? 'Updating...' : 'Update Discogs listing'}
-                      </button>
+                      {discogsMatch?.status !== 'not_in_discogs' && (
+                        <button
+                          type="button"
+                          onClick={() => handlePushToDiscogs(true)}
+                          disabled={
+                            discogsPushPending || !discogsMatch?.canPush || !!discogsMatch?.listing.releaseMismatch
+                          }
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {discogsPushPending ? 'Updating...' : 'Update Discogs listing'}
+                        </button>
+                      )}
                     </div>
-                  </div>
-                ) : discogsEligibilityLoading ? (
-                  <p className="text-sm text-warm-500 dark:text-gray-400">Checking Discogs catalog…</p>
-                ) : discogsEligibilityError ? (
-                  <p className="text-sm text-warm-500 dark:text-gray-400">
-                    Couldn&apos;t check Discogs eligibility right now.{' '}
-                    <button
-                      type="button"
-                      onClick={() => refetchDiscogsEligibility()}
-                      className="underline text-blue-600 dark:text-blue-400"
-                    >
-                      Retry
-                    </button>
-                  </p>
-                ) : discogsEligibility?.eligible ? (
-                  <div className="space-y-2">
-                    {discogsEligibility?.matchConfidence === 'fuzzy' ? (
-                      <p className="text-sm text-amber-600 dark:text-amber-400">
-                        Possible Discogs match: &quot;{discogsEligibility?.matchedTitle}&quot;. Double-check this is
-                        the right release before pushing.
+                    {discogsMatch && discogsMatch.status !== 'not_in_discogs' && (discogsMatch.listing.releaseMismatch || !discogsMatch.canPush) && (
+                      <p className="text-xs text-warm-500 dark:text-gray-400">
+                        {discogsMatch.listing.releaseMismatch
+                          ? 'Fix the release on your listing before updating it.'
+                          : 'Choose the matching Discogs release above before updating the listing.'}
                       </p>
-                    ) : (
-                      <p className="text-sm text-warm-600 dark:text-gray-400">Matches a Discogs catalog release.</p>
                     )}
-                    <div className="flex gap-2">
+                    {discogsMatch?.canPush && discogsMatch.draftOnly && !discogsMatch.listing.releaseMismatch && (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        The listing stays a Draft on Discogs until you confirm the pressing.
+                      </p>
+                    )}
+                  </div>
+                ) : discogsMatch && discogsMatch.status !== 'not_in_discogs' ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <button
                         type="button"
                         onClick={() => handlePushToDiscogs(false)}
-                        disabled={discogsPushPending}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        disabled={discogsPushPending || !discogsMatch.canPush}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {discogsPushPending ? 'Pushing...' : 'Push to Discogs'}
                       </button>
                       <button
                         type="button"
                         onClick={() => handlePushToDiscogs(true)}
-                        disabled={discogsPushPending}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        disabled={discogsPushPending || !discogsMatch.canPush}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {discogsPushPending ? 'Publishing...' : 'Publish to Discogs now'}
+                        {discogsPushPending
+                          ? 'Publishing...'
+                          : discogsMatch.draftOnly
+                            ? 'Push as Draft'
+                            : 'Publish to Discogs now'}
                       </button>
                     </div>
+                    {!discogsMatch.canPush ? (
+                      <p className="text-xs text-warm-500 dark:text-gray-400">
+                        Choose the matching Discogs release above to turn on pushing. Discogs listings are tied to one
+                        exact pressing, so we won&apos;t guess.
+                      </p>
+                    ) : discogsMatch.draftOnly ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
+                        This will be saved as a Draft on Discogs until you confirm the pressing.
+                      </p>
+                    ) : null}
                   </div>
-                ) : (
-                  <p className="text-sm text-warm-500 dark:text-gray-400">
-                    No matching Discogs catalog release found for this item.
-                  </p>
-                )}
+                ) : null}
               </div>
             )}
 

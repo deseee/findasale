@@ -1,0 +1,95 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "regression 13685723 (item text synthetic: typo 'Change' vs catalog 'Chance')",
+  "item": {
+    "id": "synthetic-time-and-chance",
+    "title": "Time and Change Vinyl LP",
+    "description": "Vinyl LP album.",
+    "brand": null,
+    "upc": null,
+    "ean": null,
+    "tags": []
+  },
+  "searches": [
+    {
+      "params": {
+        "q": "Time and Change"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7008001,
+            "type": "release",
+            "title": "Fixture Artist A - Time Of Change",
+            "format": [
+              "CD",
+              "Single"
+            ],
+            "label": [
+              "X"
+            ],
+            "catno": "X1",
+            "year": "2001",
+            "country": "UK",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7008001",
+            "barcode": [],
+            "community": {
+              "have": 3,
+              "want": 0
+            }
+          },
+          {
+            "id": 13685723,
+            "type": "release",
+            "title": "Fixture Artist - Time And Chance",
+            "format": [
+              "Vinyl",
+              "LP",
+              "Album"
+            ],
+            "label": [
+              "Fixture Label"
+            ],
+            "catno": "FL-1",
+            "year": "1979",
+            "country": "US",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/13685723",
+            "barcode": [],
+            "community": {
+              "have": 40,
+              "want": 2
+            }
+          },
+          {
+            "id": 7008002,
+            "type": "release",
+            "title": "Fixture Artist B - Change Of Time",
+            "format": [
+              "Vinyl",
+              "7\"",
+              "Single"
+            ],
+            "label": [
+              "Y"
+            ],
+            "catno": "Y1",
+            "year": "1968",
+            "country": "US",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7008002",
+            "barcode": [],
+            "community": {
+              "have": 5,
+              "want": 0
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

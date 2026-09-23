@@ -1,0 +1,69 @@
+{
+  "_note": "HAND-AUTHORED fixture in the documented Discogs /database/search and /marketplace/listings response shapes. No live Discogs call was made to build it (ADR-132 dev rule). Release ids 7xxxxxx are SYNTHETIC placeholders; 1318188 and 13685723 are the real ids named in discogsListingConnector.ts's header. Item text is the real FindA.Sale item (title/description/brand/tags) as of 2026-09-22. Re-record against the live API with an organizer token when available.",
+  "case": "ADR-132 9.3 #2",
+  "item": {
+    "id": "cmtizj5qr02va3bww0w58ovvl",
+    "title": "JUBILEE! Vinyl LP Record, Sisters' Concert Chorus, Grace Note Recordings, 1960s",
+    "description": "Long-playing vinyl record featuring the Sisters' Concert Chorus performing sacred and classical music to commemorate the Diamond Jubilee Year (75 years) of the Sisters of St. Joseph of Nazareth, Michigan. Released on Grace Note Recordings label with original colorful gatefold cover. Both sides of vinyl visible; record shows light surface wear consistent with age. Includes full program notes, choir photograph, and historical text about the Sisters' mission and educational work.",
+    "brand": "Grace Note Recordings",
+    "upc": null,
+    "ean": null,
+    "tags": [
+      "Vinyl Record",
+      "LP",
+      "1960s",
+      "Gospel Music",
+      "Sacred Music",
+      "Choral",
+      "Grace Note Recordings",
+      "Religious"
+    ]
+  },
+  "wrongReleaseId": 7002001,
+  "listedRelease": {
+    "id": 7002001,
+    "artist": "ジュビリー",
+    "title": "Jubilee!",
+    "description": "ジュビリー - Jubilee!",
+    "format": "CD, EP",
+    "label": "Victor",
+    "catalog_number": "VICL-35001",
+    "year": 2003,
+    "thumbnail": ""
+  },
+  "searches": [
+    {
+      "params": {
+        "artist": "Sisters' Concert Chorus",
+        "release_title": "JUBILEE!"
+      },
+      "response": {
+        "results": [
+          {
+            "id": 7002001,
+            "type": "release",
+            "title": "ジュビリー - Jubilee!",
+            "format": [
+              "CD",
+              "EP"
+            ],
+            "label": [
+              "Victor"
+            ],
+            "catno": "VICL-35001",
+            "year": "2003",
+            "country": "Japan",
+            "master_id": 0,
+            "thumb": "",
+            "uri": "/release/7002001",
+            "barcode": [],
+            "community": {
+              "have": 12,
+              "want": 3
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
