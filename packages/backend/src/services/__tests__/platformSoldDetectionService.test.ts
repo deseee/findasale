@@ -39,7 +39,7 @@ describe('processPlatformSoldReport', () => {
     expect(d.loadPlatformJobs).toHaveBeenCalledWith('org_1', 'MERCARI');
     expect(d.closeListingRecord).toHaveBeenCalledWith('item_pw', 'MERCARI');
     expect(d.commitSale).toHaveBeenCalledWith('item_pw', 'MERCARI');
-    expect(d.closeListingRecord.mock.invocationCallOrder[0]).toBeLessThan(d.commitSale.mock.invocationCallOrder[0]);
+    expect((d.closeListingRecord as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan((d.commitSale as jest.Mock).mock.invocationCallOrder[0]);
   });
 
   it('prefers a recorded remote listing id over the title', async () => {
