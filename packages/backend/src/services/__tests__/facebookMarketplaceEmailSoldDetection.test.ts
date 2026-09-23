@@ -16,11 +16,23 @@
  * c2c_seller_order_placed_email&listing_id=1473556531485754" -- 10175351837195594 is
  * the shipping/order id (path segment), 1473556531485754 is the listing id (query
  * param) -- the two must never be confused, which several assertions below check for.
+ *
+ * SECURITY (2026-09-23): every fixture now carries a passing mx.google.com
+ * Authentication-Results header (dkim=pass header.d=facebook.com, dmarc=pass) and a
+ * sold-<token>@<forwarding domain> recipient; organizerEmailForwardingService's DB-backed
+ * resolveOrganizerIdByForwardingToken is mocked to resolve KNOWN_TOKEN only. Negative
+ * cases for both guards live in the two describe blocks at the end of this file.
  */
 
 jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 jest.mock('../facebookNativeSaleService', () => ({
   commitFacebookNativeSale: jest.fn(),
+}));
+jest.mock('../organizerEmailForwardingService', () => ({
+  ...jest.requireActual('../organizerEmailForwardingService'),
+  resolveOrganizerIdByForwardingToken: jest.fn(async (token: string) =>
+    token.toLowerCase() === 'knowntoken_abc123' ? 'organizer_1' : null,
+  ),
 }));
 
 import {
@@ -29,16 +41,23 @@ import {
   SOLD_VIA_FB_EMAIL_ORDER,
   InboundFacebookOrderEmail,
 } from '../facebookMarketplaceEmailSoldDetection';
+import { buildFacebookSoldForwardingAddress } from '../organizerEmailForwardingService';
 
 const REAL_ORDER_ID = '10175351837195594';
 const REAL_LISTING_ID = '1473556531485754';
 const REAL_HREF = `/marketplace/you/shipping_orders/${REAL_ORDER_ID}/?referral_surface=c2c_seller_order_placed_email&listing_id=${REAL_LISTING_ID}`;
+
+const KNOWN_TOKEN = 'KnownToken_abc123';
+const PASSING_AUTH_RESULTS =
+  'mx.google.com; dkim=pass header.d=facebook.com header.s=s1024-2013-q3 header.b=AbCd; spf=pass (google.com: domain of noreply@facebookmail.com designates 1.2.3.4 as permitted sender) smtp.mailfrom=noreply@facebookmail.com; dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=marketplace.facebook.com';
 
 function orderEmail(overrides: Partial<InboundFacebookOrderEmail> = {}): InboundFacebookOrderEmail {
   return {
     from: FACEBOOK_ORDER_EMAIL_SENDER,
     subject: 'New Marketplace order for Vintage Oak Dresser',
     links: [REAL_HREF],
+    authenticationResults: [PASSING_AUTH_RESULTS],
+    recipientAddresses: ['someorganizer@gmail.com', buildFacebookSoldForwardingAddress(KNOWN_TOKEN)],
     ...overrides,
   };
 }
@@ -96,8 +115,8 @@ describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
         commitSale,
       });
 
-      expect(resolveItemIdForListingId).toHaveBeenCalledWith(REAL_LISTING_ID);
-      expect(resolveItemIdForListingId).not.toHaveBeenCalledWith(REAL_ORDER_ID);
+      expect(resolveItemIdForListingId).toHaveBeenCalledWith(REAL_LISTING_ID, 'organizer_1');
+      expect(resolveItemIdForListingId).not.toHaveBeenCalledWith(REAL_ORDER_ID, expect.anything());
       if (result.kind === 'matched') {
         expect(result.remoteListingId).toBe(REAL_LISTING_ID);
         expect(result.remoteOrderId).toBe(REAL_ORDER_ID);
@@ -116,7 +135,7 @@ describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
       );
 
       expect(result.kind).toBe('matched');
-      expect(resolveItemIdForListingId).toHaveBeenCalledWith(REAL_LISTING_ID);
+      expect(resolveItemIdForListingId).toHaveBeenCalledWith(REAL_LISTING_ID, 'organizer_1');
     });
 
     it('does NOT extract a listing id from visible link text alone (only href/rawBody)', async () => {
@@ -184,6 +203,7 @@ describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
       expect(commitSale).toHaveBeenCalledWith('item_abc', SOLD_VIA_FB_EMAIL_ORDER);
       expect(result).toMatchObject({
         kind: 'matched',
+        organizerId: 'organizer_1',
         itemId: 'item_abc',
         remoteListingId: REAL_LISTING_ID,
         remoteOrderId: REAL_ORDER_ID,
@@ -206,5 +226,193 @@ describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
         expect(result.alreadyCommitted).toBe(true);
       }
     });
+  });
+});
+
+describe('sender authentication (DKIM/DMARC via Authentication-Results) -- fail closed', () => {
+  async function run(overrides: Partial<InboundFacebookOrderEmail>) {
+    const resolveItemIdForListingId = jest.fn().mockResolvedValue('item_123');
+    const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: false });
+    const result = await processFacebookMarketplaceOrderEmail(orderEmail(overrides), {
+      resolveItemIdForListingId,
+      commitSale,
+    });
+    return { result, resolveItemIdForListingId, commitSale };
+  }
+
+  it('ignores an email with no Authentication-Results / ARC headers at all', async () => {
+    const { result, resolveItemIdForListingId, commitSale } = await run({
+      authenticationResults: [],
+      arcAuthenticationResults: [],
+    });
+    expect(result.kind).toBe('ignored');
+    expect(resolveItemIdForListingId).not.toHaveBeenCalled();
+    expect(commitSale).not.toHaveBeenCalled();
+  });
+
+  it('ignores dkim=pass for the wrong signing domain (header.d=evil.example)', async () => {
+    const { result, commitSale } = await run({
+      authenticationResults: [
+        'mx.google.com; dkim=pass header.d=evil.example header.s=s1; dmarc=pass header.from=marketplace.facebook.com',
+      ],
+    });
+    expect(result.kind).toBe('ignored');
+    expect(commitSale).not.toHaveBeenCalled();
+  });
+
+  it('ignores a look-alike signing domain that merely ends in the same letters (notfacebook.com)', async () => {
+    const { result } = await run({
+      authenticationResults: ['mx.google.com; dkim=pass header.d=notfacebook.com; dmarc=pass'],
+    });
+    expect(result.kind).toBe('ignored');
+  });
+
+  it('ignores dkim=fail even for facebook.com', async () => {
+    const { result } = await run({
+      authenticationResults: ['mx.google.com; dkim=fail header.d=facebook.com; dmarc=pass'],
+    });
+    expect(result.kind).toBe('ignored');
+  });
+
+  it('ignores dkim=pass without dmarc=pass', async () => {
+    const { result } = await run({
+      authenticationResults: ['mx.google.com; dkim=pass header.d=facebook.com; dmarc=fail (p=REJECT) header.from=marketplace.facebook.com'],
+    });
+    expect(result.kind).toBe('ignored');
+  });
+
+  it('ignores a passing header from an untrusted authserv-id (sender-forged)', async () => {
+    const { result } = await run({
+      authenticationResults: [`attacker.example; dkim=pass header.d=facebook.com; dmarc=pass`],
+    });
+    expect(result.kind).toBe('ignored');
+  });
+
+  it('only trusts the TOPMOST mx.google.com header -- a forged pass below a real fail is ignored', async () => {
+    const { result, commitSale } = await run({
+      authenticationResults: [
+        'mx.google.com; dkim=none; spf=softfail smtp.mailfrom=evil.example; dmarc=fail header.from=marketplace.facebook.com',
+        PASSING_AUTH_RESULTS,
+      ],
+    });
+    expect(result.kind).toBe('ignored');
+    expect(commitSale).not.toHaveBeenCalled();
+  });
+
+  it('accepts header.i=@facebookmail.com (no header.d) with folded lines, comments and case differences', async () => {
+    const { result } = await run({
+      authenticationResults: [
+        'MX.Google.com;\r\n       DKIM=Pass header.i=@FacebookMail.com header.s=s1024-2013-q3 header.b=AbC;\r\n       spf=pass (google.com: domain of x@facebookmail.com designates 1.2.3.4 as permitted sender; ok) smtp.mailfrom=x@facebookmail.com;\r\n       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=facebookmail.com',
+      ],
+    });
+    expect(result.kind).toBe('matched');
+  });
+
+  it('falls back to ARC-Authentication-Results only when no trusted Authentication-Results exists', async () => {
+    const { result } = await run({
+      authenticationResults: [],
+      arcAuthenticationResults: ['i=1; mx.google.com; dkim=pass header.d=facebook.com; dmarc=pass header.from=marketplace.facebook.com'],
+    });
+    expect(result.kind).toBe('matched');
+  });
+});
+
+describe('organizer scoping via sold-<token> recipient -- fail closed', () => {
+  it('ignores an email with no sold-<token>@<forwarding domain> recipient', async () => {
+    const resolveItemIdForListingId = jest.fn();
+    const commitSale = jest.fn();
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ recipientAddresses: ['someorganizer@gmail.com', 'find@outreach.finda.sale'] }),
+      { resolveItemIdForListingId, commitSale },
+    );
+    expect(result.kind).toBe('ignored');
+    expect(resolveItemIdForListingId).not.toHaveBeenCalled();
+    expect(commitSale).not.toHaveBeenCalled();
+  });
+
+  it('ignores a sold-<token> address on a different domain', async () => {
+    const resolveItemIdForListingId = jest.fn();
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ recipientAddresses: [`sold-${KNOWN_TOKEN}@evil.example`] }),
+      { resolveItemIdForListingId },
+    );
+    expect(result.kind).toBe('ignored');
+    expect(resolveItemIdForListingId).not.toHaveBeenCalled();
+  });
+
+  it('ignores a token that does not resolve to any organizer', async () => {
+    const resolveItemIdForListingId = jest.fn();
+    const resolveOrganizerIdByToken = jest.fn().mockResolvedValue(null);
+    const result = await processFacebookMarketplaceOrderEmail(orderEmail(), {
+      resolveItemIdForListingId,
+      resolveOrganizerIdByToken,
+    });
+    expect(result.kind).toBe('ignored');
+    expect(resolveItemIdForListingId).not.toHaveBeenCalled();
+  });
+
+  it('ignores recipients whose tokens resolve to more than one organizer (ambiguous)', async () => {
+    const resolveItemIdForListingId = jest.fn();
+    const resolveOrganizerIdByToken = jest.fn(async (t: string) => (t === 'tokA' ? 'org_A' : 'org_B'));
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({
+        recipientAddresses: [
+          buildFacebookSoldForwardingAddress('tokA'),
+          buildFacebookSoldForwardingAddress('tokB'),
+        ],
+      }),
+      { resolveItemIdForListingId, resolveOrganizerIdByToken },
+    );
+    expect(result.kind).toBe('ignored');
+    expect(resolveItemIdForListingId).not.toHaveBeenCalled();
+  });
+
+  it('scopes the listing lookup to the organizer resolved from the recipient token (case-insensitive address)', async () => {
+    const resolveItemIdForListingId = jest.fn().mockResolvedValue(null);
+    const resolveOrganizerIdByToken = jest.fn().mockResolvedValue('organizer_scoped');
+    const commitSale = jest.fn();
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ recipientAddresses: [buildFacebookSoldForwardingAddress(KNOWN_TOKEN).toUpperCase()] }),
+      { resolveItemIdForListingId, resolveOrganizerIdByToken, commitSale },
+    );
+    expect(resolveItemIdForListingId).toHaveBeenCalledWith(REAL_LISTING_ID, 'organizer_scoped');
+    // Another organizer's item with the same listing_id is simply not visible to this
+    // lookup -> unmatched, never committed.
+    expect(result.kind).toBe('unmatched');
+    expect(commitSale).not.toHaveBeenCalled();
+  });
+});
+
+describe('parseImapMessageToInboundEmail header extraction', () => {
+  it('extracts Authentication-Results (in order), ARC-Authentication-Results and recipient addresses', async () => {
+    const { parseImapMessageToInboundEmail } = await import('../facebookMarketplaceEmailPollService');
+    const target = buildFacebookSoldForwardingAddress(KNOWN_TOKEN);
+    const raw = [
+      `Delivered-To: ${target}`,
+      'ARC-Authentication-Results: i=1; mx.google.com;',
+      '       dkim=pass header.d=facebook.com;',
+      '       dmarc=pass header.from=marketplace.facebook.com',
+      'Authentication-Results: mx.google.com;',
+      '       dkim=pass header.d=facebook.com header.s=s1;',
+      '       dmarc=pass (p=REJECT) header.from=marketplace.facebook.com',
+      'Authentication-Results: attacker.example; dkim=pass header.d=facebook.com',
+      'From: Facebook <noreply@marketplace.facebook.com>',
+      'To: Some Organizer <someorganizer@gmail.com>',
+      'Subject: New Marketplace order for Vintage Oak Dresser',
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      `<a href="https://www.facebook.com${REAL_HREF}">View order</a>`,
+      '',
+    ].join('\r\n');
+
+    const email = await parseImapMessageToInboundEmail(Buffer.from(raw));
+
+    expect(email.from).toBe('noreply@marketplace.facebook.com');
+    expect(email.authenticationResults).toHaveLength(2);
+    expect(email.authenticationResults?.[0]).toMatch(/^mx\.google\.com;/);
+    expect(email.authenticationResults?.[1]).toMatch(/^attacker\.example;/);
+    expect(email.arcAuthenticationResults?.[0]).toMatch(/^i=1; mx\.google\.com;/);
+    expect(email.recipientAddresses).toEqual(expect.arrayContaining([target.toLowerCase(), 'someorganizer@gmail.com']));
   });
 });

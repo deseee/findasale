@@ -1747,6 +1747,9 @@
 
   function showReviewOverlay(item, index, total, photosOk, warnings) {
     const more = (index + 1) < total;
+    // S-EXT-VINTED-REMOTE-LISTING-ID: remember (per tab, 15 min) that this item was just filled, so
+    // the organizer's own post-publish page can be tied back to it (see vintCapMaybeCapture).
+    vintCapRecordFill(item);
     scrollToVintedUploadButton();
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): render every collected fillListing() warning
     // (Category miss chief among them) persistently on this screen -- see tryFill's comment above
@@ -1776,7 +1779,11 @@
       // Records this as a single, human-confirmed listing post -- this is NOT a relist/bump call
       // and must never be reused as one. See the file-header constraint.
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) {}
+      // S-EXT-VINTED-REMOTE-LISTING-ID: markListed above never knows the Vinted id (fill-and-stop);
+      // look it up in the organizer's own wardrobe while the queue delay runs (bounded, best-effort).
+      const capture = vintCapAfterMarkListed(item);
       try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
+      try { await capture; } catch (e) {}
       clearQueueDelayCountdown();
       if (more) { location.href = LISTING_URL_HINT; } else { bar && bar.remove(); }
     };
@@ -2444,7 +2451,7 @@
     if (api && api.ok) {
       if (api.ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
       if (api.ids.size === 1) {
-        if (api.complete) return { id: api.ids.values().next().value, reason: null };
+        if (api.complete) return { id: api.ids.values().next().value, reason: null, source: 'api' };
         console.log('[FAS Vinted] removal: one API match but the wardrobe read hit the page cap -- a duplicate title could exist further on; refusing.');
         return { id: null, reason: 'no_confident_listing_match' };
       }
@@ -2723,6 +2730,10 @@
       vintRemSignalBackground('crossPlatformRemovalSkipped', item, 'title_too_short_for_safe_match');
       return;
     }
+    // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23): the backend now returns the recorded Vinted
+    // listing id (pending-removals listingRefs.VINTED) when one is known. It only picks WHICH page
+    // to open -- the detail page below still requires URL id == that id AND the exact title.
+    const refId = vintRemListingRefFor(item);
     // F4: an item-detail page (/items/<numeric id>...) must match the queued title EXACTLY
     // (normalized, Vinted site suffix stripped) -- the former document.title.includes() check
     // accepted any listing whose page title merely contained the queued title.
@@ -2737,10 +2748,12 @@
         onDetailAlready = vintRemDetailPageTitleMatches(wantedTitle);
       }
     }
+    let detailTarget = null;
     if (onItemDetailPage) {
       // ID check (primary on this page): if the profile page chose a listing id for THIS queued
       // item, the current URL's numeric id must equal it exactly -- identical titles exist (fact A).
       const target = await vintRemStorageGet(VINTED_REMOVAL_TARGET_STORAGE_KEY);
+      detailTarget = target;
       if (target && target.itemId === item.id && target.vintedId) {
         const here = vintRemItemIdFromHref(location.pathname);
         if (here !== String(target.vintedId)) {
@@ -2748,6 +2761,21 @@
           onDetailAlready = false;
         }
       }
+    }
+    if (onItemDetailPage && !onDetailAlready && detailTarget && detailTarget.itemId === item.id && detailTarget.source === 'ref') {
+      // S-EXT-VINTED-REMOTE-LISTING-ID: the RECORDED id did not verify here (listing gone, title
+      // edited on Vinted, or a wrong id) -- nothing is deleted; fall back to the exact-title
+      // wardrobe lookup on the own profile page. The refFailed marker stops the next load from
+      // re-opening the same recorded id (see VINT_REM_REF_RETRY_MS).
+      console.log('[FAS Vinted] removal: recorded listing id /items/' + detailTarget.vintedId + ' did not verify on this page -- falling back to title lookup.');
+      await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, { itemId: item.id, vintedId: null, at: Date.now(), source: 'ref', refFailed: true });
+      const fallbackProfileUrl = await resolveVintedOwnProfileUrl();
+      if (fallbackProfileUrl) {
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening your Vinted listings to look for <b>' + escapeHtml(item.title) + '</b>...</div>');
+        location.href = fallbackProfileUrl.indexOf('http') === 0 ? fallbackProfileUrl : (location.origin + fallbackProfileUrl);
+        return;
+      }
+      // No profile URL -> the failure report below (transient) applies.
     }
     if (onItemDetailPage && !onDetailAlready) {
       // Fail promptly instead of navigating back to the profile page -- re-clicking the same link
@@ -2757,6 +2785,21 @@
       closeBtnHandler();
       vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, 'detail_page_title_mismatch');
       return;
+    }
+    if (!onItemDetailPage && refId) {
+      // Recorded id path: open the listing directly unless that id was already tried for this item
+      // within VINT_REM_REF_RETRY_MS (it then failed to verify, or never landed on a detail page).
+      const prevTarget = await vintRemStorageGet(VINTED_REMOVAL_TARGET_STORAGE_KEY);
+      const prevAt = prevTarget ? Number(prevTarget.at) : NaN;
+      const refTried = !!(prevTarget && prevTarget.itemId === item.id && prevTarget.source === 'ref' &&
+        Number.isFinite(prevAt) && (Date.now() - prevAt) >= 0 && (Date.now() - prevAt) < VINT_REM_REF_RETRY_MS);
+      if (!refTried) {
+        await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, { itemId: item.id, vintedId: refId, at: Date.now(), source: 'ref' });
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Vinted listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
+        location.href = location.origin + '/items/' + refId;
+        return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
+      }
+      console.log('[FAS Vinted] removal: recorded listing id /items/' + refId + ' already tried for this item -- using the title lookup instead.');
     }
     let result;
     if (onDetailAlready) {
@@ -2810,6 +2853,10 @@
       // Go straight to the one matched listing by its numeric id; the detail-page load re-checks
       // that the URL id equals this id (and the title) before deleting anything.
       await vintRemStorageSet(VINTED_REMOVAL_TARGET_STORAGE_KEY, { itemId: item.id, vintedId: match.id, at: Date.now() });
+      // S-EXT-VINTED-REMOTE-LISTING-ID backfill: a unique exact-title match from a COMPLETE read of
+      // the organizer's own wardrobe (API, not card scraping) is reported so later removals of this
+      // item go straight to /items/<id>. Set-once server side; fire-and-forget.
+      if (match.source === 'api' && match.id !== refId) vintCapReport(item.id, match.id, 'removal_wardrobe_match');
       location.href = location.origin + '/items/' + match.id;
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Vinted listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
       return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
@@ -2845,6 +2892,232 @@
     }
   }
 
+  // ------------------------------------------------------------------------------------------
+  // VINTED LISTING-ID CAPTURE (2026-09-23, S-EXT-VINTED-REMOTE-LISTING-ID). Vinted auto-publish is
+  // OFF (fill-and-stop): the organizer clicks Vinted's own Upload, so markListed is always sent with
+  // remoteListingId: null. After the fact, this learns the numeric listing id and reports it via
+  // 'setRemoteListingId' -> background -> POST /extension/items/:id/remote-listing-id (set-once,
+  // organizer-owned item, numeric-only, live POST/POSTED job only). Two sources, both exact-title
+  // and both limited to fills made IN THIS TAB within the last VINT_CAP_WINDOW_MS (sessionStorage is
+  // per tab):
+  //   1) the organizer's own /items/<id> detail page (owner-only controls present, document.title /
+  //      <h1> exactly equal to ONE recent fill's title) -> that URL id;
+  //   2) the organizer's own /member/<id> page (Vinted's post-Upload landing, round-3 note above) or
+  //      the "I posted"/"Continue" click -> a COMPLETE wardrobe API read with exactly ONE listing
+  //      whose title equals the fill's title. Ambiguity or an incomplete read -> nothing is sent.
+  // Never clicks anything and never blocks the listing flow.
+  const VINT_CAP_FILLS_KEY = 'fasVintedRecentFills';
+  const VINT_CAP_WINDOW_MS = 15 * 60 * 1000;
+  const VINT_CAP_MAX_FILLS = 10;
+  // Recorded-id removal path: how long a tried (and failed / not-landed) recorded id is skipped
+  // for the same item before the title lookup is the only path.
+  const VINT_REM_REF_RETRY_MS = 10 * 60 * 1000;
+  let vintCapBusy = false;
+  let vintCapLastPath = null;
+
+  function vintRemListingRefFor(item) {
+    const refs = item && item.listingRefs && typeof item.listingRefs === 'object' ? item.listingRefs : null;
+    const v = refs ? refs.VINTED : null;
+    const s = typeof v === 'string' ? v : (typeof v === 'number' && Number.isSafeInteger(v) ? String(v) : '');
+    return /^\d{1,20}$/.test(s) ? s : null;
+  }
+
+  function vintCapReadFills() {
+    let arr = [];
+    try { arr = JSON.parse(sessionStorage.getItem(VINT_CAP_FILLS_KEY) || '[]'); } catch (e) { arr = []; }
+    if (!Array.isArray(arr)) return [];
+    const now = Date.now();
+    return arr.filter((f) => f && typeof f.itemId === 'string' && typeof f.title === 'string' &&
+      Number.isFinite(f.at) && (now - f.at) >= 0 && (now - f.at) <= VINT_CAP_WINDOW_MS);
+  }
+  function vintCapWriteFills(arr) {
+    try { sessionStorage.setItem(VINT_CAP_FILLS_KEY, JSON.stringify(arr.slice(-VINT_CAP_MAX_FILLS))); } catch (e) { /* non-fatal */ }
+  }
+  function vintCapRecordFill(item) {
+    try {
+      if (!item || !item.id) return;
+      const title = vintRemNorm(item.title);
+      if (title.length < VINT_REM_MIN_SAFE_TITLE_LEN) return;
+      const fills = vintCapReadFills().filter((f) => f.itemId !== String(item.id));
+      fills.push({ itemId: String(item.id), title, at: Date.now() });
+      vintCapWriteFills(fills);
+    } catch (e) { /* never block the review overlay */ }
+  }
+  function vintCapForgetFill(itemId) {
+    vintCapWriteFills(vintCapReadFills().filter((f) => f.itemId !== itemId));
+  }
+
+  // true -> stop trying for this fill (recorded, unchanged, or a definitive refusal);
+  // false -> keep it for a later page (e.g. 'no_live_listing': markListed has not landed yet).
+  function vintCapIsSettled(resp) {
+    if (!resp) return false;
+    if (resp.ok) return true;
+    const reason = resp.data && resp.data.reason;
+    if (reason === 'no_live_listing') return false;
+    return resp.status === 400 || resp.status === 404 || resp.status === 409;
+  }
+
+  function vintCapReport(itemId, vintedId, source) {
+    const id = String(vintedId == null ? '' : vintedId);
+    if (!itemId || !/^\d{1,20}$/.test(id)) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          { type: 'setRemoteListingId', platform: 'VINTED', itemId: String(itemId), remoteListingId: id, source: source || null },
+          (resp) => { void chrome.runtime.lastError; resolve(resp || null); }
+        );
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  // Seller-only sidebar controls (live-confirmed 2026-09-22, see deleteVintedListingOnDetailPage):
+  // present only on the organizer's OWN listing, never on another seller's.
+  function vintCapHasOwnerControls() {
+    return !!document.querySelector('button[data-testid="item-edit-button"], button[data-testid="item-delete-button"]');
+  }
+
+  async function vintCapOnItemPage() {
+    const here = vintRemItemIdFromHref(location.pathname);
+    if (!here) return;
+    const fills = vintCapReadFills();
+    if (!fills.length) return;
+    let matches = [];
+    let owner = false;
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      matches = fills.filter((f) => vintRemDetailPageTitleMatches(f.title));
+      owner = vintCapHasOwnerControls();
+      if (matches.length && owner) break;
+      await sleep(400);
+    }
+    if (vintRemItemIdFromHref(location.pathname) !== here) return; // SPA moved on mid-wait
+    if (matches.length !== 1) {
+      console.log('[FAS Vinted] id-capture: /items/' + here + ' matches ' + matches.length + ' recent fill title(s) -- not recording.');
+      return;
+    }
+    if (!owner) {
+      console.log('[FAS Vinted] id-capture: /items/' + here + ' has no owner controls (not your listing) -- not recording.');
+      return;
+    }
+    const f = matches[0];
+    const resp = await vintCapReport(f.itemId, here, 'item_page_after_fill');
+    console.log('[FAS Vinted] id-capture: item ' + f.itemId + ' -> /items/' + here + ' (item page):', resp && resp.ok ? 'recorded' : ('not recorded (' + ((resp && resp.data && resp.data.reason) || (resp && resp.error) || 'no response') + ')'));
+    if (vintCapIsSettled(resp)) vintCapForgetFill(f.itemId);
+  }
+
+  // One pass over the organizer's own wardrobe (same API/shape checks as
+  // vintRemFetchWardrobeMatchIds), indexed by normalized title -> Set of ids.
+  async function vintCapWardrobeTitleIndex(memberId) {
+    const byTitle = new Map();
+    for (let page = 1; page <= VINT_REM_API_MAX_PAGES; page++) {
+      const url = location.origin + '/api/v2/wardrobe/' + encodeURIComponent(memberId) +
+        '/items?page=' + page + '&per_page=' + VINT_REM_API_PER_PAGE;
+      let res;
+      try {
+        res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+      } catch (e) { return { ok: false, why: 'fetch_error' }; }
+      if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+      let data;
+      try { data = await res.json(); } catch (e) { return { ok: false, why: 'non_json' }; }
+      const items = data && Array.isArray(data.items) ? data.items : null;
+      if (!items) return { ok: false, why: 'no_items_array' };
+      let recognized = 0;
+      for (const it of items) {
+        if (!it || typeof it !== 'object') continue;
+        const id = it.id != null ? String(it.id) : '';
+        if (!/^\d+$/.test(id) || typeof it.title !== 'string') continue;
+        recognized++;
+        const t = vintRemNorm(it.title);
+        if (!byTitle.has(t)) byTitle.set(t, new Set());
+        byTitle.get(t).add(id);
+      }
+      if (items.length > 0 && recognized === 0) return { ok: false, why: 'unrecognized_item_shape' };
+      const totalPages = data.pagination ? Number(data.pagination.total_pages) : NaN;
+      const lastPage = (Number.isFinite(totalPages) && totalPages > 0)
+        ? page >= totalPages
+        : items.length < VINT_REM_API_PER_PAGE;
+      if (lastPage) return { ok: true, byTitle, complete: true };
+      await sleep(250 + Math.floor(Math.random() * 250));
+    }
+    return { ok: true, byTitle, complete: false };
+  }
+
+  // The organizer's OWN member id, or null. On a /member/<id> page it must equal the cached own
+  // profile id; with no cache yet, only Vinted's post-Upload landing (?promo_shown=...) is trusted.
+  // Off a member page, the cached own profile id is used.
+  async function vintCapOwnMemberId() {
+    const here = vintRemMemberIdFromLocation();
+    const cached = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
+    const cm = /\/member\/(\d+)/.exec(String(cached || ''));
+    const cachedId = cm ? cm[1] : null;
+    if (here) {
+      if (cachedId) return cachedId === here ? here : null;
+      return /[?&]promo_shown=/.test(location.search) ? here : null;
+    }
+    return cachedId;
+  }
+
+  async function vintCapFromWardrobe(onlyItemId) {
+    const memberId = await vintCapOwnMemberId();
+    if (!memberId) {
+      console.log('[FAS Vinted] id-capture: own member id unknown on this page -- wardrobe capture skipped.');
+      return;
+    }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let fills = vintCapReadFills();
+      if (onlyItemId) fills = fills.filter((f) => f.itemId === onlyItemId);
+      if (!fills.length) return;
+      let idx;
+      try { idx = await vintCapWardrobeTitleIndex(memberId); } catch (e) { idx = { ok: false, why: 'exception' }; }
+      if (!idx.ok || !idx.complete) {
+        console.log('[FAS Vinted] id-capture: wardrobe read unusable (' + (idx.ok ? 'incomplete' : idx.why) + ') -- nothing recorded.');
+        return;
+      }
+      let missing = 0;
+      for (const f of fills) {
+        const ids = idx.byTitle.get(f.title);
+        if (!ids || !ids.size) { missing++; continue; }
+        if (ids.size > 1) {
+          console.log('[FAS Vinted] id-capture: ' + ids.size + ' wardrobe listings share the title of item ' + f.itemId + ' -- ambiguous, not recording.');
+          continue;
+        }
+        const id = ids.values().next().value;
+        const resp = await vintCapReport(f.itemId, id, 'wardrobe_after_publish');
+        console.log('[FAS Vinted] id-capture: item ' + f.itemId + ' -> /items/' + id + ' (wardrobe):', resp && resp.ok ? 'recorded' : ('not recorded (' + ((resp && resp.data && resp.data.reason) || (resp && resp.error) || 'no response') + ')'));
+        if (vintCapIsSettled(resp)) vintCapForgetFill(f.itemId);
+      }
+      if (!missing || attempt) return;
+      await sleep(4000); // the wardrobe can lag Vinted's publish by a moment -- one re-read
+    }
+  }
+
+  // Called after markListed from the "I posted" / "Continue" buttons. Bounded so it can never hold
+  // up the queue for long; the navigation that follows simply abandons a slow read.
+  async function vintCapAfterMarkListed(item) {
+    if (!item || !item.id || vintCapBusy) return;
+    vintCapBusy = true;
+    try {
+      await Promise.race([vintCapFromWardrobe(String(item.id)), sleep(8000)]);
+    } catch (e) {
+      console.warn('[FAS Vinted] id-capture after markListed threw:', e && e.message);
+    } finally { vintCapBusy = false; }
+  }
+
+  // Runs on every load and on every SPA path change (watchForVintedNavigationAway), once per path.
+  async function vintCapMaybeCapture() {
+    const path = location.pathname + location.search;
+    if (path === vintCapLastPath || vintCapBusy) return;
+    vintCapLastPath = path;
+    if (!vintCapReadFills().length) return;
+    vintCapBusy = true;
+    try {
+      if (/^\/items\/\d+(?:-[^/]*)?\/?$/.test(location.pathname)) await vintCapOnItemPage();
+      else if (isOnVintedOwnProfilePage()) await vintCapFromWardrobe(null);
+    } catch (e) {
+      console.warn('[FAS Vinted] id-capture threw:', e && e.message);
+    } finally { vintCapBusy = false; }
+  }
+
   async function maybeRunVintedRemoval() {
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'VINTED' }); } catch (e) { return false; }
@@ -2876,6 +3149,10 @@
   // real listing page; this only stops the extension from complaining on pages it has no business
   // running on.
   function looksLikeVintedListingPage() {
+    // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23): a published item's DETAIL page
+    // (/items/<numericId>-<slug>, fact B in the removal section) is not a listing form either --
+    // treating it as one made start() try to fill it. /items/new and /items/<id>/edit still count.
+    if (/^\/items\/\d+(?:-[^/]*)?\/?$/.test(location.pathname)) return false;
     return /\/items\//.test(location.pathname);
   }
 
@@ -2953,7 +3230,12 @@
       cont.textContent = 'Please wait…';
       startQueueDelayCountdown(guessedQueueDelayMs(), 'the next item');
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
+      // S-EXT-VINTED-REMOTE-LISTING-ID: this prompt usually shows on the organizer's own
+      // /member/<id>?promo_shown=true landing page right after Vinted's Upload -- the best moment
+      // to find the new listing's id in their wardrobe. Runs alongside the queue delay.
+      const capture = vintCapAfterMarkListed(queued.item);
       try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: advanceVintedQueue failed:', e && e.message); }
+      try { await capture; } catch (e) {}
       clearQueueDelayCountdown();
       location.href = LISTING_URL_HINT;
     };
@@ -3105,6 +3387,7 @@
     console.log('[FAS Vinted] navigation watcher started on ' + location.pathname);
     setInterval(() => {
       try {
+        vintCapMaybeCapture(); // S-EXT-VINTED-REMOTE-LISTING-ID: self-guarded, once per path
         if (!looksLikeVintedListingPage()) maybeShowVintedContinuePrompt();
       } catch (e) {
         console.warn('[FAS Vinted] navigation watcher tick threw:', e && e.message);
@@ -3113,6 +3396,7 @@
   }
 
 (async () => {
+    vintCapMaybeCapture(); // fire-and-forget; no-op unless this tab filled a listing in the last 15 min
     const ranRemoval = await maybeRunVintedRemoval();
     if (!ranRemoval) start();
     watchForVintedNavigationAway();

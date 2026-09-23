@@ -5,7 +5,7 @@
  *
  * BACKGROUND: each organizer sets up a Gmail "Forwarding and POP/IMAP" auto-forward
  * rule on their OWN personal Gmail account, pointed at their own unique
- * `sold-<token>@mail.finda.sale` address (organizerEmailForwardingService.ts's
+ * `sold-<token>@outreach.finda.sale` address (organizerEmailForwardingService.ts's
  * buildFacebookSoldForwardingAddress). A Google Workspace catch-all/routing rule (set up
  * separately, out of scope here) delivers any mail sent to `*@<FACEBOOK_SOLD_EMAIL_DOMAIN>`
  * that isn't a real mailbox into the single shared outreach@finda.sale inbox that
@@ -84,14 +84,17 @@ import {
   resolveOrganizerIdByForwardingToken,
   buildFacebookSoldForwardingAddress,
 } from './organizerEmailForwardingService';
+import { verifyInboundEmailAuthentication, GOOGLE_DKIM_DOMAINS } from './inboundEmailAuthService';
 
 // Gmail's IMAP server accepts its own web search syntax via X-GM-RAW (same "gmraw"
 // mechanism the sibling FB poll service and bounceSuppressService.ts already use).
 // Deliberately narrow to the subject only here, NOT the sender -- see the tolerant
 // isFromGoogleForwardingSender() exact re-check below, same "search does coarse
 // filtering, code does the real check" split already used by the FB poll service.
+// SECURITY (2026-09-23 review): Spam/Trash explicitly excluded (was "in:anywhere") --
+// same rationale as facebookMarketplaceEmailPollService's search query.
 const GMAIL_FORWARDING_CONFIRMATION_SEARCH_QUERY =
-  'subject:"Forwarding Confirmation" is:unread in:anywhere';
+  'subject:"Forwarding Confirmation" is:unread -in:spam -in:trash';
 
 // Pure defense-in-depth safety cap, same idea as the sibling FB poll service's
 // MAX_UIDS_PER_RUN -- real volume here should be tiny (one email per organizer signup).
@@ -146,9 +149,41 @@ function extractForwardingTarget(searchText: string): ForwardingTarget | null {
 // for anything that isn't a validated confirmation link.
 const CONFIRMATION_LINK_HINT_PATTERN = /google\.com\/(mail\/)?vf-|mail-settings\.google\.com|forwarding.*confirm|confirm.*forward/i;
 
+// SECURITY (2026-09-23 review): the hint pattern above is a substring test and alone would
+// accept e.g. https://evil.example/?x=mail-settings.google.com. A candidate link must ALSO
+// parse as a URL with protocol https:, no embedded credentials, no explicit port, and a
+// hostname EXACTLY in this list. mail-settings.google.com is the host of Gmail's
+// confirmation link as used in this service's own fixtures
+// ("https://mail-settings.google.com/mail/vf-..."); mail.google.com is the historical
+// "https://mail.google.com/mail/vf-..." form. Both are google.com hosts.
+const ALLOWED_CONFIRMATION_LINK_HOSTS = ['mail-settings.google.com', 'mail.google.com'];
+
+function isAllowedConfirmationUrl(href: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return false;
+  }
+  return (
+    url.protocol === 'https:' &&
+    url.username === '' &&
+    url.password === '' &&
+    url.port === '' &&
+    ALLOWED_CONFIRMATION_LINK_HOSTS.includes(url.hostname.toLowerCase())
+  );
+}
+
+function isGoogleHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '');
+  return h === 'google.com' || h.endsWith('.google.com');
+}
+
 function extractConfirmationLink(links: string[] | undefined): string | null {
   if (!links || links.length === 0) return null;
-  return links.find((href) => CONFIRMATION_LINK_HINT_PATTERN.test(href)) ?? null;
+  return (
+    links.find((href) => isAllowedConfirmationUrl(href) && CONFIRMATION_LINK_HINT_PATTERN.test(href)) ?? null
+  );
 }
 
 export interface InboundGmailForwardingConfirmationEmail {
@@ -163,6 +198,11 @@ export interface InboundGmailForwardingConfirmationEmail {
    * alongside `links`, since Gmail states it in plain sentence text, not necessarily
    * inside an anchor href. */
   rawBody?: string;
+  /** Every Authentication-Results header value, topmost first. A trusted dkim=pass for
+   * google.com + dmarc=pass is required before anything is resolved or fetched. */
+  authenticationResults?: string[];
+  /** Every ARC-Authentication-Results header value, topmost first (fallback only). */
+  arcAuthenticationResults?: string[];
 }
 
 export interface GmailForwardingConfirmDeps {
@@ -177,11 +217,37 @@ export interface GmailForwardingConfirmDeps {
 
 async function defaultConfirmForwarding(url: string): Promise<{ ok: boolean; status?: number; error?: string }> {
   try {
+    // Defense in depth: re-check the host even though the caller already validated it.
+    if (!isAllowedConfirmationUrl(url)) {
+      return { ok: false, error: 'refusing to fetch a non-allowlisted confirmation URL' };
+    }
     // Plain GET is all Gmail's confirmation link requires -- same house convention as
-    // indexNowService.ts's use of Node's built-in fetch (no axios instance needed for a
-    // single unauthenticated GET with no request body).
-    const response = await fetch(url, { method: 'GET', redirect: 'follow' });
-    return { ok: response.ok, status: response.status };
+    // indexNowService.ts's use of Node's built-in fetch. redirect: 'manual' (security
+    // review 2026-09-23): a redirect is NEVER followed. A 2xx is success; a 3xx counts as
+    // success only when its Location is an https google.com host (Google's own
+    // post-confirm hop) -- we still do not request it. Anything else fails closed.
+    const response = await fetch(url, { method: 'GET', redirect: 'manual' });
+    if (response.status >= 200 && response.status < 300) {
+      return { ok: true, status: response.status };
+    }
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      let target: URL | null = null;
+      try {
+        target = location ? new URL(location, url) : null;
+      } catch {
+        target = null;
+      }
+      if (target && target.protocol === 'https:' && isGoogleHost(target.hostname)) {
+        return { ok: true, status: response.status };
+      }
+      return {
+        ok: false,
+        status: response.status,
+        error: `confirmation GET redirected to a non-google or missing location (${location ?? 'none'})`,
+      };
+    }
+    return { ok: false, status: response.status };
   } catch (err: any) {
     return { ok: false, error: err?.message ?? String(err) };
   }
@@ -245,6 +311,17 @@ export async function processGmailForwardingConfirmationEmail(
   }
   if (!isForwardingConfirmationSubject(email.subject)) {
     return { kind: 'ignored', reason: `subject does not look like a forwarding confirmation: "${email.subject}"` };
+  }
+
+  // SENDER AUTHENTICATION (security review 2026-09-23) -- the From check above is
+  // spoofable; require the receiving server's dkim=pass for google.com + dmarc=pass before
+  // resolving any token or touching any link. Fail closed (ignored -> marked \Seen).
+  const auth = verifyInboundEmailAuthentication(email, GOOGLE_DKIM_DOMAINS);
+  if (!auth.ok) {
+    console.warn('[gmailForwardingAutoConfirmService] rejecting forwarding-confirmation email -- sender authentication failed', {
+      reason: auth.reason,
+    });
+    return { kind: 'ignored', reason: `sender authentication failed: ${auth.reason}` };
   }
 
   const searchText = [email.subject, email.rawBody ?? '', ...(email.links ?? [])].join('\n');

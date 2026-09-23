@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../index';
-import { authenticate, AuthRequest, checkTierLapse } from '../middleware/auth';
+import { authenticate, AuthRequest, checkTierLapse, requireOrganizer } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
 import { exportOrganizer, exportOrganizerCommerceManagerFeed } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
@@ -18,6 +18,12 @@ import {
   SubscriptionTier,
 } from '../utils/feeCalculator';
 import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } from '../services/referralService';
+import {
+  ensureFacebookSoldEmailToken,
+  regenerateFacebookSoldEmailToken,
+  buildFacebookSoldForwardingAddress,
+} from '../services/organizerEmailForwardingService';
+import { SOLD_VIA_FB_EMAIL_ORDER } from '../services/facebookMarketplaceEmailSoldDetection';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
@@ -698,6 +704,76 @@ router.get('/me/referral-stats', authenticate, async (req: AuthRequest, res: Res
     return res.status(500).json({ message: 'Server error' });
   }
 });
+
+// ADR-131: Facebook sold alerts (forwarding address). Organizer-scoped: the organizer is
+// always resolved from req.user.id, never from a client-supplied id, so there is no IDOR
+// surface. The first GET creates the organizer's routing token (organizer-initiated write).
+const facebookSoldEmailRegenerateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { message: 'Too many address changes. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+async function buildFacebookSoldEmailPayload(organizerId: string, token: string) {
+  const lastEmailSold = await prisma.item.findFirst({
+    where: {
+      lastSoldVia: SOLD_VIA_FB_EMAIL_ORDER,
+      OR: [{ organizerId }, { sale: { organizerId } }],
+    },
+    orderBy: { updatedAt: 'desc' },
+    select: { updatedAt: true },
+  });
+  return {
+    address: buildFacebookSoldForwardingAddress(token),
+    token,
+    autoConfirmEnabled: process.env.GMAIL_FORWARDING_AUTOCONFIRM_ENABLED === 'true',
+    lastSoldEmailAt: lastEmailSold?.updatedAt ?? null,
+  };
+}
+
+// GET /api/organizers/me/facebook-sold-email
+router.get('/me/facebook-sold-email', authenticate, requireOrganizer, async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user!.id },
+      select: { id: true },
+    });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+    const token = await ensureFacebookSoldEmailToken(organizer.id);
+    return res.json(await buildFacebookSoldEmailPayload(organizer.id, token));
+  } catch (error) {
+    console.error('[facebook-sold-email] Error:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/organizers/me/facebook-sold-email/regenerate
+router.post(
+  '/me/facebook-sold-email/regenerate',
+  authenticate,
+  requireOrganizer,
+  facebookSoldEmailRegenerateLimiter,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const organizer = await prisma.organizer.findUnique({
+        where: { userId: req.user!.id },
+        select: { id: true },
+      });
+      if (!organizer) {
+        return res.status(404).json({ message: 'Organizer profile not found' });
+      }
+      const token = await regenerateFacebookSoldEmailToken(organizer.id);
+      return res.json(await buildFacebookSoldEmailPayload(organizer.id, token));
+    } catch (error) {
+      console.error('[facebook-sold-email/regenerate] Error:', error);
+      return res.status(500).json({ message: 'Server error' });
+    }
+  }
+);
 
 // GET /api/organizers/me/sales — Get all sales for the current organizer
 // Returns array of sales with basic info (id, title, status, etc.)

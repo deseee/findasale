@@ -43,6 +43,7 @@ import {
   type InboundFacebookOrderEmail,
   type FacebookOrderEmailResult,
 } from './facebookMarketplaceEmailSoldDetection';
+import { headerValues, extractAddresses, type RawHeaderLine } from './inboundEmailAuthService';
 
 export interface FacebookSoldEmailPollResult {
   processed: number;
@@ -57,11 +58,13 @@ export interface FacebookSoldEmailPollResult {
 // down to just the order-placed sibling before processFacebookMarketplaceOrderEmail's own
 // exact sender/subject check runs. "is:unread" replaces a separate UNSEEN IMAP search key
 // so the one query string does both the content filter and the not-yet-processed filter.
-// "in:anywhere" mirrors bounceSuppressService's own fix (2026-08-17 incident) for the same
-// underlying risk here: an automated-looking sender arriving via a domain catch-all rule
-// is a real candidate for landing in Spam rather than Inbox.
+// SECURITY (2026-09-23 review): deliberately NOT "in:anywhere" (unlike
+// bounceSuppressService). Spam is exactly where spoofed "Facebook" order emails land, and
+// a message here can mark an item sold -- so Spam and Trash are explicitly excluded. A
+// genuine order email Gmail misfiles as Spam must be moved out by a human (Not spam) to
+// be processed; that is the intended fail-closed trade-off.
 const FACEBOOK_ORDER_EMAIL_SEARCH_QUERY =
-  '(from:noreply@marketplace.facebook.com subject:"New Marketplace order for") is:unread in:anywhere';
+  '(from:noreply@marketplace.facebook.com subject:"New Marketplace order for") is:unread -in:spam -in:trash';
 
 // Safety cap, same idea as bounceSuppressService's 2000-UID cap — pure defense-in-depth.
 // Real volume here is roughly one email every few weeks per ADR-131, so this should never
@@ -93,7 +96,8 @@ export async function openImapSession(): Promise<ImapSession> {
 
   // "All Mail" is just the connection's home mailbox for SEARCH/FETCH below — same idiom
   // as bounceSuppressService.ts. The actual folder scope is controlled by the gmraw
-  // query's own "in:anywhere" above, not by which mailbox this lock is taken against.
+  // query's own "-in:spam -in:trash" above, not by which mailbox this lock is taken
+  // against (All Mail itself never contains Spam/Trash in Gmail's IMAP model).
   const lock = await client.getMailboxLock('[Gmail]/All Mail');
 
   return { client, lock };
@@ -143,7 +147,21 @@ export async function parseImapMessageToInboundEmail(rawSource: Buffer): Promise
   // shot at the same listing_id=(\d+) pattern directly against the raw HTML text.
   const rawBody = htmlBody ?? parsed.text ?? undefined;
 
-  return { from, subject, links, rawBody };
+  // Sender-authentication + recipient-routing headers, in message order (topmost first),
+  // for processFacebookMarketplaceOrderEmail's DKIM/DMARC check and organizer scoping
+  // (and reused as-is by gmailForwardingAutoConfirmService's DKIM check).
+  const headerLines = (parsed as any).headerLines as RawHeaderLine[] | undefined;
+  const authenticationResults = headerValues(headerLines, 'authentication-results');
+  const arcAuthenticationResults = headerValues(headerLines, 'arc-authentication-results');
+  const recipientAddresses = Array.from(
+    new Set(
+      ['delivered-to', 'x-original-to', 'x-forwarded-to', 'to'].flatMap((name) =>
+        headerValues(headerLines, name).flatMap(extractAddresses),
+      ),
+    ),
+  );
+
+  return { from, subject, links, rawBody, authenticationResults, arcAuthenticationResults, recipientAddresses };
 }
 
 /**

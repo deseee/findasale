@@ -980,7 +980,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const itemIds = soldItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true },
+    select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true, remoteListingId: true },
   });
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
@@ -1002,7 +1002,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // AVAILABLE items -- but that endpoint filters to status:'AVAILABLE' only, so it never returns
   // SOLD items at all. Mirroring the same latest-row-per-item+platform-wins computation here
   // instead of a second divergent implementation of "is this platform's listing still live".
-  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
+  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; remoteListingId: string | null }>();
   for (const j of jobs) {
     // BUG FIX 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): a REMOVE/SKIPPED row is a failed
     // removal ATTEMPT, not a state change -- the listing is still live. markItemRemovalSkipped
@@ -1019,7 +1019,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     const key = j.itemId + ':' + j.platform;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
+      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, remoteListingId: j.remoteListingId ?? null });
     }
   }
   const stillListedPlatformsByItem = new Map<string, string[]>();
@@ -1103,12 +1103,26 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // 2026-09-04: retry eligibility is applied PER PLATFORM inside the `platforms` array, not to the
   // item as a whole. An item is returned only if at least one of its still-listed platforms is
   // itself eligible -- so Facebook burning its cap can no longer withhold Poshmark's live listing.
+  // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23): `listingRefs` is additive -- for each returned
+  // platform whose LIVE (latest non-SKIPPED) POST/POSTED job carries a remoteListingId, that id
+  // keyed by platform (e.g. { VINTED: '10025131218' }). Consumers that don't know the field ignore
+  // it. fas-vinted.js uses it to open /items/<id> directly (still re-verifying URL id + exact title
+  // before any delete) instead of the fragile exact-title wardrobe lookup.
+  const listingRefsFor = (itemId: string, platforms: string[]): Record<string, string> => {
+    const refs: Record<string, string> = {};
+    for (const p of platforms) {
+      const latest = latestByItemPlatform.get(itemId + ':' + p);
+      if (latest && latest.action === 'POST' && latest.status === 'POSTED' && latest.remoteListingId) {
+        refs[p] = latest.remoteListingId;
+      }
+    }
+    return refs;
+  };
   const items = stillPending
-    .map((i) => ({
-      id: i.id,
-      title: i.title,
-      platforms: (stillListedPlatformsByItem.get(i.id) || []).filter((p) => isRetryEligible(i.id, p)),
-    }))
+    .map((i) => {
+      const platforms = (stillListedPlatformsByItem.get(i.id) || []).filter((p) => isRetryEligible(i.id, p));
+      return { id: i.id, title: i.title, platforms, listingRefs: listingRefsFor(i.id, platforms) };
+    })
     .filter((i) => i.platforms.length > 0);
   // S1179: still surfaced here for organizer visibility once an item crosses the cap, even
   // during the cooldown windows where it's also (periodically) back in `items` above -- this
@@ -1143,6 +1157,84 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   }
 
   res.json({ items, needsManualReview });
+};
+
+// POST /api/extension/items/:id/remote-listing-id — S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23).
+// Vinted is fill-and-stop (the organizer clicks Vinted's own Upload), so markItemListed is always
+// reported with remoteListingId: null and every VINTED POST/POSTED row had no listing id (30/30 on
+// 2026-09-22). The extension now learns the numeric Vinted listing id AFTER the fact -- from the
+// organizer's own /items/<id> page right after a fill, from their own wardrobe right after publish,
+// or from the removal flow's unique exact-title wardrobe match -- and reports it here.
+// Guards: authenticated organizer (route chain), item must belong to that organizer (404 otherwise,
+// no existence leak), platform restricted to NUMERIC_REMOTE_ID_PLATFORMS, id must be 1-20 digits,
+// only the item's LIVE listing for that platform (latest non-SKIPPED row is POST/POSTED) is touched,
+// and the id is only ever written when currently null (set-once; the write itself is conditional
+// on remoteListingId: null so two racing reports cannot overwrite each other). An id already
+// recorded on another of this organizer's live listings for the same platform is refused -- one
+// Vinted listing can never be attached to two FindA.Sale items.
+const NUMERIC_REMOTE_ID_PLATFORMS: MarketplaceListingPlatform[] = ['VINTED'];
+export const setItemRemoteListingId = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : '';
+  if (!(NUMERIC_REMOTE_ID_PLATFORMS as string[]).includes(platformRaw)) {
+    res.status(400).json({ message: 'Unsupported platform', reason: 'unsupported_platform' });
+    return;
+  }
+  const platform = platformRaw as MarketplaceListingPlatform;
+  const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId.trim() : '';
+  if (!/^\d{1,20}$/.test(remoteListingId)) {
+    res.status(400).json({ message: 'remoteListingId must be numeric', reason: 'invalid_remote_listing_id' });
+    return;
+  }
+
+  // Latest row for (item, platform), ignoring REMOVE/SKIPPED (a failed removal attempt, not a state
+  // change -- same rule getPendingRemovals applies).
+  const latest = await prisma.marketplaceListingJob.findFirst({
+    where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, action: true, status: true, remoteListingId: true },
+  });
+  if (!latest || latest.action !== 'POST' || latest.status !== 'POSTED') {
+    res.status(409).json({ message: 'No live listing recorded for this item on this platform', reason: 'no_live_listing' });
+    return;
+  }
+  if (latest.remoteListingId) {
+    if (latest.remoteListingId === remoteListingId) { res.json({ ok: true, unchanged: true }); return; }
+    res.status(409).json({ message: 'A different listing id is already recorded', reason: 'already_set' });
+    return;
+  }
+
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) { res.status(404).json({ message: 'Item not found' }); return; }
+  const clash = await prisma.marketplaceListingJob.findFirst({
+    where: {
+      platform,
+      remoteListingId,
+      action: 'POST',
+      status: 'POSTED',
+      itemId: { not: itemId },
+      item: { sale: { organizerId: organizer.id } },
+    },
+    select: { id: true },
+  });
+  if (clash) {
+    res.status(409).json({ message: 'That listing id is already recorded on another item', reason: 'id_in_use' });
+    return;
+  }
+
+  const updated = await prisma.marketplaceListingJob.updateMany({
+    where: { id: latest.id, remoteListingId: null },
+    data: { remoteListingId },
+  });
+  if (updated.count !== 1) {
+    res.status(409).json({ message: 'Listing id was set concurrently', reason: 'already_set' });
+    return;
+  }
+  res.json({ ok: true });
 };
 
 // GET /api/extension/pending-updates — ADR-086: items whose FindA.Sale price has drifted from

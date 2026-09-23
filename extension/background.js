@@ -1655,6 +1655,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // logging from the content-script side) so a regression here is visible again.
         if (!markListedResp.ok && !markListedResp.deduped) console.log('[FAS markListed FAILED]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, resp: markListedResp }));
         sendResponse(markListedResp);
+      } else if (msg.type === 'setRemoteListingId') {
+        // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23): fas-vinted.js reports the numeric Vinted
+        // listing id it learned AFTER the organizer published (own /items/<id> page after a fill,
+        // own wardrobe after publish, or the removal flow's unique wardrobe title match). Only a
+        // vinted.com content script may send it, only for VINTED, only a numeric id -- the backend
+        // re-checks all of this plus item ownership and set-once semantics.
+        const senderUrl = String((sender && (sender.url || (sender.tab && sender.tab.url))) || '');
+        const rid = typeof msg.remoteListingId === 'string' ? msg.remoteListingId : '';
+        if (msg.platform !== 'VINTED' || !/^https:\/\/www\.vinted\.com\//.test(senderUrl) ||
+            !/^\d{1,20}$/.test(rid) || typeof msg.itemId !== 'string' || !msg.itemId) {
+          sendResponse({ ok: false, status: 400, error: 'invalid_request' });
+        } else {
+          const r = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/remote-listing-id',
+            { method: 'POST', body: { platform: 'VINTED', remoteListingId: rid } });
+          if (!r.ok) console.log('[FAS setRemoteListingId]', JSON.stringify({ itemId: msg.itemId, source: msg.source || null, status: r.status, reason: r.data && r.data.reason }));
+          sendResponse(r);
+        }
       } else if (msg.type === 'markRemoved') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: {} }));

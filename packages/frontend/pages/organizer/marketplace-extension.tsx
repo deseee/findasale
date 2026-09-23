@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import MarketplaceSyncHealthCard from '../../components/MarketplaceSyncHealthCard';
+import FacebookSoldAlertsCard from '../../components/FacebookSoldAlertsCard';
 
 const MarketplaceExtensionPage = () => {
   const router = useRouter();
@@ -252,6 +253,10 @@ const MarketplaceExtensionPage = () => {
           {/* Marketplace Sync Health -- last post/remove activity, manual-review backlog,
               recently sold natively on Facebook. See components/MarketplaceSyncHealthCard.tsx. */}
           <MarketplaceSyncHealthCard />
+
+          {/* Facebook sold alerts (ADR-131): per-organizer forwarding address + Gmail steps.
+              See components/FacebookSoldAlertsCard.tsx. */}
+          <FacebookSoldAlertsCard />
         </div>
       </div>
     </>

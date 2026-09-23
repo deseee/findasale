@@ -33,6 +33,10 @@ import { buildFacebookSoldForwardingAddress } from '../organizerEmailForwardingS
 const KNOWN_TOKEN = 'abc123XYZ_-token';
 const KNOWN_TARGET_ADDRESS = buildFacebookSoldForwardingAddress(KNOWN_TOKEN);
 const CONFIRMATION_URL = 'https://mail-settings.google.com/mail/vf-2-AbCdEfGhIjKlMnOp?ui=2';
+// Receiver-stamped (topmost, mx.google.com) Authentication-Results for a genuine Google
+// forwarding-confirmation email -- required since the 2026-09-23 security fix.
+const PASSING_GOOGLE_AUTH_RESULTS =
+  'mx.google.com; dkim=pass header.i=@google.com header.s=20230601 header.b=XyZ; spf=pass (google.com: domain of forwarding-noreply@google.com designates 209.85.220.73 as permitted sender) smtp.mailfrom=forwarding-noreply@google.com; dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=google.com';
 
 function confirmationEmail(
   overrides: Partial<InboundGmailForwardingConfirmationEmail> = {},
@@ -47,6 +51,7 @@ function confirmationEmail(
       <p><a href="${CONFIRMATION_URL}">Confirm forwarding request</a></p>
     `,
     links: [CONFIRMATION_URL],
+    authenticationResults: [PASSING_GOOGLE_AUTH_RESULTS],
     ...overrides,
   };
 }
@@ -221,6 +226,149 @@ describe('processGmailForwardingConfirmationEmail', () => {
         expect.stringMatching(new RegExp(`^${KNOWN_TOKEN}$`, 'i')),
       );
       expect(result.kind).toBe('confirmed');
+    });
+  });
+});
+
+describe('SECURITY (2026-09-23) -- DKIM/DMARC for google.com and confirmation-link host allowlist', () => {
+  it('ignores (never resolves or fetches) an email with no Authentication-Results headers', async () => {
+    const resolveOrganizerId = jest.fn();
+    const confirmForwarding = jest.fn();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await processGmailForwardingConfirmationEmail(
+      confirmationEmail({ authenticationResults: [], arcAuthenticationResults: [] }),
+      { resolveOrganizerId, confirmForwarding },
+    );
+
+    expect(result.kind).toBe('ignored');
+    expect(resolveOrganizerId).not.toHaveBeenCalled();
+    expect(confirmForwarding).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('ignores dkim=pass for the wrong signing domain (header.d=gmail.com)', async () => {
+    const resolveOrganizerId = jest.fn();
+    const confirmForwarding = jest.fn();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await processGmailForwardingConfirmationEmail(
+      confirmationEmail({
+        authenticationResults: ['mx.google.com; dkim=pass header.d=gmail.com; dmarc=pass header.from=google.com'],
+      }),
+      { resolveOrganizerId, confirmForwarding },
+    );
+
+    expect(result.kind).toBe('ignored');
+    expect(confirmForwarding).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('ignores a look-alike domain (header.d=evilgoogle.com) and a forged pass below a real fail', async () => {
+    const confirmForwarding = jest.fn();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const lookalike = await processGmailForwardingConfirmationEmail(
+      confirmationEmail({ authenticationResults: ['mx.google.com; dkim=pass header.d=evilgoogle.com; dmarc=pass'] }),
+      { resolveOrganizerId: jest.fn().mockResolvedValue('organizer_1'), confirmForwarding },
+    );
+    const forgedBelow = await processGmailForwardingConfirmationEmail(
+      confirmationEmail({
+        authenticationResults: ['mx.google.com; dkim=none; dmarc=fail header.from=google.com', PASSING_GOOGLE_AUTH_RESULTS],
+      }),
+      { resolveOrganizerId: jest.fn().mockResolvedValue('organizer_1'), confirmForwarding },
+    );
+
+    expect(lookalike.kind).toBe('ignored');
+    expect(forgedBelow.kind).toBe('ignored');
+    expect(confirmForwarding).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it.each([
+    ['look-alike host suffix', 'https://mail-settings.google.com.evil.example/mail/vf-2-AbC'],
+    ['allowed host only in the query string', 'https://evil.example/mail/vf-2?next=mail-settings.google.com'],
+    ['plain http', 'http://mail-settings.google.com/mail/vf-2-AbC'],
+    ['embedded credentials', 'https://mail-settings.google.com@evil.example/mail/vf-2-AbC'],
+    ['non-allowlisted google host', 'https://evil.google.com/mail/vf-2-AbC'],
+    ['explicit port', 'https://mail-settings.google.com:8443/mail/vf-2-AbC'],
+  ])('does NOT fetch a spoofed confirmation link (%s)', async (_label, href) => {
+    const resolveOrganizerId = jest.fn().mockResolvedValue('organizer_1');
+    const confirmForwarding = jest.fn();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await processGmailForwardingConfirmationEmail(confirmationEmail({ links: [href] }), {
+      resolveOrganizerId,
+      confirmForwarding,
+    });
+
+    expect(confirmForwarding).not.toHaveBeenCalled();
+    expect(result.kind).toBe('unresolved');
+    warnSpy.mockRestore();
+  });
+
+  it('accepts the historical https://mail.google.com/mail/vf-... link form', async () => {
+    const href = 'https://mail.google.com/mail/vf-%5BANGjdJ9x%5D-AbCdEf';
+    const confirmForwarding = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    const result = await processGmailForwardingConfirmationEmail(confirmationEmail({ links: [href] }), {
+      resolveOrganizerId: jest.fn().mockResolvedValue('organizer_1'),
+      confirmForwarding,
+    });
+
+    expect(confirmForwarding).toHaveBeenCalledWith(href);
+    expect(result.kind).toBe('confirmed');
+  });
+
+  describe('default confirmForwarding (real fetch, mocked)', () => {
+    const realFetch = (global as any).fetch;
+    afterEach(() => {
+      (global as any).fetch = realFetch;
+    });
+
+    function mockFetch(status: number, location?: string) {
+      const fn = jest.fn().mockResolvedValue({
+        status,
+        ok: status >= 200 && status < 300,
+        headers: { get: (name: string) => (name.toLowerCase() === 'location' ? location ?? null : null) },
+      });
+      (global as any).fetch = fn;
+      return fn;
+    }
+
+    it('uses redirect: "manual" and treats 2xx as confirmed', async () => {
+      const fetchMock = mockFetch(200);
+      const result = await processGmailForwardingConfirmationEmail(confirmationEmail(), {
+        resolveOrganizerId: jest.fn().mockResolvedValue('organizer_1'),
+      });
+      expect(fetchMock).toHaveBeenCalledWith(CONFIRMATION_URL, expect.objectContaining({ redirect: 'manual' }));
+      expect(result.kind).toBe('confirmed');
+    });
+
+    it('treats a 3xx to an https google.com host as confirmed without following it', async () => {
+      const fetchMock = mockFetch(302, 'https://accounts.google.com/ServiceLogin?continue=x');
+      const result = await processGmailForwardingConfirmationEmail(confirmationEmail(), {
+        resolveOrganizerId: jest.fn().mockResolvedValue('organizer_1'),
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.kind).toBe('confirmed');
+    });
+
+    it('fails (never follows) a 3xx to a non-google host', async () => {
+      const fetchMock = mockFetch(302, 'https://evil.example/landing');
+      const result = await processGmailForwardingConfirmationEmail(confirmationEmail(), {
+        resolveOrganizerId: jest.fn().mockResolvedValue('organizer_1'),
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.kind).toBe('failed');
+    });
+
+    it('fails a 3xx to a look-alike google host (google.com.evil.example)', async () => {
+      mockFetch(301, 'https://google.com.evil.example/');
+      const result = await processGmailForwardingConfirmationEmail(confirmationEmail(), {
+        resolveOrganizerId: jest.fn().mockResolvedValue('organizer_1'),
+      });
+      expect(result.kind).toBe('failed');
     });
   });
 });

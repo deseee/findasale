@@ -30,7 +30,15 @@
  * "generate a random, unique, per-record public token" rather than inventing a new
  * generation scheme. Uses base64url (URL-safe, no padding) instead of referralCode's
  * uppercase-hex, since this token is embedded directly in an email address local-part
- * (`sold-<token>@mail.finda.sale`) and benefits from more entropy per character.
+ * (`sold-<token>@outreach.finda.sale`) and benefits from more entropy per character.
+ *
+ * DOMAIN (2026-09-23): the default forwarding domain is `outreach.finda.sale`, the Google
+ * Workspace domain whose catch-all routing rule was fixed and verified end-to-end on
+ * 2026-09-21 (target: find@outreach.finda.sale, the inbox FACEBOOK_SOLD_IMAP_USER polls;
+ * see STATE.md and ADR-131's final section). The earlier `mail.finda.sale` default is NOT
+ * covered by that catch-all: the only real forwarding test to it (2026-09-22) delivered
+ * Google's confirmation emails to a personal inbox instead of the polled mailbox.
+ * FACEBOOK_SOLD_EMAIL_DOMAIN still overrides this if routing moves.
  */
 
 import crypto from 'crypto';
@@ -41,7 +49,7 @@ import { prisma } from '../lib/prisma';
 // is not a practical concern even though the token is not itself secret.
 const TOKEN_BYTES = 18;
 
-const FORWARDING_DOMAIN = process.env.FACEBOOK_SOLD_EMAIL_DOMAIN || 'mail.finda.sale';
+export const FORWARDING_DOMAIN = process.env.FACEBOOK_SOLD_EMAIL_DOMAIN || 'outreach.finda.sale';
 
 function generateRawToken(): string {
   return crypto.randomBytes(TOKEN_BYTES).toString('base64url');
@@ -93,9 +101,39 @@ export async function ensureFacebookSoldEmailToken(organizerId: string): Promise
   return updated.facebookSoldEmailToken!;
 }
 
+/**
+ * Replaces organizerId's forwarding token with a fresh one (organizer-initiated, e.g. the
+ * old address leaked or got noisy). The old address stops resolving immediately, so any
+ * Gmail forward pointed at it has to be set up again with the new address.
+ */
+export async function regenerateFacebookSoldEmailToken(organizerId: string): Promise<string> {
+  await prisma.organizer.update({
+    where: { id: organizerId },
+    data: { facebookSoldEmailToken: null },
+    select: { id: true },
+  });
+  return ensureFacebookSoldEmailToken(organizerId);
+}
+
 /** Builds the full forwarding address an organizer would set up a forward/filter rule to. */
 export function buildFacebookSoldForwardingAddress(token: string): string {
   return `sold-${token}@${FORWARDING_DOMAIN}`;
+}
+
+/**
+ * Extracts the forwarding token from a bare recipient address of the exact form
+ * `sold-<token>@<FORWARDING_DOMAIN>` (case-insensitive). Returns null for anything else --
+ * a different domain, a different local-part shape, or a display-name/angle-bracket form
+ * (callers pass bare addresses). Pure; no DB access.
+ */
+export function extractForwardingTokenFromAddress(address: string): string | null {
+  if (!address) return null;
+  const at = address.lastIndexOf('@');
+  if (at <= 0) return null;
+  const domain = address.slice(at + 1).trim().toLowerCase();
+  if (domain !== FORWARDING_DOMAIN.toLowerCase()) return null;
+  const m = /^sold-([A-Za-z0-9_-]+)$/i.exec(address.slice(0, at).trim());
+  return m ? m[1] : null;
 }
 
 /**

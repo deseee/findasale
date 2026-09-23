@@ -6,9 +6,10 @@
  * already-parsed email (from address, subject, and its links/body) and decides whether
  * it is a genuine Facebook Marketplace "order placed" email, and if so, which Item it
  * corresponds to. It deliberately knows NOTHING about how the email got here -- no IMAP,
- * no SendGrid Inbound Parse / Mailgun Routes / Postmark Inbound payload shape, no
- * organizer-forwarding-token lookup (see organizerEmailForwardingService.ts for that
- * separate concern). Patrick has not yet picked an inbound-mail vendor; whichever one is
+ * no SendGrid Inbound Parse / Mailgun Routes / Postmark Inbound payload shape. (It DOES
+ * resolve the organizer from the recipient's forwarding token via
+ * organizerEmailForwardingService.ts -- added 2026-09-23 to scope matching per organizer;
+ * see MATCHING LOGIC step 1b.) Patrick has not yet picked an inbound-mail vendor; whichever one is
  * chosen, that vendor's webhook adapter is future follow-up work whose only job is to
  * translate that vendor's payload into the InboundFacebookOrderEmail shape below and call
  * processFacebookMarketplaceOrderEmail with it. Nothing here should need to change when
@@ -35,6 +36,16 @@
  *
  * MATCHING LOGIC (ADR-131 §3):
  *   1. Reject (kind: 'ignored') anything whose sender or subject doesn't match exactly.
+ *   1a. SENDER AUTHENTICATION (security review 2026-09-23): the parsed From address alone
+ *      is spoofable, so also reject (kind: 'ignored') unless the receiving server's
+ *      Authentication-Results (or, as fallback, ARC-Authentication-Results) records
+ *      dkim=pass for facebookmail.com / facebook.com AND dmarc=pass -- see
+ *      inboundEmailAuthService.ts for the trust model (topmost mx.google.com header only).
+ *   1b. ORGANIZER SCOPING: resolve the owning organizer from the recipient address
+ *      (sold-<token>@<FORWARDING_DOMAIN> in Delivered-To / X-Original-To / X-Forwarded-To /
+ *      To). No resolvable token, or tokens resolving to more than one organizer, rejects
+ *      (kind: 'ignored') -- the listing_id lookup below is then limited to THAT organizer's
+ *      items, so a genuine Facebook email can never mark another organizer's item sold.
  *   2. Extract the `listing_id` query parameter via `listing_id=(\d+)` against the raw
  *      href/body text -- this is Facebook's own Marketplace listing id. Also best-effort
  *      extract the path-segment order id (`/shipping_orders/(\d+)/`) purely for the
@@ -63,6 +74,11 @@
 
 import { prisma } from '../lib/prisma';
 import { commitFacebookNativeSale } from './facebookNativeSaleService';
+import {
+  resolveOrganizerIdByForwardingToken,
+  extractForwardingTokenFromAddress,
+} from './organizerEmailForwardingService';
+import { verifyInboundEmailAuthentication, FACEBOOK_DKIM_DOMAINS } from './inboundEmailAuthService';
 
 export const FACEBOOK_ORDER_EMAIL_SENDER = 'noreply@marketplace.facebook.com';
 export const FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX = 'New Marketplace order for';
@@ -81,6 +97,14 @@ export interface InboundFacebookOrderEmail {
   /** Raw email body (HTML or plain text), used if `links` is not provided or doesn't
    * contain a match. */
   rawBody?: string;
+  /** Every Authentication-Results header value, topmost first. Required (with a
+   * trusted dkim=pass + dmarc=pass) for the email to be acted on -- fail closed. */
+  authenticationResults?: string[];
+  /** Every ARC-Authentication-Results header value, topmost first (fallback only). */
+  arcAuthenticationResults?: string[];
+  /** Bare recipient addresses from Delivered-To / X-Original-To / X-Forwarded-To / To,
+   * used to find the organizer's sold-<token>@<domain> forwarding address. */
+  recipientAddresses?: string[];
 }
 
 export type FacebookOrderEmailResult =
@@ -93,6 +117,7 @@ export type FacebookOrderEmailResult =
     }
   | {
       kind: 'matched';
+      organizerId: string;
       itemId: string;
       remoteListingId: string;
       remoteOrderId: string | null;
@@ -101,6 +126,7 @@ export type FacebookOrderEmailResult =
     }
   | {
       kind: 'unmatched';
+      organizerId: string;
       /** Facebook's shipping-order id parsed from the link path segment, if found.
        * Null when even that couldn't be parsed (e.g. no links/rawBody supplied at all). */
       remoteOrderId: string | null;
@@ -117,18 +143,29 @@ export type FacebookOrderEmailResult =
     };
 
 export interface FacebookOrderEmailDeps {
-  /** Resolves a Facebook listing id to the FindA.Sale itemId it belongs to, or null if
-   * no matching job row exists. Defaults to the real MarketplaceListingJob query
-   * (ADR-131 §3). Override in tests to avoid touching Prisma. */
-  resolveItemIdForListingId?: (remoteListingId: string) => Promise<string | null>;
+  /** Resolves a Facebook listing id to the FindA.Sale itemId it belongs to, restricted to
+   * items owned by `organizerId`, or null if no matching job row exists. Defaults to the
+   * real MarketplaceListingJob query (ADR-131 §3). Override in tests to avoid Prisma. */
+  resolveItemIdForListingId?: (remoteListingId: string, organizerId: string) => Promise<string | null>;
+  /** Resolves a sold-<token> forwarding token to its organizerId, or null. Defaults to
+   * organizerEmailForwardingService.resolveOrganizerIdByForwardingToken. */
+  resolveOrganizerIdByToken?: (token: string) => Promise<string | null>;
   /** Commits the sale once a match is found. Defaults to commitFacebookNativeSale.
    * Override in tests to assert on calls without touching the database. */
   commitSale?: (itemId: string, soldVia: string) => Promise<{ alreadyCommitted: boolean }>;
 }
 
-async function defaultResolveItemIdForListingId(remoteListingId: string): Promise<string | null> {
+async function defaultResolveItemIdForListingId(remoteListingId: string, organizerId: string): Promise<string | null> {
+  if (!organizerId) return null; // fail closed -- never an unscoped lookup
   const job = await prisma.marketplaceListingJob.findFirst({
-    where: { remoteListingId, platform: 'FACEBOOK', action: 'POST' },
+    where: {
+      remoteListingId,
+      platform: 'FACEBOOK',
+      action: 'POST',
+      // Scoped to the organizer resolved from the recipient token. Item.organizerId is a
+      // nullable denormalization of sale.organizerId, so accept either ownership path.
+      item: { OR: [{ organizerId }, { sale: { organizerId } }] },
+    },
     orderBy: { createdAt: 'desc' },
     select: { itemId: true },
   });
@@ -181,6 +218,7 @@ export async function processFacebookMarketplaceOrderEmail(
   deps: FacebookOrderEmailDeps = {},
 ): Promise<FacebookOrderEmailResult> {
   const resolveItemIdForListingId = deps.resolveItemIdForListingId ?? defaultResolveItemIdForListingId;
+  const resolveOrganizerIdByToken = deps.resolveOrganizerIdByToken ?? resolveOrganizerIdByForwardingToken;
   const commitSale = deps.commitSale ?? defaultCommitSale;
 
   if (!isExactSender(email.from)) {
@@ -189,6 +227,44 @@ export async function processFacebookMarketplaceOrderEmail(
   if (!email.subject.startsWith(FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX)) {
     return { kind: 'ignored', reason: `subject does not start with "${FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX}"` };
   }
+
+  // SENDER AUTHENTICATION -- fail closed (see file header step 1a).
+  const auth = verifyInboundEmailAuthentication(email, FACEBOOK_DKIM_DOMAINS);
+  if (!auth.ok) {
+    console.warn('[FacebookMarketplaceEmailSoldDetection] rejecting order email -- sender authentication failed', {
+      reason: auth.reason,
+    });
+    return { kind: 'ignored', reason: `sender authentication failed: ${auth.reason}` };
+  }
+
+  // ORGANIZER SCOPING -- fail closed (see file header step 1b).
+  const tokens = new Map<string, string>();
+  for (const addr of email.recipientAddresses ?? []) {
+    const token = extractForwardingTokenFromAddress(addr);
+    if (token && !tokens.has(token.toLowerCase())) tokens.set(token.toLowerCase(), token);
+  }
+  if (tokens.size === 0) {
+    console.warn('[FacebookMarketplaceEmailSoldDetection] rejecting order email -- no sold-<token> recipient address', {
+      recipientAddresses: email.recipientAddresses ?? [],
+    });
+    return { kind: 'ignored', reason: 'no sold-<token>@<forwarding domain> recipient address found' };
+  }
+  const organizerIds = new Set<string>();
+  for (const token of tokens.values()) {
+    const id = await resolveOrganizerIdByToken(token);
+    if (id) organizerIds.add(id);
+  }
+  if (organizerIds.size !== 1) {
+    const reason =
+      organizerIds.size === 0
+        ? 'forwarding token did not resolve to any known organizer'
+        : 'recipient tokens resolved to more than one organizer (ambiguous)';
+    console.warn(`[FacebookMarketplaceEmailSoldDetection] rejecting order email -- ${reason}`, {
+      tokenCount: tokens.size,
+    });
+    return { kind: 'ignored', reason };
+  }
+  const organizerId = [...organizerIds][0];
 
   const itemTitleFromSubject = parseItemTitleFromSubject(email.subject);
   const searchTexts = [...(email.links ?? []), ...(email.rawBody ? [email.rawBody] : [])];
@@ -203,6 +279,7 @@ export async function processFacebookMarketplaceOrderEmail(
     });
     return {
       kind: 'unmatched',
+      organizerId,
       remoteOrderId,
       remoteListingId: null,
       itemTitleFromSubject,
@@ -210,22 +287,24 @@ export async function processFacebookMarketplaceOrderEmail(
     };
   }
 
-  const itemId = await resolveItemIdForListingId(remoteListingId);
+  const itemId = await resolveItemIdForListingId(remoteListingId, organizerId);
 
   if (!itemId) {
     // FAIL CLOSED (ADR-131 §3, non-negotiable): never fall back to fuzzy title-matching.
     // A human reconciles this from the logged detail.
     console.warn('[FacebookMarketplaceEmailSoldDetection] unmatched order email -- no MarketplaceListingJob row', {
+      organizerId,
       remoteListingId,
       remoteOrderId,
       itemTitleFromSubject,
     });
     return {
       kind: 'unmatched',
+      organizerId,
       remoteOrderId,
       remoteListingId,
       itemTitleFromSubject,
-      reason: `no MarketplaceListingJob row (platform=FACEBOOK, action=POST) found for remoteListingId=${remoteListingId}`,
+      reason: `no MarketplaceListingJob row (platform=FACEBOOK, action=POST) owned by organizer ${organizerId} found for remoteListingId=${remoteListingId}`,
     };
   }
 
@@ -233,6 +312,7 @@ export async function processFacebookMarketplaceOrderEmail(
 
   return {
     kind: 'matched',
+    organizerId,
     itemId,
     remoteListingId,
     remoteOrderId,

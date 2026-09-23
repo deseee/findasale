@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -11,6 +11,9 @@ const router = Router();
 
 router.get('/items', authenticate, requireOrganizer, requireTier('PRO'), getExtensionItems);
 router.post('/items/:id/listed', authenticate, requireOrganizer, requireTier('PRO'), markItemListed);
+// S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23): set-once numeric marketplace listing id on the item's
+// live POST/POSTED job (Vinted only today) -- see extensionController.ts setItemRemoteListingId.
+router.post('/items/:id/remote-listing-id', authenticate, requireOrganizer, requireTier('PRO'), setItemRemoteListingId);
 router.post('/items/:id/removed', authenticate, requireOrganizer, requireTier('PRO'), markItemRemoved);
 router.post('/items/:id/removal-skipped', authenticate, requireOrganizer, requireTier('PRO'), markItemRemovalSkipped);
 router.get('/pending-removals', authenticate, requireOrganizer, requireTier('PRO'), getPendingRemovals);
