@@ -56,6 +56,7 @@ import { reviseEbayOfferPrice } from '../services/ebayPriceRevisionService';
 import {
   classifyPropagationFailure,
   formatPropagationFailureReason,
+  resolveSyncStateAfterFailure,
 } from '../services/markdownPricePropagationService';
 import { fetchAndCacheEbayStoreSubscription, isEbayStoreSubscriptionStale } from '../services/ebayStoreSubscriptionService';
 import { reconcileEbayInsertionsUsage, isEbayInsertionsReconciliationStale } from '../lib/ebayInsertionsQuotaTracker';
@@ -141,6 +142,9 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       // one-time terminal notification below actually shows the organizer.
       ebaySyncState: true,
       ebaySyncFailureReason: true,
+      // 2026-09-23: consecutive-failure count -- a content 4xx only becomes FAILED_TERMINAL
+      // once this reaches TERMINAL_AFTER_ATTEMPTS (resolveSyncStateAfterFailure).
+      ebaySyncAttempts: true,
     },
   });
 
@@ -278,21 +282,26 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
         // call in 4 hours. The price-provenance guard flags (priceUpdatedAt /
         // ebayPriceSyncedAt) are still deliberately left untouched -- the local price change
         // really is still unconfirmed, and the sync-issues panel reads exactly that.
+        // 2026-09-23 (ADR-128 Decision #4 cap): a content 4xx is only stranded as
+        // FAILED_TERMINAL after TERMINAL_AFTER_ATTEMPTS consecutive failures, so the eBay
+        // auto-repair in reviseEbayOfferPrice() gets the extra cycles it needs to converge.
         const failureClass = classifyPropagationFailure(pushResult.reason, pushResult.detail);
+        const attemptsAfterThisFailure = (item.ebaySyncAttempts ?? 0) + 1;
+        const nextSyncState = resolveSyncStateAfterFailure(failureClass, attemptsAfterThisFailure, pushResult.reason);
         const failureReason = formatPropagationFailureReason(pushResult.reason, pushResult.detail);
         await prisma.item.update({
           where: { id: item.id },
           data: {
-            ebaySyncState: failureClass === 'terminal' ? 'FAILED_TERMINAL' : 'FAILED_RETRYABLE',
+            ebaySyncState: nextSyncState,
             ebaySyncFailureReason: failureReason,
             ebaySyncAttempts: { increment: 1 },
           },
         });
 
         console.warn(
-          `[eBay PullSync] item ${item.id}: push-first failed, ${failureClass} (${pushResult.reason ?? 'unknown'}${pushResult.detail ? ` — ${pushResult.detail}` : ''}) — skipping pull this cycle too; guard flags untouched, ${failureClass === 'terminal' ? 'no further eBay calls for this item' : 'retries next cycle'}`
+          `[eBay PullSync] item ${item.id}: push-first failed, ${failureClass} -> ${nextSyncState} (attempt ${attemptsAfterThisFailure}) (${pushResult.reason ?? 'unknown'}${pushResult.detail ? ` — ${pushResult.detail}` : ''}) — skipping pull this cycle too; guard flags untouched, ${nextSyncState === 'FAILED_TERMINAL' ? 'no further eBay calls for this item' : 'retries next cycle'}`
         );
-        if (failureClass === 'terminal') {
+        if (nextSyncState === 'FAILED_TERMINAL') {
           // ADR-128 Decision #5 -- alert once, actionably. This is the transition INTO
           // FAILED_TERMINAL; every later cycle skips this item at the top of the loop and
           // re-queues it from there, where the notification's own existence is the guard.

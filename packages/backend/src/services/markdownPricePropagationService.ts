@@ -134,6 +134,33 @@ export function classifyPropagationFailure(
 }
 
 /**
+ * ADR-128 Decision #4 ("backoff + cap") -- the cap half. A content 4xx from eBay only becomes
+ * FAILED_TERMINAL after this many CONSECUTIVE failed pushes (Item.ebaySyncAttempts, which is
+ * reset to 0 on every confirmed sync). Added 2026-09-23 because reviseEbayOfferPrice()'s
+ * auto-repair (25129 aspect values, 25101/25002 packageType/aspects, category-aspect
+ * injection) often needs more than one sync cycle to converge: an aspect fixed on cycle N
+ * only takes effect on eBay by cycle N+1. Terminal-on-first-4xx stranded exactly those items.
+ */
+export const TERMINAL_AFTER_ATTEMPTS = 3;
+
+/**
+ * Map a pure classification plus the consecutive-failure count (INCLUDING the failure being
+ * recorded now) to the ebaySyncState to persist. classifyPropagationFailure() stays pure --
+ * it answers "can a retry ever fix this kind of failure?"; this decides "have we given the
+ * auto-repair loop enough cycles yet?". 'no-offer-id' stays immediately terminal: there is
+ * nothing on eBay to revise, and no repair loop touches that case.
+ */
+export function resolveSyncStateAfterFailure(
+  failureClass: EbaySyncFailureClass,
+  attemptsAfterThisFailure: number,
+  reason?: string | null
+): 'FAILED_TERMINAL' | 'FAILED_RETRYABLE' {
+  if (failureClass !== 'terminal') return 'FAILED_RETRYABLE';
+  if (reason === 'no-offer-id') return 'FAILED_TERMINAL';
+  return attemptsAfterThisFailure >= TERMINAL_AFTER_ATTEMPTS ? 'FAILED_TERMINAL' : 'FAILED_RETRYABLE';
+}
+
+/**
  * Build the string stored in Item.ebaySyncFailureReason. ADR-128, Decision #2 is explicit
  * that this column holds "the real eBay error text, not a category", because Decision #5's
  * one-time terminal alert has to be able to say "Size aspect value not supported" rather

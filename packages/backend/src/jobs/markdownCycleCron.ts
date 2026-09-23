@@ -4,6 +4,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
 import {
   classifyPropagationFailure,
+  resolveSyncStateAfterFailure,
   formatPropagationFailureReason,
   propagateMarkdownPriceToMarketplaces,
 } from '../services/markdownPricePropagationService';
@@ -81,7 +82,7 @@ export function scheduleMarkdownCycleCron(): void {
                 lte: new Date(now.getTime() - cycle.daysUntilFirst * 24 * 60 * 60 * 1000),
               },
             },
-            select: { id: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true },
+            select: { id: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true, ebaySyncAttempts: true },
           });
 
           if (firstMarkdownItems.length > 0) {
@@ -118,7 +119,7 @@ export function scheduleMarkdownCycleCron(): void {
                   // marked PENDING for a push that will never be attempted. Resolved to SYNCED or
                   // FAILED_* by the propagation block below, inside this same iteration.
                   ...(item.ebayOfferId || item.ebayListingId
-                    ? { ebaySyncState: 'PENDING' as const }
+                    ? { ebaySyncState: 'PENDING' as const, ebaySyncAttempts: 0 }
                     : {}),
                 },
               });
@@ -188,16 +189,19 @@ export function scheduleMarkdownCycleCron(): void {
                   // ebayListingSyncCron.ts can stop retrying what no retry can fix, and eBay's own
                   // error text is kept for the organizer-facing alert.
                   const failureClass = classifyPropagationFailure(ebayResult.reason, ebayResult.detail);
+                  // 2026-09-23 (ADR-128 Decision #4 cap): terminal only after TERMINAL_AFTER_ATTEMPTS
+                  // consecutive failures, so eBay auto-repair gets the cycles it needs to converge.
+                  const nextSyncState = resolveSyncStateAfterFailure(failureClass, (item.ebaySyncAttempts ?? 0) + 1, ebayResult.reason);
                   await prisma.item.update({
                     where: { id: item.id },
                     data: {
-                      ebaySyncState: failureClass === 'terminal' ? 'FAILED_TERMINAL' : 'FAILED_RETRYABLE',
+                      ebaySyncState: nextSyncState,
                       ebaySyncFailureReason: formatPropagationFailureReason(ebayResult.reason, ebayResult.detail),
                       ebaySyncAttempts: { increment: 1 },
                     },
                   });
                   console.warn(
-                    `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass}): ${ebayResult.reason ?? 'unknown'}`
+                    `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass} -> ${nextSyncState}): ${ebayResult.reason ?? 'unknown'}`
                   );
                 }
               } catch (propErr) {
@@ -231,7 +235,7 @@ export function scheduleMarkdownCycleCron(): void {
                   lte: new Date(now.getTime() - cycle.daysUntilSecond * 24 * 60 * 60 * 1000),
                 },
               },
-              select: { id: true, priceBeforeMarkdown: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true },
+              select: { id: true, priceBeforeMarkdown: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true, ebaySyncAttempts: true },
             });
 
             if (secondMarkdownItems.length > 0) {
@@ -278,7 +282,7 @@ export function scheduleMarkdownCycleCron(): void {
                     // marked PENDING for a push that will never be attempted. Resolved to SYNCED or
                     // FAILED_* by the propagation block below, inside this same iteration.
                     ...(item.ebayOfferId || item.ebayListingId
-                      ? { ebaySyncState: 'PENDING' as const }
+                      ? { ebaySyncState: 'PENDING' as const, ebaySyncAttempts: 0 }
                       : {}),
                   },
                 });
@@ -345,16 +349,19 @@ export function scheduleMarkdownCycleCron(): void {
                     // ebayListingSyncCron.ts can stop retrying what no retry can fix, and eBay's own
                     // error text is kept for the organizer-facing alert.
                     const failureClass = classifyPropagationFailure(ebayResult.reason, ebayResult.detail);
+                    // 2026-09-23 (ADR-128 Decision #4 cap): terminal only after TERMINAL_AFTER_ATTEMPTS
+                    // consecutive failures, so eBay auto-repair gets the cycles it needs to converge.
+                    const nextSyncState = resolveSyncStateAfterFailure(failureClass, (item.ebaySyncAttempts ?? 0) + 1, ebayResult.reason);
                     await prisma.item.update({
                       where: { id: item.id },
                       data: {
-                        ebaySyncState: failureClass === 'terminal' ? 'FAILED_TERMINAL' : 'FAILED_RETRYABLE',
+                        ebaySyncState: nextSyncState,
                         ebaySyncFailureReason: formatPropagationFailureReason(ebayResult.reason, ebayResult.detail),
                         ebaySyncAttempts: { increment: 1 },
                       },
                     });
                     console.warn(
-                      `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass}): ${ebayResult.reason ?? 'unknown'}`
+                      `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass} -> ${nextSyncState}): ${ebayResult.reason ?? 'unknown'}`
                     );
                   }
                 } catch (propErr) {

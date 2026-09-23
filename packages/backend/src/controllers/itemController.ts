@@ -1650,6 +1650,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       // buildHandlers(), so a non-eBay item is never marked PENDING.
       if (item.ebayOfferId || item.ebayListingId) {
         updateData.ebaySyncState = 'PENDING';
+        updateData.ebaySyncAttempts = 0; // a new organizer price gets a fresh set of push attempts
       }
       fieldsBeingEdited.push('price');
     }
