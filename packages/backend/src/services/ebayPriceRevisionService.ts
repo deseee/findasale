@@ -147,7 +147,33 @@ async function injectMissingCategoryAspects(
   // JSON.parse in a try/catch and silently returns [] on unparseable input, so the "HTTP 400 "
   // prefix was making every single call here a silent no-op. Strip the prefix before parsing.
   const rawErrorBody = (errorDetail || '').replace(/^HTTP\s+\d+\s+/, '');
-  const missingNames = parseMissingRequiredAspectNames(rawErrorBody, 25002);
+  let missingNames = parseMissingRequiredAspectNames(rawErrorBody, 25002);
+  // eBay Fashion Size Standardization fallback (2026-09-23, Gap confirmed live -- items
+  // cmo3etpx2005hjqsuvzlkt8qz / cmo3et2pb002djqsuyta1cslc, errorId 25129): 25129's
+  // parameters[] entries are full sentence fragments ("Enter a valid value for Size.",
+  // "Unspecified is not a valid value for Size...") and a bare numeric code, never a clean
+  // aspect-name label the way 25002's parameters[] are -- parseMissingRequiredAspectNames'
+  // label-shape filter correctly rejects all of them, so missingNames is always empty for a
+  // 25129 error above. The rejected aspect name IS reliably present, though, embedded in the
+  // error's own message text: "...no longer support custom values for Size. Your listing..."
+  // (repeats 3x per message, same name every time -- confirmed identically on both items
+  // above). Extract it from there when the 25002-shaped parse comes up empty.
+  if (missingNames.length === 0) {
+    try {
+      const parsed = JSON.parse(rawErrorBody) as { errors?: Array<{ errorId?: number; message?: string }> };
+      for (const err of parsed.errors || []) {
+        if (err.errorId !== 25129 || !err.message) continue;
+        const m = err.message.match(/no longer support custom values for ([A-Za-z][A-Za-z0-9/ ]{0,40}?)\.\s/);
+        if (m) {
+          missingNames = [m[1].trim()];
+          console.log(`[eBay PriceRevision] sku=${sku}: errorId 25129 (Size standardization) -- extracted aspect name "${m[1].trim()}" from error message`);
+          break;
+        }
+      }
+    } catch {
+      // rawErrorBody wasn't parseable JSON -- fall through to the same empty-result bail below.
+    }
+  }
   if (missingNames.length === 0) {
     console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair found no parseable missing-aspect name in error detail (raw="${rawErrorBody.slice(0, 200)}")`);
     return false;
@@ -169,7 +195,17 @@ async function injectMissingCategoryAspects(
   const spec = await getRequiredAspectsForCategory(categoryId);
   let injected = false;
   for (const name of missingNames) {
-    if (hasKey(name)) continue;
+    // 2026-09-23 diagnostic (Gap 2, item cmnzf780a0009pf19ru5qppqn "Amplifier Type"):
+    // this branch used to be silent, which is exactly what made the aspect-already-set
+    // mystery unreadable from logs alone -- confirmed live this cycle: this item's
+    // missingNames correctly parsed to ["Amplifier Type"], yet NO log line fired anywhere
+    // in this function, meaning this hasKey() branch (or the no-injection bail below) is
+    // where the trail went cold. Logging it now so the next cycle states the diagnosis
+    // outright instead of requiring inference from silence.
+    if (hasKey(name)) {
+      console.log(`[eBay PriceRevision] sku=${sku}: aspect "${name}" already present in inventory-item product.aspects -- not re-injecting`);
+      continue;
+    }
     const aspectSpec = spec?.find((a) => a.name.toLowerCase() === name.toLowerCase());
     if (!aspectSpec) {
       console.log(`[eBay PriceRevision] sku=${sku}: discarding aspect "${name}" -- no matching real category ${categoryId} aspect`);
@@ -184,7 +220,10 @@ async function injectMissingCategoryAspects(
     injected = true;
     console.log(`[eBay PriceRevision] sku=${sku}: injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
   }
-  if (!injected) return false;
+  if (!injected) {
+    console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair found ${missingNames.length} missing name(s) but none needed injection (already present on eBay's side or unmatched to a real category aspect) -- repair is a no-op this cycle; if the offer PUT still fails with the identical error, the aspect is already set on the inventory item and the blocker is elsewhere (propagation delay or offer/inventory-item validation-scope mismatch)`);
+    return false;
+  }
   invBody.product.aspects = aspectsObj;
 
   const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, {

@@ -17,6 +17,7 @@ import {
   suggestCategories,
 } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from './ebayController';
+import { ebayFetch } from '../services/ebayPublishService';
 
 // ── Vercel Proxy Helpers ────────────────────────────────────────────────────
 // Railway DNS cannot resolve api.ebay.com directly, so all eBay API calls route
@@ -169,6 +170,90 @@ export async function getListingDebugInfo(req: AuthRequest, res: Response): Prom
     });
   } catch (error: any) {
     console.error('[ebayTaxonomy] getListingDebugInfo error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/**
+ * GET /api/ebay/inventory-debug/:itemId -- diagnostic-only, organizer-scoped.
+ *
+ * Added 2026-09-23 (Gap 2, eBay sync-issues investigation) -- to verify, not infer from
+ * log silence, whether the "Amplifier Type" aspect is genuinely already set on eBay's live
+ * inventory item for item cmnzf780a0009pf19ru5qppqn. ebayPriceRevisionService.ts's
+ * injectMissingCategoryAspects() has a hasKey() guard that silently skips re-injecting an
+ * aspect already present in a fetched inventory item, which is CONSISTENT with the
+ * offer-level "Amplifier Type is missing" error persisting even after a prior successful
+ * injection cycle -- but that's an inference from log silence, not confirmed ground truth.
+ * This dumps the LIVE inventory item's actual current product.aspects so the real next
+ * step (if any) is evidence-based.
+ *
+ * Covers the Inventory-API/offer-based item shape (item.ebayOfferId) -- the sibling
+ * getListingDebugInfo handler above covers the legacy Trading-API shape (item.ebayListingId)
+ * instead; these two item populations don't overlap. Read-only -- no eBay or DB mutation.
+ * Item must belong to the calling organizer, same OR-scoping pattern getListingDebugInfo
+ * uses. SKU is read off the live offer GET response, never guessed from a naming
+ * convention -- mirrors exactly how ebayPriceRevisionService.ts's reviseEbayOfferPrice
+ * resolves sku today.
+ */
+export async function getInventoryItemDebugInfo(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const organizerId = (req.user as any).organizer?.id;
+    if (!organizerId) {
+      res.status(403).json({ error: 'Organizer profile not found' });
+      return;
+    }
+
+    const { itemId } = req.params;
+    const item = await prisma.item.findFirst({
+      where: { id: itemId, OR: [{ organizerId }, { sale: { organizerId } }] },
+      select: { id: true, ebayOfferId: true },
+    });
+    if (!item || !item.ebayOfferId) {
+      res.status(404).json({ error: 'Item not found, not yours, or has no eBay offer' });
+      return;
+    }
+
+    const token = await getOrganizerEbayToken(organizerId);
+    if (!token) {
+      res.status(401).json({ error: 'eBay connection not authorized' });
+      return;
+    }
+
+    const offerRes = await ebayFetch(`/sell/inventory/v1/offer/${encodeURIComponent(item.ebayOfferId)}`, token, { method: 'GET' });
+    if (!offerRes.ok) {
+      const bodyText = await offerRes.text().catch(() => '');
+      res.status(502).json({ error: 'eBay offer GET failed', status: offerRes.status, detail: bodyText.slice(0, 500) });
+      return;
+    }
+    const offerBody = (await offerRes.json()) as any;
+    const sku = typeof offerBody.sku === 'string' ? offerBody.sku : null;
+    if (!sku) {
+      res.status(502).json({ error: 'eBay offer has no sku field', offerBody });
+      return;
+    }
+
+    const invRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, token, { method: 'GET' });
+    if (!invRes.ok) {
+      const bodyText = await invRes.text().catch(() => '');
+      res.status(502).json({ error: 'eBay inventory item GET failed', status: invRes.status, detail: bodyText.slice(0, 500) });
+      return;
+    }
+    const invBody = (await invRes.json()) as any;
+
+    res.json({
+      sku,
+      offerCategoryId: offerBody.categoryId ?? null,
+      aspects: invBody?.product?.aspects ?? null,
+      productTitle: invBody?.product?.title ?? null,
+      condition: invBody?.condition ?? null,
+      availability: invBody?.availability ?? null,
+    });
+  } catch (error: any) {
+    console.error('[ebayTaxonomy] getInventoryItemDebugInfo error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
