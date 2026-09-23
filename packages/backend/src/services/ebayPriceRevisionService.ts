@@ -195,7 +195,6 @@ async function injectMissingCategoryAspects(
   if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
   const aspectsObj: Record<string, string[]> =
     invBody.product.aspects && typeof invBody.product.aspects === 'object' ? invBody.product.aspects : {};
-  const hasKey = (key: string): boolean => Object.keys(aspectsObj).some((k) => k.toLowerCase() === key.toLowerCase());
 
   const spec = await getRequiredAspectsForCategory(categoryId);
   let injected = false;
@@ -207,23 +206,44 @@ async function injectMissingCategoryAspects(
     // in this function, meaning this hasKey() branch (or the no-injection bail below) is
     // where the trail went cold. Logging it now so the next cycle states the diagnosis
     // outright instead of requiring inference from silence.
-    if (hasKey(name)) {
-      console.log(`[eBay PriceRevision] sku=${sku}: aspect "${name}" already present in inventory-item product.aspects -- not re-injecting`);
-      continue;
-    }
     const aspectSpec = spec?.find((a) => a.name.toLowerCase() === name.toLowerCase());
     if (!aspectSpec) {
       console.log(`[eBay PriceRevision] sku=${sku}: discarding aspect "${name}" -- no matching real category ${categoryId} aspect`);
       continue;
+    }
+
+    // 2026-09-23 fix: a present key is not necessarily a VALID value. eBay's Fashion Size
+    // Standardization (errorId 25129) rejects the literal placeholder "Unspecified" even
+    // though the key already exists on the inventory item -- confirmed live this cycle:
+    // item cmo3etpx2005hjqsuvzlkt8qz's real inventory-item aspects had Size=["Unspecified"],
+    // which the old presence-only check treated as "already fine" forever, so the repair
+    // was a permanent no-op and the offer PUT kept failing with the identical error. Only
+    // trust an existing value when the aspect has no enum spec to validate against (freeform
+    // aspects like Brand/MPN/Model -- any non-empty value is acceptable, unchanged 25002
+    // semantics) or the existing value actually matches one of the aspect's real eBay enum
+    // values. Otherwise fall through and try to replace it exactly like a missing aspect.
+    const existingKey = Object.keys(aspectsObj).find((k) => k.toLowerCase() === name.toLowerCase());
+    if (existingKey) {
+      const existingValues = aspectsObj[existingKey] ?? [];
+      const hasEnumSpec = aspectSpec.enumValues.length > 0;
+      const existingIsValid =
+        !hasEnumSpec ||
+        existingValues.some((v) => aspectSpec.enumValues.some((ev) => ev.toLowerCase() === String(v).toLowerCase()));
+      if (existingIsValid) {
+        console.log(`[eBay PriceRevision] sku=${sku}: aspect "${name}" already present with a valid value (${JSON.stringify(existingValues)}) -- not re-injecting`);
+        continue;
+      }
+      console.log(`[eBay PriceRevision] sku=${sku}: aspect "${name}" present but value ${JSON.stringify(existingValues)} is not a valid eBay enum value for this category -- treating as needing repair, not skipping`);
     }
     const defaultValue = pickSafeAspectDefault(aspectSpec, itemTitle, itemDescription);
     if (defaultValue === null) {
       console.log(`[eBay PriceRevision] sku=${sku}: skipping aspect "${aspectSpec.name}" -- no confident value found in title/description (never guessing a Size-family aspect)`);
       continue;
     }
+    if (existingKey && existingKey !== aspectSpec.name) delete aspectsObj[existingKey];
     aspectsObj[aspectSpec.name] = [defaultValue];
     injected = true;
-    console.log(`[eBay PriceRevision] sku=${sku}: injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
+    console.log(`[eBay PriceRevision] sku=${sku}: injecting ${existingKey ? 'corrected' : 'missing'} aspect "${aspectSpec.name}"=${defaultValue}`);
   }
   if (!injected) {
     console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair found ${missingNames.length} missing name(s) but none needed injection (already present on eBay's side or unmatched to a real category aspect) -- repair is a no-op this cycle; if the offer PUT still fails with the identical error, the aspect is already set on the inventory item and the blocker is elsewhere (propagation delay or offer/inventory-item validation-scope mismatch)`);

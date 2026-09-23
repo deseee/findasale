@@ -1039,7 +1039,13 @@ const heal25002: Healer = async (ctx, errorBody) => {
       console.log(`[eBay SelfHeal 25002] ${ctx.sku}: errorId 25129 (Size standardization) -- extracted aspect name "${m[1].trim()}" from error message (raw-text match)`);
     }
   }
-  const dynamicNames = missingNames.filter((name) => !/^brand ?mpn$/i.test(name) && !hasKey(name));
+  // 2026-09-23 fix: this used to also drop any name already present as a key
+  // (!hasKey(name)), which permanently no-ops errorId 25129 repairs -- eBay's Fashion
+  // Size Standardization rejects the literal placeholder "Unspecified" even though the
+  // key exists. Presence-vs-validity is now checked per-name below, once the real
+  // category aspect spec (with enumValues) is available, mirroring the identical fix in
+  // ebayPriceRevisionService.ts's injectMissingCategoryAspects().
+  const dynamicNames = missingNames.filter((name) => !/^brand ?mpn$/i.test(name));
   // ADR-089: ISBN is a REAL identifier aspect for Books — no safe default exists ("Does Not
   // Apply" is rejected by eBay for ISBN). Inject the item's real ISBN when present; SKIP entirely
   // when absent (a placeholder ISBN guarantees another 25002, so skipping lets the loop terminate
@@ -1065,13 +1071,37 @@ const heal25002: Healer = async (ctx, errorBody) => {
         console.log(`[eBay SelfHeal 25002] ${ctx.sku}: discarding dynamic aspect "${name}" — no matching real category aspect`);
         continue;
       }
+
+      // 2026-09-23 fix (mirrors ebayPriceRevisionService.ts's injectMissingCategoryAspects):
+      // a present key is not necessarily a VALID value. Confirmed live: eBay's Fashion Size
+      // Standardization (errorId 25129) rejects the literal placeholder "Unspecified" even
+      // though the key already exists on the inventory item. Only trust an existing value
+      // when the aspect has no enum spec to validate against (freeform aspects -- any
+      // non-empty value is acceptable, unchanged 25002 semantics) or the existing value
+      // actually matches one of the aspect's real eBay enum values. Otherwise fall through
+      // and try to replace it exactly like a genuinely-missing aspect.
+      const existingKey = Object.keys(aspectsObj).find((k) => k.toLowerCase() === name.toLowerCase());
+      if (existingKey) {
+        const existingValues = aspectsObj[existingKey] ?? [];
+        const hasEnumSpec = aspectSpec.enumValues.length > 0;
+        const existingIsValid =
+          !hasEnumSpec ||
+          existingValues.some((v) => aspectSpec.enumValues.some((ev) => ev.toLowerCase() === String(v).toLowerCase()));
+        if (existingIsValid) {
+          console.log(`[eBay SelfHeal 25002] ${ctx.sku}: aspect "${name}" already present with a valid value (${JSON.stringify(existingValues)}) -- not re-injecting`);
+          continue;
+        }
+        console.log(`[eBay SelfHeal 25002] ${ctx.sku}: aspect "${name}" present but value ${JSON.stringify(existingValues)} is not a valid eBay enum value for this category -- treating as needing repair, not skipping`);
+      }
+
       const defaultValue = pickSafeAspectDefault(aspectSpec, item.title, item.description);
       if (defaultValue === null) {
         console.log(`[eBay SelfHeal 25002] ${ctx.sku}: skipping aspect "${aspectSpec.name}" -- no confident value found in title/description (never guessing a Size-family aspect)`);
         continue;
       }
+      if (existingKey && existingKey !== aspectSpec.name) delete aspectsObj[existingKey];
       aspectsObj[aspectSpec.name] = [defaultValue];
-      console.log(`[eBay SelfHeal 25002] ${ctx.sku}: dynamically injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
+      console.log(`[eBay SelfHeal 25002] ${ctx.sku}: dynamically injecting ${existingKey ? 'corrected' : 'missing'} aspect "${aspectSpec.name}"=${defaultValue}`);
     }
   }
 
