@@ -1011,7 +1011,35 @@ const heal25002: Healer = async (ctx, errorBody) => {
 
   // Dynamic fallback (P2 fix): inject any missing aspect eBay actually named that
   // Brand/MPN/Model injection above didn't already cover.
-  const missingNames = parseMissingRequiredAspectNames(errorBody, 25002);
+  let missingNames = parseMissingRequiredAspectNames(errorBody, 25002);
+  // eBay Fashion Size Standardization fallback (2026-09-23) -- mirrors the identical fix in
+  // ebayPriceRevisionService.ts's injectMissingCategoryAspects(). errorId 25129's
+  // parameters[] entries are full sentence fragments ("Enter a valid value for Size.",
+  // "Unspecified is not a valid value for Size...") and a bare numeric code, never a clean
+  // aspect-name label the way 25002's parameters[] are, so parseMissingRequiredAspectNames'
+  // label-shape filter correctly rejects all of them and missingNames is always empty for a
+  // 25129 error above. The rejected aspect name IS reliably present, though, embedded in the
+  // error's own message text: "...no longer support custom values for Size. Your listing..."
+  // (repeats 3x per message, same name every time). Extract it from there when the
+  // 25002-shaped parse comes up empty -- this only matters when this healer was actually
+  // dispatched for a 25129 error (see the HEALERS registry entry above); for a real 25002
+  // error this block is always a no-op since missingNames is already non-empty.
+  if (missingNames.length === 0) {
+    try {
+      const parsed = JSON.parse(errorBody) as { errors?: Array<{ errorId?: number; message?: string }> };
+      for (const err of parsed.errors || []) {
+        if (err.errorId !== 25129 || !err.message) continue;
+        const m = err.message.match(/no longer support custom values for ([A-Za-z][A-Za-z0-9/ ]{0,40}?)\.\s/);
+        if (m) {
+          missingNames = [m[1].trim()];
+          console.log(`[eBay SelfHeal 25002] ${ctx.sku}: errorId 25129 (Size standardization) -- extracted aspect name "${m[1].trim()}" from error message`);
+          break;
+        }
+      }
+    } catch {
+      // errorBody wasn't parseable JSON -- missingNames stays empty, same as the 25002 path.
+    }
+  }
   const dynamicNames = missingNames.filter((name) => !/^brand ?mpn$/i.test(name) && !hasKey(name));
   // ADR-089: ISBN is a REAL identifier aspect for Books — no safe default exists ("Does Not
   // Apply" is rejected by eBay for ISBN). Inject the item's real ISBN when present; SKIP entirely
@@ -1447,6 +1475,14 @@ const HEALERS: Record<string, Healer> = {
   '25002': heal25002,
   '25007': heal25007,
   '25064': heal25064,
+  // eBay Fashion Size Standardization (2026-09-23): 25129 is a DIFFERENT errorId from
+  // 25002 but the identical failure class (a required/rejected category aspect) -- reuses
+  // heal25002 rather than a new handler, since heal25002's dynamic-aspect fallback below
+  // now also extracts the aspect name out of a 25129 error's message text. Confirmed via
+  // ebayPriceRevisionService.ts's price-revision path this same day: 25129's parameters[]
+  // never carries a clean aspect-name label the way 25002's does, so the extraction has to
+  // come from the message string instead -- see parseMissingRequiredAspectNames call below.
+  '25129': heal25002,
 };
 
 /** Ordered errorIds to probe in an error body (registry order). */
