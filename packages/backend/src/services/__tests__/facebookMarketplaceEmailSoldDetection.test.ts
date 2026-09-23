@@ -28,6 +28,11 @@ jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 jest.mock('../facebookNativeSaleService', () => ({
   commitFacebookNativeSale: jest.fn(),
 }));
+// Title fallback (2026-09-23): default to "no title match" so the listing-id tests below keep
+// their original unmatched outcome; the title-fallback tests at the bottom override per call.
+jest.mock('../platformSoldDetectionService', () => ({
+  processPlatformSoldReport: jest.fn(async () => ({ result: 'notFound', reason: 'no_match' })),
+}));
 jest.mock('../organizerEmailForwardingService', () => ({
   ...jest.requireActual('../organizerEmailForwardingService'),
   resolveOrganizerIdByForwardingToken: jest.fn(async (token: string) =>
@@ -40,6 +45,7 @@ import {
   FACEBOOK_ORDER_EMAIL_SENDER,
   SOLD_VIA_FB_EMAIL_ORDER,
   InboundFacebookOrderEmail,
+  parseFacebookSaleEmailBodyTitle,
 } from '../facebookMarketplaceEmailSoldDetection';
 import { buildFacebookSoldForwardingAddress } from '../organizerEmailForwardingService';
 
@@ -62,6 +68,23 @@ function orderEmail(overrides: Partial<InboundFacebookOrderEmail> = {}): Inbound
   };
 }
 
+// Real-shaped bodies, cut down from the organizer's inbox (buyer names replaced).
+// Label email for "Heart Dreamboat Annie" (accepted $16 offer, 2026-09-03 14:53 UTC):
+const HEART_LISTING_ID = '1555388509067893';
+const HEART_TITLE = 'Heart Dreamboat Annie Vinyl LP Record, 1975';
+const HEART_LABEL_HTML = `<html><head><title>Facebook</title></head><body><table><tr><td>
+<span class="mb_text">Hi Patrick,</span></td></tr><tr><td><span class="mb_text">Your prepaid shipping label for Buyer Name&#039;s order is attached. Please ship this item by <span style="font-weight:bold">Thu, Sep 10</span> to avoid cancellation.</span></td></tr>
+<tr><td><table><tr><td align="left" style="font-size:17px">${HEART_TITLE}</td></tr><tr><td align="left" style="font-size:15px">Buyer&#039;s Offer: $16.00</td></tr></table></td></tr>
+<tr><td><a href="https://www.facebook.com/marketplace/selling/?listing_id=${HEART_LISTING_ID}&amp;show_offers_for_listing=1">See order details</a></td></tr>
+<tr><td>How to choose the right box</td></tr></table></body></html>`;
+// Order email for a long title (2026-08-15): subject is truncated with "...", the body is not.
+const CASIO_FULL = 'Casio MMCABLE Universal PC MIDI Connector Cable, Vintage Synthesizer Accessory';
+const CASIO_SUBJECT = 'New Marketplace order for Casio MMCABLE Universal PC MIDI Connector Cable, Vintage Synthesizer Acces...';
+const CASIO_ORDER_HTML = `<html><head><title>Facebook</title></head><body><table><tr><td>
+<span class="mb_text">Congrats on your Marketplace order! <br /><br /> You must ship this by <span style="font-weight:bold">Sat, Aug 22</span>, or it will be automatically canceled.</span></td></tr>
+<tr><td><table><tr><td align="left" style="color:#1C1E21;font-size:17px">${CASIO_FULL}</td></tr><tr><tr><td align="left">$15.00</td></tr><tr><td align="left">To be shipped</td></tr></tr></table></td></tr>
+<tr><td><a href="https://www.facebook.com/marketplace/you/shipping_orders/10175199991195594/?referral_surface=c2c_seller_order_placed_email&amp;listing_id=1404937705035522">Generate&nbsp;prepaid&nbsp;label</a></td></tr></table></body></html>`;
+
 describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
   describe('sender/subject filtering', () => {
     it('ignores an email from any sender other than the exact Facebook Marketplace address', async () => {
@@ -78,9 +101,19 @@ describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
       expect(result.kind).toBe('ignored');
     });
 
-    it('ignores a shipping-label sibling email from the real sender', async () => {
+    it('ACCEPTS the shipping-label email (2026-09-23: the only email an accepted-offer sale gets)', async () => {
+      const resolveItemIdForListingId = jest.fn().mockResolvedValue('item_123');
+      const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: false });
       const result = await processFacebookMarketplaceOrderEmail(
         orderEmail({ subject: 'Shipping label for your Marketplace order' }),
+        { resolveItemIdForListingId, commitSale },
+      );
+      expect(result.kind).toBe('matched');
+    });
+
+    it('ignores a label-like subject that is not exactly the shipping-label subject', async () => {
+      const result = await processFacebookMarketplaceOrderEmail(
+        orderEmail({ subject: 'Re: Shipping label for your Marketplace order' }),
       );
       expect(result.kind).toBe('ignored');
     });
@@ -171,14 +204,16 @@ describe('processFacebookMarketplaceOrderEmail (ADR-131)', () => {
       expect(commitSale).not.toHaveBeenCalled();
     });
 
-    it('never falls back to a title-based match when the listing id itself cannot be extracted', async () => {
+    it('with no listing id, tries ONLY the exact unique-title fallback and stays unmatched when it finds nothing', async () => {
       const resolveItemIdForListingId = jest.fn();
       const commitSale = jest.fn();
+      const processTitleReport = jest.fn().mockResolvedValue({ platform: 'FACEBOOK', remoteListingId: '', title: 'Vintage Oak Dresser', result: 'notFound', reason: 'no_match' });
 
       const result = await processFacebookMarketplaceOrderEmail(
         orderEmail({ links: [], rawBody: 'no useful link in this body at all' }),
-        { resolveItemIdForListingId, commitSale },
+        { resolveItemIdForListingId, commitSale, processTitleReport },
       );
+      expect(processTitleReport).toHaveBeenCalledWith('organizer_1', 'Vintage Oak Dresser');
 
       expect(result.kind).toBe('unmatched');
       if (result.kind === 'unmatched') {
@@ -414,5 +449,81 @@ describe('parseImapMessageToInboundEmail header extraction', () => {
     expect(email.authenticationResults?.[1]).toMatch(/^attacker\.example;/);
     expect(email.arcAuthenticationResults?.[0]).toMatch(/^i=1; mx\.google\.com;/);
     expect(email.recipientAddresses).toEqual(expect.arrayContaining([target.toLowerCase(), 'someorganizer@gmail.com']));
+  });
+});
+
+describe('title fallback and the shipping-label email (2026-09-23)', () => {
+  const noJobRow = () => jest.fn().mockResolvedValue(null);
+
+  it('parses the title from the real label body and from the real order body', () => {
+    expect(parseFacebookSaleEmailBodyTitle(HEART_LABEL_HTML)).toBe(HEART_TITLE);
+    expect(parseFacebookSaleEmailBodyTitle(CASIO_ORDER_HTML)).toBe(CASIO_FULL);
+    expect(parseFacebookSaleEmailBodyTitle('<p>Respond to your new offer</p>')).toBeNull();
+    // A title with capitalized words and no commas is never cut short by the price label.
+    const plain = 'Porcelain Greyhound or Whippet Figurine Vintage Marked';
+    expect(parseFacebookSaleEmailBodyTitle(HEART_LABEL_HTML.replace(HEART_TITLE, plain))).toBe(plain);
+  });
+
+  it('Heart Dreamboat Annie: label email, placeholder job row -> unique title match -> matched via title', async () => {
+    const processTitleReport = jest.fn().mockResolvedValue({ platform: 'FACEBOOK', remoteListingId: '', title: HEART_TITLE, result: 'sold', itemId: 'cmtd1b7s1002hh09orfa4r4ov', via: 'title' });
+    const commitSale = jest.fn();
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ subject: 'Shipping label for your Marketplace order', links: undefined, rawBody: HEART_LABEL_HTML }),
+      { resolveItemIdForListingId: noJobRow(), commitSale, processTitleReport },
+    );
+    expect(processTitleReport).toHaveBeenCalledWith('organizer_1', HEART_TITLE);
+    expect(commitSale).not.toHaveBeenCalled(); // the title path commits inside processTitleReport
+    expect(result).toMatchObject({ kind: 'matched', itemId: 'cmtd1b7s1002hh09orfa4r4ov', via: 'title', remoteListingId: HEART_LISTING_ID, alreadyCommitted: false });
+  });
+
+  it('uses the body title when the order subject is truncated with "..."', async () => {
+    const processTitleReport = jest.fn().mockResolvedValue({ platform: 'FACEBOOK', remoteListingId: '', title: CASIO_FULL, result: 'alreadySold', itemId: 'item_casio', via: 'title' });
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ subject: CASIO_SUBJECT, links: undefined, rawBody: CASIO_ORDER_HTML }),
+      { resolveItemIdForListingId: noJobRow(), processTitleReport },
+    );
+    expect(processTitleReport).toHaveBeenCalledWith('organizer_1', CASIO_FULL);
+    expect(result).toMatchObject({ kind: 'matched', alreadyCommitted: true });
+  });
+
+  it('listing id match still wins and the title fallback is not consulted', async () => {
+    const processTitleReport = jest.fn();
+    const commitSale = jest.fn().mockResolvedValue({ alreadyCommitted: false });
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ subject: 'Shipping label for your Marketplace order', links: undefined, rawBody: HEART_LABEL_HTML }),
+      { resolveItemIdForListingId: jest.fn().mockResolvedValue('item_heart'), commitSale, processTitleReport },
+    );
+    expect(result).toMatchObject({ kind: 'matched', itemId: 'item_heart', via: 'listingId' });
+    expect(processTitleReport).not.toHaveBeenCalled();
+  });
+
+  it('ambiguous title -> unmatched, nothing committed', async () => {
+    const processTitleReport = jest.fn().mockResolvedValue({ platform: 'FACEBOOK', remoteListingId: '', title: HEART_TITLE, result: 'ambiguous', candidateCount: 2 });
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ subject: 'Shipping label for your Marketplace order', links: undefined, rawBody: HEART_LABEL_HTML }),
+      { resolveItemIdForListingId: noJobRow(), processTitleReport },
+    );
+    expect(result.kind).toBe('unmatched');
+    if (result.kind === 'unmatched') expect(result.reason).toMatch(/ambiguous/);
+  });
+
+  it('a failed title-path commit throws so the message stays unread', async () => {
+    const processTitleReport = jest.fn().mockResolvedValue({ platform: 'FACEBOOK', remoteListingId: '', title: HEART_TITLE, result: 'error', reason: 'commit_failed' });
+    await expect(
+      processFacebookMarketplaceOrderEmail(
+        orderEmail({ subject: 'Shipping label for your Marketplace order', links: undefined, rawBody: HEART_LABEL_HTML }),
+        { resolveItemIdForListingId: noJobRow(), processTitleReport },
+      ),
+    ).rejects.toThrow(/commit failed/);
+  });
+
+  it('still ignores the real offer email for the same item', async () => {
+    const processTitleReport = jest.fn();
+    const result = await processFacebookMarketplaceOrderEmail(
+      orderEmail({ subject: `New Marketplace offer of $16 for ${HEART_TITLE}`, rawBody: HEART_LABEL_HTML }),
+      { processTitleReport },
+    );
+    expect(result.kind).toBe('ignored');
+    expect(processTitleReport).not.toHaveBeenCalled();
   });
 });

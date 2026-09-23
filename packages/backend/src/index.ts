@@ -260,6 +260,7 @@ import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature
 import { scheduleGoogleMerchantFeedCron } from './jobs/googleMerchantFeedCron'; // Feature #463: Google Merchant Center feed
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
+import { startDiscogsSoldSyncCron } from './jobs/discogsSoldSyncCron'; // 2026-09-23: Discogs seller-order poll -> SOLD + fan-out
 import { bounceSuppressService_runReclassifyBackfillIfNeeded } from './services/bounceSuppressService'; // S1065: self-limiting boot backfill for historical bounce reclassification
 import { startEbayListingQueueCron } from './jobs/ebayListingQueueCron'; // eBay Queue Mode engine
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
@@ -1053,6 +1054,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #244 Phase 3: Register eBay sold sync cron (every 15 minutes — polling fallback)
   startEbaySoldSyncCron();
+
+  // 2026-09-23: Discogs sold sync (every 15 minutes, seller orders -> SOLD + fan-out)
+  startDiscogsSoldSyncCron();
 
   // eBay Queue Mode engine — auto-manage listing slots (every 30 minutes)
   startEbayListingQueueCron();

@@ -17,6 +17,9 @@
  *    this change; see that file for the vendor-agnostic parsing/matching core.
  *  - routes/internal.ts /mark-item-sold-elsewhere -- caller-supplied soldVia (2026-09-23: its
  *    inline copy of this cascade was replaced by a call to this helper).
+ *  - services/platformSoldDetectionService.ts -- soldVia='MERCARI' (Mercari sold email) and
+ *    'FB_EMAIL_ORDER' title fallback (2026-09-23).
+ *  - jobs/discogsSoldSyncCron.ts -- soldVia='DISCOGS', skipWithdraw ['DISCOGS'] (2026-09-23).
  *  - services/vintedSoldDetectionService.ts processVintedSoldReport -- soldVia='VINTED'
  *    (2026-09-23, extension wardrobe sold-detection; closes the item's VINTED listing record
  *    itself before calling this, since this helper touches no MarketplaceListingJob rows).
@@ -64,10 +67,19 @@ export interface CommitFacebookNativeSaleResult {
  *                confirmation email detection). Item.lastSoldVia is a plain String? --
  *                no enum, no migration needed to add another value.
  */
+export interface CommitFacebookNativeSaleOptions {
+  /** Server-side withdrawals to skip because the sale happened ON that channel (its listing
+   * already closed there). 2026-09-23: the Discogs order poll passes ['DISCOGS'] so it never
+   * tries to DELETE the Discogs listing that just sold. Omitted = withdraw from all three. */
+  skipWithdraw?: Array<'EBAY' | 'SHOPIFY' | 'DISCOGS'>;
+}
+
 export async function commitFacebookNativeSale(
   itemId: string,
   soldVia: string,
+  options: CommitFacebookNativeSaleOptions = {},
 ): Promise<CommitFacebookNativeSaleResult> {
+  const skip = new Set(options.skipWithdraw ?? []);
   try {
     await commitItemSale(itemId, 'SOLD', ['AVAILABLE']);
   } catch (err: any) {
@@ -84,15 +96,21 @@ export async function commitFacebookNativeSale(
   // fresh transition -- the ItemAlreadyCommittedError branch above already returned.
   await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
 
-  endEbayListingIfExists(itemId).catch((err: any) =>
-    console.warn(`[eBay] withdraw-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
-  );
-  markShopifyItemSold(itemId).catch((err: any) =>
-    console.warn(`[Shopify] mark-sold-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
-  );
-  withdrawDiscogsListingIfExists(itemId).catch((err: any) =>
-    console.warn(`[Discogs] withdraw-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
-  );
+  if (!skip.has('EBAY')) {
+    endEbayListingIfExists(itemId).catch((err: any) =>
+      console.warn(`[eBay] withdraw-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
+    );
+  }
+  if (!skip.has('SHOPIFY')) {
+    markShopifyItemSold(itemId).catch((err: any) =>
+      console.warn(`[Shopify] mark-sold-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
+    );
+  }
+  if (!skip.has('DISCOGS')) {
+    withdrawDiscogsListingIfExists(itemId).catch((err: any) =>
+      console.warn(`[Discogs] withdraw-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
+    );
+  }
 
   return { ok: true, alreadyCommitted: false };
 }

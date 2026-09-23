@@ -14,6 +14,7 @@ import {
   SubscriptionTier,
 } from '../utils/feeCalculator';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-09-23: eBay/Shopify/Discogs/FB withdraw on sell-out
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { assertSaleCanAcceptSquarePayment } from '../services/squarePaymentEligibilityService';
 import { checkGuestCheckoutVelocity, recordGuestCheckoutFailure, hashForVelocity } from '../services/guestCheckoutVelocityGuard'; // 2026-09-06 carding incident guard, ported as-is per fraud-hardening build tenet
@@ -509,6 +510,10 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // 2026-09-23: this path flipped the item SOLD (via sellItemUnits) without withdrawing it from
+    // eBay/Shopify/Discogs -- the only sale rail that skipped the fan-out (see header SCOPE NOTE).
+    if (soldOut) fanOutItemSoldWithdrawals(item.id, 'square_payment');
+
     setImmediate(() => {
       generateReceipt(purchase!.id).catch((err) => console.error('[squarePayment] Failed to generate receipt:', err));
     });
@@ -769,7 +774,9 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       createdPurchaseIds.push(purchase.id);
 
       try {
-        await sellItemUnits(item.id, 1);
+        const { fullySoldOut } = await sellItemUnits(item.id, 1);
+        // 2026-09-23: same missing fan-out as the single-item Square path above.
+        if (fullySoldOut) fanOutItemSoldWithdrawals(item.id, 'square_cart_payment');
       } catch (stockErr: any) {
         if (stockErr instanceof InsufficientStockError) {
           anyStockRace = true;

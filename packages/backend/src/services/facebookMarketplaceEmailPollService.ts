@@ -33,6 +33,16 @@
  * \Seen ... or move to a dedicated label"), it marks each fully-handled message \Seen and
  * leaves it in place. A message whose processing threw (vs. resolving to
  * matched/unmatched/ignored) is deliberately left unread so the next poll retries it.
+ *
+ * VINTED (2026-09-23): the same poll pass, same inbox and same session also runs a second
+ * search for Vinted's "You sold an item on Vinted" email (vintedSoldEmailDetection.ts), which
+ * organizers forward to the same sold-<token> address. Same \Seen idempotency, same
+ * leave-unread-on-throw retry, same structured unmatched logging. A failure in one branch's
+ * search never stops the other branch from running.
+ *
+ * MERCARI (2026-09-23): a third search in the same pass for Mercari's "You've made a sale: ..."
+ * email (mercariSoldEmailDetection.ts), same rules. Poshmark has no branch: no real Poshmark
+ * sale email has been observed yet, so there is no verified template to match.
  */
 
 import { ImapFlow } from 'imapflow';
@@ -44,6 +54,16 @@ import {
   type FacebookOrderEmailResult,
 } from './facebookMarketplaceEmailSoldDetection';
 import { headerValues, extractAddresses, type RawHeaderLine } from './inboundEmailAuthService';
+import { processVintedSoldEmail, type VintedSoldEmailResult } from './vintedSoldEmailDetection';
+import { processMercariSoldEmail, type MercariSoldEmailResult } from './mercariSoldEmailDetection';
+
+export interface VintedSoldEmailPollCounts {
+  processed: number;
+  matched: number;
+  unmatched: number;
+  ambiguous: number;
+  ignored: number;
+}
 
 export interface FacebookSoldEmailPollResult {
   processed: number;
@@ -51,6 +71,10 @@ export interface FacebookSoldEmailPollResult {
   unmatched: number;
   ignored: number;
   errors: string[];
+  /** Vinted sold-email branch (same pass, same inbox). Its errors land in `errors` too. */
+  vinted: VintedSoldEmailPollCounts;
+  /** Mercari sold-email branch (2026-09-23, same pass, same inbox, same counters shape). */
+  mercari: VintedSoldEmailPollCounts;
 }
 
 // Gmail's IMAP server accepts its own web search syntax via the X-GM-RAW extension
@@ -63,8 +87,22 @@ export interface FacebookSoldEmailPollResult {
 // a message here can mark an item sold -- so Spam and Trash are explicitly excluded. A
 // genuine order email Gmail misfiles as Spam must be moved out by a human (Not spam) to
 // be processed; that is the intended fail-closed trade-off.
+// 2026-09-23: also "Shipping label for your Marketplace order" -- an accepted-offer sale sends
+// only that email (see FACEBOOK_SHIPPING_LABEL_SUBJECT). Both are re-checked exactly downstream.
 const FACEBOOK_ORDER_EMAIL_SEARCH_QUERY =
-  '(from:noreply@marketplace.facebook.com subject:"New Marketplace order for") is:unread -in:spam -in:trash';
+  '(from:noreply@marketplace.facebook.com (subject:"New Marketplace order for" OR subject:"Shipping label for your Marketplace order")) is:unread -in:spam -in:trash';
+
+// Vinted branch: same shape and the same Spam/Trash exclusion. Gmail's subject: is a word match,
+// so this also catches look-alikes; processVintedSoldEmail re-checks the exact subject
+// ("You sold an item on Vinted") and sender, and only that email can mark anything sold.
+const VINTED_SOLD_EMAIL_SEARCH_QUERY =
+  '(from:no-reply@vinted.com subject:"You sold an item") is:unread -in:spam -in:trash';
+
+// Mercari branch: "You've made a sale: <title>" from no-reply@alerts.us.mercari.com. Gmail's
+// subject: is a word match, so "Transaction canceled" and other siblings can still come back;
+// processMercariSoldEmail re-checks the exact sender and subject prefix.
+const MERCARI_SOLD_EMAIL_SEARCH_QUERY =
+  '(from:no-reply@alerts.us.mercari.com subject:"made a sale") is:unread -in:spam -in:trash';
 
 // Safety cap, same idea as bounceSuppressService's 2000-UID cap — pure defense-in-depth.
 // Real volume here is roughly one email every few weeks per ADR-131, so this should never
@@ -164,6 +202,131 @@ export async function parseImapMessageToInboundEmail(rawSource: Buffer): Promise
   return { from, subject, links, rawBody, authenticationResults, arcAuthenticationResults, recipientAddresses };
 }
 
+/** Runs one gmraw search. Returns null (and records the error) on failure so the caller can
+ * move on to the other branch instead of aborting the whole pass. */
+async function searchUnread(
+  client: ImapFlow,
+  query: string,
+  label: string,
+  result: FacebookSoldEmailPollResult,
+): Promise<number[] | null> {
+  try {
+    const found = await client.search({ gmraw: query }, { uid: true });
+    let uids = found === false ? [] : found;
+    if (uids.length > MAX_UIDS_PER_RUN) {
+      console.warn(
+        `[facebookMarketplaceEmailPollService] ${label} IMAP search returned ${uids.length} UIDs -- capping at ${MAX_UIDS_PER_RUN} for this run.`
+      );
+      uids = uids.slice(0, MAX_UIDS_PER_RUN);
+    }
+    return uids;
+  } catch (err: any) {
+    const prefix = label === 'Facebook' ? 'IMAP search failed' : `${label} IMAP search failed`;
+    result.errors.push(`${prefix}: ${err.message}`);
+    console.error(`[facebookMarketplaceEmailPollService] ${label} IMAP search error:`, err.message);
+    return null;
+  }
+}
+
+async function markSeen(client: ImapFlow, uid: number): Promise<void> {
+  try {
+    await client.messageFlagsAdd([uid], ['\\Seen'], { uid: true });
+  } catch (flagErr: any) {
+    console.warn(
+      `[facebookMarketplaceEmailPollService] Could not mark UID ${uid} \\Seen -- it may be reprocessed next poll:`,
+      flagErr.message
+    );
+  }
+}
+
+type TitleEmailOutcome = VintedSoldEmailResult | MercariSoldEmailResult;
+
+/**
+ * One title-matched marketplace branch of the same pass (Vinted, Mercari). Every unread message
+ * matching `query` goes through `process`. Same per-message isolation and \Seen rules as the
+ * Facebook loop: a throw (including a failed commit) leaves the message unread for retry;
+ * matched / unmatched / ambiguous / ignored all mark it \Seen so it is never processed twice.
+ */
+async function processTitleEmailBatch(
+  client: ImapFlow,
+  result: FacebookSoldEmailPollResult,
+  label: 'Vinted' | 'Mercari',
+  query: string,
+  counts: VintedSoldEmailPollCounts,
+  process: (email: InboundFacebookOrderEmail) => Promise<TitleEmailOutcome>,
+): Promise<void> {
+  const uids = await searchUnread(client, query, label, result);
+  if (!uids) return;
+  if (uids.length === 0) {
+    console.log(`[facebookMarketplaceEmailPollService] No unread ${label} sold emails found.`);
+    return;
+  }
+  console.log(`[facebookMarketplaceEmailPollService] Found ${uids.length} unread ${label} sold email(s) to process.`);
+
+  for (const uid of uids) {
+    counts.processed++;
+    let outcome: TitleEmailOutcome;
+    try {
+      const msg: any = await client.fetchOne(uid, { source: true }, { uid: true });
+      if (!msg || !msg.source) {
+        throw new Error(`IMAP fetchOne returned no source for UID ${uid}`);
+      }
+      const email = await parseImapMessageToInboundEmail(msg.source as Buffer);
+      outcome = await process(email);
+    } catch (err: any) {
+      result.errors.push(`${label} UID ${uid}: ${err.message}`);
+      console.error(
+        `[facebookMarketplaceEmailPollService] Error processing ${label} UID ${uid} -- leaving unread for retry on next poll:`,
+        err.message
+      );
+      continue; // do NOT mark \Seen -- next poll retries this message
+    }
+
+    switch (outcome.kind) {
+      case 'matched':
+        counts.matched++;
+        console.log(
+          `[facebookMarketplaceEmailPollService] MATCHED ${label} UID ${uid}: itemId=${outcome.itemId} soldVia=${outcome.soldVia} result=${outcome.result} alreadySold=${outcome.alreadySold}`
+        );
+        break;
+      case 'unmatched':
+        counts.unmatched++;
+        console.warn(
+          `[facebookMarketplaceEmailPollService] UNMATCHED ${label} sold email -- needs manual reconciliation`,
+          { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, reason: outcome.reason }
+        );
+        break;
+      case 'ambiguous':
+        counts.ambiguous++;
+        console.warn(
+          `[facebookMarketplaceEmailPollService] AMBIGUOUS ${label} sold email -- title matches more than one item, needs manual reconciliation`,
+          { uid, organizerId: outcome.organizerId, itemTitleFromBody: outcome.title, candidateCount: outcome.candidateCount, reason: outcome.reason }
+        );
+        break;
+      case 'ignored':
+        counts.ignored++;
+        console.log(`[facebookMarketplaceEmailPollService] IGNORED ${label} UID ${uid}: ${outcome.reason}`);
+        break;
+    }
+
+    await markSeen(client, uid);
+  }
+}
+
+/** Vinted branch: every unread "You sold an item" email from no-reply@vinted.com. */
+export async function processVintedBatch(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<void> {
+  await processTitleEmailBatch(client, result, 'Vinted', VINTED_SOLD_EMAIL_SEARCH_QUERY, result.vinted, (email) =>
+    processVintedSoldEmail(email),
+  );
+}
+
+/** Mercari branch (2026-09-23): every unread "You've made a sale: ..." email. */
+export async function processMercariBatch(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<void> {
+  await processTitleEmailBatch(client, result, 'Mercari', MERCARI_SOLD_EMAIL_SEARCH_QUERY, result.mercari, (email) =>
+    processMercariSoldEmail(email),
+  );
+}
+
 /**
  * Polls FACEBOOK_SOLD_IMAP_USER's inbox for unread Facebook Marketplace order-
  * confirmation emails and runs each one through processFacebookMarketplaceOrderEmail.
@@ -182,6 +345,8 @@ export async function pollFacebookMarketplaceSoldEmails(): Promise<FacebookSoldE
     unmatched: 0,
     ignored: 0,
     errors: [],
+    vinted: { processed: 0, matched: 0, unmatched: 0, ambiguous: 0, ignored: 0 },
+    mercari: { processed: 0, matched: 0, unmatched: 0, ambiguous: 0, ignored: 0 },
   };
 
   let session: ImapSession;
@@ -196,30 +361,14 @@ export async function pollFacebookMarketplaceSoldEmails(): Promise<FacebookSoldE
   const { client, lock } = session;
 
   try {
-    let uids: number[] = [];
-    try {
-      const found = await client.search({ gmraw: FACEBOOK_ORDER_EMAIL_SEARCH_QUERY }, { uid: true });
-      uids = found === false ? [] : found;
-      if (uids.length > MAX_UIDS_PER_RUN) {
-        console.warn(
-          `[facebookMarketplaceEmailPollService] IMAP search returned ${uids.length} UIDs -- capping at ${MAX_UIDS_PER_RUN} for this run.`
-        );
-        uids = uids.slice(0, MAX_UIDS_PER_RUN);
-      }
-    } catch (err: any) {
-      result.errors.push(`IMAP search failed: ${err.message}`);
-      console.error('[facebookMarketplaceEmailPollService] IMAP search error:', err.message);
-      return result;
-    }
-
-    if (uids.length === 0) {
+    const fbUids = await searchUnread(client, FACEBOOK_ORDER_EMAIL_SEARCH_QUERY, 'Facebook', result);
+    if (fbUids && fbUids.length === 0) {
       console.log('[facebookMarketplaceEmailPollService] No unread Facebook Marketplace order emails found.');
-      return result;
+    } else if (fbUids) {
+      console.log(`[facebookMarketplaceEmailPollService] Found ${fbUids.length} unread order email(s) to process.`);
     }
 
-    console.log(`[facebookMarketplaceEmailPollService] Found ${uids.length} unread order email(s) to process.`);
-
-    for (const uid of uids) {
+    for (const uid of fbUids ?? []) {
       result.processed++;
       let outcome: FacebookOrderEmailResult;
 
@@ -278,18 +427,16 @@ export async function pollFacebookMarketplaceSoldEmails(): Promise<FacebookSoldE
           break;
       }
 
-      try {
-        await client.messageFlagsAdd([uid], ['\\Seen'], { uid: true });
-      } catch (flagErr: any) {
-        console.warn(
-          `[facebookMarketplaceEmailPollService] Could not mark UID ${uid} \\Seen -- it may be reprocessed next poll:`,
-          flagErr.message
-        );
-      }
+      await markSeen(client, uid);
     }
 
+    await processVintedBatch(client, result);
+    await processMercariBatch(client, result);
+
     console.log(
-      `[facebookMarketplaceEmailPollService] Done. processed=${result.processed} matched=${result.matched} unmatched=${result.unmatched} ignored=${result.ignored} errors=${result.errors.length}`
+      `[facebookMarketplaceEmailPollService] Done. processed=${result.processed} matched=${result.matched} unmatched=${result.unmatched} ignored=${result.ignored} ` +
+        `vinted.processed=${result.vinted.processed} vinted.matched=${result.vinted.matched} vinted.unmatched=${result.vinted.unmatched} vinted.ambiguous=${result.vinted.ambiguous} vinted.ignored=${result.vinted.ignored} ` +
+        `mercari.processed=${result.mercari.processed} mercari.matched=${result.mercari.matched} mercari.unmatched=${result.mercari.unmatched} mercari.ambiguous=${result.mercari.ambiguous} mercari.ignored=${result.mercari.ignored} errors=${result.errors.length}`
     );
     return result;
   } finally {

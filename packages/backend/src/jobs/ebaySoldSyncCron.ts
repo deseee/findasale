@@ -281,9 +281,12 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         }
 
         if (fullySold && updated.status !== 'SOLD') {
+          // lastSoldVia 'EBAY' (2026-09-23): every eBay-detected sale was landing with a NULL
+          // tag (15 EbaySoldEvent items in prod, all lastSoldVia NULL), indistinguishable from a
+          // manual status edit. Same free-form column the other detectors write.
           await prisma.item.update({
             where: { id: matchedItem.id },
-            data: { status: 'SOLD' },
+            data: { status: 'SOLD', lastSoldVia: 'EBAY' },
           });
           // Withdraw the eBay listing only once it's fully sold out (fire-and-forget)
           endEbayListingIfExists(matchedItem.id).catch((err) =>

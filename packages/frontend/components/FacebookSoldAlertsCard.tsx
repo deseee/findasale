@@ -12,6 +12,11 @@ import Skeleton from './Skeleton';
  * the address. Filter values below mirror the IMAP poll's search in
  * packages/backend/src/services/facebookMarketplaceEmailPollService.ts and the exact
  * sender/subject check in facebookMarketplaceEmailSoldDetection.ts.
+ * 2026-09-23: step 3 is ONE Gmail filter whose "Has the words" query covers every marketplace
+ * the poll reads (Facebook order + shipping-label emails, Vinted, Mercari). Each sender is paired
+ * with its own subject so only sale notices are forwarded. The backend still re-checks the exact
+ * sender, subject and DKIM/DMARC per platform (facebookMarketplaceEmailSoldDetection.ts,
+ * vintedSoldEmailDetection.ts, mercariSoldEmailDetection.ts).
  *
  * Types are local on purpose (a @findasale/shared import breaks the Vercel build).
  */
@@ -23,8 +28,14 @@ interface FacebookSoldEmailResponse {
   lastSoldEmailAt: string | null;
 }
 
-const FB_ORDER_SENDER = 'noreply@marketplace.facebook.com';
-const FB_ORDER_SUBJECT = 'New Marketplace order for';
+// One Gmail filter for every supported marketplace. Same sender/subject pairs as the poll's
+// searches in facebookMarketplaceEmailPollService.ts. Gmail filters accept OR and parentheses
+// in the "Has the words" box. Poshmark is not listed: no real Poshmark sale email has been
+// verified yet, so there is nothing safe to match.
+const SOLD_EMAIL_FILTER_QUERY =
+  '(from:noreply@marketplace.facebook.com (subject:"New Marketplace order for" OR subject:"Shipping label for your Marketplace order")) OR ' +
+  '(from:no-reply@vinted.com subject:"You sold an item") OR ' +
+  '(from:no-reply@alerts.us.mercari.com subject:"made a sale")';
 
 const CopyChip: React.FC<{ value: string; label?: string }> = ({ value, label }) => {
   const [copied, setCopied] = useState(false);
@@ -106,13 +117,14 @@ const FacebookSoldAlertsCard: React.FC = () => {
   return (
     <div className="border-t border-warm-200 dark:border-gray-700 pt-6 mt-6">
       <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-3">
-        Facebook sold alerts
+        Marketplace sold alerts
       </h3>
 
       <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
         <p className="text-sm text-warm-600 dark:text-gray-400 mb-4 leading-relaxed">
-          When something sells on Facebook Marketplace, Facebook emails you an order notice. Forward
-          those notices to your private FindA.Sale address and we mark the item sold for you.
+          When something sells on Facebook Marketplace, Vinted or Mercari, you get a sale email.
+          Forward those emails to your private FindA.Sale address and we mark the item sold and pull
+          it from your other marketplaces.
         </p>
 
         {isLoading && <Skeleton className="h-24 w-full" />}
@@ -165,15 +177,14 @@ const FacebookSoldAlertsCard: React.FC = () => {
                   </>
                 )}
               </Step>
-              <Step n={3} title="Create a filter.">
-                In Gmail search, open the search options and fill in:
-                <div className="mt-2 text-xs text-warm-500 dark:text-gray-400">From</div>
-                <CopyChip value={FB_ORDER_SENDER} label="sender" />
-                <div className="mt-2 text-xs text-warm-500 dark:text-gray-400">Subject</div>
-                <CopyChip value={FB_ORDER_SUBJECT} label="subject" />
+              <Step n={3} title="Create one filter for all your marketplaces.">
+                In Gmail search, open the search options and paste this into Has the words:
+                <CopyChip value={SOLD_EMAIL_FILTER_QUERY} label="filter" />
                 <div className="mt-2">
                   Click Create filter, check Forward it to, pick your FindA.Sale address, then Create
-                  filter again.
+                  filter again. This one filter covers Facebook Marketplace, Vinted and Mercari sales.
+                  Offers, messages and promos are not forwarded. Made our older Facebook or Vinted
+                  filter? You can delete it once this one is saved.
                 </div>
               </Step>
             </ol>

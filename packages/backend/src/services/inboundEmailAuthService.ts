@@ -1,6 +1,7 @@
 /**
  * inboundEmailAuthService.ts — sender-authentication checks for the ADR-131 inbound email
- * pipeline (facebookMarketplaceEmailSoldDetection.ts, gmailForwardingAutoConfirmService.ts).
+ * pipeline (facebookMarketplaceEmailSoldDetection.ts, vintedSoldEmailDetection.ts,
+ * gmailForwardingAutoConfirmService.ts).
  *
  * WHY: a parsed From address is trivially spoofable. Before either pipeline acts on an
  * inbound email (committing a sale, or firing a confirmation GET), it must see that the
@@ -32,6 +33,16 @@ export const TRUSTED_AUTHSERV_IDS = ['mx.google.com'];
 
 export const FACEBOOK_DKIM_DOMAINS = ['facebookmail.com', 'facebook.com'];
 export const GOOGLE_DKIM_DOMAINS = ['google.com'];
+// Vinted's sale email (vintedSoldEmailDetection.ts). Observed live 2026-09-19: Gmail recorded
+// dkim=pass header.i=@vinted.com (plus a second amazonses.com signature, which is NOT accepted
+// here) and dmarc=pass header.from=vinted.com. Deliberately not team.vinted.com-only or
+// amazonses.com: the sending ESP's own signature proves nothing about Vinted.
+export const VINTED_DKIM_DOMAINS = ['vinted.com'];
+// Mercari's sale email (mercariSoldEmailDetection.ts). Observed live 2026-09-02 on the real
+// "You've made a sale: ..." email: dkim=pass header.i=@alerts.us.mercari.com (plus a second
+// sendgrid.info signature, NOT accepted here) and dmarc=pass (p=REJECT) header.from=mercari.com.
+// alerts.us.mercari.com passes as a subdomain of mercari.com.
+export const MERCARI_DKIM_DOMAINS = ['mercari.com'];
 
 interface ResInfo {
   method: string;

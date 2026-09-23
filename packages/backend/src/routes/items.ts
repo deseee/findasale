@@ -454,11 +454,13 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         // Withdraw from eBay for any items that were AVAILABLE → SOLD and have an eBay offer (fire-and-forget)
         if (value === 'SOLD') {
           for (const item of confirmedItems) {
-            if ((item as any).ebayOfferId) {
-              endEbayListingIfExists(item.id).catch(err =>
-                console.warn(`[eBay] bulk SOLD withdraw failed for item ${item.id}:`, err.message)
-              );
-            }
+            // 2026-09-23: no longer gated on ebayOfferId. endEbayListingIfExists self-guards and
+            // also recovers a live listing whose ebayOfferId went stale (SKU lookup, then the
+            // Trading API EndFixedPriceItem fallback on ebayListingId). The old gate skipped
+            // exactly those items, the same stale-offer case S1157 fixed on the single-item path.
+            endEbayListingIfExists(item.id).catch(err =>
+              console.warn(`[eBay] bulk SOLD withdraw failed for item ${item.id}:`, err.message)
+            );
             markShopifyItemSold(item.id).catch(err =>
               console.warn(`[Shopify] bulk SOLD mark failed for item ${item.id}:`, err.message)
             );

@@ -1119,6 +1119,40 @@ export async function fetchDiscogsListing(
   }
 }
 
+/**
+ * Seller-side order list for the organizer's connected Discogs account (2026-09-23, Discogs sold
+ * detection -- jobs/discogsSoldSyncCron.ts). GET /marketplace/orders, newest first, one page.
+ * Each order's items[].id is the Discogs LISTING id, i.e. Item.discogsListingId.
+ * Returns null when the organizer has no ACTIVE Discogs connection. Throws DiscogsApiError on a
+ * non-2xx so the caller can log it and move on.
+ */
+export async function fetchRecentDiscogsSellerOrders(
+  organizerId: string,
+  perPage = 50,
+): Promise<Array<{ id: string; status: string; created?: string; items: Array<{ id: string }> }> | null> {
+  const account = await getActiveDiscogsAccount(organizerId);
+  if (!account) return null;
+  const accessToken = decryptAccessToken(account);
+  const qs = `sort=created&sort_order=desc&per_page=${Math.max(1, Math.min(100, perPage))}`;
+  const { status, text } = await discogsRequest(`/marketplace/orders?${qs}`, accessToken);
+  if (status < 200 || status >= 300) throw new DiscogsApiError(status, parseDiscogsError(status, text));
+  let body: any;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new DiscogsApiError(502, 'Could not parse Discogs orders');
+  }
+  const orders: any[] = Array.isArray(body?.orders) ? body.orders : [];
+  return orders.map((o) => ({
+    id: String(o?.id ?? ''),
+    status: String(o?.status ?? ''),
+    created: typeof o?.created === 'string' ? o.created : undefined,
+    items: (Array.isArray(o?.items) ? o.items : [])
+      .map((it: any) => ({ id: it?.id == null ? '' : String(it.id) }))
+      .filter((it: { id: string }) => it.id.length > 0),
+  }));
+}
+
 async function requireAccessToken(organizerId: string): Promise<{ account: MarketplaceAccount; accessToken: string }> {
   const account = await getActiveDiscogsAccount(organizerId);
   if (!account) throw new DiscogsNotConnectedError();

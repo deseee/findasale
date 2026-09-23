@@ -24,6 +24,14 @@
  * listing itself (it already sold there). Every other still-POSTED platform stays in the pending
  * removals and is withdrawn by the extension's normal cross-platform removal engine.
  *
+ * TITLE-ONLY ENTRY (2026-09-23, ADR-131 Vinted email branch): Vinted's "You sold an item on
+ * Vinted" email carries the title but no listing id. processVintedSoldTitleReport runs the same
+ * batch path with vintedId '' ("unknown"): step (a) is skipped, step (b) keeps its uniqueness and
+ * VINTED_SOLD_MIN_TITLE_LEN refusals, and the "different Vinted id on record" refusal is skipped
+ * because there is no reported id to compare against (a job-tracked item's own Vinted listing is
+ * exactly what that email is about). Same commit (soldVia 'VINTED'), so whichever of the email
+ * and the extension wardrobe report runs second gets alreadySold.
+ *
  * TESTABILITY: matchVintedSoldEntry is pure; processVintedSoldReport takes injectable deps.
  */
 
@@ -97,7 +105,9 @@ export function buildVintedSoldMatchContext(
 
 /** Pure resolver for one reported sold Vinted listing. Remote id always wins over title. */
 export function matchVintedSoldEntry(entry: VintedSoldEntry, ctx: VintedSoldMatchContext): VintedSoldMatch {
-  const byId = ctx.itemIdsByRemoteId.get(entry.vintedId);
+  // '' = no Vinted id known (title-only report from the sold email); never looked up by id.
+  const hasId = entry.vintedId.length > 0;
+  const byId = hasId ? ctx.itemIdsByRemoteId.get(entry.vintedId) : undefined;
   if (byId && byId.size === 1) return { kind: 'matched', itemId: byId.values().next().value as string, via: 'remoteId' };
   if (byId && byId.size > 1) return { kind: 'ambiguous', candidateCount: byId.size, via: 'remoteId' };
 
@@ -108,7 +118,7 @@ export function matchVintedSoldEntry(entry: VintedSoldEntry, ctx: VintedSoldMatc
   if (hits.length > 1) return { kind: 'ambiguous', candidateCount: hits.length, via: 'title' };
   const hit = hits[0];
   const recorded = ctx.remoteIdsByItemId.get(hit.id);
-  if (recorded && recorded.size > 0 && !recorded.has(entry.vintedId)) {
+  if (hasId && recorded && recorded.size > 0 && !recorded.has(entry.vintedId)) {
     return { kind: 'notFound', reason: 'title_match_has_different_vinted_id' };
   }
   return { kind: 'matched', itemId: hit.id, via: 'title' };
@@ -277,4 +287,18 @@ export async function processVintedSoldReport(
     });
   }
   return results;
+}
+
+/**
+ * Title-only variant for Vinted's sold email (no listing id in it). One entry, organizer-scoped,
+ * same matcher refusals and same commit path as processVintedSoldReport.
+ */
+export async function processVintedSoldTitleReport(
+  organizerId: string,
+  title: string,
+  deps: VintedSoldDeps = {},
+): Promise<VintedSoldEntryResult> {
+  const clean = String(title ?? '').slice(0, 500);
+  const [result] = await processVintedSoldReport(organizerId, [{ vintedId: '', title: clean }], deps);
+  return result;
 }

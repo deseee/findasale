@@ -21,8 +21,9 @@
  *     since mail headers are commonly re-cased in transit) -- never fuzzy-matched.
  *   - subject: the email's Subject header, exactly as delivered. Must START WITH
  *     'New Marketplace order for' (case-sensitive -- this is Facebook's own fixed
- *     string). Sibling emails from the same sender exist for other events (offers,
- *     shipping labels, delivery) with different subject prefixes and must NOT match.
+ *     string), OR be exactly 'Shipping label for your Marketplace order' (2026-09-23: the
+ *     only email an accepted-offer sale produces). Other siblings from the same sender
+ *     (offers, delivery, "Your order has arrived") must NOT match.
  *   - links: every anchor href found in the email body, in whatever order the caller's
  *     parser produced them. PREFERRED input when the caller already has these (e.g. an
  *     inbound-parse vendor that hands back a structured link list, or a caller that ran
@@ -56,7 +57,12 @@
  *      remoteListingId equals it, platform='FACEBOOK', action='POST', ordered by
  *      createdAt desc (mirrors the existing "first-seen-wins under desc order" idiom
  *      extensionController.ts already uses twice for the identical reason).
- *   4. FAIL CLOSED on no match: never fall back to fuzzy title-matching. Return
+ *   3a. (2026-09-23) If no job row matches, fall back to an EXACT normalized title that is
+ *      unique across the organizer's items (platformSoldDetectionService, same rule as the
+ *      Vinted branch). The title is the subject's (unless truncated with "...") or the body's.
+ *      The "Shipping label for your Marketplace order" email (the only email an accepted-offer
+ *      sale gets) is accepted too; it has no title in the subject, so its body title is used.
+ *  4. FAIL CLOSED on no match: never fall back to fuzzy title-matching. Return
  *      (kind: 'unmatched') carrying the raw order id and the item title parsed from the
  *      subject line, and log a structured event with the same detail, for a human to
  *      reconcile later. This function does not send any notification itself -- wiring an
@@ -79,9 +85,17 @@ import {
   extractForwardingTokenFromAddress,
 } from './organizerEmailForwardingService';
 import { verifyInboundEmailAuthentication, FACEBOOK_DKIM_DOMAINS } from './inboundEmailAuthService';
+import { htmlToPlainText } from './vintedSoldEmailDetection';
+import { processPlatformSoldReport, type PlatformSoldResult } from './platformSoldDetectionService';
 
 export const FACEBOOK_ORDER_EMAIL_SENDER = 'noreply@marketplace.facebook.com';
 export const FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX = 'New Marketplace order for';
+/** 2026-09-23: a sale made by ACCEPTING A BUYER'S OFFER sends no "New Marketplace order for"
+ * email at all -- only this one (subject has no title). Confirmed live: "Heart Dreamboat Annie
+ * Vinyl LP Record, 1975" (offer from Andra, 2026-09-02, label email 2026-09-03), "Eagles Their
+ * Greatest Hits Vinyl Record, 1976" and "Seismic Audio TRS Patch Cable" all sold this way and
+ * none had an order email. The body carries the title and the same listing_id link. */
+export const FACEBOOK_SHIPPING_LABEL_SUBJECT = 'Shipping label for your Marketplace order';
 
 /** The new Item.lastSoldVia tag for this detection channel (ADR-131 §4). Plain string
  * value on the existing free-form column -- no enum, no migration. */
@@ -123,6 +137,8 @@ export type FacebookOrderEmailResult =
       remoteOrderId: string | null;
       soldVia: typeof SOLD_VIA_FB_EMAIL_ORDER;
       alreadyCommitted: boolean;
+      /** 'listingId' = matched by Facebook's listing_id; 'title' = unique-title fallback. */
+      via?: 'listingId' | 'title';
     }
   | {
       kind: 'unmatched';
@@ -153,6 +169,10 @@ export interface FacebookOrderEmailDeps {
   /** Commits the sale once a match is found. Defaults to commitFacebookNativeSale.
    * Override in tests to assert on calls without touching the database. */
   commitSale?: (itemId: string, soldVia: string) => Promise<{ alreadyCommitted: boolean }>;
+  /** Title fallback (2026-09-23) when the listing_id path finds no job row: unique normalized
+   * title among the organizer's items, then commit. Defaults to processPlatformSoldReport
+   * ('FACEBOOK', 'FB_EMAIL_ORDER'). Override in tests. */
+  processTitleReport?: (organizerId: string, title: string) => Promise<PlatformSoldResult>;
 }
 
 async function defaultResolveItemIdForListingId(remoteListingId: string, organizerId: string): Promise<string | null> {
@@ -206,6 +226,32 @@ function isExactSender(from: string): boolean {
   return from.trim().toLowerCase() === FACEBOOK_ORDER_EMAIL_SENDER;
 }
 
+// Real body shapes (HTML reduced to one line of text by htmlToPlainText):
+//   order: "... or it will be automatically canceled. <title> $15.00 To be shipped Generate ..."
+//   label: "... Please ship this item by Thu, Sep 10 to avoid cancellation. <title> Buyer's Offer: $16.00 See order details ..."
+const ORDER_BODY_TITLE_RE = /automatically canceled\.\s*(.+?)\s*(?:US)?\$\d[\d,]*(?:\.\d{2})?\s*To be shipped/;
+// Terminator is an explicit price label ("Buyer's Offer" is the observed one) so a title that
+// merely contains capitalized words can never be cut short.
+const LABEL_BODY_TITLE_RE = /to avoid cancellation\.\s*(.+?)\s+(?:Buyer['’]s [A-Za-z]+|Price|Total|Sale price|Sold for):\s*(?:US)?\$\d/;
+
+/** Item title from an order or shipping-label email body, or null (fail closed). */
+export function parseFacebookSaleEmailBodyTitle(body: string | null | undefined): string | null {
+  if (!body) return null;
+  const text = htmlToPlainText(body);
+  const m = ORDER_BODY_TITLE_RE.exec(text) ?? LABEL_BODY_TITLE_RE.exec(text);
+  if (!m) return null;
+  const t = m[1].trim();
+  return t ? t.slice(0, 500) : null;
+}
+
+/** Best full title: the subject's (order emails) unless Facebook truncated it with "...",
+ * otherwise the body's. */
+function bestSaleTitle(subjectTitle: string | null, rawBody: string | undefined): string | null {
+  const truncated = !!subjectTitle && /(\.\.\.|…)$/.test(subjectTitle);
+  if (subjectTitle && !truncated) return subjectTitle;
+  return parseFacebookSaleEmailBodyTitle(rawBody) ?? null;
+}
+
 /**
  * Parses and matches one inbound email against Facebook's Marketplace order-placed
  * signature, and on a real match, commits the sale. See file header for the full
@@ -220,12 +266,21 @@ export async function processFacebookMarketplaceOrderEmail(
   const resolveItemIdForListingId = deps.resolveItemIdForListingId ?? defaultResolveItemIdForListingId;
   const resolveOrganizerIdByToken = deps.resolveOrganizerIdByToken ?? resolveOrganizerIdByForwardingToken;
   const commitSale = deps.commitSale ?? defaultCommitSale;
+  const processTitleReport =
+    deps.processTitleReport ??
+    ((orgId: string, title: string) =>
+      processPlatformSoldReport('FACEBOOK', SOLD_VIA_FB_EMAIL_ORDER, orgId, { remoteListingId: '', title }));
 
   if (!isExactSender(email.from)) {
     return { kind: 'ignored', reason: `sender "${email.from}" is not ${FACEBOOK_ORDER_EMAIL_SENDER}` };
   }
-  if (!email.subject.startsWith(FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX)) {
-    return { kind: 'ignored', reason: `subject does not start with "${FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX}"` };
+  const isOrderEmail = email.subject.startsWith(FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX);
+  const isLabelEmail = email.subject.trim() === FACEBOOK_SHIPPING_LABEL_SUBJECT;
+  if (!isOrderEmail && !isLabelEmail) {
+    return {
+      kind: 'ignored',
+      reason: `subject does not start with "${FACEBOOK_ORDER_EMAIL_SUBJECT_PREFIX}" and is not "${FACEBOOK_SHIPPING_LABEL_SUBJECT}"`,
+    };
   }
 
   // SENDER AUTHENTICATION -- fail closed (see file header step 1a).
@@ -267,56 +322,76 @@ export async function processFacebookMarketplaceOrderEmail(
   const organizerId = [...organizerIds][0];
 
   const itemTitleFromSubject = parseItemTitleFromSubject(email.subject);
+  const saleTitle = bestSaleTitle(itemTitleFromSubject, email.rawBody);
   const searchTexts = [...(email.links ?? []), ...(email.rawBody ? [email.rawBody] : [])];
 
   const remoteListingId = extractFirstMatch(LISTING_ID_PATTERN, searchTexts);
   const remoteOrderId = extractFirstMatch(ORDER_ID_PATTERN, searchTexts);
 
-  if (!remoteListingId) {
-    console.warn('[FacebookMarketplaceEmailSoldDetection] unmatched order email -- no listing_id extracted', {
-      remoteOrderId,
-      itemTitleFromSubject,
-    });
+  const itemId = remoteListingId ? await resolveItemIdForListingId(remoteListingId, organizerId) : null;
+
+  if (itemId) {
+    const { alreadyCommitted } = await commitSale(itemId, SOLD_VIA_FB_EMAIL_ORDER);
     return {
-      kind: 'unmatched',
+      kind: 'matched',
       organizerId,
+      itemId,
+      remoteListingId: remoteListingId as string,
       remoteOrderId,
-      remoteListingId: null,
-      itemTitleFromSubject,
-      reason: 'no listing_id found in any provided link/rawBody',
+      soldVia: SOLD_VIA_FB_EMAIL_ORDER,
+      alreadyCommitted,
+      via: 'listingId',
     };
   }
 
-  const itemId = await resolveItemIdForListingId(remoteListingId, organizerId);
-
-  if (!itemId) {
-    // FAIL CLOSED (ADR-131 §3, non-negotiable): never fall back to fuzzy title-matching.
-    // A human reconciles this from the logged detail.
-    console.warn('[FacebookMarketplaceEmailSoldDetection] unmatched order email -- no MarketplaceListingJob row', {
-      organizerId,
-      remoteListingId,
-      remoteOrderId,
-      itemTitleFromSubject,
-    });
-    return {
-      kind: 'unmatched',
-      organizerId,
-      remoteOrderId,
-      remoteListingId,
-      itemTitleFromSubject,
-      reason: `no MarketplaceListingJob row (platform=FACEBOOK, action=POST) owned by organizer ${organizerId} found for remoteListingId=${remoteListingId}`,
-    };
+  // TITLE FALLBACK (2026-09-23). Live data: 219 of 241 POSTED FACEBOOK job rows store the
+  // placeholder "https://www.facebook.com/marketplace/you/selling" as remoteListingId, so the
+  // listing_id lookup above almost never finds a row. Same standard as the Vinted email branch:
+  // exact normalized title, unique across THIS organizer's items, 8+ characters; ambiguous or
+  // missing -> unmatched for a human. Still never fuzzy. The FACEBOOK listing record is closed
+  // before the commit so the extension is not asked to delete the listing that sold.
+  let titleReason: string | null = null;
+  if (saleTitle) {
+    const r = await processTitleReport(organizerId, saleTitle);
+    if (r.result === 'sold' || r.result === 'alreadySold' || r.result === 'notAvailable') {
+      return {
+        kind: 'matched',
+        organizerId,
+        itemId: r.itemId as string,
+        remoteListingId: remoteListingId ?? '',
+        remoteOrderId,
+        soldVia: SOLD_VIA_FB_EMAIL_ORDER,
+        alreadyCommitted: r.result !== 'sold',
+        via: 'title',
+      };
+    }
+    if (r.result === 'error') {
+      // Leave the message unread so the next poll retries.
+      throw new Error(`Facebook title-fallback commit failed for organizer ${organizerId}: ${r.reason ?? r.result}`);
+    }
+    titleReason =
+      r.result === 'ambiguous'
+        ? `title matches ${r.candidateCount ?? 'several'} items (ambiguous)`
+        : `title fallback: ${r.reason ?? 'no_match'}`;
   }
 
-  const { alreadyCommitted } = await commitSale(itemId, SOLD_VIA_FB_EMAIL_ORDER);
-
-  return {
-    kind: 'matched',
+  const reason = !remoteListingId
+    ? 'no listing_id found in any provided link/rawBody'
+    : `no MarketplaceListingJob row (platform=FACEBOOK, action=POST) owned by organizer ${organizerId} found for remoteListingId=${remoteListingId}`;
+  console.warn('[FacebookMarketplaceEmailSoldDetection] unmatched sale email', {
     organizerId,
-    itemId,
     remoteListingId,
     remoteOrderId,
-    soldVia: SOLD_VIA_FB_EMAIL_ORDER,
-    alreadyCommitted,
+    saleTitle,
+    reason,
+    titleReason,
+  });
+  return {
+    kind: 'unmatched',
+    organizerId,
+    remoteOrderId,
+    remoteListingId: remoteListingId ?? null,
+    itemTitleFromSubject: saleTitle ?? itemTitleFromSubject,
+    reason: titleReason ? `${reason}; ${titleReason}` : reason,
   };
 }

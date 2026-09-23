@@ -12,6 +12,7 @@ import {
   buildVintedSoldMatchContext,
   matchVintedSoldEntry,
   processVintedSoldReport,
+  processVintedSoldTitleReport,
   sanitizeVintedSoldEntries,
   SOLD_VIA_VINTED,
 } from '../vintedSoldDetectionService';
@@ -137,5 +138,56 @@ describe('processVintedSoldReport', () => {
 
   it('refuses to run without an organizer scope', async () => {
     await expect(processVintedSoldReport('', [{ vintedId: '1', title: MR_NATURAL }], deps())).rejects.toThrow();
+  });
+});
+
+describe('title-only entry (Vinted sold email, no listing id)', () => {
+  const items = [
+    { id: 'item_mr', title: MR_NATURAL, status: 'AVAILABLE' },
+    { id: 'item_dup_a', title: 'Blue Glass Vase', status: 'AVAILABLE' },
+    { id: 'item_dup_b', title: 'blue glass vase!', status: 'AVAILABLE' },
+    { id: 'item_other_id', title: 'Walnut Jewelry Box Vintage', status: 'AVAILABLE' },
+  ];
+  const jobs = [{ itemId: 'item_other_id', remoteListingId: '777' }];
+  const ctx = buildVintedSoldMatchContext(items, jobs);
+
+  it('matches the email title (single spaces) to the stored title (double space) via the normalizer', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'Mr. Natural #2 R. Crumb (San Francisco Comic Book Company Oct 1971)' }, ctx))
+      .toEqual({ kind: 'matched', itemId: 'item_mr', via: 'title' });
+  });
+
+  it('matches a job-tracked item by title when no id is reported (no id to compare against)', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'Walnut Jewelry Box Vintage' }, ctx))
+      .toEqual({ kind: 'matched', itemId: 'item_other_id', via: 'title' });
+  });
+
+  it('keeps the ambiguity and minimum-length refusals', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'Blue Glass Vase' }, ctx)).toEqual({ kind: 'ambiguous', candidateCount: 2, via: 'title' });
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'Vase' }, ctx)).toEqual({ kind: 'notFound', reason: 'title_too_short' });
+  });
+
+  it('does no fuzzy matching', () => {
+    expect(matchVintedSoldEntry({ vintedId: '', title: 'Mr. Natural #2 R. Crumb' }, ctx)).toEqual({ kind: 'notFound', reason: 'no_match' });
+  });
+
+  it('never looks up an empty id against a job row', () => {
+    const c = buildVintedSoldMatchContext(items, [{ itemId: 'item_dup_a', remoteListingId: '' }]);
+    expect(matchVintedSoldEntry({ vintedId: '', title: MR_NATURAL }, c)).toEqual({ kind: 'matched', itemId: 'item_mr', via: 'title' });
+  });
+
+  it('processVintedSoldTitleReport commits with VINTED, and a second run (extension or email) gets alreadySold', async () => {
+    let sold = false;
+    const d = {
+      loadCandidateItems: jest.fn(async () => items),
+      loadVintedJobs: jest.fn(async () => jobs),
+      closeVintedListingRecord: jest.fn(async () => false),
+      commitSale: jest.fn(async () => { const was = sold; sold = true; return { alreadyCommitted: was }; }),
+      getItemStatus: jest.fn(async () => 'SOLD'),
+    };
+    const first = await processVintedSoldTitleReport('org_1', 'Mr. Natural #2 R. Crumb (San Francisco Comic Book Company Oct 1971)', d);
+    expect(first).toEqual(expect.objectContaining({ vintedId: '', result: 'sold', itemId: 'item_mr', via: 'title' }));
+    expect(d.commitSale).toHaveBeenCalledWith('item_mr', SOLD_VIA_VINTED);
+    const second = await processVintedSoldReport('org_1', [{ vintedId: '9879473979', title: MR_NATURAL }], d);
+    expect(second[0].result).toBe('alreadySold');
   });
 });

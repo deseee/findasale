@@ -37,6 +37,7 @@ import {
 } from '../utils/feeCalculator'; // S388: tier-aware commission; platform-locked auction buyer premium
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-09-23
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
@@ -349,6 +350,9 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       try {
         ({ fullySoldOut: recoveryFullySoldOut, remainingStock: recoveryRemainingStock } = await sellItemUnits(itemId, 1));
         if (recoveryFullySoldOut) {
+          // 2026-09-23: this purchase-recovery path flipped the item SOLD without the
+          // eBay/Shopify/Discogs/Facebook withdraw fan-out every other Stripe site runs.
+          fanOutItemSoldWithdrawals(itemId, 'stripe_recovery');
           updatedItem = await prisma.item.findUnique({
             where: { id: itemId },
             select: { id: true, saleId: true, title: true, price: true },

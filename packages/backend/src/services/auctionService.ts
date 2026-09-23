@@ -1,6 +1,7 @@
 import { prisma } from '../index';
 import { createNotification } from './notificationService';
 import { sellItemUnits, InsufficientStockError } from './itemStockService';
+import { fanOutItemSoldWithdrawals } from './soldFanOutService'; // 2026-09-23: withdraw-on-sellout fan-out
 import { syncMarketplaceStock } from './marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { createSquareCheckoutLink } from './squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe Checkout Session below
 import { buildSquareIdempotencyKey } from './squarePaymentService';
@@ -306,6 +307,10 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
     // inclusion of this call site.
     try {
       const { fullySoldOut, remainingStock } = await sellItemUnits(itemId, 1);
+      // 2026-09-23: closes the gap flagged in the NOTE above -- an auction win that sells the
+      // item out now withdraws it from eBay/Shopify/Discogs and nudges Facebook like every other
+      // sale channel.
+      if (fullySoldOut) fanOutItemSoldWithdrawals(itemId, 'auction_close');
       if (!fullySoldOut) {
         syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock }).catch(err =>
           console.error('[eBay ReviseQty] sync failed for item', itemId, err)
