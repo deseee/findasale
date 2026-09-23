@@ -1642,6 +1642,15 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       // cron does -- this is what extends the ebayListingSyncCron.ts push-first/pull-sync
       // clobber guard to manual price edits, not just markdown-driven ones.
       updateData.priceUpdatedAt = new Date();
+      // ADR-128 (2026-09-19, ported 2026-09-23): a new organizer-chosen price re-opens the
+      // eBay sync. Without this, an item parked in FAILED_TERMINAL would be skipped by
+      // ebayListingSyncCron.ts forever, so the organizer's manual fix (e.g. a price above
+      // eBay's floor) would never be pushed. PENDING puts it back on the push-first path.
+      // Gated on the same eBay-live condition as markdownPricePropagationService.ts's
+      // buildHandlers(), so a non-eBay item is never marked PENDING.
+      if (item.ebayOfferId || item.ebayListingId) {
+        updateData.ebaySyncState = 'PENDING';
+      }
       fieldsBeingEdited.push('price');
     }
     if (category !== undefined) {

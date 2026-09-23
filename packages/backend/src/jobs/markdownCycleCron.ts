@@ -2,7 +2,11 @@ import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
-import { propagateMarkdownPriceToMarketplaces } from '../services/markdownPricePropagationService';
+import {
+  classifyPropagationFailure,
+  formatPropagationFailureReason,
+  propagateMarkdownPriceToMarketplaces,
+} from '../services/markdownPricePropagationService';
 
 /**
  * Feature: Automatic Markdown Cycles (PRO Tier)
@@ -107,6 +111,15 @@ export function scheduleMarkdownCycleCron(): void {
                   // ebayListingSyncCron.ts pull-sync guard knows this price change
                   // hasn't reached eBay yet and won't clobber it back on the next pull.
                   priceUpdatedAt: new Date(),
+                  // ADR-128 (2026-09-19): the desired price just moved and eBay has not confirmed
+                  // it yet -- that in-flight gap now has a name instead of being inferred from two
+                  // timestamps. Gated on the same eBay-live condition buildHandlers() uses in
+                  // markdownPricePropagationService.ts, so an item with no eBay listing is never
+                  // marked PENDING for a push that will never be attempted. Resolved to SYNCED or
+                  // FAILED_* by the propagation block below, inside this same iteration.
+                  ...(item.ebayOfferId || item.ebayListingId
+                    ? { ebaySyncState: 'PENDING' as const }
+                    : {}),
                 },
               });
 
@@ -155,11 +168,36 @@ export function scheduleMarkdownCycleCron(): void {
                 if (ebayResult?.ok) {
                   await prisma.item.update({
                     where: { id: item.id },
-                    data: { ebayPriceSyncedAt: new Date() },
+                    data: {
+                      ebayPriceSyncedAt: new Date(),
+                      // ADR-128 (2026-09-19): eBay confirmed this price, so it is now also the
+                      // confirmed-live price a shopper on eBay would actually be charged. Clearing
+                      // the failure reason and resetting the attempt counter means a later failure
+                      // starts counting from zero rather than inheriting a stale history.
+                      ebayLivePrice: newPrice,
+                      ebaySyncState: 'SYNCED',
+                      ebaySyncFailureReason: null,
+                      ebaySyncAttempts: 0,
+                    },
                   });
                 } else if (ebayResult) {
+                  // ADR-128 (2026-09-19): record the gap instead of collapsing every failure into
+                  // one console.warn. Item.price is deliberately NOT rolled back -- the markdown is
+                  // a real business decision the organizer configured, and ADR-128 rejects rollback
+                  // explicitly. What changes is that the failure is now classified, so
+                  // ebayListingSyncCron.ts can stop retrying what no retry can fix, and eBay's own
+                  // error text is kept for the organizer-facing alert.
+                  const failureClass = classifyPropagationFailure(ebayResult.reason, ebayResult.detail);
+                  await prisma.item.update({
+                    where: { id: item.id },
+                    data: {
+                      ebaySyncState: failureClass === 'terminal' ? 'FAILED_TERMINAL' : 'FAILED_RETRYABLE',
+                      ebaySyncFailureReason: formatPropagationFailureReason(ebayResult.reason, ebayResult.detail),
+                      ebaySyncAttempts: { increment: 1 },
+                    },
+                  });
                   console.warn(
-                    `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm: ${ebayResult.reason ?? 'unknown'}`
+                    `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass}): ${ebayResult.reason ?? 'unknown'}`
                   );
                 }
               } catch (propErr) {
@@ -233,6 +271,15 @@ export function scheduleMarkdownCycleCron(): void {
                     // ADR markdown-cycle-ebay-price-sync (2026-09-15): see first-markdown
                     // loop above for why this is stamped on every FAS-initiated price write.
                     priceUpdatedAt: new Date(),
+                    // ADR-128 (2026-09-19): the desired price just moved and eBay has not confirmed
+                    // it yet -- that in-flight gap now has a name instead of being inferred from two
+                    // timestamps. Gated on the same eBay-live condition buildHandlers() uses in
+                    // markdownPricePropagationService.ts, so an item with no eBay listing is never
+                    // marked PENDING for a push that will never be attempted. Resolved to SYNCED or
+                    // FAILED_* by the propagation block below, inside this same iteration.
+                    ...(item.ebayOfferId || item.ebayListingId
+                      ? { ebaySyncState: 'PENDING' as const }
+                      : {}),
                   },
                 });
 
@@ -278,11 +325,36 @@ export function scheduleMarkdownCycleCron(): void {
                   if (ebayResult?.ok) {
                     await prisma.item.update({
                       where: { id: item.id },
-                      data: { ebayPriceSyncedAt: new Date() },
+                      data: {
+                        ebayPriceSyncedAt: new Date(),
+                        // ADR-128 (2026-09-19): eBay confirmed this price, so it is now also the
+                        // confirmed-live price a shopper on eBay would actually be charged. Clearing
+                        // the failure reason and resetting the attempt counter means a later failure
+                        // starts counting from zero rather than inheriting a stale history.
+                        ebayLivePrice: newPrice,
+                        ebaySyncState: 'SYNCED',
+                        ebaySyncFailureReason: null,
+                        ebaySyncAttempts: 0,
+                      },
                     });
                   } else if (ebayResult) {
+                    // ADR-128 (2026-09-19): record the gap instead of collapsing every failure into
+                    // one console.warn. Item.price is deliberately NOT rolled back -- the markdown is
+                    // a real business decision the organizer configured, and ADR-128 rejects rollback
+                    // explicitly. What changes is that the failure is now classified, so
+                    // ebayListingSyncCron.ts can stop retrying what no retry can fix, and eBay's own
+                    // error text is kept for the organizer-facing alert.
+                    const failureClass = classifyPropagationFailure(ebayResult.reason, ebayResult.detail);
+                    await prisma.item.update({
+                      where: { id: item.id },
+                      data: {
+                        ebaySyncState: failureClass === 'terminal' ? 'FAILED_TERMINAL' : 'FAILED_RETRYABLE',
+                        ebaySyncFailureReason: formatPropagationFailureReason(ebayResult.reason, ebayResult.detail),
+                        ebaySyncAttempts: { increment: 1 },
+                      },
+                    });
                     console.warn(
-                      `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm: ${ebayResult.reason ?? 'unknown'}`
+                      `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass}): ${ebayResult.reason ?? 'unknown'}`
                     );
                   }
                 } catch (propErr) {

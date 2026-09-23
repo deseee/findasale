@@ -1686,6 +1686,14 @@ model Item {
   ebayPriceSyncedAt               DateTime? // ADR markdown-cycle-ebay-price-sync (2026-09-15): stamped when FAS's price is confirmed to match eBay's live offer -- on a successful outbound push, or on a pull that found no difference. null or older than priceUpdatedAt means eBay has not caught up yet.
   ebayRenewalAnchorAt             DateTime? // ADR ebay-renewal-forecasting (2026-09-15): effective origin timestamp for this listing's calendar-month GTC renewal cycle (2026-09-20: corrected from an earlier fixed-30-day description -- eBay renews GTC listings once per calendar month, per eBay's own help docs, not every 30 days; see ebayRenewalForecastCron.ts for the arithmetic). Set only when a NEW ebayListingId is assigned (first push, or the self-heal delete+recreate-offer path) -- never touched by in-place PUT-only edits (price revision, category/policy/condition self-heal). Cleared to null when the item stops being eBay-live.
   ebayNextRenewalAt               DateTime? // ADR ebay-renewal-forecasting (2026-09-15): precomputed forecast -- the next calendar-month GTC renewal boundary strictly after ebayRenewalAnchorAt (2026-09-20: corrected from an earlier fixed-30-day description; eBay renews GTC listings once per calendar month per eBay's own help docs), recomputed nightly by ebayRenewalForecastCron.ts. An estimate only, not eBay-confirmed. Cleared to null when the item stops being eBay-live.
+  // ADR-128 (2026-09-19) -- eBay price-sync failure handling: two prices, not one.
+  // priceUpdatedAt/ebayPriceSyncedAt above record WHEN eBay last agreed. These four record
+  // WHAT eBay is actually charging, WHY a push is stuck, and WHETHER retrying is pointless --
+  // the representation of the gap the schema previously had no way to express.
+  ebayLivePrice                   Float? // ADR-128 (2026-09-19): last price eBay actually CONFIRMED (the confirmed-live price), as distinct from Item.price (the desired price FindA.Sale decided). The two differing is a normal in-flight sync, not corruption. null = eBay has never confirmed a price for this item.
+  ebaySyncState                   EbaySyncState? // ADR-128 (2026-09-19): SYNCED | PENDING | FAILED_RETRYABLE | FAILED_TERMINAL, classified at the propagation boundary by classifyPropagationFailure() (markdownPricePropagationService.ts). FAILED_TERMINAL means no retry can fix it, and ebayListingSyncCron.ts must stop spending eBay API calls on this item. null on every pre-ADR-128 row = not tracked by this mechanism, which falls through to the existing priceUpdatedAt/ebayPriceSyncedAt behavior.
+  ebaySyncFailureReason           String? // ADR-128 (2026-09-19): the REAL eBay error text (e.g. "put-failed - HTTP 400 ...Size aspect value not supported..."), not a category -- this is what the one-time terminal-failure notification shows the organizer. Cleared to null on a confirmed sync.
+  ebaySyncAttempts                Int                     @default(0) // ADR-128 (2026-09-19): consecutive failed eBay price-push attempts; reset to 0 on a confirmed sync. Never rolls Item.price back -- ADR-128 explicitly rejects rollback; this only counts how long the gap has persisted.
   fbExportedAt                    DateTime?
   // ADR-085 Track B (2026-07-16): general, cross-channel stock pool. Distinct from
   // `quantity` above (photos bundled into one lot) AND from the eBay-specific
@@ -3426,6 +3434,17 @@ enum SubscriptionTier {
 enum EbayPublishMode {
   DRAFT // Create unpublished Offer in eBay (organizer finalizes in Seller Hub)
   LIVE // Publish immediately
+}
+
+// ADR-128 (2026-09-19) -- where Item.price (desired) stands relative to Item.ebayLivePrice
+// (confirmed-live). FAILED_RETRYABLE keeps the existing 4h ebayListingSyncCron.ts retry;
+// FAILED_TERMINAL stops it dead, because no retry can fix a listing-content rejection or a
+// missing offer -- retrying those every 4h forever is the waste ADR-128 exists to end.
+enum EbaySyncState {
+  SYNCED // eBay confirmed Item.price; ebayLivePrice matches it
+  PENDING // FindA.Sale changed the price, eBay has not confirmed it yet (normal in-flight sync)
+  FAILED_RETRYABLE // transient: rate limit, lapsed OAuth token, network, eBay 429/5xx -- retry helps
+  FAILED_TERMINAL // listing content eBay rejected (4xx), or no eBay offer at all -- retry can never help
 }
 
 // Feature #55: Seasonal Discovery Challenges — time-limited gamification for shoppers

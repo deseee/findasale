@@ -40,6 +40,115 @@ export interface MarketplacePropagationResult {
   detail?: string;
 }
 
+/**
+ * ADR-128 (2026-09-19) -- eBay price-sync failure handling. The `reason` vocabulary above
+ * collapses two radically different situations into one string: failures a retry can clear
+ * (throttling, a lapsed token, a network blip, an eBay-side 5xx) and failures no retry will
+ * ever clear (eBay evaluated the write and rejected the listing's content, or there is no
+ * eBay offer to revise at all). Classifying them HERE -- at the propagation boundary, where
+ * the reason and detail already exist -- is what lets ebayListingSyncCron.ts stop burning a
+ * 4-hourly eBay API call on an item that can never succeed, and lets the organizer be told
+ * once, with eBay's actual message, instead of every day forever.
+ */
+export type EbaySyncFailureClass = 'retryable' | 'terminal';
+
+/**
+ * Pull eBay's HTTP status out of a MarketplacePropagationResult.detail.
+ *
+ * reviseEbayOfferPrice() formats failure details as `HTTP <status> <first 200-600 chars of body>`,
+ * but that body slice can itself contain the token "HTTP", and the legacy Trading-API path
+ * produces details with no status in them at all (`<Ack>:<LongMessage>`, or a raw exception
+ * message). So: prefer a status anchored at the very start of the detail, fall back to the
+ * first one found anywhere, and return null when there is genuinely no status to read --
+ * callers treat null as "cannot tell", which ADR-128 requires to mean retryable.
+ */
+function parseHttpStatusFromDetail(detail?: string | null): number | null {
+  if (!detail) return null;
+  const match = /^\s*HTTP\s+(\d{3})\b/.exec(detail) ?? /\bHTTP\s+(\d{3})\b/.exec(detail);
+  if (!match) return null;
+  const status = Number(match[1]);
+  return Number.isInteger(status) ? status : null;
+}
+
+/**
+ * Classify a failed MarketplacePropagationResult as retryable or terminal (ADR-128,
+ * Decision #3 + #4). Scoped to the eBay reason vocabulary defined by
+ * EbayPriceRevisionResult in ebayPriceRevisionService.ts plus the two this file adds
+ * itself ('no-token' in pushToEbay, 'threw' in its catch blocks).
+ *
+ * The hard rule from the ADR: when the reason or the HTTP status cannot be read with
+ * confidence, return 'retryable'. Nothing is ever silently marked terminal -- a wrong
+ * 'retryable' costs one wasted API call every 4h, a wrong 'terminal' silently strands the
+ * organizer's price change forever.
+ */
+export function classifyPropagationFailure(
+  reason: string | null | undefined,
+  detail?: string | null
+): EbaySyncFailureClass {
+  switch (reason) {
+    // Throttling / auth / transport: the push never reached a verdict on the listing's
+    // content, so nothing about the listing needs fixing. Retrying is the right move --
+    // 'no-token' clears when the organizer reconnects eBay, the rest clear on their own.
+    case 'rate-limited':
+    case 'no-token':
+    case 'error':
+    case 'threw':
+      return 'retryable';
+
+    // No Offer object AND no legacy ItemID -- there is nothing on eBay to revise. This will
+    // be just as true in 4 hours and in 4 months; retrying is a guaranteed no-op forever.
+    case 'no-offer-id':
+      return 'terminal';
+
+    // A write eBay actually evaluated and rejected. A 4xx other than 429 is a listing-content
+    // error -- unsupported aspect value, missing item specific, price below eBay's floor,
+    // invalid shipping type -- and only the organizer editing the listing can clear it.
+    // 429 (throttled) and 5xx (eBay-side) are transient and stay retryable.
+    // NOTE (2026-09-23 port): reviseEbayOfferPrice() now runs its own Best-Offer-threshold and
+    // category-aspect auto-repair retries before returning 'put-failed', so a 4xx that reaches
+    // this point has already survived one automatic repair attempt.
+    case 'put-failed':
+    case 'legacy-revise-failed': {
+      const status = parseHttpStatusFromDetail(detail);
+      if (status === null) return 'retryable'; // unreadable detail -- never guess terminal
+      // 401 = the token lapsed mid-run and 408 = eBay timed out the request: neither is a
+      // verdict on the listing's content, so both stay retryable (same bucket as 'no-token' /
+      // 'error' above) rather than being wrongly stranded as terminal.
+      if (status === 401 || status === 408 || status === 429 || status >= 500) return 'retryable';
+      if (status >= 400) return 'terminal';
+      return 'retryable';
+    }
+
+    // Deliberately NOT terminal on a 4xx. ADR-128's table only commits `get-failed` 5xx to
+    // "retry helps", and this failure is a READ of the offer -- not eBay's verdict on the
+    // price we tried to write. Treating a 404 here as terminal would strand items whose
+    // offer id is merely stale, so it stays retryable per the ADR's never-guess-terminal rule.
+    case 'get-failed':
+      return 'retryable';
+
+    // An unset reason, or a vocabulary this function has not been taught (a future
+    // marketplace connector's). Retryable by construction, same rule as above.
+    default:
+      return 'retryable';
+  }
+}
+
+/**
+ * Build the string stored in Item.ebaySyncFailureReason. ADR-128, Decision #2 is explicit
+ * that this column holds "the real eBay error text, not a category", because Decision #5's
+ * one-time terminal alert has to be able to say "Size aspect value not supported" rather
+ * than "sync failed" -- so the machine-readable reason and eBay's own detail are kept
+ * together. Capped so one oversized eBay error body cannot bloat the Item row.
+ */
+export function formatPropagationFailureReason(
+  reason: string | null | undefined,
+  detail?: string | null
+): string {
+  const head = reason ?? 'unknown';
+  const full = detail ? `${head} — ${detail}` : head;
+  return full.slice(0, 500);
+}
+
 async function pushToEbay(item: MarkdownPropagationItem): Promise<MarketplacePropagationResult> {
   try {
     const accessToken = await refreshEbayAccessToken(item.organizerId);

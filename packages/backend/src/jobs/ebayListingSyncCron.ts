@@ -33,6 +33,19 @@
  * pullSyncForOrganizer). The sync-issues list endpoint + platforms.tsx mini-panel that
  * notification deep-links to (Dev Handoff Notes #4-5 in that spec) are NOT built here --
  * that's explicit frontend/dispatch-5 scope per next-session-prompt.md, not this dispatch.
+ *
+ * ADR-128 (2026-09-19) -- retry only what retrying can fix:
+ * The push-first step above used to retry EVERY failure every 4h forever, which is why the
+ * same handful of items failed on every single run and their organizer got the same
+ * markdown_sync_failure notification day after day for a problem no retry can fix. Each push
+ * failure is now classified (classifyPropagationFailure, markdownPricePropagationService.ts)
+ * and persisted on the Item: FAILED_RETRYABLE keeps the 4h retry below unchanged, while
+ * FAILED_TERMINAL is skipped outright at the top of the per-item loop -- zero further eBay
+ * API calls, and no fallthrough to the pull (which would clobber Item.price back to eBay's
+ * stale value, the one thing ADR-128 explicitly rejects). A terminal failure instead gets a
+ * single, per-item notification carrying eBay's actual error message. A terminal item
+ * re-enters the push-first path when its price is written again (next markdown, or the
+ * organizer's manual price edit in itemController.ts), both of which set PENDING.
  */
 
 import cron from 'node-cron';
@@ -40,6 +53,10 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken } from '../controllers/ebayController';
 import { reviseEbayOfferPrice } from '../services/ebayPriceRevisionService';
+import {
+  classifyPropagationFailure,
+  formatPropagationFailureReason,
+} from '../services/markdownPricePropagationService';
 import { fetchAndCacheEbayStoreSubscription, isEbayStoreSubscriptionStale } from '../services/ebayStoreSubscriptionService';
 import { reconcileEbayInsertionsUsage, isEbayInsertionsReconciliationStale } from '../lib/ebayInsertionsQuotaTracker';
 import { isEbayRateLimited } from '../lib/ebayRateLimiter';
@@ -53,6 +70,13 @@ import { isEbayRateLimited } from '../lib/ebayRateLimiter';
 // different number without it being visible in code comments referencing this spec") --
 // visible here per that instruction.
 export const SYNC_FAILURE_THRESHOLD_MS = 8 * 60 * 60 * 1000; // exported (dispatch 5, ebay-markdown-budget-warnings-ux-spec-2026-09-15 Dev Handoff Note #4) so platformStatsController.ts's getEbaySyncIssues can reuse the exact same threshold instead of redefining it.
+
+// ADR-128 (2026-09-19): the aggregate markdown_sync_failure notification's deep link --
+// /organizer/platforms auto-opens the sync-issues mini-panel on ?syncIssues=1
+// (platforms.tsx). ADR-128 adds a second, per-item flavour of the same notification type
+// whose link carries an extra &item=<id>; keying the aggregate's daily dedupe on this
+// EXACT link (not just the type) is what stops the two flavours suppressing each other.
+const SYNC_ISSUES_LINK = '/organizer/platforms?syncIssues=1';
 
 // Map eBay Inventory API condition enum -> FindA.Sale condition string
 function mapEbayConditionToFas(ebayCondition: string): string | null {
@@ -112,6 +136,11 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       ebayOfferId: true,
       priceUpdatedAt: true,
       ebayPriceSyncedAt: true,
+      // ADR-128 (2026-09-19): the classified sync state decides whether this item is worth
+      // another eBay call at all, and the stored reason is eBay's own error text -- what the
+      // one-time terminal notification below actually shows the organizer.
+      ebaySyncState: true,
+      ebaySyncFailureReason: true,
     },
   });
 
@@ -185,8 +214,35 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
   // bottom of this function).
   const staleItems: { id: string; title: string }[] = [];
 
+  // ADR-128 (2026-09-19), Decision #5: items whose last push failed terminally. These are
+  // NOT part of the aggregate above -- retrying will never clear them, so an aggregate that
+  // re-fires daily is precisely the behavior this ADR exists to stop. Each gets one
+  // per-item notification carrying eBay's real message (see bottom of this function).
+  const terminalItems: { id: string; title: string; reason: string }[] = [];
+
   for (const item of items) {
     try {
+      // --- ADR-128 (2026-09-19): a terminal failure is never retried ---
+      // FAILED_TERMINAL means the last push failed for a reason no retry can fix: eBay
+      // evaluated the write and rejected the listing's content (bad aspect value, missing
+      // item specific, price under eBay's floor, invalid shipping type) even after
+      // reviseEbayOfferPrice()'s own auto-repair attempts, or there is no eBay offer to
+      // revise at all. Skip the item entirely -- zero further eBay API calls, which is the
+      // whole point, and no fallthrough to the pull-and-compare below either, because that
+      // would clobber Item.price back to eBay's stale value and ADR-128 explicitly rejects
+      // rolling the organizer's markdown back. The gap stays visible to the organizer in the
+      // sync-issues panel (getEbaySyncIssues evaluates it live), and the one-time
+      // notification is queued here rather than skipped with the item. Not a dead end: any
+      // new price write (next markdown, or a manual price edit) resets the state to PENDING.
+      if (item.ebaySyncState === 'FAILED_TERMINAL') {
+        terminalItems.push({
+          id: item.id,
+          title: item.title,
+          reason: item.ebaySyncFailureReason ?? 'eBay rejected the price update on this listing',
+        });
+        continue;
+      }
+
       // --- Push-first: a locally-pending price change wins over eBay's pull value ---
       const pendingLocalPriceChange =
         !!item.priceUpdatedAt &&
@@ -200,7 +256,16 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
           const syncedAt = new Date();
           await prisma.item.update({
             where: { id: item.id },
-            data: { ebayPriceSyncedAt: syncedAt },
+            data: {
+              ebayPriceSyncedAt: syncedAt,
+              // ADR-128 (2026-09-19): eBay confirmed this price, so it is now also the
+              // confirmed-live price a shopper would be charged on eBay. Clear the failure
+              // reason and reset the attempt counter so a later failure starts from zero.
+              ebayLivePrice: item.price,
+              ebaySyncState: 'SYNCED',
+              ebaySyncFailureReason: null,
+              ebaySyncAttempts: 0,
+            },
           });
           console.log(
             `[eBay PullSync] item ${item.id}: push-first sent pending FAS price $${item.price} to eBay, stamped ebayPriceSyncedAt`
@@ -209,10 +274,30 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
           continue;
         }
 
+        // ADR-128 (2026-09-19): classify before deciding whether this is worth another eBay
+        // call in 4 hours. The price-provenance guard flags (priceUpdatedAt /
+        // ebayPriceSyncedAt) are still deliberately left untouched -- the local price change
+        // really is still unconfirmed, and the sync-issues panel reads exactly that.
+        const failureClass = classifyPropagationFailure(pushResult.reason, pushResult.detail);
+        const failureReason = formatPropagationFailureReason(pushResult.reason, pushResult.detail);
+        await prisma.item.update({
+          where: { id: item.id },
+          data: {
+            ebaySyncState: failureClass === 'terminal' ? 'FAILED_TERMINAL' : 'FAILED_RETRYABLE',
+            ebaySyncFailureReason: failureReason,
+            ebaySyncAttempts: { increment: 1 },
+          },
+        });
+
         console.warn(
-          `[eBay PullSync] item ${item.id}: push-first failed (${pushResult.reason ?? 'unknown'}${pushResult.detail ? ` — ${pushResult.detail}` : ''}) — skipping pull this cycle too; guard flags untouched, retries next cycle`
+          `[eBay PullSync] item ${item.id}: push-first failed, ${failureClass} (${pushResult.reason ?? 'unknown'}${pushResult.detail ? ` — ${pushResult.detail}` : ''}) — skipping pull this cycle too; guard flags untouched, ${failureClass === 'terminal' ? 'no further eBay calls for this item' : 'retries next cycle'}`
         );
-        if (Date.now() - item.priceUpdatedAt!.getTime() >= SYNC_FAILURE_THRESHOLD_MS) {
+        if (failureClass === 'terminal') {
+          // ADR-128 Decision #5 -- alert once, actionably. This is the transition INTO
+          // FAILED_TERMINAL; every later cycle skips this item at the top of the loop and
+          // re-queues it from there, where the notification's own existence is the guard.
+          terminalItems.push({ id: item.id, title: item.title, reason: failureReason });
+        } else if (Date.now() - item.priceUpdatedAt!.getTime() >= SYNC_FAILURE_THRESHOLD_MS) {
           staleItems.push({ id: item.id, title: item.title });
         }
         // Per the ADR: a failed push must never be immediately followed by the old
@@ -362,6 +447,10 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
           where: {
             userId: organizer.userId,
             type: 'markdown_sync_failure',
+            // ADR-128 (2026-09-19): scope the dedupe to THIS notification's own link. Without
+            // it, one per-item terminal notification (same type, link + &item=<id>) would
+            // suppress the whole day's aggregate, and vice versa.
+            link: SYNC_ISSUES_LINK,
             createdAt: { gte: startOfTodayUtc },
           },
           select: { id: true },
@@ -376,7 +465,7 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
               title: `${count} price cut${count === 1 ? '' : 's'} didn't reach eBay`,
               body:
                 "These items still show your markdown price on FindA.Sale, but the change hasn't confirmed on the marketplace. Review and retry.",
-              link: '/organizer/platforms?syncIssues=1',
+              link: SYNC_ISSUES_LINK,
             },
           });
           console.log(
@@ -386,6 +475,63 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       }
     } catch (notifyErr) {
       console.error(`[eBay PullSync] organizer ${organizerId}: failed to create sync-failure notification:`, notifyErr);
+    }
+  }
+
+  // ADR-128 (2026-09-19), Decision #5 -- "alert once, actionably."
+  // A terminal failure is not a stale-item aggregate. Retrying can never clear it, so the
+  // daily "N price cuts didn't reach eBay" notification above would repeat for the same item
+  // forever -- the exact complaint ADR-128 opens with. Instead: ONE notification per terminal
+  // item, carrying eBay's actual message ("Size aspect value not supported"), deep-linked to
+  // that item.
+  //
+  // Once-only guard, with no new schema (per ADR-128's four-column budget): the
+  // notification's own `link` carries the item id, so an existing notification with that
+  // exact link IS the "already told them" flag. Runs after the aggregate block above so a
+  // terminal notification created in this same run can never pre-empt that day's aggregate.
+  //
+  // Known simplification, flagged not silent: if an item goes terminal, the organizer fixes
+  // it, it re-syncs, and it later goes terminal again for a DIFFERENT reason, the second
+  // failure reuses the same link and is not re-notified. Same class of approximation as the
+  // aggregate's same-day dedupe above.
+  if (terminalItems.length > 0) {
+    try {
+      const organizer = await prisma.organizer.findUnique({
+        where: { id: organizerId },
+        select: { userId: true },
+      });
+
+      if (organizer?.userId) {
+        for (const terminal of terminalItems) {
+          const link = `${SYNC_ISSUES_LINK}&item=${terminal.id}`;
+          const alreadyNotified = await prisma.notification.findFirst({
+            where: {
+              userId: organizer.userId,
+              type: 'markdown_sync_failure',
+              link,
+            },
+            select: { id: true },
+          });
+          if (alreadyNotified) {
+            continue;
+          }
+
+          await prisma.notification.create({
+            data: {
+              userId: organizer.userId,
+              type: 'markdown_sync_failure',
+              title: `eBay won't accept the new price on "${terminal.title}"`,
+              body: `eBay rejected this price change and retrying won't fix it: ${terminal.reason.slice(0, 200)}. FindA.Sale is still showing your marked-down price — fix the listing on eBay, then re-save the item's price in FindA.Sale to push it through.`,
+              link,
+            },
+          });
+          console.log(
+            `[eBay PullSync] organizer ${organizerId}: created one-time TERMINAL markdown_sync_failure notification for item ${terminal.id}`
+          );
+        }
+      }
+    } catch (notifyErr) {
+      console.error(`[eBay PullSync] organizer ${organizerId}: failed to create terminal sync-failure notification:`, notifyErr);
     }
   }
 }
