@@ -53,6 +53,7 @@
 import { prisma } from '../../lib/prisma';
 import { encryptToken, decryptToken } from '../../utils/tokenCrypto';
 import type { Item, MarketplaceAccount, Prisma } from '@prisma/client';
+import { decodeHtmlEntities } from '../../lib/sanitize';
 // ADR-132: release matcher v2 + structured record identity.
 import {
   matchDiscogsRelease,
@@ -516,7 +517,9 @@ export async function createDiscogsListing(
     condition: resolveDiscogsCondition(item.condition ?? null),
     price: item.price ?? 0, // Discogs takes a plain decimal in the seller's currency, not cents
     status: publish ? 'For Sale' : 'Draft',
-    comments: item.description || undefined,
+    // 2026-09-23 QA: Discogs renders comments as plain text, so any HTML entities in the
+    // description (&#39; &quot; &amp; ...) must be decoded once before sending.
+    comments: decodeHtmlEntities(item.description) || undefined,
     external_id: item.id,
     // 2026-09-03: only send allow_offers when explicitly true -- omitting it entirely when
     // false/undefined matches Discogs's own documented default rather than redundantly
@@ -751,10 +754,14 @@ export async function upsertDiscogsListingForItem(
     const publish = options.publish === true && pushable && !match.draftOnly;
 
     if (item.discogsListingId) {
+      // 2026-09-23 QA: a D3 most-collected auto-pick is not a confident pressing decision, so a
+      // listing already on another plausible lookalike pressing is not treated as a mismatch.
+      const lookalikeListing =
+        match.draftOnly && isPlausibleListedRelease(match.candidates, item.discogsListingReleaseId ?? null);
       const result = await updateDiscogsListingPrice(organizerId, item.discogsListingId, item.price ?? 0, {
         publish,
         allowOffers: options.allowOffers,
-        expectedReleaseId: pushable ? match.releaseId : null,
+        expectedReleaseId: pushable && !lookalikeListing ? match.releaseId : null,
       });
       if (result.ok) {
         if (result.listingReleaseId != null && result.listingReleaseId !== item.discogsListingReleaseId) {
@@ -947,6 +954,9 @@ export interface DiscogsCandidatesEnvelope {
   reason: string | null;
   rule: string | null;
   candidates: DiscogsCandidate[];
+  /** Item.discogsListingId the `currentlyListed` flags + discogsListingReleaseId were last read
+   * from (live GET). A different listing id (e.g. a manual relink) forces a fresh read. */
+  listingSyncedFor?: string | null;
 }
 
 export function readCandidatesEnvelope(raw: unknown): DiscogsCandidatesEnvelope {
@@ -960,6 +970,7 @@ export function readCandidatesEnvelope(raw: unknown): DiscogsCandidatesEnvelope 
       reason: typeof r.reason === 'string' ? r.reason : null,
       rule: typeof r.rule === 'string' ? r.rule : null,
       candidates: r.candidates as DiscogsCandidate[],
+      ...(typeof r.listingSyncedFor === 'string' ? { listingSyncedFor: r.listingSyncedFor } : {}),
     };
   }
   return { matcherVersion: MATCHER_VERSION, reason: null, rule: null, candidates: [] };
@@ -1019,6 +1030,21 @@ function isDraftOnlyMatch(item: Pick<Item, 'discogsMatchStatus' | 'discogsReleas
   return !!sel?.autoSelectedPressing;
 }
 
+/**
+ * 2026-09-23 QA: a listed release is "plausible" when the matcher itself returned it as a
+ * candidate with no hard veto and both artist and title agree with the item's identity. Used
+ * when the matcher could not pin one pressing (needs_selection, or a D3 most-collected auto-pick):
+ * a listing on one of those lookalike pressings is not a wrong release, only an unconfirmed one.
+ */
+export function isPlausibleListedRelease(candidates: DiscogsCandidate[], listedReleaseId: number | null): boolean {
+  if (listedReleaseId == null) return false;
+  const c = candidates.find(x => x.releaseId === listedReleaseId);
+  if (!c || c.vetoes.length > 0) return false;
+  const a = c.fieldScores?.artist;
+  const t = c.fieldScores?.title;
+  return a != null && t != null && a >= 0.6 && t >= 0.6;
+}
+
 export function buildDiscogsMatchView(item: MatchItemFields): DiscogsMatchView {
   const env = readCandidatesEnvelope(item.discogsCandidates);
   const status = (item.discogsMatchStatus as DiscogsMatchStatus | null) ?? null;
@@ -1027,10 +1053,19 @@ export function buildDiscogsMatchView(item: MatchItemFields): DiscogsMatchView {
   const eff = computeEffectiveIdentity(item);
   const pushable = status != null && PUSHABLE_MATCH_STATUSES.includes(status) && releaseId != null;
   const listingReleaseId = item.discogsListingReleaseId ?? null;
+  const draftOnly = isDraftOnlyMatch(item);
+  // 2026-09-23 QA: only a real disagreement is a mismatch. Previously any needs_selection item
+  // with a stale `currentlyListed` flag counted, which misfired after a manual listing relink.
+  //   - decided release (auto_high/confirmed) differs from the listing's release, unless it is a
+  //     D3 most-collected auto-pick and the listing sits on another plausible lookalike pressing;
+  //   - or the stored reason says a push already found the listing on a different release.
   const releaseMismatch =
     !!item.discogsListingId &&
-    ((listingReleaseId != null && releaseId != null && listingReleaseId !== releaseId) ||
-      (status === 'needs_selection' && env.candidates.some(c => c.currentlyListed)));
+    ((listingReleaseId != null &&
+      releaseId != null &&
+      listingReleaseId !== releaseId &&
+      !(draftOnly && isPlausibleListedRelease(env.candidates, listingReleaseId))) ||
+      (status === 'needs_selection' && env.reason === 'listing_release_mismatch'));
   return {
     itemId: item.id,
     status,
@@ -1039,7 +1074,7 @@ export function buildDiscogsMatchView(item: MatchItemFields): DiscogsMatchView {
     candidates: env.candidates,
     reason: env.reason,
     rule: env.rule,
-    draftOnly: isDraftOnlyMatch(item),
+    draftOnly,
     canPush: pushable,
     matchedAt: item.discogsMatchedAt ? new Date(item.discogsMatchedAt).toISOString() : null,
     recordIdentity: eff.values,
@@ -1106,11 +1141,60 @@ interface ResolveOptions {
   reset?: boolean;
 }
 
+/**
+ * 2026-09-23 QA (item cmtk31l0x0eic3bww7vwequob): the listing id was relinked in the DB to
+ * 4356972027 without discogsListingReleaseId, so the match view kept `currentlyListed` flags from
+ * the OLD listing and showed a false "different release". When the item has a listing and either
+ * no stored listing release, or the flags were read for a different listing id, read the live
+ * listing (one GET /marketplace/listings/{id}) and persist release.id + fresh flags. Reads only
+ * from Discogs; never throws (the match view must still render if Discogs is unreachable).
+ */
+async function syncListedReleaseFromLive(organizerId: string, item: Item): Promise<Item> {
+  const listingId = item.discogsListingId;
+  if (!listingId) return item;
+  const env = readCandidatesEnvelope(item.discogsCandidates);
+  const relinked = typeof env.listingSyncedFor === 'string' && env.listingSyncedFor !== listingId;
+  if (item.discogsListingReleaseId != null && !relinked) return item;
+  try {
+    const account = await getActiveDiscogsAccount(organizerId);
+    if (!account) return item;
+    const got = await fetchDiscogsListing(decryptAccessToken(account), listingId);
+    // 404 / errors: leave it to the push path and the sweep, which own clearing stale ids.
+    if (!got.listing) return item;
+    const listedRaw = rawFromListingRelease(got.listing.release);
+    const listedReleaseId = listedRaw?.releaseId ?? null;
+    if (listedReleaseId == null) return item;
+    const eff = computeEffectiveIdentity(item);
+    const flagged = env.candidates.map(c => ({ ...c, currentlyListed: c.releaseId === listedReleaseId }));
+    const listed = flagged.some(c => c.releaseId === listedReleaseId)
+      ? []
+      : [{ ...scoreCandidate(listedRaw!, eff.values, 0, item.title), currentlyListed: true }];
+    const envelope: DiscogsCandidatesEnvelope = {
+      ...env,
+      // A mismatch reason recorded against a different listing no longer applies.
+      reason: relinked && env.reason === 'listing_release_mismatch' ? null : env.reason,
+      candidates: dedupeCandidates([...flagged, ...listed]).slice(0, MAX_STORED_CANDIDATES),
+      listingSyncedFor: listingId,
+    };
+    return await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        discogsListingReleaseId: listedReleaseId,
+        discogsCandidates: envelope as unknown as Prisma.InputJsonValue,
+      },
+    });
+  } catch (e) {
+    console.error(`[Discogs] Could not read the live listing release for item ${item.id}:`, e);
+    return item;
+  }
+}
+
 async function resolveDiscogsMatchForItem(
   organizerId: string,
-  item: Item,
+  itemIn: Item,
   opts: ResolveOptions = {}
 ): Promise<DiscogsMatchView> {
+  const item = await syncListedReleaseFromLive(organizerId, itemIn);
   const eff = computeEffectiveIdentity(item);
   const status = (item.discogsMatchStatus as DiscogsMatchStatus | null) ?? null;
   const locked = !opts.reset && (status === 'confirmed' || status === 'not_in_discogs');
@@ -1138,7 +1222,15 @@ async function resolveDiscogsMatchForItem(
     rule: locked ? old.rule : res.rule,
     candidates: dedupeCandidates(
       locked ? [...keep, ...res.candidates] : [...res.candidates, ...keep]
-    ).slice(0, MAX_STORED_CANDIDATES),
+    )
+      .slice(0, MAX_STORED_CANDIDATES)
+      // Fresh matcher results carry no `currentlyListed`; re-mark from the stored listing release.
+      .map(c =>
+        item.discogsListingId && item.discogsListingReleaseId != null
+          ? { ...c, currentlyListed: c.releaseId === item.discogsListingReleaseId }
+          : c
+      ),
+    ...(old.listingSyncedFor ? { listingSyncedFor: old.listingSyncedFor } : {}),
   };
 
   const data: Prisma.ItemUpdateInput = locked
@@ -1299,17 +1391,24 @@ export interface DiscogsListingSnapshot {
   external_id: string | null;
 }
 
+/**
+ * 2026-09-23 QA (live): GET /marketplace/listings/{id} returns free-text fields HTML-escaped
+ * (listing 4356972027 comes back with "&#34;It&#39;s Like You Never Left&#34;"). Echoing that
+ * back on an edit or a recreate stored the entities as literal text (Styx listing 4376372817
+ * now reads "Styx &#39;Pieces of Eight&#39;"). Every text field is therefore decoded exactly
+ * once here, which undoes Discogs's output escaping without double-decoding real text.
+ */
 export function snapshotDiscogsListing(listing: any): DiscogsListingSnapshot {
   const priceValue = listing?.price?.value ?? listing?.price;
   return {
     status: String(listing?.status ?? ''),
     releaseId: listing?.release?.id != null ? Number(listing.release.id) : null,
     price: priceValue != null && !Number.isNaN(Number(priceValue)) ? Number(priceValue) : null,
-    condition: listing?.condition ? String(listing.condition) : null,
-    sleeve_condition: listing?.sleeve_condition ? String(listing.sleeve_condition) : null,
-    comments: typeof listing?.comments === 'string' ? listing.comments : null,
+    condition: listing?.condition ? decodeHtmlEntities(String(listing.condition)) : null,
+    sleeve_condition: listing?.sleeve_condition ? decodeHtmlEntities(String(listing.sleeve_condition)) : null,
+    comments: typeof listing?.comments === 'string' ? decodeHtmlEntities(listing.comments) : null,
     allow_offers: typeof listing?.allow_offers === 'boolean' ? listing.allow_offers : null,
-    location: typeof listing?.location === 'string' && listing.location ? listing.location : null,
+    location: typeof listing?.location === 'string' && listing.location ? decodeHtmlEntities(listing.location) : null,
     weight: listing?.weight != null && listing.weight !== '' ? listing.weight : null,
     format_quantity: listing?.format_quantity != null && listing.format_quantity !== '' ? listing.format_quantity : null,
     external_id: listing?.external_id != null && listing.external_id !== '' ? String(listing.external_id) : null,
@@ -1363,9 +1462,9 @@ const CORRECTABLE_LISTING_STATUSES = ['For Sale', 'Draft', 'Expired'];
  * organizer/admin explicitly invokes it for this item (Patrick D2) -- nothing calls it in bulk.
  *   1. Preconditions: status 'confirmed', discogsReleaseId + discogsListingId set, FAS item AVAILABLE.
  *   2. GET listing; abort unless For Sale / Draft / Expired (Sold = a Discogs order exists).
- *   3. Snapshot every field. Try an in-place edit with the new release_id (keeping the listing's
- *      current status), GET again to verify. If refused or silently ignored: create a new Draft
- *      with the snapshot, persist it, DELETE the old listing, then promote the new one.
+ *   3. Snapshot every field (text fields entity-decoded), create a new Draft with the snapshot
+ *      on the new release, persist it, DELETE the old listing, then promote the new one. No
+ *      in-place release edit: confirmed 2026-09-23 that Discogs ignores release_id edits.
  *   4. Final status (Patrick D4): For Sale / Draft -> For Sale; Expired stays Expired.
  */
 export async function correctDiscogsListingRelease(organizerId: string, itemId: string): Promise<DiscogsCorrectionResult> {
@@ -1434,27 +1533,15 @@ export async function correctDiscogsListingRelease(organizerId: string, itemId: 
       };
     }
 
-    // 1) In-place edit, keeping the current status until the release change is verified.
-    const edit = await postEdit(oldListingId, buildDiscogsListingBody(snap, { releaseId: newReleaseId, status: snap.status }));
-    if (edit.status >= 200 && edit.status < 300) {
-      const verify = await fetchDiscogsListing(accessToken, oldListingId);
-      const verifiedRelease = verify.listing?.release?.id != null ? Number(verify.listing.release.id) : null;
-      if (verifiedRelease === newReleaseId) {
-        if (snap.status !== finalStatus) {
-          const promote = await postEdit(oldListingId, buildDiscogsListingBody(snapshotDiscogsListing(verify.listing), { releaseId: newReleaseId, status: finalStatus }));
-          if (promote.status < 200 || promote.status >= 300) {
-            console.error(`[Discogs] Promote after in-place correction failed for listing ${oldListingId}: ${promote.status} ${promote.text}`);
-          }
-        }
-        await prisma.item.update({ where: { id: item.id }, data: { discogsListingReleaseId: newReleaseId } });
-        console.info(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'edited_in_place', itemId, listingId: oldListingId, newReleaseId })}`);
-        return {
-          action: 'edited_in_place', listingId: oldListingId, previousListingId: oldListingId, listingReleaseId: newReleaseId,
-          listingStatus: finalStatus, message: 'Discogs listing now uses the confirmed release.',
-        };
-      }
-    }
-    console.info(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'in_place_not_applied', itemId, listingId: oldListingId, editStatus: edit.status })}`);
+    // In-place release edit is intentionally NOT attempted (2026-09-23 live test, item Styx
+    // "Pieces of Eight"): POST /marketplace/listings/{id} with a new release_id returned 2xx but
+    // the follow-up GET still showed the old release, so the recreate path ran (new listing
+    // 4376372817 created, old 4356618198 deleted). Discogs does not change a listing's release
+    // in place, so we skip straight to replace and save a POST + GET per correction. The
+    // verify step that matters is kept: the GET above already short-circuits when the listing
+    // is on the confirmed release ("already_correct"). 'edited_in_place' stays in the result
+    // type for compatibility but is no longer produced. See ADR-132 6.2 / 11 note.
+    console.info(`[DiscogsCorrectionAudit] ${JSON.stringify({ event: 'replace_start', itemId, listingId: oldListingId, newReleaseId })}`);
 
     // 2) Recreate: new Draft -> persist -> delete old -> promote.
     const create = await discogsRequest('/marketplace/listings', accessToken, {
@@ -1536,6 +1623,9 @@ export interface DiscogsSweepRow {
   } | null;
   recordIdentity: RecordIdentityValues | null;
   classification: DiscogsSweepClassification;
+  /** Soft note on an AGREE row: the listing is on the matcher's best (or a plausible lookalike)
+   * pressing, but no pressing was confirmed. Not a problem row. */
+  note?: 'pressing_not_confirmed';
   error?: string;
   wrote: boolean;
 }
@@ -1677,20 +1767,43 @@ export async function runDiscogsRematchSweep(opts: {
         status: res.status, releaseId: res.releaseId, reason: res.reason, rule: res.rule,
         draftOnly: res.autoSelectedPressing, candidates: res.candidates.map(slimCandidate),
       };
-      if (res.status === 'auto_high' && res.releaseId === listedReleaseId) row.classification = 'AGREE';
-      else if (res.status === 'auto_high') row.classification = 'MISMATCH';
-      else row.classification = 'NEEDS_SELECTION';
+      // 2026-09-23 QA: 30 of 37 flagged rows were listed on exactly the release we would
+      // suggest and were flagged only because the matcher's status was needs_selection. Flag only
+      // real problems: the listing release differs from the best candidate, fails a hard veto,
+      // or there is no candidate at all.
+      const confident = res.status === 'auto_high' && !res.autoSelectedPressing;
+      const best = res.releaseId ?? res.candidates[0]?.releaseId ?? null;
+      if (listedReleaseId == null || res.candidates.length === 0 || row.listedHasHardVeto) {
+        row.classification = res.status === 'auto_high' && listedReleaseId != null ? 'MISMATCH' : 'NEEDS_SELECTION';
+      } else if (listedReleaseId === best) {
+        row.classification = 'AGREE';
+        if (!confident) row.note = 'pressing_not_confirmed';
+      } else if (!confident && isPlausibleListedRelease(res.candidates, listedReleaseId)) {
+        // Lookalike pressing the matcher could not rule out: fine, just unconfirmed.
+        row.classification = 'AGREE';
+        row.note = 'pressing_not_confirmed';
+      } else if (res.status === 'auto_high') {
+        row.classification = 'MISMATCH';
+      } else {
+        row.classification = 'NEEDS_SELECTION';
+      }
 
       if (!dryRun) {
-        const agree = row.classification === 'AGREE';
+        // DB writes are unchanged in spirit: only a confident auto_high agreement is stored as
+        // auto_high. A soft "pressing not confirmed" AGREE keeps the matcher's own status (the
+        // organizer still confirms the pressing) but is no longer recorded as a listing mismatch.
+        const agree = row.classification === 'AGREE' && res.status === 'auto_high' && res.releaseId === listedReleaseId;
         const candidates = dedupeCandidates(
           agree ? res.candidates : [...(listed ? [listed] : []), ...res.candidates]
-        ).slice(0, MAX_STORED_CANDIDATES);
+        )
+          .slice(0, MAX_STORED_CANDIDATES)
+          .map(c => ({ ...c, currentlyListed: c.releaseId === listedReleaseId }));
         const envelope: DiscogsCandidatesEnvelope = {
           matcherVersion: MATCHER_VERSION,
           reason: agree ? res.reason : row.classification === 'MISMATCH' ? 'listing_release_mismatch' : res.reason,
           rule: agree ? res.rule : null,
           candidates,
+          listingSyncedFor: item.discogsListingId,
         };
         await prisma.item.update({
           where: { id: item.id },

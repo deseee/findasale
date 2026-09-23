@@ -14,6 +14,8 @@
  * on its own for an artist+title (rule C) auto-match -- see discogsReleaseMatcher.ts.
  */
 
+import { decodeHtmlEntities } from '../../lib/sanitize';
+
 export type RecordIdentitySource = 'ai' | 'ocr' | 'organizer' | 'title_parse';
 export type RecordFormat = 'LP' | '7in' | '10in' | '12in_single' | 'CD' | 'Cassette' | 'Box' | 'Other';
 export type RecordScript = 'latin' | 'cjk' | 'cyrillic' | 'other';
@@ -270,9 +272,11 @@ function stripNoise(segment: string, label: string | null, catno: string | null)
  * Pure function -- no I/O, no AI. Every returned field is a 'title_parse' value.
  */
 export function deriveRecordIdentityFromText(input: RecordIdentityTextInput): RecordIdentityValues {
-  const title = collapse(input.title || '');
-  const description = collapse(input.description || '');
-  const brand = input.brand ? collapse(input.brand) : null;
+  // 2026-09-23 QA: text can carry HTML entities (&#39; &quot;) from imports; decode once so the
+  // quoted-title and possessive parsers see real quote characters.
+  const title = collapse(decodeHtmlEntities(input.title || ''));
+  const description = collapse(decodeHtmlEntities(input.description || ''));
+  const brand = input.brand ? collapse(decodeHtmlEntities(input.brand)) : null;
   const tagsText = (input.tags || []).join(', ');
 
   const format = detectFormatFromText(title) ?? detectFormatFromText(`${description} ${tagsText}`);

@@ -125,6 +125,8 @@ export interface DiscogsSweepRow {
   } | null;
   recordIdentity: RecordIdentityValues | null;
   classification: DiscogsSweepClassification;
+  /** Soft note on an AGREE row: listed on the best (or a lookalike) pressing, not confirmed. */
+  note?: 'pressing_not_confirmed';
   error?: string;
   wrote: boolean;
 }

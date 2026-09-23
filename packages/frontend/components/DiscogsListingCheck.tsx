@@ -68,6 +68,15 @@ const ReleaseText: React.FC<{ release: ReleaseLike | null; empty: string; vetoes
 const suggestedRelease = (row: DiscogsSweepRow): { release: ReleaseLike | null; note: string | null } => {
   const p = row.proposed;
   if (!p) return { release: null, note: null };
+  // "Looks right" rows: the listed pressing is the suggestion (or a lookalike we can't rule out).
+  if (row.classification === 'AGREE') {
+    const listedId = row.listedRelease?.releaseId;
+    const c = (listedId != null ? p.candidates.find((x) => x.releaseId === listedId) : null) ?? null;
+    return {
+      release: c ?? row.listedRelease,
+      note: row.note === 'pressing_not_confirmed' ? 'Pressing not confirmed' : null,
+    };
+  }
   if (p.releaseId) {
     const c = p.candidates.find((x) => x.releaseId === p.releaseId) ?? null;
     return { release: c, note: p.draftOnly ? 'Pressing not confirmed' : null };

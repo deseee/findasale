@@ -29,6 +29,7 @@
 import crypto from 'crypto';
 import type { RecordIdentitySources, RecordIdentityValues, RecordFormat } from './recordIdentity';
 import { scriptOf, labelBaseName } from './recordIdentity';
+import { decodeHtmlEntities } from '../../lib/sanitize';
 
 export const MATCHER_VERSION = 2;
 
@@ -102,7 +103,10 @@ export interface DiscogsMatcherDeps {
 
 export function norm(s: string | null | undefined): string {
   if (!s) return '';
-  let t = s.normalize('NFKC').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  // 2026-09-23 QA: decode HTML entities first (an item description stored as
+  // "Aerosmith &quot;Rocks&quot;" normalized to "and quot rocks and quot" and tripped the title
+  // veto). Quotes, punctuation and case then all fall away below, so "\"Rocks\"" == "Rocks".
+  let t = decodeHtmlEntities(s).normalize('NFKC').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
   t = t.replace(/\*/g, '').trim().replace(/\s*\(\d+\)$/, '');
   t = t
     .replace(/^the\s+/, '')

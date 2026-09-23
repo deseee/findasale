@@ -311,7 +311,9 @@ const DiscogsMatchPanel: React.FC<DiscogsMatchPanelProps> = ({
     });
   };
 
-  const showMismatchBanner = hasListing && (match.listing.releaseMismatch || status === 'needs_selection');
+  // 2026-09-23 QA: only a real listing/release disagreement shows the red banner. needs_selection
+  // alone (e.g. several lookalike pressings) is handled by the picker, not flagged as wrong.
+  const showMismatchBanner = hasListing && match.listing.releaseMismatch;
   const cardRelease = match.selected ?? (status === 'not_in_discogs' ? null : match.candidates[0] ?? null);
   const candidates = match.candidates.slice(0, 4);
   const sources = match.recordIdentitySources || {};
@@ -509,26 +511,34 @@ const DiscogsMatchPanel: React.FC<DiscogsMatchPanelProps> = ({
               <legend className="sr-only">Discogs releases</legend>
               {candidates.map((c) => {
                 const checked = chosenReleaseId === c.releaseId;
+                const inputId = `discogs-release-${itemId}-${c.releaseId}`;
+                // 2026-09-23 QA: real mouse clicks on a row did not select it. The whole row is
+                // now an explicit <label htmlFor> for its radio, holds no nested link (the
+                // "View on Discogs" link sits outside the label), selects on its own click as a
+                // fallback, and keeps clear of the fixed site header when scrolled into view.
                 return (
-                  <label
-                    key={c.releaseId}
-                    className={`block cursor-pointer rounded-lg border p-3 transition-colors ${
-                      checked
-                        ? 'border-amber-500 bg-white dark:bg-gray-800 ring-2 ring-amber-500'
-                        : 'border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-amber-400'
-                    }`}
-                  >
+                  <div key={c.releaseId} className="relative">
+                    <label
+                      htmlFor={inputId}
+                      onClick={() => setChosenReleaseId(c.releaseId)}
+                      className={`block cursor-pointer select-none scroll-mt-28 rounded-lg border p-3 transition-colors ${
+                        checked
+                          ? 'border-amber-500 bg-white dark:bg-gray-800 ring-2 ring-amber-500'
+                          : 'border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-amber-400'
+                      }`}
+                    >
                     <div className="flex items-start gap-2">
                       <input
+                        id={inputId}
                         type="radio"
                         name={`discogs-release-${itemId}`}
                         value={c.releaseId}
                         checked={checked}
                         onChange={() => setChosenReleaseId(c.releaseId)}
-                        className="mt-1 flex-shrink-0"
+                        className="mt-1 h-4 w-4 flex-shrink-0 cursor-pointer accent-amber-600"
                       />
                       <div className="min-w-0 flex-1">
-                        <DiscogsReleaseCard release={c} compact />
+                        <DiscogsReleaseCard release={c} compact hideLink />
                         <div className="mt-2 flex flex-wrap gap-1">
                           {match.releaseId === c.releaseId && (
                             <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">
@@ -556,7 +566,16 @@ const DiscogsMatchPanel: React.FC<DiscogsMatchPanelProps> = ({
                         </div>
                       </div>
                     </div>
-                  </label>
+                    </label>
+                    <a
+                      href={c.uri || discogsReleaseUrl(c.releaseId)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-1 ml-9 text-xs font-medium text-blue-600 dark:text-blue-400 underline"
+                    >
+                      View on Discogs
+                    </a>
+                  </div>
                 );
               })}
             </fieldset>
