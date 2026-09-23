@@ -17,7 +17,6 @@ import {
   suggestCategories,
 } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from './ebayController';
-import { ebayProxyUrl, ebayProxyHeaders } from '../services/ebayHttp';
 
 // ── Vercel Proxy Helpers ────────────────────────────────────────────────────
 // Railway DNS cannot resolve api.ebay.com directly, so all eBay API calls route
