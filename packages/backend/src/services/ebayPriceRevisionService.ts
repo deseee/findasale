@@ -133,6 +133,7 @@ async function injectMissingCategoryAspects(
   sku: string | null | undefined,
   categoryId: string | null | undefined,
   itemTitle: string | null | undefined,
+  itemDescription: string | null | undefined,
   errorDetail: string | undefined,
   accessToken: string
 ): Promise<boolean> {
@@ -154,7 +155,10 @@ async function injectMissingCategoryAspects(
 
   const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, { method: 'GET' });
   trackEbayCall();
-  if (!invGet.ok) return false;
+  if (!invGet.ok) {
+    console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair bailed -- inventory item GET failed (HTTP ${invGet.status})`);
+    return false;
+  }
   const invBody = (await invGet.json()) as any;
 
   if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
@@ -171,7 +175,11 @@ async function injectMissingCategoryAspects(
       console.log(`[eBay PriceRevision] sku=${sku}: discarding aspect "${name}" -- no matching real category ${categoryId} aspect`);
       continue;
     }
-    const defaultValue = pickSafeAspectDefault(aspectSpec, itemTitle);
+    const defaultValue = pickSafeAspectDefault(aspectSpec, itemTitle, itemDescription);
+    if (defaultValue === null) {
+      console.log(`[eBay PriceRevision] sku=${sku}: skipping aspect "${aspectSpec.name}" -- no confident value found in title/description (never guessing a Size-family aspect)`);
+      continue;
+    }
     aspectsObj[aspectSpec.name] = [defaultValue];
     injected = true;
     console.log(`[eBay PriceRevision] sku=${sku}: injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
@@ -184,7 +192,21 @@ async function injectMissingCategoryAspects(
     body: invBody,
   });
   trackEbayCall();
-  return retryInvRes.ok || retryInvRes.status === 204;
+  const invPutOk = retryInvRes.ok || retryInvRes.status === 204;
+  // 2026-09-23 diagnostic. Gap 1 remains unresolved after the parsing fix: item
+  // cmnzf780a0009pf19ru5qppqn now correctly injects "Amplifier Type"=Cabinet, evidenced by
+  // the injecting-missing-aspect log above, but the SUBSEQUENT offer PUT retry still fails
+  // with the identical "Amplifier Type is missing" error -- meaning either this inventory-item
+  // PUT itself is silently failing (this log line was missing before now, so we couldn't tell)
+  // or eBay has a propagation delay between an inventory-item aspect update and the offer
+  // validator seeing it. This log disambiguates which on the next cycle.
+  if (!invPutOk) {
+    const bodyText = await retryInvRes.text().catch(() => '');
+    console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair FAILED -- inventory item PUT rejected (HTTP ${retryInvRes.status} ${bodyText.slice(0, 300)})`);
+  } else {
+    console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair -- inventory item PUT accepted (HTTP ${retryInvRes.status}), retrying offer PUT next`);
+  }
+  return invPutOk;
 }
 
 export async function reviseEbayOfferPrice(
@@ -336,10 +358,10 @@ export async function reviseEbayOfferPrice(
       // reanalyzeItem-then-retry afterward regardless (it still keeps FindA.Sale's own Item
       // record in sync, and covers any category-aspect failure this narrower aspect-name
       // parse doesn't catch).
-      const itemRecord = await prisma.item.findUnique({ where: { id: itemId }, select: { title: true, ebayCategoryId: true } });
+      const itemRecord = await prisma.item.findUnique({ where: { id: itemId }, select: { title: true, description: true, ebayCategoryId: true } });
       const sku = typeof offerBody.sku === 'string' ? offerBody.sku : null;
       const categoryId = (typeof offerBody.categoryId === 'string' ? offerBody.categoryId : null) || itemRecord?.ebayCategoryId || null;
-      const aspectInjected = await injectMissingCategoryAspects(sku, categoryId, itemRecord?.title ?? null, firstAttempt.detail, accessToken);
+      const aspectInjected = await injectMissingCategoryAspects(sku, categoryId, itemRecord?.title ?? null, itemRecord?.description ?? null, firstAttempt.detail, accessToken);
       if (aspectInjected) {
         const repairAttempt = await putOffer(buildUpdatedOffer());
         if (repairAttempt.ok) {

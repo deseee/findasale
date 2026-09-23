@@ -74,12 +74,20 @@ export async function getAspectsForCategory(
     }
 
     // Fetch from eBay Taxonomy API
+    // 2026-09-23 fix (confirmed live -- this endpoint 400'd on every call): the proxy at
+    // /api/proxy/ebay (packages/frontend/pages/api/proxy/ebay.ts) only reads its OWN
+    // `path` query param and forwards that exact string on to eBay as the request path --
+    // any OTHER query param sent to the proxy itself (like `category_id` below, previously
+    // a sibling key in `params`) is never appended to the eBay-bound request and eBay 400s
+    // on the missing required parameter. ebayPublishService.ts's getRequiredAspectsForCategory
+    // does this correctly (confirmed working via live Gap1/Gap2 evidence, 2026-09-23) by
+    // embedding category_id directly in the single `path` string instead. Match that pattern.
+    const ebayPath = `/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`;
     const response = await axios.get(
       `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay`,
       {
         params: {
-          path: '/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category',
-          category_id: categoryId,
+          path: ebayPath,
         },
         headers: {
           Authorization: `Bearer ${accessToken}`,

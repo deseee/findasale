@@ -878,8 +878,76 @@ export function parseMissingRequiredAspectNames(errorBody: string, errorId: numb
  * literally in this item's title, so that's what should be injected, not whatever eBay
  * happens to list first.
  */
-export function pickSafeAspectDefault(aspectSpec: RequiredAspect | undefined, itemTitle?: string | null): string {
+// eBay Fashion Size Standardization (rolled out June-Aug 2026, confirmed live 2026-09-23):
+// Apparel & Footwear "Size" and its sibling identity/measurement aspects are now
+// SELECTION_ONLY in most categories, and eBay hard-rejects free-text/neutral placeholders
+// -- confirmed live via errorId 25129 on two items (cmo3et2pb002djqsuyta1cslc,
+// cmo3etpx2005hjqsuvzlkt8qz): "Unspecified is not a valid value for Size. Select a value
+// from the available options." eBay's own category-aspect metadata can still list
+// "Unspecified" as technically present in enumValues (a migration artifact) while the live
+// listing validator rejects it -- so for these aspects the neutral-value shortcut below is
+// unconditionally unsafe, not just usually-safe-but-sometimes-wrong.
+const SIZE_FAMILY_ASPECTS = new Set([
+  'size', 'shoe size', 'waist size', 'waist', 'inseam', 'neck size',
+  'bra size', 'dress size', 'chest size', 'collar size',
+]);
+
+// Confirmed live against eBay's own standardized Size facet for category 185708
+// (Tracksuits & Sets): real values are short codes -- XS/S/M/L/XL/2XL/3XL/4XL/5XL/One Size --
+// not spelled-out words. Item text commonly says "Medium" or "Size M."; map the common
+// spelled-out forms onto the token eBay's enum actually contains.
+const SIZE_WORD_TO_TOKEN: Record<string, string> = {
+  'extra small': 'XS', 'xsmall': 'XS', 'x-small': 'XS',
+  small: 'S',
+  medium: 'M',
+  large: 'L',
+  'extra large': 'XL', xlarge: 'XL', 'x-large': 'XL',
+  'xx-large': '2XL', xxlarge: '2XL', '2x-large': '2XL',
+  'xxx-large': '3XL', xxxlarge: '3XL', '3x-large': '3XL',
+  'one size fits all': 'One Size', 'one size': 'One Size', osfa: 'One Size',
+};
+
+/**
+ * Find a real, confidently-evidenced enum value for this aspect somewhere in the given
+ * text -- word-boundary match against eBay's own enum list first (avoids "M" false-matching
+ * inside "Medium"), then the spelled-out-size-word map. Returns undefined, never a guess,
+ * when nothing matches.
+ */
+function findRealAspectValueInText(enumValues: string[], text: string | null | undefined): string | undefined {
+  if (!text) return undefined;
+  for (const v of enumValues) {
+    const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(text)) return v;
+  }
+  const lower = text.toLowerCase();
+  for (const [word, token] of Object.entries(SIZE_WORD_TO_TOKEN)) {
+    if (!lower.includes(word)) continue;
+    const match = enumValues.find((v) => v.toLowerCase() === token.toLowerCase());
+    if (match) return match;
+  }
+  return undefined;
+}
+
+export function pickSafeAspectDefault(
+  aspectSpec: RequiredAspect | undefined,
+  itemTitle?: string | null,
+  itemDescription?: string | null
+): string | null {
   if (!aspectSpec || aspectSpec.enumValues.length === 0) return 'Does Not Apply';
+
+  if (SIZE_FAMILY_ASPECTS.has(aspectSpec.name.trim().toLowerCase())) {
+    // Never fall back to a neutral placeholder or enumValues[0] for these -- only a
+    // confidently-detected real value, or null (caller must skip injecting this aspect and
+    // leave the item flagged for manual review, exactly as resolveCoinConditionOverride
+    // already does for coin condition rather than guess).
+    return (
+      findRealAspectValueInText(aspectSpec.enumValues, itemTitle) ||
+      findRealAspectValueInText(aspectSpec.enumValues, itemDescription) ||
+      null
+    );
+  }
+
+  // Unchanged for every other aspect (e.g. Amplifier Type) -- same behavior as before.
   const neutral = aspectSpec.enumValues.find((v) =>
     /^(universal|other|not\s*specified|unspecified|any|multiple|n\/?a|various)$/i.test(v)
   );
@@ -970,7 +1038,11 @@ const heal25002: Healer = async (ctx, errorBody) => {
         console.log(`[eBay SelfHeal 25002] ${ctx.sku}: discarding dynamic aspect "${name}" — no matching real category aspect`);
         continue;
       }
-      const defaultValue = pickSafeAspectDefault(aspectSpec, item.title);
+      const defaultValue = pickSafeAspectDefault(aspectSpec, item.title, item.description);
+      if (defaultValue === null) {
+        console.log(`[eBay SelfHeal 25002] ${ctx.sku}: skipping aspect "${aspectSpec.name}" -- no confident value found in title/description (never guessing a Size-family aspect)`);
+        continue;
+      }
       aspectsObj[aspectSpec.name] = [defaultValue];
       console.log(`[eBay SelfHeal 25002] ${ctx.sku}: dynamically injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
     }
