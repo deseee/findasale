@@ -240,7 +240,10 @@ export const removeItemFromDiscogs = async (req: AuthRequest, res: Response) => 
       res.status(404).json({ message: 'Item not found' });
       return;
     }
-    const discogsListingId = typeof req.body?.discogsListingId === 'string' ? req.body.discogsListingId : null;
+    // 2026-09-23: default to the item's own stored listing id -- the ADR-132 match panel's
+    // "Remove from Discogs" sends no body (live 400 on item cmtizj5qr02va3bww0w58ovvl).
+    const bodyListingId = typeof req.body?.discogsListingId === 'string' ? req.body.discogsListingId : null;
+    const discogsListingId = item.discogsListingId || bodyListingId;
     if (!discogsListingId) {
       res.status(400).json({ message: 'discogsListingId is required' });
       return;
