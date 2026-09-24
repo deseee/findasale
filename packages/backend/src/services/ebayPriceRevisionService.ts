@@ -362,22 +362,67 @@ export async function reviseEbayOfferPrice(
           select: { packageWeightOz: true, packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true },
         });
         if (pkg?.packageWeightOz) {
-          // 2026-09-23 fix: never include packageType in a rebuilt packageWeightAndSize here.
-          // Confirmed live (item cmp5t9ti70011aez9qhibef89, errorId 25002 "Please provide a
-          // valid Shipping Package type", err:216314) -- this is the same LSAS-calculated-
-          // shipping incompatibility ebayController.ts's publish payload builder already guards
-          // against (~line 2845: "LSAS computes rates from weight+dims alone and rejects
-          // incompatible packageType values (err 216314)"), but this price-revision rebuild has
-          // no access to routing info to apply that guard conditionally. Weight+dims alone
-          // satisfy eBay's requirement, so always omitting packageType here is the safe choice
-          // rather than guessing whether this item's fulfillment policy tolerates it.
+          // 2026-09-24 fix (ADR-ebay-loynorrix-packagetype-fix-2026-09-24.md): the 2026-09-23
+          // fix below this comment used to unconditionally omit packageType from a rebuilt
+          // packageWeightAndSize. That correctly protected LSAS-calculated-shipping items (e.g.
+          // the tracksuit, errorId 25002 / err:216314 from an INCOMPATIBLE packageType value)
+          // but incorrectly starved items on non-calculated (flat-rate) policies of a valid,
+          // organizer-confirmed packageType -- eBay's full-offer re-validation then rejects the
+          // PUT for a MISSING Shipping Package type instead (Loy Norrix vinyl record,
+          // PACKAGE_THICK_ENVELOPE, same errorId/err code -- the mirror-image failure). Fix:
+          // read the offer's OWN already-assigned listingPolicies.fulfillmentPolicyId (same
+          // idiom as ebayController.ts's applyFulfillmentPolicyToOffer ~line 4998) and look up
+          // that one policy's real shippingOptions[].costType via a read-only GET against
+          // /sell/account/v1/fulfillment_policy (same endpoint/parsing idiom as
+          // ebayPublishService.ts ~line 1315-1320 and ebayController.ts's pickFulfillmentPolicySmart
+          // hasCostType helper ~line 4335-4337). packageType is included ONLY when a real policy
+          // match is found, it is NOT CALCULATED shipping, and the normalized value is in
+          // VALID_PACKAGE_TYPES -- any lookup failure, no policy id, or no match falls back to
+          // the original safe omission (never guess).
+          let includePackageType: string | undefined;
+          let packageTypeSkipReason = 'no packageType on item record';
+          if (pkg.packageType) {
+            packageTypeSkipReason = 'fulfillment policy lookup failed or no match';
+            const fulfillmentPolicyId = (offerBody.listingPolicies as Record<string, unknown> | undefined)?.fulfillmentPolicyId as string | undefined;
+            if (fulfillmentPolicyId) {
+              try {
+                const policyRes = await ebayFetch('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100', accessToken, { method: 'GET' });
+                trackEbayCall();
+                if (policyRes.ok) {
+                  const policyData = (await policyRes.json()) as any;
+                  const policies: any[] = policyData.fulfillmentPolicies || [];
+                  const matched = policies.find((p) => p?.fulfillmentPolicyId === fulfillmentPolicyId);
+                  if (matched) {
+                    const isCalculatedShipping = Array.isArray(matched.shippingOptions) &&
+                      matched.shippingOptions.some((opt: any) => opt?.costType === 'CALCULATED');
+                    if (isCalculatedShipping) {
+                      packageTypeSkipReason = 'assigned fulfillment policy is CALCULATED shipping';
+                    } else {
+                      const normalized = String(pkg.packageType).trim().toUpperCase().replace(/\s+/g, '_');
+                      if (VALID_PACKAGE_TYPES.has(normalized)) {
+                        includePackageType = normalized;
+                      } else {
+                        packageTypeSkipReason = `packageType="${pkg.packageType}" not in eBay enum`;
+                        console.warn(`[eBay PriceRevision] item=${itemId} dropping invalid packageType="${pkg.packageType}" (not in eBay enum)`);
+                      }
+                    }
+                  }
+                }
+              } catch (policyErr) {
+                console.warn(`[eBay PriceRevision] item=${itemId} fulfillment policy lookup failed: ${(policyErr as Error).message}`);
+              }
+            } else {
+              packageTypeSkipReason = 'offer has no assigned fulfillmentPolicyId';
+            }
+          }
           offerBody.packageWeightAndSize = {
             weight: { unit: 'OUNCE', value: Number(pkg.packageWeightOz) },
             ...(pkg.packageLengthIn && pkg.packageWidthIn && pkg.packageHeightIn
               ? { dimensions: { unit: 'INCH', length: Number(pkg.packageLengthIn), width: Number(pkg.packageWidthIn), height: Number(pkg.packageHeightIn) } }
               : {}),
+            ...(includePackageType ? { packageType: includePackageType } : {}),
           };
-          console.log(`[eBay PriceRevision] item=${itemId} rebuilt missing packageWeightAndSize from Item record before PUT (packageType omitted -- see 2026-09-23 fix comment)`);
+          console.log(`[eBay PriceRevision] item=${itemId} rebuilt missing packageWeightAndSize from Item record before PUT (packageType ${includePackageType ? `included="${includePackageType}"` : `omitted -- reason: ${packageTypeSkipReason}`})`);
         }
       } catch (pkgErr) {
         console.warn(`[eBay PriceRevision] item=${itemId} failed to rebuild packageWeightAndSize: ${(pkgErr as Error).message}`);
