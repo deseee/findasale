@@ -182,7 +182,8 @@ function isGoogleHost(hostname: string): boolean {
 function extractConfirmationLink(links: string[] | undefined): string | null {
   if (!links || links.length === 0) return null;
   return (
-    links.find((href) => isAllowedConfirmationUrl(href) && CONFIRMATION_LINK_HINT_PATTERN.test(href)) ?? null
+    // Never the "/mail/uf-" link -- that one CANCELS the verification (same host, same email).
+    links.find((href) => isAllowedConfirmationUrl(href) && CONFIRMATION_LINK_HINT_PATTERN.test(href) && !/\/mail\/uf-/i.test(href)) ?? null
   );
 }
 
@@ -351,7 +352,11 @@ export async function processGmailForwardingConfirmationEmail(
     };
   }
 
-  const confirmationUrl = extractConfirmationLink(email.links);
+  // Gmail's real confirmation email (live sample 2026-09-24) is plain text with no <a> tags, so
+  // the parsed links list is empty -- also consider bare https URLs from the body. Every
+  // candidate still has to pass isAllowedConfirmationUrl (exact Google host) + the hint pattern.
+  const bodyUrls = (email.rawBody ?? '').match(/https:\/\/[^\s<>"')\]]+/g) ?? [];
+  const confirmationUrl = extractConfirmationLink([...(email.links ?? []), ...bodyUrls]);
   if (!confirmationUrl) {
     console.warn(
       '[gmailForwardingAutoConfirmService] known organizer but no confirmation link could be extracted -- needs manual reconciliation',
