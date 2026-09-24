@@ -17,6 +17,7 @@
 
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -500,6 +501,14 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const getStaticProps: GetStaticProps<FleaMarketsCityPageProps> = async ({ params }) => {
   const citySlug = params?.['city-slug'] as string;
+
+  // Unknown region code (e.g. "nowhere-zz") is not a real location -> 404,
+  // not a 200 empty soft-404. Static check: never 404s a real city on backend
+  // failure. (This route is normally 308'd to /city/:slug/:category by
+  // next.config.js; gate kept here in case that redirect is ever removed.)
+  if (!hasKnownCityRegion(citySlug)) {
+    return { notFound: true, revalidate: 86400 };
+  }
 
   // Parse display name + state from slug (e.g. "denver-co" → "Denver", "CO")
   const parts = citySlug.split('-');

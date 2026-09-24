@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "node scripts/zip-extension.mjs && next build",
-    "postbuild": "next-sitemap",
+    "postbuild": "next-sitemap && node scripts/include-500-in-server-trace.js",
     "start": "next start",
     "lint": "next lint",
     "data:cities": "tsx scripts/generate-us-cities.ts",

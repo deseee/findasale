@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
-import { buildEventPlace, buildEventOrganizer, buildSeriesSubEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
+import { buildEventPlace, buildEventOrganizer, buildSeriesSubEvent, saleEventStatus, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import { logIsrWrite } from '@/lib/isrWriteLogger'; // ADR-2026-09-16: ISR regeneration logging
 import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Head from 'next/head';
@@ -258,6 +258,7 @@ interface InitialSaleData {
   endDate: string;
   saleType?: string;
   isOngoing?: boolean; // permanent storefront (RETAIL)
+  status?: string | null; // Sale.status: drives JSON-LD eventStatus (CANCELLED -> EventCancelled)
   photoUrls: string[];
   organizerId: string | null;
   organizer: {
@@ -962,7 +963,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 'startDate': initialData.startDate,
                 ...(initialData.isOngoing ? {} : {
                   'endDate': initialData.endDate,
-                  'eventStatus': 'https://schema.org/EventScheduled',
+                  'eventStatus': saleEventStatus(initialData.status),
                   'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
                 }),
                 ...(ssrEventPlace ? { 'location': ssrEventPlace } : {}),
@@ -1086,7 +1087,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   '@type': 'Organization',
                   'name': eventSeriesData.organizerName,
                   ...(initialData.organizerId
-                    ? { 'url': `https://finda.sale/organizer/storefront/${initialData.organizerId}` }
+                    ? { 'url': `https://finda.sale/organizers/${encodeURIComponent(initialData.organizerId)}` }
                     : {}),
                 },
                 'location': {
@@ -1206,7 +1207,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               'startDate': sale.startDate,
               ...(sale.isOngoing ? {} : {
                 'endDate': sale.endDate,
-                'eventStatus': 'https://schema.org/EventScheduled',
+                'eventStatus': saleEventStatus(sale.status),
                 'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
               }),
               ...(csrEventPlace ? { 'location': csrEventPlace } : {}),
@@ -1240,12 +1241,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 'cssSelector': ['h1', '.sale-description', '.sale-dates']
               },
               'paymentAccepted': ['CreditCard', 'Cash', 'PaymentService'],
-              ...(sale.status?.toUpperCase() === 'ENDED' ? {
-                // #GSC-fix: only override eventStatus here: 'offers' availability is
-                // already status-derived above, so we no longer clobber lowPrice/highPrice/
-                // offerCount/url/validFrom by replacing the whole offers object.
-                'eventStatus': 'https://schema.org/EventRescheduled',
-              } : {})
+              // eventStatus is set once above via saleEventStatus(). ENDED used to be
+              // overridden to EventRescheduled here, which is wrong (the sale was not
+              // rescheduled) and invalid without previousStartDate. An ended sale stays
+              // EventScheduled with its past dates; 'offers' availability stays SoldOut.
             })
           }} />
           )}
@@ -1338,7 +1337,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 '@type': 'Organization',
                 'name': eventSeriesData.organizerName,
                 ...(initialData.organizerId
-                  ? { 'url': `https://finda.sale/organizer/storefront/${initialData.organizerId}` }
+                  ? { 'url': `https://finda.sale/organizers/${encodeURIComponent(initialData.organizerId)}` }
                   : {}),
               },
               'location': {
@@ -2811,6 +2810,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       endDate: sale.endDate || '',
       saleType: sale.saleType || undefined,
       isOngoing: sale.isOngoing ?? false,
+      status: sale.status || null,
       photoUrls: sale.photoUrls || [],
       organizerId: sale.organizer?.id || null,
       isClaimed: sale.organizer?.isClaimed ?? false,

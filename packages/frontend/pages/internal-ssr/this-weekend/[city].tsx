@@ -26,6 +26,7 @@ import { GetServerSideProps } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
+import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -339,7 +340,11 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
   // tag, JSON-LD, and visible links -- confirmed live 2026-07-29 (GSC audit
   // 2026-07-28) on the sibling /city/[city-slug] route, same missing-
   // validation pattern.
-  if (!CITY_SLUG_PATTERN.test(citySlug)) {
+  // Also reject slugs whose region code is not a real US state/territory or
+  // Canadian province (e.g. "nowhere-zz"), which otherwise rendered a 200
+  // empty soft-404. Static check, so a real city with no sales stays 200 and
+  // a backend outage can never 404 a real page. See lib/seo/cityRegion.ts.
+  if (!CITY_SLUG_PATTERN.test(citySlug) || !hasKnownCityRegion(citySlug)) {
     return { notFound: true };
   }
 

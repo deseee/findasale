@@ -25,6 +25,7 @@ import { useState, useEffect } from 'react';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
 import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
+import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import CityLiveStats from '@/components/CityLiveStats';
 
 // Category slug → display label + saleType enum
@@ -386,7 +387,11 @@ export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ pa
   // tag, JSON-LD, and visible links -- confirmed live 2026-07-29 (GSC audit
   // 2026-07-28): /city/[city-slug] rendered 200 with canonical
   // "https://finda.sale/city/[city-slug]".
-  if (!CITY_SLUG_PATTERN.test(citySlug)) {
+  // Also reject slugs whose region code is not a real US state/territory or
+  // Canadian province (e.g. "nowhere-zz"), which otherwise rendered a 200
+  // empty soft-404. Static check, so a real city with no sales stays 200 and
+  // a backend outage can never 404 a real page. See lib/seo/cityRegion.ts.
+  if (!CITY_SLUG_PATTERN.test(citySlug) || !hasKnownCityRegion(citySlug)) {
     return { notFound: true };
   }
 

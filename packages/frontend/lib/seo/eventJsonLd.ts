@@ -25,6 +25,22 @@ const SITE_URL = 'https://finda.sale';
 
 export type JsonLdNode = Record<string, unknown>;
 
+/**
+ * Map a Sale.status (String column: DRAFT | PUBLISHED | ENDED | CANCELLED) to a valid
+ * schema.org eventStatus. Google accepts EventScheduled, EventCancelled, EventPostponed,
+ * EventRescheduled (the latter REQUIRES previousStartDate) and EventMovedOnline.
+ *  - CANCELLED (and the 'CANCELED' spelling) -> EventCancelled.
+ *  - Everything else, including ENDED -> EventScheduled. An ended sale was not
+ *    rescheduled; Google treats an Event with past dates as a past event on its own.
+ * We have no reschedule/postpone tracking (no previousStartDate), so this never emits
+ * EventRescheduled or EventPostponed.
+ */
+export function saleEventStatus(status?: string | null): string {
+  const s = typeof status === 'string' ? status.trim().toUpperCase() : '';
+  if (s === 'CANCELLED' || s === 'CANCELED') return 'https://schema.org/EventCancelled';
+  return 'https://schema.org/EventScheduled';
+}
+
 function clean(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
@@ -91,6 +107,7 @@ export interface ListingEventInput {
   zip?: string | null;
   photoUrl?: string | null;
   organizer?: EventOrganizerInput | null;
+  status?: string | null;
 }
 
 /**
@@ -117,7 +134,7 @@ export function buildListingEvent(sale: ListingEventInput): JsonLdNode | null {
     url: `${SITE_URL}/sales/${sale.id}`,
     startDate,
     ...(endDate ? { endDate } : {}),
-    eventStatus: 'https://schema.org/EventScheduled',
+    eventStatus: saleEventStatus(sale.status),
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location,
     ...(image ? { image } : {}),
@@ -132,6 +149,7 @@ export interface SeriesSaleInput {
   endDate?: string | null;
   city?: string | null;
   state?: string | null;
+  status?: string | null;
 }
 
 /**
@@ -153,7 +171,7 @@ export function buildSeriesSubEvent(
     name: sale.title,
     startDate,
     ...(endDate ? { endDate } : {}),
-    eventStatus: 'https://schema.org/EventScheduled',
+    eventStatus: saleEventStatus(sale.status),
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     url: `${SITE_URL}/sales/${sale.id}`,
     location,
