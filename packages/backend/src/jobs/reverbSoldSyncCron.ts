@@ -21,18 +21,33 @@
  * public/read_listings/write_listings get a 401/403, which is logged per organizer and skipped.
  *
  * Every 15 minutes, offset from the eBay and Discogs polls. Organizers are processed sequentially.
+ *
+ * Stale-listing sweep (2026-09-23): items that went SOLD before withdraw-on-SOLD existed kept a live
+ * Reverb listing (e.g. item cmt3ak88q01lea4xvvj0zh0ax / listing 101889751). Each run, per organizer,
+ * up to REVERB_STALE_SWEEP_LIMIT SOLD, non-deleted items that still carry a reverbListingId (oldest
+ * first) go through withdrawReverbListingIfExists, which ends the listing and clears the id -- so a
+ * handled item never re-enters the sweep. A 404/410 from Reverb (already gone) also clears the id.
+ * Any other failure leaves the item alone for this run; it is retried on a later run. Items that
+ * sold ON Reverb (lastSoldVia 'REVERB') keep their listing id on purpose and are excluded.
  */
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
-import { fetchRecentReverbSellerOrders, ReverbSellerOrder } from '../services/marketplace/reverbConnector';
+import {
+  fetchRecentReverbSellerOrders,
+  ReverbSellerOrder,
+  withdrawReverbListingIfExists,
+  ReverbWithdrawOutcome,
+} from '../services/marketplace/reverbConnector';
 import { commitFacebookNativeSale } from '../services/facebookNativeSaleService';
 import { createNotification } from '../lib/notificationService';
 
 export const SOLD_VIA_REVERB = 'REVERB';
 /** Orders updated within this window are examined each run. */
 export const REVERB_ORDER_LOOKBACK_DAYS = 14;
+/** At most this many stale SOLD-but-still-listed items are withdrawn per organizer per run. */
+export const REVERB_STALE_SWEEP_LIMIT = 10;
 
 export interface ReverbSoldSyncDeps {
   loadListedItems?: (organizerId: string) => Promise<Array<{ id: string; title: string; saleId: string | null; reverbListingId: string }>>;
@@ -141,6 +156,65 @@ export async function syncReverbSoldItemsForOrganizer(
   return result;
 }
 
+export interface ReverbStaleSweepDeps {
+  loadStaleSoldItems?: (organizerId: string, limit: number) => Promise<Array<{ id: string }>>;
+  withdraw?: (itemId: string) => Promise<ReverbWithdrawOutcome>;
+}
+
+export interface ReverbStaleSweepResult {
+  checked: number;
+  withdrawn: string[];
+  gone: string[];
+  failed: string[];
+}
+
+async function defaultLoadStaleSoldItems(organizerId: string, limit: number) {
+  return prisma.item.findMany({
+    where: {
+      status: 'SOLD',
+      deletedAt: null,
+      reverbListingId: { not: null },
+      AND: [
+        { OR: [{ organizerId }, { sale: { organizerId } }] },
+        // Sold ON Reverb: that listing is the one that sold -- never withdraw it. (An explicit null
+        // branch because SQL `<> 'REVERB'` alone would drop the NULL rows this sweep exists for.)
+        { OR: [{ lastSoldVia: null }, { lastSoldVia: { not: SOLD_VIA_REVERB } }] },
+      ],
+    },
+    orderBy: { updatedAt: 'asc' },
+    take: limit,
+    select: { id: true },
+  });
+}
+
+/**
+ * Withdraw live Reverb listings left on items that are already SOLD (see the header). Bounded by
+ * REVERB_STALE_SWEEP_LIMIT; one attempt per item per run; never throws per item.
+ */
+export async function sweepStaleSoldReverbListingsForOrganizer(
+  organizerId: string,
+  deps: ReverbStaleSweepDeps = {},
+): Promise<ReverbStaleSweepResult> {
+  const loadStaleSoldItems = deps.loadStaleSoldItems ?? defaultLoadStaleSoldItems;
+  const withdraw = deps.withdraw ?? withdrawReverbListingIfExists;
+  const result: ReverbStaleSweepResult = { checked: 0, withdrawn: [], gone: [], failed: [] };
+  const items = (await loadStaleSoldItems(organizerId, REVERB_STALE_SWEEP_LIMIT)).slice(0, REVERB_STALE_SWEEP_LIMIT);
+  for (const { id } of items) {
+    result.checked++;
+    let outcome: ReverbWithdrawOutcome;
+    try {
+      outcome = await withdraw(id);
+    } catch (err: any) {
+      outcome = 'failed';
+      console.error(`[Reverb Sync] Stale-listing withdraw threw for item ${id}:`, err?.message || err);
+    }
+    if (outcome === 'withdrawn') result.withdrawn.push(id);
+    else if (outcome === 'gone') result.gone.push(id);
+    else if (outcome === 'failed') result.failed.push(id);
+  }
+  return result;
+}
+
 async function syncReverbSoldItems(): Promise<void> {
   const accounts = await prisma.marketplaceAccount.findMany({
     where: { platform: 'REVERB', status: 'ACTIVE' },
@@ -153,6 +227,16 @@ async function syncReverbSoldItems(): Promise<void> {
     } catch (err: any) {
       // One organizer's failure (revoked token, missing read_orders scope, rate limit) never blocks the others.
       console.error(`[Reverb Sync ERROR] organizer ${organizerId}:`, err?.message || err);
+    }
+    try {
+      const s = await sweepStaleSoldReverbListingsForOrganizer(organizerId);
+      if (s.checked) {
+        console.log(
+          `[Reverb Sync] Organizer ${organizerId}: stale SOLD listings -- ${s.withdrawn.length} withdrawn, ${s.gone.length} already gone, ${s.failed.length} failed (of ${s.checked})`
+        );
+      }
+    } catch (err: any) {
+      console.error(`[Reverb Sync ERROR] stale-listing sweep, organizer ${organizerId}:`, err?.message || err);
     }
   }
 }

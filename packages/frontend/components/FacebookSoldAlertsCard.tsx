@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import Skeleton from './Skeleton';
@@ -163,36 +162,71 @@ const FacebookSoldAlertsCard: React.FC = () => {
               )}
             </div>
 
+            <p className="text-sm text-warm-700 dark:text-gray-300 leading-relaxed mb-4 bg-warm-50 dark:bg-gray-900/40 border border-warm-200 dark:border-gray-700 rounded p-3">
+              <span className="font-semibold text-warm-900 dark:text-gray-100">Which inbox?</span> Set
+              this up in the Gmail account where your marketplace emails end up. If another inbox (like
+              Yahoo or a second Gmail) already forwards to it, that&apos;s fine. Set it up once in the
+              Gmail that receives everything.
+            </p>
+
             <ol className="space-y-4">
               <Step n={1} title="Add the address in Gmail.">
                 On a computer, open Gmail, click the gear, then See all settings, then Forwarding and
                 POP/IMAP. Click Add a forwarding address and paste the address above. Leave
                 forwarding itself turned off so only sale notices come to us.
               </Step>
-              <Step n={2} title="Confirm it.">
+              <Step n={2} title="Let us confirm it.">
                 {data.autoConfirmEnabled ? (
-                  <>Gmail sends a confirmation to that address. We confirm it for you, usually within 20 minutes.</>
+                  <>
+                    Gmail sends a confirmation to your FindA.Sale address. You don&apos;t need to do
+                    anything. We confirm it for you automatically, usually within 15 minutes. After
+                    that, refresh Gmail and the address is ready to use in step 3.
+                  </>
                 ) : (
                   <>
-                    Gmail sends a confirmation to that address.{' '}
-                    <Link href="/support" className="text-amber-600 hover:underline font-medium">
-                      Contact support
-                    </Link>{' '}
-                    to finish this step.
+                    Gmail sends a confirmation to your FindA.Sale address. You don&apos;t need to do
+                    anything. We confirm it for you within a day. After that, refresh Gmail and the
+                    address is ready to use in step 3.
                   </>
                 )}
               </Step>
               <Step n={3} title="Create one filter for all your marketplaces.">
-                In Gmail search, open the search options and paste this into Has the words:
-                <CopyChip value={SOLD_EMAIL_FILTER_QUERY} label="filter" />
+                <ol className="list-decimal pl-5 mt-2 space-y-1.5">
+                  <li>
+                    In the Gmail search bar at the top, click the sliders icon on the right to open
+                    the search options.
+                  </li>
+                  <li>
+                    Copy this text and paste it into the Has the words box:
+                    <CopyChip value={SOLD_EMAIL_FILTER_QUERY} label="filter" />
+                  </li>
+                  <li>Click Create filter.</li>
+                  <li>
+                    Tick Forward it to and pick your FindA.Sale address. It only shows up in that list
+                    after step 2 is confirmed. If you don&apos;t see it yet, come back a little later.
+                  </li>
+                  <li>
+                    Leave Also apply filter to matching conversations unticked, so old sales are not
+                    sent again.
+                  </li>
+                  <li>Click Create filter.</li>
+                </ol>
                 <div className="mt-2">
-                  Click Create filter, check Forward it to, pick your FindA.Sale address, then Create
-                  filter again. This one filter covers Facebook Marketplace, Vinted, Mercari, Poshmark
-                  and Grailed sales. Offers, messages and promos are not forwarded. Made one of our
-                  older filters? You can delete it once this one is saved.
+                  This one filter covers Facebook Marketplace, Vinted, Mercari, Poshmark and Grailed
+                  sales. Offers, messages and promos are not forwarded. Made one of our older filters?
+                  You can delete it once this one is saved.
                 </div>
               </Step>
             </ol>
+
+            <p className="text-sm text-warm-600 dark:text-gray-400 leading-relaxed mt-5">
+              <span className="font-semibold text-warm-900 dark:text-gray-100">Not using Gmail?</span>{' '}
+              In Outlook, make a rule that forwards emails from these senders to your FindA.Sale
+              address: Facebook (noreply@marketplace.facebook.com), Vinted (no-reply@vinted.com),
+              Mercari (no-reply@alerts.us.mercari.com), Poshmark (orders@poshmark.com) and Grailed
+              (help@grailed.com). Yahoo Mail can&apos;t forward just these emails, so the easiest way is to
+              forward Yahoo into a Gmail and follow the steps above there.
+            </p>
 
             <div className="mt-5 pt-4 border-t border-warm-100 dark:border-gray-700 flex flex-wrap items-center gap-3">
               <button

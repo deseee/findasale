@@ -8,7 +8,10 @@ jest.mock('node-cron', () => ({ schedule: jest.fn() }));
 jest.mock('../../lib/prisma', () => ({ prisma: {} }));
 jest.mock('../../utils/cronGuard', () => ({ cronGuard: (_o: any, fn: any) => fn }));
 jest.mock('../../lib/notificationService', () => ({ createNotification: jest.fn() }));
-jest.mock('../../services/marketplace/reverbConnector', () => ({ fetchRecentReverbSellerOrders: jest.fn() }));
+jest.mock('../../services/marketplace/reverbConnector', () => ({
+  fetchRecentReverbSellerOrders: jest.fn(),
+  withdrawReverbListingIfExists: jest.fn(async () => 'withdrawn'),
+}));
 jest.mock('../../services/facebookNativeSaleService', () => ({
   commitFacebookNativeSale: jest.fn(async () => ({ ok: true, alreadyCommitted: false })),
 }));
@@ -18,7 +21,10 @@ import {
   matchReverbOrdersToItems,
   isVoidReverbOrderStatus,
   REVERB_ORDER_LOOKBACK_DAYS,
+  REVERB_STALE_SWEEP_LIMIT,
+  sweepStaleSoldReverbListingsForOrganizer,
 } from '../reverbSoldSyncCron';
+import { withdrawReverbListingIfExists } from '../../services/marketplace/reverbConnector';
 import { commitFacebookNativeSale } from '../../services/facebookNativeSaleService';
 
 const ITEMS = [
@@ -99,5 +105,56 @@ describe('syncReverbSoldItemsForOrganizer', () => {
     const orders = [{ orderNumber: '9', status: 'paid', listingId: '101889000' }];
     await syncReverbSoldItemsForOrganizer('org_1', { loadListedItems: async () => ITEMS, fetchOrders: async () => orders, notify: async () => undefined });
     expect(commitFacebookNativeSale as jest.Mock).toHaveBeenCalledWith('item_pedal', 'REVERB', { skipWithdraw: ['REVERB'] });
+  });
+});
+
+describe('sweepStaleSoldReverbListingsForOrganizer', () => {
+  it('withdraws each stale SOLD item once and reports withdrawn / gone / failed', async () => {
+    const withdraw = jest.fn()
+      .mockResolvedValueOnce('withdrawn')
+      .mockResolvedValueOnce('gone')
+      .mockResolvedValueOnce('failed');
+    const r = await sweepStaleSoldReverbListingsForOrganizer('org_1', {
+      loadStaleSoldItems: async () => [{ id: 'cmt3ak88q01lea4xvvj0zh0ax' }, { id: 'item_gone' }, { id: 'item_err' }],
+      withdraw,
+    });
+    expect(withdraw).toHaveBeenCalledTimes(3);
+    expect(withdraw.mock.calls.map((c: any[]) => c[0])).toEqual(['cmt3ak88q01lea4xvvj0zh0ax', 'item_gone', 'item_err']);
+    expect(r).toEqual({ checked: 3, withdrawn: ['cmt3ak88q01lea4xvvj0zh0ax'], gone: ['item_gone'], failed: ['item_err'] });
+  });
+
+  it('asks for at most REVERB_STALE_SWEEP_LIMIT items and never processes more', async () => {
+    const load = jest.fn(async (_org: string, _limit: number) => Array.from({ length: 25 }, (_, i) => ({ id: `i${i}` })));
+    const withdraw = jest.fn(async () => 'withdrawn' as const);
+    const r = await sweepStaleSoldReverbListingsForOrganizer('org_1', { loadStaleSoldItems: load, withdraw });
+    expect(REVERB_STALE_SWEEP_LIMIT).toBe(10);
+    expect(load).toHaveBeenCalledWith('org_1', 10);
+    expect(withdraw).toHaveBeenCalledTimes(10);
+    expect(r.checked).toBe(10);
+  });
+
+  it('leaves an item alone after one failure (even a throw) and moves on', async () => {
+    const withdraw = jest.fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce('withdrawn');
+    const r = await sweepStaleSoldReverbListingsForOrganizer('org_1', {
+      loadStaleSoldItems: async () => [{ id: 'a' }, { id: 'b' }],
+      withdraw,
+    });
+    expect(withdraw).toHaveBeenCalledTimes(2);
+    expect(r.failed).toEqual(['a']);
+    expect(r.withdrawn).toEqual(['b']);
+  });
+
+  it('does nothing when no stale items exist', async () => {
+    const withdraw = jest.fn();
+    const r = await sweepStaleSoldReverbListingsForOrganizer('org_1', { loadStaleSoldItems: async () => [], withdraw });
+    expect(withdraw).not.toHaveBeenCalled();
+    expect(r.checked).toBe(0);
+  });
+
+  it('defaults to withdrawReverbListingIfExists from reverbConnector', async () => {
+    await sweepStaleSoldReverbListingsForOrganizer('org_1', { loadStaleSoldItems: async () => [{ id: 'x' }] });
+    expect(withdrawReverbListingIfExists as jest.Mock).toHaveBeenCalledWith('x');
   });
 });

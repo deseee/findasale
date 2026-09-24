@@ -565,6 +565,13 @@ export async function endOrDeleteReverbListing(
   return { action: 'ended' };
 }
 
+export type ReverbWithdrawOutcome = 'withdrawn' | 'gone' | 'skipped' | 'failed';
+
+/** Reverb statuses meaning the listing no longer exists there (deleted / removed) -- nothing left to end. */
+export function isReverbListingGoneStatus(status: unknown): boolean {
+  return status === 404 || status === 410;
+}
+
 /**
  * Withdraw an item's Reverb listing when it goes SOLD via a non-Reverb channel (FindA.Sale POS /
  * Stripe / cash / eBay / Discogs / Shopify / off-platform ...). Added 2026-09-23 -- mirrors
@@ -575,8 +582,14 @@ export async function endOrDeleteReverbListing(
  * clears Item.reverbListingId/reverbListedAt, the same clear-on-delete behavior as the manual
  * organizer-triggered end in reverbMarketplaceController.ts. A sale that happened ON Reverb must
  * NOT call this (reverbSoldSyncCron passes skipWithdraw ['REVERB'] to commitFacebookNativeSale).
+ *
+ * Returns what happened (callers on the sale path ignore it; reverbSoldSyncCron's stale-listing
+ * sweep counts it): 'withdrawn' ended/deleted on Reverb and cleared; 'gone' Reverb answered 404/410
+ * (listing already removed there), so reverbListingId is cleared anyway -- without that clear the
+ * sweep would retry a dead id forever; 'skipped' nothing to do (no listing id / no organizer);
+ * 'failed' any other error, reverbListingId kept so a later run can retry.
  */
-export async function withdrawReverbListingIfExists(itemId: string): Promise<void> {
+export async function withdrawReverbListingIfExists(itemId: string): Promise<ReverbWithdrawOutcome> {
   try {
     const item = await prisma.item.findUnique({
       where: { id: itemId },
@@ -589,17 +602,27 @@ export async function withdrawReverbListingIfExists(itemId: string): Promise<voi
 
     if (!item || !item.reverbListingId) {
       // Never pushed to Reverb (or already withdrawn) -- nothing to do.
-      return;
+      return 'skipped';
     }
 
     const organizerId = item.organizerId ?? item.sale?.organizerId ?? null;
     if (!organizerId) {
       console.warn(`[Reverb] Could not resolve organizerId for item ${itemId} -- skipping withdraw`);
-      return;
+      return 'skipped';
     }
 
-    const result = await endOrDeleteReverbListing(organizerId, item.reverbListingId);
-    console.log(`[Reverb] withdraw-on-SOLD: listing ${item.reverbListingId} ${result.action} for item ${itemId}`);
+    let outcome: ReverbWithdrawOutcome;
+    try {
+      const result = await endOrDeleteReverbListing(organizerId, item.reverbListingId);
+      console.log(`[Reverb] withdraw-on-SOLD: listing ${item.reverbListingId} ${result.action} for item ${itemId}`);
+      outcome = 'withdrawn';
+    } catch (endErr: any) {
+      // Already gone on Reverb (endOrDeleteReverbListing throws ReverbApiError with the PUT's status
+      // when both the DELETE and the inventory-0 PUT fail): clear the stale id instead of keeping it.
+      if (!(endErr instanceof ReverbApiError) || !isReverbListingGoneStatus(endErr.status)) throw endErr;
+      console.log(`[Reverb] withdraw-on-SOLD: listing ${item.reverbListingId} already gone on Reverb (${endErr.status}) -- clearing it for item ${itemId}`);
+      outcome = 'gone';
+    }
 
     await prisma.item
       .update({
@@ -609,9 +632,11 @@ export async function withdrawReverbListingIfExists(itemId: string): Promise<voi
       .catch((e) => {
         console.error(`[Reverb] Failed to clear reverbListingId after withdraw-on-SOLD for item ${itemId}:`, e);
       });
+    return outcome;
   } catch (error: any) {
     // Log but don't throw -- fire-and-forget, same posture as withdrawDiscogsListingIfExists.
     console.error(`[Reverb] withdraw-on-SOLD failed for item ${itemId}:`, error?.message);
+    return 'failed';
   }
 }
 

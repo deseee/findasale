@@ -30,7 +30,7 @@ beforeEach(() => {
 describe('withdrawReverbListingIfExists', () => {
   it('is a no-op (no API call) when the item has no reverbListingId', async () => {
     (p.item.findUnique as jest.Mock).mockResolvedValue({ reverbListingId: null, organizerId: 'org_1', sale: null });
-    await withdrawReverbListingIfExists('item_1');
+    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBe('skipped');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(p.item.update).not.toHaveBeenCalled();
   });
@@ -38,7 +38,7 @@ describe('withdrawReverbListingIfExists', () => {
   it("ends the listing with the organizer's token and clears reverbListingId", async () => {
     (p.item.findUnique as jest.Mock).mockResolvedValue({ reverbListingId: '101889751', organizerId: null, sale: { organizerId: 'org_1' } });
     fetchMock.mockResolvedValueOnce(resp(422, { message: 'published' })).mockResolvedValueOnce(resp(200, {}));
-    await withdrawReverbListingIfExists('item_1');
+    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBe('withdrawn');
     expect(p.marketplaceAccount.findFirst).toHaveBeenCalledWith({ where: { organizerId: 'org_1', platform: 'REVERB', status: 'ACTIVE' } });
     expect(fetchMock.mock.calls[0][0]).toMatch(/\/listings\/101889751$/);
     expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
@@ -50,14 +50,28 @@ describe('withdrawReverbListingIfExists', () => {
   it('never throws and keeps reverbListingId when Reverb rejects the end', async () => {
     (p.item.findUnique as jest.Mock).mockResolvedValue({ reverbListingId: '5', organizerId: 'org_1', sale: null });
     fetchMock.mockResolvedValueOnce(resp(404, {})).mockResolvedValueOnce(resp(500, { message: 'down' }));
-    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBeUndefined();
+    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBe('failed');
+    expect(p.item.update).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 410])('clears reverbListingId when the listing is already gone on Reverb (%i)', async (status) => {
+    (p.item.findUnique as jest.Mock).mockResolvedValue({ reverbListingId: '101889751', organizerId: 'org_1', sale: null });
+    fetchMock.mockResolvedValueOnce(resp(status, {})).mockResolvedValueOnce(resp(status, { message: 'Not found' }));
+    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBe('gone');
+    expect(p.item.update).toHaveBeenCalledWith({ where: { id: 'item_1' }, data: { reverbListingId: null, reverbListedAt: null } });
+  });
+
+  it('keeps reverbListingId on an auth failure (not a missing listing)', async () => {
+    (p.item.findUnique as jest.Mock).mockResolvedValue({ reverbListingId: '5', organizerId: 'org_1', sale: null });
+    fetchMock.mockResolvedValueOnce(resp(403, {})).mockResolvedValueOnce(resp(403, { message: 'forbidden' }));
+    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBe('failed');
     expect(p.item.update).not.toHaveBeenCalled();
   });
 
   it('never throws when there is no active Reverb connection', async () => {
     (p.item.findUnique as jest.Mock).mockResolvedValue({ reverbListingId: '5', organizerId: 'org_1', sale: null });
     (p.marketplaceAccount.findFirst as jest.Mock).mockResolvedValue(null);
-    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBeUndefined();
+    await expect(withdrawReverbListingIfExists('item_1')).resolves.toBe('failed');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
