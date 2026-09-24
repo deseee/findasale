@@ -305,6 +305,8 @@ export default function LabelComposerPage() {
   // Partial-sheet support: first usable label slot (1–30, 1 = top-left / normal).
   const [startPosition, setStartPosition] = useState(1);
   const [startPosExpanded, setStartPosExpanded] = useState(false);
+  // Custom fill-in price for items that don't match any preset chip.
+  const [customPrice, setCustomPrice] = useState('');
 
   // Refresh saved batches list from localStorage
   const refreshSavedBatches = useCallback(() => {
@@ -648,6 +650,46 @@ export default function LabelComposerPage() {
                       {formatPrice(p)}
                     </button>
                   ))}
+                  {/* Custom fill-in price: for items whose price doesn't match any preset chip.
+                      Dispatches the exact same SELECT_PRICE action the presets use, so it flows
+                      through Add to batch / Fill rest / PDF generation with no other changes. */}
+                  <div
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold border transition-colors bg-white dark:bg-gray-700 text-warm-800 dark:text-gray-200 ${
+                      state.selectedPrice !== null && !prices.includes(state.selectedPrice)
+                        ? 'border-gray-900 dark:border-white'
+                        : 'border-warm-300 dark:border-gray-600 border-dashed hover:border-warm-400 dark:hover:border-gray-500'
+                    }`}
+                  >
+                    <span className="text-warm-400 dark:text-gray-500">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={customPrice}
+                      onChange={(e) => setCustomPrice(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        const parsed = parseFloat(customPrice);
+                        if (Number.isFinite(parsed) && parsed > 0) {
+                          dispatch({ type: 'SELECT_PRICE', price: parsed });
+                        }
+                      }}
+                      placeholder="Custom"
+                      className="w-14 bg-transparent focus:outline-none text-warm-900 dark:text-white placeholder-warm-400 dark:placeholder-gray-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const parsed = parseFloat(customPrice);
+                        if (Number.isFinite(parsed) && parsed > 0) {
+                          dispatch({ type: 'SELECT_PRICE', price: parsed });
+                        }
+                      }}
+                      className="text-xs font-semibold text-warm-500 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-200 px-0.5"
+                    >
+                      Use
+                    </button>
+                  </div>
                 </div>
               </div>
 
