@@ -51,6 +51,10 @@ footer { padding: 8px 10px; border-top: 1px solid #26362d; }
 button.primary { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #3c8c5a; color: #fff; font-weight: 700; cursor: pointer; }
 button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; }
 .note { font-size: 11px; color: #9fb6a8; margin: 8px 0 0; }
+/* S-EXT-FB-ACCOUNT-UNAVAILABLE: Facebook account paused banner */
+.warnBanner { margin: 6px 10px 0; padding: 8px 10px; border: 1px solid #7a5a2a; border-radius: 8px; background: #2a2416; color: #ffcf7a; font-size: 12px; }
+.warnBanner .dim { color: #c9b48a; font-size: 11px; margin-top: 4px; }
+.warnBanner button { margin-top: 6px; }
 /* 2026-08-22: long explanatory notes moved into <details> (popup.html) so their multi-line
    paragraphs don't inflate the popup's total height by default -- Patrick reported the "Post
    to" section becoming unreachable when banners pushed content past the popup's rendering

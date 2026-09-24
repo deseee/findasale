@@ -379,9 +379,13 @@ async function silentRemovalInProgress() {
   const { fasRemovalTabId = null, fasRemovalStartedAt = 0 } =
     await chrome.storage.local.get(['fasRemovalTabId', 'fasRemovalStartedAt']);
   if (!fasRemovalTabId) return false;
-  if (Date.now() - fasRemovalStartedAt > FAS_REMOVAL_MAX_MS) { await clearSilentRemovalState(); return false; }
+  // S-EXT-FB-ACCOUNT-UNAVAILABLE (2026-09-23): both self-heal branches below mean the run ended
+  // WITHOUT fas-remove.js ever reporting back (finishSilentRemoval clears this state before it
+  // closes the tab, so a clean finish never reaches here). That is a failed attempt, and it used
+  // to count as nothing at all -- see noteStalledRemovalRun.
+  if (Date.now() - fasRemovalStartedAt > FAS_REMOVAL_MAX_MS) { await clearSilentRemovalState(); await noteStalledRemovalRun('FACEBOOK', 'timed_out_no_report'); return false; }
   const tab = await tabsGet(fasRemovalTabId);
-  if (!tab) { await clearSilentRemovalState(); return false; }
+  if (!tab) { await clearSilentRemovalState(); await noteStalledRemovalRun('FACEBOOK', 'tab_closed_no_report'); return false; }
   return true;
 }
 
@@ -417,6 +421,155 @@ async function finishSilentRemoval() {
   }
 }
 
+// ---- Account-unavailable pause + stalled-run backoff (2026-09-23, S-EXT-FB-ACCOUNT-UNAVAILABLE) ----
+// Live report: Patrick's Facebook account is suspended, and the extension kept opening Facebook
+// every ~20 minutes to remove sold items, forever. Root cause: the backend's skip cap
+// (MAX_REMOVAL_SKIP_ATTEMPTS=3, then RETRY_COOLDOWN_MS=1h, extensionController.ts) only counts
+// REMOVE/SKIPPED rows, and a row is only written when a content script runs and reports one. A
+// suspended/checkpointed/logged-out account redirects the you/selling tab to a URL outside
+// fas-remove.js's manifest match (/checkpoint/..., /login..., /disabled/...), so the content
+// script never runs, nothing is reported, the item never accrues a skip, and
+// silentRemovalInProgress() just self-healed the dead tab after FAS_REMOVAL_MAX_MS and let the
+// next alarm open another one (DB check 2026-09-23: zero FACEBOOK REMOVE rows of any kind since
+// 09-18 while the loop kept running). Two fixes live here:
+//   1. Account-unavailable pause (per platform, today only FACEBOOK): detected from the removal
+//      tab's URL (onUpdated below) or from page text (fas-remove.js). While flagged, no Facebook
+//      removal / renewal / auto-post / price-update attempt is made, except ONE re-probe per
+//      FAS_UNAVAILABLE_REPROBE_MS or an explicit "Retry Facebook" click in the popup.
+//   2. Stalled-run backoff (every platform): a removal run that ends with no report from its
+//      content script now counts as a failed attempt locally, and after FAS_RUN_STALL_FREE_TRIES
+//      such stalls the platform backs off (1h, doubling, capped at 24h) until any report arrives.
+// No backend endpoint exists for per-platform account state (it would need a schema field), so
+// the flag is local to chrome.storage.local only.
+const FAS_PLATFORM_UNAVAILABLE_KEY = 'fasPlatformUnavailable';
+const FAS_UNAVAILABLE_REPROBE_MS = 24 * 60 * 60 * 1000;
+const FAS_FACEBOOK_UNAVAILABLE_MESSAGE = 'Facebook account unavailable, Facebook removals paused. Remove sold Facebook listings manually or restore access.';
+// Conservative URL signals only: paths Facebook uses for account checkpoints, disabled/suspended
+// accounts and its login wall. Anything else (an unknown redirect) is left to the stall backoff.
+const FAS_FB_UNAVAILABLE_URL_RE = /^https?:\/\/(?:[a-z0-9-]+\.)?facebook\.com\/(checkpoint|disabled|login|accountquality)(?:[/.?#]|$)/i;
+
+function fasFacebookUnavailableReasonFromUrl(url) {
+  const m = FAS_FB_UNAVAILABLE_URL_RE.exec(String(url || ''));
+  if (!m) return null;
+  const seg = m[1].toLowerCase();
+  if (seg === 'login') return 'login_wall';
+  if (seg === 'disabled') return 'account_disabled';
+  if (seg === 'accountquality') return 'account_quality';
+  return 'checkpoint';
+}
+
+async function getPlatformUnavailableMap() {
+  const st = await chrome.storage.local.get([FAS_PLATFORM_UNAVAILABLE_KEY]);
+  const all = st[FAS_PLATFORM_UNAVAILABLE_KEY];
+  return (all && typeof all === 'object') ? all : {};
+}
+async function getPlatformUnavailable(platform) {
+  return (await getPlatformUnavailableMap())[platform] || null;
+}
+// Returns { entry, isNew }. `since` is kept from the first detection; lastProbeAt restarts the
+// 24h re-probe clock on every confirmed detection.
+async function markPlatformUnavailable(platform, reason, url) {
+  const all = await getPlatformUnavailableMap();
+  const prev = all[platform] || null;
+  const now = Date.now();
+  let safeUrl = null;
+  try { const u = new URL(String(url || '')); safeUrl = u.origin + u.pathname; } catch (e) { safeUrl = null; }
+  all[platform] = {
+    since: (prev && prev.since) || now,
+    lastProbeAt: now,
+    reason: String(reason || 'unknown').slice(0, 200),
+    url: safeUrl,
+  };
+  await chrome.storage.local.set({ [FAS_PLATFORM_UNAVAILABLE_KEY]: all });
+  console.log('[FAS] ' + platform + ' account unavailable (' + all[platform].reason + ') -- ' + platform + ' automation paused.');
+  return { entry: all[platform], isNew: !prev };
+}
+async function clearPlatformUnavailable(platform) {
+  const all = await getPlatformUnavailableMap();
+  if (!all[platform]) return false;
+  delete all[platform];
+  await chrome.storage.local.set({ [FAS_PLATFORM_UNAVAILABLE_KEY]: all });
+  console.log('[FAS] ' + platform + ' account reachable again -- ' + platform + ' automation resumed.');
+  return true;
+}
+// Stamps a probe attempt so a probe that itself stalls (no signal either way) still waits a full
+// FAS_UNAVAILABLE_REPROBE_MS before the next one, instead of retrying on every alarm.
+async function stampPlatformProbe(platform, at) {
+  const all = await getPlatformUnavailableMap();
+  if (!all[platform]) return;
+  all[platform].lastProbeAt = at;
+  await chrome.storage.local.set({ [FAS_PLATFORM_UNAVAILABLE_KEY]: all });
+}
+// True while the platform is flagged AND its last probe was under FAS_UNAVAILABLE_REPROBE_MS ago.
+async function platformPausedForUnavailable(platform) {
+  const e = await getPlatformUnavailable(platform);
+  if (!e) return false;
+  return Date.now() - (Number(e.lastProbeAt) || 0) < FAS_UNAVAILABLE_REPROBE_MS;
+}
+
+const FAS_RUN_BACKOFF_KEY = 'fasRemovalRunBackoff';
+const FAS_RUN_STALL_FREE_TRIES = 2; // mirrors MAX_REMOVAL_SKIP_ATTEMPTS=3: two free retries, the third stall backs off
+const FAS_RUN_BACKOFF_BASE_MS = 60 * 60 * 1000; // same 1h as the backend's RETRY_COOLDOWN_MS
+const FAS_RUN_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
+async function noteStalledRemovalRun(platform, why) {
+  const st = await chrome.storage.local.get([FAS_RUN_BACKOFF_KEY]);
+  const all = st[FAS_RUN_BACKOFF_KEY] || {};
+  const prev = all[platform] || { stalls: 0 };
+  const stalls = (Number(prev.stalls) || 0) + 1;
+  const over = stalls - FAS_RUN_STALL_FREE_TRIES;
+  const delay = over > 0 ? Math.min(FAS_RUN_BACKOFF_MAX_MS, FAS_RUN_BACKOFF_BASE_MS * Math.pow(2, over - 1)) : 0;
+  all[platform] = { stalls, until: delay ? Date.now() + delay : 0, lastReason: String(why || 'no_report'), lastAt: Date.now() };
+  await chrome.storage.local.set({ [FAS_RUN_BACKOFF_KEY]: all });
+  console.log('[FAS] ' + platform + ' removal run ended with no report (' + why + ') -- stall #' + stalls +
+    (delay ? ', backing off ' + Math.round(delay / 60000) + ' min' : ''));
+}
+// Any report from a platform's content script proves the run reached the page -- reset its stalls.
+async function clearStalledRemovalRuns(platform) {
+  const st = await chrome.storage.local.get([FAS_RUN_BACKOFF_KEY]);
+  const all = st[FAS_RUN_BACKOFF_KEY] || {};
+  if (!all[platform]) return;
+  delete all[platform];
+  await chrome.storage.local.set({ [FAS_RUN_BACKOFF_KEY]: all });
+}
+// 0 when not backing off, else the epoch ms the backoff ends.
+async function removalRunBackoffUntil(platform) {
+  const st = await chrome.storage.local.get([FAS_RUN_BACKOFF_KEY]);
+  const e = (st[FAS_RUN_BACKOFF_KEY] || {})[platform];
+  const until = e ? Number(e.until) || 0 : 0;
+  return until > Date.now() ? until : 0;
+}
+
+// Shared entry point for every Facebook account-unavailable signal (tab URL or page text).
+async function handleFacebookUnavailable(reason, url, tabId) {
+  const { isNew } = await markPlatformUnavailable('FACEBOOK', reason, url);
+  // The cause is known now, so the generic stall backoff is not needed on top of the pause.
+  await clearStalledRemovalRuns('FACEBOOK');
+  const { fasRemovalTabId = null } = await chrome.storage.local.get(['fasRemovalTabId']);
+  if (tabId != null && tabId === fasRemovalTabId) await finishSilentRemoval();
+  if (isNew) {
+    chrome.notifications.create('fasFacebookUnavailable', {
+      type: 'basic',
+      iconUrl: 'icon128.png',
+      title: 'FindA.Sale',
+      message: FAS_FACEBOOK_UNAVAILABLE_MESSAGE,
+      priority: 1
+    });
+  }
+}
+
+// Top-level so it survives MV3 worker restarts (same reason as the listener above). Scoped to the
+// Facebook tabs this worker itself opened for removal (silent tab, notification-click tab), so an
+// organizer's own browsing never flips the flag.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  const reason = changeInfo && changeInfo.url ? fasFacebookUnavailableReasonFromUrl(changeInfo.url) : null;
+  if (!reason) return;
+  (async () => {
+    const st = await chrome.storage.local.get(['fasRemovalTabId', 'fasFacebookProbeTabId']);
+    if (tabId !== st.fasRemovalTabId && tabId !== st.fasFacebookProbeTabId) return;
+    await handleFacebookUnavailable(reason, changeInfo.url, tabId);
+  })().catch((e) => console.log('[FAS facebook-unavailable check FAILED]', e && e.message));
+});
+
 // ---- Price-sync detection (ADR-086, Phase A -- 2026-07-18) ----
 // Facebook has no API for a live price edit either (same gap as removal) -- this polls
 // GET /extension/pending-updates on the SAME alarm tick as checkPendingRemovals (per the ADR's
@@ -432,6 +585,8 @@ async function checkPendingUpdates() {
   // yet to run silently), so both 'notify' and 'silent' behave identically here until Phase B.
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
+  // S-EXT-FB-ACCOUNT-UNAVAILABLE: nothing can be updated on a Facebook account that is unavailable.
+  if (await getPlatformUnavailable('FACEBOOK')) return 'facebook_account_unavailable';
   const resp = await apiFetch('/extension/pending-updates');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const items = (resp.data && resp.data.items) || [];
@@ -558,12 +713,15 @@ async function silentCrossPlatformRemovalInProgress(platform) {
   const st = await chrome.storage.local.get([cfg.tabIdKey, cfg.startedAtKey]);
   const tabId = st[cfg.tabIdKey] || null;
   if (!tabId) return false;
+  // S-EXT-FB-ACCOUNT-UNAVAILABLE: a run that ends here never reported back -- count it (see
+  // noteStalledRemovalRun) so a platform whose page never loads backs off instead of looping.
   if (Date.now() - (st[cfg.startedAtKey] || 0) > FAS_REMOVAL_MAX_MS) {
     await chrome.storage.local.remove([cfg.tabIdKey, cfg.prevTabIdKey, cfg.startedAtKey]);
+    await noteStalledRemovalRun(platform, 'timed_out_no_report');
     return false;
   }
   const tab = await tabsGet(tabId);
-  if (!tab) { await chrome.storage.local.remove([cfg.tabIdKey, cfg.prevTabIdKey, cfg.startedAtKey]); return false; }
+  if (!tab) { await chrome.storage.local.remove([cfg.tabIdKey, cfg.prevTabIdKey, cfg.startedAtKey]); await noteStalledRemovalRun(platform, 'tab_closed_no_report'); return false; }
   return true;
 }
 
@@ -671,6 +829,13 @@ async function checkCrossPlatformRemovals(pendingItems) {
       outcomes.push(platform + ':skipped_in_progress');
       continue;
     }
+    // S-EXT-FB-ACCOUNT-UNAVAILABLE: repeated runs that never reported back -> back off this
+    // platform only; the loop still continues with every other platform.
+    const backoffUntil = await removalRunBackoffUntil(platform);
+    if (backoffUntil) {
+      outcomes.push(platform + ':stalled_backoff');
+      continue;
+    }
     await chrome.storage.local.set({ [cfg.queueKey]: itemsForPlatform, [cfg.indexKey]: 0 });
     if (fasAutoRemoveMode === 'silent') {
       // SAFETY FIX 2026-09-04 (S-EXT-CROSSPLATFORM-REMOVAL-TAB-BURST, precautionary -- Patrick
@@ -736,13 +901,21 @@ function buildRemovalNotificationMessage(removalCount, soldCheckCount) {
 // alarm was added: this still rides the existing FAS_REMOVAL_ALARM 20-min cadence.
 // checkPendingUpdates has no tab-opening side effect (notify-only, Phase A), so it correctly
 // stays a separate, safely-parallel poll -- untouched here.
-async function checkPendingRemovals() {
+async function checkPendingRemovals(opts) {
+  // opts.forceFacebook: the organizer clicked "Retry Facebook" in the popup -- probe now, in any
+  // mode, even with nothing queued (the sold-filter page load alone tells us if access is back).
+  const forceFacebook = !!(opts && opts.forceFacebook);
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
-  // Guard (silent mode only): don't poll/open another removal tab while one is mid-run. Also
-  // prevents overwriting fasRemovalQueue/fasRemovalIndex under an in-progress content script,
-  // which would corrupt its queue position. Notify mode never auto-creates a tab, so unaffected.
-  if (fasAutoRemoveMode === 'silent' && await silentRemovalInProgress()) return 'skipped_in_progress';
+  // Guard: don't open another Facebook removal tab while one is mid-run. Also prevents
+  // overwriting fasRemovalQueue/fasRemovalIndex under an in-progress content script, which would
+  // corrupt its queue position. Notify mode only tracks a tab after a Retry Facebook click.
+  // S-EXT-FB-ACCOUNT-UNAVAILABLE (2026-09-23): this used to `return` HERE, before the
+  // cross-platform check below -- so a wedged Facebook tab (up to FAS_REMOVAL_MAX_MS, e.g. one
+  // stuck on a checkpoint page) also stopped Poshmark/Mercari/Vinted/etc. removals for that poll.
+  // It now gates only the Facebook part. Calling it also records a stalled run (see
+  // noteStalledRemovalRun) when the previous tab ended without a report.
+  const facebookRunInProgress = await silentRemovalInProgress();
 
   const resp = await apiFetch('/extension/pending-removals');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
@@ -786,7 +959,19 @@ async function checkPendingRemovals() {
   // outright: a tab now opens from this function only when there is a genuine confirmed pending
   // removal (facebookItems.length>0) below, never as a passive "just check in case" action on
   // soldCheckCount alone.
-  if (!facebookItems.length) return 'no_items';
+  if (!facebookItems.length && !forceFacebook) return 'no_items';
+  if (facebookRunInProgress) return 'skipped_in_progress';
+
+  // S-EXT-FB-ACCOUNT-UNAVAILABLE: while the account is flagged unavailable, make no Facebook
+  // attempt at all until the 24h re-probe is due (or the organizer forces one). Other platforms
+  // were already handled above, so a paused Facebook never holds up their removals.
+  if (!forceFacebook) {
+    if (await platformPausedForUnavailable('FACEBOOK')) return 'facebook_account_unavailable_paused';
+    if (await removalRunBackoffUntil('FACEBOOK')) return 'facebook_stalled_backoff';
+  }
+  // Flagged but the re-probe is due (or forced): stamp it so this probe counts as the one for the
+  // next 24h whatever happens to it.
+  if (await getPlatformUnavailable('FACEBOOK')) await stampPlatformProbe('FACEBOOK', Date.now());
 
   // fasRemovalQueue only ever carries removal-processing candidates -- sold-check candidates
   // are fetched fresh by fas-remove.js itself (getFacebookSoldChecks) once the tab loads there;
@@ -800,9 +985,9 @@ async function checkPendingRemovals() {
     ...(soldCheckCount > 0 ? { fasLastSoldCheckActionAt: Date.now() } : {})
   });
 
-  if (fasAutoRemoveMode === 'silent') {
+  if (fasAutoRemoveMode === 'silent' || forceFacebook) {
     await openSilentRemovalTab();
-    return 'silent_removal_started:' + facebookItems.length + '_soldchecks:' + soldCheckCount;
+    return (forceFacebook ? 'facebook_retry_started:' : 'silent_removal_started:') + facebookItems.length + '_soldchecks:' + soldCheckCount;
   }
 
   // 'notify' -- Chrome notification; clicking it opens the removal page in an active tab
@@ -986,6 +1171,8 @@ async function checkAutoListQueue() {
   for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
     const items = queues[platform];
     if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
+    // S-EXT-FB-ACCOUNT-UNAVAILABLE: never queue auto-posts for an unavailable account.
+    if (await getPlatformUnavailable(platform)) { outcomes.push(platform + ':account_unavailable'); continue; }
     const cfg = FAS_AUTOLIST_QUEUE_CFG[platform];
     const readKeys = [cfg.queue, cfg.index];
     if (cfg.autoPublish) readKeys.push(cfg.autoPublish);
@@ -1126,6 +1313,10 @@ async function autoRenewDueItems(dueItems) {
   }
 
   let started = 0;
+  // S-EXT-FB-ACCOUNT-UNAVAILABLE: no Facebook repost or native renew while the account is
+  // flagged unavailable -- the removal flow owns the (24h) re-probe.
+  const facebookUnavailable = !!(await getPlatformUnavailable('FACEBOOK'));
+  if (facebookUnavailable) { fbQueue.length = 0; fbRenewQueue.length = 0; }
   if (fbQueue.length && !(await hasActiveQueue('FACEBOOK'))) {
     await chrome.storage.local.set({ fasQueue: fbQueue, fasIndex: 0, fasAutoPublish: true, fasQueueSetAt: Date.now() });
     chrome.tabs.create({ url: CFG.FB_CREATE_URL, active: false });
@@ -1305,7 +1496,16 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 chrome.notifications.onClicked.addListener((notifId) => {
   if (notifId === 'fasPendingRemovals') {
     chrome.notifications.clear(notifId);
-    chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true });
+    // S-EXT-FB-ACCOUNT-UNAVAILABLE: remember this tab so a redirect to a checkpoint/login page
+    // is recognised as "account unavailable" (see the onUpdated listener near handleFacebookUnavailable).
+    chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true }, (tab) => {
+      void chrome.runtime.lastError;
+      if (tab && tab.id != null) chrome.storage.local.set({ fasFacebookProbeTabId: tab.id });
+    });
+    return;
+  }
+  if (notifId === 'fasFacebookUnavailable') {
+    chrome.notifications.clear(notifId);
     return;
   }
   // S-EXT-CROSS-PLATFORM-AUTOREMOVE: 'fasPendingRemovals_POSHMARK' etc. -- see
@@ -2202,12 +2402,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const queue = st[cfg.queueKey] || [];
           sendResponse({ ok: true, item: queue[next] || null, index: next, total: queue.length });
         }
+      } else if (msg.type === 'facebookAccountUnavailable') {
+        // S-EXT-FB-ACCOUNT-UNAVAILABLE: fas-remove.js saw a login wall / "can't use Marketplace" /
+        // suspended-account page on you/selling itself (no redirect for onUpdated to catch).
+        await handleFacebookUnavailable(msg.reason || 'page_signal', (sender && sender.tab && sender.tab.url) || null,
+          (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null);
+        sendResponse({ ok: true });
+      } else if (msg.type === 'facebookAccountHealthy') {
+        // fas-remove.js loaded a normal you/selling page -- access works, so lift any pause.
+        const wasFlagged = await clearPlatformUnavailable('FACEBOOK');
+        await clearStalledRemovalRuns('FACEBOOK');
+        sendResponse({ ok: true, cleared: wasFlagged });
+      } else if (msg.type === 'getPlatformAccountState') {
+        // Popup status banner.
+        sendResponse({ ok: true, unavailable: await getPlatformUnavailableMap(), reprobeMs: FAS_UNAVAILABLE_REPROBE_MS });
+      } else if (msg.type === 'retryFacebookAccess') {
+        // Popup "Retry Facebook": skip the 24h wait and any stall backoff, probe immediately.
+        await clearStalledRemovalRuns('FACEBOOK');
+        const outcome = await checkPendingRemovals({ forceFacebook: true }).catch((e) => 'error:' + String((e && e.message) || e));
+        sendResponse({ ok: true, outcome });
       } else if (msg.type === 'removalQueueDoneFor') {
         // Mirrors the Facebook-only 'removalQueueDone' handler below, parameterized by platform --
         // restores the organizer's previous tab and closes the auto-opened removal tab (silent
         // mode only; no-ops harmlessly in notify mode, same as the Facebook version, since notify
         // mode never sets a tracked tab id).
-        if (FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform]) await finishSilentCrossPlatformRemoval(msg.platform);
+        if (FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform]) {
+          await clearStalledRemovalRuns(msg.platform);
+          await finishSilentCrossPlatformRemoval(msg.platform);
+        }
         sendResponse({ ok: true });
       } else if (msg.type === 'crossPlatformRemovalDeleted') {
         // Sent fire-and-forget by a content script the instant its final delete-confirm click
@@ -2221,6 +2443,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // crossPlatformRemovalSkipped / crossPlatformRemovalAttemptFailed: repeated skip and
         // attempt reports are meaningful there (they drive the retry cap) and must keep flowing.
         if (await removalReportIsDuplicate(msg.platform, msg.itemId)) { sendResponse({ ok: true, deduped: true }); return; }
+        await clearStalledRemovalRuns(msg.platform);
         const removed = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: { platform: msg.platform } });
         await clearRemovalAttempt(msg.platform, msg.itemId);
@@ -2231,6 +2454,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // Reported to the backend so it can stop re-serving it, then the queue moves on -- a
         // permanently unmatchable item must never block the rest of the platform's backlog.
         const tabId = (sender && sender.tab && sender.tab.id) || null;
+        await clearStalledRemovalRuns(msg.platform);
         // 2026-09-04: `platform` now sent -- without it the backend files every skip under the
         // schema default (FACEBOOK), so Poshmark's skips counted against Facebook's budget and
         // per-platform skip counting in getPendingRemovals was meaningless.
@@ -2244,6 +2468,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // advance the queue -- the next poll retries the same item -- until FAS_REMOVAL_MAX_ATTEMPTS
         // is reached, at which point it is treated as permanent so it cannot wedge the queue.
         const tabId = (sender && sender.tab && sender.tab.id) || null;
+        // The content script reached the page and reported, so this is NOT a stalled run; the
+        // per-item attempt cap below handles it.
+        await clearStalledRemovalRuns(msg.platform);
         const attempts = await bumpRemovalAttempt(msg.platform, msg.itemId);
         if (attempts >= FAS_REMOVAL_MAX_ATTEMPTS) {
           await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
@@ -2260,6 +2487,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // set one before this fix) -- see extensionController.ts markItemRemoved's own comment for
         // why an unset platform silently corrupted per-platform LISTED tracking for any non-
         // Facebook caller.
+        await clearStalledRemovalRuns(msg.platform || 'FACEBOOK');
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: { platform: msg.platform || 'FACEBOOK' } }));
       } else if (msg.type === 'markItemRemovalSkipped') {
@@ -2269,6 +2497,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // 2026-09-04: msg.platform threaded through, defaulting to 'FACEBOOK' -- fas-remove.js
         // sends none today, so its behaviour is byte-for-byte unchanged, while a future caller
         // can scope its skip to the right platform.
+        await clearStalledRemovalRuns(msg.platform || 'FACEBOOK');
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
           { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform || 'FACEBOOK' } }));
       } else if (msg.type === 'getFacebookSoldChecks') {
@@ -2310,6 +2539,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'removalQueueDone') {
         // fas-remove.js finished the queue -- restore the organizer's tab + close the auto-opened
         // silent-mode removal tab. No-op in notify mode (no fasRemovalTabId tracked there).
+        await clearStalledRemovalRuns('FACEBOOK');
         await finishSilentRemoval();
         sendResponse({ ok: true });
       } else if (msg.type === 'refreshRemovalAlarm') {

@@ -71,7 +71,40 @@ function send(msg) { return new Promise((res) => chrome.runtime.sendMessage(msg,
 
 function setStatus(html) { const s = $('status'); s.hidden = false; s.innerHTML = html; }
 
+// S-EXT-FB-ACCOUNT-UNAVAILABLE (2026-09-23): background.js pauses every Facebook attempt once it
+// sees a suspended / checkpointed / logged-out account (fasPlatformUnavailable in storage). Shown
+// before anything else loads so the organizer sees it even when signed out of FindA.Sale.
+const FB_UNAVAILABLE_TEXT = 'Facebook account unavailable, Facebook removals paused. Remove sold Facebook listings manually or restore access.';
+let fbAccountUnavailable = null;
+async function renderFacebookAccountBanner() {
+  const el = $('fbUnavailableBanner');
+  if (!el) return;
+  const r = await send({ type: 'getPlatformAccountState' });
+  fbAccountUnavailable = (r && r.ok && r.unavailable && r.unavailable.FACEBOOK) || null;
+  if (!fbAccountUnavailable) { el.hidden = true; el.innerHTML = ''; return; }
+  const since = fbAccountUnavailable.since ? new Date(fbAccountUnavailable.since).toLocaleString() : 'recently';
+  el.innerHTML = '<div><b>' + esc(FB_UNAVAILABLE_TEXT) + '</b></div>' +
+    '<div class="dim">Paused since ' + esc(since) + '. FindA.Sale checks Facebook again once a day.</div>' +
+    '<button type="button" class="linkbtn" id="retryFacebookBtn">Retry Facebook now</button>' +
+    '<div class="dim" id="retryFacebookResult"></div>';
+  el.hidden = false;
+  $('retryFacebookBtn').onclick = async () => {
+    const btn = $('retryFacebookBtn');
+    btn.disabled = true;
+    $('retryFacebookResult').textContent = 'Opening Facebook to check your account…';
+    const res = await send({ type: 'retryFacebookAccess' });
+    const outcome = (res && res.outcome) || 'no response';
+    $('retryFacebookResult').textContent = outcome === 'off'
+      ? 'Keep listings in sync is Off, so nothing was checked.'
+      : outcome.indexOf('skipped_in_progress') !== -1
+        ? 'A Facebook check is already running. Try again in a few minutes.'
+        : 'Checking now. This notice clears on its own once Facebook loads normally.';
+    btn.disabled = false;
+  };
+}
+
 async function load() {
+  renderFacebookAccountBanner(); // fire-and-forget, never blocks the item list
   setStatus('Loading your FindA.Sale inventory…');
   const r = await send({ type: 'getItems' });
   if (!r) { setStatus('Something went wrong. Please reopen the extension.'); return; }
@@ -595,6 +628,12 @@ async function startQueue() {
   // platform (e.g. selected before "Show all items" was toggled off again) could still queue an
   // item its own tab was supposed to hide.
   const ch = currentChannel();
+  // S-EXT-FB-ACCOUNT-UNAVAILABLE: don't open Facebook's posting page for an account Facebook has
+  // locked. The banner's Retry button re-checks and lifts this once access is back.
+  if (ch === 'facebook' && fbAccountUnavailable) {
+    await renderFacebookAccountBanner();
+    if (fbAccountUnavailable) return;
+  }
   const queue = ITEMS.filter((it) => selected.has(it.id))
     .filter((it) => !(ch === 'facebook' && it.facebookRestricted === true))
     .filter((it) => !isIneligibleOnCurrentChannel(it))

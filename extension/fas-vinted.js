@@ -2347,16 +2347,35 @@
     const m = /^\/member\/(\d+)/.exec(location.pathname);
     return m ? m[1] : null;
   }
+  // BUG FIX 2026-09-23 (S-EXT-VINTED-TITLE-MISS): a single non-200 on ANY page (Vinted rate-limits
+  // bursts with 429, and this read can overlap the sold-check / id-capture wardrobe reads on the
+  // same /member page) used to discard the whole API read. The resolver then fell back to profile
+  // cards, which only ever render the first 20 wardrobe items (fact A), so a listing on page 2 of a
+  // 33-item wardrobe was reported as "Could not find a Vinted listing titled exactly ..." and
+  // permanently skipped even though it was live. Transient failures (network error, 429, 5xx) are
+  // now retried twice with a pause; `why` also names the page so a failure is diagnosable.
+  async function vintRemFetchWardrobePage(url) {
+    let lastWhy = 'http_none';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await sleep(1500 * attempt + Math.floor(Math.random() * 1000));
+      let res;
+      try {
+        res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
+      } catch (e) { lastWhy = 'fetch_error'; continue; }
+      if (res && res.ok) return { res };
+      lastWhy = 'http_' + (res ? res.status : 'none');
+      if (!res || !(res.status === 429 || res.status >= 500)) break;
+    }
+    return { why: lastWhy };
+  }
   async function vintRemFetchWardrobeMatchIds(wanted, memberId) {
     const ids = new Set();
     for (let page = 1; page <= VINT_REM_API_MAX_PAGES; page++) {
       const url = location.origin + '/api/v2/wardrobe/' + encodeURIComponent(memberId) +
         '/items?page=' + page + '&per_page=' + VINT_REM_API_PER_PAGE;
-      let res;
-      try {
-        res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
-      } catch (e) { return { ok: false, why: 'fetch_error' }; }
-      if (!res || !res.ok) return { ok: false, why: 'http_' + (res ? res.status : 'none') };
+      const got = await vintRemFetchWardrobePage(url);
+      if (!got.res) return { ok: false, why: got.why + '_page_' + page };
+      const res = got.res;
       let data;
       try { data = await res.json(); } catch (e) { return { ok: false, why: 'non_json' }; }
       const items = data && Array.isArray(data.items) ? data.items : null;
@@ -2448,12 +2467,16 @@
         ? ('ok, ' + api.ids.size + ' exact match(es), complete=' + api.complete)
         : ('unusable (' + (api && api.why) + ') -- falling back to profile cards'));
     }
+    // Why the API read could not settle the question (null when it fully read the wardrobe).
+    const apiWhy = !memberId ? 'no_member_id_in_url'
+      : !(api && api.ok) ? ((api && api.why) || 'unknown')
+      : (api.complete ? null : 'page_cap_hit');
     if (api && api.ok) {
-      if (api.ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
+      if (api.ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title', apiComplete: !!api.complete, apiWhy };
       if (api.ids.size === 1) {
         if (api.complete) return { id: api.ids.values().next().value, reason: null, source: 'api' };
         console.log('[FAS Vinted] removal: one API match but the wardrobe read hit the page cap -- a duplicate title could exist further on; refusing.');
-        return { id: null, reason: 'no_confident_listing_match' };
+        return { id: null, reason: 'wardrobe_read_incomplete', apiComplete: false, apiWhy };
       }
     }
     // Fallback: profile cards. Poll (250ms, up to ~8s) for cards to exist before concluding anything.
@@ -2462,10 +2485,14 @@
     const ids = vintRemCardMatchIds(wanted);
     if (api && api.ok) api.ids.forEach((id) => ids.add(id));
     if (ids.size === 1) return { id: ids.values().next().value, reason: null };
-    if (ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title' };
+    if (ids.size > 1) return { id: null, reason: 'ambiguous_duplicate_title', apiComplete: !!(api && api.ok && api.complete), apiWhy };
     // apiComplete (2026-09-23): lets the caller tell "the wardrobe API fully read this member's
     // listings and none matched" apart from "the API was unusable and only cards were scanned".
-    return { id: null, reason: 'no_confident_listing_match', apiComplete: !!(api && api.ok && api.complete) };
+    // S-EXT-VINTED-TITLE-MISS: only a COMPLETE API read may conclude "not listed". A card scan sees
+    // at most the first 20 listings, so without a complete read the answer is
+    // 'wardrobe_read_incomplete' (transient, retried), never a permanent no-match.
+    if (!(api && api.ok && api.complete)) return { id: null, reason: 'wardrobe_read_incomplete', apiComplete: false, apiWhy };
+    return { id: null, reason: 'no_confident_listing_match', apiComplete: true, apiWhy };
   }
 
   // The listing id chosen on the profile page is handed to the detail-page load through
@@ -2833,21 +2860,34 @@
         // API fully read it -- clearing there forced a racy click-rediscovery on the next load
         // ("Could not find your Vinted profile/listings page"). Only clear when the API read was
         // unusable/incomplete or this page is not the cached profile.
-        if (match.reason !== 'ambiguous_duplicate_title') {
-          const cachedProfile = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
-          const cm = /\/member\/(\d+)/.exec(String(cachedProfile || ''));
-          const hereMember = vintRemMemberIdFromLocation();
-          const demonstrablyOwn = !!(match.apiComplete && cm && hereMember && cm[1] === hereMember);
-          if (!demonstrablyOwn) vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
+        // S-EXT-VINTED-TITLE-MISS (2026-09-23): the cache is now kept whenever this page IS the
+        // cached own profile, whether or not the API read completed. Clearing it after a failed
+        // read (the old `match.apiComplete &&` condition) turned one flaky read into a chain of
+        // 'no_own_profile_url' failures: the next loads started on the homepage, where the
+        // account-menu click-discovery fails (DB: item cmtd1b7s1002hh09orfa4r4ov, three
+        // 'delete_unconfirmed_after_3_attempts: no_own_profile_url' rows on 2026-09-23).
+        const cachedProfile = await vintRemStorageGet(VINTED_OWN_PROFILE_URL_STORAGE_KEY);
+        const cm = /\/member\/(\d+)/.exec(String(cachedProfile || ''));
+        const hereMember = vintRemMemberIdFromLocation();
+        if (cm && hereMember && cm[1] !== hereMember) vintRemStorageSet(VINTED_OWN_PROFILE_URL_STORAGE_KEY, null);
+        const reasonText = match.reason + (match.apiWhy ? ', ' + match.apiWhy : '');
+        const reasonNote = '<div style="margin-top:6px;font-size:11px;opacity:.8">Reason: ' + escapeHtml(reasonText) + '</div>';
+        if (match.reason === 'wardrobe_read_incomplete') {
+          // TRANSIENT: the wardrobe could not be read in full, so "not listed" was never shown.
+          // Background retries (FAS_REMOVAL_MAX_ATTEMPTS, then the backend cooldown).
+          overlayWarn('Could not read your full list of Vinted listings to find "' + escapeHtml(item.title) + '", so nothing was deleted. FindA.Sale will try again later.' + reasonNote + button('fas-vin-close', 'Close', false));
+          closeBtnHandler();
+          vintRemSignalBackground('crossPlatformRemovalAttemptFailed', item, reasonText);
+          return;
         }
         overlayWarn((match.reason === 'ambiguous_duplicate_title'
           ? 'More than one of your Vinted listings is titled "' + escapeHtml(item.title) + '" -- nothing was deleted because the right one cannot be told apart safely. Please delete it yourself.'
-          : 'Could not find a Vinted listing titled exactly "' + escapeHtml(item.title) + '" on your profile -- nothing was deleted. Please delete it yourself, then use "Mark removed" if the extension offers it.') + button('fas-vin-close', 'Close', false));
+          : 'Could not find a Vinted listing titled exactly "' + escapeHtml(item.title) + '" on your profile -- nothing was deleted. Please delete it yourself, then use "Mark removed" if the extension offers it.') + reasonNote + button('fas-vin-close', 'Close', false));
         closeBtnHandler();
         // PERMANENT failure -- zero or ambiguous title match after a real look at the page. The
         // background reports the skip so the backend stops re-serving it, then advances and
         // continues: an unmatchable item must never wedge the rest of the platform's backlog.
-        vintRemSignalBackground('crossPlatformRemovalSkipped', item, match.reason);
+        vintRemSignalBackground('crossPlatformRemovalSkipped', item, reasonText);
         return;
       }
       // Go straight to the one matched listing by its numeric id; the detail-page load re-checks
@@ -3162,6 +3202,7 @@
   }
 
   async function vintSoldMaybeCheck() {
+    if (vintRemRunning) return; // a removal run owns this tab's wardrobe reads; a later load checks
     try {
       const last = Number(await vintRemStorageGet(VINT_SOLD_LAST_CHECK_KEY)) || 0;
       if (Date.now() - last < VINT_SOLD_CHECK_INTERVAL_MS) return;
@@ -3221,10 +3262,14 @@
     } finally { vintCapBusy = false; }
   }
 
+  // S-EXT-VINTED-TITLE-MISS: set while this tab is running a removal, so the sold-check's own
+  // full wardrobe read (vintSoldMaybeCheck) does not overlap the removal lookup's read.
+  let vintRemRunning = false;
   async function maybeRunVintedRemoval() {
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'VINTED' }); } catch (e) { return false; }
     if (!queued || !queued.ok || !queued.item) return false;
+    vintRemRunning = true;
     try {
       await runVintedRemovalQueue(queued.item, queued.index, queued.total);
     } catch (e) {

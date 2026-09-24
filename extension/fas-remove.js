@@ -508,6 +508,56 @@
     }
   }
 
+  // ---- Account-unavailable detection (2026-09-23, S-EXT-FB-ACCOUNT-UNAVAILABLE) ----
+  // A suspended, checkpointed or logged-out account can render a login wall or a "you can't use
+  // Marketplace" page right on this you/selling URL. Without this check the removal flow below
+  // found no card, reported a skip for every queued item, and the whole thing repeated forever.
+  // background.js separately catches the redirect case (/checkpoint/, /login, /disabled/), where
+  // this script never runs at all. Conservative, exact-phrase signals only; anything else is
+  // treated as a normal page.
+  const FAS_FB_UNAVAILABLE_PHRASES = [
+    "you can't use marketplace",
+    "you can't buy or sell on facebook",
+    "marketplace isn't available to you",
+    "marketplace is not available to you",
+    "you're restricted from buying and selling",
+    "your account has been disabled",
+    "your account has been suspended",
+    "we suspended your account",
+  ];
+  // Text only a working "Your listings" page shows (card controls / sold-state markers).
+  const FAS_FB_HEALTHY_PHRASES = ['mark as sold', 'mark as available', 'renew listing', 'relist this item', 'view order', 'mark out of stock'];
+  function fbFoldedPageText() {
+    try {
+      return String((document.body && document.body.innerText) || '').slice(0, 30000)
+        .replace(/[\u2018\u2019\u02bc]/g, "'").replace(/\s+/g, ' ').toLowerCase();
+    } catch (e) { return ''; }
+  }
+  function detectFacebookAccountUnavailable() {
+    const path = location.pathname || '';
+    if (/^\/(checkpoint|disabled)(\/|$)/i.test(path)) return 'checkpoint';
+    if (/^\/login/i.test(path)) return 'login_wall';
+    if (document.querySelector('input[name="pass"][type="password"], form[action*="/login"] input[type="password"]')) return 'login_wall';
+    const t = fbFoldedPageText();
+    for (const phrase of FAS_FB_UNAVAILABLE_PHRASES) {
+      if (t.indexOf(phrase) !== -1) return 'marketplace_unavailable: ' + phrase;
+    }
+    return null;
+  }
+  // Polls until the page shows either an unavailable signal ({ bad }) or a working-page marker
+  // ({ ok }); { unknown } on timeout (an empty sold-filter view has no markers -- proceed as usual).
+  async function waitForFacebookAccountState(timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const bad = detectFacebookAccountUnavailable();
+      if (bad) return { bad };
+      const t = fbFoldedPageText();
+      if (FAS_FB_HEALTHY_PHRASES.some((p) => t.indexOf(p) !== -1)) return { ok: true };
+      if (Date.now() >= deadline) return { unknown: true };
+      await sleep(300);
+    }
+  }
+
   async function start() {
     // (2026-08-05 restructure) The removal-queue flow below used to return immediately when
     // nothing was queued for removal -- the common case -- which meant the sold-detection scan,
@@ -526,6 +576,19 @@
     // contains items already SOLD there -- mutually exclusive sets, so scanning first can never
     // interfere with (or be stale for) the removal pass that follows.
     await sleep(600); // let the listings grid render before searching for cards
+    // S-EXT-FB-ACCOUNT-UNAVAILABLE: stop here, before any sold-scan / removal / renewal, when the
+    // account cannot use Marketplace. background.js pauses every Facebook attempt and closes this
+    // tab in silent mode; the popup shows the same message.
+    const account = await waitForFacebookAccountState(5000);
+    if (account.bad) {
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px">Facebook account unavailable, Facebook removals paused. ' +
+        'Remove sold Facebook listings manually or restore access.</div>');
+      try { await chrome.runtime.sendMessage({ type: 'facebookAccountUnavailable', reason: account.bad }); } catch (e) {}
+      return;
+    }
+    if (account.ok) {
+      try { await chrome.runtime.sendMessage({ type: 'facebookAccountHealthy' }); } catch (e) {}
+    }
     // (2026-08-09 restructure, ADR-100 -13) Sold-detection now runs against Facebook's own
     // OUT_OF_STOCK status-filter view (SOLD_STATUS_FILTER_URL above) instead of the full
     // unfiltered "Your listings" grid -- confirmed live that this filtered view exists, loads
