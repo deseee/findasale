@@ -680,6 +680,27 @@ const EditItemPage = () => {
   // -- see discogsListingConnector.ts). Organizer opt-in per push, defaults off (matches
   // Discogs's own API default).
   const [discogsAllowOffers, setDiscogsAllowOffers] = useState(false);
+  // BUG FIX 2026-09-24 (Patrick live report: the Discogs matching/listing UI was showing up
+  // while editing a clothing item -- Discogs is a music/vinyl-records marketplace, so this makes
+  // no sense for non-music categories). Confirmed live: this section (and the live
+  // GET /discogs/items/:id/match call it triggers below) was gated ONLY on discogsConnected, with
+  // NO category-eligibility concept at all -- the exact same bug class Reverb had before its own
+  // 2026-09-02 fix (see REVERB_ELIGIBLE_CATEGORY below), and grepping discogsListingConnector.ts
+  // confirmed the backend match/push path has no category gate either (it's a live,
+  // title-based Discogs catalog search that will just return "no match" for a non-music item --
+  // it never actively BLOCKS one). marketplaceEligibilityRules.ts's own header comment already
+  // reserved a spot for a Discogs rule ("Reserved for future work -- Etsy/Discogs connectors")
+  // that was never filled in. Same source of truth as Reverb's gate: item.category is populated
+  // from cloudAIService's EBAY_L1_CATEGORIES classification (packages/backend/src/config/
+  // ebayCategories.ts), which lists 'Music' as its own exact L1 bucket (separate from 'Musical
+  // Instruments & Gear', which is Reverb's -- records/CDs/tapes are not instruments). Same
+  // colon-delimited-deep-path handling as reverbCategoryEligible above (e.g.
+  // "Music:Vinyl Records:Rock") since formData.category can carry a full path, not just the bare
+  // L1 name.
+  const DISCOGS_ELIGIBLE_CATEGORY = 'Music';
+  const discogsCategoryEligible =
+    (formData.category || '').trim().replace(/&amp;/gi, '&').split(':')[0].trim().toLowerCase() ===
+    DISCOGS_ELIGIBLE_CATEGORY.toLowerCase();
   // ADR-132 (2026-09-23): the stored release match replaces the old /eligibility check. It is
   // fetched even when a listing already exists, because it also reports whether that listing
   // sits on a different release (listing.releaseMismatch). DiscogsMatchPanel writes fresh
@@ -696,7 +717,10 @@ const EditItemPage = () => {
       const response = await api.get(`/discogs/items/${id}/match`);
       return (response.data as { match: DiscogsMatchView }).match;
     },
-    enabled: discogsConnected && !!id,
+    // BUG FIX 2026-09-24: don't fire the live Discogs catalog search at all for a category
+    // Discogs can never sell (see discogsCategoryEligible comment above) -- wasted API call and
+    // the reason the panel below was rendering a confusing "no match" state on clothing items.
+    enabled: discogsConnected && discogsCategoryEligible && !!id,
     retry: false,
   });
 
@@ -2667,10 +2691,22 @@ const EditItemPage = () => {
               </div>
             )}
 
-            {/* Discogs Push Section (2026-08-27) -- gated entirely on connection status per
-                UX spec: if not connected, render nothing at all (avoids clutter on the ~95%
-                of items/organizers this never applies to). */}
-            {discogsConnected && (
+            {/* Discogs Push Section (2026-08-27, category gate added 2026-09-24) -- gated on
+                connection status AND discogsCategoryEligible (see that constant's comment above).
+                Not connected: render nothing (avoids clutter on the ~95% of items/organizers this
+                never applies to). Connected but not a Music-category item: render a short
+                explanation only -- no match panel, no push buttons, no live Discogs API call
+                (mirrors the Reverb section's ineligible-category block just below). */}
+            {discogsConnected && !discogsCategoryEligible && (
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
+                <p className="text-sm text-warm-600 dark:text-gray-400">
+                  Discogs is for music media (vinyl records, CDs, tapes) only. This item&apos;s category
+                  {formData.category ? ` ("${formData.category}")` : ''} isn&apos;t eligible.
+                </p>
+              </div>
+            )}
+            {discogsConnected && discogsCategoryEligible && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
                 {/* 2026-09-03: Discogs's own "Allow offers" toggle (real, documented allow_offers

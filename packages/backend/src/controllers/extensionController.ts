@@ -963,6 +963,32 @@ export const MAX_REMOVAL_SKIP_ATTEMPTS = 3;
 // of waiting until tomorrow.
 const RETRY_COOLDOWN_MS = 60 * 60 * 1000; // 1h between retries once past the fast-fail cap
 
+// HARD STOP (2026-09-24, Patrick live report -- item cmt3ak88q01lea4xvvj0zh0ax, "XLR Male to
+// 3.5mm Mini Jack Right Angle Audio Cable": 33 MERCARI REMOVE/SKIPPED rows over ~33h, every one
+// status=SKIPPED lastErrorMessage="no_confident_listing_match" remoteListingId=null, retried
+// roughly hourly forever by the S1179 cooldown above with no cap). Root cause: Mercari (unlike
+// Vinted, see POST /extension/items/:id/remote-listing-id below) has NO id-capture mechanism at
+// all -- fas-mercari.js's removal flow is title-match-only (findMercariListingLinkByTitle), so
+// once title matching can't confidently find the listing, remoteListingId stays null forever and
+// no future automated attempt can do any better than the last one. S1179 deliberately rejected a
+// permanent one-way dead-letter (its own items were later-fixable by a client-side matching fix),
+// so that decaying-cooldown-forever behavior above is UNCHANGED here for the general case. This
+// adds a SECOND, higher threshold -- same shape as ADR-128's TERMINAL_AFTER_ATTEMPTS
+// (markdownPricePropagationService.ts) -- scoped narrowly to the one combination that structurally
+// can never resolve on its own: no remoteListingId has EVER been captured for this item+platform's
+// live listing (checked below via latestByItemPlatform) AND the skip count has passed this many
+// attempts. A transient failure (network hiccup, slow page load) never reaches a SKIPPED row at
+// all -- fas-*.js content scripts retry those in-page up to 3x as crossPlatformRemovalAttemptFailed
+// before ever reporting crossPlatformRemovalSkipped (see fas-mercari.js's runMercariRemovalQueue
+// comment: "crossPlatformRemovalSkipped -- PERMANENT failure" vs "crossPlatformRemovalAttemptFailed
+// -- TRANSIENT failure") -- so this only ever stops jobs that were already permanent-per-attempt
+// failures, never a job that could still succeed on its next try for a transient reason. A
+// platform that DOES later capture a remoteListingId (Vinted today; Mercari if a future dispatch
+// builds it the same way) is untouched by this cap -- remoteListingId being non-null routes it
+// around this check entirely, back to the normal cooldown-retry path above. Below
+// MAX_REMOVAL_SKIP_ATTEMPTS this never applies (existing fast-fail-then-cooldown owns 1..N-1).
+const REMOVAL_HARD_STOP_AFTER_ATTEMPTS = 10; // ~10 hourly cooldown retries past the fast-fail cap before giving up automated retry entirely
+
 export const getPendingRemovals = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
@@ -1057,6 +1083,17 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     const skipKey = itemId + ':' + platform;
     const skipCount = skipCountByItemPlatform.get(skipKey) || 0;
     if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
+    // HARD STOP (2026-09-24, see REMOVAL_HARD_STOP_AFTER_ATTEMPTS above): past this much higher
+    // threshold, stop offering a retry AT ALL when no remoteListingId has ever been captured for
+    // this item+platform's live listing -- blind title-matching has had every reasonable chance
+    // and a platform with no id-capture mechanism cannot do any better on attempt 11 than it did
+    // on attempt 10. Still surfaced forever in needsManualReview below (skipCount >=
+    // MAX_REMOVAL_SKIP_ATTEMPTS keeps flagging it) -- this only stops the automated retry loop,
+    // it does not hide the item from the organizer/admin.
+    if (skipCount >= REMOVAL_HARD_STOP_AFTER_ATTEMPTS) {
+      const liveJob = latestByItemPlatform.get(skipKey);
+      if (!liveJob || !liveJob.remoteListingId) return false;
+    }
     // S1179: past the fast-fail cap, only retry again once the cooldown since the last
     // recorded skip has elapsed -- covers items that were dead-lettered before this fix
     // shipped (their lastAttemptAt is already well past the cooldown, so they're eligible
