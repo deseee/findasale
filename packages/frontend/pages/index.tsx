@@ -18,6 +18,7 @@ const SaleOfTheDayCard = dynamic(() => import('../components/SaleOfTheDayCard'),
 import EmptyState from '../components/EmptyState';
 import { useToast } from '../components/ToastContext';
 import { useAuth } from '../components/AuthContext';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface Sale {
   id: string;
@@ -676,7 +677,7 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.finda.sale';
 
   try {
-    const res = await fetch(`${BACKEND_URL}/api/feed?limit=12&status=upcoming`);
+    const res = await serverFetch(`${BACKEND_URL}/api/feed?limit=12&status=upcoming`);
     const data = res.ok ? await res.json() : null;
     return {
       props: { initialSalesData: data },

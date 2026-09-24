@@ -986,7 +986,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                     'url': `https://finda.sale/sales/${initialData.id}`,
                     'priceCurrency': 'USD',
                     'validFrom': initialData.startDate,
-                    'availability': 'https://schema.org/InStock',
+                    // Ported from the removed client-side duplicate (Task: dedupe Event
+                    // JSON-LD, 2026-09-24) -- an ENDED sale's offers should read SoldOut,
+                    // not a blanket InStock regardless of sale status.
+                    'availability': initialData.status?.toUpperCase() === 'ENDED' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
                     'lowPrice': (() => { const ps = (initialData.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.min(...ps)) : '0'; })(),
                     'highPrice': (() => { const ps = (initialData.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.max(...ps)) : '0'; })(),
                     'offerCount': initialData.items.length || 0
@@ -1138,18 +1141,6 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     return null;
   }
 
-  // GSC Events fix (2026-09-22): same shared builders as the SSR path above.
-  const csrEventPlace = buildEventPlace({
-    placeName: sale.title,
-    address: sale.address,
-    city: sale.city,
-    state: sale.state,
-    zip: sale.zip,
-  });
-  const csrEventOrganizer = buildEventOrganizer(
-    sale.organizer ? { id: sale.organizer.id, businessName: sale.organizer.businessName } : null
-  );
-
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       {ogHead ? (
@@ -1192,90 +1183,14 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         </Head>
       )}
 
-      {/* Event schema.org + Breadcrumb JSON-LD */}
-      {sale && (
-        <Head>
-          {/* An Event with no usable location is invalid for Google: skip it (Store is fine). */}
-          {(sale.isOngoing || csrEventPlace) && (
-          <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: jsonLdSafe({
-              '@context': 'https://schema.org',
-              // Permanent storefronts emit Store (LocalBusiness) instead of a dated Event.
-              '@type': sale.isOngoing ? 'Store' : 'Event',
-              'name': sale.title,
-              'description': sale.description || `${sale.title} in ${sale.city}, ${sale.state}. Browse items, dates, and details on FindA.Sale.`,
-              'startDate': sale.startDate,
-              ...(sale.isOngoing ? {} : {
-                'endDate': sale.endDate,
-                'eventStatus': saleEventStatus(sale.status),
-                'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
-              }),
-              ...(csrEventPlace ? { 'location': csrEventPlace } : {}),
-              ...(csrEventOrganizer ? { 'organizer': csrEventOrganizer } : {}),
-              ...(sale.organizer && sale.organizer.businessName ? {
-                'performer': {
-                  '@type': 'PerformingGroup',
-                  'name': sale.organizer.businessName,
-                }
-              } : {}),
-              'url': `https://finda.sale/sales/${sale.id}`,
-              'image': (sale.photoUrls && sale.photoUrls[0]) || generateSaleOGImage({
-                cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq',
-                saleTitle: sale.title,
-                location: sale.city && sale.state ? `${sale.city}, ${sale.state}` : undefined,
-              }),
-              ...(sale.items ? {
-                'offers': {
-                  '@type': 'AggregateOffer',
-                  'url': `https://finda.sale/sales/${sale.id}`,
-                  'priceCurrency': 'USD',
-                  'validFrom': sale.startDate,
-                  'availability': sale.status?.toUpperCase() === 'ENDED' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
-                  'lowPrice': (() => { const ps = (sale.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.min(...ps)) : '0'; })(),
-                  'highPrice': (() => { const ps = (sale.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.max(...ps)) : '0'; })(),
-                  'offerCount': (sale as any)._count?.items || sale.items.length || 0
-                }
-              } : {}),
-              'speakable': {
-                '@type': 'SpeakableSpecification',
-                'cssSelector': ['h1', '.sale-description', '.sale-dates']
-              },
-              'paymentAccepted': ['CreditCard', 'Cash', 'PaymentService'],
-              // eventStatus is set once above via saleEventStatus(). ENDED used to be
-              // overridden to EventRescheduled here, which is wrong (the sale was not
-              // rescheduled) and invalid without previousStartDate. An ended sale stays
-              // EventScheduled with its past dates; 'offers' availability stays SoldOut.
-            })
-          }} />
-          )}
-          <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: jsonLdSafe({
-              '@context': 'https://schema.org',
-              '@type': 'BreadcrumbList',
-              'itemListElement': [
-                {
-                  '@type': 'ListItem',
-                  'position': 1,
-                  'name': 'Home',
-                  'item': 'https://finda.sale'
-                },
-                {
-                  '@type': 'ListItem',
-                  'position': 2,
-                  'name': 'Sales',
-                  'item': 'https://finda.sale/trending'
-                },
-                {
-                  '@type': 'ListItem',
-                  'position': 3,
-                  'name': sale.title,
-                  'item': `https://finda.sale/sales/${sale.id}`
-                }
-              ]
-            })
-          }} />
-        </Head>
-      )}
+      {/* Event schema.org + Breadcrumb JSON-LD: rendered ONLY server-side (see the
+          `initialData`-gated block near the top of this component, "Bug #432"). This
+          client-side duplicate (previously gated on `sale`, react-query client data)
+          was removed 2026-09-24 -- both blocks emitted identical Event + BreadcrumbList
+          JSON-LD, so once react-query's client fetch resolved post-hydration, the page
+          carried two <script type="application/ld+json"> tags for the same data. The
+          one meaningful difference (ENDED sales reporting SoldOut instead of a blanket
+          InStock) was ported into the server-rendered block above before this removal. */}
 
       {/* #439: Per-item Product schema: only for claimed sales with server-side items */}
       {initialData && initialData.isClaimed && initialData.items.length > 0 && (

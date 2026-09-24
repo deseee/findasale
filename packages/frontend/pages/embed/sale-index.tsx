@@ -2,6 +2,7 @@ import Head from 'next/head';
 import type { GetStaticProps } from 'next';
 import type { ReactElement } from 'react';
 import MetroTable, { MetroRow } from '../../components/sale-index/MetroTable';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface EmbedSaleIndexProps {
   generatedAt: string | null;
@@ -83,7 +84,7 @@ EmbedSaleIndex.getLayout = (page: ReactElement) => page;
 export const getStaticProps: GetStaticProps<EmbedSaleIndexProps> = async () => {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
   try {
-    const res = await fetch(`${apiBaseUrl}/index/metros`);
+    const res = await serverFetch(`${apiBaseUrl}/index/metros`);
     const data = await res.json();
     return {
       props: {

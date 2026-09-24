@@ -40,7 +40,7 @@ import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAtten
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { geocodeCityState } from '../services/geocodingService'; // ADR-091: radius-aware city pages
+import { geocodeCityStateWithStatus, type GeocodeCityStateResult } from '../services/geocodingService'; // ADR-091: radius-aware city pages
 import { requireTier } from '../middleware/requireTier'; // Feature #91: PRO tier gate
 import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404: OG Buyer count
 
@@ -199,17 +199,21 @@ function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number):
 }
 
 // Resolve a city-slug to a lat/lng centroid: persistent-cache hit, else geocode + persist.
-// Returns null if geocoding fails entirely (caller falls back to exact-match).
+// Returns geocoderStatus alongside the centroid so /by-city can tell a confirmed
+// nonexistent place (not_found) apart from a geocoder outage (error) -- both used
+// to collapse into the same `null` centroid, which is how a fake city slug like
+// "zzqqxx-mi" rendered a 200 (fell through to the exact-match fallback and simply
+// returned 0 sales, indistinguishable from a real city having 0 sales right now).
 async function resolveCityCoordinate(
   slug: string,
   cityName: string,
   stateCode: string
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<{ centroid: { lat: number; lng: number } | null; geocoderStatus: GeocodeCityStateResult['status'] }> {
   const cached = await prisma.cityCoordinate.findUnique({ where: { slug } });
-  if (cached) return { lat: cached.lat, lng: cached.lng };
+  if (cached) return { centroid: { lat: cached.lat, lng: cached.lng }, geocoderStatus: 'ok' };
 
-  const geocoded = await geocodeCityState(cityName, stateCode);
-  if (!geocoded) return null;
+  const { result: geocoded, status } = await geocodeCityStateWithStatus(cityName, stateCode);
+  if (!geocoded) return { centroid: null, geocoderStatus: status };
 
   try {
     await prisma.cityCoordinate.upsert({
@@ -234,7 +238,7 @@ async function resolveCityCoordinate(
     console.error('[sales/by-city] CityCoordinate persist error (non-fatal):', err);
   }
 
-  return { lat: geocoded.lat, lng: geocoded.lng };
+  return { centroid: { lat: geocoded.lat, lng: geocoded.lng }, geocoderStatus: 'ok' };
 }
 
 router.get('/by-city/:citySlug', async (req, res) => {
@@ -273,7 +277,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
       'Chicago': ['Chicago City'],
     };
 
-    const centroid = await resolveCityCoordinate(citySlug, cityName, stateCode);
+    const { centroid, geocoderStatus } = await resolveCityCoordinate(citySlug, cityName, stateCode);
 
     // Base "active" condition, same convention as /sales/city-slugs's activeRows query.
     const activeDateClause = { OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }] };
@@ -455,6 +459,13 @@ router.get('/by-city/:citySlug', async (req, res) => {
       activeByType,
       activeCount: Object.values(activeByType).reduce((a, b) => a + b, 0),
       matchMode: usedRadiusMatch ? 'radius' : 'exact-fallback',
+      // 'not_found'  -- geocoder confirmed this slug isn't a real place (or the
+      //                 state/province code isn't recognized at all).
+      // 'error'      -- the geocoder call itself failed/timed out; unknown either way.
+      // 'ok'         -- geocoder succeeded (or a cached centroid already existed).
+      // Frontend 404s ONLY on 'not_found', never on 'error' (see companies-deindex
+      // fix pattern) or 'ok' (even with 0 sales -- the place is real, just quiet).
+      geocoderStatus,
     });
   } catch (err) {
     console.error('[sales/by-city] error:', err);

@@ -5,6 +5,7 @@ import type { GetStaticProps } from 'next';
 import MetroTable, { MetroRow } from '../components/sale-index/MetroTable';
 import EmbedSnippetBox from '../components/sale-index/EmbedSnippetBox';
 import { generateSaleOGImage } from '../lib/ogImage';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface SaleIndexProps {
   generatedAt: string | null;
@@ -192,7 +193,7 @@ export default function SaleIndexPage({
 export const getStaticProps: GetStaticProps<SaleIndexProps> = async () => {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
   try {
-    const res = await fetch(`${apiBaseUrl}/index/metros`);
+    const res = await serverFetch(`${apiBaseUrl}/index/metros`);
     const data = await res.json();
     return {
       props: {

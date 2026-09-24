@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { GetServerSideProps } from 'next';
 import { GRAND_RAPIDS_NEIGHBORHOODS } from './index';
 import { getSaleImageUrl } from '../../lib/imageUtils';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface NeighborhoodSale {
   id: string;
@@ -226,7 +227,7 @@ export const getServerSideProps: GetServerSideProps = async ({ params, res }) =>
 
   try {
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
-    const response = await fetch(`${apiBase}/sales/neighborhood/${slug}`);
+    const response = await serverFetch(`${apiBase}/sales/neighborhood/${slug}`);
 
     if (!response.ok) throw new Error('API error');
     const data = await response.json();

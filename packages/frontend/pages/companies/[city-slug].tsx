@@ -363,38 +363,68 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const getStaticProps: GetStaticProps<CompaniesCityPageProps> = async ({ params }) => {
   const citySlug = params?.['city-slug'] as string;
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 
+  // #companies-deindex-risk fix (2026-09-24): a backend failure/timeout must
+  // NEVER produce notFound here -- Next.js caches a notFound ISR result for
+  // the full revalidate window (24h), turning a transient backend blip into
+  // a day of this page 404ing to Google. Only a backend response that
+  // affirmatively says "this isn't a real city" (structurally invalid slug,
+  // or a clean 0-qualifying-companies result) returns notFound. Anything
+  // else (fetch threw, backend 5xx, bad JSON) throws instead -- Next's
+  // documented ISR behavior for a thrown error during background
+  // regeneration is to keep serving the last successfully generated page
+  // rather than replacing it with a 404.
+  let res: Response;
   try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const res = await fetch(`${apiBaseUrl}/companies/by-city/${encodeURIComponent(citySlug)}`, {
+    res = await fetch(`${apiBaseUrl}/companies/by-city/${encodeURIComponent(citySlug)}`, {
       headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) },
     });
-
-    if (!res.ok) {
-      return { notFound: true, revalidate: 86400 };
-    }
-
-    const data = await res.json();
-    const companies: CompanyListing[] = data.companies ?? [];
-
-    // Thin-page gate: only render cities with 3 or more qualifying companies.
-    // notFound WITH revalidate, so a city that gains companies appears within a day.
-    if (companies.length < MIN_COMPANIES_FOR_PAGE) {
-      return { notFound: true, revalidate: 86400 };
-    }
-
-    return {
-      props: {
-        citySlug,
-        cityName: data.city,
-        cityState: data.state,
-        companies,
-        totalCount: companies.length,
-      },
-      revalidate: 86400, // ISR: 24 hours
-    };
   } catch (err) {
-    console.error(`[companies/[city-slug]] getStaticProps fetch error for ${citySlug}:`, err);
-    return { notFound: true, revalidate: 3600 };
+    console.error(`[companies/[city-slug]] getStaticProps fetch threw for ${citySlug}:`, err);
+    throw err;
   }
+
+  // Backend confirms this is a structurally invalid slug -- a genuine
+  // not-found, not a transient failure (see companyDirectoryController's
+  // CITY_SLUG_PATTERN 400 response).
+  if (res.status === 400) {
+    return { notFound: true, revalidate: 86400 };
+  }
+
+  if (!res.ok) {
+    // Any other non-2xx (5xx etc.) is a backend failure, not evidence the
+    // city doesn't exist -- throw so ISR keeps the last good page instead of
+    // 404ing for the next 24h.
+    throw new Error(`[companies/[city-slug]] backend returned ${res.status} for ${citySlug}`);
+  }
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch (err) {
+    console.error(`[companies/[city-slug]] getStaticProps JSON parse failed for ${citySlug}:`, err);
+    throw err;
+  }
+
+  const companies: CompanyListing[] = data.companies ?? [];
+
+  // Thin-page gate: only render cities with 3 or more qualifying companies.
+  // This IS a legitimate not-found -- the backend responded successfully and
+  // confirmed there isn't enough data for a page yet. notFound WITH
+  // revalidate, so a city that gains companies appears within a day.
+  if (companies.length < MIN_COMPANIES_FOR_PAGE) {
+    return { notFound: true, revalidate: 86400 };
+  }
+
+  return {
+    props: {
+      citySlug,
+      cityName: data.city,
+      cityState: data.state,
+      companies,
+      totalCount: companies.length,
+    },
+    revalidate: 86400, // ISR: 24 hours
+  };
 };

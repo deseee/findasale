@@ -221,8 +221,10 @@ export async function geocodeAddress(
  */
 
 // Full names as Nominatim reports them in `address.state`, keyed by the two-letter
-// code that appears in a city slug. Used only to reject mismatched results -- an
-// unknown code simply skips the state check rather than failing the lookup.
+// code that appears in a city slug. Used to reject mismatched results. An unknown
+// code is treated as not_found up front by geocodeCityStateInternal (see below) --
+// it no longer reaches cityResultMatchesRegion at all, closing the gap where an
+// unrecognized code used to skip the state check entirely.
 const US_STATE_NAMES: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
   CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia',
@@ -284,11 +286,46 @@ function cityResultMatchesRegion(
   return true;
 }
 
-export async function geocodeCityState(city: string, state: string): Promise<GeocodedResult | null> {
-  if (!city || !state) return null;
+export interface GeocodeCityStateResult {
+  result: GeocodedResult | null;
+  /**
+   * ADR (2026-09-24, fake-city soft-404 fix, `/sales/by-city`):
+   * - 'ok'        — a match was found and accepted.
+   * - 'not_found' — the geocoder ran cleanly (no thrown/network error on
+   *                 every attempt made) and confirmed no matching place, OR
+   *                 the state/province code isn't one we recognize at all
+   *                 (see the up-front check below -- an unrecognized code
+   *                 used to SKIP the region check entirely and let a
+   *                 same-named city in the wrong/nonexistent region through).
+   * - 'error'     — at least one geocoder attempt threw (network error,
+   *                 timeout, non-2xx) and no match was found on any attempt
+   *                 -- we don't actually know whether the place exists.
+   * Callers that need to tell "definitely not a real place" apart from
+   * "the geocoder itself is having a bad day" (so they don't turn a
+   * transient outage into a false 404) should use this, not the plain
+   * `geocodeCityState` wrapper below, which only preserves the old
+   * `GeocodedResult | null` contract for its existing caller.
+   */
+  status: 'ok' | 'not_found' | 'error';
+}
+
+async function geocodeCityStateInternal(city: string, state: string): Promise<GeocodeCityStateResult> {
+  if (!city || !state) return { result: null, status: 'not_found' };
+
+  // An unrecognized state/province code can never be positively confirmed as
+  // a real region, so treat it as not_found up front rather than reaching
+  // Nominatim at all. Previously this case fell through to
+  // cityResultMatchesRegion(), which SKIPPED the region check entirely for an
+  // unknown `expected` name -- meaning a fake state code (e.g. "zz") could
+  // still accept a same-named city hit from an unrelated real region and
+  // radius-match against it. See cityResultMatchesRegion below.
+  if (!expectedRegionName(state)) {
+    return { result: null, status: 'not_found' };
+  }
 
   // Route the country filter off the state code rather than assuming US.
   const countryCode: 'us' | 'ca' = isNonUsState(state) ? 'ca' : 'us';
+  let sawError = false;
 
   await waitForNominatimSlot();
 
@@ -310,10 +347,13 @@ export async function geocodeCityState(city: string, state: string): Promise<Geo
     if (hit) {
       if (cityResultMatchesRegion(hit, state, countryCode)) {
         return {
-          lat: parseFloat(hit.lat),
-          lng: parseFloat(hit.lon),
-          displayName: hit.display_name,
-          source: 'nominatim-structured',
+          result: {
+            lat: parseFloat(hit.lat),
+            lng: parseFloat(hit.lon),
+            displayName: hit.display_name,
+            source: 'nominatim-structured',
+          },
+          status: 'ok',
         };
       }
       console.warn(
@@ -321,6 +361,7 @@ export async function geocodeCityState(city: string, state: string): Promise<Geo
       );
     }
   } catch (err) {
+    sawError = true;
     console.error('[geocodingService] geocodeCityState structured error:', err instanceof Error ? err.message : err);
   }
 
@@ -346,10 +387,13 @@ export async function geocodeCityState(city: string, state: string): Promise<Geo
     if (hit) {
       if (cityResultMatchesRegion(hit, state, countryCode)) {
         return {
-          lat: parseFloat(hit.lat),
-          lng: parseFloat(hit.lon),
-          displayName: hit.display_name,
-          source: 'nominatim-freetext',
+          result: {
+            lat: parseFloat(hit.lat),
+            lng: parseFloat(hit.lon),
+            displayName: hit.display_name,
+            source: 'nominatim-freetext',
+          },
+          status: 'ok',
         };
       }
       console.warn(
@@ -357,8 +401,29 @@ export async function geocodeCityState(city: string, state: string): Promise<Geo
       );
     }
   } catch (err) {
+    sawError = true;
     console.error('[geocodingService] geocodeCityState free-text error:', err instanceof Error ? err.message : err);
   }
 
-  return null;
+  return { result: null, status: sawError ? 'error' : 'not_found' };
+}
+
+/**
+ * Full result + status. Use this for any caller that needs to distinguish a
+ * confirmed-nonexistent place from a geocoder outage (e.g. `/sales/by-city`,
+ * which surfaces this as `geocoderStatus` so the frontend can 404 only on a
+ * genuine not_found, never on a transient error).
+ */
+export async function geocodeCityStateWithStatus(city: string, state: string): Promise<GeocodeCityStateResult> {
+  return geocodeCityStateInternal(city, state);
+}
+
+/**
+ * Backward-compatible wrapper preserving the original `GeocodedResult | null`
+ * contract (used by jobs/cityCoordinateBackfillJob.ts, which doesn't need the
+ * not_found/error distinction -- it just retries next run either way).
+ */
+export async function geocodeCityState(city: string, state: string): Promise<GeocodedResult | null> {
+  const { result } = await geocodeCityStateInternal(city, state);
+  return result;
 }

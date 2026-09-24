@@ -422,22 +422,39 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
   let allCategories: string[] = [];
   let activeByType: Record<string, number> = {};
 
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+  let res: Response;
   try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const res = await fetch(
+    res = await fetch(
       `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}`,
       { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
     );
-
-    if (res.ok) {
-      const data = await res.json();
-      sales = data.sales ?? [];
-      totalCount = data.totalCount ?? 0;
-      allCategories = data.categories ?? [];
-    }
   } catch (err) {
-    console.error(`[city/[slug]] getStaticProps fetch error for ${citySlug}:`, err);
+    // Fake-city soft-404 fix (2026-09-24): the fetch itself failing is a
+    // backend outage, not proof the city doesn't exist -- throw so ISR keeps
+    // serving the last good page instead of caching an empty page for 24h.
+    console.error(`[city/[slug]] getStaticProps fetch threw for ${citySlug}:`, err);
+    throw err;
   }
+
+  if (!res.ok) {
+    throw new Error(`[city/[slug]] by-city returned ${res.status} for ${citySlug}`);
+  }
+
+  const data = await res.json();
+
+  // Geocoder confirmed this slug isn't a real place -- a genuine not-found.
+  if (data.geocoderStatus === 'not_found') {
+    return { notFound: true, revalidate: 86400 };
+  }
+  // Geocoder call itself failed -- unknown either way, never 404 on this.
+  if (data.geocoderStatus === 'error') {
+    throw new Error(`[city/[slug]] geocoderStatus=error for ${citySlug}`);
+  }
+
+  sales = data.sales ?? [];
+  totalCount = data.totalCount ?? 0;
+  allCategories = data.categories ?? [];
 
   // Per-type active counts for this city (drives the live stats block and FAQs)
   try {

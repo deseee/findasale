@@ -426,36 +426,83 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
 
   const meta = CATEGORY_META[categorySlug];
 
-  let sales: SaleListing[] = [];
-  let totalCount = 0;
-  let allCategories: string[] = [];
-  let activeByType: Record<string, number> = {};
-
-  try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const apiRes = await fetch(
-      `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?category=${categorySlug}`,
-      { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
-    );
-
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      sales = data.sales ?? [];
-      totalCount = data.totalCount ?? 0;
-      allCategories = data.categories ?? [];
-      activeByType = data.activeByType ?? {};
-    }
-  } catch (err) {
-    console.error(`[internal-ssr/city-category] fetch error for ${citySlug}/${categorySlug}:`, err);
-  }
-
-  // Parse display city name + state from slug
+  // Parse display city name + state from slug (moved ahead of the fetch so
+  // the early-return failure branches below can still populate valid props).
   const parts = citySlug.split('-');
   const stateCode = parts[parts.length - 1].toUpperCase();
   const cityName = parts
     .slice(0, -1)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
+
+  let sales: SaleListing[] = [];
+  let totalCount = 0;
+  let allCategories: string[] = [];
+  let activeByType: Record<string, number> = {};
+
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+
+  // Fake-city soft-404 fix / deindex-risk fix (2026-09-24): a backend
+  // failure/timeout, or a geocoder error, must never render as the
+  // unconditional 24h-cacheable 200/404 set above -- override with a 503 +
+  // no-store. Only geocoderStatus === 'not_found' 404s.
+  let apiRes: Response;
+  try {
+    apiRes = await fetch(
+      `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?category=${categorySlug}`,
+      { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
+    );
+  } catch (err) {
+    console.error(`[internal-ssr/city-category] fetch threw for ${citySlug}/${categorySlug}:`, err);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return {
+      props: {
+        citySlug, categorySlug, cityName, cityState: stateCode,
+        categoryLabel: meta.label, categoryPlural: meta.plural,
+        sales: [], totalCount: 0, allCategories: [], activeByType: {},
+        stats: computeSaleStats([]),
+      },
+    };
+  }
+
+  if (!apiRes.ok) {
+    console.error(`[internal-ssr/city-category] by-city returned ${apiRes.status} for ${citySlug}/${categorySlug}`);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return {
+      props: {
+        citySlug, categorySlug, cityName, cityState: stateCode,
+        categoryLabel: meta.label, categoryPlural: meta.plural,
+        sales: [], totalCount: 0, allCategories: [], activeByType: {},
+        stats: computeSaleStats([]),
+      },
+    };
+  }
+
+  const data = await apiRes.json();
+
+  if (data.geocoderStatus === 'not_found') {
+    return { notFound: true };
+  }
+  if (data.geocoderStatus === 'error') {
+    console.error(`[internal-ssr/city-category] geocoderStatus=error for ${citySlug}/${categorySlug}`);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return {
+      props: {
+        citySlug, categorySlug, cityName, cityState: stateCode,
+        categoryLabel: meta.label, categoryPlural: meta.plural,
+        sales: [], totalCount: 0, allCategories: [], activeByType: {},
+        stats: computeSaleStats([]),
+      },
+    };
+  }
+
+  sales = data.sales ?? [];
+  totalCount = data.totalCount ?? 0;
+  allCategories = data.categories ?? [];
+  activeByType = data.activeByType ?? {};
 
   const stats = computeSaleStats(sales);
 

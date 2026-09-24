@@ -371,33 +371,55 @@ export const getStaticProps: GetStaticProps<ThisWeekendPageProps> = async ({ par
   let allSales: SaleListing[] = [];
   let activeCount = 0;
 
-  try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    // Try date-filtered fetch first; fall back to all sales if endpoint doesn't support it
-    const url = `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?startAfter=${friday.toISOString()}&endBefore=${sunday.toISOString()}`;
-    const res = await fetch(url, { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } });
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+  // Try date-filtered fetch first; fall back to all sales if endpoint doesn't support it.
+  const url = `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?startAfter=${friday.toISOString()}&endBefore=${sunday.toISOString()}`;
 
-    if (res.ok) {
-      const data = await res.json();
-      allSales = data.sales ?? [];
-      // City-wide ACTIVE (any-type) count -- same field the sitemap gate reads
-      // via /sales/by-city's activeCount. Used only for isGatedThin above.
-      activeCount = Number(data.activeCount) || 0;
-    } else {
-      // Endpoint may not support date params — fetch all and filter in getStaticProps
-      const fallbackRes = await fetch(
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } });
+  } catch (err) {
+    // Fake-city soft-404 fix (2026-09-24): the fetch itself failing is a
+    // backend outage, not proof the city doesn't exist -- throw so ISR keeps
+    // serving the last good page instead of caching an empty page for 24h.
+    console.error(`[this-weekend/[city]] fetch threw for ${citySlug}:`, err);
+    throw err;
+  }
+
+  let data: any;
+  if (res.ok) {
+    data = await res.json();
+  } else {
+    // Endpoint may not support date params — fetch all and filter below.
+    let fallbackRes: Response;
+    try {
+      fallbackRes = await fetch(
         `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}`,
         { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
       );
-      if (fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json();
-        allSales = fallbackData.sales ?? [];
-        activeCount = Number(fallbackData.activeCount) || 0;
-      }
+    } catch (err) {
+      console.error(`[this-weekend/[city]] fallback fetch threw for ${citySlug}:`, err);
+      throw err;
     }
-  } catch (err) {
-    console.error(`[this-weekend/[city]] fetch error for ${citySlug}:`, err);
+    if (!fallbackRes.ok) {
+      throw new Error(`[this-weekend/[city]] by-city returned ${fallbackRes.status} (both attempts) for ${citySlug}`);
+    }
+    data = await fallbackRes.json();
   }
+
+  // Geocoder confirmed this slug isn't a real place -- a genuine not-found.
+  if (data.geocoderStatus === 'not_found') {
+    return { notFound: true, revalidate: 86400 };
+  }
+  // Geocoder call itself failed -- unknown either way, never 404 on this.
+  if (data.geocoderStatus === 'error') {
+    throw new Error(`[this-weekend/[city]] geocoderStatus=error for ${citySlug}`);
+  }
+
+  allSales = data.sales ?? [];
+  // City-wide ACTIVE (any-type) count -- same field the sitemap gate reads
+  // via /sales/by-city's activeCount. Used only for isGatedThin above.
+  activeCount = Number(data.activeCount) || 0;
 
   // Filter to sales that overlap the Friday–Sunday window
   const fridayMs = friday.getTime();

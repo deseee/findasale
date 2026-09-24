@@ -362,33 +362,84 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
   let allSales: SaleListing[] = [];
   let activeCount = 0;
 
-  try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    // Try date-filtered fetch first; fall back to all sales if endpoint doesn't support it
-    const url = `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?startAfter=${friday.toISOString()}&endBefore=${sunday.toISOString()}`;
-    const apiRes = await fetch(url, { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } });
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+  // Try date-filtered fetch first; fall back to all sales if endpoint doesn't support it.
+  const url = `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?startAfter=${friday.toISOString()}&endBefore=${sunday.toISOString()}`;
 
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      allSales = data.sales ?? [];
-      // City-wide ACTIVE (any-type) count -- same field the sitemap gate reads
-      // via /sales/by-city's activeCount. Used only for isGatedThin above.
-      activeCount = Number(data.activeCount) || 0;
-    } else {
-      // Endpoint may not support date params — fetch all and filter here
-      const fallbackRes = await fetch(
+  // Fake-city soft-404 fix / deindex-risk fix (2026-09-24): a backend
+  // failure/timeout, or a geocoder error, must never render as the
+  // unconditional 24h-cacheable 200/404 set above -- override with a 503 +
+  // no-store. Only geocoderStatus === 'not_found' 404s.
+  let apiRes: Response;
+  try {
+    apiRes = await fetch(url, { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } });
+  } catch (err) {
+    console.error(`[internal-ssr/this-weekend] fetch threw for ${citySlug}:`, err);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return { props: {
+        citySlug, cityName, cityState: stateCode,
+        sales: [], totalCount: 0,
+        weekendStart: friday.toISOString(), weekendEnd: sunday.toISOString(),
+        activeCount: 0,
+      } };
+  }
+
+  let data: any;
+  if (apiRes.ok) {
+    data = await apiRes.json();
+  } else {
+    // Endpoint may not support date params — fetch all and filter below.
+    let fallbackRes: Response;
+    try {
+      fallbackRes = await fetch(
         `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}`,
         { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
       );
-      if (fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json();
-        allSales = fallbackData.sales ?? [];
-        activeCount = Number(fallbackData.activeCount) || 0;
-      }
+    } catch (err) {
+      console.error(`[internal-ssr/this-weekend] fallback fetch threw for ${citySlug}:`, err);
+      res.statusCode = 503;
+      res.setHeader('Cache-Control', 'no-store');
+      return { props: {
+        citySlug, cityName, cityState: stateCode,
+        sales: [], totalCount: 0,
+        weekendStart: friday.toISOString(), weekendEnd: sunday.toISOString(),
+        activeCount: 0,
+      } };
     }
-  } catch (err) {
-    console.error(`[internal-ssr/this-weekend] fetch error for ${citySlug}:`, err);
+    if (!fallbackRes.ok) {
+      console.error(`[internal-ssr/this-weekend] by-city returned ${fallbackRes.status} (both attempts) for ${citySlug}`);
+      res.statusCode = 503;
+      res.setHeader('Cache-Control', 'no-store');
+      return { props: {
+        citySlug, cityName, cityState: stateCode,
+        sales: [], totalCount: 0,
+        weekendStart: friday.toISOString(), weekendEnd: sunday.toISOString(),
+        activeCount: 0,
+      } };
+    }
+    data = await fallbackRes.json();
   }
+
+  if (data.geocoderStatus === 'not_found') {
+    return { notFound: true };
+  }
+  if (data.geocoderStatus === 'error') {
+    console.error(`[internal-ssr/this-weekend] geocoderStatus=error for ${citySlug}`);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return { props: {
+        citySlug, cityName, cityState: stateCode,
+        sales: [], totalCount: 0,
+        weekendStart: friday.toISOString(), weekendEnd: sunday.toISOString(),
+        activeCount: 0,
+      } };
+  }
+
+  allSales = data.sales ?? [];
+  // City-wide ACTIVE (any-type) count -- same field the sitemap gate reads
+  // via /sales/by-city's activeCount. Used only for isGatedThin above.
+  activeCount = Number(data.activeCount) || 0;
 
   // Filter to sales that overlap the Friday–Sunday window
   const fridayMs = friday.getTime();

@@ -408,22 +408,49 @@ export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ pa
   let allCategories: string[] = [];
   let activeByType: Record<string, number> = {};
 
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+
+  // Fake-city soft-404 fix / deindex-risk fix (2026-09-24): a backend
+  // failure/timeout, or a geocoder error, must never render as the
+  // unconditional 24h-cacheable 200/404 set above -- override with a 503 +
+  // no-store so a transient blip is never CDN-cached as stale content or a
+  // false not-found. Only a backend response that affirmatively confirms
+  // this isn't a real place (geocoderStatus === 'not_found') 404s.
+  let apiRes: Response;
   try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const apiRes = await fetch(
+    apiRes = await fetch(
       `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}`,
       { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
     );
-
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      sales = data.sales ?? [];
-      totalCount = data.totalCount ?? 0;
-      allCategories = data.categories ?? [];
-    }
   } catch (err) {
-    console.error(`[internal-ssr/city/[slug]] getServerSideProps fetch error for ${citySlug}:`, err);
+    console.error(`[internal-ssr/city/[slug]] getServerSideProps fetch threw for ${citySlug}:`, err);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]) } };
   }
+
+  if (!apiRes.ok) {
+    console.error(`[internal-ssr/city/[slug]] by-city returned ${apiRes.status} for ${citySlug}`);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]) } };
+  }
+
+  const data = await apiRes.json();
+
+  if (data.geocoderStatus === 'not_found') {
+    return { notFound: true };
+  }
+  if (data.geocoderStatus === 'error') {
+    console.error(`[internal-ssr/city/[slug]] geocoderStatus=error for ${citySlug}`);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return { props: { citySlug, cityName: '', cityState: '', sales: [], totalCount: 0, allCategories: [], activeByType: {}, stats: computeSaleStats([]) } };
+  }
+
+  sales = data.sales ?? [];
+  totalCount = data.totalCount ?? 0;
+  allCategories = data.categories ?? [];
 
   // Per-type active counts for this city (drives the live stats block and FAQs)
   try {

@@ -84,6 +84,9 @@ interface CompaniesCityPageProps {
   cityState: string;
   companies: CompanyListing[];
   totalCount: number;
+  // Set only on a backend failure/timeout (see getServerSideProps below) --
+  // never a real "no companies" or "unknown city" result.
+  backendError?: boolean;
 }
 
 export default function CompaniesCityPage({
@@ -92,7 +95,27 @@ export default function CompaniesCityPage({
   cityState,
   companies,
   totalCount,
+  backendError,
 }: CompaniesCityPageProps) {
+  // Backend failure/timeout -- served with HTTP 503 + no-store from
+  // getServerSideProps below. Minimal, honest, non-indexable state instead of
+  // the full page (which would otherwise render an empty city name and bad
+  // JSON-LD from placeholder data).
+  if (backendError) {
+    return (
+      <main className="min-h-screen bg-white dark:bg-slate-900 flex items-center justify-center px-4">
+        <div className="max-w-md text-center py-24">
+          <h1 className="text-2xl font-semibold text-warm-900 dark:text-warm-100 mb-3">
+            Temporarily unavailable
+          </h1>
+          <p className="text-warm-600 dark:text-warm-400">
+            We couldn't load company data for this page right now. Please try again shortly.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   const title = `${totalCount} Estate Sale & Liquidation Companies in ${cityName}, ${cityState} | FindA.Sale`;
   const description = `Compare ${totalCount} estate sale and liquidation companies serving ${cityName}, ${cityState}. See each company's listed sales, auctions, and recent activity before you hire.`;
   const canonicalUrl = `https://finda.sale/companies/${citySlug}`;
@@ -347,42 +370,75 @@ export default function CompaniesCityPage({
 
 export const getServerSideProps: GetServerSideProps<CompaniesCityPageProps> = async ({ params, res }) => {
   const citySlug = params?.['city-slug'] as string;
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 
-  // Long-tail city (not in the curated ISR top-N -- see middleware.ts). Served
-  // via SSR + CDN Cache-Control instead of ISR (ADR-vercel-isr-overage-2026-07-19
-  // Option B). Set unconditionally (before the fetch) so even a notFound
-  // response is CDN-cacheable, avoiding repeat backend hits for thin cities.
-  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
-
+  // #companies-deindex-risk fix (2026-09-24): a backend failure/timeout must
+  // NEVER produce notFound -- the old code set a 24h public Cache-Control
+  // header UNCONDITIONALLY before the fetch, so a transient backend blip got
+  // CDN-cached as a 404 for a full day. Cache-Control is now only set on the
+  // genuine-outcome paths (success / confirmed-unknown-city); a backend
+  // failure returns 503 with no-store instead, and never notFound.
+  let apiRes: Response;
   try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const apiRes = await fetch(`${apiBaseUrl}/companies/by-city/${encodeURIComponent(citySlug)}`, {
+    apiRes = await fetch(`${apiBaseUrl}/companies/by-city/${encodeURIComponent(citySlug)}`, {
       headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) },
     });
-
-    if (!apiRes.ok) {
-      return { notFound: true };
-    }
-
-    const data = await apiRes.json();
-    const companies: CompanyListing[] = data.companies ?? [];
-
-    // Thin-page gate: only render cities with 3 or more qualifying companies.
-    if (companies.length < MIN_COMPANIES_FOR_PAGE) {
-      return { notFound: true };
-    }
-
-    return {
-      props: {
-        citySlug,
-        cityName: data.city,
-        cityState: data.state,
-        companies,
-        totalCount: companies.length,
-      },
-    };
   } catch (err) {
-    console.error(`[internal-ssr/companies] getServerSideProps fetch error for ${citySlug}:`, err);
+    console.error(`[internal-ssr/companies] getServerSideProps fetch threw for ${citySlug}:`, err);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return {
+      props: { citySlug, cityName: '', cityState: '', companies: [], totalCount: 0, backendError: true },
+    };
+  }
+
+  // Backend confirms this is a structurally invalid slug -- a genuine
+  // not-found, not a transient failure.
+  if (apiRes.status === 400) {
+    res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
     return { notFound: true };
   }
+
+  if (!apiRes.ok) {
+    // Any other non-2xx (5xx etc.) is a backend failure, not evidence the
+    // city doesn't exist.
+    console.error(`[internal-ssr/companies] backend returned ${apiRes.status} for ${citySlug}`);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return {
+      props: { citySlug, cityName: '', cityState: '', companies: [], totalCount: 0, backendError: true },
+    };
+  }
+
+  let data: any;
+  try {
+    data = await apiRes.json();
+  } catch (err) {
+    console.error(`[internal-ssr/companies] JSON parse failed for ${citySlug}:`, err);
+    res.statusCode = 503;
+    res.setHeader('Cache-Control', 'no-store');
+    return {
+      props: { citySlug, cityName: '', cityState: '', companies: [], totalCount: 0, backendError: true },
+    };
+  }
+
+  const companies: CompanyListing[] = data.companies ?? [];
+
+  // Thin-page gate: only render cities with 3 or more qualifying companies.
+  // Backend responded successfully -- this is a legitimate not-found.
+  if (companies.length < MIN_COMPANIES_FOR_PAGE) {
+    res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
+    return { notFound: true };
+  }
+
+  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
+  return {
+    props: {
+      citySlug,
+      cityName: data.city,
+      cityState: data.state,
+      companies,
+      totalCount: companies.length,
+    },
+  };
 };

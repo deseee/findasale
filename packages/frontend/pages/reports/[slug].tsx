@@ -13,6 +13,7 @@ import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Link from 'next/link';
 import { GetServerSideProps, GetServerSidePropsContext } from 'next';
+import { serverFetch } from '@/lib/serverFetch';
 
 // ---------------------------------------------------------------------------
 // Types (local — no @findasale/shared import)
@@ -484,7 +485,7 @@ export const getServerSideProps: GetServerSideProps<PageProps> = async (
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
-    const res = await fetch(`${apiUrl}/reports/${year}/${month}`, {
+    const res = await serverFetch(`${apiUrl}/reports/${year}/${month}`, {
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });

@@ -10,6 +10,7 @@ import { useToast } from '../components/ToastContext';
 import { useHeatmapTiles } from '../hooks/useHeatmapTiles';
 import RouteBuilder from '../components/RouteBuilder';
 import type { HeatmapTile } from '../types/heatmap';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface Sale {
   id: string;
@@ -562,7 +563,7 @@ export async function getStaticProps() {
   let initialSales: Sale[] = [];
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const res = await fetch(
+    const res = await serverFetch(
       `${apiBaseUrl}/sales?limit=24&lat=${DEFAULT_LAT}&lng=${DEFAULT_LNG}&radius=100`,
       { headers: { 'Content-Type': 'application/json' } }
     );

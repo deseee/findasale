@@ -27,6 +27,7 @@
  */
 
 import type { GetServerSideProps } from 'next';
+import { serverFetch } from '@/lib/serverFetch';
 
 // SSR only ever talks to the Railway API directly (server-to-server, no cookie
 // concerns) — mirrors the same pattern documented in lib/api.ts.
@@ -48,7 +49,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 
   try {
-    const res = await fetch(`${RAILWAY_API}/items/${encodeURIComponent(firstItemId)}`);
+    const res = await serverFetch(`${RAILWAY_API}/items/${encodeURIComponent(firstItemId)}`);
     if (!res.ok) {
       return { redirect: { destination: '/', permanent: false } };
     }

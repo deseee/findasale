@@ -3,6 +3,7 @@ import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface ClearanceItem {
   id: string;
@@ -343,7 +344,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
     if (city) params.set('city', city);
     if (maxPrice) params.set('maxPrice', maxPrice);
 
-    const res = await fetch(`${apiBase}/clearance?${params.toString()}`);
+    const res = await serverFetch(`${apiBase}/clearance?${params.toString()}`);
     const data = res.ok ? await res.json() : { items: [], total: 0, page: 1 };
 
     // Fetch distinct cities from a second page-1 unlimited call for the dropdown

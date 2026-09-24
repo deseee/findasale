@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { GetStaticProps } from 'next';
 import { useAuth } from '../components/AuthContext';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface ShopperRank {
   rank: number;
@@ -321,9 +322,9 @@ export const getStaticProps: GetStaticProps<LeaderboardPageProps> = async () => 
 
   try {
     const [shoppersRes, organizersRes, scoutsRes] = await Promise.allSettled([
-      fetch(`${apiBase}/leaderboard/shoppers`),
-      fetch(`${apiBase}/leaderboard/organizers`),
-      fetch(`${apiBase}/leaderboard/scouts`),
+      serverFetch(`${apiBase}/leaderboard/shoppers`),
+      serverFetch(`${apiBase}/leaderboard/organizers`),
+      serverFetch(`${apiBase}/leaderboard/scouts`),
     ]);
 
     const shoppers: ShopperRank[] =

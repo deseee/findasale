@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
 import { SkeletonCard } from '../../components/SkeletonCards';
 import { getItemImageUrl } from '../../lib/imageUtils';
+import { serverFetch } from '@/lib/serverFetch';
 
 const CATEGORIES = [
   'furniture', 'clothing', 'electronics', 'books', 'antiques',
@@ -334,7 +335,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.INTERNAL_API_URL || 'http://localhost:4000/api';
-    const res = await fetch(`${apiBaseUrl}/search/categories/${category}`);
+    const res = await serverFetch(`${apiBaseUrl}/search/categories/${category}`);
 
     if (!res.ok) {
       return { notFound: true };

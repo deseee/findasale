@@ -10,6 +10,7 @@ import type { GetStaticProps } from 'next';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
+import { serverFetch } from '@/lib/serverFetch';
 
 const CATEGORY_ICONS: Record<string, string> = {
   // --- Generic / top-level fallbacks ---
@@ -690,7 +691,7 @@ export const getStaticProps: GetStaticProps<Props> = async () => {
       process.env.NEXT_PUBLIC_API_URL ||
       process.env.INTERNAL_API_URL ||
       'http://localhost:4000/api';
-    const res = await fetch(`${apiBaseUrl}/items/categories`);
+    const res = await serverFetch(`${apiBaseUrl}/items/categories`);
     if (!res.ok) throw new Error(`/items/categories returned ${res.status}`);
     const data = (await res.json()) as { categories: Record<string, number> };
     return {

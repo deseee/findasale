@@ -8,6 +8,7 @@ import SaleCard from '../components/SaleCard';
 import { SaleCardSkeleton } from '../components/SkeletonCards';
 import EmptyState from '../components/EmptyState';
 import { useAuth } from '../components/AuthContext';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface FeedSale {
   id: string;
@@ -178,7 +179,7 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
 export const getStaticProps: GetStaticProps<FeedPageProps> = async () => {
   try {
     const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
-    const response = await fetch(`${apiBase}/feed`);
+    const response = await serverFetch(`${apiBase}/feed`);
     if (!response.ok) {
       return { props: { initialSales: [] }, revalidate: 300 };
     }

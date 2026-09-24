@@ -40,6 +40,7 @@ import SoldItemBanner from '../../components/SoldItemBanner';
 import SimilarItemsGrid from '../../components/SimilarItemsGrid';
 import EbayCompTiles from '../../components/EbayCompTiles';
 import MessageComposeModal from '../../components/MessageComposeModal'; // ADR-097: item-scoped messaging entry point
+import { serverFetch } from '@/lib/serverFetch';
 
 interface Item {
   id: string;
@@ -1496,7 +1497,7 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     // 3s timeout: fail fast so Vercel function never hangs waiting for localhost
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${apiUrl}/items/${id}`, { signal: controller.signal });
+    const res = await serverFetch(`${apiUrl}/items/${id}`, { signal: controller.signal });
     clearTimeout(timeout);
 
     if (!res.ok) {

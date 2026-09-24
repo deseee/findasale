@@ -18,6 +18,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { GetStaticPropsContext, GetStaticPropsResult, GetStaticPathsResult } from 'next';
 import { isCloudinaryUrl } from '@/lib/imageUtils';
+import { serverFetch } from '@/lib/serverFetch';
 
 interface ItemCard {
   id: string;
@@ -233,7 +234,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
 export async function getStaticPaths(): Promise<GetStaticPathsResult> {
   try {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-    const response = await fetch(`${apiBase}/tags/popular`);
+    const response = await serverFetch(`${apiBase}/tags/popular`);
 
     if (!response.ok) {
       console.warn('Failed to fetch popular tags for static paths');
@@ -269,7 +270,7 @@ export async function getStaticProps(
 
   try {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-    const response = await fetch(`${apiBase}/tags/${encodeURIComponent(slug)}/items?page=1&limit=24`);
+    const response = await serverFetch(`${apiBase}/tags/${encodeURIComponent(slug)}/items?page=1&limit=24`);
 
     if (!response.ok) {
       return { notFound: true, revalidate: 3600 };
