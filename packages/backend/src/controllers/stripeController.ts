@@ -40,6 +40,7 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-09-23
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
@@ -597,6 +598,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     withdrawDiscogsListingIfExists(item.id).catch(err =>
                       console.error('[Discogs] Failed to withdraw listing:', err)
                     );
+                    withdrawReverbListingIfExists(item.id).catch(err =>
+                      console.error('[Reverb] Failed to withdraw listing:', err)
+                    );
 
                     // Fire-and-forget: end eBay listing if item was pushed there
                     endEbayListingIfExists(item.id).catch(err =>
@@ -911,6 +915,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             );
             withdrawDiscogsListingIfExists(bountySubmission.itemId).catch(err =>
               console.error('[bounty-webhook] Discogs withdraw failed:', err)
+            );
+            withdrawReverbListingIfExists(bountySubmission.itemId).catch(err =>
+              console.error('[bounty-webhook] Reverb withdraw failed:', err)
             );
             endEbayListingIfExists(bountySubmission.itemId).catch(err =>
               console.error('[bounty-webhook] eBay withdraw failed:', err)
@@ -1497,6 +1504,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             );
             withdrawDiscogsListingIfExists(paymentIntent.metadata.itemId).catch(err =>
               console.error('[Discogs] Failed to withdraw listing:', err)
+            );
+            withdrawReverbListingIfExists(paymentIntent.metadata.itemId).catch(err =>
+              console.error('[Reverb] Failed to withdraw listing:', err)
             );
             notifyFacebookExportedItemSold(paymentIntent.metadata.itemId).catch(err =>
               console.warn(`[FB Nudge] failed for item ${paymentIntent.metadata.itemId}:`, err.message)
@@ -2727,6 +2737,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
               ).catch(() => {});
               Promise.allSettled(
                 cartFullySoldOutIds.map((itemId: string) => withdrawDiscogsListingIfExists(itemId))
+              ).catch(() => {});
+              Promise.allSettled(
+                cartFullySoldOutIds.map((itemId: string) => withdrawReverbListingIfExists(itemId))
               ).catch(() => {});
               Promise.allSettled(
                 cartFullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))

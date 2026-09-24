@@ -101,7 +101,8 @@ function parseReverbError(status: number, rawBody: string): { message: string; f
 /**
  * Connect an organizer's Reverb account using a Personal Access Token they generated
  * themselves (Reverb My Profile -> API & Integrations -> Generate New Token, scopes:
- * public, read_listings, write_listings). Validates the token against GET /shop before
+ * public, read_listings, write_listings, plus read_orders for reverbSoldSyncCron's order poll --
+ * added 2026-09-23; tokens without it still list/end fine). Validates the token against GET /shop before
  * persisting — an invalid/revoked token 401s there rather than being silently stored.
  * Tokens do not expire per Reverb's own docs, so tokenExpiresAt/refreshToken stay null.
  */
@@ -562,4 +563,127 @@ export async function endOrDeleteReverbListing(
     throw new ReverbApiError(zeroResp.status, message, fieldErrors);
   }
   return { action: 'ended' };
+}
+
+/**
+ * Withdraw an item's Reverb listing when it goes SOLD via a non-Reverb channel (FindA.Sale POS /
+ * Stripe / cash / eBay / Discogs / Shopify / off-platform ...). Added 2026-09-23 -- mirrors
+ * withdrawDiscogsListingIfExists (discogsListingConnector.ts): re-queries the item, self-guards on
+ * reverbListingId actually being set (no-op if this item was never pushed to Reverb, which makes a
+ * repeat call idempotent), resolves the owning organizer's ACTIVE Reverb token via
+ * endOrDeleteReverbListing, and NEVER throws into the sale path. On a successful end/delete it
+ * clears Item.reverbListingId/reverbListedAt, the same clear-on-delete behavior as the manual
+ * organizer-triggered end in reverbMarketplaceController.ts. A sale that happened ON Reverb must
+ * NOT call this (reverbSoldSyncCron passes skipWithdraw ['REVERB'] to commitFacebookNativeSale).
+ */
+export async function withdrawReverbListingIfExists(itemId: string): Promise<void> {
+  try {
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        reverbListingId: true,
+        organizerId: true,
+        sale: { select: { organizerId: true } },
+      },
+    });
+
+    if (!item || !item.reverbListingId) {
+      // Never pushed to Reverb (or already withdrawn) -- nothing to do.
+      return;
+    }
+
+    const organizerId = item.organizerId ?? item.sale?.organizerId ?? null;
+    if (!organizerId) {
+      console.warn(`[Reverb] Could not resolve organizerId for item ${itemId} -- skipping withdraw`);
+      return;
+    }
+
+    const result = await endOrDeleteReverbListing(organizerId, item.reverbListingId);
+    console.log(`[Reverb] withdraw-on-SOLD: listing ${item.reverbListingId} ${result.action} for item ${itemId}`);
+
+    await prisma.item
+      .update({
+        where: { id: itemId },
+        data: { reverbListingId: null, reverbListedAt: null },
+      })
+      .catch((e) => {
+        console.error(`[Reverb] Failed to clear reverbListingId after withdraw-on-SOLD for item ${itemId}:`, e);
+      });
+  } catch (error: any) {
+    // Log but don't throw -- fire-and-forget, same posture as withdrawDiscogsListingIfExists.
+    console.error(`[Reverb] withdraw-on-SOLD failed for item ${itemId}:`, error?.message);
+  }
+}
+
+// ============================================================================
+// Seller orders (reverbSoldSyncCron, 2026-09-23)
+// ============================================================================
+
+export interface ReverbSellerOrder {
+  orderNumber: string;
+  status: string;
+  /** Reverb listing id the order is for (product_id; falls back to the _links.listing href). */
+  listingId: string;
+}
+
+/** Pure: normalize one raw order from GET /api/my/orders/selling/all. */
+export function normalizeReverbOrder(o: any): ReverbSellerOrder {
+  let listingId = o?.product_id != null ? String(o.product_id) : '';
+  if (!listingId) {
+    const href: string = o?._links?.listing?.href ?? '';
+    const m = /\/listings\/(\d+)/.exec(href);
+    if (m) listingId = m[1];
+  }
+  return {
+    orderNumber: String(o?.order_number ?? o?.id ?? ''),
+    status: String(o?.status ?? ''),
+    listingId,
+  };
+}
+
+/**
+ * Recent seller orders for an organizer (read-only GET). Shape per reverb-api.com/docs/retrieve-orders
+ * (fetched 2026-09-23, NOT yet confirmed against a live response): GET /api/my/orders/selling/all
+ * with updated_start_date (ISO8601), per_page, page -> { total, current_page, total_pages, orders:
+ * [{ order_number, status, product_id, _links: { listing: { href } } ... }] }. The token needs the
+ * read_orders scope. Returns null when the organizer has no ACTIVE Reverb connection.
+ */
+export async function fetchRecentReverbSellerOrders(
+  organizerId: string,
+  since: Date,
+  opts: { perPage?: number; maxPages?: number } = {},
+): Promise<ReverbSellerOrder[] | null> {
+  const account = await getActiveReverbAccount(organizerId);
+  if (!account) return null;
+  const accessToken = decryptAccessToken(account);
+  const perPage = Math.max(1, Math.min(50, opts.perPage ?? 50));
+  const maxPages = Math.max(1, opts.maxPages ?? 4);
+
+  const out: ReverbSellerOrder[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const qs = new URLSearchParams({
+      updated_start_date: since.toISOString(),
+      per_page: String(perPage),
+      page: String(page),
+    });
+    const resp = await fetch(`${REVERB_API_BASE}/my/orders/selling/all?${qs.toString()}`, {
+      headers: reverbHeaders(accessToken),
+    });
+    const text = await resp.text();
+    if (!resp.ok) {
+      const { message } = parseReverbError(resp.status, text);
+      throw new ReverbApiError(resp.status, message);
+    }
+    let body: any;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new ReverbApiError(502, 'Could not parse Reverb orders');
+    }
+    const orders: any[] = Array.isArray(body?.orders) ? body.orders : [];
+    for (const o of orders) out.push(normalizeReverbOrder(o));
+    const totalPages = Number(body?.total_pages ?? 1);
+    if (!orders.length || !Number.isFinite(totalPages) || page >= totalPages) break;
+  }
+  return out;
 }

@@ -8,6 +8,7 @@ import { assertBoothCartCheckoutAllowed, CheckoutGuardError } from '../services/
 import { endEbayListingIfExists } from './ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
@@ -1548,6 +1549,7 @@ async function finalizeCapturedLegs(
           endEbayListingIfExists(item.id).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
           markShopifyItemSold(item.id).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
           withdrawDiscogsListingIfExists(item.id).catch((err) => console.error('[Discogs] Failed to withdraw listing:', err));
+          withdrawReverbListingIfExists(item.id).catch((err) => console.error('[Reverb] Failed to withdraw listing:', err));
           notifyFacebookExportedItemSold(item.id).catch((err) =>
             console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
           );

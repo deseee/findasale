@@ -14,6 +14,7 @@ import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
@@ -1435,6 +1436,9 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             ).catch(() => {});
             Promise.allSettled(
               soldOutHolds.map((h) => withdrawDiscogsListingIfExists(h.item.id))
+            ).catch(() => {});
+            Promise.allSettled(
+              soldOutHolds.map((h) => withdrawReverbListingIfExists(h.item.id))
             ).catch(() => {});
             Promise.allSettled(
               soldOutHolds.map((h) => notifyFacebookExportedItemSold(h.item.id))

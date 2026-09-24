@@ -43,6 +43,7 @@ import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutG
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD, mirrors endEbayListingIfExists/markShopifyItemSold
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
 import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
 import { computeChannelStatusForItems, ChannelStatusItemInput, ExtensionPlatformsUsed, PublishedExtensionPlatformsByItemId } from '../services/itemChannelStatusService'; // Add Items collapsed-row multi-channel status (2026-09-14), see ADR-2026-09-14-add-items-multichannel-status-aggregation.md
@@ -2177,6 +2178,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       withdrawDiscogsListingIfExists(id).catch(err =>
         console.warn(`[Discogs] withdraw-on-SOLD failed for item ${id}:`, err.message)
       );
+      withdrawReverbListingIfExists(id).catch(err =>
+        console.warn(`[Reverb] withdraw-on-SOLD failed for item ${id}:`, err.message)
+      );
     }
 
     // P2-3: Invalidate command center cache after item update
@@ -2701,6 +2705,9 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     );
     withdrawDiscogsListingIfExists(id).catch((err: any) =>
       console.warn(`[Discogs] withdraw-on-SOLD (off-platform) failed for item ${id}:`, err.message)
+    );
+    withdrawReverbListingIfExists(id).catch((err: any) =>
+      console.warn(`[Reverb] withdraw-on-SOLD (off-platform) failed for item ${id}:`, err.message)
     );
 
     res.json({

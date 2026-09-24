@@ -43,6 +43,7 @@ import {
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -466,6 +467,9 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             );
             withdrawDiscogsListingIfExists(item.id).catch(err =>
               console.warn(`[Discogs] bulk SOLD withdraw failed for item ${item.id}:`, err.message)
+            );
+            withdrawReverbListingIfExists(item.id).catch(err =>
+              console.warn(`[Reverb] bulk SOLD withdraw failed for item ${item.id}:`, err.message)
             );
             notifyFacebookExportedItemSold(item.id).catch(err =>
               console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)

@@ -2491,7 +2491,7 @@ const OrganizerSettingsPage = () => {
                 <ol className="text-sm text-warm-600 dark:text-gray-400 mb-6 list-decimal list-inside space-y-1">
                   <li>On Reverb, go to <span className="font-medium">My Profile → API & Integrations</span></li>
                   <li>Click <span className="font-medium">Generate New Token</span></li>
-                  <li>Select the <span className="font-medium">public</span>, <span className="font-medium">read_listings</span>, and <span className="font-medium">write_listings</span> scopes</li>
+                  <li>Select the <span className="font-medium">public</span>, <span className="font-medium">read_listings</span>, <span className="font-medium">write_listings</span>, and <span className="font-medium">read_orders</span> scopes</li>
                   <li>Copy the token and paste it here. Reverb only shows it once</li>
                 </ol>
 

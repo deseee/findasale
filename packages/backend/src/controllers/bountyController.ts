@@ -32,6 +32,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { endEbayListingIfExists } from './ebayController';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 
@@ -1118,6 +1119,9 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
         );
         withdrawDiscogsListingIfExists(submission.itemId).catch(err =>
           console.error('[completeBountyPurchase][square] Discogs withdraw failed:', err)
+        );
+        withdrawReverbListingIfExists(submission.itemId).catch(err =>
+          console.error('[completeBountyPurchase][square] Reverb withdraw failed:', err)
         );
         endEbayListingIfExists(submission.itemId).catch(err =>
           console.error('[completeBountyPurchase][square] eBay withdraw failed:', err)

@@ -24,6 +24,7 @@ import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // S388: Tie
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
@@ -360,6 +361,9 @@ export async function processCashSaleCore(params: {
         );
         withdrawDiscogsListingIfExists(item.itemId).catch(err =>
           console.error('[Discogs] Failed to withdraw listing:', err)
+        );
+        withdrawReverbListingIfExists(item.itemId).catch(err =>
+          console.error('[Reverb] Failed to withdraw listing:', err)
         );
         notifyFacebookExportedItemSold(item.itemId).catch(err =>
           console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message)

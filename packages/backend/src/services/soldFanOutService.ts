@@ -4,7 +4,7 @@
  *
  * Same four fire-and-forget calls every other SOLD call site already makes inline (Stripe, POS,
  * cash, reservations, vendor-booth cart, holds, bounties, eBay cron, bulk + single item edit):
- * eBay withdraw, Shopify mark-sold, Discogs withdraw, Facebook nudge / REMOVE enqueue. Added for
+ * eBay withdraw, Shopify mark-sold, Discogs withdraw, Reverb withdraw (2026-09-23), Facebook nudge / REMOVE enqueue. Added for
  * the call sites that were missing it (Square single + cart payment, native auction close). The
  * extension-driven platforms (Facebook, Poshmark, Mercari, Craigslist, Vinted) need nothing here:
  * getPendingRemovals picks up any SOLD item with a still-POSTED job row.
@@ -15,6 +15,7 @@
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from './shopifyService';
 import { withdrawDiscogsListingIfExists } from './marketplace/discogsListingConnector';
+import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
 import { notifyFacebookExportedItemSold } from './facebookNudgeService';
 
 export function fanOutItemSoldWithdrawals(itemId: string, source: string): void {
@@ -26,6 +27,9 @@ export function fanOutItemSoldWithdrawals(itemId: string, source: string): void 
   );
   withdrawDiscogsListingIfExists(itemId).catch((err: any) =>
     console.warn(`[Discogs] withdraw-on-SOLD (${source}) failed for item ${itemId}:`, err?.message)
+  );
+  withdrawReverbListingIfExists(itemId).catch((err: any) =>
+    console.warn(`[Reverb] withdraw-on-SOLD (${source}) failed for item ${itemId}:`, err?.message)
   );
   notifyFacebookExportedItemSold(itemId).catch((err: any) =>
     console.warn(`[FB Nudge] (${source}) failed for item ${itemId}:`, err?.message)

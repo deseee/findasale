@@ -5,6 +5,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
+import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { createNotification } from '../lib/notificationService';
@@ -373,6 +374,7 @@ export async function recordPosPaymentLinkSale(
       Promise.allSettled(fullySoldOutIds.map((itemId) => endEbayListingIfExists(itemId))).catch(() => {});
       Promise.allSettled(fullySoldOutIds.map((itemId) => markShopifyItemSold(itemId))).catch(() => {});
       Promise.allSettled(fullySoldOutIds.map((itemId) => withdrawDiscogsListingIfExists(itemId))).catch(() => {});
+      Promise.allSettled(fullySoldOutIds.map((itemId) => withdrawReverbListingIfExists(itemId))).catch(() => {});
       Promise.allSettled(fullySoldOutIds.map((itemId) => notifyFacebookExportedItemSold(itemId))).catch(() => {});
     });
   }
