@@ -357,7 +357,7 @@ export const getServerSideProps: GetServerSideProps<CompaniesCityPageProps> = as
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
     const apiRes = await fetch(`${apiBaseUrl}/companies/by-city/${encodeURIComponent(citySlug)}`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) },
     });
 
     if (!apiRes.ok) {

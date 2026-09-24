@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
+import { isTrustedServerRequest } from '../middleware/rateLimitShared';
 import { prisma } from '../index';
 import { authenticate, AuthRequest, checkTierLapse, requireOrganizer } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
@@ -41,6 +42,10 @@ const publicDirectoryRateLimiter = rateLimit({
   message: { error: 'Too many requests. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
+  // 2026-09-24: exempt our own frontend's server-side page generation (Vercel ISR for
+  // pages/organizers/[id].tsx), which shares a few Vercel egress IPs across all crawler
+  // traffic -- see isTrustedServerRequest in middleware/rateLimitShared.ts.
+  skip: (req) => isTrustedServerRequest(req),
 });
 
 // Organizer profile validation schema

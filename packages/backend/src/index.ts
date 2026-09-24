@@ -59,7 +59,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { createRateLimitStore, resilientLimiter, isWhitelistedIP, createBurstAlerter, getVerifiedSessionUserId } from './middleware/rateLimitShared'; // rate-limit hardening (2026-08-27): Redis store/whitelist/burst-alert helpers extracted here so routes/auth.ts and middleware/rateLimiter.ts can reach them without a circular import back to this file. getVerifiedSessionUserId added 2026-09-05 -- see its definition for the globalLimiter cookie-session recognition fix.
+import { createRateLimitStore, resilientLimiter, isWhitelistedIP, isTrustedServerRequest, createBurstAlerter, getVerifiedSessionUserId } from './middleware/rateLimitShared'; // rate-limit hardening (2026-08-27): Redis store/whitelist/burst-alert helpers extracted here so routes/auth.ts and middleware/rateLimiter.ts can reach them without a circular import back to this file. getVerifiedSessionUserId added 2026-09-05 -- see its definition for the globalLimiter cookie-session recognition fix.
 import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
@@ -479,6 +479,8 @@ const globalLimiter = rateLimit({
     req.path.startsWith('/api/viewers') ||
     req.path === '/api/health/latency' ||
     isWhitelistedIP(req) ||
+    // 2026-09-24: our own frontend's server-side page generation (see isTrustedServerRequest).
+    isTrustedServerRequest(req) ||
     (req.method === 'GET' && detectCrawler((req.headers['user-agent'] as string) || '') !== null) ||
     (req.path === '/api/crawler-log' &&
       !!process.env.INTERNAL_SCRAPER_KEY &&

@@ -9,6 +9,7 @@
 
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import Head from 'next/head';
 import Link from 'next/link';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
@@ -79,36 +80,18 @@ export default function CityCategoryPage({
     name: `${categoryPlural} in ${cityName}, ${cityState}`,
     description,
     numberOfItems: sales.length,
-    itemListElement: sales.slice(0, 20).map((sale, idx) => ({
-      '@type': 'ListItem',
-      position: idx + 1,
-      item: {
-        '@type': 'Event',
-        name: sale.title,
-        url: `https://finda.sale/sales/${sale.id}`,
-        startDate: sale.startDate,
-        endDate: sale.endDate,
-        location: {
-          '@type': 'Place',
-          name: sale.organizer?.businessName ?? sale.title,
-          address: {
-            '@type': 'PostalAddress',
-            streetAddress: sale.address,
-            addressLocality: sale.city,
-            addressRegion: sale.state,
-            addressCountry: 'US',
-          },
-        },
-        ...(sale.photoUrl ? { image: sale.photoUrl } : {}),
-        organizer: sale.organizer
-          ? {
-              '@type': 'Organization',
-              name: sale.organizer.businessName,
-              url: `https://finda.sale/organizers/${sale.organizer.id}`,
-            }
-          : undefined,
-      },
-    })),
+    // Event nodes come from the shared builder so every Event carries a valid Place
+    // location and organizer (GSC Events report 2026-09-22). Listings with no usable
+    // location are skipped rather than emitted as invalid Events.
+    itemListElement: sales
+      .slice(0, 20)
+      .map((sale) => buildListingEvent(sale))
+      .filter((ev): ev is JsonLdNode => ev !== null)
+      .map((ev, idx) => ({
+        '@type': 'ListItem',
+        position: idx + 1,
+        item: ev,
+      })),
   };
 
   const breadcrumbJsonLd = {
@@ -449,7 +432,7 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
     const res = await fetch(
       `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?category=${categorySlug}`,
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
     );
 
     if (res.ok) {

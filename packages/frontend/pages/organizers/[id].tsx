@@ -934,7 +934,15 @@ export const getStaticProps: GetStaticProps<OrganizerPageProps> = async ({ param
   const timeout = setTimeout(() => controller.abort(), 3000);
   let res: Response;
   try {
-    res = await fetch(`${apiUrl}/organizers/${id}`, { signal: controller.signal });
+    // x-ssr-secret: identifies this server-to-server call to the backend so it is not
+    // counted against the anonymous per-IP rate limit shared by all of Vercel's egress
+    // IPs (a crawl burst was turning backend 429s into 500s for Googlebot, 2026-09-24).
+    // REVALIDATE_SECRET is server-only (no NEXT_PUBLIC_ prefix) and never reaches the browser.
+    const ssrSecret = process.env.REVALIDATE_SECRET;
+    res = await fetch(`${apiUrl}/organizers/${id}`, {
+      signal: controller.signal,
+      headers: ssrSecret ? { 'x-ssr-secret': ssrSecret } : undefined,
+    });
   } finally {
     clearTimeout(timeout);
   }

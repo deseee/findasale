@@ -24,6 +24,7 @@
 
 import { GetServerSideProps } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { buildListingEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -107,36 +108,18 @@ export default function ThisWeekendPage({
     name: `Sales This Weekend in ${cityName}, ${cityState}`,
     description,
     numberOfItems: sales.length,
-    itemListElement: sales.slice(0, 20).map((sale, idx) => ({
-      '@type': 'ListItem',
-      position: idx + 1,
-      item: {
-        '@type': 'Event',
-        name: sale.title,
-        url: `https://finda.sale/sales/${sale.id}`,
-        startDate: sale.startDate,
-        endDate: sale.endDate,
-        location: {
-          '@type': 'Place',
-          name: sale.organizer?.businessName ?? sale.title,
-          address: {
-            '@type': 'PostalAddress',
-            streetAddress: sale.address,
-            addressLocality: sale.city,
-            addressRegion: sale.state,
-            addressCountry: 'US',
-          },
-        },
-        ...(sale.photoUrl ? { image: sale.photoUrl } : {}),
-        organizer: sale.organizer
-          ? {
-              '@type': 'Organization',
-              name: sale.organizer.businessName,
-              url: `https://finda.sale/organizers/${sale.organizer.id}`,
-            }
-          : undefined,
-      },
-    })),
+    // Event nodes come from the shared builder so every Event carries a valid Place
+    // location and organizer (GSC Events report 2026-09-22). Listings with no usable
+    // location are skipped rather than emitted as invalid Events.
+    itemListElement: sales
+      .slice(0, 20)
+      .map((sale) => buildListingEvent(sale))
+      .filter((ev): ev is JsonLdNode => ev !== null)
+      .map((ev, idx) => ({
+        '@type': 'ListItem',
+        position: idx + 1,
+        item: ev,
+      })),
   };
 
   const breadcrumbJsonLd = {
@@ -378,7 +361,7 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
     // Try date-filtered fetch first; fall back to all sales if endpoint doesn't support it
     const url = `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}?startAfter=${friday.toISOString()}&endBefore=${sunday.toISOString()}`;
-    const apiRes = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+    const apiRes = await fetch(url, { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } });
 
     if (apiRes.ok) {
       const data = await apiRes.json();
@@ -390,7 +373,7 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
       // Endpoint may not support date params — fetch all and filter here
       const fallbackRes = await fetch(
         `${apiBaseUrl}/sales/by-city/${encodeURIComponent(citySlug)}`,
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) } }
       );
       if (fallbackRes.ok) {
         const fallbackData = await fallbackRes.json();

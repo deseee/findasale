@@ -341,7 +341,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const res = await fetch(`${apiBaseUrl}/companies/city-slugs`);
+    const res = await fetch(`${apiBaseUrl}/companies/city-slugs`, { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });
     if (res.ok) {
       const data = await res.json();
       const raw: any[] = data.slugs ?? [];
@@ -367,7 +367,7 @@ export const getStaticProps: GetStaticProps<CompaniesCityPageProps> = async ({ p
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
     const res = await fetch(`${apiBaseUrl}/companies/by-city/${encodeURIComponent(citySlug)}`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : {}) },
     });
 
     if (!res.ok) {

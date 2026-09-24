@@ -14,6 +14,7 @@
  */
 
 import * as Sentry from '@sentry/node';
+import crypto from 'crypto';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { RedisStore } from 'rate-limit-redis';
@@ -145,6 +146,29 @@ export const isWhitelistedIP = (req: express.Request): boolean => {
   if (RATE_LIMIT_WHITELIST.length === 0) return false;
   const clientIP = req.ip || req.socket?.remoteAddress || '';
   return RATE_LIMIT_WHITELIST.some((allowed) => clientIP === allowed);
+};
+
+// 2026-09-24 (GSC "Server error (5xx)" on finda.sale): our own frontend's server-side
+// page generation (Next.js getStaticProps/ISR on Vercel) calls this API from Vercel's
+// small, shared pool of serverless egress IPs with UA "node". Every crawler cache-MISS on
+// a public page becomes one of those calls, so a crawl burst exhausts the anonymous
+// per-IP budget (globalLimiter 500/15min, publicDirectoryRateLimiter 100/10min) and the
+// 429 surfaces to Googlebot as a 500 on /organizers/[id] (Railway logged
+// "[rateLimit] 429 GET /api/organizers/... ua=\"node\"" on 2026-09-23/24; Vercel logged
+// "GET /organizers/<id> returned 429" -> 500). A request that carries the frontend's
+// server-only REVALIDATE_SECRET in the x-ssr-secret header is our own server, not an
+// end user -- same trust boundary already used for /api/revalidate and
+// /api/internal/isr-log. This loosens RATE LIMITING ONLY; it grants no auth or data
+// access (the routes it is used on are already public).
+export const isTrustedServerRequest = (req: express.Request): boolean => {
+  const expected = process.env.REVALIDATE_SECRET;
+  if (!expected) return false;
+  const provided = req.headers['x-ssr-secret'];
+  if (typeof provided !== 'string' || provided.length === 0) return false;
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 };
 
 // --- Sustained-429-burst alerting (rate-limit hardening Item 3) ---

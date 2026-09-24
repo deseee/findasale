@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { buildEventPlace, buildEventOrganizer, buildSeriesSubEvent, JsonLdNode } from '@/lib/seo/eventJsonLd';
 import { logIsrWrite } from '@/lib/isrWriteLogger'; // ADR-2026-09-16: ISR regeneration logging
 import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Head from 'next/head';
@@ -913,6 +914,22 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // get the correct OG tags without any browser-specific code running server-side.
   // JSON-LD structured data is rendered here from initialData (SSR props) so crawlers
   // receive it immediately without waiting for client-side hydration. (#432, #439, #440, #441, #451)
+  // GSC Events fix (2026-09-22): shared builders guarantee a valid Place location and an
+  // organizer on the SSR Event. Only fields already in initialData are used (no new
+  // address data is exposed); no street address -> city/region/postal-level address.
+  const ssrEventPlace = initialData
+    ? buildEventPlace({
+        placeName: initialData.title,
+        address: initialData.address,
+        city: initialData.city,
+        state: initialData.state,
+        zip: initialData.zip,
+      })
+    : null;
+  const ssrEventOrganizer = initialData
+    ? buildEventOrganizer({ id: initialData.organizerId, businessName: initialData.organizer?.businessName })
+    : undefined;
+
   if (!mounted || isLoading) {
     return (
       <>
@@ -933,6 +950,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         {/* Bug #432: JSON-LD from SSR initialData: rendered server-side so crawlers receive it */}
         {initialData && (
           <Head>
+            {/* An Event with no usable location is invalid for Google: skip it (Store is fine). */}
+            {(initialData.isOngoing || ssrEventPlace) && (
             <script type="application/ld+json" dangerouslySetInnerHTML={{
               __html: jsonLdSafe({
                 '@context': 'https://schema.org',
@@ -946,27 +965,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   'eventStatus': 'https://schema.org/EventScheduled',
                   'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
                 }),
-                'location': {
-                  '@type': 'Place',
-                  'name': initialData.title,
-                  'address': {
-                    '@type': 'PostalAddress',
-                    'streetAddress': initialData.address || undefined,
-                    'addressLocality': initialData.city,
-                    'addressRegion': initialData.state,
-                    'addressCountry': 'US',
-                    'postalCode': initialData.zip || undefined,
-                  }
-                },
-                ...(initialData.organizer && initialData.organizer.businessName ? {
-                  'organizer': {
-                    '@type': 'Organization',
-                    'name': initialData.organizer.businessName,
-                    ...(initialData.organizerId
-                      ? { 'url': `https://finda.sale/organizer/storefront/${initialData.organizerId}` }
-                      : {}),
-                  }
-                } : {}),
+                ...(ssrEventPlace ? { 'location': ssrEventPlace } : {}),
+                ...(ssrEventOrganizer ? { 'organizer': ssrEventOrganizer } : {}),
                 ...(initialData.organizer && initialData.organizer.businessName ? {
                   'performer': {
                     '@type': 'PerformingGroup',
@@ -998,6 +998,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 'paymentAccepted': ['CreditCard', 'Cash', 'PaymentService'],
               })
             }} />
+            )}
             <script type="application/ld+json" dangerouslySetInnerHTML={{
               __html: jsonLdSafe({
                 '@context': 'https://schema.org',
@@ -1097,13 +1098,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                     'addressCountry': 'US',
                   },
                 },
-                'subEvent': eventSeriesData.sales.map((s) => ({
-                  '@type': 'Event',
-                  'name': s.title,
-                  'startDate': s.startDate,
-                  'endDate': s.endDate,
-                  'url': `https://finda.sale/sales/${s.id}`,
-                })),
+                // Each subEvent is its own Event node, so it needs its own location and
+                // organizer (GSC 2026-09-22 root cause). Invalid ones are skipped.
+                'subEvent': eventSeriesData.sales
+                  .map((s) => buildSeriesSubEvent(s, { id: initialData?.organizerId ?? null, businessName: eventSeriesData?.organizerName ?? null }))
+                  .filter((ev): ev is JsonLdNode => ev !== null),
               })
             }} />
           </Head>
@@ -1137,6 +1136,18 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   if (!sale) {
     return null;
   }
+
+  // GSC Events fix (2026-09-22): same shared builders as the SSR path above.
+  const csrEventPlace = buildEventPlace({
+    placeName: sale.title,
+    address: sale.address,
+    city: sale.city,
+    state: sale.state,
+    zip: sale.zip,
+  });
+  const csrEventOrganizer = buildEventOrganizer(
+    sale.organizer ? { id: sale.organizer.id, businessName: sale.organizer.businessName } : null
+  );
 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -1183,6 +1194,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       {/* Event schema.org + Breadcrumb JSON-LD */}
       {sale && (
         <Head>
+          {/* An Event with no usable location is invalid for Google: skip it (Store is fine). */}
+          {(sale.isOngoing || csrEventPlace) && (
           <script type="application/ld+json" dangerouslySetInnerHTML={{
             __html: jsonLdSafe({
               '@context': 'https://schema.org',
@@ -1196,25 +1209,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 'eventStatus': 'https://schema.org/EventScheduled',
                 'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
               }),
-              'location': {
-                '@type': 'Place',
-                'name': sale.title,
-                'address': {
-                  '@type': 'PostalAddress',
-                  'streetAddress': sale.address || undefined,
-                  'addressLocality': sale.city,
-                  'addressRegion': sale.state,
-                  'addressCountry': 'US',
-                  'postalCode': sale.zip || undefined,
-                }
-              },
-              ...(sale.organizer && sale.organizer.businessName ? {
-                'organizer': {
-                  '@type': 'Organization',
-                  'name': sale.organizer.businessName,
-                  'url': `https://finda.sale/organizers/${sale.organizer.id}`
-                }
-              } : {}),
+              ...(csrEventPlace ? { 'location': csrEventPlace } : {}),
+              ...(csrEventOrganizer ? { 'organizer': csrEventOrganizer } : {}),
               ...(sale.organizer && sale.organizer.businessName ? {
                 'performer': {
                   '@type': 'PerformingGroup',
@@ -1252,6 +1248,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               } : {})
             })
           }} />
+          )}
           <script type="application/ld+json" dangerouslySetInnerHTML={{
             __html: jsonLdSafe({
               '@context': 'https://schema.org',
@@ -1353,13 +1350,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   'addressCountry': 'US',
                 },
               },
-              'subEvent': eventSeriesData.sales.map((s) => ({
-                '@type': 'Event',
-                'name': s.title,
-                'startDate': s.startDate,
-                'endDate': s.endDate,
-                'url': `https://finda.sale/sales/${s.id}`,
-              })),
+              // Each subEvent is its own Event node, so it needs its own location and
+              // organizer (GSC 2026-09-22 root cause). Invalid ones are skipped.
+              'subEvent': eventSeriesData.sales
+                .map((s) => buildSeriesSubEvent(s, { id: initialData?.organizerId ?? null, businessName: eventSeriesData?.organizerName ?? null }))
+                .filter((ev): ev is JsonLdNode => ev !== null),
             })
           }} />
         </Head>
@@ -2751,7 +2746,12 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${apiUrl}/sales/${id}`, { signal: controller.signal });
+    const res = await fetch(`${apiUrl}/sales/${id}`, {
+      signal: controller.signal,
+      // Server-only secret: exempts this ISR fetch from the backend's per-IP rate limit
+      // (Vercel egress IPs are shared across all crawler traffic). Never NEXT_PUBLIC_.
+      headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined,
+    });
     clearTimeout(timeout);
 
     if (!res.ok) {
@@ -2854,7 +2854,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
         const seriesType = sale.saleType ? `?saleType=${encodeURIComponent(sale.saleType)}` : '';
         const seriesRes = await fetch(
           `${apiUrl}/sales/organizer/${sale.organizer.id}/recurring${seriesType}`,
-          { signal: seriesController.signal }
+          { signal: seriesController.signal, headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined }
         );
         clearTimeout(seriesTimeout);
         if (seriesRes.ok) {

@@ -17,10 +17,10 @@ export async function getServerSideProps(ctx: any) {
     const STATIC_LASTMOD = '2026-07-28';
 
     // Fetch all sales and tags to generate URLs
-    const salesResponse = await api.get('/sales/sitemap');
+    const salesResponse = await api.get('/sales/sitemap', { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });
     const sales = salesResponse.data.sales || salesResponse.data;
 
-    const tagsResponse = await api.get('/tags/popular');
+    const tagsResponse = await api.get('/tags/popular', { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });
     const tags = tagsResponse.data.tags || [];
 
     // Note: /sales/sitemap returns only id+updatedAt for performance.
@@ -87,7 +87,7 @@ export async function getServerSideProps(ctx: any) {
     type CityRow = { slug: string; activeCount: number; activeByType: Record<string, number> };
     let cityRows: CityRow[] = [];
     try {
-      const citySlugsResponse = await api.get('/sales/city-slugs');
+      const citySlugsResponse = await api.get('/sales/city-slugs', { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });
       const raw = citySlugsResponse.data.slugs || citySlugsResponse.data || [];
       cityRows = raw
         .map((item: any) =>
@@ -167,7 +167,7 @@ export async function getServerSideProps(ctx: any) {
     // the S1071 policy: no ungated GEO variants, STATIC_LASTMOD for template pages.
     let companiesUrls: any[] = [];
     try {
-      const companySlugsResponse = await api.get('/companies/city-slugs');
+      const companySlugsResponse = await api.get('/companies/city-slugs', { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });
       const rawCompanySlugs = companySlugsResponse.data.slugs || [];
       companiesUrls = rawCompanySlugs
         .filter((row: any) => Boolean(row.slug) && (Number(row.companyCount) || 0) >= 3)
@@ -261,7 +261,7 @@ export async function getServerSideProps(ctx: any) {
     // Encyclopedia entries
     let encyclopediaUrls: any[] = [];
     try {
-      const encyclopediaResponse = await api.get('/encyclopedia/entries');
+      const encyclopediaResponse = await api.get('/encyclopedia/entries', { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });
       const entries = encyclopediaResponse.data.entries || encyclopediaResponse.data || [];
       encyclopediaUrls = entries
         .filter((entry: any) => entry.slug)
