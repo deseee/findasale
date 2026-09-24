@@ -303,6 +303,58 @@ async function injectMissingCategoryAspects(
   return { injected: invPutOk, alreadyValid: false };
 }
 
+// 2026-09-24 fix (ADR-ebay-loynorrix-inventory-item-fix-2026-09-24.md): the two earlier
+// fixes today both edited offerBody.packageWeightAndSize on the Offer PUT
+// (/sell/inventory/v1/offer/{offerId}) -- confirmed via eBay's own docs that
+// packageWeightAndSize is NOT a field on the Offer resource at all. eBay's real
+// validation runs against the Inventory Item resource, which this file never wrote to.
+// This helper writes the corrected packageWeightAndSize to the actual resource eBay
+// validates, using the exact same GET+merge+PUT shape as injectMissingCategoryAspects
+// above (GET the whole inventory item, mutate ONLY packageWeightAndSize, PUT the whole
+// thing back untouched otherwise). Caller passes in the already-computed weight/dims/
+// includePackageType decision (from the fulfillment-policy costType lookup) rather than
+// this function recomputing it -- single source of truth for that decision stays in
+// reviseEbayOfferPrice.
+async function ensureInventoryItemPackaging(
+  sku: string,
+  accessToken: string,
+  itemId: string | undefined,
+  packageWeightOz: number,
+  dims: { lengthIn: number; widthIn: number; heightIn: number } | null,
+  includePackageType: string | undefined
+): Promise<{ ok: boolean }> {
+  const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, { method: 'GET' });
+  trackEbayCall();
+  if (!invGet.ok) {
+    const bodyText = await invGet.text().catch(() => '');
+    console.warn(`[eBay PriceRevision] sku=${sku} item=${itemId ?? 'n/a'}: ensureInventoryItemPackaging bailed -- inventory item GET failed (HTTP ${invGet.status} ${bodyText.slice(0, 200)}) -- offer PUT will still be attempted`);
+    return { ok: false };
+  }
+  const invBody = (await invGet.json()) as any;
+  // Only packageWeightAndSize is reassigned -- every other field on eBay's own GET
+  // response for this inventory item is preserved exactly as returned, same as
+  // injectMissingCategoryAspects only reassigns invBody.product.aspects above.
+  invBody.packageWeightAndSize = {
+    weight: { unit: 'OUNCE', value: packageWeightOz },
+    ...(dims ? { dimensions: { unit: 'INCH', length: dims.lengthIn, width: dims.widthIn, height: dims.heightIn } } : {}),
+    ...(includePackageType ? { packageType: includePackageType } : {}),
+  };
+
+  const putRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, {
+    method: 'PUT',
+    body: invBody,
+  });
+  trackEbayCall();
+  const putOk = putRes.ok || putRes.status === 204;
+  if (!putOk) {
+    const bodyText = await putRes.text().catch(() => '');
+    console.warn(`[eBay PriceRevision] sku=${sku} item=${itemId ?? 'n/a'}: ensureInventoryItemPackaging PUT FAILED -- inventory item packageWeightAndSize not written (HTTP ${putRes.status} ${bodyText.slice(0, 300)}) -- offer PUT will still be attempted`);
+  } else {
+    console.log(`[eBay PriceRevision] sku=${sku} item=${itemId ?? 'n/a'}: ensureInventoryItemPackaging -- inventory item PUT accepted (HTTP ${putRes.status}), packageWeightAndSize written to the resource eBay actually validates`);
+  }
+  return { ok: putOk };
+}
+
 export async function reviseEbayOfferPrice(
   offerId: string | null | undefined,
   newPrice: number,
@@ -423,6 +475,27 @@ export async function reviseEbayOfferPrice(
             ...(includePackageType ? { packageType: includePackageType } : {}),
           };
           console.log(`[eBay PriceRevision] item=${itemId} rebuilt missing packageWeightAndSize from Item record before PUT (packageType ${includePackageType ? `included="${includePackageType}"` : `omitted -- reason: ${packageTypeSkipReason}`})`);
+
+          // 2026-09-24 fix (ADR-ebay-loynorrix-inventory-item-fix-2026-09-24.md): also write
+          // the same corrected packageWeightAndSize to the actual Inventory Item resource
+          // eBay validates (the offerBody edit above is harmless but was confirmed a no-op
+          // against a field that doesn't exist on the Offer resource). Diagnostics-only --
+          // its result never changes the offer-PUT retry flow below.
+          const packagingSku = typeof offerBody.sku === 'string' ? offerBody.sku : null;
+          if (packagingSku) {
+            await ensureInventoryItemPackaging(
+              packagingSku,
+              accessToken,
+              itemId,
+              Number(pkg.packageWeightOz),
+              pkg.packageLengthIn && pkg.packageWidthIn && pkg.packageHeightIn
+                ? { lengthIn: Number(pkg.packageLengthIn), widthIn: Number(pkg.packageWidthIn), heightIn: Number(pkg.packageHeightIn) }
+                : null,
+              includePackageType
+            );
+          } else {
+            console.warn(`[eBay PriceRevision] item=${itemId} offer=${offerId}: skipping ensureInventoryItemPackaging -- offer has no sku`);
+          }
         }
       } catch (pkgErr) {
         console.warn(`[eBay PriceRevision] item=${itemId} failed to rebuild packageWeightAndSize: ${(pkgErr as Error).message}`);
