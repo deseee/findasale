@@ -47,7 +47,7 @@ export interface EbayPriceRevisionResult {
   // attempt failed and a repair retry succeeded. Absent on a first-try success (the common
   // case) and absent (not false) when no repair was attempted at all.
   repaired?: boolean;
-  repairMethod?: 'best-offer-threshold' | 'category-aspect';
+  repairMethod?: 'best-offer-threshold' | 'category-aspect' | 'republish-escalation';
 }
 
 // ── eBay-sync-issues auto-repair helpers (2026-09-19) ──────────────────────────
@@ -128,6 +128,19 @@ function computeSafeBestOfferThresholds(newPrice: number): { accept: number; min
  * PUT back) reusing the same helpers, but stops short of heal25002's attemptPublish() call --
  * a price revision must never trigger a full republish. Returns true only when the inventory
  * item PUT itself succeeded; the caller still has to retry the offer PUT afterward.
+ *
+ * Return shape (2026-09-24, republish-escalation ADR): was a plain boolean until this
+ * change made "nothing injected because eBay already had a valid value" indistinguishable
+ * from every other no-op reason (couldn't parse a missing-aspect name, no confident value
+ * found in title/description, inventory-item GET failed, aspect name didn't match a real
+ * category aspect) -- live logs for 3 stuck items (cmnzf780a0009pf19ru5qppqn,
+ * cmo3et2pb002djqsuyta1cslc, cmo3etpx2005hjqsuvzlkt8qz) showed this function correctly
+ * reporting the aspect already-valid every cycle while the offer PUT kept failing
+ * identically forever -- the caller needs to tell that ONE case apart to know when to
+ * escalate to a republish (see reviseEbayOfferPrice's category-aspect repair branch).
+ * `alreadyValid` is true only when an already-present value was confirmed valid and
+ * skipped for that reason; every other no-op path (including "injected but the
+ * inventory-item PUT itself failed") reports `alreadyValid: false`.
  */
 async function injectMissingCategoryAspects(
   sku: string | null | undefined,
@@ -136,10 +149,10 @@ async function injectMissingCategoryAspects(
   itemDescription: string | null | undefined,
   errorDetail: string | undefined,
   accessToken: string
-): Promise<boolean> {
+): Promise<{ injected: boolean; alreadyValid: boolean }> {
   if (!sku || !categoryId) {
     console.log(`[eBay PriceRevision] category-aspect repair skipped: sku=${sku ?? 'null'} categoryId=${categoryId ?? 'null'}`);
-    return false;
+    return { injected: false, alreadyValid: false };
   }
   // 2026-09-23 fix (confirmed live -- item cmnzf780a0009pf19ru5qppqn kept failing identically
   // after this repair shipped, with ZERO log output from this function): putOffer()'s `detail`
@@ -181,14 +194,14 @@ async function injectMissingCategoryAspects(
   }
   if (missingNames.length === 0) {
     console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair found no parseable missing-aspect name in error detail (raw="${rawErrorBody.slice(0, 200)}")`);
-    return false;
+    return { injected: false, alreadyValid: false };
   }
 
   const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, accessToken, { method: 'GET' });
   trackEbayCall();
   if (!invGet.ok) {
     console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair bailed -- inventory item GET failed (HTTP ${invGet.status})`);
-    return false;
+    return { injected: false, alreadyValid: false };
   }
   const invBody = (await invGet.json()) as any;
 
@@ -198,6 +211,10 @@ async function injectMissingCategoryAspects(
 
   const spec = await getRequiredAspectsForCategory(categoryId);
   let injected = false;
+  // Tracks the ADR's "already valid" signal across the loop -- true only when an
+  // already-present aspect value was confirmed to match a real eBay enum value (or had no
+  // enum to validate against) and was therefore correctly skipped, not injected.
+  let sawAlreadyValid = false;
   for (const name of missingNames) {
     // 2026-09-23 diagnostic (Gap 2, item cmnzf780a0009pf19ru5qppqn "Amplifier Type"):
     // this branch used to be silent, which is exactly what made the aspect-already-set
@@ -231,6 +248,7 @@ async function injectMissingCategoryAspects(
         existingValues.some((v) => aspectSpec.enumValues.some((ev) => ev.toLowerCase() === String(v).toLowerCase()));
       if (existingIsValid) {
         console.log(`[eBay PriceRevision] sku=${sku}: aspect "${name}" already present with a valid value (${JSON.stringify(existingValues)}) -- not re-injecting`);
+        sawAlreadyValid = true;
         continue;
       }
       console.log(`[eBay PriceRevision] sku=${sku}: aspect "${name}" present but value ${JSON.stringify(existingValues)} is not a valid eBay enum value for this category -- treating as needing repair, not skipping`);
@@ -247,7 +265,7 @@ async function injectMissingCategoryAspects(
   }
   if (!injected) {
     console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair found ${missingNames.length} missing name(s) but none needed injection (already present on eBay's side or unmatched to a real category aspect) -- repair is a no-op this cycle; if the offer PUT still fails with the identical error, the aspect is already set on the inventory item and the blocker is elsewhere (propagation delay or offer/inventory-item validation-scope mismatch)`);
-    return false;
+    return { injected: false, alreadyValid: sawAlreadyValid };
   }
   invBody.product.aspects = aspectsObj;
   // 2026-09-23 fix: mirror heal25101 (ebayPublishService.ts) -- this PUT carries eBay's own
@@ -282,7 +300,7 @@ async function injectMissingCategoryAspects(
   } else {
     console.log(`[eBay PriceRevision] sku=${sku}: category-aspect repair -- inventory item PUT accepted (HTTP ${retryInvRes.status}), retrying offer PUT next`);
   }
-  return invPutOk;
+  return { injected: invPutOk, alreadyValid: false };
 }
 
 export async function reviseEbayOfferPrice(
@@ -444,8 +462,8 @@ export async function reviseEbayOfferPrice(
       const itemRecord = await prisma.item.findUnique({ where: { id: itemId }, select: { title: true, description: true, ebayCategoryId: true } });
       const sku = typeof offerBody.sku === 'string' ? offerBody.sku : null;
       const categoryId = (typeof offerBody.categoryId === 'string' ? offerBody.categoryId : null) || itemRecord?.ebayCategoryId || null;
-      const aspectInjected = await injectMissingCategoryAspects(sku, categoryId, itemRecord?.title ?? null, itemRecord?.description ?? null, firstAttempt.detail, accessToken);
-      if (aspectInjected) {
+      const aspectResult = await injectMissingCategoryAspects(sku, categoryId, itemRecord?.title ?? null, itemRecord?.description ?? null, firstAttempt.detail, accessToken);
+      if (aspectResult.injected) {
         const repairAttempt = await putOffer(buildUpdatedOffer());
         if (repairAttempt.ok) {
           return { ok: true, method: 'inventory-api', repaired: true, repairMethod: 'category-aspect' };
@@ -458,6 +476,47 @@ export async function reviseEbayOfferPrice(
           return { ok: true, method: 'inventory-api', repaired: true, repairMethod: 'category-aspect' };
         }
       }
+
+      // Republish escalation (ADR ebay-price-revision-republish-escalation, 2026-09-24): live
+      // Railway logs (24+ hours, 3 items across 3 different eBay categories --
+      // cmnzf780a0009pf19ru5qppqn Amplifier Type, cmo3et2pb002djqsuyta1cslc /
+      // cmo3etpx2005hjqsuvzlkt8qz Size) confirmed a consistent pattern: when
+      // injectMissingCategoryAspects reports the aspect was ALREADY present and valid
+      // (aspectResult.alreadyValid) -- a true no-op, not "couldn't find a confident value" --
+      // and both the injection retry above and the reanalyze-then-retry fallback above ALSO
+      // fail with the identical error, the offer-level price PUT does not appear to pick up a
+      // corrected inventory-item aspect on an already-published, live listing. Escalate to one
+      // full republish, which re-validates and updates the SAME existing listing in place --
+      // this is the exact same POST /sell/inventory/v1/offer/{offerId}/publish call
+      // ebayPublishService.ts's attemptPublish() already makes routinely and safely for new
+      // listings; republishing an offer that already has a live listingId is not a new
+      // capability, just a new caller of a trusted one. Deliberately narrow: only fires when
+      // (a) the aspect was confirmed already-valid (never for "couldn't find a value" -- that
+      // keeps failing normally here, no guessing) and (b) offerBody (this function's own
+      // earlier GET) already shows a live listingId, so an offer that was never published in
+      // the first place is never force-published by this branch.
+      if (aspectResult.alreadyValid && typeof offerBody.listingId === 'string' && offerBody.listingId) {
+        try {
+          const publishRes = await ebayFetch(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`, accessToken, { method: 'POST', body: {} });
+          trackEbayCall();
+          if (publishRes.ok) {
+            console.log(`[eBay PriceRevision] offer=${offerId} item=${itemId ?? 'n/a'}: republish escalation succeeded (aspect confirmed already-valid, retry+reanalyze both failed) -- retrying price PUT`);
+            const repairAttempt = await putOffer(buildUpdatedOffer());
+            if (repairAttempt.ok) {
+              return { ok: true, method: 'inventory-api', repaired: true, repairMethod: 'republish-escalation' };
+            }
+          } else {
+            const bodyText = await publishRes.text().catch(() => '');
+            console.log(`[eBay PriceRevision] offer=${offerId} item=${itemId ?? 'n/a'}: republish escalation FAILED (HTTP ${publishRes.status} ${bodyText.slice(0, 300)})`);
+          }
+        } catch (publishErr) {
+          console.warn(`[eBay PriceRevision] offer=${offerId} item=${itemId ?? 'n/a'}: republish escalation threw: ${(publishErr as Error).message}`);
+        }
+      }
+
+      // Report the ORIGINAL failure either way -- the republish escalation (if it ran and
+      // still failed) never masks firstAttempt's real error, same principle the best-offer-
+      // threshold repair above already follows.
       return { ok: false, reason: 'put-failed', detail: firstAttempt.detail };
     }
 
