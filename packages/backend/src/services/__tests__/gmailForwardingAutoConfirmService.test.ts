@@ -307,6 +307,21 @@ describe('SECURITY (2026-09-23) -- DKIM/DMARC for google.com and confirmation-li
     warnSpy.mockRestore();
   });
 
+  it('finds the confirmation URL in a plain-text body with no links, and never the uf- cancel link', async () => {
+    const resolveOrganizerId = jest.fn().mockResolvedValue('organizer_1');
+    const confirmForwarding = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const vf = 'https://mail-settings.google.com/mail/vf-%5BAbC%5D-xyz';
+    const uf = 'https://mail-settings.google.com/mail/uf-%5BDeF%5D-xyz';
+    await processGmailForwardingConfirmationEmail(
+      confirmationEmail({
+        links: [],
+        rawBody: `someone has requested to automatically forward mail to your email address ${KNOWN_TARGET_ADDRESS}.\n\nplease click the link below to confirm the request:\n\n${vf}\n\nto cancel: ${uf}`,
+      }),
+      { resolveOrganizerId, confirmForwarding },
+    );
+    expect(confirmForwarding).toHaveBeenCalledWith(vf);
+  });
+
   it('accepts the historical https://mail.google.com/mail/vf-... link form', async () => {
     const href = 'https://mail.google.com/mail/vf-%5BANGjdJ9x%5D-AbCdEf';
     const confirmForwarding = jest.fn().mockResolvedValue({ ok: true, status: 200 });

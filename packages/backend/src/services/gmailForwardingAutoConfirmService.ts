@@ -356,7 +356,9 @@ export async function processGmailForwardingConfirmationEmail(
   // the parsed links list is empty -- also consider bare https URLs from the body. Every
   // candidate still has to pass isAllowedConfirmationUrl (exact Google host) + the hint pattern.
   const bodyUrls = (email.rawBody ?? '').match(/https:\/\/[^\s<>"')\]]+/g) ?? [];
-  const confirmationUrl = extractConfirmationLink([...(email.links ?? []), ...bodyUrls]);
+  // Body URLs are a fallback ONLY when the email carried no links at all (the plain-text case);
+  // an HTML email's own links stay authoritative, so a spoofed anchor is never "rescued" by text.
+  const confirmationUrl = extractConfirmationLink(email.links && email.links.length > 0 ? email.links : bodyUrls);
   if (!confirmationUrl) {
     console.warn(
       '[gmailForwardingAutoConfirmService] known organizer but no confirmation link could be extracted -- needs manual reconciliation',
