@@ -132,6 +132,10 @@ const EditItemPage = () => {
     bestOfferDeclinePct: '' as number | '',
     // eBay shipping override
     ebayShippingOverride: null as string | null,
+    // Feature #309/#70 follow-up (2026-09-24): optional consignor attribution.
+    // '' = no consignor. Gated by consignorTouched below, same "real edit vs. incidental
+    // re-save" contract shippingAvailable/shippingPrice already use.
+    consignorId: '' as string,
     // eBay per-item fulfillment-policy override (null = Auto)
     ebayFulfillmentPolicyOverrideId: null as string | null,
   });
@@ -266,6 +270,12 @@ const EditItemPage = () => {
   // shippingPriceConfirmedByOrganizer=true just because formData always carries the
   // current shippingAvailable/shippingPrice values.
   const [shippingTouched, setShippingTouched] = useState(false);
+
+  // Feature #309/#70 follow-up (2026-09-24): same touched-gate pattern as shippingTouched
+  // immediately above -- formData.consignorId always carries a value (possibly '' loaded
+  // from the fetched item), so without this gate every save of an unrelated field would
+  // resend consignorId and the backend would treat '' as an attempted (invalid) attach.
+  const [consignorTouched, setConsignorTouched] = useState(false);
 
   // ADR-ai-package-estimation-isolation-2026-08-05, corrected S-QA-2026-08-06: explicit,
   // opt-in fetch of the AI/estimate-cascade weight+dims guess. Only fills the editable
@@ -658,6 +668,21 @@ const EditItemPage = () => {
     enabled: !!id,
   });
 
+  // Feature #309/#70 follow-up (2026-09-24): consignor picker options. TEAMS-only (the
+  // backend 403s a consignorId attach for a non-TEAMS organizer anyway), so this fetch is
+  // skipped entirely for a SIMPLE-tier organizer rather than hitting a route that would
+  // just 403 -- same "don't fetch what this tier can't use" idiom as other TEAMS-gated
+  // fetches on this page.
+  const { data: consignorOptions } = useQuery({
+    queryKey: ['consignors-for-item-picker'],
+    queryFn: async () => {
+      const response = await api.get('/consignors');
+      return response.data as Array<{ id: string; name: string }>;
+    },
+    enabled: tier === 'TEAMS',
+    staleTime: 60 * 1000,
+  });
+
   // Feature #603 (2026-08-05): organizer's default best-offer percentages, used ONLY to
   // pre-fill (never override) this item's accept/decline % fields the first time they're
   // touched with no prior value. Small, low-frequency-change fetch -- long staleTime avoids
@@ -943,6 +968,8 @@ const EditItemPage = () => {
         // eBay shipping override
         ebayShippingOverride: item.ebayShippingOverride || null,
         ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId || null,
+        // Feature #309/#70 follow-up (2026-09-24)
+        consignorId: item.consignorId || '',
       });
     }
   }, [item]);
@@ -1070,6 +1097,10 @@ const EditItemPage = () => {
         // strip UI-only percentage fields
         bestOfferAcceptPct: undefined,
         bestOfferDeclinePct: undefined,
+        // Feature #309/#70 follow-up (2026-09-24): only sent when the organizer actually
+        // touched the consignor picker this session (consignorTouched) -- same contract as
+        // shippingAvailable/shippingPrice above. '' means "clear the attribution" -> null.
+        consignorId: consignorTouched ? (formData.consignorId || null) : undefined,
       };
       return await api.put(`/items/${id}`, payload);
     },
@@ -1467,6 +1498,29 @@ const EditItemPage = () => {
                 Required by eBay for many categories. Your value is always used exactly as entered.
               </div>
             </div>
+
+            {tier === 'TEAMS' && consignorOptions && consignorOptions.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Consignor (optional)
+                </label>
+                <select
+                  value={formData.consignorId}
+                  onChange={(e) => {
+                    setConsignorTouched(true);
+                    setFormData({ ...formData, consignorId: e.target.value });
+                  }}
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">Not consigned</option>
+                  {consignorOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-3">
               <div>

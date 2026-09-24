@@ -1293,7 +1293,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence, consignorId } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // #102: Validate price >= 0
@@ -1347,7 +1347,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     // Feature #75: Check tier limits if organizer is in SIMPLE tier
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
-      select: { subscriptionTier: true }
+      select: { id: true, subscriptionTier: true }
     });
 
     if (organizer?.subscriptionTier === 'SIMPLE') {
@@ -1358,6 +1358,26 @@ export const createItem = async (req: AuthRequest, res: Response) => {
           code: 'TIER_LIMIT_EXCEEDED'
         });
       }
+    }
+
+    // Feature #309/#70 follow-up (2026-09-24): resolve an optional consignor attribution at
+    // create time. Item.consignorId already existed in the schema (Feature #70/#309) but
+    // nothing anywhere ever wrote to it -- this is the first write path. TEAMS-gated (same
+    // tier every other consignor endpoint requires) and scoped to this organizer's own
+    // workspace so a client can never attribute an item to another organizer's consignor.
+    let resolvedConsignorId: string | null = null;
+    if (consignorId) {
+      if (organizer?.subscriptionTier !== 'TEAMS') {
+        return res.status(403).json({ message: 'TEAMS subscription required to attach a consignor.' });
+      }
+      const consignorWorkspace = await prisma.organizerWorkspace.findFirst({ where: { ownerId: organizer.id } });
+      const matchedConsignor = consignorWorkspace
+        ? await prisma.consignor.findFirst({ where: { id: consignorId, workspaceId: consignorWorkspace.id } })
+        : null;
+      if (!matchedConsignor) {
+        return res.status(404).json({ message: 'Consignor not found.' });
+      }
+      resolvedConsignorId = matchedConsignor.id;
     }
 
     // Resolve photo URLs: accept pre-uploaded URLs from body, or upload files now
@@ -1392,6 +1412,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         status: status || 'AVAILABLE',
         category: category || null,
         condition: condition || null,
+        // Feature #309/#70 follow-up (2026-09-24): optional consignor attribution, resolved
+        // and validated above. null when not provided -- same default the column already had.
+        consignorId: resolvedConsignorId,
         // P0 fix: ebayShippingClassification was never written by any backend write path.
         // tags is not set on manual create (organizer AI tagging happens via a separate
         // endpoint), so classify against category + empty tags here.
@@ -1517,7 +1540,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -1597,7 +1620,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       include: {
         sale: {
           include: {
-            organizer: { select: { userId: true, subscriptionTier: true, lat: true, lng: true } },
+            organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
           },
         },
       },
@@ -1626,6 +1649,36 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     // Track which fields the organizer is explicitly editing (D-006)
     const fieldsBeingEdited: string[] = [];
+
+    // Feature #309/#70 follow-up (2026-09-24): optional consignor (re)attribution on edit.
+    // Mirrors createItem's resolution logic. undefined = untouched (default, matches every
+    // other optional field in this function); null explicitly clears the attribution; a
+    // string id (re)assigns it, TEAMS-gated and scoped to this organizer's own workspace so a
+    // client can never attribute an item to another organizer's consignor. Mutually exclusive
+    // with vendorBoothId per the schema's own comment on Item.vendorBoothId ("an item should
+    // never have both set") -- enforced here since this is the only place either FK is written
+    // from the organizer-facing item forms.
+    if (consignorId !== undefined) {
+      if (consignorId === null) {
+        updateData.consignorId = null;
+      } else {
+        if (item.sale!.organizer.subscriptionTier !== 'TEAMS') {
+          return res.status(403).json({ message: 'TEAMS subscription required to attach a consignor.' });
+        }
+        if (item.vendorBoothId) {
+          return res.status(409).json({ message: 'This item is attributed to a vendor booth and cannot also be attached to a consignor. Clear the vendor booth attribution first.' });
+        }
+        const consignorWorkspace = await prisma.organizerWorkspace.findFirst({ where: { ownerId: item.sale!.organizer.id } });
+        const matchedConsignor = consignorWorkspace
+          ? await prisma.consignor.findFirst({ where: { id: consignorId, workspaceId: consignorWorkspace.id } })
+          : null;
+        if (!matchedConsignor) {
+          return res.status(404).json({ message: 'Consignor not found.' });
+        }
+        updateData.consignorId = matchedConsignor.id;
+      }
+      fieldsBeingEdited.push('consignorId');
+    }
 
     // Only update fields that are explicitly provided
     if (title !== undefined) {

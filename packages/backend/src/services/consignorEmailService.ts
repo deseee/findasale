@@ -166,6 +166,12 @@ export const sendConsignorExpiryNotice = async (params: {
   organizerName: string;
   organizerEmail: string;
   saleId: string;
+  // Consignor intake follow-up (2026-09-24): the consignor's own on-file preference for what
+  // happens to an unsold item (Consignor.unsoldItemDisposition -- 'RETURN' | 'DONATE' |
+  // 'RELIST' | null). When set, the email states what will happen rather than asking the
+  // consignor to make a decision they already made at intake. null preserves the original
+  // "reach out to discuss" copy for a consignor who never had a preference on file.
+  disposition?: 'RETURN' | 'DONATE' | 'RELIST' | null;
 }): Promise<void> => {
   
 
@@ -175,17 +181,40 @@ export const sendConsignorExpiryNotice = async (params: {
   }
 
   try {
+    const dispositionCopy: Record<'RETURN' | 'DONATE' | 'RELIST', { headline: string; message: string }> = {
+      RETURN: {
+        headline: '📦 Your consigned item is ready to pick up',
+        message: `Per your instructions when you dropped it off, we'll have <strong>${params.itemName}</strong> ready for you to pick up. Swing by within the next 7 days, or contact <strong>${params.organizerName}</strong> to arrange a different time.`,
+      },
+      DONATE: {
+        headline: '💛 Your consigned item will be donated',
+        message: `Per your instructions when you dropped it off, <strong>${params.itemName}</strong> will be donated on your behalf now that it's been listed 60 days. No action is needed from you -- if you've changed your mind, contact <strong>${params.organizerName}</strong> within the next 7 days.`,
+      },
+      RELIST: {
+        headline: '🏷️ Your consigned item is being marked down',
+        message: `Per your instructions when you dropped it off, <strong>${params.itemName}</strong> is being relisted at a reduced price now that it's been listed 60 days. No action is needed from you -- if you'd rather it be returned or donated instead, contact <strong>${params.organizerName}</strong>.`,
+      },
+    };
+
+    const chosen = params.disposition ? dispositionCopy[params.disposition] : null;
+    const headline = chosen ? chosen.headline : '⏰ Your consigned item expires in 7 days';
+    const bannerText = chosen
+      ? 'You do not need to do anything unless you want to change this.'
+      : "If we don't hear from you in the next 7 days, the item will be delisted.";
+    const bodyIntro = chosen
+      ? `<p>Hi ${params.consignorName},</p><p>${chosen.message}</p>`
+      : `<p>Hi ${params.consignorName},</p><p>Your consigned item <strong>${params.itemName}</strong> has been listed for 60 days. Reach out to <strong>${params.organizerName}</strong> to discuss what happens next.</p>`;
+
     const html = buildEmail({
       preheader: `Item expiring soon: ${params.itemName}`,
-      headline: '⏰ Your consigned item expires in 7 days',
-      body: `<p>Hi ${params.consignorName},</p>
-        <p>Your consigned item <strong>${params.itemName}</strong> has been listed for 60 days. Reach out to <strong>${params.organizerName}</strong> to discuss what happens next.</p>
+      headline,
+      body: `${bodyIntro}
         <div style="background: #fef3c7; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
           <p style="margin: 8px 0; color: #92400e;">
-            If we don't hear from you in the next 7 days, the item will be delisted.
+            ${bannerText}
           </p>
         </div>
-        <p>Contact <a href="mailto:${params.organizerEmail}">${params.organizerName}</a> to extend or arrange pickup.</p>`,
+        <p>Contact <a href="mailto:${params.organizerEmail}">${params.organizerName}</a> with any questions.</p>`,
       ctaText: 'View Your Items',
       ctaUrl: `${siteUrl}/consignor/items`,
       accentColor: '#f59e0b',

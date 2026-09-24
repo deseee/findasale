@@ -188,6 +188,12 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         photoUrls: true,
         ebayOfferId: true,
         saleId: true,
+        // Feature #309/#70 follow-up (2026-09-24): bulk consignor-attribution operation needs
+        // both -- vendorBoothId to skip items already attributed to a vendor booth (mutually
+        // exclusive per the schema's own comment on Item.vendorBoothId), consignorId only for
+        // symmetry/debuggability (not currently branched on).
+        consignorId: true,
+        vendorBoothId: true,
         sale: { select: { organizer: { select: { userId: true } } } },
       },
     });
@@ -221,6 +227,10 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
       backgroundRemoved: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SOLD', 'RESERVED'],
       draftStatus: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SOLD', 'RESERVED'],
       tags: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SOLD', 'RESERVED'],
+      // Feature #309/#70 follow-up (2026-09-24): consignor attribution should happen before a
+      // sale, not be rewritten after the fact once payout math may already have run against
+      // the old (or no) consignor -- SOLD is deliberately excluded, same reasoning as price/status.
+      consignor: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'RESERVED'],
     };
 
     const safeStatuses = statusSafeMatrix[operation];
@@ -257,6 +267,37 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
     }
 
     const confirmedItems = items.filter((i) => confirmedIds.includes(i.id));
+
+    // Feature #309/#70 follow-up (2026-09-24): resolve + validate the target consignor once,
+    // up front, so both the dry-run and mutation branches of the 'consignor' operation below
+    // can reuse it. TEAMS-gated and scoped to this organizer's own workspace, same pattern as
+    // itemController.ts's createItem/updateItem consignor resolution.
+    let matchedConsignor: { id: string } | null = null;
+    if (operation === 'consignor') {
+      const rawConsignorId = value && typeof value === 'object' ? (value as any).consignorId : undefined;
+      if (!rawConsignorId || typeof rawConsignorId !== 'string') {
+        return res.status(400).json({ message: 'consignor operation requires { consignorId: string }' });
+      }
+      const organizerForConsignor = await prisma.organizer.findUnique({
+        where: { userId: authReq.user.id },
+        select: { id: true, subscriptionTier: true },
+      });
+      if (!organizerForConsignor || organizerForConsignor.subscriptionTier !== 'TEAMS') {
+        return res.status(403).json({ message: 'TEAMS subscription required to attach a consignor.' });
+      }
+      const consignorWorkspace = await prisma.organizerWorkspace.findFirst({
+        where: { ownerId: organizerForConsignor.id },
+      });
+      matchedConsignor = consignorWorkspace
+        ? await prisma.consignor.findFirst({
+            where: { id: rawConsignorId, workspaceId: consignorWorkspace.id },
+            select: { id: true },
+          })
+        : null;
+      if (!matchedConsignor) {
+        return res.status(404).json({ message: 'Consignor not found.' });
+      }
+    }
 
     // Dry-run mode: query without mutating
     if (dryRun) {
@@ -419,6 +460,27 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           });
         }
 
+        case 'consignor': {
+          const eligible = confirmedItems.filter((i) => !i.vendorBoothId);
+          const skippedForVendorBooth = confirmedItems
+            .filter((i) => !!i.vendorBoothId)
+            .map((i) => ({ itemId: i.id, reason: 'Item is attributed to a vendor booth and cannot also be attached to a consignor.' }));
+          for (const item of eligible) {
+            oldValues[item.id] = item.consignorId;
+            newValues[item.id] = matchedConsignor!.id;
+          }
+          return res.json({
+            message: 'Dry run: no changes applied',
+            count: eligible.length,
+            affectedIds: eligible.map((i) => i.id),
+            wouldChange: eligible.length > 0,
+            operation: 'consignor',
+            oldValues,
+            newValues,
+            ...(skippedForVendorBooth.length > 0 && { skipped: skippedForVendorBooth }),
+          });
+        }
+
         default:
           return res.status(400).json({ message: `Unknown operation: ${operation}` });
       }
@@ -513,6 +575,32 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           succeeded,
           failed,
           operation: 'category',
+        });
+      }
+
+      case 'consignor': {
+        const eligible = confirmedItems.filter((i) => !i.vendorBoothId);
+        const skipped = confirmedItems
+          .filter((i) => !!i.vendorBoothId)
+          .map((i) => ({ itemId: i.id, reason: 'Item is attributed to a vendor booth and cannot also be attached to a consignor.' }));
+        succeeded.push(...eligible.map((i) => i.id));
+        for (const item of eligible) {
+          oldValues[item.id] = item.consignorId;
+          newValues[item.id] = matchedConsignor!.id;
+        }
+        if (eligible.length > 0) {
+          await prisma.item.updateMany({
+            where: { id: { in: eligible.map((i) => i.id) } },
+            data: { consignorId: matchedConsignor!.id },
+          });
+        }
+        const consignorStatus = (failed.length > 0 || skipped.length > 0) ? 207 : 200;
+        return res.status(consignorStatus).json({
+          message: `Attached ${eligible.length} item(s) to this consignor.`,
+          succeeded,
+          failed,
+          operation: 'consignor',
+          ...(skipped.length > 0 && { skipped }),
         });
       }
 

@@ -64,6 +64,16 @@ const ConsignorsPage: React.FC = () => {
     notes: '',
   });
 
+  // Merged single-item intake (consignor-intake follow-up, 2026-09-24): lets Patrick
+  // create a Consignor and their first Item in one submit when there's only one item to
+  // bring in right now, instead of a separate trip to the add-item form. Create-mode only.
+  const [sales, setSales] = useState<Array<{ id: string; title: string }>>([]);
+  const [includeItem, setIncludeItem] = useState(false);
+  const [itemSaleId, setItemSaleId] = useState('');
+  const [itemTitle, setItemTitle] = useState('');
+  const [itemPrice, setItemPrice] = useState('');
+  const [itemCategory, setItemCategory] = useState('');
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
@@ -80,10 +90,22 @@ const ConsignorsPage: React.FC = () => {
     }
   };
 
+  const fetchSales = async () => {
+    try {
+      const response = await api.get('/sales/mine');
+      setSales(response.data?.sales || []);
+    } catch (error: any) {
+      console.error('Error fetching sales for item-intake picker:', error);
+      // Non-fatal: the picker just stays empty and the "bring an item along" toggle
+      // has nothing to offer, but consignor create/edit itself is unaffected.
+    }
+  };
+
   // Fetch consignors on mount
   useEffect(() => {
     if (user && user.roles?.includes('ORGANIZER') && canAccess('TEAMS')) {
       fetchConsignors();
+      fetchSales();
     }
   }, [user, canAccess]);
 
@@ -103,6 +125,11 @@ const ConsignorsPage: React.FC = () => {
       unsoldItemDisposition: '',
       notes: '',
     });
+    setIncludeItem(false);
+    setItemSaleId('');
+    setItemTitle('');
+    setItemPrice('');
+    setItemCategory('');
     setEditingConsignor(null);
     setModalMode('create');
   };
@@ -147,9 +174,27 @@ const ConsignorsPage: React.FC = () => {
       return;
     }
 
+    // Merged single-item intake: only meaningful at create time. Mirrors the backend's
+    // own item.saleId / item.title required-field validation so the organizer sees the
+    // problem immediately instead of round-tripping to the server first.
+    if (modalMode === 'create' && includeItem) {
+      if (!itemSaleId) {
+        showToast('Choose which sale this item belongs to', 'error');
+        return;
+      }
+      if (!itemTitle.trim()) {
+        showToast('Enter a title for the item', 'error');
+        return;
+      }
+      if (itemPrice && (isNaN(parseFloat(itemPrice)) || parseFloat(itemPrice) < 0)) {
+        showToast('Item price must be a non-negative number', 'error');
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: any = {
         name: formData.name,
         email: formData.email || undefined,
         phone: formData.phone || undefined,
@@ -158,11 +203,22 @@ const ConsignorsPage: React.FC = () => {
         unsoldItemDisposition: formData.unsoldItemDisposition || null,
         notes: formData.notes || undefined,
       };
+      if (modalMode === 'create' && includeItem) {
+        payload.item = {
+          saleId: itemSaleId,
+          title: itemTitle.trim(),
+          price: itemPrice ? parseFloat(itemPrice) : undefined,
+          category: itemCategory || undefined,
+        };
+      }
 
       if (modalMode === 'create') {
         const response = await api.post('/consignors', payload);
         setConsignors(prev => [response.data, ...prev]);
-        showToast('Consignor created', 'success');
+        showToast(
+          includeItem ? 'Consignor and item created' : 'Consignor created',
+          'success'
+        );
       } else if (editingConsignor) {
         const response = await api.put(`/consignors/${editingConsignor.id}`, payload);
         setConsignors(prev =>
@@ -511,6 +567,91 @@ const ConsignorsPage: React.FC = () => {
                   className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                 />
               </div>
+
+              {modalMode === 'create' && (
+                <div className="mb-6 border border-warm-200 dark:border-gray-600 rounded-lg p-3">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeItem}
+                      onChange={(e) => setIncludeItem(e.target.checked)}
+                      className="mt-1"
+                      aria-label="I have one item to bring in right now"
+                    />
+                    <span className="text-sm text-warm-700 dark:text-warm-300">
+                      <span className="font-bold">I have one item to bring in right now</span>
+                      <br />
+                      <span className="text-xs text-warm-500 dark:text-warm-400">
+                        Skip the separate add-item trip and create it along with this consignor.
+                        For more than one item, leave this off and use the add-item page instead.
+                      </span>
+                    </span>
+                  </label>
+
+                  {includeItem && (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                          Sale *
+                        </label>
+                        <select
+                          value={itemSaleId}
+                          onChange={(e) => setItemSaleId(e.target.value)}
+                          className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                          aria-label="Sale"
+                        >
+                          <option value="">Select a sale...</option>
+                          {sales.map((s) => (
+                            <option key={s.id} value={s.id}>{s.title}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                          Item Title *
+                        </label>
+                        <input
+                          type="text"
+                          value={itemTitle}
+                          onChange={(e) => setItemTitle(e.target.value)}
+                          className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                          aria-label="Item title"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                            Price
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={itemPrice}
+                            onChange={(e) => setItemPrice(e.target.value)}
+                            className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                            placeholder="0.00"
+                            aria-label="Item price"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                            Category
+                          </label>
+                          <input
+                            type="text"
+                            value={itemCategory}
+                            onChange={(e) => setItemCategory(e.target.value)}
+                            className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                            placeholder="Optional"
+                            aria-label="Item category"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button

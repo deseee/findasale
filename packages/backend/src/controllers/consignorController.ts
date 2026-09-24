@@ -2,8 +2,23 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
+import { ItemRarity } from '@prisma/client';
 import { sendConsignorPayout } from '../services/consignorEmailService';
 import { calculateConsignorPayout, seedDefaultCommissionTiers } from '../services/commissionCalcService';
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
+
+// Consignor intake follow-up (2026-09-24): tiny, deliberately-duplicated mirror of
+// itemController.ts's local (non-exported) assignRarity() -- same 4-line price-tier
+// logic, S261-locked boundaries (>=500 LEGENDARY, >=75 RARE, >=25 UNCOMMON, else COMMON).
+// Not imported because that function is private to itemController.ts; extracting it to
+// shared/ for one additional caller was judged not worth the refactor risk here, but if
+// the rarity boundaries ever change this copy must change too -- flagged in the handoff.
+function assignRarityForIntakeItem(price: number | null | undefined): ItemRarity {
+  if (!price || price < 25) return ItemRarity.COMMON;
+  if (price >= 500) return ItemRarity.LEGENDARY;
+  if (price >= 75) return ItemRarity.RARE;
+  return ItemRarity.UNCOMMON;
+}
 
 /**
  * Helper: Get organizer workspace from authenticated user
@@ -89,7 +104,7 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { name, email, phone, commissionRate, notes, useTieredCommission, unsoldItemDisposition } = req.body;
+    const { name, email, phone, commissionRate, notes, useTieredCommission, unsoldItemDisposition, item } = req.body;
 
     if (!name || commissionRate === undefined) {
       return res.status(400).json({ error: 'name and commissionRate required' });
@@ -120,25 +135,92 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'commissionRate must be 0-100' });
     }
 
+    // Consignor intake follow-up (2026-09-24): optional single-item intake in the same
+    // request, for the "only one item to bring in right now" case -- avoids a separate
+    // trip through the full add-item form just to attach the very first item. `item` is
+    // { saleId: string (required -- an Item must belong to a Sale), title: string
+    // (required), price?, description?, category? }. Validated fully before any write so
+    // a bad item payload never leaves a Consignor created with no way to retry atomically.
+    let saleForItem: { id: string } | null = null;
+    let parsedItemPrice: number | null = null;
+    if (item !== undefined && item !== null) {
+      if (typeof item !== 'object' || Array.isArray(item)) {
+        return res.status(400).json({ error: 'item must be an object with saleId and title' });
+      }
+      if (!item.saleId || typeof item.saleId !== 'string') {
+        return res.status(400).json({ error: 'item.saleId is required when including an item at intake' });
+      }
+      if (!item.title || typeof item.title !== 'string' || !item.title.trim()) {
+        return res.status(400).json({ error: 'item.title is required when including an item at intake' });
+      }
+      if (item.price !== undefined && item.price !== null && item.price !== '') {
+        parsedItemPrice = parseFloat(item.price);
+        if (isNaN(parsedItemPrice) || parsedItemPrice < 0) {
+          return res.status(400).json({ error: 'item.price must be a non-negative number' });
+        }
+      }
+      // Scoped to this organizer -- same ownership check createItem uses for saleId, so a
+      // client can never attach the new consignor's first item to another organizer's sale.
+      saleForItem = await prisma.sale.findFirst({
+        where: { id: item.saleId, organizerId: organizer.id },
+        select: { id: true },
+      });
+      if (!saleForItem) {
+        return res.status(404).json({ error: 'Sale not found or not yours.' });
+      }
+    }
+
     // ADR-096: opt-in tiered commission. Seed the workspace's default ladder the
     // first time anyone turns this on, so the toggle never silently no-ops.
     if (useTieredCommission === true) {
       await seedDefaultCommissionTiers(workspace.id);
     }
 
-    const consignor = await prisma.consignor.create({
-      data: {
-        workspaceId: workspace.id,
-        name,
-        email: email || null,
-        phone: phone || null,
-        commissionRate: new Decimal(rate),
-        useTieredCommission: useTieredCommission === true,
-        unsoldItemDisposition: unsoldItemDisposition || null,
-        notes: notes || null,
-      },
+    // Transaction: when an item is included, the Consignor and its first Item are created
+    // together or not at all -- never a Consignor left with a half-failed item attach.
+    const { consignorId: newConsignorId } = await prisma.$transaction(async (tx) => {
+      const createdConsignor = await tx.consignor.create({
+        data: {
+          workspaceId: workspace.id,
+          name,
+          email: email || null,
+          phone: phone || null,
+          commissionRate: new Decimal(rate),
+          useTieredCommission: useTieredCommission === true,
+          unsoldItemDisposition: unsoldItemDisposition || null,
+          notes: notes || null,
+        },
+      });
+
+      if (saleForItem) {
+        await tx.item.create({
+          data: {
+            saleId: saleForItem.id,
+            organizerId: organizer.id,
+            title: item.title.trim(),
+            description: item.description || '',
+            price: parsedItemPrice,
+            category: item.category || null,
+            status: 'AVAILABLE',
+            draftStatus: 'PUBLISHED',
+            ebayShippingClassification: classifyEbayShipping(item.category || null, []),
+            rarity: assignRarityForIntakeItem(parsedItemPrice),
+            // U1: satisfies NOT NULL constraint; scheduleItemEmbedding (itemController.ts)
+            // is not called here since this a lightweight intake path -- the item is still
+            // fully editable afterward through the normal edit-item flow.
+            embedding: [],
+            consignorId: createdConsignor.id,
+          },
+        });
+      }
+
+      return { consignorId: createdConsignor.id };
+    });
+
+    const consignor = await prisma.consignor.findUnique({
+      where: { id: newConsignorId },
       include: {
-        items: { where: { status: 'SOLD' }, select: { id: true, title: true, price: true } },
+        items: { select: { id: true, title: true, price: true, status: true, createdAt: true } },
         payouts: { select: { id: true, totalSales: true, commissionAmount: true, paidAt: true } },
       },
     });

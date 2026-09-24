@@ -54,6 +54,7 @@ import BulkPhotoModal from '../../../components/BulkPhotoModal';
 import BulkTagModal from '../../../components/BulkTagModal';
 import BulkActionDropdown from '../../../components/BulkActionDropdown';
 import BulkCategoryModal from '../../../components/BulkCategoryModal';
+import BulkConsignorModal from '../../../components/BulkConsignorModal';
 import BulkStatusModal, { OffPlatformFields } from '../../../components/BulkStatusModal';
 import { useOffPlatformUsage, markItemSoldOffPlatform, MarkSoldOffPlatformPayload } from '../../../hooks/useOffPlatformSales';
 import BulkPriceModal from '../../../components/BulkPriceModal';
@@ -398,6 +399,7 @@ const emptyForm = {
   lotNumber: '',
   tags: [] as string[], // Feature #42: Voice-to-tag support
   photoUrls: [] as string[],
+  consignorId: '' as string,
 };
 
 const AddItemsDetailPage = () => {
@@ -668,6 +670,7 @@ const AddItemsDetailPage = () => {
   const [quickbooksExporting, setQuickbooksExporting] = useState(false);
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
   const [bulkCategoryModalOpen, setBulkCategoryModalOpen] = useState(false);
+  const [bulkConsignorModalOpen, setBulkConsignorModalOpen] = useState(false);
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
   const [bulkPriceModalOpen, setBulkPriceModalOpen] = useState(false);
   const [bulkErrorModalOpen, setBulkErrorModalOpen] = useState(false);
@@ -693,6 +696,18 @@ const AddItemsDetailPage = () => {
       return response.data || null;
     },
     enabled: !!saleId,
+  });
+
+  // Consignor picker for individual item intake (TEAMS-tier only) -- lets the organizer
+  // attach this item to a consignor at creation time instead of a separate edit trip.
+  const { data: consignorOptions } = useQuery({
+    queryKey: ['consignors-for-item-picker'],
+    queryFn: async () => {
+      const response = await api.get('/consignors');
+      return response.data as Array<{ id: string; name: string }>;
+    },
+    enabled: orgTier === 'TEAMS',
+    staleTime: 60 * 1000,
   });
 
   const { data: items = [], isLoading: itemsLoading, isError: itemsError, refetch: refetchItems } = useQuery({
@@ -1040,6 +1055,7 @@ const AddItemsDetailPage = () => {
         category: 'Updated category for',
         status: 'Updated status for',
         tags: 'Updated tags for',
+        consignor: 'Attached consignor to',
       }[operation] || 'Updated';
 
       // P1-B: Show warning toast if items were skipped
@@ -1210,6 +1226,14 @@ const AddItemsDetailPage = () => {
       itemIds: Array.from(selectedItems),
       operation: 'category',
       value: category,
+    });
+  };
+
+  const handleBulkConsignor = async (consignorId: string) => {
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'consignor',
+      value: { consignorId },
     });
   };
 
@@ -2287,6 +2311,21 @@ const AddItemsDetailPage = () => {
                         <option value="REVERSE_AUCTION">Reverse Auction (daily price drop)</option>
                       </select>
                     </div>
+                    {orgTier === 'TEAMS' && consignorOptions && consignorOptions.length > 0 && (
+                      <div>
+                        <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Consignor (optional)</label>
+                        <select
+                          value={formData.consignorId}
+                          onChange={(e) => setFormData({ ...formData, consignorId: e.target.value })}
+                          className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                        >
+                          <option value="">Not consigned</option>
+                          {consignorOptions.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Conditional: Reverse Auction Fields */}
@@ -2803,6 +2842,7 @@ const AddItemsDetailPage = () => {
                       onManageTags={() => setBulkTagModalOpen(true)}
                       onManagePhotos={() => setBulkPhotoModalOpen(true)}
                       onSetPrice={() => setBulkPriceModalOpen(true)}
+                      onSetConsignor={orgTier === 'TEAMS' ? () => setBulkConsignorModalOpen(true) : undefined}
                       disabled={bulkUpdateMutation.isPending}
                     />
                   </div>
@@ -3561,6 +3601,15 @@ const AddItemsDetailPage = () => {
         categories={items.length > 0 ? Array.from(new Set(items.map((i: any) => i.category).filter(Boolean))) : []}
         onClose={() => setBulkCategoryModalOpen(false)}
         onApply={handleBulkCategory}
+        loading={bulkUpdateMutation.isPending}
+      />
+
+      <BulkConsignorModal
+        isOpen={bulkConsignorModalOpen}
+        selectedCount={selectedItems.size}
+        consignors={consignorOptions || []}
+        onClose={() => setBulkConsignorModalOpen(false)}
+        onApply={handleBulkConsignor}
         loading={bulkUpdateMutation.isPending}
       />
 
