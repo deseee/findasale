@@ -17,7 +17,7 @@
  *       A title hit whose item already has a DIFFERENT remote id on record for this platform is
  *       refused. No fuzzy matching.
  * vintedSoldDetectionService.ts keeps its own copy of this flow for Vinted (unchanged behaviour
- * and tests); Mercari and the Facebook fallback use this one.
+ * and tests); Mercari, Poshmark, Grailed and the Facebook fallback use this one.
  */
 
 import { prisma } from '../lib/prisma';
@@ -28,7 +28,9 @@ import {
   type VintedSoldCandidateItem,
 } from './vintedSoldDetectionService';
 
-export type SoldDetectionPlatform = 'VINTED' | 'MERCARI' | 'POSHMARK' | 'FACEBOOK';
+// Each value must also exist in the MarketplaceJobPlatform Prisma enum (it is used as the
+// marketplaceListingJob.platform filter). GRAILED already does; no schema change.
+export type SoldDetectionPlatform = 'VINTED' | 'MERCARI' | 'POSHMARK' | 'GRAILED' | 'FACEBOOK';
 
 export type PlatformSoldResultKind = 'sold' | 'alreadySold' | 'notAvailable' | 'ambiguous' | 'notFound' | 'error';
 

@@ -1,6 +1,7 @@
 /**
  * inboundEmailAuthService.ts — sender-authentication checks for the ADR-131 inbound email
  * pipeline (facebookMarketplaceEmailSoldDetection.ts, vintedSoldEmailDetection.ts,
+ * mercariSoldEmailDetection.ts, poshmarkSoldEmailDetection.ts, grailedSoldEmailDetection.ts,
  * gmailForwardingAutoConfirmService.ts).
  *
  * WHY: a parsed From address is trivially spoofable. Before either pipeline acts on an
@@ -43,6 +44,14 @@ export const VINTED_DKIM_DOMAINS = ['vinted.com'];
 // sendgrid.info signature, NOT accepted here) and dmarc=pass (p=REJECT) header.from=mercari.com.
 // alerts.us.mercari.com passes as a subdomain of mercari.com.
 export const MERCARI_DKIM_DOMAINS = ['mercari.com'];
+// Poshmark's sale email (poshmarkSoldEmailDetection.ts, research-built 2026-09-23, not yet seen
+// live). Sent from orders@poshmark.com through SendGrid; only a poshmark.com signature counts,
+// the sendgrid.net / sendgrid.info one never does.
+export const POSHMARK_DKIM_DOMAINS = ['poshmark.com'];
+// Grailed's sale email (grailedSoldEmailDetection.ts, PROVISIONAL 2026-09-23). Sent from
+// help@grailed.com through Mailgun; only a grailed.com signature counts, the mailgun.org one never
+// does.
+export const GRAILED_DKIM_DOMAINS = ['grailed.com'];
 
 interface ResInfo {
   method: string;

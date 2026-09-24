@@ -41,8 +41,13 @@
  * search never stops the other branch from running.
  *
  * MERCARI (2026-09-23): a third search in the same pass for Mercari's "You've made a sale: ..."
- * email (mercariSoldEmailDetection.ts), same rules. Poshmark has no branch: no real Poshmark
- * sale email has been observed yet, so there is no verified template to match.
+ * email (mercariSoldEmailDetection.ts), same rules.
+ *
+ * POSHMARK + GRAILED (2026-09-23): two more searches in the same pass, same rules.
+ * poshmarkSoldEmailDetection.ts handles '"<title>" just sold to <buyer> on Poshmark!' from
+ * orders@poshmark.com (research-built, not yet seen live). grailedSoldEmailDetection.ts is
+ * PROVISIONAL: help@grailed.com sale-like subjects, committed only when the body carries the
+ * GrailedBot "You just sold <title> in Size ..." sentence, otherwise logged as grailed_unparsed.
  */
 
 import { ImapFlow } from 'imapflow';
@@ -56,6 +61,8 @@ import {
 import { headerValues, extractAddresses, type RawHeaderLine } from './inboundEmailAuthService';
 import { processVintedSoldEmail, type VintedSoldEmailResult } from './vintedSoldEmailDetection';
 import { processMercariSoldEmail, type MercariSoldEmailResult } from './mercariSoldEmailDetection';
+import { processPoshmarkSoldEmail, type PoshmarkSoldEmailResult } from './poshmarkSoldEmailDetection';
+import { processGrailedSoldEmail, type GrailedSoldEmailResult } from './grailedSoldEmailDetection';
 
 export interface VintedSoldEmailPollCounts {
   processed: number;
@@ -75,7 +82,19 @@ export interface FacebookSoldEmailPollResult {
   vinted: VintedSoldEmailPollCounts;
   /** Mercari sold-email branch (2026-09-23, same pass, same inbox, same counters shape). */
   mercari: VintedSoldEmailPollCounts;
+  /** Poshmark sold-email branch (2026-09-23, research-built). */
+  poshmark: VintedSoldEmailPollCounts;
+  /** Grailed sold-email branch (2026-09-23, PROVISIONAL). */
+  grailed: VintedSoldEmailPollCounts;
 }
+
+/** Parsed inbound message: the Facebook shape plus the extra fields the Poshmark branch reads. */
+export type ParsedInboundEmail = InboundFacebookOrderEmail & {
+  /** Display name of the From address ('' when absent). */
+  fromName?: string;
+  /** Attachment file names ('' entries dropped). */
+  attachmentNames?: string[];
+};
 
 // Gmail's IMAP server accepts its own web search syntax via the X-GM-RAW extension
 // (same "gmraw" mechanism bounceSuppressService.ts already uses) — from:/subject: filter
@@ -103,6 +122,17 @@ const VINTED_SOLD_EMAIL_SEARCH_QUERY =
 // processMercariSoldEmail re-checks the exact sender and subject prefix.
 const MERCARI_SOLD_EMAIL_SEARCH_QUERY =
   '(from:no-reply@alerts.us.mercari.com subject:"made a sale") is:unread -in:spam -in:trash';
+
+// Poshmark branch: '"<title>" just sold to <buyer> on Poshmark!' from orders@poshmark.com.
+// processPoshmarkSoldEmail re-checks the exact sender and the full subject shape, so shipping
+// reminders, offers and promos that slip through the word match are ignored there.
+const POSHMARK_SOLD_EMAIL_SEARCH_QUERY =
+  '(from:orders@poshmark.com subject:"just sold to") is:unread -in:spam -in:trash';
+
+// Grailed branch (PROVISIONAL): the sale subject is not known yet, so this is wide on purpose;
+// processGrailedSoldEmail applies the real subject gate and only commits on a parsed body title.
+const GRAILED_SOLD_EMAIL_SEARCH_QUERY =
+  '(from:help@grailed.com (subject:sold OR subject:sale)) is:unread -in:spam -in:trash';
 
 // Safety cap, same idea as bounceSuppressService's 2000-UID cap — pure defense-in-depth.
 // Real volume here is roughly one email every few weeks per ADR-131, so this should never
@@ -165,7 +195,7 @@ function extractLinksFromHtml(html: string): string[] {
  * processFacebookMarketplaceOrderEmail() expects. Exported so this mapping is unit
  * testable without a live IMAP connection.
  */
-export async function parseImapMessageToInboundEmail(rawSource: Buffer): Promise<InboundFacebookOrderEmail> {
+export async function parseImapMessageToInboundEmail(rawSource: Buffer): Promise<ParsedInboundEmail> {
   const parsed = await simpleParser(rawSource);
 
   // Use the parsed address only (not the raw "Display Name <addr>" From header line).
@@ -174,6 +204,10 @@ export async function parseImapMessageToInboundEmail(rawSource: Buffer): Promise
   // "from" field would already be in, not a raw MIME header line that may carry a display
   // name Facebook could change at any time.
   const from = parsed.from?.value?.[0]?.address ?? '';
+  const fromName = parsed.from?.value?.[0]?.name ?? '';
+  const attachmentNames = (parsed.attachments ?? [])
+    .map((a: any) => String(a?.filename ?? '').trim())
+    .filter((n: string) => n.length > 0);
   const subject = parsed.subject ?? '';
 
   const htmlBody = typeof parsed.html === 'string' ? parsed.html : null;
@@ -199,7 +233,17 @@ export async function parseImapMessageToInboundEmail(rawSource: Buffer): Promise
     ),
   );
 
-  return { from, subject, links, rawBody, authenticationResults, arcAuthenticationResults, recipientAddresses };
+  return {
+    from,
+    fromName,
+    subject,
+    links,
+    rawBody,
+    attachmentNames,
+    authenticationResults,
+    arcAuthenticationResults,
+    recipientAddresses,
+  };
 }
 
 /** Runs one gmraw search. Returns null (and records the error) on failure so the caller can
@@ -239,7 +283,11 @@ async function markSeen(client: ImapFlow, uid: number): Promise<void> {
   }
 }
 
-type TitleEmailOutcome = VintedSoldEmailResult | MercariSoldEmailResult;
+type TitleEmailOutcome =
+  | VintedSoldEmailResult
+  | MercariSoldEmailResult
+  | PoshmarkSoldEmailResult
+  | GrailedSoldEmailResult;
 
 /**
  * One title-matched marketplace branch of the same pass (Vinted, Mercari). Every unread message
@@ -250,10 +298,10 @@ type TitleEmailOutcome = VintedSoldEmailResult | MercariSoldEmailResult;
 async function processTitleEmailBatch(
   client: ImapFlow,
   result: FacebookSoldEmailPollResult,
-  label: 'Vinted' | 'Mercari',
+  label: 'Vinted' | 'Mercari' | 'Poshmark' | 'Grailed',
   query: string,
   counts: VintedSoldEmailPollCounts,
-  process: (email: InboundFacebookOrderEmail) => Promise<TitleEmailOutcome>,
+  process: (email: ParsedInboundEmail) => Promise<TitleEmailOutcome>,
 ): Promise<void> {
   const uids = await searchUnread(client, query, label, result);
   if (!uids) return;
@@ -327,6 +375,20 @@ export async function processMercariBatch(client: ImapFlow, result: FacebookSold
   );
 }
 
+/** Poshmark branch (2026-09-23, research-built): every unread '"..." just sold to ...' email. */
+export async function processPoshmarkBatch(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<void> {
+  await processTitleEmailBatch(client, result, 'Poshmark', POSHMARK_SOLD_EMAIL_SEARCH_QUERY, result.poshmark, (email) =>
+    processPoshmarkSoldEmail(email),
+  );
+}
+
+/** Grailed branch (2026-09-23, PROVISIONAL): unread help@grailed.com sold/sale emails. */
+export async function processGrailedBatch(client: ImapFlow, result: FacebookSoldEmailPollResult): Promise<void> {
+  await processTitleEmailBatch(client, result, 'Grailed', GRAILED_SOLD_EMAIL_SEARCH_QUERY, result.grailed, (email) =>
+    processGrailedSoldEmail(email),
+  );
+}
+
 /**
  * Polls FACEBOOK_SOLD_IMAP_USER's inbox for unread Facebook Marketplace order-
  * confirmation emails and runs each one through processFacebookMarketplaceOrderEmail.
@@ -347,6 +409,8 @@ export async function pollFacebookMarketplaceSoldEmails(): Promise<FacebookSoldE
     errors: [],
     vinted: { processed: 0, matched: 0, unmatched: 0, ambiguous: 0, ignored: 0 },
     mercari: { processed: 0, matched: 0, unmatched: 0, ambiguous: 0, ignored: 0 },
+    poshmark: { processed: 0, matched: 0, unmatched: 0, ambiguous: 0, ignored: 0 },
+    grailed: { processed: 0, matched: 0, unmatched: 0, ambiguous: 0, ignored: 0 },
   };
 
   let session: ImapSession;
@@ -432,11 +496,15 @@ export async function pollFacebookMarketplaceSoldEmails(): Promise<FacebookSoldE
 
     await processVintedBatch(client, result);
     await processMercariBatch(client, result);
+    await processPoshmarkBatch(client, result);
+    await processGrailedBatch(client, result);
 
     console.log(
       `[facebookMarketplaceEmailPollService] Done. processed=${result.processed} matched=${result.matched} unmatched=${result.unmatched} ignored=${result.ignored} ` +
         `vinted.processed=${result.vinted.processed} vinted.matched=${result.vinted.matched} vinted.unmatched=${result.vinted.unmatched} vinted.ambiguous=${result.vinted.ambiguous} vinted.ignored=${result.vinted.ignored} ` +
-        `mercari.processed=${result.mercari.processed} mercari.matched=${result.mercari.matched} mercari.unmatched=${result.mercari.unmatched} mercari.ambiguous=${result.mercari.ambiguous} mercari.ignored=${result.mercari.ignored} errors=${result.errors.length}`
+        `mercari.processed=${result.mercari.processed} mercari.matched=${result.mercari.matched} mercari.unmatched=${result.mercari.unmatched} mercari.ambiguous=${result.mercari.ambiguous} mercari.ignored=${result.mercari.ignored} ` +
+        `poshmark.processed=${result.poshmark.processed} poshmark.matched=${result.poshmark.matched} poshmark.unmatched=${result.poshmark.unmatched} poshmark.ambiguous=${result.poshmark.ambiguous} poshmark.ignored=${result.poshmark.ignored} ` +
+        `grailed.processed=${result.grailed.processed} grailed.matched=${result.grailed.matched} grailed.unmatched=${result.grailed.unmatched} grailed.ambiguous=${result.grailed.ambiguous} grailed.ignored=${result.grailed.ignored} errors=${result.errors.length}`
     );
     return result;
   } finally {

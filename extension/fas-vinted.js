@@ -39,6 +39,18 @@
   console.log('[FAS Vinted] content script loaded on ' + location.pathname + location.search);
   const LISTING_URL_HINT = 'https://www.vinted.com/items/new'; // UNVERIFIED -- best-effort guess, not live-confirmed
 
+  // 2026-09-23 (console noise): when the extension is reloaded or updated, the content script
+  // already on the page keeps running but every chrome.runtime / chrome.storage call throws
+  // "Extension context invalidated." That is expected, not an error: callers check
+  // fasContextAlive() first and bail quietly, and fasContextGone(e) turns that one error into a
+  // console.log instead of a warn/error. A page reload injects a fresh, live copy of this script.
+  function fasContextAlive() {
+    try { return !!(chrome.runtime && chrome.runtime.id); } catch (e) { return false; }
+  }
+  function fasContextGone(e) {
+    const msg = String((e && e.message) || e || '');
+    return msg.indexOf('Extension context invalidated') !== -1 || !fasContextAlive();
+  }
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
   // BUG FIX 2026-08-29 (S-EXT-VINTED-COLOR-BRAND-RELIABILITY, Patrick-reported inconsistent
@@ -3202,6 +3214,7 @@
   }
 
   async function vintSoldMaybeCheck() {
+    if (!fasContextAlive()) return; // extension reloaded under this page: nothing to report to
     if (vintRemRunning) return; // a removal run owns this tab's wardrobe reads; a later load checks
     try {
       const last = Number(await vintRemStorageGet(VINT_SOLD_LAST_CHECK_KEY)) || 0;
@@ -3266,6 +3279,7 @@
   // full wardrobe read (vintSoldMaybeCheck) does not overlap the removal lookup's read.
   let vintRemRunning = false;
   async function maybeRunVintedRemoval() {
+    if (!fasContextAlive()) return false;
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'VINTED' }); } catch (e) { return false; }
     if (!queued || !queued.ok || !queued.item) return false;
@@ -3322,9 +3336,14 @@
     // "nothing in console" last round could mean either "this function never ran" (a real gap) or
     // "it ran and quietly no-opped" (this function had zero console output either way before this
     // round, so those two cases were indistinguishable from Patrick's report alone).
+    if (!fasContextAlive()) return; // extension reloaded under this page: nothing to ask
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) {
-      console.warn('[FAS Vinted] continue-prompt: getVintedQueueItem message failed:', e && e.message);
+      if (fasContextGone(e)) {
+        console.log('[FAS Vinted] continue-prompt: extension was reloaded. Reload this page to reconnect.');
+      } else {
+        console.warn('[FAS Vinted] continue-prompt: getVintedQueueItem message failed:', e && e.message);
+      }
       return;
     }
     if (!queued || !queued.ok || !queued.item) {
@@ -3361,7 +3380,7 @@
     // often competing with Vinted's own centered "Item listed" dialog for attention -- confirmed
     // live via screenshot). Fire-and-forget -- the on-page toast below is the primary UI regardless
     // of whether the notification succeeds (e.g. OS notifications disabled for Chrome).
-    try { chrome.runtime.sendMessage({ type: 'showVintedContinueNotification', itemId: queued.item.id, itemTitle: queued.item.title }); } catch (e) { /* non-fatal */ }
+    try { const pn = chrome.runtime.sendMessage({ type: 'showVintedContinueNotification', itemId: queued.item.id, itemTitle: queued.item.title }); if (pn && pn.catch) pn.catch(() => {}); } catch (e) { /* non-fatal */ }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Finished with <b>' + escapeHtml(queued.item.title) + '</b>?</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Vinted took you away from the review screen before you could confirm. If you already clicked Vinted\'s own Upload for this item, continue to the next one below -- if not, just close this.</div>' +
       button('fas-vin-continue', 'Continue to next item &#9654;', true) +
@@ -3377,12 +3396,12 @@
       cont.disabled = true;
       cont.textContent = 'Please wait…';
       startQueueDelayCountdown(guessedQueueDelayMs(), 'the next item');
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
+      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, markListed skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
       // S-EXT-VINTED-REMOTE-LISTING-ID: this prompt usually shows on the organizer's own
       // /member/<id>?promo_shown=true landing page right after Vinted's Upload -- the best moment
       // to find the new listing's id in their wardrobe. Runs alongside the queue delay.
       const capture = vintCapAfterMarkListed(queued.item);
-      try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) { console.warn('[FAS Vinted] continue-prompt: advanceVintedQueue failed:', e && e.message); }
+      try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, advanceVintedQueue skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: advanceVintedQueue failed:', e && e.message); }
       try { await capture; } catch (e) {}
       clearQueueDelayCountdown();
       location.href = LISTING_URL_HINT;
@@ -3483,6 +3502,7 @@
   }
 
   async function start() {
+    if (!fasContextAlive()) return;
     if (!looksLikeVintedListingPage()) { await maybeShowVintedContinuePrompt(); return; }
     await sleep(600);
     let queued;
@@ -3533,12 +3553,20 @@
   // transition is a full reload or a same-document SPA route change.
   function watchForVintedNavigationAway() {
     console.log('[FAS Vinted] navigation watcher started on ' + location.pathname);
-    setInterval(() => {
+    const watcherId = setInterval(() => {
+      // Extension reloaded under this page: every tick would only throw "Extension context
+      // invalidated", so stop the watcher for good. A page reload starts a fresh one.
+      if (!fasContextAlive()) {
+        clearInterval(watcherId);
+        console.log('[FAS Vinted] navigation watcher stopped: extension was reloaded. Reload this page to reconnect.');
+        return;
+      }
       try {
         vintCapMaybeCapture(); // S-EXT-VINTED-REMOTE-LISTING-ID: self-guarded, once per path
         if (!looksLikeVintedListingPage()) maybeShowVintedContinuePrompt();
       } catch (e) {
-        console.warn('[FAS Vinted] navigation watcher tick threw:', e && e.message);
+        if (fasContextGone(e)) console.log('[FAS Vinted] navigation watcher tick: extension was reloaded.');
+        else console.warn('[FAS Vinted] navigation watcher tick threw:', e && e.message);
       }
     }, 800);
   }

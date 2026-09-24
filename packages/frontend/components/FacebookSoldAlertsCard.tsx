@@ -13,10 +13,11 @@ import Skeleton from './Skeleton';
  * packages/backend/src/services/facebookMarketplaceEmailPollService.ts and the exact
  * sender/subject check in facebookMarketplaceEmailSoldDetection.ts.
  * 2026-09-23: step 3 is ONE Gmail filter whose "Has the words" query covers every marketplace
- * the poll reads (Facebook order + shipping-label emails, Vinted, Mercari). Each sender is paired
- * with its own subject so only sale notices are forwarded. The backend still re-checks the exact
- * sender, subject and DKIM/DMARC per platform (facebookMarketplaceEmailSoldDetection.ts,
- * vintedSoldEmailDetection.ts, mercariSoldEmailDetection.ts).
+ * the poll reads (Facebook order + shipping-label emails, Vinted, Mercari, Poshmark, Grailed).
+ * Each sender is paired with its own subject so only sale notices are forwarded. The backend
+ * still re-checks the exact sender, subject and DKIM/DMARC per platform
+ * (facebookMarketplaceEmailSoldDetection.ts, vintedSoldEmailDetection.ts,
+ * mercariSoldEmailDetection.ts, poshmarkSoldEmailDetection.ts, grailedSoldEmailDetection.ts).
  *
  * Types are local on purpose (a @findasale/shared import breaks the Vercel build).
  */
@@ -30,12 +31,15 @@ interface FacebookSoldEmailResponse {
 
 // One Gmail filter for every supported marketplace. Same sender/subject pairs as the poll's
 // searches in facebookMarketplaceEmailPollService.ts. Gmail filters accept OR and parentheses
-// in the "Has the words" box. Poshmark is not listed: no real Poshmark sale email has been
-// verified yet, so there is nothing safe to match.
+// in the "Has the words" box. Poshmark (research-built, not yet seen live) and Grailed
+// (PROVISIONAL: subject not known yet, so sold OR sale) were added 2026-09-23; the backend only
+// acts on their exact sale notices and ignores everything else these clauses let through.
 const SOLD_EMAIL_FILTER_QUERY =
   '(from:noreply@marketplace.facebook.com (subject:"New Marketplace order for" OR subject:"Shipping label for your Marketplace order")) OR ' +
   '(from:no-reply@vinted.com subject:"You sold an item") OR ' +
-  '(from:no-reply@alerts.us.mercari.com subject:"made a sale")';
+  '(from:no-reply@alerts.us.mercari.com subject:"made a sale") OR ' +
+  '(from:orders@poshmark.com subject:"just sold to") OR ' +
+  '(from:help@grailed.com (subject:sold OR subject:sale))';
 
 const CopyChip: React.FC<{ value: string; label?: string }> = ({ value, label }) => {
   const [copied, setCopied] = useState(false);
@@ -122,7 +126,8 @@ const FacebookSoldAlertsCard: React.FC = () => {
 
       <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
         <p className="text-sm text-warm-600 dark:text-gray-400 mb-4 leading-relaxed">
-          When something sells on Facebook Marketplace, Vinted or Mercari, you get a sale email.
+          When something sells on Facebook Marketplace, Vinted, Mercari, Poshmark or Grailed, you get
+          a sale email.
           Forward those emails to your private FindA.Sale address and we mark the item sold and pull
           it from your other marketplaces.
         </p>
@@ -182,9 +187,9 @@ const FacebookSoldAlertsCard: React.FC = () => {
                 <CopyChip value={SOLD_EMAIL_FILTER_QUERY} label="filter" />
                 <div className="mt-2">
                   Click Create filter, check Forward it to, pick your FindA.Sale address, then Create
-                  filter again. This one filter covers Facebook Marketplace, Vinted and Mercari sales.
-                  Offers, messages and promos are not forwarded. Made our older Facebook or Vinted
-                  filter? You can delete it once this one is saved.
+                  filter again. This one filter covers Facebook Marketplace, Vinted, Mercari, Poshmark
+                  and Grailed sales. Offers, messages and promos are not forwarded. Made one of our
+                  older filters? You can delete it once this one is saved.
                 </div>
               </Step>
             </ol>
