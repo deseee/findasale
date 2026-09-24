@@ -1856,20 +1856,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!markListedResp.ok && !markListedResp.deduped) console.log('[FAS markListed FAILED]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, resp: markListedResp }));
         sendResponse(markListedResp);
       } else if (msg.type === 'setRemoteListingId') {
-        // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23): fas-vinted.js reports the numeric Vinted
-        // listing id it learned AFTER the organizer published (own /items/<id> page after a fill,
-        // own wardrobe after publish, or the removal flow's unique wardrobe title match). Only a
-        // vinted.com content script may send it, only for VINTED, only a numeric id -- the backend
-        // re-checks all of this plus item ownership and set-once semantics.
+        // S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23), generalized ADR-mercari-remote-listing-id-
+        // capture-2026-09-24: fas-vinted.js / fas-mercari.js report the listing id they learned
+        // AFTER the organizer published (own listing/detail page after a fill, own wardrobe/listings
+        // page after publish, or the removal flow's own unique title match). Only a content script
+        // for that SAME platform's own origin may send it, only an id matching that platform's own
+        // format -- the backend re-checks all of this plus item ownership and set-once semantics.
+        // Per-platform origin + id-format config, keyed the same way REMOTE_ID_FORMATS is keyed
+        // server-side (extensionController.ts) -- VINTED's own check is unchanged from before this
+        // generalization; MERCARI's id (e.g. 'm12345678') is normalized lowercase before the POST,
+        // matching mercRemItemIdFromHref's own .toLowerCase() convention in fas-mercari.js.
+        const SET_REMOTE_ID_CONFIG = {
+          VINTED: { originRe: /^https:\/\/www\.vinted\.com\//, idRe: /^\d{1,20}$/ },
+          MERCARI: { originRe: /^https:\/\/www\.mercari\.com\//, idRe: /^m\d{1,20}$/i },
+        };
         const senderUrl = String((sender && (sender.url || (sender.tab && sender.tab.url))) || '');
-        const rid = typeof msg.remoteListingId === 'string' ? msg.remoteListingId : '';
-        if (msg.platform !== 'VINTED' || !/^https:\/\/www\.vinted\.com\//.test(senderUrl) ||
-            !/^\d{1,20}$/.test(rid) || typeof msg.itemId !== 'string' || !msg.itemId) {
+        const ridRaw = typeof msg.remoteListingId === 'string' ? msg.remoteListingId : '';
+        const setRemoteIdCfg = SET_REMOTE_ID_CONFIG[msg.platform];
+        const rid = setRemoteIdCfg && setRemoteIdCfg.idRe.test(ridRaw) ? ridRaw.toLowerCase() : ridRaw;
+        if (!setRemoteIdCfg || !setRemoteIdCfg.originRe.test(senderUrl) ||
+            !setRemoteIdCfg.idRe.test(ridRaw) || typeof msg.itemId !== 'string' || !msg.itemId) {
           sendResponse({ ok: false, status: 400, error: 'invalid_request' });
         } else {
           const r = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/remote-listing-id',
-            { method: 'POST', body: { platform: 'VINTED', remoteListingId: rid } });
-          if (!r.ok) console.log('[FAS setRemoteListingId]', JSON.stringify({ itemId: msg.itemId, source: msg.source || null, status: r.status, reason: r.data && r.data.reason }));
+            { method: 'POST', body: { platform: msg.platform, remoteListingId: rid } });
+          if (!r.ok) console.log('[FAS setRemoteListingId]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, source: msg.source || null, status: r.status, reason: r.data && r.data.reason }));
           sendResponse(r);
         }
       } else if (msg.type === 'reportVintedSold') {

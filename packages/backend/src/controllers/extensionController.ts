@@ -1204,13 +1204,17 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
 // organizer's own /items/<id> page right after a fill, from their own wardrobe right after publish,
 // or from the removal flow's unique exact-title wardrobe match -- and reports it here.
 // Guards: authenticated organizer (route chain), item must belong to that organizer (404 otherwise,
-// no existence leak), platform restricted to NUMERIC_REMOTE_ID_PLATFORMS, id must be 1-20 digits,
-// only the item's LIVE listing for that platform (latest non-SKIPPED row is POST/POSTED) is touched,
-// and the id is only ever written when currently null (set-once; the write itself is conditional
-// on remoteListingId: null so two racing reports cannot overwrite each other). An id already
-// recorded on another of this organizer's live listings for the same platform is refused -- one
-// Vinted listing can never be attached to two FindA.Sale items.
-const NUMERIC_REMOTE_ID_PLATFORMS: MarketplaceListingPlatform[] = ['VINTED'];
+// no existence leak), platform restricted to REMOTE_ID_FORMATS' keys, id must match that platform's
+// own format, only the item's LIVE listing for that platform (latest non-SKIPPED row is POST/POSTED)
+// is touched, and the id is only ever written when currently null (set-once; the write itself is
+// conditional on remoteListingId: null so two racing reports cannot overwrite each other). An id
+// already recorded on another of this organizer's live listings for the same platform is refused --
+// one listing can never be attached to two FindA.Sale items.
+// ADR-mercari-remote-listing-id-capture-2026-09-24: generalized from a bare NUMERIC_REMOTE_ID_PLATFORMS
+// array + single shared /^\d{1,20}$/ regex (Vinted-only) to a per-platform format map, so Mercari gets
+// the same after-the-fact capture mechanism -- Mercari's own id is scraped/normalized lowercase
+// (mercRemItemIdFromHref in fas-mercari.js), e.g. 'm12345678', never bare digits like Vinted's.
+const REMOTE_ID_FORMATS: Record<string, RegExp> = { VINTED: /^\d{1,20}$/, MERCARI: /^m\d{1,20}$/ };
 export const setItemRemoteListingId = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const itemId = req.params.id;
@@ -1218,16 +1222,12 @@ export const setItemRemoteListingId = async (req: AuthRequest, res: Response): P
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
   const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : '';
-  if (!(NUMERIC_REMOTE_ID_PLATFORMS as string[]).includes(platformRaw)) {
-    res.status(400).json({ message: 'Unsupported platform', reason: 'unsupported_platform' });
+  const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId.trim() : '';
+  if (!REMOTE_ID_FORMATS[platformRaw]?.test(remoteListingId)) {
+    res.status(400).json({ message: 'Unsupported platform or invalid remoteListingId format', reason: 'unsupported_platform' });
     return;
   }
   const platform = platformRaw as MarketplaceListingPlatform;
-  const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId.trim() : '';
-  if (!/^\d{1,20}$/.test(remoteListingId)) {
-    res.status(400).json({ message: 'remoteListingId must be numeric', reason: 'invalid_remote_listing_id' });
-    return;
-  }
 
   // Latest row for (item, platform), ignoring REMOVE/SKIPPED (a failed removal attempt, not a state
   // change -- same rule getPendingRemovals applies).

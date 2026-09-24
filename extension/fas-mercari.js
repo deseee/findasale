@@ -1946,6 +1946,13 @@
     const next = document.getElementById('fas-merc-next');
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'MERCARI' }); } catch (e) {}
+      // ADR-mercari-remote-listing-id-capture-2026-09-24 (mirrors S-EXT-VINTED-REMOTE-LISTING-ID):
+      // remember (per tab, 15 min) that this item was just confirmed posted here, so the organizer's
+      // own /mypage/listings/active/ page can later be tied back to it (see mercCapMaybeCapture).
+      // Recorded HERE (the organizer's own "I posted" click) rather than earlier in the fill --
+      // Mercari's fill is review-then-organizer-confirms, unlike Vinted's fill-and-stop, so this
+      // click is the actual "a fill genuinely completed" signal, not merely "a draft was rendered".
+      mercCapRecordFill(item);
       try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue', itemId: item.id }); } catch (e) {}
       if (more) { location.href = SELL_URL_HINT; } else { bar && bar.remove(); }
     };
@@ -2477,6 +2484,118 @@
   //   crossPlatformRemovalAttemptFailed -- TRANSIENT failure: do NOT advance until 3 attempts fail.
   // Every send is fire-and-forget: background navigates this tab onward, so awaiting the reply would
   // just race the navigation that tears this content script down.
+  // ------------------------------------------------------------------------------------------
+  // MERCARI LISTING-ID CAPTURE (2026-09-24, ADR-mercari-remote-listing-id-capture-2026-09-24,
+  // mirrors S-EXT-VINTED-REMOTE-LISTING-ID shipped for Vinted 2026-09-23). Mercari removal was
+  // purely a live exact-title scan against /mypage/listings/active/ (findMercariListingLinkByTitle,
+  // below) -- once a title drifts after the fill (retitle, truncation), that scan can no longer find
+  // the listing and removal is permanently stuck (the REMOVAL_HARD_STOP_AFTER_ATTEMPTS cap in
+  // extensionController.ts is the backstop for exactly that case, not the fix). This learns the
+  // Mercari listing id (e.g. 'm12345678') AFTER the fact -- from the organizer's own "I posted" click
+  // (mercCapRecordFill, hooked into showReviewOverlay's next.onclick above) followed by an
+  // opportunistic match against /mypage/listings/active/ whenever it loads -- and reports it via
+  // 'setRemoteListingId' -> background -> POST /extension/items/:id/remote-listing-id (set-once,
+  // organizer-owned item, format-checked, same-platform-clash refused). Recorded fills are bounded to
+  // MERC_CAP_WINDOW_MS / MERC_CAP_MAX_FILLS (sessionStorage, per tab) exactly like Vinted's own
+  // fasVintedRecentFills. The match itself REUSES findMercariListingLinkByTitle verbatim (exact-title,
+  // exactly-one-candidate-or-refuse) -- the same matcher the removal flow trusts for live delete
+  // decisions -- rather than duplicating that regex/logic here. Never clicks anything, never blocks
+  // the fill or removal flow, and a miss (zero or ambiguous candidates) is silently left for a later
+  // page rather than guessed.
+  const MERC_CAP_FILLS_KEY = 'fasMercRecentFills';
+  const MERC_CAP_WINDOW_MS = 15 * 60 * 1000;
+  const MERC_CAP_MAX_FILLS = 10;
+
+  // Mirrors vintRemListingRefFor's validation shape exactly: the backend's getPendingRemovals
+  // response already populates item.listingRefs.MERCARI once a job's remoteListingId is set (generic,
+  // no backend change needed here -- see listingRefsFor() in extensionController.ts) -- this just
+  // re-validates the shape before trusting it for navigation.
+  function mercRemListingRefFor(item) {
+    const refs = item && item.listingRefs && typeof item.listingRefs === 'object' ? item.listingRefs : null;
+    const v = refs ? refs.MERCARI : null;
+    const s = typeof v === 'string' ? v.toLowerCase() : '';
+    return /^m\d{1,20}$/.test(s) ? s : null;
+  }
+
+  function mercCapReadFills() {
+    let arr = [];
+    try { arr = JSON.parse(sessionStorage.getItem(MERC_CAP_FILLS_KEY) || '[]'); } catch (e) { arr = []; }
+    if (!Array.isArray(arr)) return [];
+    const now = Date.now();
+    return arr.filter((f) => f && typeof f.itemId === 'string' && typeof f.title === 'string' &&
+      Number.isFinite(f.at) && (now - f.at) >= 0 && (now - f.at) <= MERC_CAP_WINDOW_MS);
+  }
+  function mercCapWriteFills(arr) {
+    try { sessionStorage.setItem(MERC_CAP_FILLS_KEY, JSON.stringify(arr.slice(-MERC_CAP_MAX_FILLS))); } catch (e) { /* non-fatal */ }
+  }
+  function mercCapRecordFill(item) {
+    try {
+      if (!item || !item.id) return;
+      const title = mercRemNorm(item.title);
+      if (title.length < MERC_REM_MIN_SAFE_TITLE_LEN) return;
+      const fills = mercCapReadFills().filter((f) => f.itemId !== String(item.id));
+      fills.push({ itemId: String(item.id), title, at: Date.now() });
+      mercCapWriteFills(fills);
+    } catch (e) { /* never block the review overlay */ }
+  }
+  function mercCapForgetFill(itemId) {
+    mercCapWriteFills(mercCapReadFills().filter((f) => f.itemId !== itemId));
+  }
+
+  // true -> stop trying for this fill (recorded, unchanged, or a definitive refusal);
+  // false -> keep it for a later page (e.g. 'no_live_listing': markListed has not landed yet).
+  function mercCapIsSettled(resp) {
+    if (!resp) return false;
+    if (resp.ok) return true;
+    const reason = resp.data && resp.data.reason;
+    if (reason === 'no_live_listing') return false;
+    return resp.status === 400 || resp.status === 404 || resp.status === 409;
+  }
+
+  function mercCapReport(itemId, mercId, source) {
+    const id = String(mercId == null ? '' : mercId).toLowerCase();
+    if (!itemId || !/^m\d{1,20}$/.test(id)) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          { type: 'setRemoteListingId', platform: 'MERCARI', itemId: String(itemId), remoteListingId: id, source: source || null },
+          (resp) => { void chrome.runtime.lastError; resolve(resp || null); }
+        );
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  // Runs opportunistically whenever /mypage/listings/active/ loads (or, on a layout this file
+  // doesn't otherwise recognize by path, whenever the same listing-card selectors the removal flow
+  // itself waits on are already present) -- reuses findMercariListingLinkByTitle, defined below, so
+  // this NEVER carries its own copy of the card-matching regex/logic.
+  let mercCapBusy = false;
+  async function mercCapMaybeCapture() {
+    if (mercCapBusy) return;
+    const onListingsPage = /^\/mypage\/listings\/active\/?$/.test(location.pathname) ||
+      !!document.querySelector('a[data-testid="ItemLink"]');
+    if (!onListingsPage) return;
+    const fills = mercCapReadFills();
+    if (!fills.length) return;
+    mercCapBusy = true;
+    try {
+      // Same card-hydration wait runMercariRemovalQueue uses before its own first scan.
+      const cardsDeadline = Date.now() + 8000;
+      while (Date.now() < cardsDeadline && !document.querySelector('a[data-testid="ItemLink"], a[href*="/item/"]')) await sleep(250);
+      for (const f of fills) {
+        const link = findMercariListingLinkByTitle(f.title);
+        if (!link) continue; // zero or ambiguous match -- never guessed, same refusal rule as removal
+        const id = link.fasMercItemId || mercRemItemIdFromHref(link.href);
+        if (!id) continue;
+        const resp = await mercCapReport(f.itemId, id, 'listings_page_fill_match');
+        console.log('[FAS Mercari] id-capture: item ' + f.itemId + ' -> ' + id + ' (listings page):', resp && resp.ok ? 'recorded' : ('not recorded (' + ((resp && resp.data && resp.data.reason) || (resp && resp.error) || 'no response') + ')'));
+        if (mercCapIsSettled(resp)) mercCapForgetFill(f.itemId);
+      }
+    } catch (e) {
+      console.warn('[FAS Mercari] id-capture threw:', e && e.message);
+    } finally { mercCapBusy = false; }
+  }
+
   async function runMercariRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
     // 2026-09-23: on an item page, wait (250ms polls, up to ~8s) for the <h1> to hydrate, then
@@ -2511,7 +2630,39 @@
       try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'MERCARI', itemId: item.id, reason: result, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
+    // ADR-mercari-remote-listing-id-capture-2026-09-24: we ARE on a real item detail page
+    // (hereItemId set above) but it did not verify -- either the title didn't match within the 8s
+    // hydration wait, or it matched a DIFFERENT item id than the one this queue entry targeted (the
+    // targetId refusal above). Fail this attempt now instead of falling through to the card-scan
+    // below, which can never succeed on a detail page (no listing cards render there at all, and a
+    // "similar items" rail -- if Mercari renders one -- would share the same /item/ href shape and
+    // could false-match). Mirrors fas-vinted.js's identical `onItemDetailPage && !onDetailAlready`
+    // guard exactly: a TRANSIENT attempt failure, not a permanent skip -- background counts it toward
+    // FAS_REMOVAL_MAX_ATTEMPTS (and, above that, REMOVAL_HARD_STOP_AFTER_ATTEMPTS) before giving up,
+    // so a genuinely stale/wrong recorded id cannot wedge the queue or get silently trusted.
+    if (hereItemId) {
+      try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
+      overlayWarn('This Mercari listing page does not exactly match "' + escapeHtml(item.title) + '" -- nothing was deleted. Please remove it yourself.' + button('fas-merc-close', 'Close', false));
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'MERCARI', itemId: item.id, reason: 'detail_page_title_mismatch', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      return;
+    }
+    // Id-first (ADR-mercari-remote-listing-id-capture-2026-09-24): a known Mercari id for this item
+    // (item.listingRefs.MERCARI -- populated by getPendingRemovals whenever the item's live POST/
+    // POSTED job carries a remoteListingId; see listingRefsFor() in extensionController.ts and
+    // mercCapMaybeCapture above, which is what sets it in the first place) means the listings-page
+    // title scan below can be skipped entirely -- navigate straight to the listing. The EXISTING
+    // hydration-wait + exact-title re-verification (top of this function, hereItemId/
+    // onListingDetailPage) still runs unchanged on the resulting page load before any delete is
+    // attempted, so a bad id is re-verified, never trusted blindly.
+    const refId = mercRemListingRefFor(item);
+    if (refId) {
+      try { sessionStorage.setItem('fasMercDeleteTargetId', refId); } catch (e) {}
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Mercari listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
+      location.href = 'https://www.mercari.com/us/item/' + refId + '/';
+      return; // the resulting page load re-invokes maybeRunMercariRemoval() against the same queued item
+    }
     // 2026-09-23: wait (250ms polls, up to ~8s) for listing cards to render before the first scan.
+    // Only reached when NO Mercari id is known yet for this item (the id-first branch above returns).
     const cardsDeadline = Date.now() + 8000;
     while (Date.now() < cardsDeadline && !document.querySelector('a[data-testid="ItemLink"], a[href*="/item/"]')) await sleep(250);
     const link = findMercariListingLinkByTitle(item.title);
@@ -2533,6 +2684,10 @@
   }
 
   (async () => {
+    // ADR-mercari-remote-listing-id-capture-2026-09-24: fire-and-forget, no-op unless this tab
+    // filled a listing in the last 15 min AND this is (or looks like) the listings page -- never
+    // awaited, so it can never block or delay the removal/fill flow below.
+    mercCapMaybeCapture();
     const ranRemoval = await maybeRunMercariRemoval();
     if (!ranRemoval) start();
   })();
