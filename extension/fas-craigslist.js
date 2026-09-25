@@ -56,6 +56,10 @@
     // ROUND 2 (see marketplaceEligibilityRules.ts's CRAIGSLIST rule, same comment): government-
     // assistance goods (food stamps, WIC vouchers).
     'food stamp', 'wic voucher',
+    // 2026-09-25: weapon-synonym + police-insignia additions, mirrors the same-day
+    // marketplaceEligibilityRules.ts CRAIGSLIST rule edit (see that rule's comment for sourcing).
+    'pepper spray', 'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'butterfly knife', 'throwing star',
+    'police insignia',
   ];
   // BONUS FIX found during the 2026-09-18 mirror-sync pass (not a new audit finding --
   // pre-existing drift from S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03, which added a

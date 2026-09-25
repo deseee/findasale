@@ -257,6 +257,29 @@ const RULES: EligibilityRule[] = [
     reason: 'Facebook Marketplace does not allow listing gift cards, digital goods/accounts, or resold event tickets (Commerce Policy).',
   },
 
+  // ---- FACEBOOK LAW ENFORCEMENT / GOVERNMENT IMPERSONATION ITEMS (added 2026-09-25, while
+  // answering Patrick's direct question about cross-marketplace weapon/category scrutiny) --
+  // Craigslist's own prohibited-items page explicitly bans "police insignia" alongside
+  // government IDs/documents, Gumtree AU's explicitly bans "government and transit badges,
+  // uniforms, IDs, documents and licenses," and Vinted explicitly bans "armed-forces/police/
+  // emergency-services official uniforms and badges" -- all three confirmed via direct fetch of
+  // each platform's own current policy page this session. Meta's own Restricted Goods /
+  // Commerce Policy pages could NOT be freshly re-fetched this session (transparency.meta.com
+  // returned 404/robots-blocked on every attempt) to get an equally direct quote for Facebook
+  // specifically -- flagging that honestly rather than treating this as independently confirmed.
+  // Added as a precautionary, defense-in-depth measure anyway: Facebook is the one platform in
+  // this registry that has ALREADY had a real account restriction from an under-scoped rule
+  // (S-FB-WEAPON-COIN-FIX-2026-09-03), law-enforcement/government impersonation items are
+  // essentially zero-false-positive keywords for an estate-sale business, and 3 of the other 4
+  // platforms audited this session explicitly ban this exact category. Revisit/narrow only if a
+  // legitimate item is ever actually blocked by this in production.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['police badge', 'police uniform', 'police insignia', 'law enforcement badge', 'military uniform', 'government id', 'security badge'],
+    reason: 'Facebook Marketplace does not allow listing law enforcement, government, or military identification, badges, or uniforms (Commerce Policy, precautionary).',
+  },
+
   // ---- CRAIGSLIST (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- previously had ZERO eligibility
   // rule at all, despite fas-craigslist.js supporting full auto-publish CHECKED BY DEFAULT (the
   // 2026-07-17 locked decision, confirmed via that file's own header comment this session) -- the
@@ -299,6 +322,18 @@ const RULES: EligibilityRule[] = [
       // WIC vouchers). Narrow, specific phrases -- no legitimate estate-sale item is titled
       // this way.
       'food stamp', 'wic voucher',
+      // 2026-09-25: closes weapon-synonym and government-impersonation gaps found while
+      // answering Patrick's direct cross-marketplace scrutiny question. Weapon terms mirror
+      // FACEBOOK/VINTED's already-broader coverage -- these are unambiguous self-defense/
+      // martial-arts weapons (not ordinary tools like knives, which Craigslist deliberately
+      // stays silent on per this rule's own header comment) so the evidence gap that justifies
+      // NOT banning knives here doesn't apply to them. 'police insignia' is a direct quote from
+      // craigslist.org/about/prohibited's own Government ID & Documents line ("ID cards,
+      // licenses, police insignia, government documents..."), re-fetched live this session --
+      // 'machete' deliberately NOT added here, same reasoning as the knife carve-out (a common
+      // legitimate yard/garden tool, no comparable evidence Craigslist restricts it).
+      'pepper spray', 'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'butterfly knife', 'throwing star',
+      'police insignia',
     ],
     // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
     // same bare-'gun'-substring false positive applies here (e.g. "...Gunmetal..." golf clubs).
@@ -337,6 +372,15 @@ const RULES: EligibilityRule[] = [
       // already had these tokens (this same failure class caused the original Facebook dagger
       // incident, S-FB-WEAPON-COIN-FIX-2026-09-03), GUMTREE_AU/POSHMARK/MERCARI did not.
       'dagger', 'sword', 'bayonet',
+      // 2026-09-25 (same session as the dagger fix above): closes weapon-synonym gap for
+      // brass knuckles/nunchucks/batons/pepper spray/butterfly knives/machetes/throwing stars --
+      // re-fetched help.gumtree.com.au live this session and confirmed the Weapons category
+      // (item 37) is explicitly open-ended ("including, but not limited to") and separately
+      // names "martial arts weapons" as its own subcategory, which these all fall under. Unlike
+      // CRAIGSLIST, Gumtree already bans ALL knives outright (no culinary exception), so
+      // 'machete' is included here too -- no comparable tool/weapon tension.
+      'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'pepper spray', 'butterfly knife',
+      'machete', 'throwing star',
       'martial arts', 'archery', 'bow and arrow',
       'firework', 'explosive',
       'alcohol', 'tobacco', 'cigarette', 'vape', 'e-cigarette',
@@ -499,6 +543,12 @@ const RULES: EligibilityRule[] = [
       // 2026-09-25: closes a real dagger/sword/bayonet gap, see the GUMTREE_AU rule's comment
       // above for the full story (same fix, same reason, same session).
       'dagger', 'sword', 'bayonet',
+      // 2026-09-25: closes the same weapon-synonym gap as GUMTREE_AU/MERCARI above -- Poshmark's
+      // own "Firearms, weapons & knives" ban is a broad, unqualified category, and Poshmark
+      // already bans ALL non-table-knife blades (see the excludeKeywords note above), so no
+      // tool/weapon tension for 'machete' here either.
+      'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'pepper spray', 'butterfly knife',
+      'machete', 'throwing star',
       'alcohol', 'liquor', 'wine', 'beer',
     ],
     excludeKeywords: [
@@ -507,6 +557,23 @@ const RULES: EligibilityRule[] = [
       'gunmetal',
     ],
     reason: 'Poshmark prohibits firearms, weapons, knives, and ammunition (only dull-bladed table knives are allowed), plus alcohol (Prohibited Items Policy, v4.1).',
+  },
+
+  // ---- POSHMARK LAW ENFORCEMENT / GOVERNMENT IMPERSONATION ITEMS (added 2026-09-25, while
+  // answering Patrick's direct question about cross-marketplace weapon/category scrutiny) --
+  // corroborated via a secondary aggregator source summarizing Poshmark's policy under an
+  // "Impersonation and Official Items" category naming police uniforms specifically
+  // (listperfectly.com, cross-marketplace prohibited-items comparison, checked live this
+  // session) -- the live poshmark.com/prohibited_items_policy page itself only rendered generic
+  // Terms-of-Service boilerplate to this session's fetch tool (likely JS-rendered content), so
+  // this is corroborated but not a direct primary-source quote the way GUMTREE_AU/VINTED/
+  // CRAIGSLIST's versions of this rule are. Kept as its own rule (same reason-accuracy pattern
+  // as the weapons/alcohol vs. drugs/hazmat split above) so a blocked organizer sees why.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'POSHMARK',
+    nameKeywords: ['police badge', 'police uniform', 'law enforcement badge', 'military uniform', 'government id'],
+    reason: 'Poshmark prohibits impersonation and official items such as law enforcement or military badges, uniforms, and government IDs (Prohibited Items Policy).',
   },
 
   // ---- POSHMARK DRUGS/HAZMAT/MEDICAL/ANIMAL PRODUCTS (added S-CROSS-MARKETPLACE-COMPLIANCE-
@@ -544,6 +611,17 @@ const RULES: EligibilityRule[] = [
       // 2026-09-25: closes a real dagger/sword/bayonet gap, see the GUMTREE_AU rule's comment
       // above (same fix, same reason, same session).
       'dagger', 'sword', 'bayonet',
+      // 2026-09-25: closes the same weapon-synonym gap as GUMTREE_AU/POSHMARK above. Mercari's
+      // own policy separately bans "Self defense items, including military-grade items" (already
+      // reflected by the 'self defense' keyword below) -- these are the literal item names a
+      // listing titled just "Brass Knuckles" or "Pepper Spray Keychain" would use, which 'self
+      // defense' alone wouldn't catch. Deliberately did NOT add police/government-impersonation
+      // keywords here: re-fetched mercari.com/us/help_center/prohibited_items live this session
+      // and confirmed it states no police/law-enforcement/military-ID restriction at all, unlike
+      // CRAIGSLIST/GUMTREE_AU/VINTED/FACEBOOK/POSHMARK above -- consistent with this file's
+      // evidence-based approach, not adding an unconfirmed category here.
+      'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'pepper spray', 'butterfly knife',
+      'machete', 'throwing star',
       'taser', 'stun gun', 'self defense',
       'narcotic', 'drug', 'prescription', 'alcohol', 'liquor', 'wine', 'beer', 'tobacco',
       'cigarette', 'cigar', 'vape', 'e-cigarette', 'cbd', 'supplement', 'vitamin', 'food',

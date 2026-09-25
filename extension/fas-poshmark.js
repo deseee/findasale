@@ -384,6 +384,10 @@
         // 2026-09-25: closes a real dagger/sword/bayonet gap -- mirrors the backend
         // marketplaceEligibilityRules.ts POSHMARK rule fix, same session, same reasoning.
         'dagger', 'sword', 'bayonet',
+        // 2026-09-25: weapon-synonym additions, mirrors the same-day
+        // marketplaceEligibilityRules.ts POSHMARK weapons rule edit.
+        'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'pepper spray', 'butterfly knife',
+        'machete', 'throwing star',
         'alcohol', 'liquor', 'wine', 'beer',
       ],
       // RESOLVED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (Patrick decision
@@ -393,6 +397,14 @@
       // blocked here same as any other knife, reducing account-strike risk.
       excludeKeywords: ['table knife', 'butter knife', 'gunmetal'],
       reason: 'Poshmark prohibits firearms, weapons, knives, and ammunition (only dull-bladed table knives are allowed), plus alcohol (Prohibited Items Policy, v4.1).',
+    },
+    // NEW RULE added 2026-09-25 -- mirrors the new POSHMARK LAW ENFORCEMENT / GOVERNMENT
+    // IMPERSONATION rule in marketplaceEligibilityRules.ts (see that rule's own comment for
+    // sourcing/caveats: corroborated via a secondary source, not a direct primary-source quote).
+    {
+      nameKeywords: ['police badge', 'police uniform', 'law enforcement badge', 'military uniform', 'government id'],
+      excludeKeywords: [],
+      reason: 'Poshmark prohibits impersonation and official items such as law enforcement or military badges, uniforms, and government IDs (Prohibited Items Policy).',
     },
     // NEW RULE added S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
     // cross-marketplace-compliance-audit-2026-09-18.md), mirrors the new third POSHMARK

@@ -57,6 +57,10 @@
     // question about cross-marketplace weapon-filter coverage -- mirrors the backend
     // marketplaceEligibilityRules.ts GUMTREE_AU rule fix, same session, same reasoning.
     'dagger', 'sword', 'bayonet',
+    // 2026-09-25: weapon-synonym additions, mirrors the same-day marketplaceEligibilityRules.ts
+    // GUMTREE_AU rule edit (see that rule's comment for sourcing).
+    'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'pepper spray', 'butterfly knife',
+    'machete', 'throwing star',
     'martial arts', 'archery', 'bow and arrow',
     'firework', 'explosive',
     'alcohol', 'tobacco', 'cigarette', 'vape', 'e-cigarette',

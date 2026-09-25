@@ -2224,6 +2224,11 @@
     // 2026-09-25: closes a real dagger/sword/bayonet gap -- mirrors the backend
     // marketplaceEligibilityRules.ts MERCARI rule fix, same session, same reasoning.
     'dagger', 'sword', 'bayonet',
+    // 2026-09-25: weapon-synonym additions, mirrors the same-day marketplaceEligibilityRules.ts
+    // MERCARI rule edit (police/government keywords deliberately NOT added -- see that rule's
+    // comment: Mercari's own policy has no such restriction, confirmed live this session).
+    'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'pepper spray', 'butterfly knife',
+    'machete', 'throwing star',
     'taser', 'stun gun', 'self defense',
     'narcotic', 'drug', 'prescription', 'alcohol', 'liquor', 'wine', 'beer', 'tobacco',
     'cigarette', 'cigar', 'vape', 'e-cigarette', 'cbd', 'supplement', 'vitamin', 'food',

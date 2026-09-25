@@ -86,6 +86,9 @@
     if (FB_GIFTCARD_DIGITAL_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing gift cards, digital goods/accounts, or resold event tickets (Commerce Policy).';
     }
+    if (FB_POLICE_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing law enforcement, government, or military identification, badges, or uniforms (Commerce Policy, precautionary).';
+    }
     return null;
   }
   // Added S-FB-COMPLIANCE-AUDIT-2026-09-18 (see marketplaceEligibilityRules.ts for full
@@ -96,6 +99,11 @@
   const FB_GAMBLING_NAME_KEYWORDS = ['lottery ticket', 'raffle ticket', 'casino chip'];
   const FB_COUNTERFEIT_NAME_KEYWORDS = ['counterfeit', 'replica', 'knockoff', 'bootleg', 'stolen'];
   const FB_GIFTCARD_DIGITAL_NAME_KEYWORDS = ['gift card', 'streaming account', 'game account', 'software key', 'digital download', 'event ticket resale'];
+  // Added 2026-09-25 -- mirrors the new FACEBOOK LAW ENFORCEMENT / GOVERNMENT IMPERSONATION
+  // rule in marketplaceEligibilityRules.ts (kept in sync manually, same as every other list in
+  // this file -- see that rule's own comment for full sourcing/caveats: precautionary, Meta's
+  // live policy text could not be re-fetched this session to get a direct quote).
+  const FB_POLICE_NAME_KEYWORDS = ['police badge', 'police uniform', 'police insignia', 'law enforcement badge', 'military uniform', 'government id', 'security badge'];
   function isFacebookRestrictedItem(category, title) {
     return facebookRestrictionReason(category, title) !== null;
   }
