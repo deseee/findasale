@@ -108,6 +108,11 @@ export function scheduleMarkdownCycleCron(): void {
                   priceBeforeMarkdown: currentPrice,
                   price: newPrice,
                   markdownApplied: true,
+                  // Physical Markdown Alert List (2026-09-25): first markdown stage just
+                  // changed the price -- (re)surface this item on the staff "needs physical
+                  // re-tagging" list. See markdownCron.ts for the same field on the other
+                  // markdown cron.
+                  markdownPhysicallyAppliedAt: null,
                   // ADR markdown-cycle-ebay-price-sync (2026-09-15): stamp so the
                   // ebayListingSyncCron.ts pull-sync guard knows this price change
                   // hasn't reached eBay yet and won't clobber it back on the next pull.
@@ -272,6 +277,13 @@ export function scheduleMarkdownCycleCron(): void {
                   where: { id: item.id },
                   data: {
                     price: newPrice,
+                    // Physical Markdown Alert List (2026-09-25): this is the "LATER markdown
+                    // fires on the same item" case -- the second markdown stage just changed
+                    // the price again, so reset back to null even if staff already re-tagged
+                    // the item for the first markdown, so they get alerted again for the new
+                    // price. See markdownCron.ts / the first-markdown loop above for the same
+                    // field on a first-ever markdown.
+                    markdownPhysicallyAppliedAt: null,
                     // ADR markdown-cycle-ebay-price-sync (2026-09-15): see first-markdown
                     // loop above for why this is stamped on every FAS-initiated price write.
                     priceUpdatedAt: new Date(),

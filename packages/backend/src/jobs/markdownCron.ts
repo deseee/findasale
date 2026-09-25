@@ -94,6 +94,12 @@ export function scheduleMarkdownCron(): void {
               price: newPrice,
               priceBeforeMarkdown: originalPrice,
               markdownApplied: true,
+              // Physical Markdown Alert List (2026-09-25): a system markdown just changed
+              // this item's price, so the shelf sticker/tag is now stale -- (re)surface it
+              // on the staff "needs physical re-tagging" list. Explicit null (not just
+              // relying on the column default) so this stays correct even if a future
+              // change ever lets this cron revisit an item a second time.
+              markdownPhysicallyAppliedAt: null,
             },
           });
 

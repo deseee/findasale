@@ -445,6 +445,40 @@ const AddItemsDetailPage = () => {
   // Rapidfire Mode state
   const [captureMode, setCaptureMode] = useState<'rapidfire' | 'regular'>('rapidfire');
   const [rapidItems, setRapidItems] = useState<RapidItem[]>([]);
+
+  // Consignor-scoped rapid capture (2026-09-25): when set, every item created via the
+  // camera flow (both rapidfire and regular-mode create paths -- both route through
+  // POST /upload/rapidfire, see processAndUploadRapidPhoto below) is attributed to this
+  // consignor automatically. Persisted to sessionStorage per-sale (never localStorage) so
+  // it survives navigating away and back within the same tab, but never silently outlives
+  // the tab or leaks across sales. Ends only via an explicit organizer action -- the page
+  // banner's or the in-camera banner's "End session" button -- never implicitly.
+  const [scopedConsignor, setScopedConsignor] = useState<{ id: string; name: string } | null>(null);
+  // Read at upload time (not capture time) to avoid a stale closure in the async capture
+  // pipeline -- same pattern as addingToItemIdRef below.
+  const scopedConsignorRef = useRef<{ id: string; name: string } | null>(null);
+
+  const startConsignorSession = (id: string, name: string) => {
+    const target = { id, name };
+    setScopedConsignor(target);
+    scopedConsignorRef.current = target;
+    try {
+      sessionStorage.setItem(`findasale.rapidCaptureConsignor.${saleId}`, JSON.stringify(target));
+    } catch {
+      // best-effort persistence only -- session still works for this page load either way
+    }
+  };
+
+  const endConsignorSession = () => {
+    setScopedConsignor(null);
+    scopedConsignorRef.current = null;
+    try {
+      sessionStorage.removeItem(`findasale.rapidCaptureConsignor.${saleId}`);
+    } catch {
+      // best-effort
+    }
+    showToast('Consignor capture session ended', 'info');
+  };
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
   // Re-analyze from the PreviewModal error banner (mirrors review.tsx's
   // reanalyzingIds/reanalyzeErrors pattern): tracks in-flight items and the
@@ -785,9 +819,38 @@ const AddItemsDetailPage = () => {
           addingToItemIdRef.current = appendId;
         }).catch(() => {});
       }
+      // Consignor-scoped capture session (2026-09-25): arriving from the "Rapid Capture"
+      // action on /organizer/consignors carries the consignor through as query params.
+      // Starts (or overwrites) the scoped session for THIS sale.
+      const queryConsignorId = router.query.consignorId as string | undefined;
+      const queryConsignorName = router.query.consignorName as string | undefined;
+      if (queryConsignorId && queryConsignorName) {
+        startConsignorSession(queryConsignorId, queryConsignorName);
+      }
       setCameraOpen(true);
     }
-  }, [router.isReady, router.query.openCamera, router.query.captureMode, router.query.appendToItemId]);
+  }, [router.isReady, router.query.openCamera, router.query.captureMode, router.query.appendToItemId, router.query.consignorId, router.query.consignorName]);
+
+  // Restore a previously-started consignor-scoped session for this sale if the organizer
+  // navigated away (e.g. to the review page) and back within the same tab, without the
+  // query params above (those only fire on the initial arrival from /organizer/consignors).
+  // Never restores across a different saleId -- the session key is per-sale.
+  useEffect(() => {
+    if (!router.isReady || !saleId) return;
+    if (router.query.consignorId) return; // handled by the effect above instead
+    try {
+      const raw = sessionStorage.getItem(`findasale.rapidCaptureConsignor.${saleId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.id && parsed?.name) {
+          setScopedConsignor(parsed);
+          scopedConsignorRef.current = parsed;
+        }
+      }
+    } catch {
+      // sessionStorage blocked/unavailable -- scoped session just won't survive navigation
+    }
+  }, [router.isReady, saleId, router.query.consignorId]);
 
   // First-time walkthrough: show once per browser (not per-sale)
   useEffect(() => {
@@ -1487,6 +1550,11 @@ const AddItemsDetailPage = () => {
         fd.append('image', processedBlob, 'rapidfire.jpg');
         fd.append('saleId', saleId as string);
         fd.append('autoEnhanced', autoEnhanced ? 'true' : 'false');
+        // Consignor-scoped capture session (2026-09-25): read via ref to avoid a stale
+        // closure in this async pipeline.
+        if (scopedConsignorRef.current) {
+          fd.append('consignorId', scopedConsignorRef.current.id);
+        }
 
         const res = await api.post('/upload/rapidfire', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -1680,6 +1748,10 @@ const AddItemsDetailPage = () => {
         fd.append('image', pendingQualityBlob, 'rapidfire.jpg');
         fd.append('saleId', saleId as string);
         fd.append('autoEnhanced', 'false');
+        // Consignor-scoped capture session (2026-09-25): see the main create path above.
+        if (scopedConsignorRef.current) {
+          fd.append('consignorId', scopedConsignorRef.current.id);
+        }
 
         const res = await api.post('/upload/rapidfire', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -1792,6 +1864,10 @@ const AddItemsDetailPage = () => {
         fd.append('image', pendingFaceBlob, 'rapidfire.jpg');
         fd.append('saleId', saleId as string);
         fd.append('autoEnhanced', 'false');
+        // Consignor-scoped capture session (2026-09-25): see the main create path above.
+        if (scopedConsignorRef.current) {
+          fd.append('consignorId', scopedConsignorRef.current.id);
+        }
 
         const res = await api.post('/upload/rapidfire', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -2121,6 +2197,23 @@ const AddItemsDetailPage = () => {
               </Link>
             </div>
           </div>
+
+          {/* Consignor-scoped capture session banner (2026-09-25): visible for the whole
+              session (any tab, camera open or closed) so it's never silently forgotten.
+              Ends only via this button or the equivalent one inside the camera overlay. */}
+          {scopedConsignor && (
+            <div className="flex items-center justify-between gap-3 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3 mb-6">
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                Capturing for: {scopedConsignor.name} — every item captured now is attributed to them automatically
+              </p>
+              <button
+                onClick={endConsignorSession}
+                className="flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                End Session
+              </button>
+            </div>
+          )}
 
           {/* Tab Navigation: ordered by primary workflow */}
           <div className="flex gap-2 mb-6 flex-wrap">
@@ -2589,6 +2682,8 @@ const AddItemsDetailPage = () => {
               maxPhotos={captureMode === 'rapidfire' ? Infinity : 5}
               mode={captureMode}
               onModeChange={setCaptureMode}
+              consignorLabel={scopedConsignor?.name ?? null}
+              onEndConsignorSession={endConsignorSession}
               rapidItems={rapidItems}
               addingToItemId={addingToItemId}
               onAddToItem={(id) => {

@@ -187,6 +187,15 @@ interface RapidCaptureProps {
    * resumes decoding by itself.
    */
   isObscured?: boolean;
+  /**
+   * Consignor-scoped capture session (2026-09-25): when set, shows a small persistent
+   * banner inside the camera ("Capturing for: X") so the organizer never loses context
+   * mid-shoot. The actual consignorId attribution happens server-side in the parent
+   * page's upload calls -- this prop is purely a visibility aid inside the overlay.
+   */
+  consignorLabel?: string | null;
+  /** Called when the organizer taps "End" on the in-camera consignor banner. */
+  onEndConsignorSession?: () => void;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
@@ -209,6 +218,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   onAnalyze,
   isAnalyzing = false,
   isObscured = false,
+  consignorLabel = null,
+  onEndConsignorSession,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -861,6 +872,29 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Consignor-scoped capture session banner (2026-09-25): visible above the
+            viewfinder for the whole camera session so the organizer can't lose track of
+            which consignor new captures are being attributed to. */}
+        {consignorLabel && (
+          <div
+            className="absolute left-0 z-20 flex items-center justify-center gap-2 pointer-events-none"
+            style={{ top: '90px', right: isLandscape ? '88px' : '0' }}
+          >
+            <span className="pointer-events-auto flex items-center gap-2 text-xs font-bold text-white bg-amber-600/90 rounded-full pl-3 pr-1.5 py-1 shadow-lg">
+              Capturing for: {consignorLabel}
+              {onEndConsignorSession && (
+                <button
+                  onClick={onEndConsignorSession}
+                  className="bg-white/20 hover:bg-white/30 rounded-full px-2 py-0.5 text-[10px] transition-colors"
+                  aria-label="End consignor capture session"
+                >
+                  End
+                </button>
+              )}
+            </span>
+          </div>
+        )}
 
         {/* Settings pill: drops vertically from gear button */}
         {settingsPanelOpen && (

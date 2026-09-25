@@ -82,6 +82,13 @@ interface CartItem {
   title: string;
   amount: number;
   photoUrl?: string;
+  // ADR cashier-discretionary-discount (2026-09-25): venue/hub-cart mode only -- the
+  // item's live discretion cap + currently-applied amount, from getBoothCartSummary /
+  // getBoothCartContents. Undefined outside venue mode (non-venue POS never populates
+  // these -- the old cart-wide POS Cashier Discount Permission control is a separate,
+  // deliberately un-composed mechanism, see the gate on canApplyDiscount below).
+  maxDiscretionCents?: number;
+  discretionAppliedCents?: number;
 }
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -461,6 +468,15 @@ export default function POSPage() {
     readyForStandardCharge: boolean;
   }>>([]);
   const [venueBoothOutcomes, setVenueBoothOutcomes] = useState<Record<string, 'pending' | 'connecting' | 'ready' | 'tapping' | 'authorized' | 'failed'>>({});
+  // ADR cashier-discretionary-discount (2026-09-25): whether THIS cashier (HUB_OWNER, or
+  // TEAM_MEMBER/BOOTH with an enabled CashierDiscretionGrant for this hub) may apply the
+  // per-item discretionary discount at all. Refreshed once the venue cart is open --
+  // getBoothCartSummary resolves it server-side from the actual booth-auth session, never
+  // guessed client-side.
+  const [cashierDiscretionAllowed, setCashierDiscretionAllowed] = useState(false);
+  const [discretionOpenForCartId, setDiscretionOpenForCartId] = useState<string | null>(null);
+  const [discretionPercentInput, setDiscretionPercentInput] = useState(0);
+  const [discretionSaving, setDiscretionSaving] = useState(false);
   const [venueCheckoutOpen, setVenueCheckoutOpen] = useState(false);
   const [venueCheckoutFailure, setVenueCheckoutFailure] = useState<string | null>(null);
   const [venueCapturing, setVenueCapturing] = useState(false);
@@ -1329,6 +1345,57 @@ export default function POSPage() {
         });
     });
   }, [venueHubId, ensureVenueCart, cart, venueBoothToken]);
+
+  // ADR cashier-discretionary-discount (2026-09-25): once the venue cart is open, ask
+  // the server whether THIS cashier session may apply a discretionary discount at all
+  // (getBoothCartSummary resolves it from the real boothAuth session -- HUB_OWNER always,
+  // TEAM_MEMBER/BOOTH only with an enabled CashierDiscretionGrant for this hub). Cheap,
+  // one-time-per-cart-open call; the per-item cap itself is resolved server-side by the
+  // PATCH .../discretion call when the cashier actually applies a discount, so this
+  // effect never needs to know or guess any item's price/cap.
+  useEffect(() => {
+    if (!venueHubId || !venueCart?.id) {
+      setCashierDiscretionAllowed(false);
+      return;
+    }
+    api.get(
+      `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/summary`,
+      venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+    )
+      .then(res => setCashierDiscretionAllowed(!!res.data?.cashierDiscretionAllowed))
+      .catch(() => setCashierDiscretionAllowed(false));
+  }, [venueHubId, venueCart?.id, venueBoothToken]);
+
+  // ADR cashier-discretionary-discount (2026-09-25): applies the cashier's requested
+  // percent (0-10, of the item's CURRENT price) to one venue-cart item. Server resolves
+  // and clamps everything from a fresh read -- this function sends ONLY requestedPercent,
+  // never a client-computed cents/dollar amount, and trusts only the server's response for
+  // what actually got applied (netPriceCents/appliedCents/clamped).
+  const applyVenueItemDiscretion = useCallback(async (cartItem: CartItem, requestedPercent: number) => {
+    if (!venueHubId || !venueCart?.id || !cartItem.itemId) return;
+    setDiscretionSaving(true);
+    try {
+      const res = await api.patch(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items/${cartItem.itemId}/discretion`,
+        { requestedPercent },
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
+      const { appliedCents, maxDiscretionCents, netPriceCents, clamped } = res.data || {};
+      setCart(prev => prev.map(c => c.id === cartItem.id
+        ? { ...c, amount: (typeof netPriceCents === 'number' ? netPriceCents : Math.round(c.amount * 100)) / 100, discretionAppliedCents: appliedCents, maxDiscretionCents }
+        : c
+      ));
+      if (clamped) {
+        showToast(`Max for this item is lower than requested. Applying $${((appliedCents || 0) / 100).toFixed(2)} instead.`, 'info');
+      }
+      setDiscretionOpenForCartId(null);
+    } catch (err: any) {
+      const message = err?.response?.data?.error || 'Could not apply the discount to this item.';
+      setErrorMessage(message);
+    } finally {
+      setDiscretionSaving(false);
+    }
+  }, [venueHubId, venueCart?.id, venueBoothToken, showToast]);
 
   // ─── Venue mode: sequential per-booth checkout -- ports the proven flow from
   // hubs/[hubId]/cart.tsx (now deprecated, see S1178 ADR). Card/manual-card rail only in
@@ -3113,6 +3180,53 @@ export default function POSPage() {
                       </span>
                     )}
                   </div>
+                  {/* ADR cashier-discretionary-discount (2026-09-25): per-item control,
+                      venue/hub-cart mode only, and only when this cashier session is
+                      actually allowed to grant discretion. Deliberately separate from the
+                      cart-wide POS Cashier Discount Permission control (gated off above,
+                      !venueHubId) -- item-level and cap-bounded, not cart-level. */}
+                  {venueHubId && cashierDiscretionAllowed && item.itemId && (
+                    discretionOpenForCartId === item.id ? (
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0}
+                          max={10}
+                          step={1}
+                          value={discretionPercentInput}
+                          onChange={(e) => setDiscretionPercentInput(parseInt(e.target.value, 10))}
+                          className="w-20"
+                        />
+                        <span className="text-xs text-warm-600 dark:text-warm-400 w-8">{discretionPercentInput}%</span>
+                        <button
+                          type="button"
+                          disabled={discretionSaving}
+                          onClick={() => applyVenueItemDiscretion(item, discretionPercentInput)}
+                          className="text-xs px-2 py-1 rounded bg-sage-600 text-white disabled:opacity-50"
+                        >
+                          Apply
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDiscretionOpenForCartId(null)}
+                          className="text-xs text-warm-400 hover:text-warm-600 dark:hover:text-warm-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscretionPercentInput(0);
+                          setDiscretionOpenForCartId(item.id);
+                        }}
+                        className="mt-1 text-xs text-sage-600 dark:text-sage-400 hover:underline"
+                      >
+                        {item.discretionAppliedCents ? `Discount: -$${(item.discretionAppliedCents / 100).toFixed(2)}` : 'Discount'}
+                      </button>
+                    )
+                  )}
                 </div>
                 <div className="flex items-center gap-3 ml-2">
                   <span className="text-sm font-semibold text-sage-700 dark:text-green-400">
@@ -3134,7 +3248,13 @@ export default function POSPage() {
                 (not disabled) for a cart-holder without the apply_pos_discount permission
                 or an empty cart -- see claude_docs/ux-spotchecks/pos-cashier-discount-permission.md
                 for why absence, not a disabled-with-tooltip control, is the correct signal. */}
-            {canApplyDiscount && cart.length > 0 && discountOpen && (
+            {/* ADR cashier-discretionary-discount (2026-09-25): the old cart-wide POS
+                Cashier Discount Permission control is EXCLUDED from hub/venue-cart mode
+                (`!venueHubId`) so it can never stack with the new per-item, cap-bounded
+                discretion control below -- see that ADR's Composition/anti-gaming section
+                for why combining an uncapped old-mechanism discount with the new bounded
+                one is a real hole, not just redundant UI. */}
+            {canApplyDiscount && !venueHubId && cart.length > 0 && discountOpen && (
               <div className="mb-3 p-3 rounded-md bg-warm-50 dark:bg-gray-700/50 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-warm-700 dark:text-warm-300">Discount</span>
@@ -3207,7 +3327,7 @@ export default function POSPage() {
               <span>${cartTotal.toFixed(2)}</span>
             </div>
 
-            {canApplyDiscount && cart.length > 0 && !discountOpen && (
+            {canApplyDiscount && !venueHubId && cart.length > 0 && !discountOpen && (
               <button
                 type="button"
                 onClick={() => setDiscountOpen(true)}

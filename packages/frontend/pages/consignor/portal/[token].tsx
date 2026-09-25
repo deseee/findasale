@@ -20,6 +20,12 @@ interface Item {
   price: string | number;
   status: string;
   createdAt: string;
+  // Markdown visibility (Patrick, 2026-09-25): populated when the organizer's automatic
+  // markdown system has reduced this item's price -- see getConsignorPortal in
+  // consignorController.ts. priceBeforeMarkdown is only meaningful when markdownApplied
+  // is true.
+  priceBeforeMarkdown?: number | string | null;
+  markdownApplied?: boolean;
 }
 
 interface Payout {
@@ -32,6 +38,17 @@ interface Payout {
   createdAt: string;
 }
 
+// In-app consignor agreement (Patrick, 2026-09-25): rendered server-side from this
+// consignor's real values -- see renderConsignorAgreementForConsignor in
+// consignorAgreementService.ts. acceptedAt/acceptedVersion mirror Consignor's own
+// agreementAcceptedAt/agreementAcceptedVersion columns.
+interface Agreement {
+  version: number;
+  renderedMarkdown: string;
+  acceptedAt: string | null;
+  acceptedVersion: number | null;
+}
+
 interface PortalData {
   consignor: {
     name: string;
@@ -40,6 +57,7 @@ interface PortalData {
   };
   items: Item[];
   payouts: Payout[];
+  agreement: Agreement | null;
 }
 
 const ConsignorPortalPage: React.FC = () => {
@@ -49,7 +67,9 @@ const ConsignorPortalPage: React.FC = () => {
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'items' | 'payouts'>('items');
+  const [activeTab, setActiveTab] = useState<'items' | 'payouts' | 'agreement'>('items');
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -75,6 +95,65 @@ const ConsignorPortalPage: React.FC = () => {
 
     fetchPortal();
   }, [token]);
+
+  const handleAcceptAgreement = async () => {
+    if (!token) return;
+    try {
+      setAccepting(true);
+      setAcceptError(null);
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL || '/api'}/consignors/portal/${token}/agreement/accept`
+      );
+
+      setData(prev =>
+        prev && prev.agreement
+          ? {
+              ...prev,
+              agreement: {
+                ...prev.agreement,
+                acceptedAt: response.data.agreementAcceptedAt,
+                acceptedVersion: response.data.agreementAcceptedVersion,
+              },
+            }
+          : prev
+      );
+    } catch (err: any) {
+      console.error('Error accepting consignor agreement:', err);
+      setAcceptError(err.response?.data?.error || 'Could not record your acceptance. Please try again.');
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  // Minimal, dependency-free rendering for the agreement's markdown (## headings + plain
+  // paragraphs only -- that's all CONSIGNOR_AGREEMENT_TEMPLATE uses).
+  const renderAgreementMarkdown = (markdown: string) =>
+    markdown
+      .split(/\n{2,}/)
+      .map(block => block.trim())
+      .filter(Boolean)
+      .map((block, idx) => {
+        if (block.startsWith('## ')) {
+          return (
+            <h3 key={idx} className="text-base font-bold text-warm-900 dark:text-white mt-5 mb-1 first:mt-0">
+              {block.replace(/^##\s+/, '')}
+            </h3>
+          );
+        }
+        if (block.startsWith('# ')) {
+          return (
+            <h2 key={idx} className="text-lg font-bold text-warm-900 dark:text-white mb-2">
+              {block.replace(/^#\s+/, '')}
+            </h2>
+          );
+        }
+        return (
+          <p key={idx} className="text-sm text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+            {block}
+          </p>
+        );
+      });
 
   if (loading) {
     return (
@@ -161,6 +240,21 @@ const ConsignorPortalPage: React.FC = () => {
             )}
           </div>
 
+          {/* Agreement banner (Patrick, 2026-09-25): unmissable until accepted, easy to ignore after */}
+          {data.agreement && !data.agreement.acceptedAt && (
+            <div className="mb-8 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                Please review and accept your consignor agreement.
+              </p>
+              <button
+                onClick={() => setActiveTab('agreement')}
+                className="px-4 py-2 rounded-lg text-sm font-bold bg-amber-600 hover:bg-amber-700 text-white transition-colors self-start sm:self-auto"
+              >
+                Review Agreement
+              </button>
+            </div>
+          )}
+
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-warm-200 dark:border-gray-700">
@@ -213,6 +307,18 @@ const ConsignorPortalPage: React.FC = () => {
             >
               Payouts ({data.payouts.length})
             </button>
+            {data.agreement && (
+              <button
+                onClick={() => setActiveTab('agreement')}
+                className={`px-4 py-3 font-bold text-sm border-b-2 transition-colors ${
+                  activeTab === 'agreement'
+                    ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+                    : 'border-transparent text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-300'
+                }`}
+              >
+                Agreement{!data.agreement.acceptedAt && ' •'}
+              </button>
+            )}
           </div>
 
           {/* Items Tab */}
@@ -252,7 +358,21 @@ const ConsignorPortalPage: React.FC = () => {
                               {item.title}
                             </td>
                             <td className="px-4 py-3 text-sm font-bold text-amber-600 dark:text-amber-400">
-                              ${Number(item.price).toFixed(2)}
+                              {item.markdownApplied && item.priceBeforeMarkdown != null ? (
+                                <div>
+                                  <div>
+                                    <span className="line-through text-warm-400 dark:text-warm-500 font-normal mr-2">
+                                      ${Number(item.priceBeforeMarkdown).toFixed(2)}
+                                    </span>
+                                    <span>${Number(item.price).toFixed(2)}</span>
+                                  </div>
+                                  <div className="text-[11px] font-normal text-warm-500 dark:text-warm-400">
+                                    Marked down from original price
+                                  </div>
+                                </div>
+                              ) : (
+                                <>${Number(item.price).toFixed(2)}</>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm">
                               <span
@@ -338,6 +458,37 @@ const ConsignorPortalPage: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Agreement Tab */}
+          {activeTab === 'agreement' && data.agreement && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6">
+              <div className="max-w-none">
+                {renderAgreementMarkdown(data.agreement.renderedMarkdown)}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-warm-200 dark:border-gray-700">
+                {data.agreement.acceptedAt ? (
+                  <p className="text-sm font-bold text-green-600 dark:text-green-400">
+                    ✓ Accepted on {new Date(data.agreement.acceptedAt).toLocaleDateString()}
+                    {data.agreement.acceptedVersion != null && ` (version ${data.agreement.acceptedVersion})`}
+                  </p>
+                ) : (
+                  <div>
+                    <button
+                      onClick={handleAcceptAgreement}
+                      disabled={accepting}
+                      className="px-5 py-2.5 rounded-lg text-sm font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors"
+                    >
+                      {accepting ? 'Recording...' : 'I Agree'}
+                    </button>
+                    {acceptError && (
+                      <p className="text-sm text-red-600 dark:text-red-400 mt-2">{acceptError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

@@ -7,14 +7,18 @@ import {
   deleteConsignor,
   runPayout,
   getConsignorPortal,
+  acceptConsignorAgreement,
 } from '../controllers/consignorController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// Public endpoint — NO authentication required
+// Public endpoints — NO authentication required
 // Must be defined BEFORE the :id routes to avoid Express router conflicts
 router.get('/portal/:token', getConsignorPortal);
+
+// Consignor accepts the in-app agreement rendered on their portal (Patrick, 2026-09-25)
+router.post('/portal/:token/agreement/accept', acceptConsignorAgreement);
 
 // All routes below require authentication
 router.use(authenticate);

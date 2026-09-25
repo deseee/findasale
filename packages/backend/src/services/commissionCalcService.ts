@@ -156,3 +156,54 @@ export async function seedDefaultCommissionTiers(workspaceId: string): Promise<v
     })),
   });
 }
+
+export interface ConsignorMarkdownPolicyNotice {
+  configured: boolean; // true if an active MarkdownCycle exists for this organizer
+  summary: string; // plain-language, one-sentence schedule (or "none configured") explanation
+}
+
+/**
+ * Consignor intake disclosure (Patrick, 2026-09-25): calculateConsignorPayout() above
+ * (and consignorSettlementController.buildSettlementLines()) computes payout from each
+ * sold Item's `price` field directly -- and both markdownCron.ts (Sale-level clearance)
+ * and markdownCycleCron.ts (this organizer/sale-configurable MarkdownCycle system) write
+ * the marked-down amount straight into that same `price` field. So a markdown that fires
+ * before an item sells mechanically lowers the consignor's payout with zero payout-math
+ * change needed -- the gap is that neither the organizer nor the consignor is ever told
+ * this can happen. This turns the organizer's own MarkdownCycle configuration into a
+ * one-sentence, plain-language summary for onboarding copy (consignorController.createConsignor)
+ * and the consignor payment-setup-invite email (stripeConnectController.initiateConsignorOnboarding).
+ *
+ * Only MarkdownCycle is considered here (not the separate fixed-schedule Sale.markdownEnabled
+ * clearance system), matching the scope Patrick asked for. Prefers the organizer's
+ * workspace-wide cycle (saleId: null -- applies to all their sales); a sale-specific-only
+ * cycle is called out generically since it isn't guaranteed to apply to this consignor's
+ * future items.
+ */
+export async function getConsignorMarkdownPolicyNotice(organizerId: string): Promise<ConsignorMarkdownPolicyNotice> {
+  const cycles = await prisma.markdownCycle.findMany({
+    where: { organizerId, isActive: true },
+  });
+
+  const general = cycles.find((c) => c.saleId === null);
+  if (general) {
+    let summary = `After ${general.daysUntilFirst} day${general.daysUntilFirst === 1 ? '' : 's'} unsold, items are automatically marked down ${general.firstPct}%`;
+    if (general.daysUntilSecond != null && general.secondPct != null) {
+      summary += `, and after ${general.daysUntilSecond} days, ${general.secondPct}% off`;
+    }
+    summary += '.';
+    return { configured: true, summary };
+  }
+
+  if (cycles.length > 0) {
+    return {
+      configured: true,
+      summary: 'A custom markdown schedule is configured for specific sales -- ask the organizer whether it applies to your items.',
+    };
+  }
+
+  return {
+    configured: false,
+    summary: 'No automatic markdown schedule is currently set up for this organizer.',
+  };
+}

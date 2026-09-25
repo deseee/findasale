@@ -119,6 +119,12 @@ export const sendConsignorPaymentSetupInvite = async (params: {
   consignorEmail: string;
   onboardingUrl: string;
   organizerName: string;
+  // Consignor intake disclosure (Patrick, 2026-09-25): plain-language markdown-schedule
+  // summary from getConsignorMarkdownPolicyNotice() (commissionCalcService.ts), e.g. "After
+  // 14 days unsold, items are automatically marked down 25%." or "No automatic markdown
+  // schedule is currently set up for this organizer." Optional so existing callers/tests
+  // that don't pass it still compile and send unchanged.
+  markdownNotice?: string;
 }): Promise<void> => {
 
   if (await suppressionService.isHardSuppressed(params.consignorEmail)) {
@@ -127,6 +133,9 @@ export const sendConsignorPaymentSetupInvite = async (params: {
   }
 
   try {
+    const markdownNoticeBlock = params.markdownNotice
+      ? `<p style="color: #666; font-size: 13px;">Please note: ${params.organizerName} may apply automatic price markdowns to unsold items over time. A markdown lowers an item's sale price, and your payout is calculated from that lower price. ${params.markdownNotice}</p>`
+      : '';
     const html = buildEmail({
       preheader: `Set up automatic payout from ${params.organizerName}`,
       headline: 'Get paid automatically when your items sell',
@@ -137,7 +146,8 @@ export const sendConsignorPaymentSetupInvite = async (params: {
             Takes about 2 minutes. You'll need your bank or debit card details. No FindA.Sale account required.
           </p>
         </div>
-        <p>If you'd rather be paid the usual way (cash, check, Venmo), just let ${params.organizerName} know -- nothing changes for you.</p>`,
+        <p>If you'd rather be paid the usual way (cash, check, Venmo), just let ${params.organizerName} know -- nothing changes for you.</p>
+        ${markdownNoticeBlock}`,
       ctaText: 'Set Up Automatic Payout',
       ctaUrl: params.onboardingUrl,
       accentColor: '#10b981',
@@ -230,5 +240,130 @@ export const sendConsignorExpiryNotice = async (params: {
     console.log(`[consignor-email] Sent expiry notice to ${params.consignorEmail}`);
   } catch (err) {
     console.error('[consignor-email] Failed to send expiry notice email:', err);
+  }
+};
+
+/**
+ * Consignor pickup-window reminder (2026-09-25, Patrick policy): sent by
+ * consignorExpiryNoticeJob.ts during the 15-day pickup-arrangement window that opens once a
+ * RETURN-disposition consignor's item has sat AVAILABLE past their own returnPeriodDays.
+ * Sent twice per item -- reminderNumber 1 when the window opens, reminderNumber 2 partway
+ * through -- so the consignor gets "a couple emails" during the window rather than just one,
+ * per Patrick's own phrasing. When the workspace's consignor-intake link is enabled,
+ * pickupAppointmentLinkUrl points the consignor straight at it to self-serve a pickup time;
+ * otherwise the email just asks them to contact the organizer directly.
+ */
+export const sendConsignorPickupWindowReminder = async (params: {
+  consignorName: string;
+  consignorEmail: string;
+  itemName: string;
+  organizerName: string;
+  organizerEmail: string;
+  saleId: string;
+  reminderNumber: 1 | 2;
+  pickupAppointmentLinkUrl?: string;
+}): Promise<void> => {
+
+  if (await suppressionService.isHardSuppressed(params.consignorEmail)) {
+    console.log(`[consignor-email] Skipping suppressed address: ${params.consignorEmail}`);
+    return;
+  }
+
+  try {
+    const isFirst = params.reminderNumber === 1;
+    const headline = isFirst
+      ? '\ud83d\udce6 Time to arrange pickup for your consigned item'
+      : '\u23f0 Reminder: your consigned item is still waiting for pickup';
+    const introLine = isFirst
+      ? `Your consigned item <strong>${params.itemName}</strong> didn't sell, and per your on-file return preference it's ready for you to pick up or arrange a donation.`
+      : `Just a reminder -- <strong>${params.itemName}</strong> is still waiting for you to arrange pickup or donation.`;
+    const windowLine = isFirst
+      ? 'You have 15 days to contact us and arrange a pickup or donation time.'
+      : 'The 15-day pickup-arrangement window is about halfway through -- please reach out soon so we can settle this item.';
+
+    const bookingBlock = params.pickupAppointmentLinkUrl
+      ? `<p style="margin: 8px 0 0;">Prefer to pick your own time? <a href="${params.pickupAppointmentLinkUrl}">Book a pickup time online</a>.</p>`
+      : '';
+
+    const html = buildEmail({
+      preheader: `Arrange pickup: ${params.itemName}`,
+      headline,
+      body: `<p>Hi ${params.consignorName},</p><p>${introLine}</p>
+        <div style="background: #fef3c7; padding: 16px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <p style="margin: 0; color: #92400e;">${windowLine}</p>
+          ${bookingBlock}
+        </div>
+        <p>Contact <a href="mailto:${params.organizerEmail}">${params.organizerName}</a> to arrange pickup or donation.</p>`,
+      ctaText: params.pickupAppointmentLinkUrl ? 'Book Pickup Time' : 'View Your Items',
+      ctaUrl: params.pickupAppointmentLinkUrl || `${siteUrl}/consignor/items`,
+      accentColor: '#f59e0b',
+    });
+
+    await transactionalEmailService.emails.send({
+      from: fromEmail,
+      to: params.consignorEmail,
+      subject: isFirst
+        ? `\ud83d\udce6 Arrange pickup: ${params.itemName}`
+        : `\u23f0 Reminder: arrange pickup for ${params.itemName}`,
+      html,
+    });
+
+    console.log(`[consignor-email] Sent pickup-window reminder #${params.reminderNumber} to ${params.consignorEmail}`);
+  } catch (err) {
+    console.error('[consignor-email] Failed to send pickup-window reminder email:', err);
+  }
+};
+
+/**
+ * Consignor Self-Serve Intake (2026-09-25): notify the organizer's ACCOUNT email (their
+ * own User.email, not a per-consignor address) when a prospective consignor submits the
+ * public intake form. V1 goes to the workspace owner only, not every team member -- see
+ * consignorIntakeController.ts's submitIntakeRequest for the fire-and-forget call site.
+ */
+export const sendConsignorIntakeRequestNotice = async (params: {
+  organizerEmail: string;
+  organizerName: string;
+  requesterName: string;
+  requesterContact?: string | null;
+  requestedStartsAt?: Date | null;
+}): Promise<void> => {
+
+  if (await suppressionService.isHardSuppressed(params.organizerEmail)) {
+    console.log(`[consignor-email] Skipping suppressed address: ${params.organizerEmail}`);
+    return;
+  }
+
+  try {
+    const contactLine = params.requesterContact
+      ? `<p style="margin: 8px 0; color: #666;">Contact: ${params.requesterContact}</p>`
+      : '';
+    const timeLine = params.requestedStartsAt
+      ? `<p style="margin: 8px 0; color: #666;">Requested time: ${params.requestedStartsAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>`
+      : '';
+    const html = buildEmail({
+      preheader: `New consignor request from ${params.requesterName}`,
+      headline: 'New consignor request',
+      body: `<p>Hi ${params.organizerName},</p>
+        <p><strong>${params.requesterName}</strong> just submitted a request to bring items in through your consignor intake link.</p>
+        <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+          ${contactLine}
+          ${timeLine}
+        </div>
+        <p>Review it in your Consignors dashboard to approve or decline.</p>`,
+      ctaText: 'Review Request',
+      ctaUrl: `${siteUrl}/organizer/consignors`,
+      accentColor: '#3b82f6',
+    });
+
+    await transactionalEmailService.emails.send({
+      from: fromEmail,
+      to: params.organizerEmail,
+      subject: `New consignor request from ${params.requesterName}`,
+      html,
+    });
+
+    console.log(`[consignor-email] Sent new intake request notice to ${params.organizerEmail}`);
+  } catch (err) {
+    console.error('[consignor-email] Failed to send intake request notice email:', err);
   }
 };

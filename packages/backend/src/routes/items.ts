@@ -39,6 +39,9 @@ import {
   getPackageEstimatesBatchHandler,
   getSuggestedShippingPriceHandler,
   getLiveShippingRateCheckHandler,
+  getMarkdownRetagQueue,
+  markItemRetagged,
+  markItemsRetaggedBulk,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -917,6 +920,14 @@ router.get('/:id/label', authenticate, getSingleItemLabel);
 // Must stay separate from the generic GET /:id below (which is intentionally public/
 // permissive for the shopper-facing item page) — see getItemForEdit for full rationale.
 router.get('/:id/edit', authenticate, getItemForEdit);
+
+// Physical Markdown Alert List (2026-09-25): must be registered BEFORE the generic
+// GET '/:id' route immediately below, or Express would treat "markdown-retag-queue" as
+// an :id value and shadow this route (same ordering hazard the /:id/label comment above
+// already flags for this file).
+router.get('/markdown-retag-queue', authenticate, getMarkdownRetagQueue);
+router.post('/mark-retagged/bulk', authenticate, markItemsRetaggedBulk);
+router.post('/:id/mark-retagged', authenticate, markItemRetagged);
 
 router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);
