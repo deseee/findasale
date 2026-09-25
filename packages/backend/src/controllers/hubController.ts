@@ -26,6 +26,11 @@ const createHubSchema = z.object({
   // optional at the schema layer so existing hubs (none of which have these) stay valid;
   // create.tsx still requires address client-side for new hubs.
   address: z.string().max(300).optional(),
+  // City/state/zip (2026-09-25, vendor-booth-hub-autofill-adr): captured from the same
+  // AddressAutocomplete suggestion as address/lat/lng, previously discarded on write.
+  city: z.string().max(100).optional(),
+  state: z.string().max(2).optional(),
+  zip: z.string().max(10).optional(),
   phone: z.string().max(30).optional(),
   contactEmail: z.string().email().max(200).optional(),
   hoursText: z.string().max(200).optional(),
@@ -536,6 +541,9 @@ export const getMyHub = async (req: AuthRequest, res: Response) => {
         lng: hub.lng,
         // Venue details (2026-09-25) -- editable on manage.tsx.
         address: hub.address,
+        city: hub.city,
+        state: hub.state,
+        zip: hub.zip,
         phone: hub.phone,
         contactEmail: hub.contactEmail,
         hoursText: hub.hoursText,

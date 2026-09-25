@@ -34,6 +34,9 @@ export default function CreateHubPage() {
     slug: '',
     description: '',
     address: '',
+    city: '',
+    state: '',
+    zip: '',
     phone: '',
     contactEmail: '',
     hoursText: '',
@@ -189,6 +192,9 @@ export default function CreateHubPage() {
                     setFormData((prev) => ({
                       ...prev,
                       address: suggestion.address,
+                      city: suggestion.city,
+                      state: suggestion.state,
+                      zip: suggestion.zip,
                       lat: suggestion.lat,
                       lng: suggestion.lng,
                     }))

@@ -747,9 +747,11 @@ export const listMyVendorBooths = async (req: AuthRequest, res: Response) => {
         squareOnboarded: true,
         // Deep link back to this booth's own page. Owner-scoped by the where clause above.
         boothToken: true,
-        // The market's name. Without it the vendor sees a bare hub id, which means nothing
-        // to them. Narrow select — id and name only, never the hub owner or its other booths.
-        hub: { select: { id: true, name: true } },
+        // The market's name plus its venue-details fields (2026-09-25,
+        // vendor-booth-hub-autofill-adr) so the Create Sale wizard can auto-fill a booth
+        // sale's address/lat/lng from the hub's own saved location, and show hoursText as a
+        // hint. Still narrow — never the hub owner or its other booths.
+        hub: { select: { id: true, name: true, address: true, city: true, state: true, zip: true, lat: true, lng: true, hoursText: true } },
         payouts: { select: { id: true, totalSales: true, netPayout: true, status: true, paidAt: true } },
         // Register access grant (2026-07-29, Patrick's decision) -- gates the "Open the
         // register" link in MyVendorBoothsCard.tsx. A separate, organizer-controlled state

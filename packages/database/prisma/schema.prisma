@@ -3828,6 +3828,13 @@ model SaleHub {
   // and no server-side geocoding runs on these (matches Organizer's own address, which is
   // also never re-geocoded server-side -- AddressAutocomplete hands back lat/lng directly).
   address           String?
+  // City/state/zip (2026-09-25, vendor-booth-hub-autofill-adr): AddressAutocomplete
+  // (Nominatim/OSM) already returns these on every suggestion at hub create/manage time --
+  // they were previously discarded. Persisted here so a vendor's sale wizard can copy a
+  // hub's full structured location instead of just the one-line address string.
+  city              String?
+  state             String?
+  zip               String?
   phone             String?
   contactEmail      String?
   hoursText         String?                      // freeform, e.g. "Sat-Sun 9am-4pm"

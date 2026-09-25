@@ -170,6 +170,9 @@ export interface MyHubDetail {
   lng: number;
   // Venue details (2026-09-25) -- editable on manage.tsx.
   address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   phone?: string;
   contactEmail?: string;
   hoursText?: string;
@@ -254,6 +257,9 @@ export const useCreateHub = () => {
       lat: number;
       lng: number;
       address?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
       phone?: string;
       contactEmail?: string;
       hoursText?: string;
@@ -279,6 +285,9 @@ export const useUpdateHub = (hubId: string) => {
       lat?: number;
       lng?: number;
       address?: string;
+      city?: string;
+      state?: string;
+      zip?: string;
       phone?: string;
       contactEmail?: string;
       hoursText?: string;

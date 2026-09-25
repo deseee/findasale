@@ -84,7 +84,20 @@ interface DayHours {
 interface VendorBoothOption {
   id: string;
   vendorName: string;
-  hub?: { id: string; name: string } | null;
+  // Venue-details fields added 2026-09-25 (vendor-booth-hub-autofill-adr) so the wizard
+  // can auto-fill Step 2's address/lat/lng from the booth's hub and show hoursText as a
+  // read-only hint. Nullable -- older hubs may not have all of these saved yet.
+  hub?: {
+    id: string;
+    name: string;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    zip: string | null;
+    lat: number;
+    lng: number;
+    hoursText: string | null;
+  } | null;
 }
 
 interface WizardFormData {
@@ -1047,6 +1060,15 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
               <p style={{ fontSize: 11, color: c.textFaint, marginTop: 8, fontFamily: 'Inter, sans-serif' }}>
                 Times are in your local timezone.
               </p>
+              {/* vendor-booth-hub-autofill-adr (2026-09-25): hoursText is freeform text the
+                  hub owner typed (e.g. "Sat-Sun 9am-4pm") -- shown as a hint only, never
+                  parsed into startTime/endTime. A wrong auto-parsed time would silently
+                  publish incorrect public hours with no visible sign it was guessed. */}
+              {form.saleType === 'BOOTH' && vendorBooths?.find(b => b.id === form.vendorBoothId)?.hub?.hoursText && (
+                <p style={{ fontSize: 11, color: c.textDim, marginTop: 6, fontFamily: 'Inter, sans-serif' }}>
+                  Venue hours on file: {vendorBooths.find(b => b.id === form.vendorBoothId)!.hub!.hoursText}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1126,6 +1148,20 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
                 />
               </label>
             </div>
+
+            {/* vendor-booth-hub-autofill-adr (2026-09-25): the hub only stores one
+                formatted address line (no separate city/state/zip on older hubs saved
+                before 2026-09-25) -- when that's the case, show the raw line so the
+                organizer can copy city/state/zip by eye instead of guessing/re-typing the
+                whole address from memory. Never auto-splits it into the fields below. */}
+            {form.saleType === 'BOOTH' && !form.city && (() => {
+              const hub = vendorBooths?.find(b => b.id === form.vendorBoothId)?.hub;
+              return hub?.address ? (
+                <p style={{ fontSize: 11, color: c.textDim, marginTop: -8, marginBottom: 14, fontFamily: 'Inter, sans-serif' }}>
+                  Venue address on file: {hub.address} — copy the city/state/zip above.
+                </p>
+              ) : null;
+            })()}
 
             {/* Map pin preview placeholder */}
             {form.lat && form.lng && (
@@ -2327,6 +2363,33 @@ const CreateSalePage: React.FC = () => {
       setForm(f => ({ ...f, vendorBoothId: vendorBooths[0].id }));
     }
   }, [form.saleType, vendorBooths, form.vendorBoothId]);
+
+  // vendor-booth-hub-autofill-adr (2026-09-25): one-time copy of the selected booth's hub
+  // location into Step 2, for BOTH the silent single-booth auto-select above and the
+  // multi-booth picker (Step1's dropdown, ~line 765) -- both paths only ever set
+  // form.vendorBoothId, so a single effect keyed on it covers both. The ref (not a state
+  // check) is what makes this fire-once: feedback_organizer_intent_wins.md is explicit that
+  // organizer-entered values always win, no exceptions, so once applied for a given booth
+  // this must never re-apply even if the organizer later clears the field back to empty.
+  const hubAutoFillAppliedForBoothIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!form.vendorBoothId || !vendorBooths) return;
+    if (hubAutoFillAppliedForBoothIdRef.current === form.vendorBoothId) return;
+    const booth = vendorBooths.find(b => b.id === form.vendorBoothId);
+    const hub = booth?.hub;
+    if (!hub) return;
+    hubAutoFillAppliedForBoothIdRef.current = form.vendorBoothId;
+    if (form.address.trim() !== '') return; // organizer already typed something -- never overwrite
+    setForm(f => ({
+      ...f,
+      ...(hub.address ? { address: hub.address } : {}),
+      ...(hub.city ? { city: hub.city } : {}),
+      ...(hub.state ? { state: hub.state } : {}),
+      ...(hub.zip ? { zip: hub.zip } : {}),
+      ...(hub.lat != null ? { lat: hub.lat } : {}),
+      ...(hub.lng != null ? { lng: hub.lng } : {}),
+    }));
+  }, [form.vendorBoothId, vendorBooths, form.address]);
 
   useEffect(() => { setIsClient(true); }, []);
 
