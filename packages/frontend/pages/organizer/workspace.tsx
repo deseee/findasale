@@ -129,6 +129,11 @@ export default function WorkspaceSettingsPage() {
   // '' capType = no cap configured (matches backend null -- "no limit").
   const [staffDiscountCapType, setStaffDiscountCapType] = useState<'' | 'PERCENT' | 'FIXED'>('');
   const [staffDiscountCapValue, setStaffDiscountCapValue] = useState('');
+  // Configurable Consignment Intake Floor + Relist Cap (2026-09-25): blank = platform
+  // default (4000 cents / $40 floor; 90-day relist cap), matching the null-means-default
+  // convention the backend uses.
+  const [consignmentMinimumPrice, setConsignmentMinimumPrice] = useState('');
+  const [maxRelistDays, setMaxRelistDays] = useState('');
 
   // Initialize local state from queries
   useEffect(() => {
@@ -142,6 +147,10 @@ export default function WorkspaceSettingsPage() {
       setDescription((settings as any).description || '');
       setStaffDiscountCapType(((settings as any).staffDiscountCapType as '' | 'PERCENT' | 'FIXED') || '');
       setStaffDiscountCapValue((settings as any).staffDiscountCapValue || '');
+      const centsVal = (settings as any).consignmentMinimumPriceCents;
+      setConsignmentMinimumPrice(centsVal != null ? (centsVal / 100).toString() : '');
+      const relistDaysVal = (settings as any).maxRelistDays;
+      setMaxRelistDays(relistDaysVal != null ? relistDaysVal.toString() : '');
     }
   }, [settings]);
 
@@ -248,6 +257,23 @@ export default function WorkspaceSettingsPage() {
       showToast('Discount cap saved', 'success');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to save discount cap', 'error');
+    }
+  };
+
+  // Configurable Consignment Intake Floor + Relist Cap (2026-09-25): blank input clears
+  // back to the platform default (null -> 4000 cents / $40 floor, 90-day relist cap).
+  const handleSaveConsignmentSettings = async () => {
+    if (!workspace) return;
+    try {
+      const dollars = consignmentMinimumPrice.trim() === '' ? null : parseFloat(consignmentMinimumPrice);
+      const days = maxRelistDays.trim() === '' ? null : parseInt(maxRelistDays, 10);
+      await updateSettingsMutation.mutateAsync({
+        consignmentMinimumPriceCents: dollars != null && !isNaN(dollars) ? Math.round(dollars * 100) : null,
+        maxRelistDays: days != null && !isNaN(days) ? days : null,
+      } as any);
+      showToast('Consignment settings saved', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to save consignment settings', 'error');
     }
   };
 
@@ -555,6 +581,59 @@ export default function WorkspaceSettingsPage() {
                         className="bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-6 rounded-md disabled:opacity-50 text-sm"
                       >
                         {updateSettingsMutation.isPending ? 'Saving...' : 'Save Limit'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Configurable Consignment Intake Floor + Relist Cap (2026-09-25, Patrick):
+                    organizer-settable override of the platform's $40 intake floor and
+                    90-day relist cap for consigned items. Blank = platform default. */}
+                <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Consignment Settings</h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Minimum price to accept a consigned item at intake, and how long a
+                    relisted item can stay on the floor before it needs your decision.
+                    Leave blank for the platform default ($40 floor, 90-day relist cap).
+                  </p>
+                  <div className="flex flex-wrap items-end gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        Intake floor ($)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={consignmentMinimumPrice}
+                        onChange={(e) => setConsignmentMinimumPrice(e.target.value)}
+                        disabled={!isOwner}
+                        placeholder="40.00"
+                        className="w-32 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        Relist cap (days)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={maxRelistDays}
+                        onChange={(e) => setMaxRelistDays(e.target.value)}
+                        disabled={!isOwner}
+                        placeholder="90"
+                        className="w-32 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white disabled:opacity-50"
+                      />
+                    </div>
+                    {isOwner && (
+                      <button
+                        onClick={handleSaveConsignmentSettings}
+                        disabled={updateSettingsMutation.isPending}
+                        className="bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-6 rounded-md disabled:opacity-50 text-sm"
+                      >
+                        {updateSettingsMutation.isPending ? 'Saving...' : 'Save Consignment Settings'}
                       </button>
                     )}
                   </div>

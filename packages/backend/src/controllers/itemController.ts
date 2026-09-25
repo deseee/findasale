@@ -284,6 +284,23 @@ const assignRarity = (price: number | undefined | null): ItemRarity => {
   return ItemRarity.UNCOMMON;
 };
 
+// Configurable Consignment Intake Floor (2026-09-25, Patrick): the intake-time minimum
+// price for a consigned item used to be hard-coded to $40 (4000 cents) below -- now
+// organizer-settable via WorkspaceSettings.consignmentMinimumPriceCents (GET/PATCH
+// /api/workspace/:workspaceId/settings, workspaceController.ts). Null/unset = platform
+// default of 4000 cents ($40). Stored/compared in cents to avoid float rounding on a
+// dollars comparison. Shared by createItem and updateItem's floor checks below.
+const DEFAULT_CONSIGNMENT_MINIMUM_PRICE_CENTS = 4000;
+
+async function getConsignmentMinimumPriceCents(organizerId: string): Promise<number> {
+  const workspace = await prisma.organizerWorkspace.findFirst({
+    where: { ownerId: organizerId },
+    select: { settings: { select: { consignmentMinimumPriceCents: true } } },
+  });
+  const cents = workspace?.settings?.consignmentMinimumPriceCents;
+  return cents !== null && cents !== undefined ? cents : DEFAULT_CONSIGNMENT_MINIMUM_PRICE_CENTS;
+}
+
 // Hunt Pass Feature: Helper to check if item is visible to user based on rarity + Hunt Pass status
 // Rare: 6 hours early access for Hunt Pass holders
 // Legendary: 12 hours early access for Hunt Pass holders
@@ -1380,6 +1397,27 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       resolvedConsignorId = matchedConsignor.id;
     }
 
+    // Patrick's intake rule (2026-09-25, made organizer-configurable same day): a
+    // consigned item priced under the workspace's configured floor (default $40/4000
+    // cents) should be donated or refused/returned at intake, not listed -- hard-blocked
+    // here (not just a warning) so it can never be saved by accident, same style as the
+    // price >= 0 check above. Applies ONLY when a consignor is attached
+    // (resolvedConsignorId); a non-consignor item has no floor. Deliberately does NOT
+    // touch the markdown system -- markdownCron.ts / markdownCycleCron.ts write
+    // Item.price directly via Prisma and never call createItem/updateItem, so a consigned
+    // item's price CAN still legitimately drop below the floor later via markdown
+    // (confirmed by reading both jobs, 2026-09-25).
+    if (resolvedConsignorId && price !== undefined && price !== null && price !== '') {
+      const consignorPrice = parseFloat(price);
+      if (!isNaN(consignorPrice)) {
+        const floorCents = await getConsignmentMinimumPriceCents(organizer!.id);
+        if (Math.round(consignorPrice * 100) < floorCents) {
+          const floorDisplay = (floorCents / 100).toFixed(2);
+          return res.status(400).json({ message: `Consigned items must be priced at $${floorDisplay} or more at intake. Items under $${floorDisplay} should be donated or declined per policy.` });
+        }
+      }
+    }
+
     // Resolve photo URLs: accept pre-uploaded URLs from body, or upload files now
     let photoUrls: string[] = [];
     if (files && files.length > 0) {
@@ -1405,6 +1443,8 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         title,
         description: description || '',
         price: price ? parseFloat(price) : null,
+        // ADR cashier-discretionary-discount (2026-09-25): anchor set once at creation.
+        originalPrice: price ? parseFloat(price) : null,
         auctionStartPrice: auctionStartPrice ? parseFloat(auctionStartPrice) : null,
         auctionReservePrice: auctionReservePrice ? parseFloat(auctionReservePrice) : null,
         bidIncrement: bidIncrement ? parseFloat(bidIncrement) : null,
@@ -1680,6 +1720,22 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       fieldsBeingEdited.push('consignorId');
     }
 
+    // Patrick's intake rule (2026-09-25, made organizer-configurable same day): mirrors
+    // createItem's configurable floor -- see there for the full reasoning and the
+    // markdown-cron caveat. Effective consignor = the one this request is (re)attaching,
+    // or the item's existing one if this edit doesn't touch it.
+    const effectiveConsignorId = consignorId !== undefined ? updateData.consignorId : item.consignorId;
+    if (effectiveConsignorId && price !== undefined && price !== null && price !== '') {
+      const consignorPrice = parseFloat(price);
+      if (!isNaN(consignorPrice)) {
+        const floorCents = await getConsignmentMinimumPriceCents(item.sale!.organizer.id);
+        if (Math.round(consignorPrice * 100) < floorCents) {
+          const floorDisplay = (floorCents / 100).toFixed(2);
+          return res.status(400).json({ message: `Consigned items must be priced at $${floorDisplay} or more. Items under $${floorDisplay} should be donated or declined per policy.` });
+        }
+      }
+    }
+
     // Only update fields that are explicitly provided
     if (title !== undefined) {
       updateData.title = title;
@@ -1735,6 +1791,14 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         updateData.priceBeforeMarkdown = newPrice;
         updateData.markdownApplied = false;
       }
+
+      // ADR cashier-discretionary-discount (2026-09-25): originalPrice RESETS on every
+      // organizer-initiated price change, UNCONDITIONALLY (not gated like
+      // priceBeforeMarkdown above, which only backfills once) -- this endpoint is the
+      // one and only "deliberate re-listing" signal the cashier-discretion cap anchors
+      // on (see Item.originalPrice's own schema comment). A null/zero newPrice clears it
+      // back to null rather than anchoring a discretion cap on a delisted/unpriced item.
+      updateData.originalPrice = newPrice && newPrice > 0 ? newPrice : null;
     }
     if (auctionStartPrice !== undefined) updateData.auctionStartPrice = auctionStartPrice ? parseFloat(auctionStartPrice) : null;
     if (auctionReservePrice !== undefined) updateData.auctionReservePrice = auctionReservePrice ? parseFloat(auctionReservePrice) : null;
@@ -5418,5 +5482,158 @@ export const getLiveShippingRateCheckHandler = async (req: AuthRequest, res: Res
   } catch (error) {
     console.error('[getLiveShippingRateCheckHandler] Error:', error);
     res.status(500).json({ message: 'Server error checking a live shipping rate' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Physical Markdown Alert List (2026-09-25, Patrick): a running staff-facing list of
+// items the SYSTEM auto-marked down (markdownCron.ts / markdownCycleCron.ts, which set
+// Item.markdownApplied = true and write an ItemPriceHistory row) so a real person can
+// physically re-tag/re-sticker that item on the shelf with its new price. See
+// Item.markdownPhysicallyAppliedAt in schema.prisma for the tracking field and its reset
+// rule on a later markdown stage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/items/markdown-retag-queue — organizer-wide (all of this organizer's sales),
+// paginated, newest-marked-down-first. Mirrors getPackageEstimatesBatchHandler's
+// organizer-resolution/ownership pattern above.
+export const getMarkdownRetagQueue = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const { page = '1', limit = '50' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit as string) || 50));
+
+    const where = {
+      organizerId: organizer.id,
+      markdownApplied: true,
+      markdownPhysicallyAppliedAt: null,
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.item.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          sku: true,
+          price: true,
+          priceBeforeMarkdown: true,
+          photoUrls: true,
+          saleId: true,
+          sale: { select: { title: true } },
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
+      }),
+      prisma.item.count({ where }),
+    ]);
+
+    res.json({
+      items: items.map((i) => ({
+        id: i.id,
+        title: i.title,
+        sku: i.sku,
+        price: i.price,
+        priceBeforeMarkdown: i.priceBeforeMarkdown,
+        photoUrl: i.photoUrls?.[0] || null,
+        saleId: i.saleId,
+        saleTitle: i.sale?.title || null,
+        markedDownAt: i.updatedAt,
+      })),
+      total,
+      page: pageNum,
+      limit: limitNum,
+      hasMore: pageNum * limitNum < total,
+    });
+  } catch (error) {
+    console.error('[getMarkdownRetagQueue] Error:', error);
+    res.status(500).json({ message: 'Server error loading markdown re-tag queue' });
+  }
+};
+
+// POST /api/items/:id/mark-retagged — single-item "I physically re-tagged this" action.
+export const markItemRetagged = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const { id } = req.params;
+    const item = await prisma.item.findUnique({ where: { id }, select: { id: true, organizerId: true } });
+    if (!item || item.organizerId !== organizer.id) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    await prisma.item.update({
+      where: { id },
+      data: { markdownPhysicallyAppliedAt: new Date() },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[markItemRetagged] Error:', error);
+    res.status(500).json({ message: 'Server error marking item as re-tagged' });
+  }
+};
+
+// POST /api/items/mark-retagged/bulk — "mark all on this page as done". Capped and
+// silently-skip-unowned, same pattern as getPackageEstimatesBatchHandler above.
+const MARK_RETAGGED_BULK_MAX = 200;
+
+export const markItemsRetaggedBulk = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const { itemIds } = req.body as { itemIds?: unknown };
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ message: 'itemIds (a non-empty array of item IDs) is required.' });
+    }
+    if (itemIds.length > MARK_RETAGGED_BULK_MAX) {
+      return res.status(400).json({
+        message: `Too many item IDs -- ${itemIds.length} sent, ${MARK_RETAGGED_BULK_MAX} max per request.`,
+      });
+    }
+    const idsToUse = itemIds.filter((i): i is string => typeof i === 'string' && i.length > 0);
+    if (idsToUse.length === 0) {
+      return res.status(400).json({ message: 'itemIds must contain at least one non-empty string ID.' });
+    }
+
+    // Ownership-scoped in the update itself -- any ID not belonging to this organizer is
+    // simply not touched, same as getPackageEstimatesBatchHandler's skip-silently pattern.
+    const result = await prisma.item.updateMany({
+      where: { id: { in: idsToUse }, organizerId: organizer.id },
+      data: { markdownPhysicallyAppliedAt: new Date() },
+    });
+
+    res.json({ success: true, updated: result.count });
+  } catch (error) {
+    console.error('[markItemsRetaggedBulk] Error:', error);
+    res.status(500).json({ message: 'Server error marking items as re-tagged' });
   }
 };

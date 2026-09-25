@@ -28,6 +28,11 @@ export interface WorkspaceSettings {
   // POS Cashier Discount Permission (2026-08-28)
   staffDiscountCapType?: string | null;
   staffDiscountCapValue?: string | null;
+  // Configurable Consignment Intake Floor + Relist Cap (2026-09-25): null = platform
+  // default (4000 cents / $40 floor; 90-day relist cap). See schema.prisma comments on
+  // WorkspaceSettings for the full reasoning.
+  consignmentMinimumPriceCents?: number | null;
+  maxRelistDays?: number | null;
   createdAt: string;
   updatedAt: string;
 }

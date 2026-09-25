@@ -66,8 +66,153 @@ export const scheduleConsignmentUnclaimedItemsCron = (): void => {
     cronGuard({ jobName: 'consignmentUnclaimedItemsJob' }, async () => {
       console.log('[consignment-unclaimed-cron] Starting unclaimed consigned items sweep...');
       await processUnclaimedConsignmentItems();
+      console.log('[consignment-unclaimed-cron] Starting relist-cap-exceeded sweep...');
+      await processRelistCapExceededItems();
     })
   );
+};
+
+// Relist Cap (2026-09-25, Patrick): "we're not a pawn shop, no automatic disposal" --
+// consigned items on a RELIST disposition were relisting on the floor forever with no
+// ceiling. Researched real-world consignment-shop practice (60-120 day total period,
+// escalating markdowns, and critically NO silent auto-renewal -- either a notify + short
+// pickup window, an opt-in extension, or a hard ceiling) informed WorkspaceSettings.
+// maxRelistDays (default 90 -- one additional full cycle past Consignor.returnPeriodDays,
+// itself default 90). When a RELIST item has been unsold for returnPeriodDays +
+// maxRelistDays total, this sweep flags it for a staff decision -- reusing the exact same
+// per-workspace/per-consignor grouping, notification, and idempotent-stamp pattern as
+// processUnclaimedConsignmentItems above, just with its own trigger (RELIST-only, a later
+// threshold) and its own stamp column (Item.relistCapFlaggedAt) so it doesn't collide with
+// that job's unclaimedNotifiedAt (a RELIST item typically hits the returnPeriodDays-only
+// unclaimed check first and gets THAT field stamped well before it ever reaches this one).
+// NOTIFICATION-ONLY / VISIBILITY-ONLY, same posture as the rest of this file: never
+// changes Item.status, never auto-donates/returns/relists anything, never touches a
+// payout or Stripe/Square/Finix path. The /organizer/consignors "relist cap" badge
+// (relistCapExceededCount, listConsignors in consignorController.ts) is computed live
+// against the same returnPeriodDays + maxRelistDays window, independent of this stamp --
+// exactly mirroring how the "Unclaimed" badge is independent of unclaimedNotifiedAt.
+const DEFAULT_MAX_RELIST_DAYS = 90;
+
+export const processRelistCapExceededItems = async (): Promise<void> => {
+  try {
+    const now = new Date();
+
+    const candidates = await prisma.item.findMany({
+      where: {
+        status: 'AVAILABLE',
+        consignorId: { not: null },
+        relistCapFlaggedAt: null,
+        consignor: { unsoldItemDisposition: 'RELIST' },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        consignor: {
+          select: {
+            id: true,
+            name: true,
+            returnPeriodDays: true,
+            workspaceId: true,
+            workspace: {
+              select: {
+                name: true,
+                owner: { select: { userId: true } },
+                settings: { select: { maxRelistDays: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Keep only items that have crossed THEIR OWN consignor's returnPeriodDays plus
+    // THEIR OWN workspace's maxRelistDays (or the platform default if unset) -- never a
+    // shared/global cutoff, matching processUnclaimedConsignmentItems's own approach.
+    const exceeded = candidates.filter((item) => {
+      if (!item.consignor) return false;
+      const maxRelistDays = item.consignor.workspace?.settings?.maxRelistDays ?? DEFAULT_MAX_RELIST_DAYS;
+      const totalDays = item.consignor.returnPeriodDays + maxRelistDays;
+      const cutoff = new Date(now.getTime() - totalDays * MS_PER_DAY);
+      return item.createdAt < cutoff;
+    });
+
+    if (exceeded.length === 0) {
+      console.log('[relist-cap-cron] No newly-relist-cap-exceeded items found');
+      return;
+    }
+
+    interface ConsignorBucket {
+      name: string;
+      itemIds: string[];
+    }
+    interface WorkspaceGroup {
+      organizerUserId: string | null;
+      consignors: Map<string, ConsignorBucket>;
+    }
+    const byWorkspace = new Map<string, WorkspaceGroup>();
+
+    for (const item of exceeded) {
+      const c = item.consignor!;
+      let group = byWorkspace.get(c.workspaceId);
+      if (!group) {
+        group = { organizerUserId: c.workspace?.owner?.userId || null, consignors: new Map() };
+        byWorkspace.set(c.workspaceId, group);
+      }
+      let bucket = group.consignors.get(c.id);
+      if (!bucket) {
+        bucket = { name: c.name, itemIds: [] };
+        group.consignors.set(c.id, bucket);
+      }
+      bucket.itemIds.push(item.id);
+    }
+
+    console.log(
+      `[relist-cap-cron] Found ${exceeded.length} newly-relist-cap-exceeded item(s) across ${byWorkspace.size} workspace(s)`
+    );
+
+    for (const [workspaceId, group] of byWorkspace.entries()) {
+      try {
+        const consignorBuckets = Array.from(group.consignors.values());
+        const totalItems = consignorBuckets.reduce((sum, b) => sum + b.itemIds.length, 0);
+        const itemWord = totalItems === 1 ? 'item' : 'items';
+        const title = `${totalItems} relisted consigned ${itemWord} need a decision`;
+        const lines = consignorBuckets.map((b) => `${b.name} (${b.itemIds.length} ${b.itemIds.length === 1 ? 'item' : 'items'})`);
+        const body =
+          `${totalItems} RELIST-disposition consigned ${itemWord} from ${consignorBuckets.length} consignor(s) have passed the workspace's relist cap without selling: ` +
+          lines.join(', ') +
+          '. This is a visibility flag only -- nothing was donated, returned, or otherwise changed automatically. Decide next steps for each item yourself on the Consignors page.';
+
+        if (group.organizerUserId) {
+          await createNotification(
+            group.organizerUserId,
+            'CONSIGNOR_RELIST_CAP_EXCEEDED',
+            title,
+            body,
+            '/organizer/consignors',
+            'OPERATIONAL',
+            true,
+            title
+          );
+        } else {
+          console.warn(
+            `[relist-cap-cron] Workspace ${workspaceId} has no resolvable owner userId, skipping notification`
+          );
+        }
+
+        const itemIds = consignorBuckets.flatMap((b) => b.itemIds);
+        await prisma.item.updateMany({
+          where: { id: { in: itemIds } },
+          data: { relistCapFlaggedAt: now },
+        });
+      } catch (err) {
+        console.error(`[relist-cap-cron] Failed processing workspace ${workspaceId}:`, err);
+      }
+    }
+
+    console.log('[relist-cap-cron] Relist-cap-exceeded sweep completed');
+  } catch (err) {
+    console.error('[relist-cap-cron] Job failed:', err);
+  }
 };
 
 export const processUnclaimedConsignmentItems = async (): Promise<void> => {

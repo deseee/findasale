@@ -474,6 +474,8 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
           commissionOverride: null,
           staffDiscountCapType: null,
           staffDiscountCapValue: null,
+          consignmentMinimumPriceCents: null,
+          maxRelistDays: null,
         },
       });
     }
@@ -512,6 +514,12 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
       // POS Cashier Discount Permission (2026-08-28)
       staffDiscountCapType: settings.staffDiscountCapType,
       staffDiscountCapValue: settings.staffDiscountCapValue?.toString() || null,
+      // Configurable Consignment Intake Floor + Relist Cap (2026-09-25): null here means
+      // "platform default" (itemController.ts falls back to 4000 cents / $40;
+      // consignmentUnclaimedItemsJob.ts falls back to 90 days) -- see schema.prisma
+      // comments on WorkspaceSettings for the full reasoning.
+      consignmentMinimumPriceCents: settings.consignmentMinimumPriceCents,
+      maxRelistDays: settings.maxRelistDays,
       memberCount,
       ownerName,
       createdAt: settings.createdAt,
@@ -527,7 +535,7 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
 export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
-    const { name, description, brandRules, templateUsed, enableAnalytics, enableLeaderboard, enableTeamChat, staffDiscountCapType, staffDiscountCapValue } = req.body;
+    const { name, description, brandRules, templateUsed, enableAnalytics, enableLeaderboard, enableTeamChat, staffDiscountCapType, staffDiscountCapValue, consignmentMinimumPriceCents, maxRelistDays } = req.body;
 
     if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
 
@@ -546,6 +554,8 @@ export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) =
         commissionOverride: null,
         staffDiscountCapType: staffDiscountCapType || null,
         staffDiscountCapValue: staffDiscountCapValue != null ? staffDiscountCapValue : null,
+        consignmentMinimumPriceCents: consignmentMinimumPriceCents != null ? parseInt(consignmentMinimumPriceCents, 10) : null,
+        maxRelistDays: maxRelistDays != null ? parseInt(maxRelistDays, 10) : null,
       },
       update: {
         ...(name !== undefined && { name: name || null }),
@@ -559,6 +569,11 @@ export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) =
         // (organizer sets "no limit"), undefined leaves the existing value untouched.
         ...(staffDiscountCapType !== undefined && { staffDiscountCapType }),
         ...(staffDiscountCapValue !== undefined && { staffDiscountCapValue }),
+        // Configurable Consignment Intake Floor + Relist Cap (2026-09-25): same
+        // undefined-untouched / explicit-null-clears-back-to-platform-default convention
+        // as staffDiscountCapType/Value immediately above.
+        ...(consignmentMinimumPriceCents !== undefined && { consignmentMinimumPriceCents: consignmentMinimumPriceCents != null ? parseInt(consignmentMinimumPriceCents, 10) : null }),
+        ...(maxRelistDays !== undefined && { maxRelistDays: maxRelistDays != null ? parseInt(maxRelistDays, 10) : null }),
       },
     });
 
@@ -578,6 +593,8 @@ export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) =
       commissionOverride: settings.commissionOverride?.toString() || null,
       staffDiscountCapType: settings.staffDiscountCapType,
       staffDiscountCapValue: settings.staffDiscountCapValue?.toString() || null,
+      consignmentMinimumPriceCents: settings.consignmentMinimumPriceCents,
+      maxRelistDays: settings.maxRelistDays,
       createdAt: settings.createdAt,
       updatedAt: settings.updatedAt,
     });

@@ -1546,6 +1546,24 @@ model Item {
   // non-booth-cart flow ever populates it.
   boothCartTransactionId          String?
   boothCartTransaction            BoothCartTransaction?   @relation("BoothCartReservedItems", fields: [boothCartTransactionId], references: [id], onDelete: SetNull)
+  // ADR cashier-discretionary-discount (2026-09-25): cart-scoped staging for a
+  // per-item cashier discount, mirroring the boothCartTransactionId RESERVED-transient
+  // -state pattern immediately above. Written by PATCH .../cart/:cartTransactionId/
+  // items/:itemId/discretion (services/cashierDiscretionService.ts
+  // resolveCashierDiscretion), read by resolveBoothLegItems
+  // (vendorBoothCartController.ts) wherever it sums item prices into a leg's
+  // amountCents/subtotalCents, and cleared back to null/0 by the SAME two paths that
+  // already clear boothCartTransactionId on cart exit -- removeBoothCartItem and
+  // releasePendingCartHold (cancelBoothCart's shared core) -- no new cleanup surface,
+  // per the ADR's own instruction. pendingCashierDiscretionAppliedByType/ById snapshot
+  // WHO granted this discount ('HUB_OWNER' | 'TEAM_MEMBER' | 'BOOTH', the same
+  // boothAuth.type discriminant requireBoothAuth.ts already produces, plus the actor's
+  // id) so the eventual Purchase-row audit columns (cashierDiscretionAppliedByType/ById)
+  // have a source. Also cleared to null/0 at capture time once folded into the
+  // permanent Purchase audit columns (finalizeCapturedLegs).
+  pendingCashierDiscretionAppliedCents  Int?    @default(0)
+  pendingCashierDiscretionAppliedByType String?
+  pendingCashierDiscretionAppliedById   String?
   // #310: Color-tagged Discount Rules (TEAMS)
   tagColor                        String? // Hex or label e.g. "#EF4444" — ties to active DiscountRule
   // #311: Multi-Location Inventory (TEAMS)
@@ -1565,9 +1583,34 @@ model Item {
   // #112 Soft-Delete Archival + #121 Tiered Storage pre-wire
   deletedAt                       DateTime?
   storageArchive                  Boolean                 @default(false) // #121: Pre-wire for cold storage tier
+  // ADR cashier-discretionary-discount (2026-09-25): purpose-built anchor for the
+  // cashier-discretion 20%-of-original cap (and any future "off original price"
+  // feature) -- distinct from priceBeforeMarkdown/markdownApplied below, which are
+  // markdown-cron-owned and staleness-prone (itemController.ts's manual-price-edit
+  // block only sets priceBeforeMarkdown when it was null, so it goes stale on a
+  // SECOND manual edit -- not safe as a money-affecting cap anchor). Set once at item
+  // creation (= price), RESET only by an explicit organizer/booth-owner price edit
+  // (itemController.ts updateItem, unconditionally, every time -- a deliberate
+  // re-listing) -- NEVER touched by either markdown cron (markdownCron.ts /
+  // markdownCycleCron.ts), by design. Nullable: existing rows get a one-time backfill
+  // (COALESCE(priceBeforeMarkdown, price)) via migration; a null value here means "no
+  // discretion cap can be computed" (computeCashierDiscretionCap treats <= 0 as cap 0),
+  // never a crash or an inflated cap.
+  originalPrice                   Float?
   // Feature #91: Auto-Markdown (Smart Clearance)
   priceBeforeMarkdown             Float? // Original price before markdown applied
   markdownApplied                 Boolean                 @default(false) // Whether auto-markdown has been applied
+  // Physical Markdown Alert List (2026-09-25, Patrick): markdownApplied above means the
+  // SYSTEM cut the price -- it says nothing about whether a staff member has re-tagged the
+  // physical item on the shelf with the new price yet. Null = needs physical re-tagging
+  // (the default for any item markdownApplied just flipped true on); non-null = a staff
+  // member hit "Mark as re-tagged" (see markdownRetagController / GET /api/items/markdown-retag-queue).
+  // Reset back to null by markdownCron.ts/markdownCycleCron.ts whenever a LATER markdown
+  // (e.g. the cycle's second-stage cut) changes the price again, so staff are re-alerted for
+  // the new price even if they already re-tagged the item once. Deliberately a separate field
+  // from markdownApplied -- reusing that flag would break the markdown-cron idempotency
+  // filters that already read it (see @@index([saleId, markdownApplied]) below).
+  markdownPhysicallyAppliedAt     DateTime?
   // Feature #228: Settlement Hub — high-value item tracking + AI comp
   isHighValue                     Boolean                 @default(false)
   highValueThreshold              Decimal?
@@ -1733,6 +1776,24 @@ model Item {
   // AVAILABLE), so the daily sweep never re-notifies for the same item. Null = not yet notified,
   // or not a consignment item. Notification-only -- never gates or changes item behavior itself.
   unclaimedNotifiedAt             DateTime?
+  // Consignor pickup-window notices (2026-09-25, Patrick policy): for RETURN-disposition
+  // consignors only, consignorExpiryNoticeJob.ts opens a 15-day "arrange pickup or donation"
+  // window once the item has sat AVAILABLE past its consignor's own returnPeriodDays (default
+  // 90) and sends the consignor a couple of reminder emails during it. pickupWindowStartedAt
+  // is stamped when the window opens (reminder #1 sent); pickupReminder2SentAt is stamped
+  // when the second, mid-window reminder is sent. Both null = window not yet opened for this
+  // item. Notification-only, same posture as unclaimedNotifiedAt immediately above -- never
+  // gates or changes item behavior itself, never touches a payout or settlement path.
+  pickupWindowStartedAt           DateTime?
+  pickupReminder2SentAt           DateTime?
+  // Relist cap (2026-09-25, Patrick): stamped once a RELIST-disposition item has been
+  // unsold for its consignor's returnPeriodDays + the workspace's maxRelistDays
+  // (WorkspaceSettings, both above) and consignmentUnclaimedItemsJob.ts has surfaced it
+  // for a staff decision (relistCapExceededCount badge on /organizer/consignors). Null =
+  // not yet flagged, or not a RELIST-disposition item. Same "notify once, no un-stamping
+  // path" posture as unclaimedNotifiedAt immediately above -- never gates or changes item
+  // behavior itself, never touches a payout or settlement path, never auto-disposes.
+  relistCapFlaggedAt              DateTime?
 
   // @@unique([saleId, sku]) -- Feature #300: removed — NULLs defeat compound unique in Postgres
   // Full-text search column maintained by a Postgres trigger, not by Prisma. Queried via raw
@@ -1750,6 +1811,8 @@ model Item {
   @@index([locationId]) // #311: Multi-Location filter
   @@index([consignorId]) // #309: Consignor item lookup
   @@index([consignorId, status, unclaimedNotifiedAt]) // consignmentUnclaimedItemsJob.ts (2026-09-25): daily sweep for unclaimed consigned items
+  @@index([consignorId, status, pickupWindowStartedAt]) // consignorExpiryNoticeJob.ts (2026-09-25): daily sweep for RETURN-disposition pickup-window reminders
+  @@index([consignorId, status, relistCapFlaggedAt]) // consignmentUnclaimedItemsJob.ts (2026-09-25): daily sweep for RELIST-disposition relist-cap decisions
   @@index([vendorBoothId]) // Vendor Booth Payments 2026-07-07: booth item lookup
   @@index([boothCartTransactionId]) // 2026-07-28: cart-scoped reservation lookup (resolveBoothLegItems / cancelBoothCart)
   @@index([tagColor]) // #310: Discount rule color tag lookup
@@ -1757,6 +1820,7 @@ model Item {
   @@index([saleId])
   @@index([saleId, status]) // Sentry slow query: SELECT Item WHERE saleId+status (1351ms) — public item browse + POS organizer item search with optional status filter
   @@index([saleId, markdownApplied]) // Sentry slow query: markdownCron findMany WHERE saleId+markdownApplied=false — eliminates per-sale full scans in markdown job
+  @@index([organizerId, markdownApplied, markdownPhysicallyAppliedAt]) // Physical Markdown Alert List (2026-09-25): staff "needs re-tagging" queue query
   @@index([status, ebayNextRenewalAt]) // ADR ebay-renewal-forecasting (2026-09-15): forecast cron + insertions-forecast endpoint query pattern -- AVAILABLE items with an upcoming eBay GTC renewal date
   @@index([discogsMatchStatus]) // ADR-132: "Discogs: needs your pick" filter
 }
@@ -1954,6 +2018,23 @@ model Purchase {
   discountAmountCents     Int? // this row's share, in cents (cart-level discount distributed proportionally)
   discountReasonNote      String?
   discountAppliedByUserId String?
+
+  // Cashier Discretionary Discount at Point of Sale (ADR cashier-discretionary-discount,
+  // 2026-09-25): PARALLEL to, NOT reusing, the POS Cashier Discount Permission block
+  // immediately above -- that mechanism is cart-level/role-level and scoped to the
+  // single-organizer POS flow; this one is item-level, cap-bounded (10% of current price
+  // AND never more than 20% off original price, both independently), and scoped to the
+  // hub/venue-cart booth-checkout flow (vendorBoothCartController.ts). All nullable --
+  // null on every row where discretion wasn't used. priceOriginalCents/
+  // priceBeforeDiscretionCents are populated on EVERY booth-cart Purchase row going
+  // forward (even when discretion wasn't used) for full auditability; the other four are
+  // null unless a discretionary discount was actually applied to this item.
+  cashierDiscretionPercent      Decimal? @db.Decimal(5, 2) // effective percent OFF THE CURRENT (pre-discretion) PRICE actually applied, derived from cashierDiscretionAmountCents/priceBeforeDiscretionCents at capture time -- may differ from the cashier's requested percent if a fresh cap clamp fired
+  cashierDiscretionAmountCents  Int? // cents actually applied to this item, after the server-side cap clamp (never trusts a client-supplied cents value)
+  cashierDiscretionAppliedByType String? // 'HUB_OWNER' | 'TEAM_MEMBER' | 'BOOTH' -- mirrors BoothAuthRequest.boothAuth.type
+  cashierDiscretionAppliedById   String? // TeamMember.id | VendorBooth.id | Organizer.id (HUB_OWNER) -- whichever actor type applied it
+  priceOriginalCents            Int? // Item.originalPrice at capture time, in cents -- the 20%-of-original cap's anchor, snapshotted
+  priceBeforeDiscretionCents    Int? // Item.price at capture time (i.e. post-markdown, pre-discretion), in cents
 
   // ── FEE SNAPSHOT (2026-08-17) — what was ACTUALLY charged, pinned at charge time ────────
   // `platformFeeAmount` above stores the COMBINED Stripe application_fee_amount (auction buyer
@@ -3390,11 +3471,15 @@ model OrganizerWorkspace {
   alerts            WorkspaceAlert[]            @relation("WorkspaceAlerts")
   // Retail gap features (TEAMS)
   consignors        Consignor[]                 @relation("WorkspaceConsignors")
+  agreementVersions ConsignorAgreementVersion[] @relation("WorkspaceConsignorAgreements")
   commissionTiers   CommissionTier[]            @relation("WorkspaceCommissionTiers")
   discountRules     DiscountRule[]              @relation("WorkspaceDiscountRules")
   locations         Location[]                  @relation("WorkspaceLocations")
   // #239: Multi-Consignor Settlement batches owned by this workspace
   settlementBatches ConsignorSettlementBatch[]  @relation("WorkspaceSettlementBatches")
+  // Consignor Self-Serve Intake (2026-09-25)
+  intakeRequests     ConsignorIntakeRequest[]     @relation("WorkspaceIntakeRequests")
+  intakeAppointments ConsignorIntakeAppointment[] @relation("WorkspaceIntakeAppointments")
 }
 
 model WorkspaceMember {
@@ -3851,6 +3936,9 @@ model SaleHub {
   cartTransactions  BoothCartTransaction[]       @relation("HubCartTransactions")
   settlementBatches VendorBoothSettlementBatch[] @relation("HubSettlementBatches")
   hubOwnerShareManualPayouts HubOwnerShareManualPayout[] @relation("HubHubOwnerSharePayouts")
+  // ADR cashier-discretionary-discount (2026-09-25): per-hub cashier-discretion grants
+  // (who besides the hub owner may apply the checkout-time discretionary discount).
+  cashierDiscretionGrants CashierDiscretionGrant[] @relation("HubCashierDiscretionGrants")
 
   @@index([organizerId])
   @@index([lat, lng])
@@ -5055,6 +5143,35 @@ model WorkspacePermission {
   @@index([workspaceId, role])
 }
 
+// ADR cashier-discretionary-discount (2026-09-25): per-hub, per-cashier permission to
+// apply the checkout-time discretionary discount in the hub/venue-cart register
+// (vendorBoothCartController.ts). Deliberately NOT a WorkspacePermission row (that model
+// is role-level and workspace-scoped; this is per-hub AND per-INDIVIDUAL cashier --
+// either one TeamMember or one VendorBooth, never a whole role). HUB_OWNER needs no row
+// here at all -- always allowed, resolved directly in
+// services/cashierDiscretionService.ts, but still cap-bounded like everyone else (see
+// that service's own comment for why HUB_OWNER is not exempt from the cap).
+// Exactly one of cashierTeamMemberId/cashierBoothId is set per row (app-level
+// convention, mirrors BoothCartTransaction.cashierTeamMemberId/cashierBoothId) --
+// enforced by the granting endpoint, not a DB CHECK constraint.
+model CashierDiscretionGrant {
+  id                  String       @id @default(cuid())
+  hubId               String
+  hub                 SaleHub      @relation("HubCashierDiscretionGrants", fields: [hubId], references: [id], onDelete: Cascade)
+  cashierTeamMemberId String?
+  cashierTeamMember   TeamMember?  @relation("TeamMemberCashierDiscretionGrants", fields: [cashierTeamMemberId], references: [id], onDelete: Cascade)
+  cashierBoothId      String?
+  cashierBooth        VendorBooth? @relation("BoothCashierDiscretionGrants", fields: [cashierBoothId], references: [id], onDelete: Cascade)
+  enabled             Boolean      @default(false)
+  setByUserId         String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@unique([hubId, cashierTeamMemberId])
+  @@unique([hubId, cashierBoothId])
+  @@index([hubId])
+}
+
 // WorkspaceRoleTemplate — predefined role templates for quick setup
 model WorkspaceRoleTemplate {
   id          String   @id @default(cuid())
@@ -5081,6 +5198,9 @@ model TeamMember {
   saleAssignments     SaleAssignment[]            @relation("TeamMemberSaleAssignments")
   // Vendor Booth Payments (2026-07-07): cashier attribution for booth cart transactions
   cashierTransactions BoothCartTransaction[]      @relation("CashierTransactions")
+  // ADR cashier-discretionary-discount (2026-09-25): per-hub grants letting this team
+  // member apply the checkout-time discretionary discount.
+  cashierDiscretionGrants CashierDiscretionGrant[] @relation("TeamMemberCashierDiscretionGrants")
   createdAt           DateTime                    @default(now())
   updatedAt           DateTime                    @updatedAt
 
@@ -5152,6 +5272,32 @@ model WorkspaceSettings {
   // createTerminalPaymentIntent -- see claude_docs/feature-notes/ADR-pos-cashier-discount-permission.md.
   staffDiscountCapType  String?  // 'PERCENT' | 'FIXED'
   staffDiscountCapValue Decimal? @db.Decimal(10, 2) // percent (0-100) or dollars, per staffDiscountCapType
+  // Consignor Self-Serve Intake (2026-09-25): permanent, rotatable capability-URL token for
+  // this workspace's public "request to bring items in" form, same unguessable-token pattern
+  // as Consignor.portalToken -- generated server-side on first GET /api/consignor-intake/link,
+  // never client-supplied. intakeLinkEnabled is the organizer's kill switch: rotating or
+  // disabling never deletes ConsignorIntakeRequest history, it only stops new public
+  // submissions (rotation invalidates the old URL by replacing the token; disabling keeps
+  // the same token but the public GET/POST endpoints refuse it while false).
+  intakeLinkToken    String?  @unique
+  intakeLinkEnabled  Boolean  @default(true)
+  // Configurable Consignment Intake Floor + Relist Cap (2026-09-25, Patrick): the
+  // intake-time minimum price for a consigned item was hard-coded to $40 (4000 cents) in
+  // itemController.ts createItem/updateItem -- Patrick asked for it to be organizer-
+  // settable instead. Null = use the platform default of 4000 cents ($40), same "null
+  // means platform default" convention as elsewhere in this model. Stored in cents (not
+  // Decimal dollars) to avoid float rounding in the itemController.ts comparison. Settable
+  // via GET/PATCH /api/workspace/:workspaceId/settings (workspaceController.ts), the same
+  // general settings surface staffDiscountCapType/Value above already use.
+  consignmentMinimumPriceCents Int?
+  // Relist cap (2026-09-25, Patrick): a RELIST-disposition consigned item should not just
+  // continue on the floor forever. Null = platform default of 90 days -- one additional
+  // full cycle past Consignor.returnPeriodDays (also defaults to 90), matching researched
+  // real-world consignment-shop norms (60-120 day total period, no silent auto-renewal)
+  // rather than an arbitrary number. When a RELIST item has been unsold for
+  // returnPeriodDays + maxRelistDays total, consignmentUnclaimedItemsJob.ts flags it for a
+  // staff decision -- visibility/flagging only, never automatic donation/return/disposal.
+  maxRelistDays Int? @default(90)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -5416,7 +5562,7 @@ model Consignor {
   phone             String?
   commissionRate    Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
   useTieredCommission Boolean          @default(false) // ADR-096: opt-in value-tiered split; false = today's flat commissionRate behavior, unchanged
-  unsoldItemDisposition String?       // 'RETURN' | 'DONATE' | 'RELIST' | null — organizer's plan for this consignor's items if they don't sell, set at onboarding. Shown in guide/checklist copy. Automation: consignorExpiryNoticeJob.ts (fixed 60-day, per-item) reads this to drive its organizer-facing next-step copy (2026-09-24), and consignmentUnclaimedItemsJob.ts (configurable per-consignor returnPeriodDays below, batched per organizer, 2026-09-25) nudges the organizer to act on it -- both notification-only, neither takes automatic action on the item.
+  unsoldItemDisposition String?       // 'RETURN' | 'DONATE' | 'RELIST' | null — organizer's plan for this consignor's items if they don't sell, set at onboarding. Shown in guide/checklist copy. Automation, reconciled 2026-09-25 per Patrick's stated policy: consignorExpiryNoticeJob.ts now triggers off returnPeriodDays below (not a fixed day count) and is scoped to RETURN only -- it opens a 15-day consignor-facing pickup-arrangement email window (a couple of reminders, with a pickup-appointment link when the workspace's consignor-intake link is enabled). consignmentUnclaimedItemsJob.ts (same returnPeriodDays trigger, batched per organizer, 2026-09-25) remains the ALL-dispositions organizer-facing nudge and is unchanged. Both notification-only, neither takes automatic action on the item.
   returnPeriodDays  Int                @default(90) // How many days after an item's intake (Item.createdAt) before it's considered "unclaimed" for this consignor. Drives consignmentUnclaimedItemsJob.ts's daily sweep and the "Unclaimed" badge on /organizer/consignors. 90 is the default; organizer-overridable per consignor later (no override UI yet -- just the column).
   notes             String?            @db.Text
   portalToken       String             @unique @default(cuid()) // capability URL token — permanent for MVP
@@ -5445,14 +5591,105 @@ model Consignor {
   squareAccessTokenEncrypted  String?
   squareRefreshTokenEncrypted String?
   squareTokenExpiresAt        DateTime?
+  // In-app consignor agreement (Patrick, 2026-09-25): replaces the earlier standalone-document
+  // draft -- the agreement now lives in the app itself (see ConsignorAgreementVersion below).
+  // Records which version this consignor accepted and when, for a real audit trail.
+  // Rendered/accepted via consignorAgreementService.ts.
+  agreementAcceptedAt      DateTime?
+  agreementAcceptedVersion Int?
   items             Item[]             @relation("ConsignorItems")
   payouts           ConsignorPayout[]
+  // Consignor Self-Serve Intake (2026-09-25): set once the approving organizer creates this
+  // Consignor from a ConsignorIntakeRequest -- see that model's resultingConsignorId.
+  intakeRequest      ConsignorIntakeRequest?
+  intakeAppointments ConsignorIntakeAppointment[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
   @@index([workspaceId])
   @@index([portalToken])
   @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering
+}
+
+// Consignor Self-Serve Intake (2026-09-25): a prospective consignor's public-form
+// submission, sitting on its own before the organizer decides. Approve-then-create: a real
+// Consignor row is only created (via createConsignorCore, shared with the manual "Add
+// Consignor" form) when the organizer clicks Approve -- see consignorIntakeController.ts.
+// Declining does NOT auto-notify the requester; the organizer handles that off-platform if
+// they choose (product decision, 2026-09-25). Deliberately does NOT let a prospective
+// consignor touch inventory/uploads -- `message` is a single free-text note field, never
+// structured items or photos.
+model ConsignorIntakeRequest {
+  id                 String              @id @default(cuid())
+  workspaceId        String
+  workspace          OrganizerWorkspace  @relation("WorkspaceIntakeRequests", fields: [workspaceId], references: [id], onDelete: Cascade)
+  name               String
+  email              String?
+  phone              String?
+  message            String?  @db.Text
+  requestedStartsAt  DateTime?
+  status             String   @default("PENDING") // PENDING | APPROVED | DECLINED
+  declineReason      String?
+  reviewedAt         DateTime?
+  reviewedByUserId   String?
+  resultingConsignorId String? @unique
+  resultingConsignor Consignor? @relation(fields: [resultingConsignorId], references: [id], onDelete: SetNull)
+  appointment        ConsignorIntakeAppointment?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+// Consignor Self-Serve Intake (2026-09-25): lightweight appointment scheduling for intake
+// drop-off/consult. Created either by the public submit endpoint (createdBy CONSIGNOR, when
+// the requester picked a time on the public form) or directly by staff (createdBy ORGANIZER,
+// via "+ Add Appointment" for a phone/walk-in booking). consignorId is only set once the
+// linked request (if any) is approved. V1 display is a plain day-grouped chronological list,
+// not a calendar grid (product decision, 2026-09-25).
+model ConsignorIntakeAppointment {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  workspace       OrganizerWorkspace @relation("WorkspaceIntakeAppointments", fields: [workspaceId], references: [id], onDelete: Cascade)
+  consignorId     String?
+  consignor       Consignor? @relation(fields: [consignorId], references: [id], onDelete: SetNull)
+  intakeRequestId String?   @unique
+  intakeRequest   ConsignorIntakeRequest? @relation(fields: [intakeRequestId], references: [id], onDelete: SetNull)
+  contactName     String
+  contactEmail    String?
+  contactPhone    String?
+  startsAt        DateTime
+  endsAt          DateTime?
+  status          String   @default("REQUESTED") // REQUESTED | CONFIRMED | COMPLETED | CANCELLED | NO_SHOW
+  notes           String?  @db.Text
+  createdBy       String   @default("ORGANIZER") // "ORGANIZER" | "CONSIGNOR"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([startsAt])
+  @@index([status])
+}
+
+// Consignor agreement, in-app (Patrick, 2026-09-25): versioned text of the consignor
+// agreement -- lives in the product itself, not a standalone document. One workspace can
+// have many versions over time; Consignor.agreementAcceptedVersion pins which version a
+// given consignor actually accepted. bodyMarkdown carries {{commissionRate}},
+// {{returnPeriodDays}}, {{unsoldItemDisposition}}, and {{markdownPolicySummary}}
+// placeholders, filled in per-consignor at render/accept time (consignorAgreementService.ts)
+// from that consignor's real configured values -- never hardcoded per version.
+model ConsignorAgreementVersion {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  workspace       OrganizerWorkspace @relation("WorkspaceConsignorAgreements", fields: [workspaceId], references: [id], onDelete: Cascade)
+  version         Int
+  bodyMarkdown    String             @db.Text
+  createdByUserId String
+  createdAt       DateTime           @default(now())
+
+  @@unique([workspaceId, version])
+  @@index([workspaceId])
 }
 
 // #309: Payout record — created when organizer runs a payout for a consignor
@@ -6683,6 +6920,9 @@ model VendorBooth {
   // BoothCartLeg.cashierBoothId, whoever was operating the register for that leg's cart).
   cashierLegs         BoothCartLeg[]         @relation("CashierBoothLegs")
   feeCharges          VendorBoothFeeCharge[]
+  // ADR cashier-discretionary-discount (2026-09-25): a grant letting THIS booth (as a
+  // roaming cashier at its own hub) apply the checkout-time discretionary discount.
+  cashierDiscretionGrants CashierDiscretionGrant[] @relation("BoothCashierDiscretionGrants")
 
   @@unique([hubId, boothNumber])
   @@index([hubId])

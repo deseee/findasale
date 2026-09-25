@@ -17,7 +17,7 @@ import TierGate from '../../components/TierGate';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Link from 'next/link';
-import { Trash2, Edit2, DollarSign, Copy, Check, Percent } from 'lucide-react';
+import { Trash2, Edit2, DollarSign, Copy, Check, Percent, Camera, X, Link2, RefreshCw, Mail, MessageCircle, Inbox, CalendarClock } from 'lucide-react';
 
 interface Consignor {
   id: string;
@@ -28,6 +28,7 @@ interface Consignor {
   unsoldItemDisposition: string | null; // 'RETURN' | 'DONATE' | 'RELIST' | null
   returnPeriodDays: number; // consignmentUnclaimedItemsJob.ts (2026-09-25): days after intake before an unsold item counts as unclaimed for this consignor (default 90)
   unclaimedCount: number; // consignmentUnclaimedItemsJob.ts (2026-09-25): AVAILABLE items past returnPeriodDays, precomputed server-side by listConsignors
+  relistCapExceededCount: number; // Relist Cap (2026-09-25): RELIST-disposition AVAILABLE items past returnPeriodDays + workspace maxRelistDays, precomputed server-side by listConsignors
   notes: string | null;
   portalToken: string;
   items: Array<{ id: string; title: string; price: string | number; status: string }>;
@@ -40,7 +41,34 @@ interface Consignor {
   createdAt: string;
 }
 
+// Consignor Self-Serve Intake (2026-09-25)
+interface IntakeAppointmentSummary {
+  id: string;
+  startsAt: string;
+  status: string;
+}
+
+interface IntakeRequest {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  requestedStartsAt: string | null;
+  status: string;
+  createdAt: string;
+  appointment: IntakeAppointmentSummary | null;
+  resultingConsignor: { id: string; name: string } | null;
+}
+
+interface IntakeLink {
+  url: string;
+  token: string;
+  enabled: boolean;
+}
+
 type ModalMode = 'closed' | 'create' | 'edit';
+type PageTab = 'consignors' | 'requests';
 
 const ConsignorsPage: React.FC = () => {
   const router = useRouter();
@@ -54,6 +82,18 @@ const ConsignorsPage: React.FC = () => {
   const [editingConsignor, setEditingConsignor] = useState<Consignor | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
+  // Consignor intake disclosure (Patrick, 2026-09-25): plain-language markdown-policy
+  // notice returned by POST /consignors (see consignorController.createConsignor),
+  // shown once right after a new consignor is created.
+  const [markdownNotice, setMarkdownNotice] = useState<string | null>(null);
+
+  // Rapid capture entry point (consignor-scoped capture follow-up, 2026-09-25): lets the
+  // organizer jump straight into the existing per-sale rapidfire camera flow with this
+  // consignor's id carried through. The flow is per-sale, so a sale must be picked/confirmed
+  // first -- this small picker does that, then hands off to add-items/[saleId].tsx via query
+  // params (openCamera/captureMode already existed there; consignorId/consignorName are new).
+  const [rapidCaptureTarget, setRapidCaptureTarget] = useState<{ id: string; name: string } | null>(null);
+  const [rapidCaptureSaleId, setRapidCaptureSaleId] = useState('');
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -79,6 +119,31 @@ const ConsignorsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
+  // Consignor Self-Serve Intake (2026-09-25): tab switcher, persistent intake link, and the
+  // Requests review queue. Additive to this page -- the existing Consignors tab/content
+  // above is unchanged.
+  const [activeTab, setActiveTab] = useState<PageTab>('consignors');
+  const [intakeLink, setIntakeLink] = useState<IntakeLink | null>(null);
+  const [intakeLinkBusy, setIntakeLinkBusy] = useState(false);
+  const [copiedIntakeLink, setCopiedIntakeLink] = useState(false);
+  const [intakeRequests, setIntakeRequests] = useState<IntakeRequest[]>([]);
+  const [intakeRequestsLoading, setIntakeRequestsLoading] = useState(false);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
+
+  const [approveTarget, setApproveTarget] = useState<IntakeRequest | null>(null);
+  const [approveForm, setApproveForm] = useState({
+    commissionRate: '',
+    useTieredCommission: false,
+    unsoldItemDisposition: '',
+    notes: '',
+    confirmAppointment: true,
+  });
+  const [isApproving, setIsApproving] = useState(false);
+
+  const [declineTarget, setDeclineTarget] = useState<IntakeRequest | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [isDeclining, setIsDeclining] = useState(false);
+
   const fetchConsignors = async () => {
     try {
       setLoading(true);
@@ -103,11 +168,38 @@ const ConsignorsPage: React.FC = () => {
     }
   };
 
+  const fetchIntakeLink = async () => {
+    try {
+      const response = await api.get('/consignor-intake/link');
+      setIntakeLink(response.data);
+    } catch (error: any) {
+      console.error('Error fetching intake link:', error);
+      // Non-fatal: the link card just stays hidden/empty.
+    }
+  };
+
+  const fetchIntakeRequests = async () => {
+    try {
+      setIntakeRequestsLoading(true);
+      const response = await api.get('/consignor-intake/requests', { params: { status: 'PENDING' } });
+      const requests: IntakeRequest[] = response.data || [];
+      setIntakeRequests(requests);
+      setPendingRequestCount(requests.length);
+    } catch (error: any) {
+      console.error('Error fetching intake requests:', error);
+      showToast('Failed to load consignor requests', 'error');
+    } finally {
+      setIntakeRequestsLoading(false);
+    }
+  };
+
   // Fetch consignors on mount
   useEffect(() => {
     if (user && user.roles?.includes('ORGANIZER') && canAccess('TEAMS')) {
       fetchConsignors();
       fetchSales();
+      fetchIntakeLink();
+      fetchIntakeRequests();
     }
   }, [user, canAccess]);
 
@@ -216,11 +308,15 @@ const ConsignorsPage: React.FC = () => {
 
       if (modalMode === 'create') {
         const response = await api.post('/consignors', payload);
-        setConsignors(prev => [response.data, ...prev]);
+        const { markdownPolicyNotice, ...createdConsignor } = response.data;
+        setConsignors(prev => [createdConsignor, ...prev]);
         showToast(
           includeItem ? 'Consignor and item created' : 'Consignor created',
           'success'
         );
+        if (markdownPolicyNotice?.message) {
+          setMarkdownNotice(markdownPolicyNotice.message);
+        }
       } else if (editingConsignor) {
         const response = await api.put(`/consignors/${editingConsignor.id}`, payload);
         setConsignors(prev =>
@@ -258,11 +354,167 @@ const ConsignorsPage: React.FC = () => {
     }
   };
 
+  const handleOpenRapidCapture = (consignor: Consignor) => {
+    setRapidCaptureTarget({ id: consignor.id, name: consignor.name });
+    setRapidCaptureSaleId(sales.length === 1 ? sales[0].id : '');
+  };
+
+  const handleConfirmRapidCapture = () => {
+    if (!rapidCaptureTarget) return;
+    if (!rapidCaptureSaleId) {
+      showToast('Choose which sale to capture items into', 'error');
+      return;
+    }
+    const params = new URLSearchParams({
+      openCamera: '1',
+      captureMode: 'rapidfire',
+      consignorId: rapidCaptureTarget.id,
+      consignorName: rapidCaptureTarget.name,
+    });
+    router.push(`/organizer/add-items/${rapidCaptureSaleId}?${params.toString()}`);
+    setRapidCaptureTarget(null);
+  };
+
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/consignor/portal/${token}`);
     setCopiedToken(token);
     showToast('Portal link copied', 'success');
     setTimeout(() => setCopiedToken(null), 2000);
+  };
+
+  // Consignor Self-Serve Intake (2026-09-25): link management handlers.
+  const handleCopyIntakeLink = () => {
+    if (!intakeLink) return;
+    navigator.clipboard.writeText(intakeLink.url);
+    setCopiedIntakeLink(true);
+    showToast('Intake link copied', 'success');
+    setTimeout(() => setCopiedIntakeLink(false), 2000);
+  };
+
+  const handleTextIntakeLink = () => {
+    if (!intakeLink) return;
+    window.open(`sms:?&body=${encodeURIComponent(intakeLink.url)}`, '_blank');
+  };
+
+  const handleEmailIntakeLink = () => {
+    if (!intakeLink) return;
+    const subject = encodeURIComponent('Bring items in for consignment');
+    const body = encodeURIComponent(`You can request to bring items in here: ${intakeLink.url}`);
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+  };
+
+  const handleToggleIntakeLink = async () => {
+    if (!intakeLink) return;
+    setIntakeLinkBusy(true);
+    try {
+      const response = await api.patch('/consignor-intake/link', { enabled: !intakeLink.enabled });
+      setIntakeLink(response.data);
+      showToast(response.data.enabled ? 'Now accepting requests' : 'No longer accepting requests', 'success');
+    } catch (error: any) {
+      console.error('Error toggling intake link:', error);
+      showToast(error.response?.data?.error || 'Failed to update intake link', 'error');
+    } finally {
+      setIntakeLinkBusy(false);
+    }
+  };
+
+  const handleRotateIntakeLink = async () => {
+    setIntakeLinkBusy(true);
+    try {
+      const response = await api.post('/consignor-intake/link/rotate');
+      setIntakeLink(response.data);
+      showToast('New intake link generated -- the old link no longer works', 'success');
+    } catch (error: any) {
+      console.error('Error rotating intake link:', error);
+      showToast(error.response?.data?.error || 'Failed to generate a new link', 'error');
+    } finally {
+      setIntakeLinkBusy(false);
+    }
+  };
+
+  // Consignor Self-Serve Intake (2026-09-25): review queue handlers.
+  const handleOpenApprove = (request: IntakeRequest) => {
+    setApproveTarget(request);
+    setApproveForm({
+      commissionRate: '',
+      useTieredCommission: false,
+      unsoldItemDisposition: '',
+      notes: '',
+      confirmAppointment: Boolean(request.appointment),
+    });
+  };
+
+  const handleCloseApprove = () => setApproveTarget(null);
+
+  const handleApproveFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    setApproveForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  };
+
+  const handleSubmitApprove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!approveTarget) return;
+    if (!approveForm.commissionRate) {
+      showToast('Commission rate is required', 'error');
+      return;
+    }
+    const rate = parseFloat(approveForm.commissionRate);
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      showToast('Commission rate must be between 0-100', 'error');
+      return;
+    }
+
+    setIsApproving(true);
+    try {
+      const response = await api.post(`/consignor-intake/requests/${approveTarget.id}/approve`, {
+        commissionRate: rate,
+        useTieredCommission: approveForm.useTieredCommission,
+        unsoldItemDisposition: approveForm.unsoldItemDisposition || null,
+        notes: approveForm.notes || undefined,
+        confirmAppointment: approveForm.confirmAppointment,
+      });
+      setConsignors(prev => [response.data.consignor, ...prev]);
+      setIntakeRequests(prev => prev.filter(r => r.id !== approveTarget.id));
+      setPendingRequestCount(prev => Math.max(0, prev - 1));
+      showToast(`${approveTarget.name} approved as a consignor`, 'success');
+      setApproveTarget(null);
+    } catch (error: any) {
+      console.error('Error approving request:', error);
+      showToast(error.response?.data?.error || 'Failed to approve request', 'error');
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleOpenDecline = (request: IntakeRequest) => {
+    setDeclineTarget(request);
+    setDeclineReason('');
+  };
+
+  const handleCloseDecline = () => setDeclineTarget(null);
+
+  const handleSubmitDecline = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!declineTarget) return;
+
+    setIsDeclining(true);
+    try {
+      await api.post(`/consignor-intake/requests/${declineTarget.id}/decline`, {
+        reason: declineReason || undefined,
+      });
+      setIntakeRequests(prev => prev.filter(r => r.id !== declineTarget.id));
+      setPendingRequestCount(prev => Math.max(0, prev - 1));
+      showToast('Request declined', 'success');
+      setDeclineTarget(null);
+    } catch (error: any) {
+      console.error('Error declining request:', error);
+      showToast(error.response?.data?.error || 'Failed to decline request', 'error');
+    } finally {
+      setIsDeclining(false);
+    }
   };
 
   if (authLoading) {
@@ -291,6 +543,13 @@ const ConsignorsPage: React.FC = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
+                href="/organizer/intake-appointments"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold text-sm bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 transition-colors"
+              >
+                <CalendarClock className="w-4 h-4" />
+                Intake Appointments
+              </Link>
+              <Link
                 href="/organizer/commission-tiers"
                 className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold text-sm bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 transition-colors"
               >
@@ -306,8 +565,115 @@ const ConsignorsPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Consignor Self-Serve Intake (2026-09-25): persistent, rotatable per-workspace
+              link a prospective consignor uses to request to bring items in. */}
+          {intakeLink && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-4 md:p-6 mb-8">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Link2 className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <h2 className="text-sm font-bold text-warm-900 dark:text-white uppercase">
+                      Invite a Consignor
+                    </h2>
+                    <span
+                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        intakeLink.enabled
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                          : 'bg-warm-200 dark:bg-gray-700 text-warm-600 dark:text-warm-400'
+                      }`}
+                    >
+                      {intakeLink.enabled ? 'Accepting requests' : 'Paused'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
+                    Share this link so a prospective consignor can request to bring items in --
+                    they never touch your inventory directly. You review and approve each request.
+                  </p>
+                  <p className="text-xs font-mono text-blue-600 dark:text-blue-400 break-all">
+                    {intakeLink.url}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2 flex-shrink-0">
+                  <button
+                    onClick={handleCopyIntakeLink}
+                    className="flex items-center gap-1 px-3 py-2 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 rounded-lg font-medium text-xs transition-colors"
+                  >
+                    {copiedIntakeLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedIntakeLink ? 'Copied' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={handleTextIntakeLink}
+                    className="flex items-center gap-1 px-3 py-2 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 rounded-lg font-medium text-xs transition-colors"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    Text
+                  </button>
+                  <button
+                    onClick={handleEmailIntakeLink}
+                    className="flex items-center gap-1 px-3 py-2 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 rounded-lg font-medium text-xs transition-colors"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    Email
+                  </button>
+                  <button
+                    onClick={handleRotateIntakeLink}
+                    disabled={intakeLinkBusy}
+                    className="flex items-center gap-1 px-3 py-2 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 rounded-lg font-medium text-xs transition-colors disabled:opacity-50"
+                    title="Generate a new link (the old one stops working)"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    New Link
+                  </button>
+                  <button
+                    onClick={handleToggleIntakeLink}
+                    disabled={intakeLinkBusy}
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg font-medium text-xs transition-colors disabled:opacity-50 ${
+                      intakeLink.enabled
+                        ? 'bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400'
+                        : 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400'
+                    }`}
+                  >
+                    {intakeLink.enabled ? 'Pause' : 'Resume'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab switcher: Consignors / Requests (2026-09-25) */}
+          <div className="flex gap-2 mb-6 border-b border-warm-200 dark:border-gray-700">
+            <button
+              onClick={() => setActiveTab('consignors')}
+              className={`px-4 py-2 font-bold text-sm border-b-2 transition-colors ${
+                activeTab === 'consignors'
+                  ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+                  : 'border-transparent text-warm-500 dark:text-warm-400 hover:text-warm-700 dark:hover:text-warm-200'
+              }`}
+            >
+              Consignors
+            </button>
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`flex items-center gap-2 px-4 py-2 font-bold text-sm border-b-2 transition-colors ${
+                activeTab === 'requests'
+                  ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+                  : 'border-transparent text-warm-500 dark:text-warm-400 hover:text-warm-700 dark:hover:text-warm-200'
+              }`}
+            >
+              <Inbox className="w-4 h-4" />
+              Requests
+              {pendingRequestCount > 0 && (
+                <span className="bg-amber-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {pendingRequestCount}
+                </span>
+              )}
+            </button>
+          </div>
+
           {/* Consignors List */}
-          {loading ? (
+          {activeTab === 'consignors' && (
+          loading ? (
             <div className="text-center py-12">
               <p className="text-warm-600 dark:text-warm-400">Loading consignors...</p>
             </div>
@@ -350,6 +716,14 @@ const ConsignorsPage: React.FC = () => {
                       {consignor.unclaimedCount > 0 && (
                         <p className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
                           {consignor.unclaimedCount} {consignor.unclaimedCount === 1 ? 'item' : 'items'} past their {consignor.returnPeriodDays}-day return window
+                        </p>
+                      )}
+                      {/* Relist Cap (2026-09-25, Patrick): "needs a decision" badge --
+                          visibility only, nothing has been donated/returned/relisted
+                          automatically. See consignmentUnclaimedItemsJob.ts. */}
+                      {consignor.relistCapExceededCount > 0 && (
+                        <p className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+                          {consignor.relistCapExceededCount} relisted {consignor.relistCapExceededCount === 1 ? 'item needs' : 'items need'} a decision
                         </p>
                       )}
                     </div>
@@ -424,6 +798,13 @@ const ConsignorsPage: React.FC = () => {
                       Edit
                     </button>
                     <button
+                      onClick={() => handleOpenRapidCapture(consignor)}
+                      className="flex items-center gap-2 px-3 py-2 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-400 rounded-lg font-medium text-sm transition-colors"
+                    >
+                      <Camera className="w-4 h-4" />
+                      Rapid Capture
+                    </button>
+                    <button
                       onClick={() => router.push(`/organizer/consignors/${consignor.id}`)}
                       className="flex items-center gap-2 px-3 py-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg font-medium text-sm transition-colors"
                     >
@@ -442,6 +823,73 @@ const ConsignorsPage: React.FC = () => {
                 </div>
               ))}
             </div>
+          )
+          )}
+
+          {/* Requests tab (2026-09-25): review queue for public intake-form submissions */}
+          {activeTab === 'requests' && (
+            intakeRequestsLoading ? (
+              <div className="text-center py-12">
+                <p className="text-warm-600 dark:text-warm-400">Loading requests...</p>
+              </div>
+            ) : intakeRequests.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center">
+                <p className="text-warm-600 dark:text-warm-400">No pending requests</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {intakeRequests.map(reqItem => (
+                  <div
+                    key={reqItem.id}
+                    className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-lg font-bold text-warm-900 dark:text-white mb-1">
+                          {reqItem.name}
+                        </h2>
+                        {reqItem.email && (
+                          <p className="text-sm text-warm-600 dark:text-warm-400">{reqItem.email}</p>
+                        )}
+                        {reqItem.phone && (
+                          <p className="text-sm text-warm-600 dark:text-warm-400">{reqItem.phone}</p>
+                        )}
+                        <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
+                          Submitted {new Date(reqItem.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                        {reqItem.requestedStartsAt && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 font-bold mt-1 flex items-center gap-1">
+                            <CalendarClock className="w-3.5 h-3.5" />
+                            Requested {new Date(reqItem.requestedStartsAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </p>
+                        )}
+                        {reqItem.message && (
+                          <p className="mt-3 p-2 bg-warm-50 dark:bg-gray-700 rounded text-sm text-warm-700 dark:text-warm-300">
+                            {reqItem.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-row md:flex-col gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => handleOpenApprove(reqItem)}
+                          className="flex items-center justify-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg font-bold text-sm transition-colors"
+                        >
+                          <Check className="w-4 h-4" />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleOpenDecline(reqItem)}
+                          className="flex items-center justify-center gap-2 px-4 py-2 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg font-bold text-sm transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </div>
@@ -685,6 +1133,254 @@ const ConsignorsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Rapid Capture sale picker (consignor-scoped capture follow-up, 2026-09-25) */}
+      {rapidCaptureTarget && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setRapidCaptureTarget(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-white">
+                Rapid Capture for {rapidCaptureTarget.name}
+              </h2>
+              <button
+                onClick={() => setRapidCaptureTarget(null)}
+                className="text-warm-400 hover:text-warm-600 dark:hover:text-warm-200"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+              Every item you capture in this session will be attributed to {rapidCaptureTarget.name} automatically.
+            </p>
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                Sale *
+              </label>
+              <select
+                value={rapidCaptureSaleId}
+                onChange={(e) => setRapidCaptureSaleId(e.target.value)}
+                className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                aria-label="Sale"
+              >
+                <option value="">Select a sale...</option>
+                {sales.map((s) => (
+                  <option key={s.id} value={s.id}>{s.title}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setRapidCaptureTarget(null)}
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRapidCapture}
+                className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold transition-colors"
+              >
+                Start Capture
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve request modal (2026-09-25): reuses the same commissionRate/disposition
+          fields as "Add Consignor" -- the actual creation goes through the shared
+          createConsignorCore path on the backend. */}
+      {approveTarget && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseApprove}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold text-warm-900 dark:text-white mb-1">
+              Approve Request
+            </h2>
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+              {approveTarget.name}
+              {approveTarget.email ? ` · ${approveTarget.email}` : ''}
+              {approveTarget.phone ? ` · ${approveTarget.phone}` : ''}
+            </p>
+            {approveTarget.message && (
+              <div className="mb-4 p-2 bg-warm-50 dark:bg-gray-700 rounded text-sm text-warm-700 dark:text-warm-300">
+                {approveTarget.message}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitApprove}>
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                  Commission Rate (%) *
+                </label>
+                <input
+                  type="number"
+                  name="commissionRate"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={approveForm.commissionRate}
+                  onChange={handleApproveFormChange}
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  required
+                  aria-label="Commission rate"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="useTieredCommission"
+                    checked={approveForm.useTieredCommission}
+                    onChange={handleApproveFormChange}
+                    className="mt-1"
+                    aria-label="Use value-based tiered commission"
+                  />
+                  <span className="text-sm text-warm-700 dark:text-warm-300">
+                    Use value-based tiered commission instead of a flat rate
+                  </span>
+                </label>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                  If items don't sell
+                </label>
+                <select
+                  name="unsoldItemDisposition"
+                  value={approveForm.unsoldItemDisposition}
+                  onChange={handleApproveFormChange}
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  aria-label="If items don't sell"
+                >
+                  <option value="">Not sure yet</option>
+                  <option value="RETURN">Return to consignor</option>
+                  <option value="DONATE">Donate to charity</option>
+                  <option value="RELIST">Relist next sale</option>
+                </select>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  name="notes"
+                  value={approveForm.notes}
+                  onChange={handleApproveFormChange}
+                  rows={2}
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              {approveTarget.appointment && (
+                <div className="mb-6">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="confirmAppointment"
+                      checked={approveForm.confirmAppointment}
+                      onChange={handleApproveFormChange}
+                      className="mt-1"
+                      aria-label="Confirm the requested intake time"
+                    />
+                    <span className="text-sm text-warm-700 dark:text-warm-300">
+                      Confirm the requested intake time
+                      {approveTarget.requestedStartsAt && (
+                        <>
+                          {' '}
+                          ({new Date(approveTarget.requestedStartsAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })})
+                        </>
+                      )}
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseApprove}
+                  className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isApproving}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg font-bold transition-colors"
+                >
+                  {isApproving ? 'Approving...' : 'Approve'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Decline request modal (2026-09-25): no notification is sent to the requester --
+          the organizer handles that off-platform if they choose. */}
+      {declineTarget && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseDecline}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold text-warm-900 dark:text-white mb-1">
+              Decline Request
+            </h2>
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+              {declineTarget.name} won't be notified automatically -- reach out yourself if you'd like to.
+            </p>
+            <form onSubmit={handleSubmitDecline}>
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                  Reason (internal note, optional)
+                </label>
+                <textarea
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  rows={2}
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseDecline}
+                  className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDeclining}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg font-bold transition-colors"
+                >
+                  {isDeclining ? 'Declining...' : 'Decline'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog
         isOpen={deleteConfirm.open}
         title="Delete Consignor"
@@ -694,6 +1390,27 @@ const ConsignorsPage: React.FC = () => {
         onCancel={() => setDeleteConfirm({ open: false, id: '', name: '' })}
         variant="danger"
       />
+
+      {/* Consignor intake disclosure (Patrick, 2026-09-25): markdown-policy notice shown
+          once right after a new consignor is created -- see the markdownNotice state above. */}
+      {markdownNotice && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 max-w-md w-full">
+            <h2 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">
+              Markdown Policy
+            </h2>
+            <p className="text-sm text-warm-600 dark:text-warm-300 mb-6 whitespace-pre-wrap">
+              {markdownNotice}
+            </p>
+            <button
+              onClick={() => setMarkdownNotice(null)}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </TierGate>
   );
 };
