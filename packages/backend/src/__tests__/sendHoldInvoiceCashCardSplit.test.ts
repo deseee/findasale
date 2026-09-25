@@ -10,8 +10,8 @@
  * re-derived, per the ADR's explicit instruction).
  *
  * Covers:
- *   - a TEAMS organizer's split cash/card invoice charges 8% of the CARD portion only
- *   - a SIMPLE-tier organizer (regression guard) still gets 10% of the card portion
+ *   - a TEAMS organizer's split cash/card invoice charges 7.5% ONLINE of the CARD portion only
+ *   - a SIMPLE-tier organizer (regression guard) still gets 9.5% ONLINE of the card portion
  *   - a fully-cash invoice (cashAmountCents >= total) never creates a payment link at all,
  *     and is recorded PAID immediately with a real Purchase row (no fabricated PaymentIntent
  *     id -- stripePaymentIntentId is null throughout, source 'POS')
@@ -23,10 +23,16 @@
  * (services/holdInvoiceSquareCheckoutHelper.ts), a Square Payment Link, and a Stripe-only
  * organizer instead falls through to a 409 SquareOnboardingIncompleteError. This suite now
  * seeds Square-onboarded organizers and mocks createHoldInvoiceSquareCheckout directly (the
- * same seam sendHoldInvoice itself calls) -- the fee-rate math it verifies (8%/10% of the CARD
- * portion only) is unchanged by the processor swap, since platformFeeAmount is computed
- * before the Square/Stripe branch split and merely spent as `appFeeCents` once the payment
- * link is created.
+ * same seam sendHoldInvoice itself calls) -- the fee-rate math it verifies is unchanged by the
+ * processor swap, since platformFeeAmount is computed before the Square/Stripe branch split
+ * and merely spent as `appFeeCents` once the payment link is created.
+ *
+ * Inclusive-fee migration (2026-09-24, Patrick ruling): sendHoldInvoice's payment-link card leg
+ * is ONLINE (a hosted Square Quick Pay Checkout link completed remotely by the buyer, even
+ * though the invoice is created at the register) -- `calculateInclusiveCommissionCents(...,
+ * 'ONLINE')` replaces the old flat per-tier rate this suite originally asserted (TEAMS 8%,
+ * SIMPLE 10%), landing on TEAMS 7.5% / SIMPLE 9.5%. Neither dollar amount below is anywhere
+ * near the 75-cent minimum floor, so the numbers are pure percentage multiplication.
  *
  * MOCKING NOTES: same convention as posCombinedInvoiceFee.test.ts / sendHoldInvoiceMergedReservation.test.ts
  * -- Square payment-link creation, socket, notifications and transactional email are mocked;
@@ -156,7 +162,7 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     await prisma.$disconnect();
   });
 
-  it('charges TEAMS 8% on the CARD portion of a split cash/card invoice (not the full total)', async () => {
+  it('charges TEAMS 7.5% ONLINE on the CARD portion of a split cash/card invoice (not the full total)', async () => {
     const { orgUser, hold } = await seed('teams-split', 'TEAMS');
 
     mockCreateHoldInvoiceSquareCheckout.mockResolvedValueOnce({
@@ -181,10 +187,10 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     expect(res.status).not.toHaveBeenCalledWith(409);
     expect(res.status).not.toHaveBeenCalledWith(500);
 
-    // $100 item, $40 cash -> $60 card leg. Fee = 8% of 6000 = 480, never 10% of the full
-    // 10000 total (800) or 10% of the card leg (600).
+    // $100 item, $40 cash -> $60 card leg. Fee = 7.5% ONLINE of 6000 = 450, never the old
+    // flat 8% (480), 10% of the full 10000 total (800), or 10% of the card leg (600).
     expect(mockCreateHoldInvoiceSquareCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 6000, appFeeCents: 480 })
+      expect.objectContaining({ amountCents: 6000, appFeeCents: 450 })
     );
 
     const invoice = await prisma.holdInvoice.findFirst({ where: { reservationId: hold.id } });
@@ -192,11 +198,11 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
     expect(invoice!.totalAmount).toBe(10000);
     expect(invoice!.cashAmountCents).toBe(4000);
     expect(invoice!.cardAmountCents).toBe(6000);
-    expect(invoice!.platformFeeAmount).toBe(480);
+    expect(invoice!.platformFeeAmount).toBe(450);
     expect(invoice!.squarePaymentLinkId).toBe('sqpl_hi_teams_split');
   });
 
-  it('a SIMPLE-tier organizer still gets 10% on the card portion (control -- no overcorrection)', async () => {
+  it('a SIMPLE-tier organizer gets 9.5% ONLINE on the card portion (control -- no overcorrection)', async () => {
     const { orgUser, hold } = await seed('simple-split', 'SIMPLE');
 
     mockCreateHoldInvoiceSquareCheckout.mockResolvedValueOnce({
@@ -217,15 +223,16 @@ describe('sendHoldInvoice -- cash/card split + fully-cash immediate-paid (ADR-11
 
     expect(res.status).not.toHaveBeenCalledWith(500);
 
-    // 10% of the $60 card portion = 600 cents.
+    // 9.5% ONLINE of the $60 card portion = 570 cents (was flat 10% = 600 cents before
+    // this migration).
     expect(mockCreateHoldInvoiceSquareCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 6000, appFeeCents: 600 })
+      expect.objectContaining({ amountCents: 6000, appFeeCents: 570 })
     );
 
     const invoice = await prisma.holdInvoice.findFirst({ where: { reservationId: hold.id } });
     expect(invoice).not.toBeNull();
     expect(invoice!.cardAmountCents).toBe(6000);
-    expect(invoice!.platformFeeAmount).toBe(600);
+    expect(invoice!.platformFeeAmount).toBe(570);
   });
 
   it('a fully-cash invoice never touches Square and is recorded PAID immediately with a real Purchase row', async () => {

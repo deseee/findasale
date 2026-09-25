@@ -7,7 +7,7 @@
  *
  *   1. `const platformFeeCents = Math.round(splitCardAmountCents! * 0.1);` — a LITERAL 10%,
  *      not the organizer's resolved tier rate. Every PRO/TEAMS organizer was overcharged on
- *      the CARD half of a split tender (10% instead of their contractual 8%).
+ *      the CARD half of a split tender.
  *   2. The CASH half of a split tender was never charged any commission at all — nothing in
  *      this file ever touched `Organizer.cashFeeBalance`, the mechanism every other cash path
  *      (terminalController.processCashSaleCore, reservationController's RECORD mode) uses to
@@ -16,15 +16,24 @@
  * Both are fixed by routing BOTH halves through the same shared, tier-aware resolvers
  * services/cashFeeService.ts already established as the precedent (fixed there, and at
  * stripeController/terminalController's analogous card paths, the same project-day): the card
- * half via `getPlatformFeeRate` (+ referral-discount override, mirroring
+ * half via the platform fee resolver (+ referral-discount override, mirroring
  * terminalController.createTerminalPaymentIntent exactly), the cash half via
  * `resolveCashCommissionRate` + `accrueCashFeeBalance`.
  *
- * These tests assert the money on a TEAMS organizer (8% contractual rate), not the code shape:
- *   - the card half's application fee and the Purchase's `platformFeeAmount` reflect 8% of
- *     the card portion, NOT the old hardcoded 10%
- *   - the cash half accrues 8% of the cash portion to `Organizer.cashFeeBalance` — NOT $0
- *   - combined, the platform collects exactly 8% of the full $100 cart ($8.00), split evenly
+ * Inclusive-fee migration (2026-09-24, Patrick ruling): the flat per-tier rate this suite
+ * originally asserted (TEAMS 8%) was replaced by `getInclusivePlatformFeeRate(tier, channel)` /
+ * `calculateInclusiveCommissionCents`, which vary by channel (IN_PERSON vs ONLINE) and apply a
+ * 75-cent per-transaction minimum floor. A POS register split-tender's card leg AND its cash
+ * leg (cash never touches Square either way) are both IN_PERSON, so TEAMS now resolves to 6%
+ * (down from the old flat 8%) on both halves — neither dollar amount here is anywhere near the
+ * 75-cent floor, so the numbers below are pure 6% multiplication, not floor-affected.
+ *
+ * These tests assert the money on a TEAMS organizer (6% IN_PERSON inclusive rate), not the
+ * code shape:
+ *   - the card half's application fee and the Purchase's `platformFeeAmount` reflect 6% of
+ *     the card portion, NOT the old hardcoded 10% (nor the pre-migration flat 8%)
+ *   - the cash half accrues 6% of the cash portion to `Organizer.cashFeeBalance` — NOT $0
+ *   - combined, the platform collects exactly 6% of the full $100 cart ($6.00), split evenly
  *     across the two legs by design of this fixture (50/50 cash/card)
  *
  * Stripe removal (2026-09-12): this file no longer seeds a Stripe-only organizer or mocks the
@@ -159,7 +168,7 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     await prisma.$disconnect();
   });
 
-  it('charges TEAMS 8% on the card half (not the hardcoded 10%) AND accrues 8% on the cash half (not $0)', async () => {
+  it('charges TEAMS 6% IN_PERSON on the card half (not the hardcoded 10%) AND accrues 6% on the cash half (not $0)', async () => {
     const { orgUser, organizer, sale, shopper } = await seed('teams');
 
     // $100 cart, split 50/50 cash/card.
@@ -184,11 +193,12 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     expect(requestId).toBeTruthy();
 
     // THE PLATFORM FEE MATH: platformFeeCents (persisted on the row at create time) must be
-    // 8% of $50 (400 cents), never the old hardcoded 10% (500 cents). Square has no
-    // "create now" charge to inspect at this point (see file header) -- the row itself is
-    // the fee-math evidence, spent as appFeeCents once confirm actually charges the card.
+    // 6% IN_PERSON of $50 (300 cents), never the old hardcoded 10% (500 cents) nor the
+    // pre-migration flat 8% (400 cents). Square has no "create now" charge to inspect at this
+    // point (see file header) -- the row itself is the fee-math evidence, spent as appFeeCents
+    // once confirm actually charges the card.
     const posRequestAfterCreate = await prisma.pOSPaymentRequest.findUnique({ where: { id: requestId } });
-    expect(posRequestAfterCreate!.platformFeeCents).toBe(400);
+    expect(posRequestAfterCreate!.platformFeeCents).toBe(300);
 
     // Shopper accepts.
     const acceptReq: any = { user: { id: shopper.id }, params: { requestId } };
@@ -216,32 +226,33 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     );
     expect(confirmRes.status).not.toHaveBeenCalledWith(500);
 
-    // THE CHARGE ACTUALLY MADE: appFeeCents on the Square charge is 8% of the card portion,
-    // not the old hardcoded 10% (500 cents).
+    // THE CHARGE ACTUALLY MADE: appFeeCents on the Square charge is 6% IN_PERSON of the card
+    // portion, not the old hardcoded 10% (500 cents).
     expect(mockCreateAndCapturePayment).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 5000, appFeeCents: 400, sourceId: 'cnon:test-split-teams' })
+      expect.objectContaining({ amountCents: 5000, appFeeCents: 300, sourceId: 'cnon:test-split-teams' })
     );
 
-    // THE CARD-HALF ROW: platformFeeAmount is 8% of the card portion, not 10%.
+    // THE CARD-HALF ROW: platformFeeAmount is 6% IN_PERSON of the card portion, not 10%.
     const purchase = await prisma.purchase.findFirst({ where: { saleId: sale.id } });
     expect(purchase).not.toBeNull();
     expect(purchase!.status).toBe('PAID');
     expect(purchase!.amount).toBeCloseTo(100, 2); // misc-only cart: one Purchase for the full cart total
-    expect(purchase!.platformFeeAmount).toBeCloseTo(4, 2); // 8% of $50 card portion — was $5 (10%) before the fix
+    expect(purchase!.platformFeeAmount).toBeCloseTo(3, 2); // 6% of $50 card portion — was $5 (10%) / $4 (flat 8%) before this migration
 
-    // THE CASH-HALF LEDGER: the organizer now owes 8% of the $50 cash portion ($4.00) against
-    // their next Square payout — before this fix it was exactly $0.00, every time.
+    // THE CASH-HALF LEDGER: the organizer now owes 6% of the $50 cash portion ($3.00) against
+    // their next Square payout — before the original cash-accrual fix it was exactly $0.00, every time.
     const organizerAfter = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-    expect(organizerAfter!.cashFeeBalance).toBeCloseTo(4, 2);
+    expect(organizerAfter!.cashFeeBalance).toBeCloseTo(3, 2);
     expect(organizerAfter!.cashFeeBalanceUpdatedAt).not.toBeNull();
 
-    // COMBINED: the platform collected exactly 8% of the full $100 cart across both legs —
-    // never the pre-fix combination of ($5 card via the hardcoded 10%) + ($0 cash).
+    // COMBINED: the platform collected exactly 6% of the full $100 cart across both legs —
+    // never the pre-fix combination of ($5 card via the hardcoded 10%) + ($0 cash), nor the
+    // pre-migration flat-8% combination ($8.00).
     const totalCollected = purchase!.platformFeeAmount! + organizerAfter!.cashFeeBalance;
-    expect(totalCollected).toBeCloseTo(8, 2);
+    expect(totalCollected).toBeCloseTo(6, 2);
   });
 
-  it('a non-split TEAMS card-only payment request still uses the 8% tier rate (control)', async () => {
+  it('a non-split TEAMS card-only payment request still uses the 6% IN_PERSON inclusive rate (control)', async () => {
     const { orgUser, sale, shopper } = await seed('teams-nosplit');
 
     const createReq: any = {
@@ -259,10 +270,10 @@ describe('POS split-payment commission — cash-half accrual + tier-aware rate',
     expect(createRes.status).toHaveBeenCalledWith(201);
     const requestId: string = createRes.json.mock.calls[0][0].requestId;
 
-    // Card amount is the FULL total when not split — fee is 8% of $100 = 800 cents, not the
-    // old hardcoded 10% (1000 cents).
+    // Card amount is the FULL total when not split — fee is 6% IN_PERSON of $100 = 600 cents,
+    // not the old hardcoded 10% (1000 cents) nor the pre-migration flat 8% (800 cents).
     const posRequestAfterCreate = await prisma.pOSPaymentRequest.findUnique({ where: { id: requestId } });
-    expect(posRequestAfterCreate!.platformFeeCents).toBe(800);
+    expect(posRequestAfterCreate!.platformFeeCents).toBe(600);
 
     // Non-split: no cash leg, so no cash-fee accrual should occur.
     const organizerAfter = await prisma.organizer.findUnique({ where: { id: posRequestAfterCreate!.organizerId } });

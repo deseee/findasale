@@ -277,15 +277,15 @@ describe('Auction close — configured premium & reserve parity', () => {
       // $200 hammer + the platform 5% => $210.00. NOT the $230.00 the stored 15% would give.
       expect(call![0].amountCents).toBe(21000);
       expect(call![0].amountCents).not.toBe(23000);
-      // appFeeCents = $10.00 premium + $20.00 SIMPLE commission.
-      expect(call![0].appFeeCents).toBe(1000 + 2000);
-      // Organizer still nets $180.00.
-      expect(call![0].amountCents - call![0].appFeeCents).toBe(18000);
+      // appFeeCents = $10.00 premium + $19.00 SIMPLE (ONLINE inclusive rate) commission.
+      expect(call![0].appFeeCents).toBe(1000 + 1900);
+      // Organizer still nets $181.00.
+      expect(call![0].amountCents - call![0].appFeeCents).toBe(18100);
 
       // The PENDING Purchase must record what the buyer was actually charged.
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
       expect(purchase?.amount).toBe(210);
-      expect(purchase?.platformFeeAmount).toBe(30);
+      expect(purchase?.platformFeeAmount).toBe(29);
       expect(purchase?.status).toBe('PENDING');
       console.log('✓ auctionJob: stored 15% ignored, winner charged $210.00 at the platform 5%');
     });
@@ -307,7 +307,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       expect(call).toBeDefined();
       expect(call![0].amountCents).toBe(21000);            // premium still charged
       expect(call![0].amountCents).not.toBe(20000);         // the "organizer zeroed us out" bug
-      expect(call![0].appFeeCents).toBe(3000);              // $10 premium + $20 commission
+      expect(call![0].appFeeCents).toBe(2900);              // $10 premium + $19 commission (ONLINE inclusive)
       console.log('✓ auctionJob: stored 0% ignored, platform still collects its 5%');
     });
 
@@ -324,7 +324,7 @@ describe('Auction close — configured premium & reserve parity', () => {
         (c) => c[0]?.metadata?.itemId === item.id
       );
       expect(call![0].amountCents).toBe(21000);
-      expect(call![0].appFeeCents).toBe(1000 + 2000);
+      expect(call![0].appFeeCents).toBe(1000 + 1900);
       console.log('✓ auctionJob: unset column, 5% charged');
     });
 
@@ -340,20 +340,20 @@ describe('Auction close — configured premium & reserve parity', () => {
       expect(purchase).toBeTruthy();
       expect(purchase!.buyerPremiumAmount).toBe(10);
       expect(purchase!.buyerPremiumRate).toBe(AUCTION_BUYER_PREMIUM_RATE);
-      expect(purchase!.commissionAmount).toBe(20);
-      expect(purchase!.commissionRate).toBe(0.1);
+      expect(purchase!.commissionAmount).toBe(19);
+      expect(purchase!.commissionRate).toBe(0.095);
       expect(purchase!.organizerAbsorbedPremium).toBe(false);
       // THE INVARIANT: the two components reconstruct the combined application fee.
       expect(purchase!.buyerPremiumAmount! + purchase!.commissionAmount!).toBe(
         purchase!.platformFeeAmount
       );
 
-      // And reporting PREFERS it: the organizer sees $200 gross / $20 fee even if we hand the
+      // And reporting PREFERS it: the organizer sees $200 gross / $19 fee even if we hand the
       // helper a PRO tier rate, because the row records that it was charged at SIMPLE.
       const report = resolveOrganizerFeeReport(purchase as any, 0.08);
       expect(report.grossSalePrice).toBe(200);
-      expect(report.platformFee).toBe(20);
-      console.log('✓ auctionJob snapshot: $10 premium + $20 commission pinned; report ignores the PRO rate');
+      expect(report.platformFee).toBe(19);
+      console.log('✓ auctionJob snapshot: $10 premium + $19 commission pinned; report ignores the PRO rate');
     });
 
     it('should snapshot the coversFee case as organizer-absorbed', async () => {
@@ -370,17 +370,17 @@ describe('Auction close — configured premium & reserve parity', () => {
       );
       // Buyer pays the bid only; the platform still collects premium + commission.
       expect(call![0].amountCents).toBe(20000);
-      expect(call![0].appFeeCents).toBe(3000);
+      expect(call![0].appFeeCents).toBe(2900);
 
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
       expect(purchase!.organizerAbsorbedPremium).toBe(true);
       expect(purchase!.buyerPremiumAmount).toBe(10);
-      expect(purchase!.commissionAmount).toBe(20);
-      // The organizer absorbed the premium, so it belongs on THEIR fee line: $200 gross, $30 fee.
+      expect(purchase!.commissionAmount).toBe(19);
+      // The organizer absorbed the premium, so it belongs on THEIR fee line: $200 gross, $29 fee.
       const report = resolveOrganizerFeeReport(purchase as any, 0.1);
       expect(report.grossSalePrice).toBe(200);
-      expect(report.platformFee).toBe(30);
-      console.log('✓ auctionJob coversFee: buyer charged $200.00, organizer fee line $30.00');
+      expect(report.platformFee).toBe(29);
+      console.log('✓ auctionJob coversFee: buyer charged $200.00, organizer fee line $29.00');
     });
 
     it('should award AUCTION_WIN XP to the winner (the behaviour the manual path had to match)', async () => {
@@ -468,7 +468,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       // Buyer pays $200 + 5% = $210.00 — same arithmetic as the cron.
       expect(call.amountCents).toBe(21000);
       expect(call.amountCents).not.toBe(23000);
-      expect(call.appFeeCents).toBe(1000 + 2000);
+      expect(call.appFeeCents).toBe(1000 + 1900);
 
       // auctionService.ts's Square branch creates its own PENDING Purchase row inline (unlike
       // the old Stripe branch, which deferred to a webhook) — read the fee split straight off
@@ -478,12 +478,12 @@ describe('Auction close — configured premium & reserve parity', () => {
       expect(purchase!.processor).toBe('SQUARE');
       expect(purchase!.status).toBe('PENDING');
       expect(purchase!.amount).toBe(210);
-      expect(purchase!.platformFeeAmount).toBe(30);
+      expect(purchase!.platformFeeAmount).toBe(29);
       expect(purchase!.buyerPremiumAmount).toBe(10);
-      expect(purchase!.commissionAmount).toBe(20);
-      expect(purchase!.commissionRate).toBe(0.1);
+      expect(purchase!.commissionAmount).toBe(19);
+      expect(purchase!.commissionRate).toBe(0.095);
       expect(purchase!.organizerAbsorbedPremium).toBe(false);
-      console.log('✓ manual close above reserve: $210.00 payment link, $30.00 fee, split pinned on the Purchase row');
+      console.log('✓ manual close above reserve: $210.00 payment link, $29.00 fee, split pinned on the Purchase row');
     });
 
     it('should award a lot with NO reserve set, exactly as before', async () => {

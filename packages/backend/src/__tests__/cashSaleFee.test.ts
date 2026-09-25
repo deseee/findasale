@@ -27,7 +27,8 @@
  *   bountyController.ts) — that flow has its own coverage in those files' test suites, not here.
  *
  * These tests assert the money, not the code shape:
- *   - a $100 cash sale accrues $10.00 at SIMPLE and $8.00 at PRO (tier rate, not a hardcoded 10%)
+ *   - a $100 cash sale accrues $8.00 at SIMPLE and $6.00 at PRO (IN_PERSON inclusive tier
+ *     rate -- 2026-09-24 migration -- not the old hardcoded flat 10%/8%)
  *   - `cashFeeBalance` increments by exactly that, and only that
  *   - the Purchase fee snapshot reconciles: platformFeeAmount == buyerPremiumAmount + commissionAmount
  *   - what the organizer is SHOWN (resolveOrganizerFeeReport, the helper every earnings surface
@@ -118,8 +119,11 @@ const makeMockRes = () => {
   return res;
 };
 
-const SIMPLE_RATE = 0.1;
-const PRO_RATE = 0.08;
+// Inclusive-fee migration (2026-09-24, Patrick ruling): cash is always IN_PERSON (there is no
+// such thing as remote/online cash), so these are getInclusivePlatformFeeRate(tier, 'IN_PERSON')
+// -- SIMPLE 8%, PRO/TEAMS 6% -- not the old flat 10%/8% this suite originally asserted.
+const SIMPLE_RATE = 0.08;
+const PRO_RATE = 0.06;
 
 describe('RECORD-mode cash settlement — commission accrual', () => {
   let shopper: any;
@@ -232,25 +236,25 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     const body = res.json.mock.calls[0][0];
     expect(body.settlementMode).toBe('RECORD');
     expect(body.updated).toBe(1);
-    expect(body.platformFee).toBe(10);
+    expect(body.platformFee).toBe(8);
 
-    // THE LEDGER: the organizer now owes $10.00 against their next payout.
+    // THE LEDGER: the organizer now owes $8.00 against their next payout.
     const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-    expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
+    expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
     expect(after!.cashFeeBalanceUpdatedAt).not.toBeNull();
-    expect(body.cashFeeBalance).toBeCloseTo(10, 2);
+    expect(body.cashFeeBalance).toBeCloseTo(8, 2);
 
     // THE ROW: platformFeeAmount is no longer the literal 0 it used to be.
     const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
     expect(purchase).not.toBeNull();
     expect(purchase!.status).toBe('PAID');
     expect(purchase!.amount).toBeCloseTo(100, 2);
-    expect(purchase!.platformFeeAmount).toBeCloseTo(10, 2);
+    expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
 
     // THE SNAPSHOT INVARIANT: platformFeeAmount == buyerPremiumAmount + commissionAmount.
     expect(purchase!.buyerPremiumAmount).toBe(0);
     expect(purchase!.buyerPremiumRate).toBe(0);
-    expect(purchase!.commissionAmount).toBeCloseTo(10, 2);
+    expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
     expect(purchase!.commissionRate).toBeCloseTo(SIMPLE_RATE, 4);
     expect(purchase!.organizerAbsorbedPremium).toBe(false);
     expect(purchase!.buyerPremiumAmount! + purchase!.commissionAmount!).toBeCloseTo(
@@ -259,20 +263,20 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     );
   });
 
-  it('charges PRO the 8% rate, not a hardcoded 10%', async () => {
+  it('charges PRO the 6% IN_PERSON rate, not a hardcoded 10%', async () => {
     const { orgUser, organizer, item, hold } = await seed('pro', 'PRO', 100);
 
     const res = await recordSold(orgUser, [hold.id]);
 
-    expect(res.json.mock.calls[0][0].platformFee).toBe(8);
+    expect(res.json.mock.calls[0][0].platformFee).toBe(6);
 
     const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-    expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
+    expect(after!.cashFeeBalance).toBeCloseTo(6, 2);
 
     const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
-    expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
+    expect(purchase!.platformFeeAmount).toBeCloseTo(6, 2);
     expect(purchase!.commissionRate).toBeCloseTo(PRO_RATE, 4);
-    expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
+    expect(purchase!.commissionAmount).toBeCloseTo(6, 2);
   });
 
   // ── Fee-precedence regression (2026-08-22) ──────────────────────────────────────────────
@@ -288,7 +292,7 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
       await prisma.feeStructure.deleteMany({ where: { listingType: '*' } });
     });
 
-    it('resolves PRO to 0.08 even when a wildcard FeeStructure row (rate 0.10) is present', async () => {
+    it('resolves PRO to 0.06 IN_PERSON even when a wildcard FeeStructure row (rate 0.10) is present', async () => {
       await prisma.feeStructure.create({ data: { listingType: '*', feeRate: 0.10 } });
 
       const { orgUser, organizer, item, hold } = await seed('pro-wildcard', 'PRO', 100);
@@ -296,43 +300,43 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
       const res = await recordSold(orgUser, [hold.id]);
 
       // Would be 10 if the wildcard row (still present) incorrectly outranked the tier rate.
-      expect(res.json.mock.calls[0][0].platformFee).toBe(8);
+      expect(res.json.mock.calls[0][0].platformFee).toBe(6);
 
       const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-      expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
+      expect(after!.cashFeeBalance).toBeCloseTo(6, 2);
 
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
-      expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
+      expect(purchase!.platformFeeAmount).toBeCloseTo(6, 2);
       expect(purchase!.commissionRate).toBeCloseTo(PRO_RATE, 4);
-      expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
+      expect(purchase!.commissionAmount).toBeCloseTo(6, 2);
     });
 
-    it('resolves TEAMS to 0.08 even when a wildcard FeeStructure row (rate 0.10) is present', async () => {
+    it('resolves TEAMS to 0.06 IN_PERSON even when a wildcard FeeStructure row (rate 0.10) is present', async () => {
       await prisma.feeStructure.create({ data: { listingType: '*', feeRate: 0.10 } });
 
       const { orgUser, organizer, item, hold } = await seed('teams-wildcard', 'TEAMS', 100);
 
       const res = await recordSold(orgUser, [hold.id]);
 
-      expect(res.json.mock.calls[0][0].platformFee).toBe(8);
+      expect(res.json.mock.calls[0][0].platformFee).toBe(6);
 
       const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-      expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
+      expect(after!.cashFeeBalance).toBeCloseTo(6, 2);
 
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
-      expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
-      expect(purchase!.commissionRate).toBeCloseTo(PRO_RATE, 4); // TEAMS shares PRO's 0.08 rate
-      expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
+      expect(purchase!.platformFeeAmount).toBeCloseTo(6, 2);
+      expect(purchase!.commissionRate).toBeCloseTo(PRO_RATE, 4); // TEAMS shares PRO's 0.06 IN_PERSON rate
+      expect(purchase!.commissionAmount).toBeCloseTo(6, 2);
     });
 
-    it('resolves SIMPLE to 0.10 whether or not the wildcard row is present (control)', async () => {
+    it('resolves SIMPLE to 0.08 IN_PERSON whether or not the wildcard row is present (control)', async () => {
       await prisma.feeStructure.create({ data: { listingType: '*', feeRate: 0.10 } });
 
       const { orgUser, organizer, item, hold } = await seed('simple-wildcard', 'SIMPLE', 100);
 
       const res = await recordSold(orgUser, [hold.id]);
 
-      expect(res.json.mock.calls[0][0].platformFee).toBe(10);
+      expect(res.json.mock.calls[0][0].platformFee).toBe(8);
 
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
       expect(purchase!.commissionRate).toBeCloseTo(SIMPLE_RATE, 4);
@@ -359,22 +363,22 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     );
     expect(report.grossSalePrice).toBeCloseTo(250, 2);
     expect(report.platformFee).toBeCloseTo(organizerAfter!.cashFeeBalance, 2);
-    expect(report.platformFee).toBeCloseTo(20, 2);
+    expect(report.platformFee).toBeCloseTo(15, 2); // PRO IN_PERSON 6% of $250
 
     // And it stays pinned when the organizer's tier changes — the whole point of the snapshot.
     const afterUpgrade = resolveOrganizerFeeReport(purchase as any, getPlatformFeeRate('SIMPLE'));
-    expect(afterUpgrade.platformFee).toBeCloseTo(20, 2);
+    expect(afterUpgrade.platformFee).toBeCloseTo(15, 2);
   });
 
   it('does not accrue twice when the same holds are settled again', async () => {
     const { orgUser, organizer, item, hold } = await seed('double', 'SIMPLE', 40);
 
     const first = await recordSold(orgUser, [hold.id]);
-    expect(first.json.mock.calls[0][0].platformFee).toBe(4);
+    expect(first.json.mock.calls[0][0].platformFee).toBeCloseTo(3.2, 2); // SIMPLE IN_PERSON 8% of $40
 
     const balanceAfterFirst = (await prisma.organizer.findUnique({ where: { id: organizer.id } }))!
       .cashFeeBalance;
-    expect(balanceAfterFirst).toBeCloseTo(4, 2);
+    expect(balanceAfterFirst).toBeCloseTo(3.2, 2);
 
     // Repeat submit. Two guards stand between a double-click and a double charge, and this
     // asserts the OUTER one: the first settlement moved the hold to the terminal 'COMPLETED'
@@ -388,7 +392,7 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
 
     const balanceAfterSecond = (await prisma.organizer.findUnique({ where: { id: organizer.id } }))!
       .cashFeeBalance;
-    expect(balanceAfterSecond).toBeCloseTo(4, 2);
+    expect(balanceAfterSecond).toBeCloseTo(3.2, 2);
     expect(await prisma.purchase.count({ where: { itemId: item.id } })).toBe(1);
   });
 
@@ -418,10 +422,10 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     const res = await recordSold(a.orgUser, [a.hold.id, hold2.id]);
     const body = res.json.mock.calls[0][0];
     expect(body.updated).toBe(2);
-    expect(body.platformFee).toBeCloseTo(10, 2); // $3.00 + $7.00
+    expect(body.platformFee).toBeCloseTo(8, 2); // $2.40 + $5.60 (SIMPLE IN_PERSON 8%)
 
     const after = await prisma.organizer.findUnique({ where: { id: a.organizer.id } });
-    expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
+    expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
   });
 
   // ── createPayout — Square has no on-demand payout, so cash-debt netting moved ────────────
@@ -434,7 +438,7 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
       const { orgUser, organizer, hold } = await seed('payout', 'SIMPLE', 100);
       await recordSold(orgUser, [hold.id]);
       expect((await prisma.organizer.findUnique({ where: { id: organizer.id } }))!.cashFeeBalance)
-        .toBeCloseTo(10, 2);
+        .toBeCloseTo(8, 2);
 
       const req: any = {
         user: { id: orgUser.id, role: 'ORGANIZER', roles: ['ORGANIZER'] },
@@ -451,7 +455,7 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
 
       // No payout mechanism exists to net the debt against, so nothing changes.
       const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-      expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
+      expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
     });
 
     it('gives the same "not available" response no matter what amount is requested', async () => {
@@ -471,7 +475,7 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
       expect(body.message).toMatch(/Square/i);
       // Debt is untouched either way -- there's no payout to net it against.
       const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
-      expect(after!.cashFeeBalance).toBeCloseTo(10, 2);
+      expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
     });
   });
 
@@ -511,12 +515,12 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     const res = makeMockRes();
     await batchUpdateHolds(req, res);
 
-    expect(res.json.mock.calls[0][0].platformFee).toBe(10);
+    expect(res.json.mock.calls[0][0].platformFee).toBe(8);
     const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
-    expect(purchase!.platformFeeAmount).toBeCloseTo(10, 2);
+    expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
     expect(purchase!.amount).toBeCloseTo(100, 2);
     expect((await prisma.organizer.findUnique({ where: { id: organizer.id } }))!.cashFeeBalance)
-      .toBeCloseTo(10, 2);
+      .toBeCloseTo(8, 2);
   });
 
   it('rejects a non-organizer caller', async () => {
