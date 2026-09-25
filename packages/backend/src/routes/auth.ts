@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { register, login, oauthLogin, redeemInvite, verifyEmail, oauthVerifyAge, linkOAuthProvider, getRegistrationChallenge } from '../controllers/authController';
+import { register, login, oauthLogin, redeemInvite, verifyEmail, oauthVerifyAge, linkOAuthProvider, getRegistrationChallenge, exitImpersonation } from '../controllers/authController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
@@ -471,6 +471,13 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
     return res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });
+
+// Exit an active admin impersonation session and restore the admin's own full session.
+// authenticate ONLY -- deliberately no admin-role gate: while impersonating, req.user.role
+// IS the impersonated user's role, not ADMIN, so a role gate would lock the admin out of
+// their own exit route. The real guard is exitImpersonation() checking for a server-signed
+// impersonatedBy claim (see middleware/auth.ts and 2026-09-25 exit-impersonation-adr).
+router.post('/exit-impersonation', authenticate, exitImpersonation);
 
 // P1 Security Fix: GET /auth/me — strip sensitive credential fields before sending
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {

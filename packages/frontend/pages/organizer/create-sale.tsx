@@ -910,8 +910,15 @@ interface Step2Props {
   setForm: React.Dispatch<React.SetStateAction<WizardFormData>>;
   validationErrors: Record<string, string>;
   setValidationErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  // 2026-09-25 (vendor-booth-hub-autofill-adr): needed so Step2 can show the selected
+  // booth's hub hoursText/address as a read-only hint. CI fix (S-create-sale-ci-fail,
+  // 2026-09-25): this was referenced here without ever being added to Step2Props/the
+  // Step2 call site -- only Step1Props had it -- so `vendorBooths` was simply undefined
+  // in Step2's scope. tsc caught it in CI (not locally, per this session's known broken
+  // local typescript symlink) as TS2304 at the three usage sites below.
+  vendorBooths: VendorBoothOption[] | null;
 }
-function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step2Props) {
+function Step2({ c, form, setForm, validationErrors, setValidationErrors, vendorBooths }: Step2Props) {
   const [showEntrance, setShowEntrance] = useState(!!(form.entranceNote));
 
   const isRetail = form.saleType === 'RETAIL';
@@ -2768,6 +2775,7 @@ const CreateSalePage: React.FC = () => {
                   c={c} form={form} setForm={setForm}
                   validationErrors={validationErrors}
                   setValidationErrors={setValidationErrors}
+                  vendorBooths={vendorBooths}
                 />
               )}
               {currentStep === 3 && (

@@ -46,6 +46,7 @@ const DegradationBanner = dynamic(() => import('../components/DegradationBanner'
 import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20: Proactive Degradation Mode
 import { LowBandwidthProvider } from '../contexts/LowBandwidthContext'; // Feature #22: Low-Bandwidth Mode
 const LowBandwidthBanner = dynamic(() => import('../components/LowBandwidthBanner'), { ssr: false }); // Feature #22: Low-Bandwidth Mode
+const ImpersonationBanner = dynamic(() => import('../components/ImpersonationBanner'), { ssr: false }); // 2026-09-25: exit-impersonation-adr
 import { useLowBandwidthInitializer } from '../hooks/useLowBandwidthInitializer'; // Feature #22: Low-Bandwidth Mode
 import { OfflineSyncProvider } from '../contexts/OfflineSyncContext'; // Feature #69: Local-First Offline Mode
 import CookieConsentBanner from '../components/CookieConsentBanner';
@@ -579,6 +580,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               {/* Feature #22: Low-Bandwidth Mode */}
               <LowBandwidthMonitor />
               <LowBandwidthBanner />
+              {/* 2026-09-25: persistent "Log in as" indicator + exit button, exit-impersonation-adr */}
+              <ImpersonationBanner />
               {/* #18: UTM capture for social link clicks */}
               <UTMCapture />
               {/* Feature #21: Sentry user context sync */}

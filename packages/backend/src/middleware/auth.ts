@@ -230,6 +230,17 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       req.user.organizerProfile = user.organizer;
     }
 
+    // Exit-impersonation support (2026-09-25, exit-impersonation-adr): the impersonation
+    // JWT carries impersonatedBy (the admin's own id), but req.user is always built fresh
+    // from the DB row above, which has no such column -- so this claim was silently lost
+    // for every route, including GET /auth/me. Forward it through so it survives both the
+    // initial "Log in as" click and a page refresh mid-impersonation.
+    if ((decoded as any).impersonatedBy) {
+      (req.user as any).impersonatedBy = (decoded as any).impersonatedBy;
+      (req.user as any).impersonatingAdminEmail = (decoded as any).impersonatingAdminEmail ?? null;
+      (req.user as any).impersonatingAdminName = (decoded as any).impersonatingAdminName ?? null;
+    }
+
     // Feature #75: Check tier lapse state for organizers
     return checkTierLapse(req, res, next);
   } catch (error) {

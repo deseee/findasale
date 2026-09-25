@@ -2702,6 +2702,11 @@ export const impersonateUser = async (req: AuthRequest, res: Response) => {
         huntPassExpiry: targetUser.huntPassExpiry,
         guildXp: targetUser.guildXp || 0,
         impersonatedBy: adminUserId, // trace claim — any action taken during this session is attributable
+        // 2026-09-25 (exit-impersonation-adr): req.user here IS the admin (this whole router
+        // requires authenticate+requireAdmin before this handler runs), so no extra DB lookup
+        // is needed -- just read the admin's own already-loaded fields for banner display.
+        impersonatingAdminEmail: req.user!.email,
+        impersonatingAdminName: req.user!.name,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '15m' } // deliberately shorter than real login's 1h — no refreshToken issued either

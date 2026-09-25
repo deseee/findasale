@@ -65,6 +65,13 @@ interface User {
   profileSlug?: string | null;
   purchasesVisible?: boolean;
   emailVerified?: boolean; // S512: email verification gate
+  // Exit-impersonation (2026-09-25, exit-impersonation-adr): present only while an admin
+  // is impersonating this session. Sourced from the JWT's impersonatedBy claim, forwarded
+  // by middleware/auth.ts onto req.user so it survives both the initial "Log in as" and a
+  // page refresh mid-impersonation (via GET /auth/me).
+  impersonatedBy?: string | null;
+  impersonatingAdminEmail?: string | null;
+  impersonatingAdminName?: string | null;
 }
 
 interface AuthContextType {
@@ -74,6 +81,7 @@ interface AuthContextType {
   updateUser: (updates: Partial<User>) => void;
   isLoading: boolean;
   onRankUp?: (newRank: string) => void;
+  exitImpersonation: () => Promise<void>; // 2026-09-25, exit-impersonation-adr
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -108,6 +116,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         teamsOnboardingComplete: user.teamsOnboardingComplete ?? false,
         createdAt: user.createdAt,
         emailVerified: user.emailVerified ?? true,
+        impersonatedBy: user.impersonatedBy ?? null,
+        impersonatingAdminEmail: user.impersonatingAdminEmail ?? null,
+        impersonatingAdminName: user.impersonatingAdminName ?? null,
       });
     };
 
@@ -189,6 +200,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
         createdAt: payload.createdAt,
         emailVerified: payload.emailVerified ?? true,
+        impersonatedBy: payload.impersonatedBy ?? null,
+        impersonatingAdminEmail: payload.impersonatingAdminEmail ?? null,
+        impersonatingAdminName: payload.impersonatingAdminName ?? null,
       });
     } catch (e) {
       console.error('Failed to decode token', e);
@@ -213,8 +227,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(prev => prev ? { ...prev, ...updates } : null);
   }, []);
 
+  // 2026-09-25 (exit-impersonation-adr): restores the admin's own full session
+  // (accessToken + refreshToken) after "Log in as". POST /auth/exit-impersonation
+  // returns the same { user, token } shape login() already expects, so this is just
+  // "call the endpoint, then feed its token into the existing login()" -- no separate
+  // session-restoration code path needed.
+  const exitImpersonation = useCallback(async () => {
+    try {
+      const response = await api.post('/auth/exit-impersonation');
+      if (response.data?.token) {
+        login(response.data.token);
+      }
+    } catch (err) {
+      console.error('[AuthContext] exitImpersonation failed:', err);
+      // No valid session to fall back to (e.g. admin account gone mid-impersonation) --
+      // send to /login rather than leaving the user stuck on a 15-minute-to-live token.
+      window.location.href = '/login';
+    }
+  }, [login]);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, onRankUp }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading, onRankUp, exitImpersonation }}>
       {children}
     </AuthContext.Provider>
   );

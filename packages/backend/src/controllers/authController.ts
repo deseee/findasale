@@ -839,6 +839,81 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
   }
 };
 
+// Shared session-minting helper (2026-09-25, exit-impersonation-adr): builds the JWT
+// payload, signs both tokens, and sets both httpOnly cookies -- the exact logic login()
+// used to inline. Extracted so login() and the new exitImpersonation() below always mint
+// a real session identically, in exactly one place, instead of two copies that can drift.
+function mintSessionTokens(
+  res: Response,
+  user: NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>,
+  organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>>,
+  subscriptionLapsed: boolean
+) {
+  const userRoles = (user.roles && user.roles.length > 0) ? user.roles : [user.role];
+
+  const token = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      roles: userRoles,
+      referralCode: user.referralCode,
+      tokenVersion: user.tokenVersion,
+      emailVerified: user.emailVerified, // S512: gate dashboard banner
+      subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+      subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+      subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
+      organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
+      onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+      createdAt: user.createdAt.toISOString(),
+      huntPassActive: user.huntPassActive,
+      huntPassExpiry: user.huntPassExpiry,
+      guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
+      // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
+    },
+    process.env.JWT_SECRET!,
+    { expiresIn: '1h' } // S708: bumped from 15m — was causing apparent sign-offs on idle tabs
+  );
+
+  // P0 Security Fix: Set httpOnly cookies for secure token storage
+  const refreshToken = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      roles: userRoles,
+      // P2 Security Fix: embed version claims so /auth/refresh can enforce invalidation
+      tokenVersion: user.tokenVersion,
+      organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
+    },
+    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
+    { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
+  );
+
+  res.cookie('accessToken', token, {
+    httpOnly: true,
+    secure: true, // P0 Security Fix Item 7: Always require HTTPS
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 1000, // 1 hour (S708 — must match JWT expiresIn above)
+  });
+
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: true, // P0 Security Fix Item 7: Always require HTTPS
+    sameSite: 'lax',
+    path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
+    // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
+    // refresh cookie is sent regardless of proxy path depth.
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
+  });
+
+  const { password: _pw, ...userWithoutPassword } = user;
+  return { token, userWithoutPassword };
+}
+
 export const login = async (req: Request, res: Response) => {
   try {
     const { email: rawLoginEmail, password } = req.body;
@@ -914,71 +989,10 @@ export const login = async (req: Request, res: Response) => {
       }
     }
 
-    // Generate JWT — include referralCode so AuthContext can decode without a round-trip
-    // Feature #72 Phase 2: Include roles array from user.roles (array field in User model)
-    // Fallback to single-role array if roles is empty, for backward compatibility
-    const userRoles = (user.roles && user.roles.length > 0) ? user.roles : [user.role];
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        roles: userRoles,
-        referralCode: user.referralCode,
-        tokenVersion: user.tokenVersion,
-        emailVerified: user.emailVerified, // S512: gate dashboard banner
-        subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
-        subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
-        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
-        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
-        onboardingComplete: organizerProfile?.onboardingComplete ?? false,
-        createdAt: user.createdAt.toISOString(),
-        huntPassActive: user.huntPassActive,
-        huntPassExpiry: user.huntPassExpiry,
-        guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: '1h' } // S708: bumped from 15m — was causing apparent sign-offs on idle tabs
-    );
-
-    // P0 Security Fix: Set httpOnly cookies for secure token storage
-    const refreshToken = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        roles: userRoles,
-        // P2 Security Fix: embed version claims so /auth/refresh can enforce invalidation
-        tokenVersion: user.tokenVersion,
-        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
-      },
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
-    );
-
-    res.cookie('accessToken', token, {
-      httpOnly: true,
-      secure: true, // P0 Security Fix Item 7: Always require HTTPS
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 1000, // 1 hour (S708 — must match JWT expiresIn above)
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: true, // P0 Security Fix Item 7: Always require HTTPS
-      sameSite: 'lax',
-      path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
-      // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
-      // refresh cookie is sent regardless of proxy path depth.
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
-    });
-
-    // Return user without password. Still include token in body for backward compatibility during transition
-    const { password: _, ...userWithoutPassword } = user;
+    // Generate JWT + refreshToken + cookies via the shared helper (2026-09-25,
+    // exit-impersonation-adr) -- see mintSessionTokens() above.
+    const { token, userWithoutPassword } = mintSessionTokens(res, user, organizerProfile, subscriptionLapsed);
+    // Still include token in body for backward compatibility during transition
     res.json({ user: userWithoutPassword, token });
 
     // Feature: Record referral tranche login (non-blocking)
@@ -991,6 +1005,60 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });
+  }
+};
+
+// Exit an active admin impersonation session and restore the admin's own full session
+// (2026-09-25, exit-impersonation-adr). impersonateUser() (adminController.ts) intentionally
+// issues the impersonated user a 15-minute accessToken with no refreshToken, and clears the
+// admin's own refreshToken cookie -- correct anti-privilege-leak behavior, but it left no way
+// back except a fresh /login. middleware/auth.ts's authenticate() now forwards the JWT's
+// impersonatedBy claim onto req.user, so this route can trust it: it is server-signed on the
+// original "Log in as" token and cannot be forged client-side.
+export const exitImpersonation = async (req: AuthRequest, res: Response) => {
+  try {
+    const adminUserId = (req.user as any)?.impersonatedBy;
+    if (!adminUserId) {
+      return res.status(400).json({ message: 'Not currently impersonating.' });
+    }
+
+    const admin = await prisma.user.findUnique({ where: { id: adminUserId } });
+    if (!admin) {
+      // Admin account deleted mid-impersonation -- rare, but there is no session to
+      // restore. Frontend should hard-redirect to /login on this response.
+      return res.status(401).json({ message: 'Admin account not found. Please log in again.' });
+    }
+
+    // SECURITY (findasale-hacker adversarial pass, 2026-09-25): mirror login()'s own
+    // suspendedAt/deletedAt rejection here. Without this check, an admin account
+    // suspended or soft-deleted WHILE mid-impersonation could still exit back into a
+    // brand-new, fully valid 1h/30d session -- bypassing the exact guard login() enforces
+    // for every other path to a fresh session. findUnique() still returns a suspended row
+    // (it isn't removed), so `!admin` alone does not catch this.
+    if (admin.deletedAt || admin.suspendedAt) {
+      return res.status(403).json({ message: 'This account is not available. Contact support@finda.sale.' });
+    }
+
+    // Mirror login()'s organizer/subscriptionLapsed lookup so the restored session's JWT is
+    // built exactly the way a normal login would build it for this admin.
+    let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
+    let subscriptionLapsed = false;
+    const hasOrganizerRole = admin.roles?.includes('ORGANIZER') || admin.role === 'ORGANIZER';
+    if (hasOrganizerRole) {
+      organizerProfile = await prisma.organizer.findUnique({ where: { userId: admin.id } });
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: { userId: admin.id, role: 'ORGANIZER' },
+      });
+      if (roleSubscription) {
+        subscriptionLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+      }
+    }
+
+    const { token, userWithoutPassword } = mintSessionTokens(res, admin, organizerProfile, subscriptionLapsed);
+    res.json({ user: userWithoutPassword, token });
+  } catch (error) {
+    console.error('[exitImpersonation] error:', error);
+    res.status(500).json({ message: 'Server error exiting impersonation' });
   }
 };
 
