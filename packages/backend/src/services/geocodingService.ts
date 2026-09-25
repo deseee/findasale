@@ -225,7 +225,7 @@ export async function geocodeAddress(
 // code is treated as not_found up front by geocodeCityStateInternal (see below) --
 // it no longer reaches cityResultMatchesRegion at all, closing the gap where an
 // unrecognized code used to skip the state check entirely.
-const US_STATE_NAMES: Record<string, string> = {
+export const US_STATE_NAMES: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
   CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', DC: 'District of Columbia',
   FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois',

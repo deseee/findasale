@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
+import { US_STATE_NAMES } from '../services/geocodingService';
 
 // In-memory cache: key = normalized address string, value = { lat, lng, cachedAt }
 interface GeoResult {
@@ -17,6 +18,23 @@ let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL_MS = 1100; // Nominatim requires 1 req/sec
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Reverse lookup: full state name -> USPS 2-letter code, built once from the
+// existing US_STATE_NAMES map (geocodingService.ts) so we don't hand-maintain
+// a second 50-state table. Nominatim's addressdetails.state comes back as a
+// full name ("Michigan"), but hub/sale schemas validate state as max 2 chars.
+const STATE_NAME_TO_CODE: Record<string, string> = Object.entries(US_STATE_NAMES).reduce(
+  (acc, [code, name]) => {
+    acc[name.trim().toLowerCase()] = code;
+    return acc;
+  },
+  {} as Record<string, string>
+);
+
+function stateNameToCode(stateName: string | undefined): string {
+  if (!stateName) return '';
+  return STATE_NAME_TO_CODE[stateName.trim().toLowerCase()] || '';
+}
 
 export const geocodeAddress = async (req: Request, res: Response) => {
   try {
@@ -135,5 +153,70 @@ export const geocodeAddress = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Geocoding error:', error.message);
     res.status(500).json({ message: 'Geocoding service temporarily unavailable. Please try again.' });
+  }
+};
+
+// GET /api/geocode/autocomplete?q=<free text>&countrycodes=us
+// Backs AddressAutocomplete.tsx's live suggestion dropdown (hub create/manage,
+// create-sale wizard address step). This route did not previously exist --
+// every request 404'd and the frontend silently swallowed the error, so no
+// AddressAutocomplete picker on the site has ever returned real suggestions.
+export const autocompleteAddress = async (req: Request, res: Response) => {
+  try {
+    const { q, countrycodes } = req.query;
+
+    if (!q || typeof q !== 'string' || q.trim().length < 3) {
+      return res.json([]);
+    }
+
+    // Shared Nominatim rate limit (module-level state, same as geocodeAddress above --
+    // Nominatim's 1 req/sec policy applies across the whole process, not per-endpoint).
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
+      await sleep(MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest);
+    }
+    lastRequestTime = Date.now();
+
+    const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q,
+        format: 'json',
+        addressdetails: 1,
+        limit: 5,
+        countrycodes: typeof countrycodes === 'string' && countrycodes ? countrycodes : 'us',
+      },
+      headers: {
+        'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)',
+      },
+      timeout: 8000,
+    });
+
+    const results = Array.isArray(response.data) ? response.data : [];
+
+    const suggestions = results.map((item: any) => {
+      const addr = item.address || {};
+      const streetLine = [addr.house_number, addr.road].filter(Boolean).join(' ');
+      const city = addr.city || addr.town || addr.village || '';
+      const stateCode = stateNameToCode(addr.state);
+
+      return {
+        display_name: item.display_name,
+        lat: item.lat,
+        lon: item.lon,
+        address: streetLine,
+        city,
+        state: stateCode,
+        postcode: addr.postcode || '',
+      };
+    });
+
+    return res.json(suggestions);
+  } catch (error: any) {
+    // Match the frontend's existing catch-and-clear behavior: on any failure
+    // (timeout, Nominatim down, etc.) return an empty list rather than a 500,
+    // since AddressAutocomplete.tsx already treats a thrown error as "no suggestions."
+    console.error('Autocomplete error:', error.message);
+    return res.json([]);
   }
 };
