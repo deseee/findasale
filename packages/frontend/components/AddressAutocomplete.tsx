@@ -42,6 +42,13 @@ const AddressAutocomplete = ({
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Fix (2026-09-25, vendor-booth-hub-autofill-adr follow-up): tracks whether the organizer
+  // is actually focused in this field. A programmatic value change -- the Create Sale
+  // wizard's hub auto-fill, or re-selecting a suggestion -- used to pop the suggestions
+  // dropdown open with irrelevant nationwide matches (the debounced fetch effect below
+  // fired on any `value` change with no focus check). Gating both the fetch and the open
+  // on focus means the dropdown only ever appears while the organizer is actually typing.
+  const [isFocused, setIsFocused] = useState(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -61,7 +68,7 @@ const AddressAutocomplete = ({
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-    if (!value || value.length < 3) {
+    if (!value || value.length < 3 || !isFocused) {
       setSuggestions([]);
       setIsOpen(false);
       return;
@@ -98,7 +105,7 @@ const AddressAutocomplete = ({
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [value]);
+  }, [value, isFocused]);
 
   const handleSelectSuggestion = (suggestion: AddressSuggestion) => {
     onSuggestionSelected?.(suggestion);
@@ -114,7 +121,8 @@ const AddressAutocomplete = ({
         type="text"
         value={value}
         onChange={onChange}
-        onFocus={() => value.length >= 3 && setIsOpen(true)}
+        onFocus={() => { setIsFocused(true); value.length >= 3 && setIsOpen(true); }}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
         required={required}
         disabled={disabled}
