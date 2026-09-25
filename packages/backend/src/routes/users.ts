@@ -230,7 +230,56 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
           address: address || existing.address,
         }
       });
-      return res.json({ organizer: updated, created: false });
+
+      // Bugfix (2026-09-25, S-HEIDI-ORGANIZER-NO-TOKEN): this branch used to return
+      // without a fresh JWT. useOrganizerSetup.ts on the frontend treats any response
+      // missing `token` as a hard failure ("No token received from server") and shows
+      // that to the user even though the organizer profile update above succeeded --
+      // reproduced live against a real account (organizer row pre-existed without
+      // ORGANIZER having made it into that user's roles array yet). Forward-sync
+      // ORGANIZER into roles/role here too, mirroring the create-path below, since an
+      // organizer row existing without that sync having happened is exactly the state
+      // that lands a user in this branch.
+      const currentRoles = req.user.roles || ['USER'];
+      const newRoles = [...new Set([...currentRoles, 'ORGANIZER'])];
+      const roleNeedsSync = !currentRoles.includes('ORGANIZER') || req.user.role === 'USER';
+
+      const updatedUser = roleNeedsSync
+        ? await prisma.user.update({
+            where: { id: req.user.id },
+            data: { roles: newRoles, ...(req.user.role === 'USER' ? { role: 'ORGANIZER' } : {}) }
+          })
+        : await prisma.user.findUniqueOrThrow({ where: { id: req.user.id } });
+
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: { userId: updatedUser.id, role: 'ORGANIZER' },
+      });
+      const subscriptionLapsed =
+        roleSubscription !== null &&
+        roleSubscription.tierLapsedAt !== null &&
+        roleSubscription.tierResumedAt === null;
+
+      const token = jwt.sign(
+        {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          name: updatedUser.name,
+          role: updatedUser.role,
+          roles: updatedUser.roles,
+          referralCode: updatedUser.referralCode,
+          tokenVersion: updatedUser.tokenVersion,
+          subscriptionTier: updated?.subscriptionTier ?? 'SIMPLE',
+          subscriptionStatus: updated?.subscriptionStatus ?? null,
+          subscriptionLapsed: subscriptionLapsed,
+          organizerTokenVersion: updated?.tokenVersion ?? 0,
+          onboardingComplete: updated?.onboardingComplete ?? false,
+          guildXp: updatedUser.guildXp || 0,
+        },
+        process.env.JWT_SECRET!,
+        { expiresIn: '7d' }
+      );
+
+      return res.json({ organizer: updated, created: false, token });
     }
 
     // User doesn't have organizer profile yet
