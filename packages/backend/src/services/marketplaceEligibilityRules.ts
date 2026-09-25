@@ -329,6 +329,35 @@ const RULES: EligibilityRule[] = [
     reason: 'Facebook Marketplace does not allow listing human body parts or remains (Commerce Policy).',
   },
 
+  // ---- FACEBOOK FINANCIAL/EDUCATIONAL DOCUMENTS, VOUCHERS & COUPONS (added 2026-09-26, after
+  // Patrick pushed back on the bare 'certificate'/'voucher'/'coupon' version of this rule that
+  // a research agent originally proposed and this file's own audit correctly declined to add).
+  // PRIMARY source (transparency.meta.com's live Restricted Goods text, same fetch as the
+  // artifacts/human-remains rules above): "Vouchers and coupons... Financial documents...
+  // Educational documents and professional certificates." The real risk with bare 'certificate'
+  // is that it collides constantly with ordinary "certificate of authenticity" language bundled
+  // into totally unrelated collectible/art/memorabilia listings -- confirmed this is a REAL
+  // structural problem, not just a theoretical one: Item.category here is the eBay L1 category
+  // name (schema.prisma comment: "eBay L1 category name, e.g. Home & Garden"), and both a stock
+  // certificate for sale AND a signed baseball with an included certificate of authenticity would
+  // realistically land in the same L1 bucket ("Collectibles"), so category-based scoping doesn't
+  // separate them either -- there's no clean structural signal here, only word choice. Fix:
+  // narrow to the actual compound phrases the prohibited items would be titled with instead of
+  // the single generic word -- none of these collide with "certificate of authenticity."
+  // (Separately, eBay does have a real, distinct L1 category for gift cards specifically
+  // -- "Gift Cards & Coupons" -- which COULD be matched via ebayCategoryIds the same way the
+  // FACEBOOK coin/currency rule above does, giving a cleaner signal for that one sub-piece. Not
+  // built here: this whole category is low-volume for an estate-sale business, and sourcing the
+  // exact category ID plus confirming it's populated on our own Item records is more engineering
+  // than a low-volume edge case currently justifies. Worth doing properly if this ever becomes a
+  // real recurring false-positive/false-negative problem in production.)
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['stock certificate', 'share certificate', 'diploma', 'professional certificate', 'gift voucher', 'discount coupon'],
+    reason: 'Facebook Marketplace does not allow listing financial documents, educational/professional certificates, or vouchers and coupons (Commerce Policy).',
+  },
+
   // ---- CRAIGSLIST (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- previously had ZERO eligibility
   // rule at all, despite fas-craigslist.js supporting full auto-publish CHECKED BY DEFAULT (the
   // 2026-07-17 locked decision, confirmed via that file's own header comment this session) -- the

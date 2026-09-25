@@ -76,6 +76,10 @@
   // 2026-09-25-ROUND2, mirrors the new FACEBOOK HUMAN REMAINS rule.
   const FB_HUMAN_REMAINS_NAME_KEYWORDS = ['human skull', 'human bone', 'human remains', 'human hair'];
   const FB_HUMAN_REMAINS_EXCLUDE_KEYWORDS = ['wig', 'hair extension', 'weave', 'ponytail extension', 'clip-in'];
+  // Added 2026-09-26, mirrors the new FACEBOOK FINANCIAL/EDUCATIONAL DOCUMENTS, VOUCHERS &
+  // COUPONS rule in marketplaceEligibilityRules.ts -- narrow compound phrases only (not bare
+  // 'certificate'/'voucher'/'coupon'), see that rule's own comment for why.
+  const FB_DOCUMENTS_NAME_KEYWORDS = ['stock certificate', 'share certificate', 'diploma', 'professional certificate', 'gift voucher', 'discount coupon'];
   function facebookRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
@@ -117,6 +121,9 @@
     if (FB_HUMAN_REMAINS_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)
         && !FB_HUMAN_REMAINS_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing human body parts or remains (Commerce Policy).';
+    }
+    if (FB_DOCUMENTS_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing financial documents, educational/professional certificates, or vouchers and coupons (Commerce Policy).';
     }
     return null;
   }
