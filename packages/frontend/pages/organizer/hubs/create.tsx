@@ -34,6 +34,9 @@ export default function CreateHubPage() {
     slug: '',
     description: '',
     address: '',
+    phone: '',
+    contactEmail: '',
+    hoursText: '',
     lat: 0,
     lng: 0,
   });
@@ -199,6 +202,60 @@ export default function CreateHubPage() {
                     ? `📍 ${formData.address}`
                     : "Select an address from the suggestions to set this hub's location"}
                 </p>
+              </div>
+
+              {/* Contact & Hours (2026-09-25) -- so booths and shoppers have something to go
+                  on: a mall front-desk phone/email and posted hours, none of which existed
+                  anywhere on a hub before this. All optional. */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Contact & Hours</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Optional, but shoppers and vendors will see this on the public page.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Phone
+                    </label>
+                    <input
+                      id="phone"
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="(269) 555-0100"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Contact Email
+                    </label>
+                    <input
+                      id="contactEmail"
+                      type="email"
+                      value={formData.contactEmail}
+                      onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                      placeholder="info@example.com"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="hoursText" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Hours
+                    </label>
+                    <input
+                      id="hoursText"
+                      type="text"
+                      value={formData.hoursText}
+                      onChange={(e) => setFormData({ ...formData, hoursText: e.target.value })}
+                      placeholder="Sat-Sun 9am-4pm"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Submit */}

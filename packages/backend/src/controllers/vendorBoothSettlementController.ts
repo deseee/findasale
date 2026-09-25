@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
-import { getInclusivePlatformFeeRate } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): disclosed rate must match computeLegFeeSplit's actual IN_PERSON charge
+import { getInclusivePlatformFeeRate, getInclusiveFeeRangePercent } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling); getInclusiveFeeRangePercent added 2026-09-25 (Patrick correction) -- this settlement preview is currently unread by any frontend page (grepped, confirmed), but keep it consistent with getVendorBoothPayouts's now-corrected shape rather than leaving a second stale single-number version to rot
 
 /**
  * Vendor Booth Payments — Settlement Batches (2026-07-07, re-scoped 2026-07-20 ADR-090 Phase 3)
@@ -157,6 +157,7 @@ export const previewVendorBoothSettlement = async (req: AuthRequest, res: Respon
     // 2 takes it in real time) -- see buildBoothSettlementLines. payoutMethod is
     // informational only: no Stripe Transfer is ever fired from this endpoint anymore
     // (vendors already received their net proceeds directly at capture time).
+    const feeRange = getInclusiveFeeRangePercent(organizer.subscriptionTier as any);
     return res.status(200).json({
       hubId,
       liveTransfersEnabled: vendorLiveTransfersEnabled(),
@@ -169,7 +170,12 @@ export const previewVendorBoothSettlement = async (req: AuthRequest, res: Respon
         vendorName: r.vendorName,
         itemCount: r.itemCount,
         gross: r.gross.toFixed(2),
+        // 2026-09-25 (Patrick correction): kept for back-compat (IN_PERSON, what booth-cart
+        // legs actually charge), plus the honest min/max range alongside it -- see
+        // getVendorBoothPayouts in vendorBoothController.ts for the identical fix.
         platformFeePercent: Math.round(getInclusivePlatformFeeRate(organizer.subscriptionTier as any, 'IN_PERSON') * 100),
+        platformFeePercentMin: feeRange.min,
+        platformFeePercentMax: feeRange.max,
         boothFee: r.boothFeeCharged.toFixed(2),
         revenueSharePercent: r.revenueSharePercent,
         revenueShareOwed: r.revenueShareOwed.toFixed(2),

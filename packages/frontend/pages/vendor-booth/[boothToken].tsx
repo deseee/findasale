@@ -39,6 +39,11 @@ interface PayoutInfo {
   boothFee: string;
   revenueSharePercent: number;
   platformFeePercent: number;
+  // 2026-09-25 (Patrick correction): the real min/max of the platform's channel-dependent
+  // fee schedule (6-7.5% for PRO/TEAMS, 8-9.5% for SIMPLE), not just the single IN_PERSON
+  // number this booth's own register happens to charge.
+  platformFeePercentMin: number;
+  platformFeePercentMax: number;
   payouts: Array<{
     id: string;
     totalSales: string;
@@ -362,8 +367,12 @@ const VendorBoothTokenPage: React.FC = () => {
                       </h2>
                       <dl className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <dt className="text-warm-600 dark:text-warm-400">Platform fee (flat, all sales)</dt>
-                          <dd className="font-bold text-warm-900 dark:text-white">{payoutInfo.platformFeePercent}%</dd>
+                          <dt className="text-warm-600 dark:text-warm-400">Platform fee</dt>
+                          <dd className="font-bold text-warm-900 dark:text-white">
+                            {payoutInfo.platformFeePercentMin === payoutInfo.platformFeePercentMax
+                              ? `${payoutInfo.platformFeePercentMin}%`
+                              : `${payoutInfo.platformFeePercentMin}-${payoutInfo.platformFeePercentMax}%`}
+                          </dd>
                         </div>
                         <div className="flex justify-between">
                           <dt className="text-warm-600 dark:text-warm-400">Booth fee (this booth)</dt>
@@ -375,6 +384,20 @@ const VendorBoothTokenPage: React.FC = () => {
                         </div>
                       </dl>
                       <p className="text-xs text-warm-500 dark:text-warm-400 mt-3">
+                        The platform fee is {payoutInfo.platformFeePercentMin}% on a sale rung up in person at
+                        your booth's register and {payoutInfo.platformFeePercentMax}% on a sale completed
+                        remotely (for example, a hosted checkout link) -- it is FindA.Sale's fee, not the
+                        mall's, and applies either way.
+                      </p>
+                      {payoutInfo.revenueSharePercent > 0 && (
+                        <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
+                          The {payoutInfo.revenueSharePercent}% revenue share only comes out when someone
+                          else checks the customer out for you -- a team member, the mall owner, or another
+                          booth. Ring up your own sale yourself and this booth's revenue share is waived for
+                          that sale.
+                        </p>
+                      )}
+                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
                         These terms apply only to this booth. You may have different terms at other malls or markets.
                       </p>
                     </div>
@@ -398,8 +421,9 @@ const VendorBoothTokenPage: React.FC = () => {
                         <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
                           This is the total that sold at your booth in each period, before fees. It is not
                           a deposit. Your money already arrived in your account at checkout, after the{' '}
-                          {payoutInfo.platformFeePercent}% platform fee and the {payoutInfo.revenueSharePercent}%
-                          revenue share listed above were taken out. Booth rent is billed separately.
+                          {payoutInfo.platformFeePercent}% platform fee (in-person rate) and, on sales someone
+                          else checked out for you, the {payoutInfo.revenueSharePercent}% revenue share
+                          listed above were taken out. Booth rent is billed separately.
                           {Number(payoutInfo.boothFee) > 0 ? ' See Booth Rent Auto-Pay below.' : ''}
                         </p>
                         <ul className="divide-y divide-warm-200 dark:divide-gray-700">

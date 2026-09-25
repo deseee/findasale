@@ -24,7 +24,7 @@ import { createSquareSharedCardForBoothFee } from '../services/squareVendorBooth
 // below MUST derive from this, using the same hub-owner tier the money path
 // (vendorBoothCartController.ts computeLegFeeSplit) feeds it -- a hardcoded
 // display percentage drifts from what Stripe actually takes.
-import { getInclusivePlatformFeeRate } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): disclosed rate must match what computeLegFeeSplit (vendorBoothCartController.ts) actually charges -- IN_PERSON, since a booth leg is always collected at the physical booth
+import { getInclusivePlatformFeeRate, getInclusiveFeeRangePercent } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling); getInclusiveFeeRangePercent added 2026-09-25 (Patrick correction) -- booth-cart legs are always charged IN_PERSON (getInclusivePlatformFeeRate stays for that), but the DISCLOSURE to the vendor should show the platform's real fee range, not just the one channel this booth's register happens to use
 import { sendVendorBoothInviteEmail } from '../services/vendorBoothInviteEmailService';
 // Lifecycle notifications (claim / confirm / reject-cancel / Stripe connected). Every one
 // of these is invoked fire-and-forget with a .catch, exactly like the invite trigger at
@@ -117,6 +117,10 @@ export const listVendorBooths = async (req: AuthRequest, res: Response) => {
         // alongside the Stripe pair above, never replacing it, since a booth can carry a
         // legacy Stripe connection and a Square connection independently.
         squareOnboarded: true, squareNotifiedAt: true,
+        // Finix sandbox pilot (2026-09-18, ADR-127 SS5.3/SS5.4 step 4) -- added 2026-09-25
+        // (Patrick correction): was already on VendorBooth but never selected here, so the
+        // hub-owner table could never show it regardless of what the frontend rendered.
+        finixOnboarded: true,
         // Register access grant (2026-07-29, Patrick's decision) -- separate from
         // claim/confirm. See VendorBooth.registerAccessGrantedAt in schema.prisma.
         registerAccessGrantedAt: true,
@@ -938,12 +942,19 @@ export const getVendorBoothPayouts = async (req: AuthRequest, res: Response) => 
     // the platform fee + revenue share were already taken at capture) nor what they owe.
     // See vendorBoothSettlementController.ts buildBoothSettlementLines for the full note.
     // Do not re-point the UI at netPayout.
+    const feeRange = getInclusiveFeeRangePercent((booth.hub?.organizer?.subscriptionTier as any) ?? null);
     return res.status(200).json({
       boothFee: booth.boothFee.toString(),
       revenueSharePercent: booth.revenueSharePercent,
+      // 2026-09-25 (Patrick correction): was a single hardcoded IN_PERSON-only number
+      // (e.g. "6%") labeled as flat -- now the real min/max of the platform's fee schedule.
+      // platformFeePercent (IN_PERSON, what this booth's register actually charges) is kept
+      // for any caller still reading the old single-number shape.
       platformFeePercent: Math.round(
         getInclusivePlatformFeeRate((booth.hub?.organizer?.subscriptionTier as any) ?? null, 'IN_PERSON') * 100
       ),
+      platformFeePercentMin: feeRange.min,
+      platformFeePercentMax: feeRange.max,
       payouts: payouts.map((p) => ({
         ...p,
         totalSales: p.totalSales.toString(),

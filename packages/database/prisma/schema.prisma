@@ -1728,6 +1728,11 @@ model Item {
   messages                        Message[]
   createdAt                       DateTime                @default(now())
   updatedAt                       DateTime                @updatedAt
+  // consignmentUnclaimedItemsJob.ts (2026-09-25): set once the "this item is unclaimed" organizer
+  // notification has fired for it (createdAt older than its Consignor.returnPeriodDays, still
+  // AVAILABLE), so the daily sweep never re-notifies for the same item. Null = not yet notified,
+  // or not a consignment item. Notification-only -- never gates or changes item behavior itself.
+  unclaimedNotifiedAt             DateTime?
 
   // @@unique([saleId, sku]) -- Feature #300: removed — NULLs defeat compound unique in Postgres
   // Full-text search column maintained by a Postgres trigger, not by Prisma. Queried via raw
@@ -1744,6 +1749,7 @@ model Item {
   @@index([isLegendary, legendaryVisibleAt]) // Phase 2b: Legendary early access query optimization
   @@index([locationId]) // #311: Multi-Location filter
   @@index([consignorId]) // #309: Consignor item lookup
+  @@index([consignorId, status, unclaimedNotifiedAt]) // consignmentUnclaimedItemsJob.ts (2026-09-25): daily sweep for unclaimed consigned items
   @@index([vendorBoothId]) // Vendor Booth Payments 2026-07-07: booth item lookup
   @@index([boothCartTransactionId]) // 2026-07-28: cart-scoped reservation lookup (resolveBoothLegItems / cancelBoothCart)
   @@index([tagColor]) // #310: Discount rule color tag lookup
@@ -3817,6 +3823,14 @@ model SaleHub {
   organizerId       String
   lat               Float
   lng               Float
+  // Venue details (2026-09-25, ADR-salehub-venue-details-and-processor-display) -- mirrors
+  // Organizer.address/Organizer.phone shape. Nullable: existing hubs have none of this yet,
+  // and no server-side geocoding runs on these (matches Organizer's own address, which is
+  // also never re-geocoded server-side -- AddressAutocomplete hands back lat/lng directly).
+  address           String?
+  phone             String?
+  contactEmail      String?
+  hoursText         String?                      // freeform, e.g. "Sat-Sun 9am-4pm"
   isActive          Boolean                      @default(true)
   // Feature #44: Neighborhood Sale Day — coordinated event date
   saleDate          DateTime?
@@ -5395,7 +5409,8 @@ model Consignor {
   phone             String?
   commissionRate    Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
   useTieredCommission Boolean          @default(false) // ADR-096: opt-in value-tiered split; false = today's flat commissionRate behavior, unchanged
-  unsoldItemDisposition String?       // 'RETURN' | 'DONATE' | 'RELIST' | null — organizer's plan for this consignor's items if they don't sell, set at onboarding. Informational only (shown in guide/checklist copy); no automation is tied to it yet.
+  unsoldItemDisposition String?       // 'RETURN' | 'DONATE' | 'RELIST' | null — organizer's plan for this consignor's items if they don't sell, set at onboarding. Shown in guide/checklist copy. Automation: consignorExpiryNoticeJob.ts (fixed 60-day, per-item) reads this to drive its organizer-facing next-step copy (2026-09-24), and consignmentUnclaimedItemsJob.ts (configurable per-consignor returnPeriodDays below, batched per organizer, 2026-09-25) nudges the organizer to act on it -- both notification-only, neither takes automatic action on the item.
+  returnPeriodDays  Int                @default(90) // How many days after an item's intake (Item.createdAt) before it's considered "unclaimed" for this consignor. Drives consignmentUnclaimedItemsJob.ts's daily sweep and the "Unclaimed" badge on /organizer/consignors. 90 is the default; organizer-overridable per consignor later (no override UI yet -- just the column).
   notes             String?            @db.Text
   portalToken       String             @unique @default(cuid()) // capability URL token — permanent for MVP
   stripeAccountId   String? // Stripe Connect account ID for consignor payouts

@@ -35,6 +35,11 @@ interface VendorBooth {
   // carry a legacy Stripe connection and a Square connection independently -- this is
   // additive, not a replacement.
   squareOnboarded: boolean;
+  // Finix sandbox pilot (2026-09-18, ADR-127 SS5.3/SS5.4 step 4), scoped specifically to
+  // Maple Lake Mall's booths -- not a platform-wide rollout. Added 2026-09-25 (Patrick
+  // correction): this was already on the wire from listVendorBooths's select but never
+  // rendered anywhere in this table.
+  finixOnboarded: boolean;
   boothToken: string;
   userId: string | null;
   confirmedAt: string | null;
@@ -83,6 +88,28 @@ interface FeeCharge {
  * "is this vendor up to date?" at a glance, and only expands into the per-event detail
  * when the organizer taps it. Collapsed, the cell is one short line plus one chip.
  */
+/**
+ * Which payment processor a booth actually completed onboarding through, in order of
+ * business precedence (2026-09-25, Patrick correction -- was a single hardcoded "Stripe"
+ * column that only ever read stripeOnboarded, so a vendor who onboarded via Square or the
+ * Finix sandbox pilot showed as "Not onboarded" in the one column the hub owner sees):
+ *   - Finix: sandbox pilot specific to this hub (ADR-127 SS5.3/SS5.4 step 4) -- newest,
+ *     shown first when present.
+ *   - Square: the live, platform-wide default processor.
+ *   - Stripe: legacy only. FindA.Sale's Stripe platform account was permanently closed by
+ *     Stripe itself on 2026-09-06 ("unacceptable risk") -- a booth with ONLY
+ *     stripeOnboarded=true cannot actually take a card payment today, so this says so
+ *     rather than the previous plain "Onboarded", which was actively misleading.
+ */
+function resolveBoothProcessorStatus(booth: VendorBooth): { label: string; tone: 'ok' | 'warn' | 'none' } {
+  if (booth.finixOnboarded) return { label: 'Finix (sandbox pilot)', tone: 'ok' };
+  if (booth.squareOnboarded) return { label: 'Square', tone: 'ok' };
+  if (booth.stripeOnboarded) {
+    return { label: 'Stripe (legacy -- cannot process payments)', tone: 'warn' };
+  }
+  return { label: 'Not connected', tone: 'none' };
+}
+
 type NotifyState = 'sent' | 'missing' | 'untracked' | 'na';
 type NotifyKind = 'claim' | 'confirm' | 'decision' | 'stripe' | 'square';
 
@@ -849,9 +876,14 @@ const VendorBoothsPage: React.FC = () => {
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Status</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Notified</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Claimed</th>
-                    <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Stripe</th>
+                    <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Payment Processor</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Booth Fee</th>
-                    <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Rev Share %</th>
+                    <th
+                      className="p-3 font-bold text-warm-700 dark:text-warm-300"
+                      title="Only deducted when someone else checks the customer out for this booth -- a team member, you, or another booth. A vendor who rings up their own sale keeps the full amount minus only the platform fee."
+                    >
+                      Rev Share %
+                    </th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Actions</th>
                   </tr>
                 </thead>
@@ -919,11 +951,16 @@ const VendorBoothsPage: React.FC = () => {
                         )}
                       </td>
                       <td className="p-3">
-                        {booth.stripeOnboarded ? (
-                          <span className="text-green-600 dark:text-green-400 text-xs font-bold">Onboarded</span>
-                        ) : (
-                          <span className="text-warm-400 text-xs">Not onboarded</span>
-                        )}
+                        {(() => {
+                          const { label, tone } = resolveBoothProcessorStatus(booth);
+                          const toneClass =
+                            tone === 'ok'
+                              ? 'text-green-600 dark:text-green-400'
+                              : tone === 'warn'
+                                ? 'text-amber-700 dark:text-amber-400'
+                                : 'text-warm-400';
+                          return <span className={`text-xs font-bold ${toneClass}`}>{label}</span>;
+                        })()}
                       </td>
                       <td className="p-3 text-warm-700 dark:text-warm-300">${Number(booth.boothFee).toFixed(2)}</td>
                       <td className="p-3 text-warm-700 dark:text-warm-300">{booth.revenueSharePercent}%</td>
@@ -1139,7 +1176,7 @@ const VendorBoothsPage: React.FC = () => {
                       revShareError ? 'text-red-600 dark:text-red-400' : 'text-warm-500 dark:text-warm-400'
                     }`}
                   >
-                    {revShareError || `Up to ${REVENUE_SHARE_CAP_PERCENT}% of each sale at this booth.`}
+                    {revShareError || `Up to ${REVENUE_SHARE_CAP_PERCENT}% of each sale at this booth -- only taken when someone else (you, a team member, or another booth) checks the customer out. Waived when the vendor rings up their own sale.`}
                   </p>
                 </div>
               </div>

@@ -22,6 +22,13 @@ const createHubSchema = z.object({
   description: z.string().optional(),
   lat: z.number(),
   lng: z.number(),
+  // Venue details (2026-09-25, ADR-salehub-venue-details-and-processor-display) -- all
+  // optional at the schema layer so existing hubs (none of which have these) stay valid;
+  // create.tsx still requires address client-side for new hubs.
+  address: z.string().max(300).optional(),
+  phone: z.string().max(30).optional(),
+  contactEmail: z.string().email().max(200).optional(),
+  hoursText: z.string().max(200).optional(),
 });
 
 const updateHubSchema = createHubSchema.partial().omit({ slug: true });
@@ -159,6 +166,11 @@ export const getHub = async (req: Request, res: Response) => {
         eventName: hub.eventName,
         organizerName: hub.organizer?.businessName,
         organizerPhoto: hub.organizer?.profilePhoto,
+        // Venue details (2026-09-25) -- shown on the public mall page.
+        address: hub.address,
+        phone: hub.phone,
+        contactEmail: hub.contactEmail,
+        hoursText: hub.hoursText,
       },
     });
   } catch (error) {
@@ -522,6 +534,11 @@ export const getMyHub = async (req: AuthRequest, res: Response) => {
         description: hub.description,
         lat: hub.lat,
         lng: hub.lng,
+        // Venue details (2026-09-25) -- editable on manage.tsx.
+        address: hub.address,
+        phone: hub.phone,
+        contactEmail: hub.contactEmail,
+        hoursText: hub.hoursText,
         saleDate: hub.saleDate,
         eventName: hub.eventName,
         isActive: hub.isActive,

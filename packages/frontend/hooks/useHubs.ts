@@ -49,6 +49,11 @@ export interface SaleHubInfo {
 
 export interface SaleHubDetail extends SaleHubInfo {
   description?: string;
+  // Venue details (2026-09-25) -- shown on the public mall page.
+  address?: string;
+  phone?: string;
+  contactEmail?: string;
+  hoursText?: string;
 }
 
 export interface NearbyHubsResponse {
@@ -163,6 +168,11 @@ export interface MyHubDetail {
   description?: string;
   lat: number;
   lng: number;
+  // Venue details (2026-09-25) -- editable on manage.tsx.
+  address?: string;
+  phone?: string;
+  contactEmail?: string;
+  hoursText?: string;
   saleDate?: string;
   eventName?: string;
   isActive: boolean;
@@ -243,6 +253,10 @@ export const useCreateHub = () => {
       description?: string;
       lat: number;
       lng: number;
+      address?: string;
+      phone?: string;
+      contactEmail?: string;
+      hoursText?: string;
     }) => {
       try {
         const response = await api.post('/organizer/hubs', data);
@@ -264,6 +278,10 @@ export const useUpdateHub = (hubId: string) => {
       description?: string;
       lat?: number;
       lng?: number;
+      address?: string;
+      phone?: string;
+      contactEmail?: string;
+      hoursText?: string;
     }) => {
       try {
         const response = await api.put(`/organizer/hubs/${hubId}`, data);

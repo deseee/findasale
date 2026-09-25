@@ -9,6 +9,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useHubById, useUpdateHub, useSetHubEvent } from '../../../../hooks/useHubs';
 import HubManagementNav from '../../../../components/HubManagementNav';
+import AddressAutocomplete from '../../../../components/AddressAutocomplete';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,6 +28,10 @@ export default function HubManagePage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    address: '',
+    phone: '',
+    contactEmail: '',
+    hoursText: '',
     lat: 0,
     lng: 0,
   });
@@ -44,6 +49,10 @@ export default function HubManagePage() {
     setFormData({
       name: data.hub.name || '',
       description: data.hub.description || '',
+      address: data.hub.address || '',
+      phone: data.hub.phone || '',
+      contactEmail: data.hub.contactEmail || '',
+      hoursText: data.hub.hoursText || '',
       lat: data.hub.lat ?? 0,
       lng: data.hub.lng ?? 0,
     });
@@ -195,29 +204,67 @@ export default function HubManagePage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Latitude</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      value={formData.lat}
-                      onChange={(e) => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Longitude</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      value={formData.lng}
-                      onChange={(e) => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg"
-                      required
-                    />
-                  </div>
+                <div>
+                  <label htmlFor="hubAddress" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Address
+                  </label>
+                  {/* 2026-09-25 (Patrick correction): this used to be two raw numeric lat/lng
+                      inputs a non-technical mall owner had no way to fill in correctly, and the
+                      address itself had no edit field at all. Reuses the same AddressAutocomplete
+                      create.tsx uses so address and lat/lng always move together. */}
+                  <AddressAutocomplete
+                    id="hubAddress"
+                    name="address"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    onSuggestionSelected={(suggestion) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        address: suggestion.address,
+                        lat: suggestion.lat,
+                        lng: suggestion.lng,
+                      }))
+                    }
+                    placeholder="123 Main St, Grand Rapids, MI"
+                  />
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    {formData.lat && formData.lng
+                      ? `📍 ${formData.address}`
+                      : 'Select an address from the suggestions to update this hub\'s map location'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Phone</label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="(269) 555-0100"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contact Email</label>
+                  <input
+                    type="email"
+                    value={formData.contactEmail}
+                    onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                    placeholder="info@example.com"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Hours</label>
+                  <input
+                    type="text"
+                    value={formData.hoursText}
+                    onChange={(e) => setFormData({ ...formData, hoursText: e.target.value })}
+                    placeholder="Sat-Sun 9am-4pm"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
+                  />
                 </div>
 
                 <button
@@ -239,10 +286,20 @@ export default function HubManagePage() {
                   <p className="text-gray-700 dark:text-gray-300">{formData.description || 'No description'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Location</p>
-                  <p className="text-gray-700 dark:text-gray-300">
-                    {formData.lat}, {formData.lng}
-                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Address</p>
+                  <p className="text-gray-700 dark:text-gray-300">{formData.address || 'No address set'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Phone</p>
+                  <p className="text-gray-700 dark:text-gray-300">{formData.phone || 'No phone set'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Contact Email</p>
+                  <p className="text-gray-700 dark:text-gray-300">{formData.contactEmail || 'No contact email set'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Hours</p>
+                  <p className="text-gray-700 dark:text-gray-300">{formData.hoursText || 'No hours set'}</p>
                 </div>
               </div>
             )}

@@ -385,6 +385,32 @@ const normalizeInclusiveTier = (tier: SubscriptionTier): 'SIMPLE' | 'PRO' | 'TEA
 export const getInclusivePlatformFeeRate = (tier: SubscriptionTier, channel: PaymentChannel): number =>
   INCLUSIVE_FEE_RATES[normalizeInclusiveTier(tier)][channel];
 
+/**
+ * Fee-disclosure range for a tier, in whole/half percent (e.g. { min: 6, max: 7.5 } for
+ * PRO/TEAMS), for UI surfaces that show "the platform fee" without a specific channel in
+ * hand -- IN_PERSON is always <= ONLINE in INCLUSIVE_FEE_RATES, so this just reads both.
+ *
+ * Added 2026-09-25 (Patrick correction, Maple Lake Mall hub pages pass): the vendor-booth
+ * payout page and settlement preview were both disclosing a single hardcoded IN_PERSON-only
+ * number (e.g. "6%" for TEAMS) labeled "flat, all sales" -- technically accurate for a
+ * booth-cart leg specifically (computeLegFeeSplit always charges IN_PERSON there), but
+ * misleading as a description of FindA.Sale's actual platform commission, which is genuinely
+ * channel-dependent (every OTHER checkout path in this file -- bounties, hold invoices,
+ * Square Quick Pay links, native Buy Now -- charges ONLINE). Callers that know their exact
+ * channel should keep calling getInclusivePlatformFeeRate/calculateInclusiveCommissionCents
+ * directly; this is only for "what's the fee schedule" disclosure copy.
+ *
+ * Rounds to one decimal (not a whole percent) so 0.075 renders as 7.5, not a wrong 8 --
+ * the old `Math.round(rate * 100)` pattern this replaces silently lost the half-percent.
+ */
+export const getInclusiveFeeRangePercent = (
+  tier: SubscriptionTier
+): { min: number; max: number } => {
+  const rates = INCLUSIVE_FEE_RATES[normalizeInclusiveTier(tier)];
+  const round1 = (n: number) => Math.round(n * 1000) / 10;
+  return { min: round1(rates.IN_PERSON), max: round1(rates.ONLINE) };
+};
+
 /** Inclusive commission in cents on `baseCents`, floored at MINIMUM_TRANSACTION_FEE_CENTS.
  *  `baseCents` is the sale subtotal actually charged -- never a client-supplied amount.
  *  Zero-guarded (2026-09-24 hardening): a 0-or-negative baseCents returns 0, never the

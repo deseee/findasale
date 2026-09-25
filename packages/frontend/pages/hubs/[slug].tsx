@@ -154,6 +154,48 @@ export default function HubLandingPage() {
                     {hub.description}
                   </p>
                 )}
+
+                {/* Venue details (2026-09-25) -- address/phone/contactEmail/hoursText all
+                    added to SaleHub this session; previously nothing here beyond the map
+                    pin, and address in particular was silently discarded on create before
+                    this fix (see ADR-salehub-venue-details-and-processor-display). Each
+                    renders only when present, matching this page's existing conditional
+                    style used for saleDate/description above. */}
+                {(hub.address || hub.phone || hub.contactEmail || hub.hoursText) && (
+                  <div className="space-y-2 mb-6 text-warm-800 dark:text-gray-200">
+                    {hub.address && (
+                      <div className="flex items-center gap-2">
+                        <span aria-hidden="true">📍</span>
+                        <span>{hub.address}</span>
+                      </div>
+                    )}
+                    {hub.hoursText && (
+                      <div className="flex items-center gap-2">
+                        <span aria-hidden="true">🕒</span>
+                        <span>{hub.hoursText}</span>
+                      </div>
+                    )}
+                    {hub.phone && (
+                      <div className="flex items-center gap-2">
+                        <span aria-hidden="true">📞</span>
+                        <a href={`tel:${hub.phone}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400">
+                          {hub.phone}
+                        </a>
+                      </div>
+                    )}
+                    {hub.contactEmail && (
+                      <div className="flex items-center gap-2">
+                        <span aria-hidden="true">✉️</span>
+                        <a
+                          href={`mailto:${hub.contactEmail}`}
+                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400"
+                        >
+                          {hub.contactEmail}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Venue map */}
