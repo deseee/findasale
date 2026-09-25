@@ -2221,6 +2221,9 @@
   // confirmed those are a Mercari SHIPPING-LABEL requirement, not a listing prohibition.
   const MERCARI_PROHIBITED_NAME_KEYWORDS = [
     'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'blade', 'explosive',
+    // 2026-09-25: closes a real dagger/sword/bayonet gap -- mirrors the backend
+    // marketplaceEligibilityRules.ts MERCARI rule fix, same session, same reasoning.
+    'dagger', 'sword', 'bayonet',
     'taser', 'stun gun', 'self defense',
     'narcotic', 'drug', 'prescription', 'alcohol', 'liquor', 'wine', 'beer', 'tobacco',
     'cigarette', 'cigar', 'vape', 'e-cigarette', 'cbd', 'supplement', 'vitamin', 'food',

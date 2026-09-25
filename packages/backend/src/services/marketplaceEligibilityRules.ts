@@ -332,6 +332,11 @@ const RULES: EligibilityRule[] = [
     nameKeywords: [
       'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'paintball gun', 'gel blaster',
       'spear gun', 'tear gas', 'taser', 'stun gun', 'knife', 'switchblade',
+      // 2026-09-25: closes a real dagger/sword/bayonet gap found while answering Patrick's
+      // direct question about cross-marketplace weapon-filter coverage -- FACEBOOK and VINTED
+      // already had these tokens (this same failure class caused the original Facebook dagger
+      // incident, S-FB-WEAPON-COIN-FIX-2026-09-03), GUMTREE_AU/POSHMARK/MERCARI did not.
+      'dagger', 'sword', 'bayonet',
       'martial arts', 'archery', 'bow and arrow',
       'firework', 'explosive',
       'alcohol', 'tobacco', 'cigarette', 'vape', 'e-cigarette',
@@ -491,6 +496,9 @@ const RULES: EligibilityRule[] = [
     // only literal table/butter knives are exempt.
     nameKeywords: [
       'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'switchblade',
+      // 2026-09-25: closes a real dagger/sword/bayonet gap, see the GUMTREE_AU rule's comment
+      // above for the full story (same fix, same reason, same session).
+      'dagger', 'sword', 'bayonet',
       'alcohol', 'liquor', 'wine', 'beer',
     ],
     excludeKeywords: [
@@ -533,6 +541,9 @@ const RULES: EligibilityRule[] = [
     platform: 'MERCARI',
     nameKeywords: [
       'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'blade', 'explosive',
+      // 2026-09-25: closes a real dagger/sword/bayonet gap, see the GUMTREE_AU rule's comment
+      // above (same fix, same reason, same session).
+      'dagger', 'sword', 'bayonet',
       'taser', 'stun gun', 'self defense',
       'narcotic', 'drug', 'prescription', 'alcohol', 'liquor', 'wine', 'beer', 'tobacco',
       'cigarette', 'cigar', 'vape', 'e-cigarette', 'cbd', 'supplement', 'vitamin', 'food',

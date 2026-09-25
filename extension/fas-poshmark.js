@@ -381,6 +381,9 @@
       // weapons, knives, ammunition, and alcohol are prohibited.
       nameKeywords: [
         'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'knife', 'switchblade',
+        // 2026-09-25: closes a real dagger/sword/bayonet gap -- mirrors the backend
+        // marketplaceEligibilityRules.ts POSHMARK rule fix, same session, same reasoning.
+        'dagger', 'sword', 'bayonet',
         'alcohol', 'liquor', 'wine', 'beer',
       ],
       // RESOLVED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (Patrick decision

@@ -53,6 +53,10 @@
   const GT_PROHIBITED_NAME_KEYWORDS = [
     'weapon', 'firearm', 'gun', 'ammo', 'ammunition', 'paintball gun', 'gel blaster',
     'spear gun', 'tear gas', 'taser', 'stun gun', 'knife', 'switchblade',
+    // 2026-09-25: closes a real dagger/sword/bayonet gap found while answering Patrick's direct
+    // question about cross-marketplace weapon-filter coverage -- mirrors the backend
+    // marketplaceEligibilityRules.ts GUMTREE_AU rule fix, same session, same reasoning.
+    'dagger', 'sword', 'bayonet',
     'martial arts', 'archery', 'bow and arrow',
     'firework', 'explosive',
     'alcohol', 'tobacco', 'cigarette', 'vape', 'e-cigarette',
