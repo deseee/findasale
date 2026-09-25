@@ -517,7 +517,7 @@ function searchInputValue() {
 
 function row(it) {
   const d = document.createElement('div'); d.className = 'item';
-  const img = it.photoUrls && it.photoUrls[0] ? '<img src="' + it.photoUrls[0] + '">' : '<img>';
+  const img = it.photoUrls && it.photoUrls[0] ? '<img src="' + esc(it.photoUrls[0]) + '">' : '<img>';
   // Facebook Commerce Policy: coins/currency items cannot be listed on Facebook Marketplace.
   // Backend (extensionController.ts getExtensionItems) computes facebookRestricted per item --
   // this only disables the checkbox / shows a badge on the FACEBOOK channel specifically; the

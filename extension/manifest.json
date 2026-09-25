@@ -45,19 +45,6 @@
   "background": {
     "service_worker": "background.js"
   },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "popup.html",
-        "popup.css",
-        "popup.js",
-        "config.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ],
   "content_scripts": [
     {
       "matches": [
