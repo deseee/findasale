@@ -276,6 +276,7 @@ import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJ
 import { scheduleFoundingOrgBadgeCron } from './jobs/foundingOrgBadgeJob'; // Feature #405: Founding Organizer Badge — nightly award
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature: Retail Mode auto-renewal
 import { scheduleConsignorExpiryNoticeCron } from './jobs/consignorExpiryNoticeJob'; // Feature #309: Consignor expiry notices
+import { scheduleConsignmentUnclaimedItemsCron } from './jobs/consignmentUnclaimedItemsJob'; // ADR consignment-unclaimed-items (2026-09-25): daily per-organizer nudge on aging unsold consigned items
 import { scheduleResyncShippingDriftCron } from './jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: daily carrier-rate drift re-pin (4 AM UTC)
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature: Referral reputation score recomputation
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
@@ -1046,6 +1047,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #309: Register consignor expiry notice cron (daily at 2 AM UTC)
   scheduleConsignorExpiryNoticeCron();
+
+  // ADR consignment-unclaimed-items (2026-09-25): Register daily unclaimed-consigned-items sweep (2:20 AM UTC) -- batched per-organizer nudge to act on Consignor.unsoldItemDisposition once an item has sat AVAILABLE past that consignor's returnPeriodDays
+  scheduleConsignmentUnclaimedItemsCron();
 
   scheduleOutwardEmailAutomationsCron();
 

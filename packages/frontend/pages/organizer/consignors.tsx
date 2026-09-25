@@ -26,6 +26,8 @@ interface Consignor {
   phone: string | null;
   commissionRate: string | number; // Decimal from Prisma
   unsoldItemDisposition: string | null; // 'RETURN' | 'DONATE' | 'RELIST' | null
+  returnPeriodDays: number; // consignmentUnclaimedItemsJob.ts (2026-09-25): days after intake before an unsold item counts as unclaimed for this consignor (default 90)
+  unclaimedCount: number; // consignmentUnclaimedItemsJob.ts (2026-09-25): AVAILABLE items past returnPeriodDays, precomputed server-side by listConsignors
   notes: string | null;
   portalToken: string;
   items: Array<{ id: string; title: string; price: string | number; status: string }>;
@@ -341,6 +343,15 @@ const ConsignorsPage: React.FC = () => {
                       <p className="text-sm text-amber-600 dark:text-amber-400 font-bold mt-2">
                         Commission: {Number(consignor.commissionRate).toFixed(1)}%
                       </p>
+                      {/* consignmentUnclaimedItemsJob.ts (2026-09-25): informational badge only --
+                          mirrors the same daily nudge the organizer gets by email/in-app, surfaced
+                          here so it's visible without waiting for that notification. Never implies
+                          anything was changed automatically. */}
+                      {consignor.unclaimedCount > 0 && (
+                        <p className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                          {consignor.unclaimedCount} {consignor.unclaimedCount === 1 ? 'item' : 'items'} past their {consignor.returnPeriodDays}-day return window
+                        </p>
+                      )}
                     </div>
 
                     {/* Portal Link */}

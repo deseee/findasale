@@ -75,9 +75,36 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
+    // consignmentUnclaimedItemsJob.ts / "Unclaimed" badge support (2026-09-25): count each
+    // consignor's AVAILABLE items whose intake (createdAt) is older than that consignor's own
+    // returnPeriodDays -- same definition the daily job uses. Queried separately from the
+    // `items` include above (which is deliberately SOLD-only for the existing Items/Sold
+    // stats) rather than changing that include's meaning. Workspace-scoped for free: every
+    // consignorId here comes from the workspace-filtered `consignors` list above, so this can
+    // never pull in another workspace's items.
+    const consignorIds = consignors.map((c) => c.id);
+    const availableItems = consignorIds.length
+      ? await prisma.item.findMany({
+          where: { consignorId: { in: consignorIds }, status: 'AVAILABLE' },
+          select: { consignorId: true, createdAt: true },
+        })
+      : [];
+    const returnPeriodByConsignor = new Map(consignors.map((c) => [c.id, c.returnPeriodDays]));
+    const unclaimedCountByConsignor = new Map<string, number>();
+    const nowMs = Date.now();
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    for (const item of availableItems) {
+      if (!item.consignorId) continue;
+      const days = returnPeriodByConsignor.get(item.consignorId) ?? 90;
+      if (nowMs - item.createdAt.getTime() > days * MS_PER_DAY) {
+        unclaimedCountByConsignor.set(item.consignorId, (unclaimedCountByConsignor.get(item.consignorId) || 0) + 1);
+      }
+    }
+
     // Convert Decimal fields to strings for JSON serialization
     const serialized = consignors.map((c) => ({
       ...c,
+      unclaimedCount: unclaimedCountByConsignor.get(c.id) || 0,
       payouts: c.payouts.map((p) => ({
         ...p,
         totalSales: p.totalSales.toString(),
