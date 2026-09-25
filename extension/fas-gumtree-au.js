@@ -80,6 +80,13 @@
     'human body part', 'human material', 'burglary tool',
     'government document', 'government id', 'police badge', 'police uniform', 'military uniform',
     'controlled substance', 'pesticide', 'pornographic', 'adult',
+    // 2026-09-25-ROUND2: mirrors the same-day marketplaceEligibilityRules.ts GUMTREE_AU rule
+    // edit (identity docs/surveillance/taxidermy/tanning-bed findings from a harder second pass).
+    'identity document', 'passport', 'checkbook',
+    'hidden camera', 'spy camera',
+    'radar detector', 'police scanner',
+    'taxidermy',
+    'tanning bed',
   ];
   // BONUS FIX found during the 2026-09-18 mirror-sync pass (pre-existing drift -- this file
   // never had an excludeKeywords guard at all, unlike the backend GUMTREE_AU rule which has

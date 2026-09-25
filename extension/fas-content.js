@@ -52,11 +52,30 @@
     'dagger', 'sword', 'bayonet', 'blade', 'knife',
     'taser', 'stun gun', 'nunchuck', 'nunchaku', 'baton', 'brass knuckle',
     'pepper spray', 'switchblade', 'butterfly knife',
+    'firework', // 2026-09-25-ROUND2, mirrors backend FACEBOOK weapons rule edit
   ];
   const FB_WEAPON_EXCLUDE_KEYWORDS = [
     'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
     'chef knife', 'paring knife', 'bread knife', 'steak knife',
   ];
+  // 2026-09-25-ROUND2 FIX (real pre-existing mirror gap, not new this session -- found while
+  // doing a harder second-pass audit): this file never had a client-side twin of the backend's
+  // FACEBOOK ALCOHOL/TOBACCO/DRUGS/ADULT/ANIMAL rule at all, despite every other backend FACEBOOK
+  // rule having one here. This is the one gate that runs immediately before Facebook's own form
+  // is filled in -- exactly the gap class that caused the original dagger incident, just for a
+  // different category this time. Kept in sync with marketplaceEligibilityRules.ts's FACEBOOK
+  // alcohol/animal rule, including the 2026-09-25-ROUND2 scrimshaw/whalebone/baleen addition.
+  const FB_ALCOHOL_ANIMAL_NAME_KEYWORDS = [
+    'alcohol', 'liquor', 'wine', 'beer', 'tobacco', 'cigarette', 'cigar',
+    'vape', 'e-cigarette', 'narcotic', 'prescription drug',
+    'taxidermy', 'ivory', 'mounted head', 'rhino horn', 'scrimshaw', 'whalebone', 'baleen',
+    'pornographic', 'sex toy',
+  ];
+  // 2026-09-25-ROUND2, mirrors the new FACEBOOK HISTORICAL ARTIFACTS / CULTURAL HERITAGE rule.
+  const FB_ARTIFACT_NAME_KEYWORDS = ['historical artifact', 'ancient artifact', 'archaeological artifact', 'cultural heritage artifact', 'arrowhead'];
+  // 2026-09-25-ROUND2, mirrors the new FACEBOOK HUMAN REMAINS rule.
+  const FB_HUMAN_REMAINS_NAME_KEYWORDS = ['human skull', 'human bone', 'human remains', 'human hair'];
+  const FB_HUMAN_REMAINS_EXCLUDE_KEYWORDS = ['wig', 'hair extension', 'weave', 'ponytail extension', 'clip-in'];
   function facebookRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
@@ -68,8 +87,11 @@
         && !FB_WEAPON_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing weapons, ammunition, or explosives (Commerce Policy).';
     }
+    if (FB_ALCOHOL_ANIMAL_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing alcohol, tobacco, drugs, adult content, or certain animal products (Commerce Policy).';
+    }
     if (FB_SUPPLEMENT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
-      return 'Facebook Marketplace does not allow listing unsafe supplements or controlled hormonal products (Commerce Policy).';
+      return 'Facebook Marketplace does not allow listing unsafe supplements, weight-loss/skin-whitening products, or controlled hormonal products (Commerce Policy).';
     }
     if (FB_RECALLED_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing products subject to a safety recall (Commerce Policy).';
@@ -89,11 +111,18 @@
     if (FB_POLICE_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
       return 'Facebook Marketplace does not allow listing law enforcement, government, or military identification, badges, or uniforms (Commerce Policy, precautionary).';
     }
+    if (FB_ARTIFACT_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing historical or cultural heritage artifacts (Commerce Policy).';
+    }
+    if (FB_HUMAN_REMAINS_NAME_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)
+        && !FB_HUMAN_REMAINS_EXCLUDE_KEYWORDS.some((kw) => haystack.indexOf(kw) !== -1)) {
+      return 'Facebook Marketplace does not allow listing human body parts or remains (Commerce Policy).';
+    }
     return null;
   }
   // Added S-FB-COMPLIANCE-AUDIT-2026-09-18 (see marketplaceEligibilityRules.ts for full
   // sourcing/reasoning per category -- kept literally in sync here).
-  const FB_SUPPLEMENT_NAME_KEYWORDS = ['steroid', 'anabolic', 'human growth hormone', 'hgh', 'ephedra', 'dhea', 'comfrey'];
+  const FB_SUPPLEMENT_NAME_KEYWORDS = ['steroid', 'anabolic', 'human growth hormone', 'hgh', 'ephedra', 'dhea', 'comfrey', 'diet pill', 'skin whitening cream', 'skin bleaching cream'];
   const FB_RECALLED_NAME_KEYWORDS = ['recalled', 'recall notice', 'subject to recall'];
   const FB_HAZMAT_NAME_KEYWORDS = ['hazmat', 'flammable', 'toxic chemical', 'radioactive', 'damaged battery', 'swollen battery'];
   const FB_GAMBLING_NAME_KEYWORDS = ['lottery ticket', 'raffle ticket', 'casino chip'];

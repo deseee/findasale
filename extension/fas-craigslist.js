@@ -60,6 +60,12 @@
     // marketplaceEligibilityRules.ts CRAIGSLIST rule edit (see that rule's comment for sourcing).
     'pepper spray', 'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'butterfly knife', 'throwing star',
     'police insignia',
+    // 2026-09-25-ROUND2: mirrors the same-day marketplaceEligibilityRules.ts CRAIGSLIST rule
+    // edit (bedding/food/cosmetics/animal/military-ordnance findings from a harder second pass).
+    'unsanitized', 'used mattress', 'biohazard',
+    'homemade food', 'home-canned', 'opened cosmetics', 'used makeup',
+    'taxidermy',
+    'ordnance', 'inert grenade', 'not demilitarized',
   ];
   // BONUS FIX found during the 2026-09-18 mirror-sync pass (not a new audit finding --
   // pre-existing drift from S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03, which added a

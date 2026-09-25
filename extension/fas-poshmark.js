@@ -402,9 +402,11 @@
     // IMPERSONATION rule in marketplaceEligibilityRules.ts (see that rule's own comment for
     // sourcing/caveats: corroborated via a secondary source, not a direct primary-source quote).
     {
-      nameKeywords: ['police badge', 'police uniform', 'law enforcement badge', 'military uniform', 'government id'],
+      // 2026-09-25-ROUND2: mirrors the same-day marketplaceEligibilityRules.ts POSHMARK
+      // impersonation-rule edit (vaccine/immunization cards, airline-crew uniforms).
+      nameKeywords: ['police badge', 'police uniform', 'law enforcement badge', 'military uniform', 'government id', 'vaccine card', 'immunization card', 'airline uniform', 'flight attendant uniform', 'pilot uniform'],
       excludeKeywords: [],
-      reason: 'Poshmark prohibits impersonation and official items such as law enforcement or military badges, uniforms, and government IDs (Prohibited Items Policy).',
+      reason: 'Poshmark prohibits impersonation and official items such as law enforcement or military badges, uniforms, government IDs, or vaccine cards (Prohibited Items Policy).',
     },
     // NEW RULE added S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/
     // cross-marketplace-compliance-audit-2026-09-18.md), mirrors the new third POSHMARK
@@ -417,9 +419,20 @@
         'medical device', 'contact lens', 'breast pump', 'pill press',
         'hazardous material', 'aerosol', 'combustible', 'pesticide', 'radioactive',
         'turtle shell', 'pangolin', 'big cat fur',
+        // 2026-09-25-ROUND2: mirrors the same-day marketplaceEligibilityRules.ts POSHMARK
+        // drugs/hazmat/animal rule edit (ivory/tusk/shark fin were missing here, unlike every
+        // other platform in this file).
+        'ivory', 'tusk', 'shark fin',
       ],
       excludeKeywords: [],
       reason: 'Poshmark prohibits drugs/paraphernalia, certain medical devices, hazardous materials, and endangered-animal products (Prohibited Items Policy, v4.1).',
+    },
+    // 2026-09-25-ROUND2: mirrors the new POSHMARK HATE SYMBOLS / SANCTIONED-COUNTRY GOODS rule
+    // in marketplaceEligibilityRules.ts.
+    {
+      nameKeywords: ['nazi', 'fascist symbol', 'cuban cigar', 'made in cuba', 'made in iran', 'made in north korea'],
+      excludeKeywords: [],
+      reason: 'Poshmark prohibits hate symbols/violent extremist items and goods originating from sanctioned countries (Prohibited Items Policy).',
     },
   ];
   function poshmarkRestrictionReason(category, title) {

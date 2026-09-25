@@ -3436,6 +3436,17 @@
     'medicine', 'medicinal', 'supplement', 'cosmetic', 'sanitary', 'tampon', 'recalled',
     'counterfeit', 'replica', 'bootleg', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
     'fur', 'ivory', 'reptile skin', 'shell', 'vape', 'e-cigarette', 'fetish', 'furniture',
+    // 2026-09-25-ROUND2: mirrors the same-day marketplaceEligibilityRules.ts VINTED general
+    // rule edit (mattress/certificate/car-seat/refrigerant/tanning/collar/battery/helmet
+    // findings from a harder second pass).
+    'mattress', 'duvet',
+    'stock certificate', 'share certificate',
+    'car seat', 'booster seat',
+    'refrigerant', 'freon',
+    'tanning bed', 'massage table', 'tattoo machine',
+    'choke collar', 'prong collar', 'spiked collar', 'shock collar',
+    'expired battery', 'used power bank',
+    'motorcycle helmet', 'ski helmet',
     'cycling helmet', 'safety harness', 'heated tobacco',
     'archaeological artifact', 'cultural heritage artifact', 'detergent', 'cleaning chemical',
     'used piercing', 'live animal', 'jailbroken', 'carrier blocked', 'imei blocked',

@@ -151,6 +151,11 @@ const RULES: EligibilityRule[] = [
       'dagger', 'sword', 'bayonet', 'blade', 'knife',
       'taser', 'stun gun', 'nunchuck', 'nunchaku', 'baton', 'brass knuckle',
       'pepper spray', 'switchblade', 'butterfly knife',
+      // 2026-09-25-ROUND2 (Patrick asked for a harder second pass across all platforms, done via
+      // parallel research agents re-fetching each platform's live policy text): 'firework' was
+      // corroborated by secondary sources for Facebook specifically (not a direct primary quote --
+      // Meta's own text folds it under "explosives" without naming it) -- cheap, zero-FP addition.
+      'firework',
     ],
     excludeKeywords: [
       'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
@@ -181,6 +186,16 @@ const RULES: EligibilityRule[] = [
       'alcohol', 'liquor', 'wine', 'beer', 'tobacco', 'cigarette', 'cigar',
       'vape', 'e-cigarette', 'narcotic', 'prescription drug',
       'taxidermy', 'ivory', 'mounted head', 'rhino horn',
+      // 2026-09-25-ROUND2: PRIMARY-sourced from transparency.meta.com's live Restricted Goods
+      // and Services text (fetched fresh this session, cross-checked against an archive.org
+      // snapshot dated 2026-09-21): "animal horns, organs, limbs, carcasses, taxidermy..." is
+      // broader than ivory/rhino horn alone. Deliberately did NOT add bare 'tortoiseshell' or
+      // 'coral' here -- both are overwhelmingly used for faux/plastic eyewear and jewelry
+      // patterns in ordinary resale listings, too high a false-positive surface without a
+      // dedicated exclude-list this pass didn't have time to build properly. 'scrimshaw' and
+      // 'whalebone'/'baleen' are far more specific antique-material terms with no everyday
+      // false-positive use.
+      'scrimshaw', 'whalebone', 'baleen',
       'pornographic', 'sex toy',
     ],
     reason: 'Facebook Marketplace does not allow listing alcohol, tobacco, drugs, adult content, or certain animal products (Commerce Policy).',
@@ -196,8 +211,13 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'FACEBOOK',
-    nameKeywords: ['steroid', 'anabolic', 'human growth hormone', 'hgh', 'ephedra', 'dhea', 'comfrey'],
-    reason: 'Facebook Marketplace does not allow listing unsafe supplements or controlled hormonal products (Commerce Policy).',
+    // 2026-09-25-ROUND2: PRIMARY-sourced from transparency.meta.com's live Restricted Goods text
+    // -- a separate, explicit "weight loss or weight gain products" and "skin whitening/bleaching
+    // creams" category, not just hormonal supplements. Scoped to specific product-name phrases
+    // ("diet pill", not bare "weight loss") since the agent that found this flagged bare
+    // "weight loss" as high-false-positive (fitness equipment ad copy).
+    nameKeywords: ['steroid', 'anabolic', 'human growth hormone', 'hgh', 'ephedra', 'dhea', 'comfrey', 'diet pill', 'skin whitening cream', 'skin bleaching cream'],
+    reason: 'Facebook Marketplace does not allow listing unsafe supplements, weight-loss/skin-whitening products, or controlled hormonal products (Commerce Policy).',
   },
 
   // ---- FACEBOOK RECALLED PRODUCTS (added S-FB-COMPLIANCE-AUDIT-2026-09-18) -- Meta bans listing
@@ -280,6 +300,35 @@ const RULES: EligibilityRule[] = [
     reason: 'Facebook Marketplace does not allow listing law enforcement, government, or military identification, badges, or uniforms (Commerce Policy, precautionary).',
   },
 
+  // ---- FACEBOOK HISTORICAL ARTIFACTS / CULTURAL HERITAGE (added 2026-09-25-ROUND2, PRIMARY-
+  // sourced from transparency.meta.com's live Restricted Goods and Services text, fetched fresh
+  // this session, cross-checked against an archive.org snapshot dated 2026-09-21): "Content that
+  // attempts to buy, sell, trade, donate or gift or asks for historical artifacts" -- a category
+  // with ZERO prior coverage anywhere in this registry. Deliberately did NOT include bare
+  // 'artifact' or 'relic' -- 'artifact' is this business's own parent company name (Artifact,
+  // LLC) and 'relic' is common non-antiquity branding ("relic finish" guitars/jeans), both too
+  // noisy. Scoped to specific, low-ambiguity phrasing instead.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['historical artifact', 'ancient artifact', 'archaeological artifact', 'cultural heritage artifact', 'arrowhead'],
+    reason: 'Facebook Marketplace does not allow listing historical or cultural heritage artifacts (Commerce Policy).',
+  },
+
+  // ---- FACEBOOK HUMAN REMAINS (added 2026-09-25-ROUND2, PRIMARY-sourced same as above): "human
+  // body parts... human fluids" -- estate sales do occasionally surface Victorian mourning/
+  // hairwork jewelry and antique "oddity" curios (real human skulls/bones sold as curiosities).
+  // excludeKeywords carves out the wig/hair-extension industry's explicit, common use of "human
+  // hair" as a normal, legal product descriptor -- without it, 'human hair' would false-positive
+  // constantly on legitimate wig/extension listings.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'FACEBOOK',
+    nameKeywords: ['human skull', 'human bone', 'human remains', 'human hair'],
+    excludeKeywords: ['wig', 'hair extension', 'weave', 'ponytail extension', 'clip-in'],
+    reason: 'Facebook Marketplace does not allow listing human body parts or remains (Commerce Policy).',
+  },
+
   // ---- CRAIGSLIST (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) -- previously had ZERO eligibility
   // rule at all, despite fas-craigslist.js supporting full auto-publish CHECKED BY DEFAULT (the
   // 2026-07-17 locked decision, confirmed via that file's own header comment this session) -- the
@@ -334,6 +383,21 @@ const RULES: EligibilityRule[] = [
       // legitimate yard/garden tool, no comparable evidence Craigslist restricts it).
       'pepper spray', 'brass knuckle', 'nunchuck', 'nunchaku', 'baton', 'butterfly knife', 'throwing star',
       'police insignia',
+      // 2026-09-25-ROUND2 (Patrick asked for a harder second pass): re-fetched
+      // craigslist.org/about/prohibited AND the Terms of Use (which incorporates the prohibited
+      // list by reference, confirmed no further categories there) via a dedicated research pass.
+      // Found real quoted lines the first two passes missed: "unsanitized bedding/clothing" and
+      // "body parts/fluids" (direct quote), "unpackaged or adulterated food or cosmetics" (direct
+      // quote), and animal parts/protected species beyond ivory. Scoped to specific compound
+      // phrases per the research agent's own false-positive guidance -- bare 'mattress'/
+      // 'bedding'/'food'/'cosmetics' would over-block ordinary clean/new listings.
+      'unsanitized', 'used mattress', 'biohazard',
+      'homemade food', 'home-canned', 'opened cosmetics', 'used makeup',
+      'taxidermy',
+      // "US military items not demilitarized in accord with Defense Department policy" -- narrow
+      // phrasing only (not bare 'military', which the rule's own original comment already
+      // rejected as too noisy against legitimate military-surplus/collectible inventory).
+      'ordnance', 'inert grenade', 'not demilitarized',
     ],
     // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
     // same bare-'gun'-substring false positive applies here (e.g. "...Gunmetal..." golf clubs).
@@ -406,6 +470,18 @@ const RULES: EligibilityRule[] = [
       'human body part', 'human material', 'burglary tool',
       'government document', 'government id', 'police badge', 'police uniform', 'military uniform',
       'controlled substance', 'pesticide', 'pornographic', 'adult',
+      // 2026-09-25-ROUND2 (Patrick asked for a harder second pass): re-fetched
+      // help.gumtree.com.au's full ~42-item Restricted Categories list via a dedicated research
+      // pass. Found real quoted lines the first two passes missed: "Identity documents, personal
+      // financial records and personal information" (broader than the 'government document'/
+      // 'government id' already here -- passports/checkbooks specifically named), "Electronic
+      // surveillance equipment", "radar scanners"/illegal telecom, endangered species beyond
+      // ivory/rhino horn (taxidermy), and commercial tanning units.
+      'identity document', 'passport', 'checkbook',
+      'hidden camera', 'spy camera',
+      'radar detector', 'police scanner',
+      'taxidermy',
+      'tanning bed',
     ],
     // S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03: see FACEBOOK weapons rule's comment above --
     // same bare-'gun'-substring false positive applies here.
@@ -572,8 +648,13 @@ const RULES: EligibilityRule[] = [
   {
     type: 'CATEGORY_BLOCKLIST',
     platform: 'POSHMARK',
-    nameKeywords: ['police badge', 'police uniform', 'law enforcement badge', 'military uniform', 'government id'],
-    reason: 'Poshmark prohibits impersonation and official items such as law enforcement or military badges, uniforms, and government IDs (Prohibited Items Policy).',
+    // 2026-09-25-ROUND2 (Patrick asked for a harder second pass): a dedicated research pass
+    // found secondary-sourced corroboration that Poshmark's real "Impersonation and Official
+    // Items" category is broader than police/military alone -- also names vaccine/immunization
+    // cards and airline-crew uniform impersonation. Same evidentiary tier as the rest of this
+    // rule (corroborated, not a direct primary-source quote -- see this rule's header comment).
+    nameKeywords: ['police badge', 'police uniform', 'law enforcement badge', 'military uniform', 'government id', 'vaccine card', 'immunization card', 'airline uniform', 'flight attendant uniform', 'pilot uniform'],
+    reason: 'Poshmark prohibits impersonation and official items such as law enforcement or military badges, uniforms, government IDs, or vaccine cards (Prohibited Items Policy).',
   },
 
   // ---- POSHMARK DRUGS/HAZMAT/MEDICAL/ANIMAL PRODUCTS (added S-CROSS-MARKETPLACE-COMPLIANCE-
@@ -590,8 +671,30 @@ const RULES: EligibilityRule[] = [
       'medical device', 'contact lens', 'breast pump', 'pill press',
       'hazardous material', 'aerosol', 'combustible', 'pesticide', 'radioactive',
       'turtle shell', 'pangolin', 'big cat fur',
+      // 2026-09-25-ROUND2: this rule's own animal-products list was missing 'ivory'/'tusk'/
+      // 'shark fin' -- oversight relative to every other platform in this file, which all carry
+      // ivory coverage already. Corroborated via secondary sources this pass (Poshmark's own
+      // blog cites "products derived from threatened or extinct species").
+      'ivory', 'tusk', 'shark fin',
     ],
     reason: 'Poshmark prohibits drugs/paraphernalia, certain medical devices, hazardous materials, and endangered-animal products (Prohibited Items Policy, v4.1).',
+  },
+
+  // ---- POSHMARK HATE SYMBOLS / SANCTIONED-COUNTRY GOODS (added 2026-09-25-ROUND2) --
+  // corroborated via secondary sources this pass (Poshmark's own blog + independent reseller
+  // guides): a "Hate Symbols or Violence" category and a "Sanctioned or Illegal Goods by Region"
+  // category (Cuba/Iran/North Korea), neither previously covered here. WWII militaria and Cuban
+  // cigars are both real, if occasional, estate-sale categories -- same reasoning VINTED's
+  // existing 'nazi'/'fascist symbol' keywords already use there (mirrored verbatim here for
+  // consistency). Deliberately did NOT add a Native American misrepresentation keyword this pass
+  // -- flagged by the research agent as a genuine legal-risk area (Indian Arts and Crafts Act)
+  // but one that needs human judgment/certification-checking, not a safe auto-block keyword;
+  // raised separately with Patrick rather than guessed at here.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'POSHMARK',
+    nameKeywords: ['nazi', 'fascist symbol', 'cuban cigar', 'made in cuba', 'made in iran', 'made in north korea'],
+    reason: 'Poshmark prohibits hate symbols/violent extremist items and goods originating from sanctioned countries (Prohibited Items Policy).',
   },
 
   // ---- MERCARI -- broadest of the four (general marketplace). Blocklist sourced directly from
@@ -649,6 +752,14 @@ const RULES: EligibilityRule[] = [
       // (Mercari's policy names "used underwear" as its own example under human materials,
       // same as Poshmark/Gumtree already carry).
       'stolen', 'recalled', 'used underwear',
+      // 2026-09-25-ROUND2: corroborated secondary-sourced finding (Mercari's own help-center
+      // AI-paraphrased summary names an "Offensive Content" category for hate/violence/
+      // discrimination) -- mirrors VINTED's existing 'nazi'/'fascist symbol' keywords for
+      // consistency. Did NOT add lithium-battery/aerosol/flammable/hazmat keywords this pass
+      // despite a fresh research agent surfacing them -- re-confirms the prior deliberate
+      // decision two paragraphs above (these are a Mercari SHIPPING-LABEL requirement, not a
+      // listing prohibition; adding them would wrongly block sellable inventory).
+      'nazi', 'fascist symbol',
     ],
     excludeKeywords: [
       'kitchen', 'cutlery', 'multitool', 'multi-tool', 'butter knife',
@@ -678,6 +789,22 @@ const RULES: EligibilityRule[] = [
       'medicine', 'medicinal', 'supplement', 'cosmetic', 'sanitary', 'tampon', 'recalled',
       'counterfeit', 'replica', 'bootleg', 'cryptocurrency', 'crypto', 'coin', 'banknote', 'stamp',
       'fur', 'ivory', 'reptile skin', 'shell', 'vape', 'e-cigarette', 'fetish', 'furniture',
+      // 2026-09-25-ROUND2 (Patrick asked for a harder second pass): re-fetched both
+      // vinted.com/help/52-items-not-allowed-on-vinted and vinted.com/catalog-rules via a
+      // dedicated research pass and found real quoted categories the first two passes missed:
+      // mattresses/duvets, active stock/share certificates, kids' car-seat safety items,
+      // standalone refrigerants, tanning beds/massage tables/tattoo machines, pet restraint
+      // devices beyond what GUMTREE_AU already carries ('shock collar'/'training collar'; Vinted
+      // itself had none), used/expired batteries and power banks, and non-cycling used
+      // head/face protection (Vinted only blocked cycling helmets before).
+      'mattress', 'duvet',
+      'stock certificate', 'share certificate',
+      'car seat', 'booster seat',
+      'refrigerant', 'freon',
+      'tanning bed', 'massage table', 'tattoo machine',
+      'choke collar', 'prong collar', 'spiked collar', 'shock collar',
+      'expired battery', 'used power bank',
+      'motorcycle helmet', 'ski helmet',
       // Confirmed on Vinted's own page this session, not previously covered:
       'cycling helmet', 'safety harness', 'heated tobacco',
       // EXTENDED S-CROSS-MARKETPLACE-COMPLIANCE-AUDIT-2026-09-18 (see claude_docs/audits/

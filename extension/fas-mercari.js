@@ -2244,6 +2244,9 @@
     // ROUND 2 (see marketplaceEligibilityRules.ts's MERCARI rule, same comment): stolen goods,
     // recalled items, used underwear -- all explicitly named in Mercari's own policy.
     'stolen', 'recalled', 'used underwear',
+    // 2026-09-25-ROUND2: mirrors the same-day marketplaceEligibilityRules.ts MERCARI rule edit
+    // (hate-symbol keywords, mirrors VINTED's existing 'nazi'/'fascist symbol' coverage).
+    'nazi', 'fascist symbol',
   ];
   // Any of these present anywhere in the haystack means the match is a false positive (e.g. a
   // 'kitchen knife' matches 'knife' but is not a weapon; a 'gold ring' matches 'gold' but is
