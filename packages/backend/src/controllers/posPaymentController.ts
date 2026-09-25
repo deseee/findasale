@@ -17,8 +17,8 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError, recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard; recordSuspectedSignal: manual card entry has no verifiable buyer account either (2026-09-12)
-import { snapshotForCommissionOnly, getPlatformFeeRate } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); getPlatformFeeRate: split-payment commission fix (2026-08-22)
-import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12)
+import { snapshotForCommissionOnly, getInclusivePlatformFeeRate, calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); inclusive-fee migration (2026-09-24, Patrick ruling): replaces getPlatformFeeRate (flat tier rate) at both card-fee sites in this file -- both are IN_PERSON channel (POS register, not buyer self-serve)
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection, wouldExceedCashFeeExposureCap } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12); wouldExceedCashFeeExposureCap: cash-fee exposure cap pre-check (2026-09-24, Patrick ruling)
 import { resolvePosDiscount } from '../services/posDiscountService';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
@@ -180,6 +180,26 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       splitCardAmountCents = totalAmountCents;
     }
 
+    // Cash-fee exposure cap (2026-09-24, Patrick ruling: inclusive-fee restructuring --
+    // "whatever's recommended and won't leave gaps"). A cash leg never touches Square, so its
+    // commission only ever collects via cashFeeService's opportunistic recoupment against a
+    // LATER card sale (applyCashDebtToAppFee/settleCashDebtCollection, confirmPaymentRequest
+    // below) -- an organizer who never makes another card sale leaves that debt uncollectible
+    // forever. This bounds the tail risk BEFORE the cash leg is even accepted: reject a split
+    // cash amount that would push Organizer.cashFeeBalance past CASH_FEE_EXPOSURE_CAP_CENTS
+    // ($100), rather than silently letting an unbounded balance accrue.
+    if (isSplitPayment && splitCashAmountCents && splitCashAmountCents > 0) {
+      const cashFeeRate = await resolveCashCommissionRate(organizer);
+      const estimatedCashCommission = cashCommissionOn(splitCashAmountCents / 100, cashFeeRate);
+      if (await wouldExceedCashFeeExposureCap({ organizerId: organizer.id, commission: estimatedCashCommission })) {
+        return res.status(400).json({
+          message:
+            'This cash amount would exceed the outstanding cash-commission limit on your account. Settle your balance with a card sale first, or contact support.',
+          code: 'CASH_FEE_EXPOSURE_CAP_EXCEEDED',
+        });
+      }
+    }
+
     // Verify sale exists, is PUBLISHED, and belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -294,8 +314,10 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     // confirmPaymentRequest (below), once the payment has actually succeeded.
     const hasReferralDiscount =
       organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
-    const cardFeeRate = hasReferralDiscount ? 0 : getPlatformFeeRate(organizer.subscriptionTier as any);
-    const platformFeeCents = Math.round(splitCardAmountCents! * cardFeeRate);
+    const cardFeeRate = hasReferralDiscount ? 0 : getInclusivePlatformFeeRate(organizer.subscriptionTier as any, 'IN_PERSON');
+    const platformFeeCents = hasReferralDiscount
+      ? 0
+      : calculateInclusiveCommissionCents(splitCardAmountCents!, organizer.subscriptionTier as any, 'IN_PERSON');
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
     // P2 idempotency fix (fix-and-reverify batch, same bug class fixed at P1 elsewhere this
@@ -1867,8 +1889,10 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // resolution createPaymentRequest above uses for the card portion of its own charges.
     const hasReferralDiscount =
       organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
-    const cardFeeRate = hasReferralDiscount ? 0 : getPlatformFeeRate(organizer.subscriptionTier as any);
-    const baseAppFeeCents = Math.round(subtotalCents * cardFeeRate);
+    const cardFeeRate = hasReferralDiscount ? 0 : getInclusivePlatformFeeRate(organizer.subscriptionTier as any, 'IN_PERSON');
+    const baseAppFeeCents = hasReferralDiscount
+      ? 0
+      : calculateInclusiveCommissionCents(subtotalCents, organizer.subscriptionTier as any, 'IN_PERSON');
 
     // QA Test-Transaction Harness (2026-09-17): mirrors squarePaymentController.ts's
     // createSquareTestTransaction -- see that function's header comment for the full "why
@@ -2009,11 +2033,25 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
 
     const purchaseIds: string[] = [];
     let remainingDebtCentsToAllocate = debtAppliedCents;
+    // Inclusive-fee migration (2026-09-24): baseAppFeeCents may include the per-transaction
+    // minimum-fee floor (calculateInclusiveCommissionCents), which a flat itemAmountCents *
+    // cardFeeRate multiplication would not reflect on a small-ticket sale where the floor is
+    // what actually applies. Allocate it the same remainder-tracked way debt is allocated just
+    // below (proportional per item, last item absorbs the rounding remainder) so the summed
+    // per-item platformFeeAmount always equals baseAppFeeCents exactly -- the real amount
+    // charged to Square -- instead of silently under-reporting it on floor-priced sales.
+    let remainingAppFeeCentsToAllocate = baseAppFeeCents;
     for (let idx = 0; idx < chargedItems.length; idx++) {
       const item = chargedItems[idx];
       const itemAmountCents = Math.round(item.amount * 100);
-      const itemFeeCents = Math.round(itemAmountCents * cardFeeRate);
       const isLastItem = idx === chargedItems.length - 1;
+      const itemFeeCents = isLastItem
+        ? remainingAppFeeCentsToAllocate
+        : Math.min(
+            remainingAppFeeCentsToAllocate,
+            subtotalCents > 0 ? Math.round(baseAppFeeCents * (itemAmountCents / subtotalCents)) : 0
+          );
+      remainingAppFeeCentsToAllocate -= itemFeeCents;
       const itemDebtCents = isLastItem
         ? remainingDebtCentsToAllocate
         : Math.min(

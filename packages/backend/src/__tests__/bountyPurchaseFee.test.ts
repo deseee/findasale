@@ -52,10 +52,16 @@
  * completeBountyPurchase's XP spend GATES the purchase (insufficient spendable XP is a 402), so
  * leaving it real would require seeding a real XP ledger unrelated to what this suite is
  * testing.
+ *
+ * Inclusive-fee migration (2026-09-24, Patrick ruling): the dollar/cent assertions below were
+ * updated from the old flat tier rates (10% SIMPLE / 8% PRO+TEAMS) to the new inclusive ONLINE
+ * rates (9.5% SIMPLE / 7.5% PRO+TEAMS -- see utils/feeCalculator.ts's INCLUSIVE_FEE_RATES). The
+ * regression this suite guards against (the local hardcoded-10%-for-everyone shadow function)
+ * is unchanged and still guarded by these tests' PRO/TEAMS-vs-SIMPLE distinction.
  */
 
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate } from '../utils/feeCalculator';
+import { getInclusivePlatformFeeRate } from '../utils/feeCalculator';
 
 // ── Mocks (hoisted by ts-jest above these declarations — `var`, not `const`, deliberately) ──
 var mockResolveOrganizerSquareAccessToken = jest.fn();
@@ -196,7 +202,7 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     await prisma.$disconnect();
   });
 
-  it('resolves PRO to 0.08 (not the old hardcoded 0.10) even with a wildcard FeeStructure row present', async () => {
+  it('resolves PRO to the inclusive online rate 0.075 (not the old hardcoded 0.10) even with a wildcard FeeStructure row present', async () => {
     const { shopper, submission } = await seed('pro', 'PRO', 100);
 
     mockCreateSquareCharge.mockResolvedValueOnce({
@@ -219,9 +225,10 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(402);
     expect(res.status).not.toHaveBeenCalledWith(409);
 
-    // $10.00 (10%) if the old hardcoded shadow function were still in place -- must be $8.00 (8%).
+    // $10.00 (10%) if the old hardcoded shadow function were still in place -- must be $7.50
+    // (7.5% inclusive ONLINE rate, PRO/TEAMS -- inclusive-fee migration 2026-09-24).
     expect(mockCreateSquareCharge).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 10000, appFeeCents: 800, sourceId: 'cnon:test-bounty-pro' })
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 750, sourceId: 'cnon:test-bounty-pro' })
     );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ squarePaymentId: 'sqp_bounty_pro', processor: 'SQUARE' })
@@ -231,12 +238,12 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
       where: { squarePaymentId: 'sqp_bounty_pro' },
     });
     expect(purchase).not.toBeNull();
-    expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
-    expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
-    expect(purchase!.commissionRate).toBeCloseTo(getPlatformFeeRate('PRO'), 4); // 0.08
+    expect(purchase!.platformFeeAmount).toBeCloseTo(7.5, 2);
+    expect(purchase!.commissionAmount).toBeCloseTo(7.5, 2);
+    expect(purchase!.commissionRate).toBeCloseTo(getInclusivePlatformFeeRate('PRO', 'ONLINE'), 4); // 0.075
   });
 
-  it('resolves TEAMS to 0.08 (not the old hardcoded 0.10) even with a wildcard FeeStructure row present', async () => {
+  it('resolves TEAMS to the inclusive online rate 0.075 (not the old hardcoded 0.10) even with a wildcard FeeStructure row present', async () => {
     const { shopper, submission } = await seed('teams', 'TEAMS', 100);
 
     mockCreateSquareCharge.mockResolvedValueOnce({
@@ -260,18 +267,18 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(409);
 
     expect(mockCreateSquareCharge).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 10000, appFeeCents: 800, sourceId: 'cnon:test-bounty-teams' })
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 750, sourceId: 'cnon:test-bounty-teams' })
     );
 
     const purchase = await prisma.purchase.findFirst({
       where: { squarePaymentId: 'sqp_bounty_teams' },
     });
     expect(purchase).not.toBeNull();
-    expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
-    expect(purchase!.commissionRate).toBeCloseTo(getPlatformFeeRate('TEAMS'), 4); // 0.08 (TEAMS shares PRO's rate)
+    expect(purchase!.platformFeeAmount).toBeCloseTo(7.5, 2);
+    expect(purchase!.commissionRate).toBeCloseTo(getInclusivePlatformFeeRate('TEAMS', 'ONLINE'), 4); // 0.075 (TEAMS shares PRO's rate)
   });
 
-  it('resolves SIMPLE to 0.10 whether or not the wildcard row is present (control)', async () => {
+  it('resolves SIMPLE to the inclusive online rate 0.095 whether or not the wildcard row is present (control)', async () => {
     const { shopper, submission } = await seed('simple', 'SIMPLE', 100);
 
     mockCreateSquareCharge.mockResolvedValueOnce({
@@ -293,12 +300,12 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(500);
 
     expect(mockCreateSquareCharge).toHaveBeenCalledWith(
-      expect.objectContaining({ amountCents: 10000, appFeeCents: 1000, sourceId: 'cnon:test-bounty-simple' })
+      expect.objectContaining({ amountCents: 10000, appFeeCents: 950, sourceId: 'cnon:test-bounty-simple' })
     );
 
     const purchase = await prisma.purchase.findFirst({
       where: { squarePaymentId: 'sqp_bounty_simple' },
     });
-    expect(purchase!.commissionRate).toBeCloseTo(getPlatformFeeRate('SIMPLE'), 4); // 0.10
+    expect(purchase!.commissionRate).toBeCloseTo(getInclusivePlatformFeeRate('SIMPLE', 'ONLINE'), 4); // 0.095
   });
 });

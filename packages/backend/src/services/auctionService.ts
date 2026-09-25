@@ -5,7 +5,7 @@ import { fanOutItemSoldWithdrawals } from './soldFanOutService'; // 2026-09-23: 
 import { syncMarketplaceStock } from './marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { createSquareCheckoutLink } from './squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe Checkout Session below
 import { buildSquareIdempotencyKey } from './squarePaymentService';
-import { calculateApplicationFee, formatBuyerPremiumRate, getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { calculateApplicationFee, formatBuyerPremiumRate, getInclusivePlatformFeeRate, applyInclusiveFloor, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel, mirrors jobs/auctionJob.ts's cron path exactly
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from './xpService'; // XP parity with jobs/auctionJob.ts — see awardAuctionWinXp below
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared reserve rule — identical to jobs/auctionJob.ts
 
@@ -194,10 +194,14 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
     // earlier the same day). The premium is FindA.Sale's revenue, not an organizer setting, so
     // calculateApplicationFee reads the platform constant itself and takes no rate parameter.
     const hammerPriceCents = Math.round(bidAmount * 100);
-    const commissionRate = getPlatformFeeRate(
-      item.sale!.organizer.subscriptionTier as SubscriptionTier
+    const commissionRate = getInclusivePlatformFeeRate(
+      item.sale!.organizer.subscriptionTier as SubscriptionTier,
+      'ONLINE'
     );
-    const auctionFees = calculateApplicationFee(hammerPriceCents, commissionRate, true);
+    const rawAuctionFees = calculateApplicationFee(hammerPriceCents, commissionRate, true);
+    // Inclusive-fee migration (2026-09-24): floors the organizer-commission component only,
+    // never the buyer premium -- see applyInclusiveFloor's own header comment.
+    const auctionFees = applyInclusiveFloor(rawAuctionFees, commissionRate);
     const organizerCoversPremium = item.sale!.coversFee === true;
     const buyerPremium = organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents / 100;
     const amountInCents = hammerPriceCents + (organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents);

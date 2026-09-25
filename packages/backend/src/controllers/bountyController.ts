@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
 import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // Fee-precedence bug fix (2026-08-24): this file had its OWN local getPlatformFeeRate
+import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // Fee-precedence bug fix (2026-08-24): this file had its OWN local getPlatformFeeRate; inclusive-fee migration (2026-09-24, Patrick ruling) -- bounty Square purchase is buyer-initiated online checkout
 // shadow (hardcoded 0.10 for PRO/TEAMS too) that was never touched by the 2026-08-22 fee-precedence
 // fix applied everywhere else (stripeController.ts, terminalController.ts, jobs/auctionJob.ts,
 // services/cashFeeService.ts, services/nativeShippingSuggestionService.ts). Every bounty-fulfillment
@@ -966,7 +966,7 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       // Same shared resolver every other charge path in this file's fee math ultimately traces
       // back to (utils/feeCalculator.ts) -- computed independently of the Stripe branch's own
       // platformFeeAmount below since this if-block returns before that line is ever reached.
-      const squarePlatformFeeAmount = Math.round(priceCents * getPlatformFeeRate(subscriptionTier as SubscriptionTier));
+      const squarePlatformFeeAmount = calculateInclusiveCommissionCents(priceCents, subscriptionTier as SubscriptionTier, 'ONLINE');
 
       let organizerAccessToken: string;
       try {
@@ -1068,7 +1068,7 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
           buyerPremiumAmount: 0,
           buyerPremiumRate: 0,
           commissionAmount: squarePlatformFeeAmount / 100,
-          commissionRate: getPlatformFeeRate(subscriptionTier as SubscriptionTier),
+          commissionRate: getInclusivePlatformFeeRate(subscriptionTier as SubscriptionTier, 'ONLINE'),
           organizerAbsorbedPremium: false,
           processor: 'SQUARE',
           squarePaymentId: chargeResult.paymentId,

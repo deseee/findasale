@@ -314,3 +314,111 @@ export const resolveOrganizerFeeReport = (
     platformFee: round2(commission + absorbedPremium),
   };
 };
+
+/**
+ * ── INCLUSIVE PLATFORM FEE MODEL (Patrick ruling, 2026-09-24) ────────────────────────────
+ *
+ * ADDITIVE to the model above -- getPlatformFeeRate/calculateApplicationFee and every one of
+ * their existing call sites are UNCHANGED and continue to charge the flat 10%/8% commission
+ * with the processor's own cost billed to the organizer as a SEPARATE line (see
+ * payoutController.getEarningsBreakdown). This is deliberate: this fee model touches ~20 call
+ * sites across auctions, bounties, guest invoices, reservations, POS, vendor-booth-cart and the
+ * Stripe fallback, plus 4 regression-guarded test suites, and is being rolled out path-by-path
+ * rather than in one cutover. Only a call site that has been explicitly migrated (see each
+ * call site's own comment) uses the functions below -- do not assume platform-wide effect from
+ * this file alone.
+ *
+ * WHAT CHANGES: the platform's commission becomes INCLUSIVE of card-processing cost -- one
+ * blended rate, no separate processorFee line for a migrated purchase. This is a genuine
+ * reversal of the "TWO SEPARATE fees" ruling at the top of this file for whichever paths adopt
+ * it; the old model remains correct and unchanged for every path that has not been migrated.
+ *
+ * CHANNEL, not entry-method: the rate depends on whether the CHECKOUT ENDPOINT is an in-person
+ * one (POS, vendor-booth-cart -- the organizer/staff-operated surfaces used while a buyer is
+ * physically at the sale) or every other, buyer-self-serve endpoint (online cart, Buy Now,
+ * auctions, guest invoices, reservations/holds). This is NOT a Square entryMethod lookup:
+ * confirmed this session that no call site in this codebase integrates Square's Terminal API or
+ * Reader SDK -- every charge, POS included, goes through the Web Payments SDK's typed-card
+ * `payments.card()` component (components/SquarePaymentRequestForm.tsx). There is no physical
+ * card-present hardware anywhere in this stack today, so Square's own real processing cost is
+ * roughly the same manually-keyed-equivalent rate whether the endpoint is "in-person" or
+ * "online" -- the distinction below is a business/context one (was the buyer standing at the
+ * sale) that Patrick is deliberately pricing differently, not a cost-recovery one. Do not wire
+ * this to any Square API response field; pass the channel as a hardcoded constant per call site
+ * based on which endpoint is charging.
+ *
+ * MINIMUM FEE: floors the percentage calc so a very small sale can never net the platform less
+ * than MINIMUM_TRANSACTION_FEE_CENTS, protecting the ONLINE bucket in particular -- verified
+ * this session that below ~$7 (PRO/TEAMS online) a pure-percentage fee no longer even covers
+ * Square's own real per-transaction cost.
+ *
+ * DOES NOT REPLACE the existing CNP (card-not-present) surcharge in posPaymentController.ts's
+ * manual-card-entry walk-up flow (`CNP_FEE_RATE_PLACEHOLDER`, added 2026-09-18) -- that is a
+ * BUYER-facing surcharge recovering the organizer's higher Square processing cost for a
+ * manually-keyed card, structurally unrelated to the platform's own commission computed here.
+ * The two coexist on the same charge without conflict: this file's rate is the platform's own
+ * cut of the sale subtotal; the CNP surcharge is an amount added on top of that same subtotal
+ * before the buyer's total is computed. Do not fold one into the other.
+ */
+
+export type PaymentChannel = 'IN_PERSON' | 'ONLINE';
+
+const INCLUSIVE_FEE_RATES: Record<'SIMPLE' | 'PRO' | 'TEAMS', Record<PaymentChannel, number>> = {
+  SIMPLE: { IN_PERSON: 0.08, ONLINE: 0.095 },
+  PRO: { IN_PERSON: 0.06, ONLINE: 0.075 },
+  TEAMS: { IN_PERSON: 0.06, ONLINE: 0.075 },
+};
+
+/** Flat per-transaction minimum, in cents -- overrides the percentage calc on small-ticket
+ *  sales. $0.75, sized against Square's real online/card-not-present cost (2.9-3.3% + 30c on
+ *  the Free/Plus/Premium plans, verified live 2026-09-24) so the platform's take never goes
+ *  negative once Square's own cost is netted out, with real margin above the crossover price
+ *  rather than a bare break-even. */
+export const MINIMUM_TRANSACTION_FEE_CENTS = 75;
+
+const normalizeInclusiveTier = (tier: SubscriptionTier): 'SIMPLE' | 'PRO' | 'TEAMS' =>
+  !tier || tier === 'SIMPLE' ? 'SIMPLE' : tier === 'TEAMS' ? 'TEAMS' : 'PRO';
+
+/** The inclusive commission rate for one (tier, channel) pair. See file-header note above --
+ *  `channel` must come from which endpoint is charging, never from client input or a Square
+ *  API field. */
+export const getInclusivePlatformFeeRate = (tier: SubscriptionTier, channel: PaymentChannel): number =>
+  INCLUSIVE_FEE_RATES[normalizeInclusiveTier(tier)][channel];
+
+/** Inclusive commission in cents on `baseCents`, floored at MINIMUM_TRANSACTION_FEE_CENTS.
+ *  `baseCents` is the sale subtotal actually charged -- never a client-supplied amount.
+ *  Zero-guarded (2026-09-24 hardening): a 0-or-negative baseCents returns 0, never the
+ *  floor -- some callers pass the CARD-only portion of a split sale (e.g. posController.ts's
+ *  sendHoldInvoice, cardAmountCents = grandTotal - cashAlreadyCollected), which is a
+ *  legitimate 0 when an invoice is fully settled in cash. There is never a case where a $0
+ *  charge should carry a $0.75 minimum fee. */
+export const calculateInclusiveCommissionCents = (
+  baseCents: number,
+  tier: SubscriptionTier,
+  channel: PaymentChannel
+): number =>
+  baseCents > 0 ? Math.max(Math.round(baseCents * getInclusivePlatformFeeRate(tier, channel)), MINIMUM_TRANSACTION_FEE_CENTS) : 0;
+
+/**
+ * Applies the inclusive-model per-transaction minimum floor to an EXISTING
+ * ApplicationFeeBreakdown (calculateApplicationFee's return shape), for callers that build
+ * their fee breakdown through that older auction/buyer-premium-aware path (Square/Stripe
+ * checkout controllers) rather than calling calculateInclusiveCommissionCents directly.
+ *
+ * Floors ONLY organizerCommissionCents -- never buyerPremiumCents, which is a separate
+ * buyer-paid auction surcharge unrelated to the platform's own per-transaction minimum.
+ * Skips the floor entirely when commissionRate is 0 (an active referral discount): a
+ * referral-discounted charge must still cost the organizer $0, not $0.75.
+ */
+export const applyInclusiveFloor = (
+  breakdown: ApplicationFeeBreakdown,
+  commissionRate: number
+): ApplicationFeeBreakdown => {
+  if (!(commissionRate > 0)) return breakdown;
+  const flooredCommissionCents = Math.max(breakdown.organizerCommissionCents, MINIMUM_TRANSACTION_FEE_CENTS);
+  return {
+    ...breakdown,
+    organizerCommissionCents: flooredCommissionCents,
+    applicationFeeCents: breakdown.buyerPremiumCents + flooredCommissionCents,
+  };
+};

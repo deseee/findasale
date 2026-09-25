@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { getPlatformFeeRate, getInclusivePlatformFeeRate, MINIMUM_TRANSACTION_FEE_CENTS, SubscriptionTier } from '../utils/feeCalculator';
 
 /**
  * ── CASH / OFF-PLATFORM COMMISSION ACCRUAL ───────────────────────────────────────────────
@@ -83,12 +83,50 @@ export async function resolveCashCommissionRate(
     organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
   if (hasReferralDiscount) return 0;
 
-  return getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
+  // Inclusive-fee-model migration (Patrick ruling, 2026-09-24): cash is by definition an
+  // in-person transaction -- there is no such thing as remote/online cash -- so every cash
+  // sale in the app, whichever controller records it, now resolves the IN_PERSON inclusive
+  // rate rather than the old flat 10%/8%. See utils/feeCalculator.ts's inclusive-fee-model
+  // header comment for what this does and does not touch.
+  return getInclusivePlatformFeeRate(organizer.subscriptionTier as SubscriptionTier, 'IN_PERSON');
 }
 
-/** The commission owed on one line's amount, in dollars, rounded to cents. */
-export const cashCommissionOn = (amount: number, rate: number): number =>
-  roundMoney((Number(amount) || 0) * rate);
+/** The commission owed on one line's amount, in dollars, rounded to cents. Floored at
+ *  MINIMUM_TRANSACTION_FEE_CENTS whenever `rate` is positive (2026-09-24) -- a rate of
+ *  exactly 0 (referral discount) is left at $0, never floored up. */
+export const cashCommissionOn = (amount: number, rate: number): number => {
+  if (!(rate > 0)) return 0;
+  const raw = roundMoney((Number(amount) || 0) * rate);
+  return Math.max(raw, MINIMUM_TRANSACTION_FEE_CENTS / 100);
+};
+
+/**
+ * ── CASH-FEE EXPOSURE CAP (Patrick ruling, 2026-09-24, findasale-hacker P1) ────────────────
+ * Uncollected cashFeeBalance is already opportunistically recouped from the organizer's next
+ * Square card sale (applyCashDebtToAppFee above) -- but an organizer who never runs another
+ * card sale can otherwise carry that debt indefinitely. This caps the exposure: once
+ * cashFeeBalance would cross the cap, no FURTHER cash sale is allowed to accrue debt on top
+ * of it until the balance is brought back under the cap (by a card sale recouping it, or a
+ * manual adjustment). Callers check this BEFORE accepting a new cash amount, not after.
+ */
+export const CASH_FEE_EXPOSURE_CAP_CENTS = 10000; // $100.00
+
+/** True when accruing `commission` more dollars of cash-fee debt would put this organizer's
+ *  cashFeeBalance at or over the cap. Callers should block the cash leg and ask the organizer
+ *  to settle (via a card sale) before accepting more cash. */
+export async function wouldExceedCashFeeExposureCap(params: {
+  organizerId: string;
+  commission: number;
+}): Promise<boolean> {
+  if (!(params.commission > 0)) return false;
+  const organizer = await prisma.organizer.findUnique({
+    where: { id: params.organizerId },
+    select: { cashFeeBalance: true },
+  });
+  const currentCents = Math.round((organizer?.cashFeeBalance ?? 0) * 100);
+  const afterCents = currentCents + Math.round(params.commission * 100);
+  return afterCents > CASH_FEE_EXPOSURE_CAP_CENTS;
+}
 
 /**
  * Add `commission` dollars to the organizer's running cash-fee balance and stamp the

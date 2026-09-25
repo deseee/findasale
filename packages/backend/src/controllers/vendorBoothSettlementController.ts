@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
-import { getPlatformFeeRate } from '../utils/feeCalculator';
+import { getInclusivePlatformFeeRate } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): disclosed rate must match computeLegFeeSplit's actual IN_PERSON charge
 
 /**
  * Vendor Booth Payments — Settlement Batches (2026-07-07, re-scoped 2026-07-20 ADR-090 Phase 3)
@@ -169,7 +169,7 @@ export const previewVendorBoothSettlement = async (req: AuthRequest, res: Respon
         vendorName: r.vendorName,
         itemCount: r.itemCount,
         gross: r.gross.toFixed(2),
-        platformFeePercent: Math.round(getPlatformFeeRate(organizer.subscriptionTier as any) * 100),
+        platformFeePercent: Math.round(getInclusivePlatformFeeRate(organizer.subscriptionTier as any, 'IN_PERSON') * 100),
         boothFee: r.boothFeeCharged.toFixed(2),
         revenueSharePercent: r.revenueSharePercent,
         revenueShareOwed: r.revenueShareOwed.toFixed(2),

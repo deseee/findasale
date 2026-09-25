@@ -52,7 +52,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): guest invoice is a hosted Square checkout link completed by the buyer remotely -- ONLINE channel
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
 import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../services/holdInvoiceSquareCheckoutHelper';
@@ -343,7 +343,7 @@ export const createGuestInvoice = async (req: AuthRequest, res: Response) => {
     if (grandTotal < MIN_TOTAL_CENTS) {
       return res.status(400).json({ message: `Total must be at least $${(MIN_TOTAL_CENTS / 100).toFixed(2)}` });
     }
-    const platformFeeAmount = Math.round(grandTotal * getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier));
+    const platformFeeAmount = calculateInclusiveCommissionCents(grandTotal, organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
 
     const expiresAt = new Date(Date.now() + safeExpiryDays * 24 * 60 * 60 * 1000);
 

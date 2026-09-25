@@ -1,6 +1,6 @@
 import { POSPaymentLink } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, snapshotForCommissionOnly, SubscriptionTier } from '../utils/feeCalculator';
+import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, snapshotForCommissionOnly, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): this recorder completes the SAME payment-link flow posController.createPaymentLinkInternal creates (buyer pays remotely via hosted checkout) -- ONLINE channel
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -167,7 +167,7 @@ export async function recordPosPaymentLinkSale(
         })
       : null;
     const posOrganizerTier = posOrganizerLookup?.organizer?.subscriptionTier ?? null;
-    const posFeeRate = getPlatformFeeRate(posOrganizerTier as SubscriptionTier);
+    const posFeeRate = getInclusivePlatformFeeRate(posOrganizerTier as SubscriptionTier, 'ONLINE');
 
     // Stripe account snapshot (2026-08-20 migration: 20260820190000_add_pos_payment_
     // link_stripe_account_snapshot): prefer the value pinned on the link itself at
@@ -237,19 +237,44 @@ export async function recordPosPaymentLinkSale(
         ? await tx.item.findMany({ where: { id: { in: sellableItemIds } } })
         : [];
 
+      // Inclusive-fee migration (2026-09-24): the floor must apply ONCE to the whole
+      // payment link's recorded item subtotal, not per item below -- summing a per-item
+      // floor would overcharge a multi-item link where each item is individually tiny but
+      // the link's total is already well above the floor. Allocated proportionally with the
+      // last item absorbing the rounding remainder, same exact-sum pattern used everywhere
+      // else in this migration (posPaymentController.ts, reservationController.ts).
+      const itemsSubtotalCents = Math.round(items.reduce((sum, it) => sum + (it.price || 0), 0) * 100);
+      const totalItemsFeeCents = calculateInclusiveCommissionCents(
+        itemsSubtotalCents,
+        posOrganizerTier as SubscriptionTier,
+        'ONLINE'
+      );
+      let remainingItemsFeeCentsToAllocate = totalItemsFeeCents;
+
       const createdPurchaseIds: string[] = [];
-      for (const item of items) {
+      for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+        const item = items[itemIdx];
+        const itemPriceCents = Math.round((item.price || 0) * 100);
+        const isLastRecordedItem = itemIdx === items.length - 1;
+        const itemFeeCents = isLastRecordedItem
+          ? remainingItemsFeeCentsToAllocate
+          : Math.min(
+              remainingItemsFeeCentsToAllocate,
+              itemsSubtotalCents > 0 ? Math.round(totalItemsFeeCents * (itemPriceCents / itemsSubtotalCents)) : 0
+            );
+        remainingItemsFeeCentsToAllocate -= itemFeeCents;
+        const itemFeeAmount = itemFeeCents / 100;
         try {
           const purchase = await tx.purchase.create({
             data: {
               itemId: item.id,
               saleId: fresh.saleId,
               amount: item.price || 0,
-              platformFeeAmount: parseFloat(((item.price || 0) * posFeeRate).toFixed(2)),
+              platformFeeAmount: itemFeeAmount,
               // FEE SNAPSHOT (2026-08-17): commission-only — a POS payment link never sells an
               // auction lot. Pinning posFeeRate here also pins WHICH tier decision was live at
               // completion time, which this recorder otherwise recomputes (see the note above).
-              ...snapshotForCommissionOnly((item.price || 0) * posFeeRate, posFeeRate),
+              ...snapshotForCommissionOnly(itemFeeAmount, posFeeRate),
               status: 'PAID',
               source: 'POS',
               processor,
@@ -289,7 +314,7 @@ export async function recordPosPaymentLinkSale(
       // had no record the sale ever happened. Purchase.itemId is nullable specifically to
       // support this case (confirmed via architect schema review — no migration needed).
       const miscAmount = fresh.amount / 100;
-      const miscFeeAmount = parseFloat((miscAmount * posFeeRate).toFixed(2));
+      const miscFeeAmount = calculateInclusiveCommissionCents(fresh.amount, posOrganizerTier as SubscriptionTier, 'ONLINE') / 100;
       try {
         const purchase = await tx.purchase.create({
           data: {

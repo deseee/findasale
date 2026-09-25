@@ -21,7 +21,7 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): CHECKOUT_LINK mode's Hold-to-Pay invoice is a hosted Square checkout completed by the buyer remotely -- ONLINE channel. RECORD-mode's cash commission already migrated separately, through cashFeeService.ts's resolveCashCommissionRate/cashCommissionOn (imported below).
 import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // RECORD-mode cash fee (2026-08-17): Purchase fee snapshot
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, roundMoney } from '../services/cashFeeService'; // RECORD-mode cash commission accrual (2026-08-17)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
@@ -1931,19 +1931,25 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // PRO+TEAMS"). Also switched off the role-subscription array (which can drift from the
     // Organizer's own record) onto `organizer.subscriptionTier` directly via the shared
     // `getPlatformFeeRate()` resolver, matching every other call site in the codebase.
-    const platformFeePercent = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
-
     let totalAmount = 0;
-    let totalPlatformFeeAmount = 0;
     const bundledItemIds: string[] = [];
 
     for (const hold of allShopperHolds) {
       const itemPrice = hold.item.price || 0;
       totalAmount += itemPrice;
-      const itemPlatformFee = Math.round(itemPrice * platformFeePercent * 100) / 100;
-      totalPlatformFeeAmount += itemPlatformFee;
       bundledItemIds.push(hold.item.id);
     }
+
+    // Inclusive-fee migration (2026-09-24): the floor must apply ONCE to the whole bundled
+    // invoice's single Square charge, not per item inside the loop above -- summing a
+    // per-item floor would overcharge a multi-item hold invoice made of several small-ticket
+    // items whose bundled total is already well above the floor.
+    const totalPlatformFeeAmount =
+      calculateInclusiveCommissionCents(
+        Math.round(totalAmount * 100),
+        organizer.subscriptionTier as SubscriptionTier,
+        'ONLINE'
+      ) / 100;
 
     // LOCKED DECISION #7: Payment window = hold timer remainder (earliest expiry)
     const expiresAt = new Date(Math.min(...allShopperHolds.map(h => h.expiresAt.getTime())));

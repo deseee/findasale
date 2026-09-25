@@ -51,7 +51,7 @@ import {
   FedexDestinationSurchargeTier,
 } from './ebayRateEstimateService';
 import { roundUpToBucket, applyCharmPricing } from '../utils/shippingPriceMath';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { getInclusivePlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): this grosses up a SHIPPED item's suggested price, which only ever goes through squarePaymentController.ts's native Buy Now checkout (buyer self-serve, remote) -- ONLINE channel, matching that path's own migration exactly
 
 export { ShippingHardBlockError };
 
@@ -74,7 +74,7 @@ export interface NativeShippingSuggestion {
  * to sit ahead of the tier rate here was removed.)
  */
 async function resolveEffectivePlatformFeeRate(subscriptionTier: SubscriptionTier): Promise<number> {
-  return getPlatformFeeRate(subscriptionTier ?? 'SIMPLE');
+  return getInclusivePlatformFeeRate(subscriptionTier ?? 'SIMPLE', 'ONLINE');
 }
 
 /**

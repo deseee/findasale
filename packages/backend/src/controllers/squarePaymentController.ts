@@ -8,11 +8,13 @@ import { generateReceipt } from '../services/receiptService';
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import {
   calculateApplicationFee,
-  getPlatformFeeRate,
+  getInclusivePlatformFeeRate,
+  calculateInclusiveCommissionCents,
+  applyInclusiveFloor,
   snapshotForCommissionOnly,
   snapshotFromBreakdown,
   SubscriptionTier,
-} from '../utils/feeCalculator';
+} from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): all 3 sites in this file are buyer-initiated online checkout except createSquareTestTransaction, which mirrors the POS path and uses IN_PERSON
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-09-23: eBay/Shopify/Discogs/FB withdraw on sell-out
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
@@ -60,7 +62,10 @@ const buildPurchaseFeeContext = (params: {
   feePercent: number;
   saleCoversFee: boolean;
 }) => {
-  const feeBreakdown = calculateApplicationFee(params.priceCents, params.feePercent, params.isAuctionItem);
+  const rawBreakdown = calculateApplicationFee(params.priceCents, params.feePercent, params.isAuctionItem);
+  // Inclusive-fee migration (2026-09-24): floors the organizer-commission component only,
+  // never the buyer premium -- see applyInclusiveFloor's own header comment.
+  const feeBreakdown = applyInclusiveFloor(rawBreakdown, params.feePercent);
   const buyerPremiumAmount = feeBreakdown.buyerPremiumCents;
   const totalWithBuyerPremium = params.priceCents + buyerPremiumAmount;
   const platformFeeAmount = feeBreakdown.applicationFeeCents;
@@ -269,7 +274,7 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const baseFeePercent = getPlatformFeeRate(item.sale!.organizer.subscriptionTier as any);
+    const baseFeePercent = getInclusivePlatformFeeRate(item.sale!.organizer.subscriptionTier as any, 'ONLINE');
     const discountExpiry = item.sale!.organizer.referralDiscountExpiry;
     const hasReferralDiscount = discountExpiry != null && discountExpiry > new Date();
     const feePercent = hasReferralDiscount ? 0 : baseFeePercent;
@@ -674,9 +679,9 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
     }
 
     const tier = (organizer?.subscriptionTier ?? null) as SubscriptionTier;
-    const feeRate = getPlatformFeeRate(tier);
+    const feeRate = getInclusivePlatformFeeRate(tier, 'ONLINE');
     const totalCents = items.reduce((sum, i) => sum + Math.round((i.price as number) * 100), 0);
-    const platformFeeAmount = Math.round(totalCents * feeRate);
+    const platformFeeAmount = calculateInclusiveCommissionCents(totalCents, tier, 'ONLINE');
 
     let organizerAccessToken: string;
     try {
@@ -937,7 +942,7 @@ export const createSquareTestTransaction = async (req: AuthRequest, res: Respons
     }
 
     const amountCents = Math.round(amount * 100);
-    const feeRate = getPlatformFeeRate(sale.organizer.subscriptionTier as SubscriptionTier);
+    const feeRate = getInclusivePlatformFeeRate(sale.organizer.subscriptionTier as SubscriptionTier, 'IN_PERSON');
 
     // Reuse the EXACT SAME fee-computation helper createSquarePayment (above, this file)
     // calls -- not hand-rolled. isAuctionItem is always false here: POS/test-harness

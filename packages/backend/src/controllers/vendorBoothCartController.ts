@@ -13,7 +13,7 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
-import { getPlatformFeeRate } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula
+import { calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula; inclusive-fee migration (2026-09-24, Patrick ruling) -- booth-cart legs (cash and card) are always IN_PERSON, collected at the physical booth
 import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotificationService'; // per-vendor "your item sold" notification
 import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 (2026-08-01): hub owner's own items sell through a synthetic booth
 import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
@@ -133,8 +133,10 @@ async function computeLegFeeSplit(params: {
   // as any: mirrors the existing cast terminalController.ts already uses at this
   // exact call site (Prisma's generated SubscriptionTier enum vs. feeCalculator.ts's
   // plain string-literal-union SubscriptionTier type are structurally distinct types).
-  const platformFeeCents = Math.round(
-    amountCents * getPlatformFeeRate((hubOwnerOrganizer?.subscriptionTier as any) ?? null)
+  const platformFeeCents = calculateInclusiveCommissionCents(
+    amountCents,
+    (hubOwnerOrganizer?.subscriptionTier as any) ?? null,
+    'IN_PERSON'
   );
 
   const clampedRevenueSharePercent = Math.min(Math.max(revenueSharePercent || 0, 0), REVENUE_SHARE_CAP_PERCENT);

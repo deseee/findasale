@@ -19,7 +19,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): both sites in this file are hosted-checkout-link charges completed by the buyer on their own device (Square Quick Pay Checkout / hold-invoice email link) -- ONLINE channel, never IN_PERSON, even though the link itself is created at the register
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
@@ -91,8 +91,8 @@ export async function createPaymentLinkInternal(opts: {
 
   const amountCents = Math.round(amount * 100);
 
-  const feeRate = getPlatformFeeRate(subscriptionTier as SubscriptionTier);
-  const platformFeeAmount = Math.round(amountCents * feeRate);
+  const feeRate = getInclusivePlatformFeeRate(subscriptionTier as SubscriptionTier, 'ONLINE');
+  const platformFeeAmount = calculateInclusiveCommissionCents(amountCents, subscriptionTier as SubscriptionTier, 'ONLINE');
 
   const organizerHasSquare = squareOnboarded === true && !!squareMerchantId;
 
@@ -734,7 +734,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const heldItemTotal = Math.round(reservation.item.price! * 100); // in cents
     const miscTotal = miscItems ? miscItems.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) : 0;
     const grandTotal = heldItemTotal + miscTotal;
-    const holdFeeRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
+    const holdFeeRate = getInclusivePlatformFeeRate(organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
 
     // ADR-114 (2026-08-31): cash/card split, ported from createCombinedInvoice's
     // already-tested math (posCombinedInvoiceFee.test.ts) rather than re-derived --
@@ -751,7 +751,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const safeCashAmountCents = Number.isFinite(cashAmountCents) ? Math.max(0, Math.round(cashAmountCents as number)) : 0;
     const finalCashAmountCents = Math.min(safeCashAmountCents, grandTotal);
     const cardAmountCents = grandTotal - finalCashAmountCents;
-    const platformFeeAmount = Math.round(cardAmountCents * holdFeeRate);
+    const platformFeeAmount = calculateInclusiveCommissionCents(cardAmountCents, organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
 
     // P0 fix (2026-08-17): HoldInvoice.reservationId is @unique
     // (HoldInvoice_reservationId_key, confirmed live in Postgres) and, before this,

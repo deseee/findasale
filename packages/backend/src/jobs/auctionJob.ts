@@ -7,7 +7,7 @@ import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
 import { createSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe PaymentIntent below
 import { buildSquareIdempotencyKey } from '../services/squarePaymentService';
-import { calculateApplicationFee, getPlatformFeeRate, snapshotFromBreakdown, SubscriptionTier } from '../utils/feeCalculator';
+import { calculateApplicationFee, getInclusivePlatformFeeRate, applyInclusiveFloor, snapshotFromBreakdown, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared with services/auctionService.closeAuction — see that file's header
 
 
@@ -136,8 +136,9 @@ export const endAuctions = async () => {
         // 2026-08-22): the wildcard '*' row previously beat the organizer's tier rate here too,
         // billing PRO and TEAMS organizers the SIMPLE rate. Matches
         // stripeController.createPaymentIntent's identical fix exactly.
-        const feePercent = getPlatformFeeRate(
-          currentItem.sale!.organizer.subscriptionTier as SubscriptionTier
+        const feePercent = getInclusivePlatformFeeRate(
+          currentItem.sale!.organizer.subscriptionTier as SubscriptionTier,
+          'ONLINE'
         );
 
         // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
@@ -157,7 +158,10 @@ export const endAuctions = async () => {
         // takes no rate parameter. `Sale.coversFee` still works and is honoured below.
         const hammerPriceCents = Math.round(price * 100);
         const organizerCoversPremium = currentItem.sale!.coversFee === true;
-        const auctionFees = calculateApplicationFee(hammerPriceCents, feePercent, true);
+        const rawAuctionFees = calculateApplicationFee(hammerPriceCents, feePercent, true);
+        // Inclusive-fee migration (2026-09-24): floors the organizer-commission component
+        // only, never the buyer premium -- see applyInclusiveFloor's own header comment.
+        const auctionFees = applyInclusiveFloor(rawAuctionFees, feePercent);
         const buyerChargeCents = organizerCoversPremium
           ? hammerPriceCents
           : hammerPriceCents + auctionFees.buyerPremiumCents;

@@ -24,7 +24,7 @@ import { createSquareSharedCardForBoothFee } from '../services/squareVendorBooth
 // below MUST derive from this, using the same hub-owner tier the money path
 // (vendorBoothCartController.ts computeLegFeeSplit) feeds it -- a hardcoded
 // display percentage drifts from what Stripe actually takes.
-import { getPlatformFeeRate } from '../utils/feeCalculator';
+import { getInclusivePlatformFeeRate } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): disclosed rate must match what computeLegFeeSplit (vendorBoothCartController.ts) actually charges -- IN_PERSON, since a booth leg is always collected at the physical booth
 import { sendVendorBoothInviteEmail } from '../services/vendorBoothInviteEmailService';
 // Lifecycle notifications (claim / confirm / reject-cancel / Stripe connected). Every one
 // of these is invoked fire-and-forget with a .catch, exactly like the invite trigger at
@@ -942,7 +942,7 @@ export const getVendorBoothPayouts = async (req: AuthRequest, res: Response) => 
       boothFee: booth.boothFee.toString(),
       revenueSharePercent: booth.revenueSharePercent,
       platformFeePercent: Math.round(
-        getPlatformFeeRate((booth.hub?.organizer?.subscriptionTier as any) ?? null) * 100
+        getInclusivePlatformFeeRate((booth.hub?.organizer?.subscriptionTier as any) ?? null, 'IN_PERSON') * 100
       ),
       payouts: payouts.map((p) => ({
         ...p,
