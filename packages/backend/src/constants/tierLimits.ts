@@ -18,7 +18,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
   maxTeamMembers: number;
 }> = {
   SIMPLE: {
-    itemsPerSale: 200,
+    itemsPerSale: Number.MAX_SAFE_INTEGER, // Cap removed 2026-09-24 -- tiers now gate on aiTagsPerMonth/ebayPushesPerMonth (metered pipeline usage), not raw item count. See claude_docs/feature-notes/ for the Architect note.
     photosPerItem: 5,
     aiTagsPerMonth: 100,
     ebayPushesPerMonth: 10,
@@ -28,7 +28,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     maxTeamMembers: 0,
   },
   PRO: {
-    itemsPerSale: 500,
+    itemsPerSale: Number.MAX_SAFE_INTEGER, // Cap removed 2026-09-24 -- see SIMPLE tier comment above
     photosPerItem: 10,
     aiTagsPerMonth: 2000,
     ebayPushesPerMonth: 200,
@@ -38,7 +38,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     maxTeamMembers: 0,
   },
   TEAMS: {
-    itemsPerSale: 2000,
+    itemsPerSale: Number.MAX_SAFE_INTEGER, // Cap removed 2026-09-24 -- see SIMPLE tier comment above
     photosPerItem: Infinity,
     aiTagsPerMonth: Infinity,
     ebayPushesPerMonth: 999999,

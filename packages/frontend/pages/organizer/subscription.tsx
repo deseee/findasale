@@ -166,7 +166,7 @@ export default function SubscriptionPage() {
                 <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
                   <h2 className="font-semibold text-blue-900 dark:text-blue-200 mb-3">You're on the Free Plan</h2>
                   <p className="text-blue-800 dark:text-blue-300 mb-4">
-                    You get 200 items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
+                    You get unlimited items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
                   </p>
                 </div>
 
@@ -185,8 +185,8 @@ export default function SubscriptionPage() {
                       <p className="text-sm text-amber-700 dark:text-amber-300">Run multiple sales at the same time.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">500 items per sale</p>
-                      <p className="text-sm text-amber-700 dark:text-amber-300">5x the items vs. Free. Sell more without limits.</p>
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Unlimited items per sale</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">No item cap -- list and sell as much as you want.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">2,000 auto tags/month</p>
@@ -222,7 +222,7 @@ export default function SubscriptionPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                      <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 items & 10 photos each</p>
+                      <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Unlimited items & 10 photos each</p>
                       <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large sale.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -363,7 +363,7 @@ export default function SubscriptionPage() {
                       <li className="flex items-start">
                         <span className="text-green-600 mr-3 mt-0.5">✓</span>
                         <div>
-                          <p className="font-semibold text-gray-900 dark:text-gray-100">Up to 500 Items per Sale</p>
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">Unlimited Items per Sale</p>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Manage larger inventories</p>
                         </div>
                       </li>
@@ -479,7 +479,7 @@ export default function SubscriptionPage() {
               <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
                 <h2 className="font-semibold text-blue-900 dark:text-blue-200 mb-3">You're on the Free Plan</h2>
                 <p className="text-blue-800 dark:text-blue-300">
-                  You get 200 items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
+                  You get unlimited items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
                 </p>
               </div>
 
@@ -532,8 +532,8 @@ export default function SubscriptionPage() {
                     <p className="text-sm text-amber-700 dark:text-amber-300">Run multiple sales at the same time.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">500 items per sale</p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">5x the items vs. Free. Sell more without limits.</p>
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Unlimited items per sale</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">No item cap -- list and sell as much as you want.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">2,000 auto tags/month</p>
@@ -569,7 +569,7 @@ export default function SubscriptionPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 items & 10 photos each</p>
+                    <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Unlimited items & 10 photos each</p>
                     <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large sale.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -677,7 +677,7 @@ export default function SubscriptionPage() {
                   <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
                     <div>
                       <p className="font-semibold text-gray-900 dark:text-gray-100">Items per sale</p>
-                      <p>{tier === 'PRO' ? '500' : 'Unlimited'}</p>
+                      <p>Unlimited</p>
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900 dark:text-gray-100">Photos per item</p>

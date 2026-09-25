@@ -52,7 +52,7 @@ export default function DowngradePreviewModal({ isOpen, onClose, preview, onConf
         <ul className="space-y-2 mb-6 text-sm">
           <li className="flex gap-2">
             <span className="text-green-600">✓</span>
-            First 200 items stay visible to shoppers
+            All your items stay visible to shoppers
           </li>
           {preview.itemsHidden > 0 && (
             <li className="flex gap-2">
