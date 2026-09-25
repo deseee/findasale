@@ -2307,7 +2307,19 @@ const CreateSalePage: React.FC = () => {
         if (!cancelled) setVendorBoothsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [form.saleType, vendorBooths, vendorBoothsLoading]);
+    // Deliberately NOT depending on vendorBooths/vendorBoothsLoading: this effect's own
+    // setVendorBoothsLoading(true) call changes vendorBoothsLoading, and if that were a
+    // dependency, React tears this effect down (running the cleanup above, which sets
+    // cancelled=true) and rebuilds it on the very next render -- before the in-flight
+    // request can resolve. The stale closure's `cancelled` flag then silently discards the
+    // real, successful response via the `if (cancelled) return` guards above, and the
+    // rebuilt effect's own guard (vendorBoothsLoading is now true) blocks any replacement
+    // fetch from starting, so state gets stuck at {vendorBooths: null, vendorBoothsLoading:
+    // true} forever, no matter how many times the request actually succeeds server-side.
+    // Only form.saleType should gate when this effect (re)runs; vendorBooths/
+    // vendorBoothsLoading are read once per run purely as one-shot guards.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.saleType]);
 
   // Auto-select silently when exactly one claimed booth exists.
   useEffect(() => {
