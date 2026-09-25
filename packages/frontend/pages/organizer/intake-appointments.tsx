@@ -89,11 +89,8 @@ const IntakeAppointmentsPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
+  // NOTE: this hook must run unconditionally, before the auth early-return below
+  // (react-hooks/rules-of-hooks) -- CI build failure fixed 2026-09-25.
   const groups = useMemo(() => {
     const active = appointments.filter(a => a.status !== 'CANCELLED');
     const sorted = [...active].sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
@@ -105,6 +102,11 @@ const IntakeAppointmentsPage: React.FC = () => {
     }
     return Array.from(byDay.entries());
   }, [appointments]);
+
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const handleUpdateStatus = async (appt: Appointment, status: string) => {
     try {
