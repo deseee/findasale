@@ -312,7 +312,8 @@ async function injectMissingCategoryAspects(
 // validates, using the exact same GET+merge+PUT shape as injectMissingCategoryAspects
 // above (GET the whole inventory item, mutate ONLY packageWeightAndSize, PUT the whole
 // thing back untouched otherwise). Caller passes in the already-computed weight/dims/
-// includePackageType decision (from the fulfillment-policy costType lookup) rather than
+// includePackageType decision (from the fulfillment-policy-match + enum-validation check,
+// 2026-09-25: no longer conditioned on the policy's costType) rather than
 // this function recomputing it -- single source of truth for that decision stays in
 // reviseEbayOfferPrice.
 async function ensureInventoryItemPackaging(
@@ -424,13 +425,26 @@ export async function reviseEbayOfferPrice(
           // PACKAGE_THICK_ENVELOPE, same errorId/err code -- the mirror-image failure). Fix:
           // read the offer's OWN already-assigned listingPolicies.fulfillmentPolicyId (same
           // idiom as ebayController.ts's applyFulfillmentPolicyToOffer ~line 4998) and look up
-          // that one policy's real shippingOptions[].costType via a read-only GET against
-          // /sell/account/v1/fulfillment_policy (same endpoint/parsing idiom as
-          // ebayPublishService.ts ~line 1315-1320 and ebayController.ts's pickFulfillmentPolicySmart
-          // hasCostType helper ~line 4335-4337). packageType is included ONLY when a real policy
-          // match is found, it is NOT CALCULATED shipping, and the normalized value is in
-          // VALID_PACKAGE_TYPES -- any lookup failure, no policy id, or no match falls back to
-          // the original safe omission (never guess).
+          // that one policy via a read-only GET against /sell/account/v1/fulfillment_policy
+          // (same endpoint/parsing idiom as ebayPublishService.ts ~line 1315-1320) purely to
+          // confirm a real policy match exists. packageType is included whenever a matching
+          // policy is found AND the normalized value is in VALID_PACKAGE_TYPES -- any lookup
+          // failure, no policy id, or no match falls back to the original safe omission (never
+          // guess).
+          //
+          // 2026-09-25 fix (ADR-ebay-loynorrix-calculated-shipping-fix-2026-09-25.md): the
+          // 2026-09-24 fix above additionally omitted packageType whenever the matched policy's
+          // shippingOptions[].costType was 'CALCULATED', on the theory that eBay's
+          // calculated-shipping rate engine wouldn't want a packageType. Live Railway log
+          // evidence for this exact Loy Norrix item proved that theory wrong: the code detected
+          // CALCULATED shipping, correctly omitted packageType, and the offer PUT still failed
+          // with the identical errorId 25002 / err:216314 "Please provide a valid Shipping
+          // Package type" -- even though the item's own packageType (PACKAGE_THICK_ENVELOPE) is
+          // a valid VALID_PACKAGE_TYPES entry. eBay's calculated-shipping validation requires a
+          // valid packageType too; it does not accept weight/dimensions with no type. The
+          // CALCULATED-shipping special case is removed: packageType is now included whenever a
+          // matching fulfillment policy is found and pkg.packageType normalizes to a
+          // VALID_PACKAGE_TYPES entry, regardless of that policy's costType.
           let includePackageType: string | undefined;
           let packageTypeSkipReason = 'no packageType on item record';
           if (pkg.packageType) {
@@ -445,18 +459,12 @@ export async function reviseEbayOfferPrice(
                   const policies: any[] = policyData.fulfillmentPolicies || [];
                   const matched = policies.find((p) => p?.fulfillmentPolicyId === fulfillmentPolicyId);
                   if (matched) {
-                    const isCalculatedShipping = Array.isArray(matched.shippingOptions) &&
-                      matched.shippingOptions.some((opt: any) => opt?.costType === 'CALCULATED');
-                    if (isCalculatedShipping) {
-                      packageTypeSkipReason = 'assigned fulfillment policy is CALCULATED shipping';
+                    const normalized = String(pkg.packageType).trim().toUpperCase().replace(/\s+/g, '_');
+                    if (VALID_PACKAGE_TYPES.has(normalized)) {
+                      includePackageType = normalized;
                     } else {
-                      const normalized = String(pkg.packageType).trim().toUpperCase().replace(/\s+/g, '_');
-                      if (VALID_PACKAGE_TYPES.has(normalized)) {
-                        includePackageType = normalized;
-                      } else {
-                        packageTypeSkipReason = `packageType="${pkg.packageType}" not in eBay enum`;
-                        console.warn(`[eBay PriceRevision] item=${itemId} dropping invalid packageType="${pkg.packageType}" (not in eBay enum)`);
-                      }
+                      packageTypeSkipReason = `packageType="${pkg.packageType}" not in eBay enum`;
+                      console.warn(`[eBay PriceRevision] item=${itemId} dropping invalid packageType="${pkg.packageType}" (not in eBay enum)`);
                     }
                   }
                 }
