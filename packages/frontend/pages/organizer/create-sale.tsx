@@ -97,6 +97,13 @@ interface VendorBoothOption {
     lat: number;
     lng: number;
     hoursText: string | null;
+    // organizer.hours added 2026-09-25 (structured-hours-preference follow-up): the mall's
+    // own structured Business Hours, when set and unambiguous, take precedence over
+    // hoursText -- see resolveStructuredHours below. May be missing on older API responses
+    // (defensive '?'), and is commonly an empty array (no Business Hours saved yet).
+    organizer?: {
+      hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
+    } | null;
   } | null;
 }
 
@@ -109,6 +116,13 @@ interface WizardFormData {
   // silently when the user has exactly one claimed booth; otherwise picked via Step1's
   // required dropdown once 2+ booths exist.
   vendorBoothId: string | null;
+  // vendor-booth-hub-autofill-adr (2026-09-25) / S-stale-draft-blocks-autofill fix: which
+  // booth id the hub auto-fill has already completed for, persisted into the draft (not
+  // just an in-memory ref) so a restored localStorage draft can tell "address the organizer
+  // actually confirmed" apart from "stale leftover from an abandoned attempt". Null means
+  // the auto-fill has never completed for the booth currently in vendorBoothId, so any
+  // existing address/city/state/zip is untrusted and safe to overwrite fresh from the hub.
+  hubAutoFillAppliedForBoothId: string | null;
   title: string;
   description: string;
   isCharitySale: boolean;
@@ -228,6 +242,7 @@ const DEFAULT_FORM: WizardFormData = {
   saleType: '',
   saleSubtype: '',
   vendorBoothId: null,
+  hubAutoFillAppliedForBoothId: null,
   title: '',
   description: '',
   isCharitySale: false,
@@ -260,6 +275,61 @@ const DEFAULT_FORM: WizardFormData = {
 };
 
 const DRAFT_KEY = 'findasale_create_sale_draft';
+
+// vendor-booth-hub-autofill-adr follow-up (2026-09-25): best-effort parser for a hub's
+// freeform hoursText (e.g. "Tue - Sat 11 am - 6 pm", "Sat-Sun 9am-4pm", "9:00 AM - 5:00 PM")
+// into a single open/close time pair for the wizard's Step 2 time fields. Deliberately
+// conservative: a hub describes one set of hours covering all its open days, not per-day
+// variation, so this only succeeds when the text contains EXACTLY two time-of-day tokens
+// (the open time and the close time) -- day names/ranges ("Tue - Sat") contain no time
+// tokens and are ignored naturally. Any other shape (zero tokens, e.g. "By appointment
+// only"; more than two, e.g. per-day-variable hours) returns null and the caller leaves
+// the existing read-only hint text as the fallback rather than guessing. A wrong auto-fill
+// is worse than no auto-fill.
+function parseHoursTextToRange(hoursText: string): { startTime: string; endTime: string } | null {
+  const TIME_TOKEN = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi;
+  const matches = [...hoursText.matchAll(TIME_TOKEN)];
+  if (matches.length !== 2) return null;
+
+  const toMinutes24 = (m: RegExpMatchArray): string | null => {
+    let hour = parseInt(m[1], 10);
+    const minute = m[2] ? parseInt(m[2], 10) : 0;
+    const meridiem = m[3].toLowerCase();
+    if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return null;
+    if (meridiem === 'am') {
+      if (hour === 12) hour = 0;
+    } else {
+      if (hour !== 12) hour += 12;
+    }
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  };
+
+  const startTime = toMinutes24(matches[0]);
+  const endTime = toMinutes24(matches[1]);
+  if (!startTime || !endTime || startTime === endTime) return null;
+  return { startTime, endTime };
+}
+
+// structured-hours-preference follow-up (2026-09-25): resolves the mall's own structured
+// Business Hours (OrganizerHours -- per-day-of-week, HH:MM 24h strings, empty string means
+// closed that day) into a single open/close pair, when unambiguous. Takes precedence over
+// parseHoursTextToRange in the auto-fill effect below, per Patrick's direction: prefer
+// structured Business Hours when set and unambiguous, else fall back to the hoursText
+// parser, else leave the fields blank with the existing read-only hint. Same conservative
+// principle as parseHoursTextToRange -- a wrong auto-fill is worse than no auto-fill, so a
+// venue with genuinely different hours on different open days (per-day-variable) returns
+// null rather than guessing which day's hours to use.
+function resolveStructuredHours(
+  hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }> | undefined
+): { startTime: string; endTime: string } | null {
+  if (!hours || hours.length === 0) return null;
+  const openDays = hours.filter((h) => h.openTime !== '' && h.closeTime !== '');
+  if (openDays.length === 0) return null;
+  const first = openDays[0];
+  const allSame = openDays.every((h) => h.openTime === first.openTime && h.closeTime === first.closeTime);
+  if (!allSame) return null;
+  return { startTime: first.openTime, endTime: first.closeTime };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATE HELPERS (local-timezone-safe)
@@ -2386,17 +2456,44 @@ const CreateSalePage: React.FC = () => {
     const hub = booth?.hub;
     if (!hub) return;
     hubAutoFillAppliedForBoothIdRef.current = form.vendorBoothId;
-    if (form.address.trim() !== '') return; // organizer already typed something -- never overwrite
+    // S-stale-draft-blocks-autofill fix (2026-09-25): trust an existing address only if
+    // it's known to have come from a completed hub auto-fill for THIS SAME booth (this
+    // session, or a restored draft that already ran this effect for this booth) -- the
+    // organizer may have since edited it, and that edit must still win, per
+    // feedback_organizer_intent_wins.md. Anything else -- including a non-empty address
+    // left over from a different, abandoned draft -- is untrusted and gets overwritten
+    // fresh from the hub, exactly like a first-time fill. Root cause: findasale_create_sale_draft
+    // is a single global localStorage key that's never cleared except on a successful
+    // publish/save, so a stale address from any earlier abandoned attempt silently blocked
+    // every later hub auto-fill forever under the old `form.address.trim() !== ''` guard.
+    const addressIsTrusted = form.address.trim() !== '' && form.hubAutoFillAppliedForBoothId === form.vendorBoothId;
+    if (addressIsTrusted) return;
+
+    // structured-hours-preference follow-up (2026-09-25): prefer the mall's own structured
+    // Business Hours (OrganizerHours) when set and unambiguous; else fall back to parsing
+    // hub.hoursText; else leave startTime/endTime untouched (existing read-only hint stays
+    // as the final fallback). Patrick's explicit direction after confirming Business Hours
+    // is currently empty for most organizers -- the hoursText parser must keep working
+    // until organizers actually fill in Business Hours.
+    const resolvedHours = resolveStructuredHours(hub.organizer?.hours) ?? (hub.hoursText ? parseHoursTextToRange(hub.hoursText) : null);
+
     setForm(f => ({
       ...f,
+      hubAutoFillAppliedForBoothId: form.vendorBoothId,
       ...(hub.address ? { address: hub.address } : {}),
       ...(hub.city ? { city: hub.city } : {}),
       ...(hub.state ? { state: hub.state } : {}),
       ...(hub.zip ? { zip: hub.zip } : {}),
       ...(hub.lat != null ? { lat: hub.lat } : {}),
       ...(hub.lng != null ? { lng: hub.lng } : {}),
+      // Best-effort hours auto-fill (S-hours-never-autofill fix, 2026-09-25; precedence
+      // updated same day, structured-hours-preference follow-up): only applied when
+      // resolvedHours above found an unambiguous pair, structured or parsed. Otherwise
+      // startTime/endTime are left untouched and the existing "Venue hours on file"
+      // read-only hint remains the fallback so the organizer can still copy it by eye.
+      ...(resolvedHours ? { startTime: resolvedHours.startTime, endTime: resolvedHours.endTime } : {}),
     }));
-  }, [form.vendorBoothId, vendorBooths, form.address]);
+  }, [form.vendorBoothId, vendorBooths, form.address, form.hubAutoFillAppliedForBoothId]);
 
   useEffect(() => { setIsClient(true); }, []);
 

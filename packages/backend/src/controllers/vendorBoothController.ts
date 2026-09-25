@@ -751,7 +751,12 @@ export const listMyVendorBooths = async (req: AuthRequest, res: Response) => {
         // vendor-booth-hub-autofill-adr) so the Create Sale wizard can auto-fill a booth
         // sale's address/lat/lng from the hub's own saved location, and show hoursText as a
         // hint. Still narrow — never the hub owner or its other booths.
-        hub: { select: { id: true, name: true, address: true, city: true, state: true, zip: true, lat: true, lng: true, hoursText: true } },
+        // organizer.hours added (2026-09-25, structured-hours-preference follow-up): the
+        // mall's own structured Business Hours (OrganizerHours, per-day-of-week HH:MM) take
+        // precedence over hoursText when unambiguous -- see resolveStructuredHours in
+        // create-sale.tsx. Only dayOfWeek/openTime/closeTime are selected -- no organizerId,
+        // no other organizer fields; still scoped to exactly what the wizard needs to read.
+        hub: { select: { id: true, name: true, address: true, city: true, state: true, zip: true, lat: true, lng: true, hoursText: true, organizer: { select: { hours: { select: { dayOfWeek: true, openTime: true, closeTime: true } } } } } },
         payouts: { select: { id: true, totalSales: true, netPayout: true, status: true, paidAt: true } },
         // Register access grant (2026-07-29, Patrick's decision) -- gates the "Open the
         // register" link in MyVendorBoothsCard.tsx. A separate, organizer-controlled state
