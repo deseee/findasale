@@ -69,7 +69,7 @@ const LIGHT = {
 // TYPE DEFINITIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-type SaleTypeKey = 'ESTATE' | 'YARD' | 'AUCTION' | 'FLEA_MARKET' | 'RETAIL' | 'DORM_DASH';
+type SaleTypeKey = 'ESTATE' | 'YARD' | 'AUCTION' | 'FLEA_MARKET' | 'RETAIL' | 'DORM_DASH' | 'BOOTH';
 
 interface DayHours {
   date: string; // ISO date
@@ -78,10 +78,24 @@ interface DayHours {
   endTime: string;
 }
 
+// ADR vendor-booth-sale-onboarding-gate (2026-09-25): shape returned by
+// GET /api/vendor-booth/my-booths (vendorBoothController.ts listMyVendorBooths), narrowed to
+// the fields this wizard actually needs. Mirrors MyVendorBoothsCard.tsx's MyVendorBooth type.
+interface VendorBoothOption {
+  id: string;
+  vendorName: string;
+  hub?: { id: string; name: string } | null;
+}
+
 interface WizardFormData {
   // Step 1
   saleType: SaleTypeKey | '';
   saleSubtype: string;
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25): which of the user's own claimed
+  // vendor booths a BOOTH-type sale is for. Null for every other saleType. Auto-filled
+  // silently when the user has exactly one claimed booth; otherwise picked via Step1's
+  // required dropdown once 2+ booths exist.
+  vendorBoothId: string | null;
   title: string;
   description: string;
   isCharitySale: boolean;
@@ -181,6 +195,14 @@ const SALE_TYPE_TILES = [
     subs: getSubtypesFor('RETAIL'),
     hasCharityToggle: false,
   },
+  {
+    key: 'BOOTH' as SaleTypeKey,
+    label: 'Vendor Booth',
+    desc: 'You operate a booth at someone else\'s mall or market.',
+    icon: '🎪',
+    subs: getSubtypesFor('BOOTH'),
+    hasCharityToggle: false,
+  },
 ];
 
 const TAG_OPTIONS = [
@@ -192,6 +214,7 @@ const TAG_OPTIONS = [
 const DEFAULT_FORM: WizardFormData = {
   saleType: '',
   saleSubtype: '',
+  vendorBoothId: null,
   title: '',
   description: '',
   isCharitySale: false,
@@ -535,8 +558,12 @@ interface Step1Props {
   c: typeof LIGHT;
   form: WizardFormData;
   setForm: React.Dispatch<React.SetStateAction<WizardFormData>>;
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25): null = not fetched yet (or saleType
+  // isn't BOOTH). Owned by CreateSalePage so the same fetch also drives validateStep/publish.
+  vendorBooths: VendorBoothOption[] | null;
+  vendorBoothsLoading: boolean;
 }
-function Step1({ c, form, setForm }: Step1Props) {
+function Step1({ c, form, setForm, vendorBooths, vendorBoothsLoading }: Step1Props) {
   const [showDescription, setShowDescription] = useState(!!form.description);
 
   const selectedTile = SALE_TYPE_TILES.find(t => t.key === form.saleType);
@@ -548,7 +575,12 @@ function Step1({ c, form, setForm }: Step1Props) {
     FLEA_MARKET: ['Riverside Flea Market', 'Monthly Pop-Up Market', 'Vintage Vendor Market'],
     RETAIL: ['Antique & Vintage Shop', 'Estate Finds Store', 'Consignment Boutique'],
     DORM_DASH: ['Room 204 Move-Out Sale', 'End-of-Semester Dorm Dash', 'College Move-Out. Everything Must Go'],
+    BOOTH: ['Weekend Pop-Up at Riverside Market', 'My Booth Sale', 'Vendor Booth Clearance'],
   };
+
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
+  const showBoothOnboarding = form.saleType === 'BOOTH' && !vendorBoothsLoading && vendorBooths !== null && vendorBooths.length === 0;
+  const showBoothPicker = form.saleType === 'BOOTH' && !vendorBoothsLoading && vendorBooths !== null && vendorBooths.length > 1;
 
   return (
     <div style={{ padding: '0 0 24px' }}>
@@ -692,6 +724,23 @@ function Step1({ c, form, setForm }: Step1Props) {
         })}
       </div>
 
+      {showBoothOnboarding ? (
+        <div style={{
+          padding: 24, marginBottom: 20,
+          background: c.surface, border: `1.5px dashed ${c.borderStrong}`, borderRadius: 14,
+        }}>
+          <div style={{
+            fontFamily: '"Inter Tight", "Inter", sans-serif',
+            fontSize: 16, fontWeight: 600, color: c.text, marginBottom: 8,
+          }}>You'll need a vendor booth first</div>
+          <p style={{ fontSize: 13.5, color: c.textDim, lineHeight: 1.5, fontFamily: 'Inter, sans-serif', margin: 0 }}>
+            You need a vendor booth before you can create this kind of sale. If a mall or
+            market sent you a booth invite link, open it to claim your booth. Otherwise, ask
+            the hub organizer to set one up for you.
+          </p>
+        </div>
+      ) : (
+        <>
       {/* Info note about online-only */}
       <div style={{
         marginBottom: 20, padding: '11px 14px', borderRadius: 8,
@@ -701,6 +750,39 @@ function Step1({ c, form, setForm }: Step1Props) {
       }}>
         ℹ Online-only sales? Set that on the next step, "No physical address. Items ship to buyers".
       </div>
+
+      {showBoothPicker && (
+        <div style={{
+          marginBottom: 20, padding: 20,
+          background: c.surface, border: `1.5px solid ${c.accent}`, borderRadius: 14,
+        }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif' }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
+              Which vendor booth is this sale for?{' '}
+              <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>Required — you operate more than one</span>
+            </span>
+            <select
+              value={form.vendorBoothId ?? ''}
+              onChange={e => setForm(f => ({ ...f, vendorBoothId: e.target.value || null }))}
+              required
+              style={{
+                padding: '11px 14px', borderRadius: 8,
+                background: c.surfaceElevated,
+                border: `1.5px solid ${form.vendorBoothId ? c.border : c.warn}`,
+                fontSize: 14, color: c.text, fontFamily: 'Inter, sans-serif',
+                outline: 'none',
+              }}
+            >
+              <option value="" disabled>Choose a booth…</option>
+              {(vendorBooths ?? []).map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.vendorName}{b.hub?.name ? ` — ${b.hub.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
 
       {/* Title section */}
       <div style={{
@@ -799,6 +881,8 @@ function Step1({ c, form, setForm }: Step1Props) {
           </label>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2197,6 +2281,41 @@ const CreateSalePage: React.FC = () => {
   const [isClient, setIsClient] = useState(false);
   const [published, setPublished] = useState(false);
 
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25): the user's own claimed vendor
+  // booths, fetched lazily the first time 'BOOTH' is selected as the sale type (same
+  // GET /api/vendor-booth/my-booths call MyVendorBoothsCard.tsx already makes). null =
+  // not fetched yet; [] = fetched, zero booths (onboarding panel gate).
+  const [vendorBooths, setVendorBooths] = useState<VendorBoothOption[] | null>(null);
+  const [vendorBoothsLoading, setVendorBoothsLoading] = useState(false);
+
+  useEffect(() => {
+    if (form.saleType !== 'BOOTH' || vendorBooths !== null || vendorBoothsLoading) return;
+    let cancelled = false;
+    setVendorBoothsLoading(true);
+    api.get('/vendor-booth/my-booths')
+      .then(response => {
+        if (cancelled) return;
+        setVendorBooths(Array.isArray(response.data) ? response.data : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Fail closed: treat a fetch failure the same as zero booths rather than silently
+        // letting the organizer past a gate we could not actually verify.
+        setVendorBooths([]);
+      })
+      .finally(() => {
+        if (!cancelled) setVendorBoothsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [form.saleType, vendorBooths, vendorBoothsLoading]);
+
+  // Auto-select silently when exactly one claimed booth exists.
+  useEffect(() => {
+    if (form.saleType === 'BOOTH' && vendorBooths && vendorBooths.length === 1 && !form.vendorBoothId) {
+      setForm(f => ({ ...f, vendorBoothId: vendorBooths[0].id }));
+    }
+  }, [form.saleType, vendorBooths, form.vendorBoothId]);
+
   useEffect(() => { setIsClient(true); }, []);
 
   // Auth guard — after all hooks
@@ -2226,6 +2345,21 @@ const CreateSalePage: React.FC = () => {
       if (!form.saleType) {
         showToast('Please choose a sale type.', 'error');
         return false;
+      }
+      // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
+      if (form.saleType === 'BOOTH') {
+        if (vendorBoothsLoading || vendorBooths === null) {
+          showToast('Still checking your vendor booths — try again in a moment.', 'error');
+          return false;
+        }
+        if (vendorBooths.length === 0) {
+          showToast('You need a vendor booth before creating a Vendor Booth sale.', 'error');
+          return false;
+        }
+        if (vendorBooths.length > 1 && !form.vendorBoothId) {
+          showToast('Please choose which vendor booth this sale is for.', 'error');
+          return false;
+        }
       }
       if (!form.title.trim()) {
         showToast('Please enter a sale title.', 'error');
@@ -2316,6 +2450,8 @@ const CreateSalePage: React.FC = () => {
       isOnlineOnly: f.isOnlineOnly,
       saleSubtype: f.saleSubtype || undefined,
       isCharitySale: f.isCharitySale,
+      // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
+      ...(f.saleType === 'BOOTH' && f.vendorBoothId ? { vendorBoothId: f.vendorBoothId } : {}),
       // Feature #411: Dorm Dash Phase 2
       ...(f.saleType === 'DORM_DASH' && f.dormBuilding ? { dormBuilding: f.dormBuilding } : {}),
       ...(f.saleType === 'DORM_DASH' && f.moveOutDate ? { moveOutDate: new Date(`${f.moveOutDate}T23:59:59`).toISOString() } : {}),
@@ -2367,8 +2503,19 @@ const CreateSalePage: React.FC = () => {
         setPublished(true);
       }
     } catch (error: unknown) {
-      const err = error as { response?: { status: number; data: { code?: string; message?: string; current?: number; tier?: string; limit?: number; upgradeUrl?: string } } };
-      if (err.response?.status === 409 && err.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+      const err = error as { response?: { status: number; data: { code?: string; error?: string; message?: string; current?: number; tier?: string; limit?: number; upgradeUrl?: string } } };
+      // ADR vendor-booth-sale-onboarding-gate (2026-09-25): belt-and-suspenders for a stale
+      // tab that bypassed Step1's frontend gate (e.g. lost its claimed booth between load and
+      // publish). Reuses the same onboarding messaging the Step1 panel shows.
+      if (
+        err.response?.status === 403 &&
+        (err.response?.data?.error === 'NO_VENDOR_BOOTH' || err.response?.data?.error === 'INVALID_VENDOR_BOOTH')
+      ) {
+        showToast(
+          err.response.data.message || 'You need a vendor booth before creating a Vendor Booth sale.',
+          'error'
+        );
+      } else if (err.response?.status === 409 && err.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
         const data = err.response.data;
         setTierLimitError({
           current: data.current ?? 0,
@@ -2535,7 +2682,11 @@ const CreateSalePage: React.FC = () => {
               maxWidth: 900, width: '100%', margin: '0 auto', boxSizing: 'border-box',
             }}>
               {currentStep === 1 && (
-                <Step1 c={c} form={form} setForm={setForm} />
+                <Step1
+                  c={c} form={form} setForm={setForm}
+                  vendorBooths={vendorBooths}
+                  vendorBoothsLoading={vendorBoothsLoading}
+                />
               )}
               {currentStep === 2 && (
                 <Step2
@@ -2586,7 +2737,18 @@ const CreateSalePage: React.FC = () => {
                   ? 'Sales without photos get far fewer views'
                   : undefined
               }
-              nextDisabled={currentStep === 5 && isSubmitting}
+              nextDisabled={
+                (currentStep === 5 && isSubmitting) ||
+                // ADR vendor-booth-sale-onboarding-gate (2026-09-25): mirrors validateStep(1)'s
+                // BOOTH checks so the button itself visibly reflects the blocked state, not just
+                // the click producing a toast.
+                (currentStep === 1 && form.saleType === 'BOOTH' && (
+                  vendorBoothsLoading ||
+                  vendorBooths === null ||
+                  vendorBooths.length === 0 ||
+                  (vendorBooths.length > 1 && !form.vendorBoothId)
+                ))
+              }
             />
           </div>
         </div>

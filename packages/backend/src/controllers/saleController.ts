@@ -111,9 +111,16 @@ export const saleCreateSchema = z.object({
   isAuctionSale: z.boolean().optional().default(false), // Deprecated: use saleType instead
   // B1: Sale type — Feature #5: Strict validation for enum consistency
   // Allow all sale type options from frontend
-  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'RETAIL', 'DORM_DASH'], {
-    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, RETAIL, DORM_DASH' })
+  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'RETAIL', 'DORM_DASH', 'BOOTH'], {
+    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, RETAIL, DORM_DASH, BOOTH' })
   }).optional().default(SaleType.ESTATE),
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25): links a BOOTH sale to one of the
+  // creating user's own claimed vendor booths. Ownership is verified server-side in
+  // createSale/updateSale before persisting -- never trust this value blindly (same
+  // mass-assignment discipline as commissionTierService.coerceTierInput). Can be
+  // auto-defaulted (exactly one claimed booth) or left null (2+ booths, frontend picker
+  // required) -- see resolveVendorBoothIdForSale below.
+  vendorBoothId: z.string().optional(),
   // ADR-023: granular flavor under the parent saleType tile (e.g. 'consignment', 'moving', 'downsizing')
   saleSubtype: z.string().optional(),
   // ADR-023: charity overlay, orthogonal to saleType/saleSubtype
@@ -640,6 +647,55 @@ export const getSale = async (req: Request, res: Response) => {
   }
 };
 
+// ADR vendor-booth-sale-onboarding-gate (2026-09-25): shared by createSale/updateSale.
+// Looks up the requester's own claimed vendor booths using the EXACT same where-clause
+// vendorBoothController.ts's listMyVendorBooths already uses. Callers only invoke this when
+// the resolved saleType === 'BOOTH'.
+//   - Zero claimed booths: writes the 403 NO_VENDOR_BOOTH response itself and returns
+//     { ok: false } -- caller must `return` immediately without touching res again.
+//   - requestedVendorBoothId supplied: verified against this user's own claimed booths
+//     (mass-assignment guard) before being accepted; 403 if it does not belong to them.
+//   - requestedVendorBoothId omitted + exactly one claimed booth: defaults to it silently.
+//   - requestedVendorBoothId omitted + 2+ claimed booths: resolves to undefined (left
+//     null) -- the frontend gate should have prompted a picker; this is the defensive
+//     fallback for a stale tab that bypassed it.
+async function resolveVendorBoothIdForSale(
+  userId: string,
+  res: Response,
+  requestedVendorBoothId: string | undefined
+): Promise<{ ok: true; vendorBoothId: string | undefined } | { ok: false }> {
+  const claimedBooths = await prisma.vendorBooth.findMany({
+    where: { userId, deletedAt: null, isHubOwnerBooth: false },
+    select: { id: true },
+  });
+
+  if (claimedBooths.length === 0) {
+    res.status(403).json({
+      error: 'NO_VENDOR_BOOTH',
+      message: 'You need a vendor booth before creating a Vendor Booth sale.',
+    });
+    return { ok: false };
+  }
+
+  if (requestedVendorBoothId) {
+    const ownsRequestedBooth = claimedBooths.some((b) => b.id === requestedVendorBoothId);
+    if (!ownsRequestedBooth) {
+      res.status(403).json({
+        error: 'INVALID_VENDOR_BOOTH',
+        message: 'That vendor booth does not belong to you.',
+      });
+      return { ok: false };
+    }
+    return { ok: true, vendorBoothId: requestedVendorBoothId };
+  }
+
+  if (claimedBooths.length === 1) {
+    return { ok: true, vendorBoothId: claimedBooths[0].id };
+  }
+
+  return { ok: true, vendorBoothId: undefined };
+}
+
 export const createSale = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -657,6 +713,13 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     }
 
     const saleData = saleCreateSchema.parse(req.body);
+
+    // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
+    if (saleData.saleType === 'BOOTH') {
+      const boothResult = await resolveVendorBoothIdForSale(req.user.id, res, saleData.vendorBoothId);
+      if (!boothResult.ok) return;
+      saleData.vendorBoothId = boothResult.vendorBoothId;
+    }
 
     let organizerId = req.user.organizerProfile?.id;
     let organizer = req.user.organizerProfile;
@@ -849,6 +912,15 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
     const effectiveSaleType = saleData.saleType ?? existingSale.saleType;
     if (effectiveSaleType === 'RETAIL') {
       (saleData as any).isOngoing = true;
+    }
+
+    // ADR vendor-booth-sale-onboarding-gate (2026-09-25): same booth-ownership gate as
+    // createSale, keyed off the resolved (existing-or-incoming) saleType so an edit to an
+    // existing BOOTH sale is re-validated too, not just a fresh create.
+    if (effectiveSaleType === 'BOOTH') {
+      const boothResult = await resolveVendorBoothIdForSale(req.user.id, res, saleData.vendorBoothId);
+      if (!boothResult.ok) return;
+      saleData.vendorBoothId = boothResult.vendorBoothId;
     }
 
     const sale = await prisma.sale.update({ where: { id }, data: saleData });

@@ -27,6 +27,15 @@ import SaleCoverPhotoManager from '../../../components/SaleCoverPhotoManager';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import { AUCTION_BUYER_PREMIUM_LABEL } from '../../../lib/platformFees'; // platform-set auction buyer premium — not organizer-configurable
 
+// ADR vendor-booth-sale-onboarding-gate (2026-09-25): shape returned by
+// GET /api/vendor-booth/my-booths (vendorBoothController.ts listMyVendorBooths), narrowed to
+// the fields this page actually needs. Mirrors MyVendorBoothsCard.tsx's MyVendorBooth type.
+interface VendorBoothOption {
+  id: string;
+  vendorName: string;
+  hub?: { id: string; name: string } | null;
+}
+
 const EditSalePage = () => {
   const router = useRouter();
   const { id } = router.query;
@@ -70,6 +79,12 @@ const EditSalePage = () => {
     zip: '',
     neighborhood: '',
     saleType: 'ESTATE' as string,
+    // ADR vendor-booth-sale-onboarding-gate (2026-09-25): which of the user's own claimed
+    // vendor booths a BOOTH-type sale is for. MUST stay `undefined` (never `null`) when
+    // absent -- updateMutation spreads formData straight into the PUT body, and
+    // saleUpdateSchema's `vendorBoothId: z.string().optional()` accepts a missing key but
+    // rejects a literal `null`, which would 400 every single sale save, not just BOOTH ones.
+    vendorBoothId: undefined as string | undefined,
     // Cover photo
     photoUrls: [] as string[],
     // Feature 35: Front Door Locator
@@ -220,6 +235,9 @@ const EditSalePage = () => {
       zip: sale.zip,
       neighborhood: sale.neighborhood ?? '',
       saleType: sale.saleType ?? 'ESTATE',
+      // ADR vendor-booth-sale-onboarding-gate (2026-09-25): `?? undefined`, not `?? null` --
+      // see the formData initial-state comment above for why.
+      vendorBoothId: sale.vendorBoothId ?? undefined,
       photoUrls: sale.photoUrls ?? [],
       entranceLat: sale.entranceLat ?? undefined,
       entranceLng: sale.entranceLng ?? undefined,
@@ -258,6 +276,28 @@ const EditSalePage = () => {
     }
   }, [sale, geocodingAttempted]);
 
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25): same GET /api/vendor-booth/my-booths
+  // call MyVendorBoothsCard.tsx already makes. Only fetched once 'Vendor Booth' is selected.
+  const { data: vendorBooths, isLoading: vendorBoothsLoading } = useQuery<VendorBoothOption[]>({
+    queryKey: ['my-vendor-booths-for-edit-sale'],
+    queryFn: async () => {
+      const response = await api.get('/vendor-booth/my-booths');
+      return Array.isArray(response.data) ? response.data : [];
+    },
+    enabled: formData.saleType === 'BOOTH',
+    staleTime: 60_000,
+  });
+
+  const showBoothOnboarding = formData.saleType === 'BOOTH' && !vendorBoothsLoading && !!vendorBooths && vendorBooths.length === 0;
+  const showBoothPicker = formData.saleType === 'BOOTH' && !vendorBoothsLoading && !!vendorBooths && vendorBooths.length > 1;
+
+  // Auto-select silently when exactly one claimed booth exists.
+  useEffect(() => {
+    if (formData.saleType === 'BOOTH' && vendorBooths && vendorBooths.length === 1 && !formData.vendorBoothId) {
+      setFormData(prev => ({ ...prev, vendorBoothId: vendorBooths[0].id }));
+    }
+  }, [formData.saleType, vendorBooths, formData.vendorBoothId]);
+
   const updateMutation = useMutation({
     mutationFn: async () => {
       // Feature #91: Exclude markdown fields from main update (they go to separate endpoint)
@@ -294,6 +334,19 @@ const EditSalePage = () => {
       router.push(`/organizer/dashboard`);
     },
     onError: (error: any) => {
+      // ADR vendor-booth-sale-onboarding-gate (2026-09-25): belt-and-suspenders for a stale
+      // tab that bypassed the form's own gate below (e.g. lost its claimed booth between
+      // load and save). Reuses the same onboarding messaging the panel shows.
+      if (
+        error.response?.status === 403 &&
+        (error.response?.data?.error === 'NO_VENDOR_BOOTH' || error.response?.data?.error === 'INVALID_VENDOR_BOOTH')
+      ) {
+        showToast(
+          error.response.data.message || 'You need a vendor booth before creating a Vendor Booth sale.',
+          'error'
+        );
+        return;
+      }
       showToast(error.response?.data?.message || 'Failed to update sale', 'error');
     },
   });
@@ -694,7 +747,28 @@ const EditSalePage = () => {
             )}
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); updateMutation.mutate(); }} className="space-y-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
+              if (formData.saleType === 'BOOTH') {
+                if (vendorBoothsLoading || vendorBooths === undefined) {
+                  showToast('Still checking your vendor booths — try again in a moment.', 'error');
+                  return;
+                }
+                if (vendorBooths.length === 0) {
+                  showToast('You need a vendor booth before creating a Vendor Booth sale.', 'error');
+                  return;
+                }
+                if (vendorBooths.length > 1 && !formData.vendorBoothId) {
+                  showToast('Please choose which vendor booth this sale is for.', 'error');
+                  return;
+                }
+              }
+              updateMutation.mutate();
+            }}
+            className="space-y-6"
+          >
             {/* Save button at top for quick access */}
             <button
               type="submit"
@@ -776,6 +850,40 @@ const EditSalePage = () => {
                 <option value="DORM_DASH">Dorm Dash</option>
               </select>
             </div>
+
+            {/* ADR vendor-booth-sale-onboarding-gate (2026-09-25) */}
+            {showBoothOnboarding && (
+              <div className="rounded-lg border border-dashed border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-700/50 p-4">
+                <p className="text-sm font-medium text-warm-900 dark:text-warm-100 mb-1">You'll need a vendor booth first</p>
+                <p className="text-sm text-warm-600 dark:text-gray-400">
+                  You need a vendor booth before you can create this kind of sale. If a mall or
+                  market sent you a booth invite link, open it to claim your booth. Otherwise,
+                  ask the hub organizer to set one up for you.
+                </p>
+              </div>
+            )}
+
+            {showBoothPicker && (
+              <div>
+                <label htmlFor="edit-vendorBoothId" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
+                  Which vendor booth is this sale for? <span className="text-warm-400 dark:text-gray-500 font-normal">Required</span>
+                </label>
+                <select
+                  id="edit-vendorBoothId"
+                  value={formData.vendorBoothId ?? ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, vendorBoothId: e.target.value || undefined }))}
+                  required
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                >
+                  <option value="" disabled>Choose a booth…</option>
+                  {(vendorBooths ?? []).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.vendorName}{b.hub?.name ? ` — ${b.hub.name}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <div className="flex items-center justify-between gap-2 mb-2">

@@ -39,6 +39,31 @@ const stripe = () => getStripe();
 // defense-in-depth, so a stale/bypassed value can never inflate a real charge.
 const REVENUE_SHARE_CAP_PERCENT = 30;
 
+// ADR-127 (2026-09-25, cashier-bonus/self-checkout-fee-waiver build spec): graduated
+// two-bracket cashier bonus on a leg's own amountCents, paid to whoever cashiered an
+// "assisted" checkout (any booth, team member, or the hub owner cashiering a DIFFERENT
+// booth's items) -- 15% on the first $100, 10% on the remainder above $100.
+const CASHIER_BONUS_TIER_1_THRESHOLD_CENTS = 10000; // $100.00
+const CASHIER_BONUS_TIER_1_RATE = 0.15;
+const CASHIER_BONUS_TIER_2_RATE = 0.10;
+
+/**
+ * ADR-127 cashier-bonus build spec: same "two-bracket graduated percentage" shape as
+ * calculateConsignorPayout()'s per-item tier lookup (ADR-096, commissionCalcService.ts),
+ * adapted here to split a SINGLE leg amount across the two brackets (like a progressive
+ * tax bracket) rather than select one whole-item tier. Sums both bracket portions before
+ * rounding ONCE at the end -- never rounds each bracket separately -- so no fractional
+ * cent is lost or double-counted at the $100 boundary (flagged explicitly in the ADR as a
+ * cent-level exactness requirement for the findasale-hacker adversarial pass).
+ */
+function calculateGraduatedCashierBonusCents(amountCents: number): number {
+  const tier1PortionCents = Math.min(amountCents, CASHIER_BONUS_TIER_1_THRESHOLD_CENTS);
+  const tier2PortionCents = Math.max(amountCents - CASHIER_BONUS_TIER_1_THRESHOLD_CENTS, 0);
+  const rawBonusCents =
+    tier1PortionCents * CASHIER_BONUS_TIER_1_RATE + tier2PortionCents * CASHIER_BONUS_TIER_2_RATE;
+  return Math.round(rawBonusCents);
+}
+
 /**
  * P1 cart-IDOR fix (findasale-hacker fix-and-reverify pass, 2026-07-28). Every cart
  * endpoint in this file resolves its cart with `findFirst({ id: cartTransactionId, hubId })`,
@@ -98,6 +123,25 @@ async function computeLegFeeSplit(params: {
   // checks the RIGHT onboarding status. Defaults to 'STRIPE' so every call site that
   // predates this ADR (and never set this) keeps its exact existing behavior unchanged.
   processor?: 'STRIPE' | 'SQUARE';
+  // ADR-127 (2026-09-25, cashier-bonus/self-checkout-fee-waiver build spec): who is
+  // operating the register for the WHOLE cart this leg belongs to (cart.cashierBoothId --
+  // null when a TEAM_MEMBER or the HUB_OWNER personally cashiered, per requireBoothAuth.ts's
+  // three auth types), and which booth OWNS this particular leg's items (booth.id at both
+  // call sites). Optional so any call site that predates this ADR keeps type-checking
+  // unchanged -- omitting either simply means isSelfCheckout below is always false.
+  cartCashierBoothId?: string | null;
+  legOwnerVendorBoothId?: string;
+  // ADR-127 hacker-pass fix (2026-09-25): the synthetic house booth
+  // (VendorBooth.isHubOwnerBooth -- the hub owner's own inventory sold through the
+  // shared register, revenueSharePercent hardcoded to 0, its Stripe/Square identity IS
+  // the hub owner's own connected account) has no boothToken -- it's never claimed via
+  // the normal vendor-claim flow -- so cartCashierBoothId can NEVER equal its own id and
+  // the isSelfCheckout check above alone can never catch it. Without this, every
+  // house-booth sale looks "assisted" and gets a bogus cashier bonus / mall cut computed
+  // on the hub owner's own goods. Optional so pre-existing call sites keep type-checking
+  // unchanged -- omitting it simply means a house-booth leg is (incorrectly) never
+  // short-circuited, so every call site that can pass it now does.
+  legOwnerIsHubOwnerBooth?: boolean;
   hubOwnerOrganizer: {
     // 2026-09-16 fix: id/squareMerchantId added so the SQUARE branch can resolve a real
     // usable access token (resolveOrganizerSquareAccessToken) and live-check its granted
@@ -126,10 +170,19 @@ async function computeLegFeeSplit(params: {
   // by the organizer directly (outside Stripe) instead of Transferred automatically.
   skipReadinessGate?: boolean;
 }): Promise<
-  | { blocked: false; applicationFeeAmountCents: number; hubOwnerShareCents: number }
+  | { blocked: false; applicationFeeAmountCents: number; hubOwnerShareCents: number; cashierBonusCents: number }
   | { blocked: true; reason: string }
 > {
-  const { amountCents, revenueSharePercent, hubOwnerOrganizer, skipReadinessGate, processor } = params;
+  const {
+    amountCents,
+    revenueSharePercent,
+    hubOwnerOrganizer,
+    skipReadinessGate,
+    processor,
+    cartCashierBoothId,
+    legOwnerVendorBoothId,
+    legOwnerIsHubOwnerBooth,
+  } = params;
   // as any: mirrors the existing cast terminalController.ts already uses at this
   // exact call site (Prisma's generated SubscriptionTier enum vs. feeCalculator.ts's
   // plain string-literal-union SubscriptionTier type are structurally distinct types).
@@ -139,9 +192,36 @@ async function computeLegFeeSplit(params: {
     'IN_PERSON'
   );
 
+  // ADR-127 cashier-bonus/self-checkout-fee-waiver build spec (2026-09-25, later same day
+  // UPDATE): self-checkout is the vendor whose own items these are ringing themselves up.
+  // cartCashierBoothId is null whenever a TEAM_MEMBER or the HUB_OWNER personally cashiered,
+  // which never equals a real booth id, so that case correctly falls through to "assisted"
+  // with zero special-casing (section 5.2's generalized rule -- any booth, not case-specific).
+  const isSelfCheckout =
+    cartCashierBoothId != null && legOwnerVendorBoothId != null && cartCashierBoothId === legOwnerVendorBoothId;
+
+  if (isSelfCheckout || legOwnerIsHubOwnerBooth) {
+    // Mall's base cut AND cashier bonus are BOTH waived, regardless of this booth's
+    // configured revenueSharePercent. Platform fee is UNCHANGED (still always charged) --
+    // section 5.2 is explicit that only the mall's cut is waived, never the platform's.
+    // legOwnerIsHubOwnerBooth (ADR-127 hacker-pass fix, 2026-09-25): the house booth has
+    // no boothToken so cartCashierBoothId can never equal its own id -- treat it exactly
+    // like self-checkout regardless of who is physically cashiering, since it's the hub
+    // owner's own inventory sold through their own register either way. The hub owner
+    // can't owe themselves a mall cut or a cashier bonus.
+    return { blocked: false, applicationFeeAmountCents: platformFeeCents, hubOwnerShareCents: 0, cashierBonusCents: 0 };
+  }
+
   const clampedRevenueSharePercent = Math.min(Math.max(revenueSharePercent || 0, 0), REVENUE_SHARE_CAP_PERCENT);
-  if (clampedRevenueSharePercent <= 0) {
-    return { blocked: false, applicationFeeAmountCents: platformFeeCents, hubOwnerShareCents: 0 };
+  // Assisted checkout (including cartCashierBoothId === null, i.e. TEAM_MEMBER/HUB_OWNER
+  // personally cashiered someone else's booth): the mall's existing flat
+  // revenueSharePercent-of-amountCents cut is UNCHANGED by this ADR -- PLUS a graduated
+  // cashier bonus on this leg's own amountCents (15% on the first $100, 10% on the
+  // remainder), computed regardless of whether this booth has a revenue-share agreement at
+  // all, since the bonus compensates whoever cashiered, not the mall.
+  const cashierBonusCents = calculateGraduatedCashierBonusCents(amountCents);
+  if (clampedRevenueSharePercent <= 0 && cashierBonusCents <= 0) {
+    return { blocked: false, applicationFeeAmountCents: platformFeeCents, hubOwnerShareCents: 0, cashierBonusCents: 0 };
   }
 
   if (!skipReadinessGate) {
@@ -210,11 +290,16 @@ async function computeLegFeeSplit(params: {
     }
   }
 
-  const hubOwnerShareCents = Math.round(amountCents * (clampedRevenueSharePercent / 100));
+  const revenueShareCents = Math.round(amountCents * (clampedRevenueSharePercent / 100));
+  // cashierBonusCents is added into the SAME total the function returns as the hub-side
+  // cut, so application_fee_amount = platformFeeCents + hubOwnerShareCents at both call
+  // sites needs no changes -- it already sums whatever this function returns.
+  const hubOwnerShareCents = revenueShareCents + cashierBonusCents;
   return {
     blocked: false,
     applicationFeeAmountCents: platformFeeCents + hubOwnerShareCents,
     hubOwnerShareCents,
+    cashierBonusCents,
   };
 }
 
@@ -1341,6 +1426,15 @@ export const authorizeBoothCartSquareLegs = async (req: BoothAuthRequest, res: R
         revenueSharePercent: booth.revenueSharePercent,
         processor: 'SQUARE',
         hubOwnerOrganizer: booth.hub.organizer,
+        // ADR-127 cashier-bonus/self-checkout-fee-waiver build spec (2026-09-25):
+        // cart.cashierBoothId is who is operating the register for the whole cart;
+        // booth.id is who owns this particular leg's items.
+        cartCashierBoothId: cart.cashierBoothId,
+        legOwnerVendorBoothId: booth.id,
+        // ADR-127 hacker-pass fix (2026-09-25): the house booth has no boothToken, so
+        // cartCashierBoothId can never equal its own id -- pass this so a house-booth
+        // leg is waived like self-checkout regardless of who is cashiering.
+        legOwnerIsHubOwnerBooth: booth.isHubOwnerBooth,
       });
       if (feeSplit.blocked) {
         failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: feeSplit.reason };
@@ -1363,6 +1457,12 @@ export const authorizeBoothCartSquareLegs = async (req: BoothAuthRequest, res: R
             status: 'PENDING',
             hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
             platformFeeCents: feeSplit.applicationFeeAmountCents - feeSplit.hubOwnerShareCents,
+            // ADR-127 cashier-bonus/self-checkout-fee-waiver build spec (2026-09-25):
+            // snapshot who cashiered this leg's cart + the bonus portion of
+            // hubOwnerShareAmount above, so the mall has a queryable record of what it
+            // owes the cashiering vendor out-of-band.
+            cashierBoothId: cart.cashierBoothId,
+            cashierBonusCents: feeSplit.cashierBonusCents,
           },
         });
       } catch (claimErr: any) {
@@ -1948,6 +2048,15 @@ export const captureBoothCartCash = async (req: BoothAuthRequest, res: Response)
         processor: 'STRIPE', // irrelevant here (skipReadinessGate below), set for consistency/clarity only
         hubOwnerOrganizer: booth.hub.organizer,
         skipReadinessGate: true,
+        // ADR-127 cashier-bonus/self-checkout-fee-waiver build spec (2026-09-25):
+        // cart.cashierBoothId is who is operating the register for the whole cart;
+        // booth.id is who owns this particular leg's items.
+        cartCashierBoothId: cart.cashierBoothId,
+        legOwnerVendorBoothId: booth.id,
+        // ADR-127 hacker-pass fix (2026-09-25): the house booth has no boothToken, so
+        // cartCashierBoothId can never equal its own id -- pass this so a house-booth
+        // leg is waived like self-checkout regardless of who is cashiering.
+        legOwnerIsHubOwnerBooth: booth.isHubOwnerBooth,
       });
       if (feeSplit.blocked) {
         // Unreachable with skipReadinessGate: true, but never silently drop a booth's
@@ -1971,6 +2080,12 @@ export const captureBoothCartCash = async (req: BoothAuthRequest, res: Response)
           status: 'CAPTURED',
           hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
           platformFeeCents: feeSplit.applicationFeeAmountCents - feeSplit.hubOwnerShareCents,
+          // ADR-127 cashier-bonus/self-checkout-fee-waiver build spec (2026-09-25):
+          // snapshot who cashiered this leg's cart + the bonus portion of
+          // hubOwnerShareAmount above, so the mall has a queryable record of what it
+          // owes the cashiering vendor out-of-band.
+          cashierBoothId: cart.cashierBoothId,
+          cashierBonusCents: feeSplit.cashierBonusCents,
         },
       });
       legs.push(leg);

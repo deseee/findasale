@@ -115,6 +115,7 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
         amountCents: true,
         platformFeeCents: true,
         hubOwnerShareAmount: true,
+        cashierBonusCents: true,
         status: true,
         rail: true,
         processor: true,
@@ -166,6 +167,11 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
 
     const grossCents = leg.amountCents;
     const hubOwnerShareCents = leg.hubOwnerShareAmount ? Math.round(Number(leg.hubOwnerShareAmount) * 100) : 0;
+    // ADR-127 (2026-09-25, cashier-bonus/self-checkout-fee-waiver build spec): already
+    // bundled INTO hubOwnerShareCents above (same total handed to Stripe/Square as part of
+    // application_fee_amount) -- read separately here ONLY to add one extra disclosure line
+    // per ADR-127 section 1.3's presentation rule. Does not change the bundled math above.
+    const cashierBonusCents = leg.cashierBonusCents ?? 0;
     // NULL means this leg predates the platformFeeCents column. Do not guess.
     const platformFeeCents: number | null = leg.platformFeeCents ?? null;
     const netCents: number | null =
@@ -199,11 +205,12 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
         booth.userId,
         'vendor_booth',
         `You sold $${money(grossCents)} at Booth ${booth.boothNumber}`,
-        isCash
+        (isCash
           ? `${itemCount} ${itemWord} sold at Booth ${booth.boothNumber} at ${hubNameRaw} for $${money(grossCents)} cash, rung up at the register. This did not go through ${processorName} -- settle the FindA.Sale fee${hubOwnerShareCents > 0 ? ` and revenue share` : ''} with the market organizer directly.`
           : netCents !== null
           ? `${itemCount} ${itemWord} sold at Booth ${booth.boothNumber} at ${hubNameRaw}. $${money(netCents)} reaches your ${processorName} account after the platform fee and the revenue share.`
-          : `${itemCount} ${itemWord} sold at Booth ${booth.boothNumber} at ${hubNameRaw}, for $${money(grossCents)} before fees.`,
+          : `${itemCount} ${itemWord} sold at Booth ${booth.boothNumber} at ${hubNameRaw}, for $${money(grossCents)} before fees.`) +
+          (cashierBonusCents > 0 ? ` Includes a $${money(cashierBonusCents)} cashier bonus.` : ''),
         boothPath,
         'OPERATIONAL'
       );
@@ -229,6 +236,7 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
           <li>Sold for cash: $${money(grossCents)}</li>
           ${platformFeeCents !== null ? `<li>FindA.Sale fee you owe: $${money(platformFeeCents)}</li>` : ''}
           ${hubOwnerShareCents > 0 ? `<li>Revenue share owed to ${organizerName}: $${money(hubOwnerShareCents)}</li>` : ''}
+          ${cashierBonusCents > 0 ? `<li>Includes a $${money(cashierBonusCents)} cashier bonus</li>` : ''}
         </ul>
         <p>This was a cash sale rung up at the register -- it never went through ${processorName}, so nothing was deducted automatically and nothing is landing in your ${processorName} account for it. Settle the fee${hubOwnerShareCents > 0 ? ` and revenue share` : ''} above with ${organizerName} directly; your booth page shows your current terms.</p>`
       : platformFeeCents !== null && netCents !== null
@@ -237,6 +245,7 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
           <li>Sold: $${money(grossCents)}</li>
           <li>FindA.Sale fee: $${money(platformFeeCents)}</li>
           ${hubOwnerShareCents > 0 ? `<li>Revenue share to ${organizerName}: $${money(hubOwnerShareCents)}</li>` : ''}
+          ${cashierBonusCents > 0 ? `<li>Includes a $${money(cashierBonusCents)} cashier bonus</li>` : ''}
           <li><strong>Reaches your ${processorName} account: $${money(netCents)}</strong></li>
         </ul>
         <p>${processorName}'s own card processing fee comes out of that as well, so the amount that lands in your bank will be a little lower.</p>`

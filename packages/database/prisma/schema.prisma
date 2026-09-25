@@ -1252,6 +1252,12 @@ model Sale {
   // #311: Multi-Location Inventory (TEAMS)
   locationId                  String?
   location                    Location?                  @relation("LocationSales", fields: [locationId], references: [id], onDelete: SetNull)
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25): links a BOOTH-type sale to one of the
+  // creating vendor's own claimed VendorBooth rows (see saleController.ts's booth-ownership
+  // gate). Nullable -- every other saleType leaves this null. onDelete: SetNull so a hub owner
+  // deleting/soft-removing a booth never cascades into deleting the vendor's sale history.
+  vendorBoothId                String?
+  vendorBooth                  VendorBooth?               @relation(fields: [vendorBoothId], references: [id], onDelete: SetNull)
   // #309: Consignor Portal payouts linked to this sale
   consignorPayouts            ConsignorPayout[]          @relation("ConsignorPayouts")
   // #239: Multi-Consignor Settlement batches for this sale
@@ -1316,6 +1322,7 @@ model Sale {
   @@index([lifecycleStage])
   @@index([organizerId, status, endDate]) // Feature #249: Concurrent Sales Gate optimization
   @@index([locationId]) // #311: Multi-Location filter
+  @@index([vendorBoothId]) // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
   @@index([status, endDate]) // Sentry P0: public feed filter (published + not-ended sales)
   @@index([status, endDate, lat, lng]) // Sentry NODEJS-10: discoveryService bounding box query (6298ms, 49x)
   @@index([city, status, endDate]) // Sentry P0: geo-filtered feed performance
@@ -6644,8 +6651,15 @@ model VendorBooth {
 
   items               Item[]                 @relation("VendorBoothItems")
   payouts             VendorBoothPayout[]
+  // ADR vendor-booth-sale-onboarding-gate (2026-09-25): back-relation for Sale.vendorBoothId
+  sales               Sale[]
   cashierTransactions BoothCartTransaction[] @relation("CashierBoothTransactions")
   cartLegs            BoothCartLeg[]         @relation("VendorBoothCartLegs")
+  // ADR-127 (2026-09-25, cashier-bonus/self-checkout-fee-waiver build spec): back-relation
+  // for BoothCartLeg.cashierBoothId -- distinct relation name from cartLegs above (that one
+  // is keyed on BoothCartLeg.vendorBoothId, the leg's OWNING booth; this one is keyed on
+  // BoothCartLeg.cashierBoothId, whoever was operating the register for that leg's cart).
+  cashierLegs         BoothCartLeg[]         @relation("CashierBoothLegs")
   feeCharges          VendorBoothFeeCharge[]
 
   @@unique([hubId, boothNumber])
@@ -6830,6 +6844,27 @@ model BoothCartLeg {
   hubOwnerShareManualPayoutId String?
   hubOwnerShareManualPayout   HubOwnerShareManualPayout? @relation("HubOwnerShareManualPayoutLegs", fields: [hubOwnerShareManualPayoutId], references: [id])
 
+  // ADR-127 (2026-09-25, cashier-bonus/self-checkout-fee-waiver build spec): snapshot of
+  // cart.cashierBoothId AT THE MOMENT this leg was authorized -- transaction-level cashier
+  // identity can't be trusted to stay stable for later reporting/settlement if it were only
+  // read live off BoothCartTransaction, mirrors why platformFeeCents above is already
+  // snapshotted on this same model instead of re-derived. Null = a TEAM_MEMBER or the
+  // HUB_OWNER personally cashiered, not a vendor booth (requireBoothAuth.ts's three auth
+  // types) -- distinct relation name from vendorBooth above (CashierBoothLegs vs.
+  // VendorBoothCartLegs) since a leg can have its owning booth and its cashiering booth be
+  // two different VendorBooth rows.
+  cashierBoothId String?
+  cashierBooth   VendorBooth? @relation("CashierBoothLegs", fields: [cashierBoothId], references: [id], onDelete: SetNull)
+  // The portion of this leg's total hubOwnerShareAmount that is the cashier bonus
+  // specifically, as opposed to the mall's own flat base cut. hubOwnerShareAmount still
+  // represents the TOTAL that lands in the hub owner's own Stripe/Square account at charge
+  // time (unchanged mechanism) -- the mall then owes the cashiering vendor this bonus
+  // portion out-of-band (ADR-127 §1.1: "paid by the mall to the cashiering vendor
+  // afterward, out-of-band -- NOT a new live payment-rail party"). Without this column the
+  // mall has no queryable record of what it owes whom. Null/0 on every leg with no bonus
+  // (self-checkout, or an assisted leg with $0 computed bonus).
+  cashierBonusCents Int? @default(0)
+
   @@index([cartTransactionId])
   @@index([vendorBoothId])
   @@index([stripePaymentIntentId])
@@ -6839,6 +6874,7 @@ model BoothCartLeg {
   @@index([hubOwnerTransferFailedAt])
   @@index([hubOwnerShareSettledAt])
   @@index([hubOwnerShareManualPayoutId])
+  @@index([cashierBoothId])
 }
 
 model VendorBoothSettlementBatch {
