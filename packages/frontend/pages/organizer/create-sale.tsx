@@ -288,7 +288,11 @@ const DRAFT_KEY = 'findasale_create_sale_draft';
 // is worse than no auto-fill.
 function parseHoursTextToRange(hoursText: string): { startTime: string; endTime: string } | null {
   const TIME_TOKEN = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi;
-  const matches = [...hoursText.matchAll(TIME_TOKEN)];
+  // Fixed 2026-09-25 (CI ci-typecheck run): tsconfig target is es5 with no
+  // downlevelIteration, so spreading a RegExpStringIterator ([...x.matchAll(...)]) fails
+  // TS2802. Array.from(iterable) compiles fine under es5 -- it's a normal function call,
+  // not a language-level iteration the compiler needs to transpile.
+  const matches = Array.from(hoursText.matchAll(TIME_TOKEN));
   if (matches.length !== 2) return null;
 
   const toMinutes24 = (m: RegExpMatchArray): string | null => {
