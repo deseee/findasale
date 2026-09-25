@@ -19,6 +19,7 @@ import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 
 import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
 import { Decimal } from '@prisma/client/runtime/library';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, VendorBooth wiring
+import { computeCashierDiscretionCap, resolveCashierDiscretion, isCashierDiscretionGrantedTo, CashierActorType } from '../services/cashierDiscretionService'; // ADR cashier-discretionary-discount (2026-09-25)
 import { resolveOrganizerSquareAccessToken } from '../services/squarePaymentService'; // 2026-09-16 fix: live Square OAuth scope check (ADR-123 §5 item 1/§9), see computeLegFeeSplit
 import { getSquareGrantedScopes, SQUARE_ADDITIONAL_RECIPIENTS_SCOPE } from '../services/squareConnectService'; // 2026-09-16 fix: same
 import {
@@ -101,6 +102,31 @@ function callerOwnsCart(
 // (CheckoutGuardError -> 403) and requireBoothAuth.ts's own 403s for a valid-but-
 // unauthorized session. The message carries no detail about the other cashier.
 const CART_NOT_YOURS_ERROR = 'This cart belongs to another cashier';
+
+/**
+ * ADR cashier-discretionary-discount (2026-09-25): maps a BoothAuthRequest.boothAuth
+ * session to the actor identity cashierDiscretionService.ts needs -- the same
+ * discriminant requireBoothAuth.ts already produces, so this is a plain re-shape, never
+ * a second source of truth about who the caller is. `appliedById` is what gets
+ * snapshotted onto Item.pendingCashierDiscretionAppliedById / eventually
+ * Purchase.cashierDiscretionAppliedById for the audit trail: the TeamMember id, the
+ * VendorBooth id, or (HUB_OWNER) the Organizer id -- never a raw User id, so it lines up
+ * with what every other actor-identity column on this cart already stores.
+ */
+function resolveDiscretionActor(boothAuth: NonNullable<BoothAuthRequest['boothAuth']>): {
+  actorType: CashierActorType;
+  actorTeamMemberId: string | null;
+  actorBoothId: string | null;
+  appliedById: string | null;
+} {
+  if (boothAuth.type === 'TEAM_MEMBER') {
+    return { actorType: 'TEAM_MEMBER', actorTeamMemberId: boothAuth.teamMemberId ?? null, actorBoothId: null, appliedById: boothAuth.teamMemberId ?? null };
+  }
+  if (boothAuth.type === 'BOOTH') {
+    return { actorType: 'BOOTH', actorTeamMemberId: null, actorBoothId: boothAuth.vendorBoothId ?? null, appliedById: boothAuth.vendorBoothId ?? null };
+  }
+  return { actorType: 'HUB_OWNER', actorTeamMemberId: null, actorBoothId: null, appliedById: boothAuth.organizerId ?? null };
+}
 
 /**
  * ADR-090 Phase 2: compute one booth-cart leg's application_fee_amount (the
@@ -806,7 +832,20 @@ export const removeBoothCartItem = async (req: BoothAuthRequest, res: Response) 
     //    concurrent sibling call's change is never clobbered.
     const releaseClaim = await prisma.item.updateMany({
       where: { id: item.id, status: 'RESERVED', boothCartTransactionId: cart.id },
-      data: { status: 'AVAILABLE', vendorBoothId: null, boothCartTransactionId: null },
+      data: {
+        status: 'AVAILABLE',
+        vendorBoothId: null,
+        boothCartTransactionId: null,
+        // ADR cashier-discretionary-discount (2026-09-25): clear the cart-scoped
+        // discretion scratch columns on cart exit -- same "no new cleanup surface,
+        // extend the paths that already reset cart-transient state" instruction as
+        // boothCartTransactionId above. A re-add starts discretion fresh at 0, which is
+        // correct: it prevents a stale discount surviving a remove-then-re-add with a
+        // since-changed price.
+        pendingCashierDiscretionAppliedCents: 0,
+        pendingCashierDiscretionAppliedByType: null,
+        pendingCashierDiscretionAppliedById: null,
+      },
     });
     if (releaseClaim.count !== 1) {
       return res.status(409).json({ error: 'Item is not reserved in this cart (concurrent request)' });
@@ -857,6 +896,85 @@ export const removeBoothCartItem = async (req: BoothAuthRequest, res: Response) 
 };
 
 /**
+ * PATCH /api/organizer/hubs/:hubId/cart/:cartTransactionId/items/:itemId/discretion
+ * Body: { requestedPercent: number } -- 0-10, a PERCENT of the item's CURRENT price.
+ * ADR cashier-discretionary-discount (2026-09-25): sets (or clears, with
+ * requestedPercent: 0) this item's cart-scoped discretionary discount. Same booth/team
+ * auth middleware and cart-ownership/PENDING-only guards as addBoothCartItems/
+ * removeBoothCartItem above -- edits are only allowed before checkout has started.
+ *
+ * SERVER NEVER TRUSTS A CLIENT-SUPPLIED CENTS/DOLLAR AMOUNT: only a requested PERCENT is
+ * accepted, and resolveCashierDiscretion (cashierDiscretionService.ts) resolves it to
+ * cents from a FRESH read of this item's live price/originalPrice, then clamps to the
+ * freshly-computed cap -- the same clamp resolveBoothLegItems re-runs again at
+ * authorize/capture time, so a markdown firing in between can only ever shrink what
+ * actually gets applied, never leave a stale over-cap amount in place.
+ */
+export const setBoothCartItemDiscretion = async (req: BoothAuthRequest, res: Response) => {
+  try {
+    const { hubId, cartTransactionId, itemId } = req.params;
+    const { requestedPercent } = req.body as { requestedPercent?: number };
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+    if (typeof requestedPercent !== 'number' || !Number.isFinite(requestedPercent)) {
+      return res.status(400).json({ error: 'requestedPercent is required and must be a number' });
+    }
+
+    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
+    if (cart.status !== 'PENDING') {
+      return res.status(409).json({ error: `Cart is not open for edits (status: ${cart.status})` });
+    }
+
+    // FRESH read -- never trust anything the client sent about this item's price.
+    const item = await prisma.item.findFirst({
+      where: { id: itemId, status: 'RESERVED', boothCartTransactionId: cart.id },
+      select: { id: true, price: true, originalPrice: true },
+    });
+    if (!item) return res.status(404).json({ error: 'Item is not reserved in this cart' });
+
+    const discretionActor = resolveDiscretionActor(req.boothAuth);
+    const resolution = await resolveCashierDiscretion({
+      hubId,
+      actorType: discretionActor.actorType,
+      actorTeamMemberId: discretionActor.actorTeamMemberId,
+      actorBoothId: discretionActor.actorBoothId,
+      item: { price: item.price, originalPrice: item.originalPrice },
+      requestedPercent,
+    });
+    if (!resolution.ok) {
+      return res.status(resolution.status).json({ error: resolution.message });
+    }
+
+    // Conditional updateMany (not a plain update-by-id) -- same CAS idiom this file's
+    // other cart-item writes use, so a concurrent remove/re-add of this exact item can't
+    // land a stale discretion write onto an item that has already left this cart.
+    const claim = await prisma.item.updateMany({
+      where: { id: item.id, status: 'RESERVED', boothCartTransactionId: cart.id },
+      data: {
+        pendingCashierDiscretionAppliedCents: resolution.appliedCents,
+        pendingCashierDiscretionAppliedByType: resolution.appliedCents > 0 ? discretionActor.actorType : null,
+        pendingCashierDiscretionAppliedById: resolution.appliedCents > 0 ? discretionActor.appliedById : null,
+      },
+    });
+    if (claim.count !== 1) {
+      return res.status(409).json({ error: 'Item is not reserved in this cart (concurrent request)' });
+    }
+
+    return res.status(200).json({
+      itemId: item.id,
+      appliedCents: resolution.appliedCents,
+      maxDiscretionCents: resolution.cap.maxDiscretionCents,
+      netPriceCents: Math.max(0, resolution.cap.currentCents - resolution.appliedCents),
+      clamped: resolution.appliedCents < Math.round((resolution.cap.currentCents * requestedPercent) / 100),
+    });
+  } catch (error) {
+    console.error('[setBoothCartItemDiscretion] Error:', error);
+    return res.status(500).json({ error: 'Failed to set item discount' });
+  }
+};
+
+/**
  * ADR-020 (2026-07-07, Patrick-approved same session): Standard-account migration.
  * Replaces the old single-PaymentIntent-per-cart model (`chargeBoothCart` /
  * `confirmBoothCart`, one Direct charge on the ORGANIZER's stripeConnectId, vendor
@@ -901,9 +1019,41 @@ const isTerminalSimulated = () => process.env.STRIPE_TERMINAL_SIMULATED === 'tru
  */
 async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented: string[], vendorBoothId: string) {
   if (!boothsRepresented.includes(vendorBoothId)) return [];
-  return prisma.item.findMany({
+  const items = await prisma.item.findMany({
     where: { status: 'RESERVED', vendorBoothId, boothCartTransactionId: cartTransactionId },
-    select: { id: true, price: true, title: true, vendorBoothId: true },
+    select: {
+      id: true, price: true, title: true, vendorBoothId: true,
+      // ADR cashier-discretionary-discount (2026-09-25): originalPrice + the cart-scoped
+      // scratch columns needed to resolve each item's NET (post-discretion) price below.
+      originalPrice: true,
+      pendingCashierDiscretionAppliedCents: true,
+      pendingCashierDiscretionAppliedByType: true,
+      pendingCashierDiscretionAppliedById: true,
+    },
+  });
+  // ADR cashier-discretionary-discount (2026-09-25) Dev Instruction 5: "at capture time,
+  // defensively re-run computeCashierDiscretionCap against the LIVE item row and take
+  // min(stored cents, fresh cap) -- closes the window where a markdown fires between
+  // 'cashier sets discount' and 'checkout completes'." Done HERE, once, at the single
+  // choke point every caller of this function already goes through (leg amountCents at
+  // Square authorize, cash-rail capture, the booth summary, and finalizeCapturedLegs'
+  // Purchase-row creation at true finalize time) -- so every consumer gets the fresh
+  // clamp for free, with no separate re-run needed at each call site. This mirrors how
+  // markdown itself already "composes for free": each call reads Item.price/
+  // originalPrice live, so a markdown that fired since this item was reserved is picked
+  // up automatically, same as it always has been.
+  return items.map((item) => {
+    const cap = computeCashierDiscretionCap({ originalPrice: item.originalPrice, price: item.price });
+    const storedAppliedCents = item.pendingCashierDiscretionAppliedCents || 0;
+    const discretionAppliedCents = Math.max(0, Math.min(storedAppliedCents, cap.maxDiscretionCents));
+    const netPriceCents = Math.max(0, cap.currentCents - discretionAppliedCents);
+    return {
+      ...item,
+      discretionAppliedCents,
+      discretionCap: cap,
+      /** Final per-item price in cents, after markdown (item.price) AND cashier discretion, clamped fresh. */
+      netPriceCents,
+    };
   });
 }
 
@@ -991,10 +1141,22 @@ export const getBoothCartSummary = async (req: BoothAuthRequest, res: Response) 
     const legs = await prisma.boothCartLeg.findMany({ where: { cartTransactionId: cart.id } });
     const legsByBooth = new Map(legs.map((l) => [l.vendorBoothId, l]));
 
+    // ADR cashier-discretionary-discount (2026-09-25): cart-level "can this cashier
+    // apply a discount AT ALL" flag, so the frontend can decide whether to render the
+    // per-item "Discount" control at all without a client-side guess. HUB_OWNER always
+    // true; TEAM_MEMBER/BOOTH depend on an enabled CashierDiscretionGrant for this hub.
+    const discretionActor = resolveDiscretionActor(req.boothAuth);
+    const cashierDiscretionAllowed = await isCashierDiscretionGrantedTo(
+      hubId,
+      discretionActor.actorType,
+      discretionActor.actorTeamMemberId,
+      discretionActor.actorBoothId
+    );
+
     const summary = await Promise.all(
       booths.map(async (booth) => {
         const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, booth.id);
-        const subtotalCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
+        const subtotalCents = items.reduce((sum, i) => sum + i.netPriceCents, 0);
         const leg = legsByBooth.get(booth.id);
         return {
           vendorBoothId: booth.id,
@@ -1004,11 +1166,23 @@ export const getBoothCartSummary = async (req: BoothAuthRequest, res: Response) 
           itemCount: items.length,
           readyForStandardCharge: booth.stripeAccountType === 'standard' && booth.stripeOnboarded && !!booth.stripeAccountId,
           leg: leg ? { legId: leg.id, status: leg.status, rail: leg.rail } : null,
+          // ADR cashier-discretionary-discount (2026-09-25): per-item cap/applied state,
+          // embedded here so the cashier UI can render the "Discount" stepper's live
+          // headroom with no extra round trip.
+          items: items.map((i) => ({
+            itemId: i.id,
+            title: i.title,
+            priceCents: i.discretionCap.currentCents,
+            originalPriceCents: i.discretionCap.originalCents,
+            netPriceCents: i.netPriceCents,
+            discretionAppliedCents: i.discretionAppliedCents,
+            maxDiscretionCents: i.discretionCap.maxDiscretionCents,
+          })),
         };
       })
     );
 
-    return res.status(200).json({ cartStatus: cart.status, booths: summary });
+    return res.status(200).json({ cartStatus: cart.status, booths: summary, cashierDiscretionAllowed });
   } catch (error) {
     console.error('[getBoothCartSummary] Error:', error);
     return res.status(500).json({ error: 'Failed to load cart summary' });
@@ -1034,7 +1208,12 @@ export const getBoothCartContents = async (req: BoothAuthRequest, res: Response)
 
     const items = await prisma.item.findMany({
       where: { status: 'RESERVED', boothCartTransactionId: cart.id },
-      select: { id: true, title: true, price: true, vendorBoothId: true, photoUrls: true },
+      select: {
+        id: true, title: true, price: true, vendorBoothId: true, photoUrls: true,
+        // ADR cashier-discretionary-discount (2026-09-25): needed to compute each item's
+        // live cap/applied state below, same as resolveBoothLegItems does.
+        originalPrice: true, pendingCashierDiscretionAppliedCents: true,
+      },
     });
     const booths = cart.boothsRepresented.length
       ? await prisma.vendorBooth.findMany({ where: { id: { in: cart.boothsRepresented } }, select: { id: true, vendorName: true, boothNumber: true } })
@@ -1043,12 +1222,21 @@ export const getBoothCartContents = async (req: BoothAuthRequest, res: Response)
 
     return res.status(200).json({
       cart: { id: cart.id, hubId: cart.hubId, status: cart.status, totalAmount: cart.totalAmount.toString() },
-      items: items.map((i) => ({
-        itemId: i.id, title: i.title, price: i.price, photoUrl: i.photoUrls?.[0] ?? null,
-        vendorBoothId: i.vendorBoothId,
-        vendorName: i.vendorBoothId ? boothById.get(i.vendorBoothId)?.vendorName ?? null : null,
-        boothNumber: i.vendorBoothId ? boothById.get(i.vendorBoothId)?.boothNumber ?? null : null,
-      })),
+      items: items.map((i) => {
+        const cap = computeCashierDiscretionCap({ originalPrice: i.originalPrice, price: i.price });
+        const discretionAppliedCents = Math.max(0, Math.min(i.pendingCashierDiscretionAppliedCents || 0, cap.maxDiscretionCents));
+        return {
+          itemId: i.id, title: i.title, price: i.price, photoUrl: i.photoUrls?.[0] ?? null,
+          vendorBoothId: i.vendorBoothId,
+          vendorName: i.vendorBoothId ? boothById.get(i.vendorBoothId)?.vendorName ?? null : null,
+          boothNumber: i.vendorBoothId ? boothById.get(i.vendorBoothId)?.boothNumber ?? null : null,
+          // ADR cashier-discretionary-discount (2026-09-25): so a page refresh can
+          // rehydrate the "Discount" control's state without a second round trip.
+          discretionAppliedCents,
+          maxDiscretionCents: cap.maxDiscretionCents,
+          netPriceCents: Math.max(0, cap.currentCents - discretionAppliedCents),
+        };
+      }),
     });
   } catch (error) {
     console.error('[getBoothCartContents] Error:', error);
@@ -1408,7 +1596,11 @@ export const authorizeBoothCartSquareLegs = async (req: BoothAuthRequest, res: R
       }
 
       const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, booth.id);
-      const amountCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
+      // ADR cashier-discretionary-discount (2026-09-25): netPriceCents is already
+      // markdown- AND cashier-discretion-adjusted (server-clamped, freshly recomputed on
+      // every read -- see resolveBoothLegItems' own comment). This is the ACTUAL amount
+      // charged to the shopper's card for this leg.
+      const amountCents = items.reduce((sum, i) => sum + i.netPriceCents, 0);
       if (amountCents < 50) {
         failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: `Booth "${booth.vendorName}"'s subtotal must be at least $0.50` };
         break;
@@ -1612,24 +1804,63 @@ async function finalizeCapturedLegs(
         // schema default for a Square row; it is never read for a booth-cart purchase regardless
         // of processor (refundService.ts's isBoothCartPurchase branch always short-circuits past
         // the chargeType checks -- confirmed by direct read this dispatch).
-        const purchase = await prisma.purchase.create({
-          data: {
-            userId: null, // walk-in POS: no server-derived shopper identity exists (P0 fix, 2026-07-28)
-            itemId: item.id,
-            amount: item.price || 0,
-            processor: isSquareLeg ? 'SQUARE' : 'STRIPE',
-            ...(isSquareLeg
-              ? { squarePaymentId: leg.squarePaymentId }
-              : {
-                  stripePaymentIntentId: leg.stripePaymentIntentId,
-                  chargeType: legIsRealDirectCharge ? 'DIRECT' : 'DESTINATION',
-                  ...(legIsRealDirectCharge ? { stripeAccountId: leg.stripeAccountId! } : {}),
-                }),
-            source: 'POS',
-            status: 'PAID',
-            boothCartTransactionId: cart.id,
-          },
-        });
+        // ADR cashier-discretionary-discount (2026-09-25): resolveBoothLegItems already
+        // defensively re-ran computeCashierDiscretionCap against this LIVE item row (see
+        // its own comment) -- item.netPriceCents is the actual final per-item price,
+        // item.discretionAppliedCents is the (fresh-capped) cents actually applied.
+        // priceOriginalCents/priceBeforeDiscretionCents are populated on EVERY booth-cart
+        // Purchase row (even when discretion wasn't used), per the ADR's own instruction;
+        // the other four stay null unless discretion was actually applied to this item.
+        const discretionAppliedCents = item.discretionAppliedCents;
+        const priceBeforeDiscretionCents = item.discretionCap.currentCents;
+        const cashierDiscretionFields =
+          discretionAppliedCents > 0
+            ? {
+                cashierDiscretionAmountCents: discretionAppliedCents,
+                cashierDiscretionPercent:
+                  priceBeforeDiscretionCents > 0
+                    ? new Decimal(Math.round((discretionAppliedCents / priceBeforeDiscretionCents) * 10000) / 100)
+                    : new Decimal(0),
+                cashierDiscretionAppliedByType: item.pendingCashierDiscretionAppliedByType ?? null,
+                cashierDiscretionAppliedById: item.pendingCashierDiscretionAppliedById ?? null,
+              }
+            : {};
+        // ADR cashier-discretionary-discount (2026-09-25) Dev Instruction 6: Purchase-row
+        // creation writes the resolved audit columns AND clears this item's three
+        // discretion scratch columns back to null/0 "in the same transaction" -- batched
+        // here via prisma.$transaction so the clear can never land without the audit
+        // columns it's clearing the STAGING copy of (or vice versa).
+        const [purchase] = await prisma.$transaction([
+          prisma.purchase.create({
+            data: {
+              userId: null, // walk-in POS: no server-derived shopper identity exists (P0 fix, 2026-07-28)
+              itemId: item.id,
+              amount: item.netPriceCents / 100,
+              priceOriginalCents: item.discretionCap.originalCents,
+              priceBeforeDiscretionCents,
+              ...cashierDiscretionFields,
+              processor: isSquareLeg ? 'SQUARE' : 'STRIPE',
+              ...(isSquareLeg
+                ? { squarePaymentId: leg.squarePaymentId }
+                : {
+                    stripePaymentIntentId: leg.stripePaymentIntentId,
+                    chargeType: legIsRealDirectCharge ? 'DIRECT' : 'DESTINATION',
+                    ...(legIsRealDirectCharge ? { stripeAccountId: leg.stripeAccountId! } : {}),
+                  }),
+              source: 'POS',
+              status: 'PAID',
+              boothCartTransactionId: cart.id,
+            },
+          }),
+          prisma.item.update({
+            where: { id: item.id },
+            data: {
+              pendingCashierDiscretionAppliedCents: 0,
+              pendingCashierDiscretionAppliedByType: null,
+              pendingCashierDiscretionAppliedById: null,
+            },
+          }),
+        ]);
         purchaseIds.push(purchase.id);
 
         // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
@@ -2016,7 +2247,11 @@ export const captureBoothCartCash = async (req: BoothAuthRequest, res: Response)
     let totalCents = 0;
     for (const booth of booths) {
       const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, booth.id);
-      const amountCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
+      // ADR cashier-discretionary-discount (2026-09-25): netPriceCents already reflects
+      // markdown + cashier discretion, freshly clamped on this same read -- see
+      // resolveBoothLegItems' own comment. Cash has no separate authorize step, so this
+      // IS the defensive "capture time" re-run the ADR calls for.
+      const amountCents = items.reduce((sum, i) => sum + i.netPriceCents, 0);
       if (amountCents <= 0) continue; // nothing to charge this booth -- no leg needed
       boothAmounts.push({ booth, amountCents });
       totalCents += amountCents;

@@ -596,6 +596,138 @@ export const revokeBoothRegisterAccess = async (req: AuthRequest, res: Response)
 };
 
 /**
+ * GET /api/organizer/hubs/:hubId/cashier-discretion
+ * ADR cashier-discretionary-discount (2026-09-25): the mall-owner-only per-cashier
+ * toggle screen's data -- every CONFIRMED, non-deleted VendorBooth at this hub, every
+ * TeamMember reachable through this hub's owning organizer's workspace, and a
+ * non-toggleable "you" row for the mall owner (always allowed, never needs a grant row).
+ *
+ * ACCESS CONTROL (ADR §4, "use recommendation" decision): only the hub-owning
+ * organizer's own login can reach this -- the SAME ownership check
+ * grantBoothRegisterAccess/revokeBoothRegisterAccess above already use
+ * (getOrganizerWorkspace(req.user.id) + hub.organizerId === organizer.id), which is
+ * `req.user.id`-derived and therefore rejects a TEAM_MEMBER caller outright, MANAGER-role
+ * included -- a team member has no Organizer row of their own to match hub.organizerId
+ * against (their WorkspaceMember.organizerId, if set, points at the OWNER's Organizer
+ * id, not one they own). This is deliberately NOT requireBoothTokenOrTeamMember() (used
+ * by the cart routes), which treats TEAM_MEMBER as a full cashier -- that is exactly the
+ * caller this endpoint must reject.
+ */
+export const listHubCashierDiscretionGrants = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { hubId } = req.params;
+
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
+    const { organizer, workspace } = result;
+
+    const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    const [booths, teamMembers, grants] = await Promise.all([
+      prisma.vendorBooth.findMany({
+        where: { hubId, status: 'CONFIRMED', deletedAt: null },
+        select: { id: true, vendorName: true, boothNumber: true, isHubOwnerBooth: true },
+        orderBy: { boothNumber: 'asc' },
+      }),
+      prisma.teamMember.findMany({
+        where: { workspaceMember: { workspaceId: workspace.id, acceptedAt: { not: null } } },
+        select: {
+          id: true,
+          role: true,
+          workspaceMember: { select: { user: { select: { name: true, email: true } }, organizer: { select: { businessName: true, user: { select: { name: true, email: true } } } } } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.cashierDiscretionGrant.findMany({ where: { hubId } }),
+    ]);
+
+    const boothGrantByBoothId = new Map(grants.filter((g) => g.cashierBoothId).map((g) => [g.cashierBoothId as string, g]));
+    const teamGrantByTeamMemberId = new Map(grants.filter((g) => g.cashierTeamMemberId).map((g) => [g.cashierTeamMemberId as string, g]));
+
+    return res.status(200).json({
+      hubOwner: { label: 'You (mall owner)', toggleable: false, enabled: true },
+      booths: booths.map((b) => ({
+        vendorBoothId: b.id,
+        vendorName: b.vendorName,
+        boothNumber: b.boothNumber,
+        isHubOwnerBooth: b.isHubOwnerBooth,
+        enabled: boothGrantByBoothId.get(b.id)?.enabled ?? false,
+      })),
+      teamMembers: teamMembers.map((tm) => ({
+        teamMemberId: tm.id,
+        role: tm.role,
+        name: tm.workspaceMember?.user?.name ?? tm.workspaceMember?.organizer?.user?.name ?? tm.workspaceMember?.user?.email ?? tm.workspaceMember?.organizer?.businessName ?? 'Team member',
+        enabled: teamGrantByTeamMemberId.get(tm.id)?.enabled ?? false,
+      })),
+    });
+  } catch (error) {
+    console.error('[listHubCashierDiscretionGrants] Error:', error);
+    return res.status(500).json({ error: 'Failed to load cashier discretion settings' });
+  }
+};
+
+/**
+ * PUT /api/organizer/hubs/:hubId/cashier-discretion/:type/:id
+ * Body: { enabled: boolean }
+ * :type = 'TEAM_MEMBER' | 'BOOTH'. Upserts (never creates a duplicate -- the schema's
+ * @@unique([hubId, cashierTeamMemberId]) / @@unique([hubId, cashierBoothId]) is the
+ * idempotency guard) the CashierDiscretionGrant row for this hub + cashier. Same
+ * hub-owning-organizer-only access control as listHubCashierDiscretionGrants above.
+ */
+export const setHubCashierDiscretionGrant = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { hubId, type, id } = req.params;
+    const { enabled } = req.body as { enabled?: boolean };
+
+    if (type !== 'TEAM_MEMBER' && type !== 'BOOTH') {
+      return res.status(400).json({ error: "type must be 'TEAM_MEMBER' or 'BOOTH'" });
+    }
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
+    const { organizer, workspace } = result;
+
+    const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    if (type === 'BOOTH') {
+      const booth = await prisma.vendorBooth.findFirst({ where: { id, hubId, deletedAt: null } });
+      if (!booth) return res.status(404).json({ error: 'Vendor booth not found on this hub' });
+
+      const grant = await prisma.cashierDiscretionGrant.upsert({
+        where: { hubId_cashierBoothId: { hubId, cashierBoothId: id } },
+        create: { hubId, cashierBoothId: id, enabled, setByUserId: req.user.id },
+        update: { enabled, setByUserId: req.user.id },
+      });
+      return res.status(200).json({ vendorBoothId: id, enabled: grant.enabled });
+    }
+
+    // type === 'TEAM_MEMBER' -- must belong to THIS hub's owning organizer's workspace,
+    // never any team member on the platform (verified via the join, not trusted from id).
+    const teamMember = await prisma.teamMember.findFirst({
+      where: { id, workspaceMember: { workspaceId: workspace.id, acceptedAt: { not: null } } },
+    });
+    if (!teamMember) return res.status(404).json({ error: 'Team member not found on this hub\'s workspace' });
+
+    const grant = await prisma.cashierDiscretionGrant.upsert({
+      where: { hubId_cashierTeamMemberId: { hubId, cashierTeamMemberId: id } },
+      create: { hubId, cashierTeamMemberId: id, enabled, setByUserId: req.user.id },
+      update: { enabled, setByUserId: req.user.id },
+    });
+    return res.status(200).json({ teamMemberId: id, enabled: grant.enabled });
+  } catch (error) {
+    console.error('[setHubCashierDiscretionGrant] Error:', error);
+    return res.status(500).json({ error: 'Failed to update cashier discretion setting' });
+  }
+};
+
+/**
  * GET /api/vendor-booth/:boothToken
  * PUBLIC endpoint (no auth). Field-whitelisted per ADR-017 — never boothFee,
  * revenueSharePercent, stripeAccountId, stripeOnboarded, or payout data.

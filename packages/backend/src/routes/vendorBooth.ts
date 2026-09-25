@@ -27,6 +27,8 @@ import {
   resendVendorBoothNotification,
   grantBoothRegisterAccess,
   revokeBoothRegisterAccess,
+  listHubCashierDiscretionGrants,
+  setHubCashierDiscretionGrant,
 } from '../controllers/vendorBoothController';
 import {
   getVendorBoothFinixStatus,
@@ -36,6 +38,7 @@ import {
   startBoothCart,
   addBoothCartItems,
   removeBoothCartItem,
+  setBoothCartItemDiscretion,
   getBoothCartSummary,
   getBoothCartContents,
   createBoothCartTerminalConnectionToken,
@@ -158,6 +161,17 @@ router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/notify', authenti
 router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access', authenticate, requireTier('TEAMS'), grantBoothRegisterAccess);
 router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access', authenticate, requireTier('TEAMS'), revokeBoothRegisterAccess);
 
+// Cashier Discretionary Discount at Point of Sale (ADR cashier-discretionary-discount,
+// 2026-09-25) -- the mall-owner-only per-cashier toggle screen. Deliberately `authenticate`
+// (hard-401s with no session) + requireTier('TEAMS'), NOT requireBoothTokenOrTeamMember()
+// (used by the cart routes below) -- that middleware treats a TEAM_MEMBER JWT as a valid
+// cashier session, which is exactly who this screen must reject. Ownership (hub-owning
+// organizer only, not even a MANAGER-role team member) is enforced inside the controller
+// via getOrganizerWorkspace(req.user.id) + hub.organizerId match, same as
+// grantBoothRegisterAccess/revokeBoothRegisterAccess immediately above.
+router.get('/api/organizer/hubs/:hubId/cashier-discretion', authenticate, requireTier('TEAMS'), listHubCashierDiscretionGrants);
+router.put('/api/organizer/hubs/:hubId/cashier-discretion/:type/:id', authenticate, requireTier('TEAMS'), setHubCashierDiscretionGrant);
+
 // --- Roaming multi-booth cart (cashier: TeamMember JWT or X-Booth-Token) ---
 // optionalAuthenticate() runs first — it populates req.user when a valid Bearer
 // token/cookie is present, but calls next() without erroring when it is absent
@@ -169,6 +183,12 @@ router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access
 router.post('/api/organizer/hubs/:hubId/cart/start', optionalAuthenticate, requireBoothTokenOrTeamMember(), startBoothCart);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), addBoothCartItems);
 router.delete('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items/:itemId', optionalAuthenticate, requireBoothTokenOrTeamMember(), removeBoothCartItem);
+// Cashier Discretionary Discount at Point of Sale (ADR cashier-discretionary-discount,
+// 2026-09-25): same auth model as every other cart-item route above -- booth token or
+// team member, scoped to this hub. Permission to actually grant a NON-ZERO discount
+// (HUB_OWNER always, TEAM_MEMBER/BOOTH only with an enabled CashierDiscretionGrant) is
+// checked inside the controller (resolveCashierDiscretion), not at the route layer.
+router.patch('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items/:itemId/discretion', optionalAuthenticate, requireBoothTokenOrTeamMember(), setBoothCartItemDiscretion);
 
 // Hub-wide item search (2026-07-31, replaces the booth-scoped route above's old
 // handler): venue mode's "Search by title or SKU" box has no single selectedSaleId to

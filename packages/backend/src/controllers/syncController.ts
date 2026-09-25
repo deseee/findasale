@@ -208,6 +208,8 @@ async function handleCreateItem(operation: SyncOperation, organizerId: string) {
         title: payload.title,
         description: payload.description,
         price: payload.price,
+        // ADR cashier-discretionary-discount (2026-09-25): anchor set once at creation.
+        originalPrice: payload.price,
         category: payload.category,
         condition: payload.condition,
         sku: payload.sku,

@@ -643,6 +643,8 @@ export const convertScanToListing = async (req: AuthRequest, res: Response): Pro
         condition: scan.condition,
         photoUrls: scan.photoUrls,
         price: scan.priceMedian != null ? scan.priceMedian / 100 : null,
+        // ADR cashier-discretionary-discount (2026-09-25): anchor set once at creation.
+        originalPrice: scan.priceMedian != null ? scan.priceMedian / 100 : null,
         saleId: null,
         organizerId: organizer.id,
         inInventory: true,

@@ -442,7 +442,7 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const { saleId } = req.body;
+    const { saleId, consignorId } = req.body;
     const file = req.file;
 
     if (!saleId) {
@@ -459,7 +459,7 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
       include: {
-        organizer: { select: { userId: true } }
+        organizer: { select: { id: true, userId: true, subscriptionTier: true } }
       }
     });
 
@@ -471,6 +471,28 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     if (sale.organizer.userId !== req.user.id) {
       res.status(403).json({ message: 'Not your sale' });
       return;
+    }
+
+    // Consignor-scoped rapid capture (Feature #309/#70 follow-up, 2026-09-25): mirrors
+    // itemController.createItem's consignorId resolution -- TEAMS-gated and scoped to this
+    // organizer's own workspace so a client can never attribute a captured item to another
+    // organizer's consignor. See packages/frontend/pages/organizer/consignors.tsx (session
+    // entry point) and add-items/[saleId].tsx (carries consignorId through each capture).
+    let resolvedConsignorId: string | null = null;
+    if (consignorId) {
+      if (sale.organizer.subscriptionTier !== 'TEAMS') {
+        res.status(403).json({ message: 'TEAMS subscription required to attach a consignor.' });
+        return;
+      }
+      const consignorWorkspace = await prisma.organizerWorkspace.findFirst({ where: { ownerId: sale.organizer.id } });
+      const matchedConsignor = consignorWorkspace
+        ? await prisma.consignor.findFirst({ where: { id: consignorId, workspaceId: consignorWorkspace.id } })
+        : null;
+      if (!matchedConsignor) {
+        res.status(404).json({ message: 'Consignor not found.' });
+        return;
+      }
+      resolvedConsignorId = matchedConsignor.id;
     }
 
     // Upload image to Cloudinary (with retry for 420 rate limits from rapid-fire bursts)
@@ -498,6 +520,7 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
         listingType: 'FIXED',
         isActive: true,
         autoEnhanced,
+        consignorId: resolvedConsignorId,
       }
     });
 

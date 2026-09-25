@@ -125,6 +125,8 @@ import reminderRoutes from './routes/reminders';        // Sale Reminders — em
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
 import pointsRoutes from './routes/points';                    // XP tracking: sale visits
 import consignorRoutes from './routes/consignors';       // Feature #309: Consignor Portal & Payouts
+import consignorIntakeRoutes from './routes/consignorIntake';       // Consignor Self-Serve Intake (2026-09-25)
+import intakeAppointmentRoutes from './routes/intakeAppointments';  // Consignor Self-Serve Intake (2026-09-25): appointments
 import healthRoutes from './routes/health';              // Feature #20: Proactive Degradation Mode
 import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
 import socialProofRoutes from './routes/socialProof';     // Feature 67: Social Proof Notifications
@@ -771,6 +773,8 @@ app.use('/api/voice', voiceRoutes);                              // Feature #42:
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
 app.use('/api/points', pointsRoutes);                       // XP tracking: sale visits
 app.use('/api/consignors', consignorRoutes);                     // Feature #309: Consignor Portal & Payouts
+app.use('/api/consignor-intake', consignorIntakeRoutes);         // Consignor Self-Serve Intake (2026-09-25): link mgmt, public submit, review queue
+app.use('/api/intake-appointments', intakeAppointmentRoutes);    // Consignor Self-Serve Intake (2026-09-25): appointments
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
 app.use('/api/nudges', nudgeRoutes);                             // Feature 61: Near-Miss Nudges
 app.use('/api/social-proof', socialProofRoutes);                 // Feature 67: Social Proof Notifications

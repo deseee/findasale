@@ -6513,6 +6513,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               description,
               photoUrls,
               price,
+              // ADR cashier-discretionary-discount (2026-09-25): anchor set once at creation.
+              originalPrice: price,
               status: 'AVAILABLE',
               inInventory: true,
               organizerId: organizer.id,

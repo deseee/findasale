@@ -456,6 +456,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Image size={16} className="text-amber-500"/>
               <span>Manage Photos</span>
             </Link>
+            <Link href="/organizer/markdown-retag" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Items auto-marked-down that still need a physical re-tag on the shelf">
+              <Tag size={16} className="text-amber-500" />
+              <span>Markdown Re-tag List</span>
+            </Link>
             <Link href="/organizer/checklist" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Sale preparation checklist">
               <CheckCircle size={16} className="text-amber-500" />
               <span>Sale Checklist</span>
@@ -1296,6 +1300,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/organizer/ugc-moderation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Image size={14} className="inline mr-2 text-amber-500"/> Manage Photos
+                    </Link>
+                    <Link href="/organizer/markdown-retag" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Tag size={14} className="inline mr-2 text-amber-500" /> Markdown Re-tag List
                     </Link>
                     <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Star size={14} className="inline mr-2 text-amber-500" /> Reputation

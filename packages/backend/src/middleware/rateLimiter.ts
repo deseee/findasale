@@ -234,6 +234,26 @@ export const consignorOnboardingInviteLimiter = rateLimit({
 });
 
 /**
+ * Consignor Self-Serve Intake (2026-09-25): POST /api/consignor-intake/:token/submit is a
+ * fully anonymous write endpoint (no auth, capability-token-gated only) that creates a DB
+ * row and fires an email on every call -- an unguarded version is both a spam vector against
+ * the organizer's inbox and a cheap way to flood their review queue. Modeled directly on
+ * consignorOnboardingInviteLimiter above (same 1-hour window shape); keyed by IP via the
+ * shared getKeyGenerator, which already falls back to req.ip for an unauthenticated request.
+ * 5/hour is generous for a real prospective consignor (who submits once) and tight enough
+ * to blunt a scripted flood against one workspace's link.
+ */
+export const consignorIntakeSubmitLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many requests submitted. Please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Shopper reservations limiter: 40 requests per minute, keyed by req.user.id (rate-limit
  * hardening Item 1, 2026-08-27 -- Architect + Hacker sign-off, incident: a ~17min external
  * 429-storm against /api/reservations/shopper and /api/reservations/my-holds-full, fully

@@ -14,6 +14,7 @@ import {
 // in this file -- both call sites that used it (consignor + hub-owner onboarding)
 // now block new-Stripe-identity creation instead (Stripe platform account closed).
 import { sendConsignorPaymentSetupInvite } from '../services/consignorEmailService';
+import { getConsignorMarkdownPolicyNotice } from '../services/commissionCalcService';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -122,11 +123,19 @@ export const initiateConsignorOnboarding = async (req: AuthRequest, res: Respons
     const emailConsignor = req.body?.emailConsignor === true;
     if (emailConsignor && consignor.email) {
       const workspace = await prisma.organizerWorkspace.findFirst({ where: { owner: { userId } } });
+      // Consignor intake disclosure (Patrick, 2026-09-25): tell the consignor themselves,
+      // in the same email that gets them their payout link, that this organizer's markdown
+      // schedule (if any) reduces the sale price their payout is calculated from.
+      const organizerIdForMarkdownNotice = workspace?.ownerId;
+      const markdownPolicy = organizerIdForMarkdownNotice
+        ? await getConsignorMarkdownPolicyNotice(organizerIdForMarkdownNotice)
+        : null;
       sendConsignorPaymentSetupInvite({
         consignorName: consignor.name,
         consignorEmail: consignor.email,
         onboardingUrl,
         organizerName: workspace?.name || 'your organizer',
+        markdownNotice: markdownPolicy?.summary,
       }).catch((err) => console.warn('[consignor-payment-setup-email] Failed to send:', err));
     }
 

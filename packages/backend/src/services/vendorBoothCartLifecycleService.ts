@@ -92,7 +92,18 @@ export async function releasePendingCartHold(cart: { id: string; status: string 
   // (see the 2026-07-28 P0 cart-scope fix note on Item.boothCartTransactionId).
   await prisma.item.updateMany({
     where: { status: 'RESERVED', boothCartTransactionId: cart.id },
-    data: { status: 'AVAILABLE', boothCartTransactionId: null },
+    data: {
+      status: 'AVAILABLE',
+      boothCartTransactionId: null,
+      // ADR cashier-discretionary-discount (2026-09-25): clear the cart-scoped
+      // discretion scratch columns on cart exit here too -- this is cancelBoothCart's
+      // shared core (also reused by the abandonment sweep job), so a cancelled/
+      // abandoned cart must never leave a stale discount staged on an item that is
+      // now back on the shelf for a completely different sale.
+      pendingCashierDiscretionAppliedCents: 0,
+      pendingCashierDiscretionAppliedByType: null,
+      pendingCashierDiscretionAppliedById: null,
+    },
   });
 
   // Status already flipped to FAILED by the claim above -- no separate write needed.
