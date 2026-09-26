@@ -1076,10 +1076,62 @@
   // via popup.js's shared startQueue() map (not Mercari-specific) -- no new wiring needed. Clamped
   // to a sane range and rounded to a whole dollar, same digit-reflow avoidance already proven
   // necessary on Grailed's own floor-price field.
+  // GAP FIX 2026-09-26 (S-EXT-MERCARI-MARKDOWN-FLOOR-SYNC, today's Mercari deep-dive research):
+  // Mercari's own Smart Pricing gradually drifts a listing's price DOWN toward whatever floor is
+  // set below, on Mercari's own independent schedule -- completely separate from FindA.Sale's own
+  // sale-level Auto-Markdown cron (Feature #91, markdownCron.ts: Day 2 = 50% off, Day 3+ = 75%
+  // off, floored at Sale.markdownFloor and a $0.99 absolute minimum -- confirmed by direct read of
+  // that file, 2026-09-26). Before this fix, nothing connected the two: the floor set here came
+  // ONLY from best-offer settings, gated on item.allowBestOffer, with zero awareness of whether
+  // this item's sale even has Auto-Markdown enabled -- confirmed by grepping "autoMarkdown" /
+  // "markdown" across packages/backend/src/jobs/markdownCron.ts, priceDropService.ts and this
+  // whole extension directory: zero references outside markdownCron.ts/markdownCycleCron.ts
+  // themselves. Once FindA.Sale's own cron marks an item down, nothing pushes that new, lower
+  // price over to Mercari (markdownPricePropagationService.ts only pushes to EBAY/DISCOGS/REVERB,
+  // which have real server-side write APIs -- Mercari has none, it's browser-automation only), so
+  // a floor derived purely from best-offer settings could sit ABOVE FindA.Sale's own planned
+  // final price, letting Mercari's own Smart Pricing plateau above what FindA.Sale intends, or
+  // (if best-offer settings are more aggressive) undercut it -- either way the two mechanisms were
+  // never reconciled.
+  //
+  // DATA-PLUMBING GAP FOUND AND FIXED HERE: extensionController.ts's getExtensionItems (the
+  // endpoint that feeds this exact `item` object) selected Sale.city/zip/address for Craigslist's
+  // autofill but never Sale.markdownEnabled/markdownFloor -- confirmed by direct read, there was
+  // no way for this content script to know an item's sale has Auto-Markdown on at all. Fixed by
+  // adding item.saleMarkdownEnabled / item.saleMarkdownFloor to that endpoint's response (same
+  // straight-passthrough, never-invent pattern already used for saleCity/saleZip/saleAddress --
+  // see extensionController.ts for the matching change). No schema change: both Sale fields
+  // already existed (schema.prisma Feature #91).
+  //
+  // KNOWN GAP, FLAGGED NOT GUESSED: markdownCron.ts's own idempotency filter
+  // (`markdownApplied: false` in its query) means a real item is normally only EVER marked down
+  // ONCE by that cron -- whichever tier it is first caught at. For an item posted before its
+  // sale's second day (the common case), that is almost always the Day-2 50% tier; markdownApplied
+  // then permanently excludes it from the later Day-3 75% pass, which in practice is only ever
+  // reached by an item first seen by the cron after Day 2 has already elapsed. So the item's
+  // TRUE eventual FindA.Sale floor is often the 50%-off price, not 75%. Using the Day-3 75%-off
+  // price below anyway is the deliberately conservative (lower) choice per Patrick's own "use
+  // whichever floor is LOWER" instruction -- it can never let Mercari settle above what
+  // FindA.Sale's schedule, at its most aggressive documented tier, would allow. A complete fix
+  // for the 50%-vs-75% ambiguity itself would require changing markdownCron.ts's own once-only
+  // behavior, which is out of scope here and not touched by this change.
+  function computeMercariAutoMarkdownFloor(item) {
+    if (!item || item.saleMarkdownEnabled !== true) return null;
+    if (item.price == null || !isFinite(Number(item.price))) return null;
+    const price = Number(item.price);
+    const saleFloor = (item.saleMarkdownFloor != null && isFinite(Number(item.saleMarkdownFloor)))
+      ? Number(item.saleMarkdownFloor) : 0;
+    // Mirrors markdownCron.ts's own newPrice formula exactly: Math.max(price*(1-discount),
+    // sale.markdownFloor ?? 0, 0.99), with discount = 0.75 (the Day-3+ tier -- see the KNOWN GAP
+    // note above for why this is the conservative, not necessarily the literally-reached, choice).
+    const finalMarkdownPrice = Math.max(price * (1 - 0.75), saleFloor, 0.99);
+    return finalMarkdownPrice < price ? finalMarkdownPrice : null;
+  }
+
   async function fillMercariSmartPricingFloor(item) {
     if (item.price == null || !isFinite(Number(item.price))) return false;
     const price = Number(item.price);
-    let floor;
+    let floor = null;
     // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-5, P0, DB-confirmed): Round 4's priority order (below)
     // put item.bestOfferMinimumAmt FIRST on the assumption it was "a deliberate, explicit per-item
     // override" -- that assumption was wrong and never verified against real data. A live DB query
@@ -1096,20 +1148,37 @@
     // bestOfferMinimumAmt kept as the next fallback (not removed) because a second, independent
     // path -- packages/frontend/components/PostSaleEbayPanel.tsx -- CAN set it without also setting
     // bestOfferAutoAcceptAmt, so it's still a real, meaningful signal when it's the only one present.
-    if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
-      floor = Number(item.bestOfferAutoAcceptAmt);
-    } else if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
-      floor = Number(item.bestOfferMinimumAmt);
-    } else {
-      // FIX 2026-09-15: use defaultBestOfferAcceptPct ("auto-accept up to this discount",
-      // suggested default 10) -- NOT defaultBestOfferDeclinePct (a different, more permissive
-      // "decline offers below this" boundary, suggested default 25), which this previously read
-      // by mistake, making the floor twice as generous as the organizer's real default. See the
-      // re-enabled call-site comment below for the confirmed live impact (4/24 items affected).
-      const acceptPct = (item.defaultBestOfferAcceptPct != null && isFinite(Number(item.defaultBestOfferAcceptPct)))
-        ? Number(item.defaultBestOfferAcceptPct) : 10; // schema.prisma's own suggested default
-      floor = price * (1 - acceptPct / 100);
+    // GAP FIX 2026-09-26: this whole best-offer-derived branch is now scoped to
+    // item.allowBestOffer, unchanged from the 2026-09-15 fix's intent ("items where the organizer
+    // turned OFF best-offer negotiation never get an automated price-drop floor set on Mercari"
+    // FROM THIS SOURCE) -- it no longer runs unconditionally now that this function can also be
+    // entered purely for Auto-Markdown (see the call site's widened gate below).
+    if (item.allowBestOffer) {
+      if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
+        floor = Number(item.bestOfferAutoAcceptAmt);
+      } else if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
+        floor = Number(item.bestOfferMinimumAmt);
+      } else {
+        // FIX 2026-09-15: use defaultBestOfferAcceptPct ("auto-accept up to this discount",
+        // suggested default 10) -- NOT defaultBestOfferDeclinePct (a different, more permissive
+        // "decline offers below this" boundary, suggested default 25), which this previously read
+        // by mistake, making the floor twice as generous as the organizer's real default. See the
+        // re-enabled call-site comment below for the confirmed live impact (4/24 items affected).
+        const acceptPct = (item.defaultBestOfferAcceptPct != null && isFinite(Number(item.defaultBestOfferAcceptPct)))
+          ? Number(item.defaultBestOfferAcceptPct) : 10; // schema.prisma's own suggested default
+        floor = price * (1 - acceptPct / 100);
+      }
     }
+    // GAP FIX 2026-09-26 (S-EXT-MERCARI-MARKDOWN-FLOOR-SYNC): independent of allowBestOffer --
+    // Patrick's explicit instruction is "if best-offer settings and auto-markdown are both active
+    // for the same item, use whichever floor is LOWER (most conservative -- never sell for less
+    // than either mechanism would allow)". A null best-offer floor (allowBestOffer false, or no
+    // Auto-Markdown on this item's sale) just means only the other source (if any) applies.
+    const markdownFloor = computeMercariAutoMarkdownFloor(item);
+    if (markdownFloor != null) {
+      floor = (floor == null) ? markdownFloor : Math.min(floor, markdownFloor);
+    }
+    if (floor == null) return false; // neither best-offer nor Auto-Markdown applies -- nothing to set
     floor = Math.max(1, Math.min(floor, price - 0.01));
     // BUG FIX 2026-08-28 (S-EXT-MERCARI-FLOOR-BOUNDARY-STALL, Patrick live report: "Mercari stopped
     // on this floor pricing step", screenshot showed floor=$9.00 against a $10.00 item with Mercari's
@@ -2112,7 +2181,13 @@
     // up to this discount", suggested default 10), not defaultBestOfferDeclinePct (a different,
     // more permissive boundary, suggested default 25) -- confirmed live impact before this fix:
     // 4/24 currently-Mercari-posted items had allowBestOffer=false and were hitting this path.
-    if (item.allowBestOffer && !interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
+    // GAP FIX 2026-09-26 (S-EXT-MERCARI-MARKDOWN-FLOOR-SYNC): widened from allowBestOffer-only
+    // so an Auto-Markdown-enabled sale still gets its Mercari Smart Pricing floor synced even on
+    // an item where the organizer turned best-offer negotiation off. fillMercariSmartPricingFloor
+    // itself still scopes the best-offer-derived branch to item.allowBestOffer internally (see its
+    // own comment) -- this widened gate only ever ADDS the Auto-Markdown path, never changes the
+    // existing best-offer-only behavior.
+    if ((item.allowBestOffer || item.saleMarkdownEnabled) && !interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
     return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
   }
 
@@ -2450,16 +2525,43 @@
   // organizer stops watching it and it can still sell a second time). Now returns 'deleted' ONLY
   // when a confirmation control was actually found AND clicked; every other exit returns a specific
   // reason string the caller reports as a retriable attempt-failure instead of as a removal.
+  //
+  // GAP FIX 2026-09-26 (S-EXT-MERCARI-SOLD-PERMANENT-SKIP, today's Mercari deep-dive research):
+  // Mercari does not allow deleting a listing once it has sold -- sellers can only Archive/Hide
+  // it, there is no Delete button at all in that state. Before this fix, a sold item hit exactly
+  // the 'no_menu_button'/'no_delete_action' exits below and was reported to the caller as a
+  // TRANSIENT crossPlatformRemovalAttemptFailed -- retried up to FAS_REMOVAL_MAX_ATTEMPTS
+  // (background.js) and then given up as a generic "delete unconfirmed" skip, even though a sold
+  // item's Delete button can never appear no matter how many times this is retried.
+  // CODE-ONLY / UNVERIFIED: no live sold Mercari item has been used to confirm the sold-badge
+  // selector below (same caveat this whole removal feature already carries, see the block comment
+  // above this function's own history). Mirrors fas-poshmark.js's classifyPoshmarkDeleteBlock --
+  // an UNVERIFIED keyword scan is an established, already-shipped pattern in this codebase -- but
+  // scoped even tighter: ONLY a short (<=20 char), badge-like element whose OWN text is exactly
+  // "sold" or "sold out" counts, never a page-wide substring scan (which would also match
+  // unrelated copy such as a seller's "120 sold" stats line -- exactly the false-positive risk
+  // classifyPoshmarkDeleteBlock's own comment calls out for its header-nav case). If no such badge
+  // is found this returns false and both call sites below fall through to their existing, already-
+  // safe generic failure strings unchanged -- this can only ever ADD a permanent-skip
+  // classification on top of the already-correct non-removal behavior, never cause a false
+  // 'deleted' or change behavior for a non-sold item.
+  function mercRemPageIndicatesSold() {
+    return qa('[class*="sold" i], [data-testid*="sold" i], [data-testid*="status" i], [aria-label*="sold" i]').some((el) => {
+      const text = norm(el.textContent);
+      return text.length > 0 && text.length <= 20 && /^sold(\s*out)?$/.test(text);
+    });
+  }
+
   async function deleteMercariListingOnDetailPage() {
     const menuBtn = qa('button, [role="button"]').find((el) => {
       const label = (el.getAttribute('aria-label') || '').toLowerCase();
       return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...';
     });
-    if (!menuBtn) return 'no_menu_button';
+    if (!menuBtn) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'no_menu_button';
     await realClick(menuBtn);
     await sleep(400);
     const deleteBtn = mercRemFindButtonByText('Delete listing') || mercRemFindButtonByText('Delete') || mercRemFindButtonByText('Remove listing');
-    if (!deleteBtn) return 'no_delete_action';
+    if (!deleteBtn) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'no_delete_action';
     await realClick(deleteBtn);
     await sleep(400);
     const confirmBtn = mercRemFindButtonByText('Yes') || mercRemFindButtonByText('Confirm') || mercRemFindButtonByText('Delete');
@@ -2635,6 +2737,21 @@
       if (result === 'deleted') {
         overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Mercari.</div>');
         try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'MERCARI', itemId: item.id, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+        return;
+      }
+      if (result === 'blocked_sold_mercari') {
+        // GAP FIX 2026-09-26 (S-EXT-MERCARI-SOLD-PERMANENT-SKIP): PERMANENT, non-retriable --
+        // Mercari never allows deleting a sold listing (Archive/Hide only), so retrying this can
+        // never succeed. crossPlatformRemovalSkipped (not crossPlatformRemovalAttemptFailed)
+        // reports it and moves the queue on immediately, the same permanent-skip mechanism
+        // fas-poshmark.js already reuses for its own already-sold case (reason
+        // 'already_sold_on_poshmark_permanent') rather than inventing a new one here.
+        overlayWarn('This item shows as sold on Mercari -- Mercari never allows deleting a sold listing (Archive/Hide only), so this can\'t be automated. Please review it yourself.' + button('fas-merc-close', 'Close', false));
+        try {
+          chrome.runtime.sendMessage({
+            type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'already_sold_on_mercari_archive_only', continueUrl: MERCARI_REMOVAL_CONTINUE_URL
+          });
+        } catch (e) {}
         return;
       }
       overlayWarn('Found the listing but couldn\'t confirm the delete action (' + escapeHtml(result) + ') -- please remove it yourself. FindA.Sale will try this item again rather than marking it removed.' + button('fas-merc-close', 'Close', false));

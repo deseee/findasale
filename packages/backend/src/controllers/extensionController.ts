@@ -94,10 +94,19 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // real guest-posting walkthrough) asks for a street address that our script never filled
     // because the step wasn't even detected. Sale.address already exists and is exactly the
     // right data -- same never-invent-a-value rule as city/zip below.
-    select: { id: true, title: true, city: true, zip: true, address: true },
+    // GAP FIX 2026-09-26 (S-EXT-MERCARI-MARKDOWN-FLOOR-SYNC, today's Mercari deep-dive research):
+    // markdownEnabled/markdownFloor added -- Sale-level Auto-Markdown config (Feature #91,
+    // markdownCron.ts) existed on this row all along but was never selected here, so the
+    // extension had no way to know an item's sale even has Auto-Markdown on, let alone its floor.
+    // Same straight-passthrough, never-invent pattern as city/zip/address above -- no schema
+    // change, both fields already exist on Sale.
+    select: { id: true, title: true, city: true, zip: true, address: true, markdownEnabled: true, markdownFloor: true },
   });
   const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
-  const saleLocationById = new Map(sales.map((s) => [s.id, { city: s.city, zip: s.zip, address: s.address }]));
+  const saleLocationById = new Map(sales.map((s) => [s.id, {
+    city: s.city, zip: s.zip, address: s.address,
+    markdownEnabled: s.markdownEnabled, markdownFloor: s.markdownFloor,
+  }]));
 
   const items = await prisma.item.findMany({
     // ADR-084 amendment 2026-07-15: exclude DONT_LIST items -- mirrors PostSaleEbayPanel's
@@ -617,6 +626,15 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // Craigslist geoverify-step street address (2026-08-06) -- fills fas-craigslist.js's
     // #xstreet0 field on the ?s=geoverify "add map" screen. Same never-invent rule.
     saleAddress: saleLocationById.get(it.saleId || '')?.address || null,
+    // GAP FIX 2026-09-26 (S-EXT-MERCARI-MARKDOWN-FLOOR-SYNC): fas-mercari.js's Smart Pricing
+    // floor logic (fillMercariSmartPricingFloor / computeMercariAutoMarkdownFloor) needs to know
+    // whether this item's sale has Auto-Markdown on, and at what floor, so Mercari's own Smart
+    // Pricing floor can be kept at or below FindA.Sale's own planned final markdown price. Same
+    // never-invent, straight-passthrough pattern as saleCity/saleZip/saleAddress above --
+    // markdownFloor is a Prisma Float?/nullable column, passed through as-is (null means no
+    // organizer-set floor, exactly as fas-mercari.js's own consumer treats it).
+    saleMarkdownEnabled: saleLocationById.get(it.saleId || '')?.markdownEnabled === true,
+    saleMarkdownFloor: saleLocationById.get(it.saleId || '')?.markdownFloor ?? null,
   }));
 
   // Generate + store each item's QR overlay asset on Cloudinary once (fire-and-forget, never
