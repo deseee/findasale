@@ -325,7 +325,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         // CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS's definition): record this just-completed post and, if
         // the rolling 60-minute count is at/over the cap, hold here FIRST, additive to (never
         // instead of) the baseline delay right below.
-        const clHourlyWaitMs = await craigslistRecordPostAndGetHourlyWaitMs();
+        const clHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('CRAIGSLIST', CRAIGSLIST_HOURLY_CAP);
         if (clHourlyWaitMs > 0) {
           console.log('[FAS Craigslist] hourly cap (' + CRAIGSLIST_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(clHourlyWaitMs / 1000) + 's');
           await craigslistDelayWithOverlay(tabId, { MIN: clHourlyWaitMs, MAX: clHourlyWaitMs }, false);
@@ -1609,50 +1609,96 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 // end: 150-210s/item, averaging exactly 180000ms (3min) = 20 items/hour, still slower than every
 // concrete tool found.
 const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 150000, MAX: 210000 };
+// CROSS-PLATFORM PACING HARDENING (2026-09-26, same-day follow-up to the Craigslist retune above --
+// see claude_docs/feature-notes/ADR-craigslist-pacing-retune-2026-09-25.md addendum for the full
+// research writeup). A fresh multi-agent audit of every other crosslist platform found three still
+// on the generic 10-25s QUEUE_ADVANCE_DELAY_MS fallback with real risk signal: Facebook (a real
+// rolling-60-minute burst hit 34 posts/hour on 2026-09-02 -- above this project's own researched
+// 20-25/hr Facebook-jail threshold -- and a real account got an "automated behavior" checkpoint on
+// 2026-09-20, see claude_docs/audits/facebook-marketplace-checkpoint-incident-2026-09-20.md);
+// Poshmark (full auto-publish at real production volume up to 113 posts in observed history; no
+// official numeric limit exists, unofficial vendor guidance converges around ~300 new listings/24h
+// as a loose outer bound, but that's directional, not a hard fact); and Grailed (only 4 production
+// jobs so far, but the single strictest anti-automation ToS clause of any platform studied --
+// requires "prior written consent" for any third-party tool and its Code of Conduct explicitly
+// names bots/scraping/AI as suspension grounds). All three get Craigslist's same conservative
+// 150-210s/item pacing (~20/hr average) plus the same real sliding hourly cap below. Gumtree AU
+// (manual-assist only -- fas-gumtree-au.js never auto-fills or auto-submits, a human always copies
+// fields and clicks Post themselves; zero production rows ever; no stated Gumtree AU posting-count
+// limit and no confirmed automation-ban case found) gets only a modest, dedicated bump as cheap
+// insurance -- no hourly cap, since there's no real automated submission there to pace against (see
+// GUMTREE_AU_QUEUE_ADVANCE_DELAY_MS below). Mercari and Vinted needed NO changes: Mercari's
+// auto-publish is already hardcoded off (2026-09-22, S-EXT-MERCARI-NO-AUTOPUBLISH) and Vinted never
+// auto-publishes at all -- both already require a human click to advance, safer than any timing
+// constant here.
+const FACEBOOK_QUEUE_ADVANCE_DELAY_MS = { MIN: 150000, MAX: 210000 };
+const POSHMARK_QUEUE_ADVANCE_DELAY_MS = { MIN: 150000, MAX: 210000 };
+const GRAILED_QUEUE_ADVANCE_DELAY_MS = { MIN: 150000, MAX: 210000 };
+const GUMTREE_AU_QUEUE_ADVANCE_DELAY_MS = { MIN: 25000, MAX: 45000 };
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 // HOURLY ROLLING CAP (2026-09-26, Patrick-directed follow-up to the 2026-09-25 pacing retune --
-// see claude_docs/feature-notes/ADR-craigslist-pacing-retune-2026-09-25.md addendum). The
-// CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS range above only AVERAGES 180000ms (3min, i.e. 20/hour) -- it
-// is a randomized per-item delay, not a hard cap, so an unlucky run of low draws near the 150000ms
-// floor could post faster than 20/hour in a given rolling hour, with nothing actually counting real
-// posts against a real window. Patrick's explicit direction after reviewing this data: enforce a
-// genuine sliding 20-posts-per-60-minutes ceiling, ADDITIVE to (not a replacement for) the existing
-// per-item delay above -- that delay still sets the baseline spacing between individual posts; this
-// cap only adds extra wait time on top when the rolling count would otherwise exceed 20/hour. This
-// is a continuously-sliding rate limit, not the old flat per-session cap removed 2026-09-25 -- a
-// run can go on indefinitely at a sustained ~20/hour, it never gets cut off after one batch of 20.
-// Timestamps are persisted in chrome.storage.local (not an in-memory array) for the same reason
-// CRAIGSLIST_SESSION_COOLDOWN_MINUTES's resume state is: a long Craigslist run can span an MV3
-// service-worker restart, and an in-memory array would silently reset to empty on restart,
-// defeating the whole point of a rolling cap.
+// see claude_docs/feature-notes/ADR-craigslist-pacing-retune-2026-09-25.md addendum). A per-item
+// delay range above only AVERAGES its target rate -- it is a randomized per-item delay, not a hard
+// cap, so an unlucky run of low draws near a range's floor could post faster than the intended rate
+// in a given rolling hour, with nothing actually counting real posts against a real window. Enforce
+// a genuine sliding N-posts-per-60-minutes ceiling, ADDITIVE to (not a replacement for) each
+// platform's own per-item delay above -- that delay still sets the baseline spacing between
+// individual posts; this cap only adds extra wait time on top when the rolling count would
+// otherwise exceed the cap. This is a continuously-sliding rate limit, not a flat per-session cap --
+// a run can go on indefinitely at the sustained rate, it never gets cut off after one batch.
+// GENERALIZED 2026-09-26 (cross-platform pacing hardening, same day as the Craigslist-only version
+// this replaces): rather than duplicating this ~25-line function once per platform, it is now a
+// single helper parameterized by platform key -- see recordPlatformPostAndGetHourlyWaitMs below.
+// Timestamps are persisted per-platform in chrome.storage.local (not an in-memory array) for the
+// same reason CRAIGSLIST_SESSION_COOLDOWN_MINUTES's resume state is: a long run can span an MV3
+// service-worker restart, and an in-memory array would silently reset to empty on restart, defeating
+// the whole point of a rolling cap.
 const CRAIGSLIST_HOURLY_CAP = 20;
-const CRAIGSLIST_HOURLY_WINDOW_MS = 60 * 60 * 1000;
-const FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY = 'fasCraigslistPostTimestamps';
+const FACEBOOK_HOURLY_CAP = 20;
+const POSHMARK_HOURLY_CAP = 20;
+const GRAILED_HOURLY_CAP = 20;
+const PLATFORM_HOURLY_WINDOW_MS = 60 * 60 * 1000;
+const FAS_PLATFORM_POST_TIMESTAMPS_KEY_PREFIX = 'fasPlatformPostTimestamps_';
+// Pre-generalization (2026-09-26 first pass), Craigslist used its own dedicated storage key. Left
+// here so the helper below can do a one-time carry-forward of any timestamps already in flight
+// under the old key the first time it runs post-refactor -- after that, Craigslist reads/writes the
+// shared 'fasPlatformPostTimestamps_CRAIGSLIST' key exactly like every other platform.
+const FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY_LEGACY = 'fasCraigslistPostTimestamps';
 
-// Records the Craigslist post that just completed (the one triggering this advance -- both call
-// sites below only reach this function after a real publish succeeded) and returns how many
-// additional ms the NEXT post must wait, on top of the normal CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
-// pacing, to keep the rolling 60-minute window at or under CRAIGSLIST_HOURLY_CAP posts. Returns 0
-// when there is still room in the window (the common case). Prunes timestamps older than the
-// window on every call, so the cap self-corrects run after run -- no separate reset logic needed,
-// and there is no fixed per-session ceiling: once old posts age out, new ones are allowed again.
-async function craigslistRecordPostAndGetHourlyWaitMs() {
+// Records the platform post that just completed (every call site below only reaches this function
+// after a real publish succeeded) and returns how many additional ms the NEXT post on that SAME
+// platform must wait, on top of that platform's own normal per-item pacing, to keep its rolling
+// 60-minute window at or under `hourlyCap` posts. Returns 0 when there is still room in the window
+// (the common case). Prunes timestamps older than the window on every call, so the cap
+// self-corrects run after run -- no separate reset logic needed, and there is no fixed per-session
+// ceiling: once old posts age out, new ones are allowed again. Each platform's timestamps are
+// tracked independently (separate storage key per `platformKey`) so a busy run on one platform can
+// never eat into another platform's own allowance.
+async function recordPlatformPostAndGetHourlyWaitMs(platformKey, hourlyCap) {
   const now = Date.now();
-  const cutoff = now - CRAIGSLIST_HOURLY_WINDOW_MS;
-  const { [FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY]: existing = [] } =
-    await chrome.storage.local.get([FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY]);
+  const cutoff = now - PLATFORM_HOURLY_WINDOW_MS;
+  const storageKey = FAS_PLATFORM_POST_TIMESTAMPS_KEY_PREFIX + platformKey;
+  const { [storageKey]: existingRaw } = await chrome.storage.local.get([storageKey]);
+  let existing = existingRaw;
+  if (existing === undefined && platformKey === 'CRAIGSLIST') {
+    // One-time migration (2026-09-26 generalization): carry forward any timestamps already in
+    // flight under Craigslist's old dedicated key the first time this runs post-refactor.
+    const legacy = await chrome.storage.local.get([FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY_LEGACY]);
+    existing = legacy[FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY_LEGACY] || [];
+  }
+  existing = existing || [];
   // existing is chronological (append-only below); dropping anything outside the window keeps the
   // array from growing unbounded across a long-running or multi-day queue.
   const timestamps = existing.filter((t) => typeof t === 'number' && t > cutoff);
   timestamps.push(now); // this post just happened -- count it toward the rolling total immediately
-  await chrome.storage.local.set({ [FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY]: timestamps });
-  if (timestamps.length < CRAIGSLIST_HOURLY_CAP) return 0;
+  await chrome.storage.local.set({ [storageKey]: timestamps });
+  if (timestamps.length < hourlyCap) return 0;
   // At/over the cap: hold the next post until the OLDEST in-window timestamp ages out of the
   // window -- that is exactly what frees the next slot under a true sliding-window cap (as opposed
   // to a fixed-bucket "reset every hour" scheme, which is not what was asked for here).
   const oldest = timestamps[0];
-  return Math.max(0, (oldest + CRAIGSLIST_HOURLY_WINDOW_MS) - Date.now());
+  return Math.max(0, (oldest + PLATFORM_HOURLY_WINDOW_MS) - Date.now());
 }
 
 // BATCH COOLDOWN (2026-08-31, Patrick live report -- 60-75s per-item still tripped Craigslist's
@@ -2016,7 +2062,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // null (queue exhausted) -- the delay's countdown overlay would count to 0 and then just
         // sit there, since nothing ever overlays a "done" message afterward when there's no next
         // item to actually process. Only pace/show the countdown when there's a real next item.
-        if (item) await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        if (item) {
+          // 2026-09-26 (cross-platform pacing hardening): Facebook full auto-publish is default ON
+          // and production data showed a real 34-posts/hour burst plus a real automated-behavior
+          // checkpoint hit -- widened from the generic 10-25s fallback to Craigslist's conservative
+          // 150-210s/item pacing plus the same real 20/hr sliding cap. See the constant block above
+          // (FACEBOOK_QUEUE_ADVANCE_DELAY_MS) for the full research citation.
+          const fbHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('FACEBOOK', FACEBOOK_HOURLY_CAP);
+          if (fbHourlyWaitMs > 0) {
+            console.log('[FAS Facebook] hourly cap (' + FACEBOOK_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(fbHourlyWaitMs / 1000) + 's');
+            await humanQueueDelay(sender.tab && sender.tab.id, { MIN: fbHourlyWaitMs, MAX: fbHourlyWaitMs });
+          }
+          await humanQueueDelay(sender.tab && sender.tab.id, FACEBOOK_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        }
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
       } else if (msg.type === 'setCraigslistQueue') {
         // Craigslist channel (ADR-084 extension): store the queue and OPEN the posting tab here in
@@ -2075,7 +2133,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // 2026-09-26 (Patrick-directed hourly cap -- see CRAIGSLIST_HOURLY_CAP block near
           // CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS's definition): mirrored here in sync with the
           // primary reliability-net path above, same reasoning -- additive, never a replacement.
-          const clHourlyWaitMs = await craigslistRecordPostAndGetHourlyWaitMs();
+          const clHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('CRAIGSLIST', CRAIGSLIST_HOURLY_CAP);
           if (clHourlyWaitMs > 0) {
             console.log('[FAS Craigslist] hourly cap (' + CRAIGSLIST_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(clHourlyWaitMs / 1000) + 's');
             await craigslistDelayWithOverlay(clAdvanceTabId, { MIN: clHourlyWaitMs, MAX: clHourlyWaitMs }, false);
@@ -2156,7 +2214,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const next = (st.fasGumtreeAuIndex || 0) + 1;
         await chrome.storage.local.set({ fasGumtreeAuIndex: next });
         const item = (st.fasGumtreeAuQueue || [])[next] || null;
-        await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        // 2026-09-26 (cross-platform pacing hardening): manual-assist only (a human always copies
+        // fields and clicks Post themselves) with zero production volume and no stated Gumtree AU
+        // posting-count limit or confirmed enforcement case -- a modest dedicated bump as cheap
+        // insurance, not a response to a real problem. No hourly cap: there's no real automated
+        // submission here to pace against.
+        await humanQueueDelay(undefined, GUMTREE_AU_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
         sendResponse({ ok: true, item, index: next, total: (st.fasGumtreeAuQueue || []).length });
       } else if (msg.type === 'gumtreeAuLoginStateObserved') {
         // (ADR-102, 2026-08-09) Same shape as craigslistLoginStateObserved above -- best-effort
@@ -2229,7 +2292,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // 'advanceQueue' fix above -- this fired even when `item` is null (queue exhausted),
           // leaving the countdown overlay stuck at "...0s" forever after the last item. Only pace
           // when there's a real next item.
-          if (item) await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          if (item) {
+            // 2026-09-26 (cross-platform pacing hardening): Poshmark full auto-publish is default
+            // ON at real production volume (up to 113 posts in observed history) -- widened from
+            // the generic 10-25s fallback to Craigslist's conservative 150-210s/item pacing plus the
+            // same real 20/hr sliding cap, intentionally well under the ~300/day unofficial ceiling
+            // even accounting for realistic multi-hour organizer sessions (that ceiling is
+            // directional, not confirmed). See POSHMARK_QUEUE_ADVANCE_DELAY_MS above.
+            const poshHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('POSHMARK', POSHMARK_HOURLY_CAP);
+            if (poshHourlyWaitMs > 0) {
+              console.log('[FAS Poshmark] hourly cap (' + POSHMARK_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(poshHourlyWaitMs / 1000) + 's');
+              await humanQueueDelay(sender.tab && sender.tab.id, { MIN: poshHourlyWaitMs, MAX: poshHourlyWaitMs });
+            }
+            await humanQueueDelay(sender.tab && sender.tab.id, POSHMARK_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          }
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'setMercariQueue') {
@@ -2417,7 +2493,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasGrailedIndex: next });
           const item = queue[next] || null;
-          await humanQueueDelay(); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          // 2026-09-26 (cross-platform pacing hardening): Grailed's ToS has the single strictest
+          // anti-automation clause of any platform studied (requires "prior written consent" for
+          // any third-party tool; its Code of Conduct explicitly names bots/scraping/AI as
+          // suspension grounds) -- good time to harden before volume grows, even though production
+          // volume is still low (4 jobs so far). Widened from the generic 10-25s fallback to
+          // Craigslist's conservative 150-210s/item pacing plus the same real 20/hr sliding cap.
+          // See GRAILED_QUEUE_ADVANCE_DELAY_MS above.
+          const grHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('GRAILED', GRAILED_HOURLY_CAP);
+          if (grHourlyWaitMs > 0) {
+            console.log('[FAS Grailed] hourly cap (' + GRAILED_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(grHourlyWaitMs / 1000) + 's');
+            await humanQueueDelay(undefined, { MIN: grHourlyWaitMs, MAX: grHourlyWaitMs });
+          }
+          await humanQueueDelay(undefined, GRAILED_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'getRemovalQueueItem') {
