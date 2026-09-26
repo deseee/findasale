@@ -26,6 +26,7 @@ import { prisma } from '../lib/prisma';
 import { randomBytes } from 'crypto';
 import { getOrganizerWorkspace, createConsignorCore, ConsignorValidationError } from './consignorController';
 import { sendConsignorIntakeRequestNotice } from '../services/consignorEmailService';
+import { ConsignorIntakeAppointment } from '@prisma/client';
 
 const siteUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
@@ -448,7 +449,7 @@ export const approveIntakeRequest = async (req: AuthRequest, res: Response) => {
           },
         });
 
-        let appointment = null;
+        let appointment: ConsignorIntakeAppointment | null = null;
         if (intakeRequest.appointment && shouldConfirmAppointment) {
           appointment = await tx.consignorIntakeAppointment.update({
             where: { id: intakeRequest.appointment.id },

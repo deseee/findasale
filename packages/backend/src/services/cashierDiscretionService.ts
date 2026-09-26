@@ -94,6 +94,47 @@ export type CashierDiscretionResolution =
  * by any input. `item` must be a FRESH read (the caller's responsibility) so the cap
  * reflects the item's live price/originalPrice, not a stale client-supplied snapshot.
  */
+/**
+ * Cart-level "can this cashier apply a discount AT ALL" check (ADR cashier-discretionary-
+ * discount, 2026-09-25) -- the permission-only half of resolveCashierDiscretion below, used
+ * by getBoothCartSummary (vendorBoothCartController.ts) so the frontend can decide whether to
+ * render the per-item Discount control without a per-item resolve call. Mirrors the exact
+ * same grant-lookup logic as resolveCashierDiscretion's gate (kept in sync manually -- both
+ * read the same CashierDiscretionGrant row shape); this one only answers yes/no, it never
+ * computes or clamps an actual discount amount. HUB_OWNER always true (still cap-bounded at
+ * resolve time by resolveCashierDiscretion -- never exempt from the cap itself, just never
+ * needs a grant row). TEAM_MEMBER/BOOTH require an enabled CashierDiscretionGrant row for
+ * this specific hub.
+ */
+export async function isCashierDiscretionGrantedTo(
+  hubId: string,
+  actorType: CashierActorType,
+  actorTeamMemberId?: string | null,
+  actorBoothId?: string | null
+): Promise<boolean> {
+  if (actorType === 'HUB_OWNER') return true;
+
+  if (actorType === 'TEAM_MEMBER') {
+    if (!actorTeamMemberId) return false;
+    const grant = await prisma.cashierDiscretionGrant.findUnique({
+      where: { hubId_cashierTeamMemberId: { hubId, cashierTeamMemberId: actorTeamMemberId } },
+      select: { enabled: true },
+    });
+    return !!grant?.enabled;
+  }
+
+  if (actorType === 'BOOTH') {
+    if (!actorBoothId) return false;
+    const grant = await prisma.cashierDiscretionGrant.findUnique({
+      where: { hubId_cashierBoothId: { hubId, cashierBoothId: actorBoothId } },
+      select: { enabled: true },
+    });
+    return !!grant?.enabled;
+  }
+
+  return false;
+}
+
 export async function resolveCashierDiscretion(
   params: ResolveCashierDiscretionParams
 ): Promise<CashierDiscretionResolution> {

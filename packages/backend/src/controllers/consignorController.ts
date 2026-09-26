@@ -67,6 +67,16 @@ export class ConsignorValidationError extends Error {
  * createConsignor's optional first-item intake, or Approve's appointment-confirmation update)
  * can pass their transaction's `tx` through.
  */
+// Prisma v5: prisma is $extends-wrapped, so the client `prisma.$transaction(cb)` hands to
+// `cb` is the EXTENDED transaction flavor (Omit<typeof prisma, ITXClientDenyList>), which is
+// NOT assignable to the plain `Prisma.TransactionClient`. Accept either so every call site
+// (base prisma, a raw tx, or an extended interactive-transaction tx) type-checks. Same pattern
+// as itemStockService.ts sellItemUnits / xpService.ts spendXp (Prisma v5 pitfall, confirmed via
+// Railway build failure 2026-09-25, TS2345 on this exact function -- see STATE.md).
+type ConsignorTxClient =
+  | Prisma.TransactionClient
+  | Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+
 export async function createConsignorCore(
   params: {
     workspaceId: string;
@@ -78,8 +88,13 @@ export async function createConsignorCore(
     unsoldItemDisposition?: unknown;
     notes?: string | null;
   },
-  client: Prisma.TransactionClient | typeof prisma = prisma
+  clientParam: ConsignorTxClient = prisma
 ) {
+  // See itemStockService.ts sellItemUnits for why this explicit-annotation cast (not
+  // `const client = clientParam`) is required -- letting TS infer the union type on this
+  // variable risks the same "excessive stack depth" Prisma v5 pitfall once used with
+  // model delegates below.
+  const client: Prisma.TransactionClient = clientParam as Prisma.TransactionClient;
   const { workspaceId, name, email, phone, commissionRate, useTieredCommission, unsoldItemDisposition, notes } = params;
 
   if (!name || commissionRate === undefined || commissionRate === null || commissionRate === '') {
