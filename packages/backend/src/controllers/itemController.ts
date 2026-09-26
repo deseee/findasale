@@ -292,7 +292,7 @@ const assignRarity = (price: number | undefined | null): ItemRarity => {
 // dollars comparison. Shared by createItem and updateItem's floor checks below.
 const DEFAULT_CONSIGNMENT_MINIMUM_PRICE_CENTS = 4000;
 
-async function getConsignmentMinimumPriceCents(organizerId: string): Promise<number> {
+export async function getConsignmentMinimumPriceCents(organizerId: string): Promise<number> {
   const workspace = await prisma.organizerWorkspace.findFirst({
     where: { ownerId: organizerId },
     select: { settings: { select: { consignmentMinimumPriceCents: true } } },

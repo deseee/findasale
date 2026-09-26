@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { getConsignorMarkdownPolicyNotice } from './commissionCalcService';
+import { getConsignmentMinimumPriceCents } from '../controllers/itemController';
 
 /**
  * In-app consignor agreement (Patrick, 2026-09-25): the consignor agreement now lives in
@@ -10,12 +11,19 @@ import { getConsignorMarkdownPolicyNotice } from './commissionCalcService';
  * Deliberately does NOT include a "cashier discretionary markdown" clause -- that feature
  * (an additional POS-time discount) is still being decided by Patrick and isn't ready to
  * be represented to consignors as policy yet.
+ *
+ * {{consignmentMinimumPrice}} (2026-09-26 fix): the intake floor used to be a fixed $40
+ * baked into this text; it's been organizer-configurable since 2026-09-25
+ * (WorkspaceSettings.consignmentMinimumPriceCents, see itemController.ts's
+ * getConsignmentMinimumPriceCents) and the template never caught up. Rendered per
+ * organizer via that same helper so this line always matches what intake actually
+ * enforces.
  */
 export const CONSIGNOR_AGREEMENT_TEMPLATE = `# Consignor Agreement
 
 ## 1. Item Intake
 
-Intake is by appointment only. Every item, collection, or lot priced under $40 may be declined at intake and returned to you, or donated at your direction, at {{businessName}}'s discretion. There is no minimum on what an item may later sell for once it's on the floor (see Automatic Markdowns below). {{businessName}} determines final listed price, tags, and displays for each item; you may suggest a price, but {{businessName}} has final say.
+Intake is by appointment only. Every item, collection, or lot priced under {{consignmentMinimumPrice}} may be declined at intake and returned to you, or donated at your direction, at {{businessName}}'s discretion. There is no minimum on what an item may later sell for once it's on the floor (see Automatic Markdowns below). {{businessName}} determines final listed price, tags, and displays for each item; you may suggest a price, but {{businessName}} has final say.
 
 ## 2. Revenue Split
 
@@ -106,12 +114,15 @@ export async function renderConsignorAgreementForConsignor(
   const organizerId = consignor.workspace.owner.id;
   const markdownPolicy = await getConsignorMarkdownPolicyNotice(organizerId);
   const version = await ensureCurrentAgreementVersion(consignor.workspaceId, consignor.workspace.owner.userId);
+  const minimumPriceCents = await getConsignmentMinimumPriceCents(organizerId);
+  const minimumPriceDisplay = `$${(minimumPriceCents / 100).toFixed(minimumPriceCents % 100 === 0 ? 0 : 2)}`;
 
   const renderedMarkdown = version.bodyMarkdown
     .replace(/\{\{\s*commissionRate\s*\}\}/g, `${consignor.commissionRate.toNumber()}%`)
     .replace(/\{\{\s*returnPeriodDays\s*\}\}/g, String(consignor.returnPeriodDays))
     .replace(/\{\{\s*unsoldItemDisposition\s*\}\}/g, humanizeDisposition(consignor.unsoldItemDisposition))
     .replace(/\{\{\s*markdownPolicySummary\s*\}\}/g, markdownPolicy.summary)
+    .replace(/\{\{\s*consignmentMinimumPrice\s*\}\}/g, minimumPriceDisplay)
     .replace(/\{\{\s*businessName\s*\}\}/g, consignor.workspace.owner.businessName);
 
   return {
