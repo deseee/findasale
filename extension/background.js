@@ -320,7 +320,16 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         // and reasoning. The REACTIVE safety net (craigslistRateLimitHit -> startCraigslistSessionCooldown,
         // in the message listener below) is unchanged -- this run now only pauses when Craigslist's
         // own "posting too rapidly" wall is actually hit, not on a fixed item count.
-        // CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS alone now carries the pacing for every item, uniformly.
+        // CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS alone now carries the baseline per-item pacing.
+        // 2026-09-26 (Patrick-directed hourly cap -- see CRAIGSLIST_HOURLY_CAP block near
+        // CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS's definition): record this just-completed post and, if
+        // the rolling 60-minute count is at/over the cap, hold here FIRST, additive to (never
+        // instead of) the baseline delay right below.
+        const clHourlyWaitMs = await craigslistRecordPostAndGetHourlyWaitMs();
+        if (clHourlyWaitMs > 0) {
+          console.log('[FAS Craigslist] hourly cap (' + CRAIGSLIST_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(clHourlyWaitMs / 1000) + 's');
+          await craigslistDelayWithOverlay(tabId, { MIN: clHourlyWaitMs, MAX: clHourlyWaitMs }, false);
+        }
         await craigslistDelayWithOverlay(
           tabId,
           CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS,
@@ -1602,6 +1611,50 @@ const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 const CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS = { MIN: 150000, MAX: 210000 };
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
+// HOURLY ROLLING CAP (2026-09-26, Patrick-directed follow-up to the 2026-09-25 pacing retune --
+// see claude_docs/feature-notes/ADR-craigslist-pacing-retune-2026-09-25.md addendum). The
+// CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS range above only AVERAGES 180000ms (3min, i.e. 20/hour) -- it
+// is a randomized per-item delay, not a hard cap, so an unlucky run of low draws near the 150000ms
+// floor could post faster than 20/hour in a given rolling hour, with nothing actually counting real
+// posts against a real window. Patrick's explicit direction after reviewing this data: enforce a
+// genuine sliding 20-posts-per-60-minutes ceiling, ADDITIVE to (not a replacement for) the existing
+// per-item delay above -- that delay still sets the baseline spacing between individual posts; this
+// cap only adds extra wait time on top when the rolling count would otherwise exceed 20/hour. This
+// is a continuously-sliding rate limit, not the old flat per-session cap removed 2026-09-25 -- a
+// run can go on indefinitely at a sustained ~20/hour, it never gets cut off after one batch of 20.
+// Timestamps are persisted in chrome.storage.local (not an in-memory array) for the same reason
+// CRAIGSLIST_SESSION_COOLDOWN_MINUTES's resume state is: a long Craigslist run can span an MV3
+// service-worker restart, and an in-memory array would silently reset to empty on restart,
+// defeating the whole point of a rolling cap.
+const CRAIGSLIST_HOURLY_CAP = 20;
+const CRAIGSLIST_HOURLY_WINDOW_MS = 60 * 60 * 1000;
+const FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY = 'fasCraigslistPostTimestamps';
+
+// Records the Craigslist post that just completed (the one triggering this advance -- both call
+// sites below only reach this function after a real publish succeeded) and returns how many
+// additional ms the NEXT post must wait, on top of the normal CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS
+// pacing, to keep the rolling 60-minute window at or under CRAIGSLIST_HOURLY_CAP posts. Returns 0
+// when there is still room in the window (the common case). Prunes timestamps older than the
+// window on every call, so the cap self-corrects run after run -- no separate reset logic needed,
+// and there is no fixed per-session ceiling: once old posts age out, new ones are allowed again.
+async function craigslistRecordPostAndGetHourlyWaitMs() {
+  const now = Date.now();
+  const cutoff = now - CRAIGSLIST_HOURLY_WINDOW_MS;
+  const { [FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY]: existing = [] } =
+    await chrome.storage.local.get([FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY]);
+  // existing is chronological (append-only below); dropping anything outside the window keeps the
+  // array from growing unbounded across a long-running or multi-day queue.
+  const timestamps = existing.filter((t) => typeof t === 'number' && t > cutoff);
+  timestamps.push(now); // this post just happened -- count it toward the rolling total immediately
+  await chrome.storage.local.set({ [FAS_CRAIGSLIST_POST_TIMESTAMPS_KEY]: timestamps });
+  if (timestamps.length < CRAIGSLIST_HOURLY_CAP) return 0;
+  // At/over the cap: hold the next post until the OLDEST in-window timestamp ages out of the
+  // window -- that is exactly what frees the next slot under a true sliding-window cap (as opposed
+  // to a fixed-bucket "reset every hour" scheme, which is not what was asked for here).
+  const oldest = timestamps[0];
+  return Math.max(0, (oldest + CRAIGSLIST_HOURLY_WINDOW_MS) - Date.now());
+}
+
 // BATCH COOLDOWN (2026-08-31, Patrick live report -- 60-75s per-item still tripped Craigslist's
 // "You are posting too rapidly" throttle, the THIRD widening attempt to fail. Patrick's own
 // observation: it trips roughly every 6 items regardless of per-item spacing, which points at
@@ -2019,6 +2072,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             const clLog1 = clLog0.concat([{ t: Date.now(), index: next }]);
             await chrome.storage.local.set({ fasCraigslistPostLog: clLog1.length > 200 ? clLog1.slice(-200) : clLog1 });
           } catch (e) {}
+          // 2026-09-26 (Patrick-directed hourly cap -- see CRAIGSLIST_HOURLY_CAP block near
+          // CRAIGSLIST_QUEUE_ADVANCE_DELAY_MS's definition): mirrored here in sync with the
+          // primary reliability-net path above, same reasoning -- additive, never a replacement.
+          const clHourlyWaitMs = await craigslistRecordPostAndGetHourlyWaitMs();
+          if (clHourlyWaitMs > 0) {
+            console.log('[FAS Craigslist] hourly cap (' + CRAIGSLIST_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(clHourlyWaitMs / 1000) + 's');
+            await craigslistDelayWithOverlay(clAdvanceTabId, { MIN: clHourlyWaitMs, MAX: clHourlyWaitMs }, false);
+          }
           // 2026-09-17 (round 4): no more batch-of-5 branch -- see reliability-net call site above.
           await craigslistDelayWithOverlay(
             clAdvanceTabId,
