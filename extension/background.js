@@ -1656,7 +1656,9 @@ function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 // the whole point of a rolling cap.
 const CRAIGSLIST_HOURLY_CAP = 20;
 const FACEBOOK_HOURLY_CAP = 20;
-const POSHMARK_HOURLY_CAP = 20;
+const POSHMARK_HOURLY_CAP = 12; // 2026-09-26: tightened from 20 -> 12 after research found competitor
+// tools (Vendoo et al.) converge on ~300 new listings/24h (~12.5/hr sustained) as their own safe-guidance
+// ceiling for Poshmark -- 20/hr was looser than what competitors themselves consider safe.
 const GRAILED_HOURLY_CAP = 20;
 const PLATFORM_HOURLY_WINDOW_MS = 60 * 60 * 1000;
 const FAS_PLATFORM_POST_TIMESTAMPS_KEY_PREFIX = 'fasPlatformPostTimestamps_';
