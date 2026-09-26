@@ -2674,7 +2674,90 @@
   // flow. Fixed by polling for BOTH the delete link and the confirm modal via the file's own
   // existing waitForSelector() helper instead of fixed sleeps, so a slow-to-hydrate page gets a
   // real chance to catch up instead of being checked exactly once.
-  async function deletePoshmarkListingOnEditPage(item, targetId, continueUrl) {
+  // Any currently-visible `.modal.simple-modal`, with NO text filter (unlike
+  // findVisiblePoshmarkDeleteConfirmModal above, which only matches the delete-confirm dialog
+  // itself) -- used below to catch a REPLACEMENT modal Poshmark may show after the "Yes" click is
+  // accepted but the delete is refused server-side (e.g. an inline offer/bundle/sold error), which
+  // would not match the delete-confirm-specific text filter.
+  function findAnyVisiblePoshmarkSimpleModal() {
+    return qa('.modal.simple-modal').find((m) => {
+      if (m.hidden) return false;
+      const style = getComputedStyle(m);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+  }
+
+  // UNVERIFIED (2026-09-26, claude_docs/architecture/poshmark-delisting-notes.md) -- Poshmark's
+  // exact wording/markup for a refused delete (active offer / active bundle / already sold, see
+  // that file) has never been directly observed live in this codebase, unlike every selector
+  // above it in this file. This is a best-effort keyword scan of a still-or-newly visible modal's
+  // OWN text, using the same text-content-matching style findVisiblePoshmarkDeleteConfirmModal
+  // already relies on -- deliberately scoped to the modal only, NEVER the whole page: this file's
+  // own poshRemCollectClosetCards/findPoshmarkListingTitleEl comments above already document that
+  // Poshmark's header nav permanently contains the literal words "My Offers" and "My Bundles" on
+  // every edit-listing page load, blocked or not, so a page-wide text scan for "offer"/"bundle"
+  // would misfire on every single attempt. If no modal is visible, or its text matches none of
+  // these, this returns null and the caller falls back to the existing generic "delete unconfirmed"
+  // retry path instead of guessing a classification.
+  function classifyPoshmarkDeleteBlock() {
+    const modal = findAnyVisiblePoshmarkSimpleModal();
+    const text = modal ? norm(modal.textContent) : '';
+    if (!text) return null;
+    if (/\bsold\b/.test(text)) return 'sold';
+    if (/\bbundle\b/.test(text)) return 'bundle';
+    if (/\boffer\b/.test(text)) return 'offer';
+    return null;
+  }
+
+  // UNVERIFIED (2026-09-26, claude_docs/architecture/poshmark-delisting-notes.md) -- the
+  // edit-listing page's own Save control has never been directly observed live the way
+  // findPoshmarkPublishButton's "List this item" text was (see that function's own bug-fix
+  // history). Tries several plausible labels, same text-match style as findPoshmarkPublishButton,
+  // so an unexpected real label just means this returns null (caller degrades to the existing
+  // generic retry path) instead of clicking the wrong control.
+  var POSHMARK_EDIT_SAVE_BUTTON_TEXTS = ['save changes', 'save', 'update listing', 'save listing'];
+  function findPoshmarkEditSaveButton() {
+    for (const t of POSHMARK_EDIT_SAVE_BUTTON_TEXTS) {
+      const btn = findPoshmarkVisibleButtonByText(t);
+      if (btn) return btn;
+    }
+    return null;
+  }
+
+  // UNVERIFIED (2026-09-26, claude_docs/architecture/poshmark-delisting-notes.md) -- implements the
+  // one documented workaround for the active-offer delete block (Vendoo help center + multiple
+  // reseller how-to guides, see that file's Sources): editing the listing's Size field and saving
+  // auto-cancels any pending offer on it, letting a retried delete succeed. Reuses fillPoshmarkSize
+  // (this file's own live-confirmed Size-dropdown mechanics from the CREATE-listing flow) on the
+  // inference that the edit-listing page reuses the same Vue field components -- a reasonable but
+  // NOT independently live-confirmed inference here (the brand-edit-3-times warning modal this
+  // file already has to scope around on this same edit page confirms at least one other field is
+  // editable here the same way, which is the basis for that inference). The exact size value picked
+  // doesn't matter -- Poshmark's own auto-cancel fires on ANY size change -- and the listing is
+  // about to be deleted anyway, so there is no need to change it back. Returns false (never true
+  // on a guess) if the Size field can't be found/set or no Save control can be found, so the caller
+  // never claims a workaround happened when it didn't.
+  var POSHMARK_WORKAROUND_SIZE_CANDIDATES = ['S', 'M', 'L', 'XL', 'One Size'];
+  async function attemptPoshmarkSizeEditCancelWorkaround(item) {
+    const current = norm(item && item.size);
+    const candidates = POSHMARK_WORKAROUND_SIZE_CANDIDATES.filter((s) => norm(s) !== current);
+    let changed = false;
+    for (const candidate of candidates) {
+      if (await fillPoshmarkSize(candidate)) { changed = true; break; }
+    }
+    if (!changed) return false;
+    const saveBtn = await waitForSelector(() => findPoshmarkEditSaveButton(), 4000);
+    if (!saveBtn) return false;
+    await humanPause(400, 900);
+    realClick(saveBtn);
+    // No known confirmation signal for "the save round-tripped" on this page (UNVERIFIED) -- a
+    // fixed pause, not a polled wait, before the caller retries the delete click.
+    await sleep(1500);
+    return true;
+  }
+
+  async function deletePoshmarkListingOnEditPage(item, targetId, continueUrl, allowOfferWorkaround) {
+    if (allowOfferWorkaround === undefined) allowOfferWorkaround = true;
     const deleteLink = await waitForSelector(() => document.querySelector('a[data-et-name="delete"]'), 8000);
     if (!deleteLink) return 'no_delete_link';
     // SAFETY 2026-09-04: the delete link itself carries the listing id it will delete
@@ -2698,13 +2781,46 @@
     // next item -- is therefore handed to background.js, which is a persistent worker and always
     // survives. Fire-and-forget on purpose: the dispatch must be initiated before teardown, and
     // must not be queued behind any further code in this function that might never run.
-    try {
-      chrome.runtime.sendMessage({
-        type: 'crossPlatformRemovalDeleted', platform: 'POSHMARK', itemId: item.id, continueUrl: continueUrl || null
-      });
-    } catch (e) {}
-    try { sessionStorage.removeItem('fasPoshDeleteTargetId'); } catch (e) {}
-    return 'deleted';
+    //
+    // VERIFY (2026-09-26, poshmark-delisting-notes.md): a click accepted by Poshmark's UI is not
+    // the same as the delete actually taking effect server-side -- an active offer, an active
+    // buyer bundle, or the item already being sold on Poshmark can all block the delete while the
+    // confirm modal still closes normally. The one confirmed real signal for a genuine delete is
+    // exactly the post-delete redirect the comment above already documents, so wait for that
+    // navigation instead of assuming the click alone means success (this replaces the old
+    // fire-the-success-message-immediately behavior with a real check).
+    const verifyId = targetId || linkListingId;
+    const navigatedAway = await waitForSelector(
+      () => ((location.pathname.indexOf('/edit-listing/') === -1 || extractPoshmarkListingId(location.pathname) !== verifyId) ? true : null),
+      6000
+    );
+    if (navigatedAway) {
+      try {
+        chrome.runtime.sendMessage({
+          type: 'crossPlatformRemovalDeleted', platform: 'POSHMARK', itemId: item.id, continueUrl: continueUrl || null
+        });
+      } catch (e) {}
+      try { sessionStorage.removeItem('fasPoshDeleteTargetId'); } catch (e) {}
+      return 'deleted';
+    }
+
+    // Still on this exact listing's edit page after the "Yes" click -- the delete did not go
+    // through. Classify why (best-effort -- see classifyPoshmarkDeleteBlock's own confidence note)
+    // and branch three ways per poshmark-delisting-notes.md rather than treating every blocked
+    // delete as the same generic "couldn't confirm" case.
+    const blockReason = classifyPoshmarkDeleteBlock();
+    if (blockReason === 'sold') return 'blocked_sold';
+    if (blockReason === 'bundle') return 'blocked_bundle';
+    if (blockReason === 'offer') {
+      if (!allowOfferWorkaround) return 'blocked_offer_retry_exhausted';
+      const workedAround = await attemptPoshmarkSizeEditCancelWorkaround(item);
+      if (!workedAround) return 'blocked_offer_workaround_failed';
+      // One retry only (allowOfferWorkaround=false) -- if the listing is STILL offer-blocked after
+      // a real size change+save, retrying the workaround again is unlikely to help and risks a
+      // runaway edit loop, so fall through to the bounded generic retry path instead.
+      return await deletePoshmarkListingOnEditPage(item, targetId, continueUrl, false);
+    }
+    return 'delete_unconfirmed';
   }
 
   // Removal reporting, queue advance and continue-navigation now live in background.js (driven by
@@ -2761,9 +2877,41 @@
           // background.js, which survives the redirect Poshmark fires immediately after a delete.
           return;
         }
+        if (result === 'blocked_sold') {
+          // PERMANENT, non-retriable (2026-09-26, poshmark-delisting-notes.md): a listing that has
+          // actually sold on Poshmark itself can never be deleted or edited there again, no matter
+          // how many times this is retried -- unlike every other failure path in this function,
+          // this must never be re-attempted. crossPlatformRemovalSkipped (not
+          // crossPlatformRemovalAttemptFailed) reports it and moves the queue on immediately, the
+          // same permanent-skip call this file already uses for a genuinely unmatchable title.
+          overlayWarn('This item shows as already sold on Poshmark -- Poshmark never allows deleting a sold listing, so this can\'t be automated. Please review it yourself.' + button('fas-posh-close', 'Close', false));
+          try {
+            chrome.runtime.sendMessage({
+              type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'already_sold_on_poshmark_permanent', continueUrl: closetUrl || null
+            });
+          } catch (e) {}
+          return;
+        }
+        if (result === 'blocked_bundle') {
+          // RETRIABLE, but not by anything this extension can force (2026-09-26,
+          // poshmark-delisting-notes.md): unlike the offer case there is no size-edit trick that
+          // clears a buyer bundle -- only the buyer/bundle itself clearing does. Deliberately
+          // reuses the SAME crossPlatformRemovalAttemptFailed / FAS_REMOVAL_MAX_ATTEMPTS bounded
+          // retry-then-permanent-skip mechanism background.js already applies to every other
+          // transient failure below, rather than a new status -- this leaves the item queued for a
+          // later retry instead of marking it removed or failing it outright on first sighting.
+          overlayWarn('This item is in an active buyer bundle on Poshmark, which blocks deleting it right now -- will retry later.' + button('fas-posh-close', 'Close', false));
+          try {
+            chrome.runtime.sendMessage({
+              type: 'crossPlatformRemovalAttemptFailed', platform: 'POSHMARK', itemId: item.id, reason: 'active_bundle_block', continueUrl: closetUrl || null
+            });
+          } catch (e) {}
+          return;
+        }
         overlayWarn('Found the edit page but couldn\'t confirm the delete action (' + escapeHtml(result) + ') -- please remove it yourself.' + button('fas-posh-close', 'Close', false));
-        // Transient by nature (page/modal not hydrated yet, or a mid-flow redirect): background.js
-        // retries this same item and only treats it as permanent after 3 failed attempts.
+        // Transient by nature (page/modal not hydrated yet, a mid-flow redirect, or an offer-block
+        // whose size-edit workaround didn't take): background.js retries this same item and only
+        // treats it as permanent after 3 failed attempts.
         try {
           chrome.runtime.sendMessage({
             type: 'crossPlatformRemovalAttemptFailed', platform: 'POSHMARK', itemId: item.id, reason: result, continueUrl: closetUrl || null
