@@ -2279,6 +2279,23 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
     const awardResult = await awardXp(userId, 'VISIT', XP_AWARDS.VISIT, { saleId, description: `Visited sale: ${sale.title}` });
 
     if (!awardResult) {
+      // awardXp() returns null both when its internal fraud check blocks the
+      // award (Platform Safety #118) and on a genuine unexpected failure --
+      // those need different HTTP responses. Re-check the fraud flag here
+      // (cheap, only hit on this rare null path) rather than changing
+      // awardXp()'s return contract, which 40+ other call sites across the
+      // codebase depend on as a simple truthy/falsy check.
+      // Audit finding 2026-09-26: this branch was unconditionally returning
+      // 500 for fraud-blocked visits, mislabeling a working fraud check as a
+      // server crash. Fixed 2026-09-27.
+      const awardingUser = await prisma.user.findUnique({ where: { id: userId }, select: { fraudSuspect: true, guildXp: true } });
+      if (awardingUser?.fraudSuspect) {
+        res.status(200).json({
+          message: 'Visit recorded, but XP was not awarded.',
+          guildXp: awardingUser.guildXp,
+        });
+        return;
+      }
       res.status(500).json({ message: 'Failed to award XP.' });
       return;
     }
