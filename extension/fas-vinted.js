@@ -1931,7 +1931,7 @@
     // right after Category and before Brand/Size/Color, so Vinted has real wall-clock time (the DOM
     // interactions + sleeps for Brand and Size below) to actually analyze the photos before Color's
     // suggested-swatch check runs.
-    const photosOk = await injectPhotos(item.photoUrls);
+    let photosOk = await injectPhotos(item.photoUrls);
     if (!photosOk) console.warn('[FAS Vinted] Photos did not attach -- Color\'s suggested-swatch check below will very likely find nothing to accept, since Vinted has no photos to analyze from.');
     await humanPause(400, 800);
     // 2026-08-18: brand/size/color/material now exist on Item (single string each, not an
@@ -2098,6 +2098,32 @@
           warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
         }
       }
+    }
+    // BUG FIX 2026-09-27 (Patrick live report + live-observed via screenshot: mid-fill, after
+    // Price and Category were already visibly filled, Vinted's real "Language" MODAL popped up
+    // for this Books/Comics/Magazines item -- and once it closed, Photos and Category were back
+    // to empty/unset, as if the form had restarted). Language runs dead LAST in this function
+    // specifically because an earlier fix (see this block's own comment above) found Vinted's
+    // Item Details panel resets SIBLING fields whenever one of them is interacted with -- moving
+    // Language last was meant to make it immune to being reset by anything after it. This is the
+    // same bug hitting in the other direction: Language's own interaction (a real modal, not the
+    // inline auto-apply panel every other field here uses) appears to trigger a broader re-render
+    // than usual, resetting fields filled well BEFORE it -- Photos and Category, both observed
+    // live. Same fix pattern already used for Price/Language above (re-verify the real DOM at the
+    // end rather than trusting an earlier-in-the-run snapshot): now that Language is done, check
+    // Photos and Category one more time and re-fill whichever one Vinted silently cleared.
+    if (!photosOk || !(photoInput() && photoInput().files && photoInput().files.length)) {
+      console.warn('[FAS Vinted] Photos missing after the Language step -- Vinted reset them, re-attaching.');
+      const rePhotosOk = await injectPhotos(item.photoUrls);
+      if (rePhotosOk) photosOk = true;
+      else if (!photosOk) console.warn('[FAS Vinted] Photos still did not attach after re-attempting post-Language.');
+    }
+    const categoryFieldAfterLanguage = fieldByLabel('Category');
+    const categoryTextAfterLanguage = categoryFieldAfterLanguage ? norm(categoryFieldAfterLanguage.value) : '';
+    const categoryStillSet = categoryTextAfterLanguage && categoryTextAfterLanguage !== norm('Select a category');
+    if (!categoryStillSet) {
+      console.warn('[FAS Vinted] Category missing after the Language step -- Vinted reset it, re-selecting.');
+      await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
     }
     return { photosOk, warnings };
   }
@@ -3534,6 +3560,38 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+
+    // BUG FIX 2026-09-27 (Patrick live report: repeated reload+refill cycles hammered the same
+    // Vinted listing several times inside an hour tonight -- Vinted's own fraud/abuse detection
+    // flagged the account for "unusual activity" and temporarily restricted it, confirmed live via
+    // a Vinted Support inbox message timestamped 36 minutes into this exact debugging session.
+    // Root cause: start() runs a full, fast, many-field automated fill on EVERY page load with zero
+    // memory of prior attempts -- reloading the extension or the tab (which happened repeatedly
+    // tonight chasing an unrelated DOM-reset bug) always triggered another full-speed re-fill of
+    // the SAME item, with no cap and no cooldown. That rapid, repeated, full-form automated activity
+    // on one account is exactly the pattern a marketplace's abuse detection watches for, independent
+    // of whether any individual fill attempt itself succeeded or failed. Circuit breaker: track
+    // attempts per item id in storage; after 2 attempts within 30 minutes, refuse to auto-fill again
+    // and tell the organizer plainly instead of silently retrying -- protects the account first,
+    // regardless of what DOM issue (if any) is still causing retries.
+    const FAS_VINTED_ATTEMPTS_KEY = 'fasVintedItemAttempts';
+    const FAS_VINTED_ATTEMPT_COOLDOWN_MS = 30 * 60 * 1000;
+    const FAS_VINTED_MAX_ATTEMPTS = 2;
+    const vintedAttemptsNow = Date.now();
+    const vintedAttemptsStore = (await chrome.storage.local.get([FAS_VINTED_ATTEMPTS_KEY]))[FAS_VINTED_ATTEMPTS_KEY] || {};
+    const vintedPriorAttempt = vintedAttemptsStore[queued.item.id];
+    if (vintedPriorAttempt && vintedPriorAttempt.count >= FAS_VINTED_MAX_ATTEMPTS &&
+        (vintedAttemptsNow - vintedPriorAttempt.lastAt) < FAS_VINTED_ATTEMPT_COOLDOWN_MS) {
+      const waitMin = Math.ceil((FAS_VINTED_ATTEMPT_COOLDOWN_MS - (vintedAttemptsNow - vintedPriorAttempt.lastAt)) / 60000);
+      overlayWarn('FindA.Sale paused automatic filling for <b>' + escapeHtml(queued.item.title || 'this item') +
+        '</b> after ' + vintedPriorAttempt.count + ' repeated attempts in a short time -- to protect your Vinted ' +
+        'account from being flagged for unusual activity, please finish this one by hand, or wait about ' + waitMin +
+        ' more minute' + (waitMin === 1 ? '' : 's') + ' before reloading.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    vintedAttemptsStore[queued.item.id] = { count: (vintedPriorAttempt ? vintedPriorAttempt.count : 0) + 1, lastAt: vintedAttemptsNow };
+    try { await chrome.storage.local.set({ [FAS_VINTED_ATTEMPTS_KEY]: vintedAttemptsStore }); } catch (e) {}
 
     const vintedReason = vintedRestrictionReason(queued.item.category, queued.item.title);
     if (vintedReason) {
