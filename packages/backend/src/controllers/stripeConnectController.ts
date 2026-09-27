@@ -7,7 +7,6 @@ import {
   createStandardMigrationAccount,
   createStandardMigrationAccountManual,
   getAccountStatus,
-  payConsignorViaACH,
   updateConsignorOnboardingStatus,
 } from '../services/stripeConnectService';
 // S-STRIPE-SQUARE-ONBOARDING-GUARD (2026-09-09): createConnectAccount no longer used
@@ -15,8 +14,9 @@ import {
 // now block new-Stripe-identity creation instead (Stripe platform account closed).
 import { sendConsignorPaymentSetupInvite } from '../services/consignorEmailService';
 import { getConsignorMarkdownPolicyNotice } from '../services/commissionCalcService';
-import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold
-import { Decimal } from '@prisma/client/runtime/library';
+// isPayoutFlaggedForReview / Decimal (Stripe-removal pass, 2026-09-27): were used only by
+// payConsignor, deleted below (Patrick: kill it, dead Stripe-era ACH endpoint, unreferenced by
+// any live frontend -- ACHPayoutButton.tsx that called it is itself never imported/rendered).
 
 const stripe = () => getStripe();
 
@@ -184,112 +184,6 @@ export const handleConnectReturn = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('handleConnectReturn error:', error);
     return res.status(500).json({ message: 'Failed to verify onboarding status.' });
-  }
-};
-
-// POST /api/stripe-connect/pay/:consignorId
-export const payConsignor = async (req: AuthRequest, res: Response) => {
-  try {
-    const { consignorId } = req.params;
-    const userId = req.user?.id;
-    const { settlementId, amountCents, description } = req.body;
-
-    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-    if (!settlementId || !amountCents) {
-      return res.status(400).json({ message: 'settlementId and amountCents required.' });
-    }
-
-    // Verify TEAMS tier
-    const organizer = await prisma.organizer.findFirst({
-      where: { userId },
-      select: { id: true, subscriptionTier: true, stripeConnectAccountId: true },
-    });
-
-    if (!organizer) return res.status(404).json({ message: 'Organizer not found.' });
-    if (organizer.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ message: 'ACH Payouts require TEAMS tier.' });
-    }
-
-    // Verify consignor exists and is onboarded
-    const consignor = await prisma.consignor.findFirst({
-      where: {
-        id: consignorId,
-        workspace: {
-          owner: { userId },
-        },
-      },
-    });
-
-    if (!consignor) return res.status(404).json({ message: 'Consignor not found.' });
-    if (!consignor.stripeOnboarded || !consignor.stripeAccountId) {
-      return res.status(400).json({ message: 'Consignor not onboarded for ACH payouts.' });
-    }
-
-    // S1198 (2026-09-06): hold -- never silently drop -- an ACH transfer to a consignor
-    // whose connected account's bank account fingerprint matches another connected
-    // account on the platform (connectAccountGuard.ts). This is the one explicit,
-    // FindA.Sale-controlled "pay consignor" action for Standard accounts (which
-    // otherwise self-manage their own Stripe payout schedule) -- admin must clear the
-    // flag via /api/admin/connect-bank-fingerprints before this can proceed again.
-    if (await isPayoutFlaggedForReview('CONSIGNOR', consignor.id)) {
-      return res.status(403).json({
-        message: 'This payout is on hold pending admin review. Contact support@finda.sale for details.',
-      });
-    }
-
-    // Verify settlement exists and belongs to this organizer
-    const settlement = await prisma.saleSettlement.findFirst({
-      where: {
-        id: settlementId,
-        sale: {
-          organizer: { userId },
-        },
-      },
-      select: { id: true, netProceeds: true },
-    });
-
-    if (!settlement) return res.status(404).json({ message: 'Settlement not found or access denied.' });
-
-    // Verify amount doesn't exceed settlement proceeds
-    const netProceeds = Number(settlement.netProceeds);
-    if (amountCents > netProceeds * 100) {
-      return res.status(400).json({ message: 'Payout amount exceeds settlement proceeds.' });
-    }
-
-    // Execute Stripe transfer
-    const transfer = await payConsignorViaACH(
-      consignor.stripeAccountId,
-      amountCents,
-      description || `Consignor payout for settlement ${settlementId}`,
-      organizer.stripeConnectAccountId || undefined
-    );
-
-    // Create ConsignorPayout record
-    const payout = await prisma.consignorPayout.create({
-      data: {
-        consignorId,
-        saleId: undefined,
-        totalSales: new Decimal(0),
-        commissionAmount: new Decimal(amountCents / 100),
-        netPayout: new Decimal(amountCents / 100),
-        method: 'ACH',
-        stripeTransferId: transfer.transferId,
-        paidAt: new Date(),
-        notes: description || null,
-      },
-    });
-
-    return res.json({
-      payoutId: payout.id,
-      consignorId,
-      amountFormatted: transfer.amountFormatted,
-      transferId: transfer.transferId,
-      status: transfer.status,
-      paidAt: payout.paidAt?.toISOString(),
-    });
-  } catch (error) {
-    console.error('payConsignor error:', error);
-    return res.status(500).json({ message: 'Failed to process ACH payout.' });
   }
 };
 

@@ -4,10 +4,6 @@ import {
   getPendingPayment,
   createRefund,
   recoverPaymentIntent,
-  testTransaction,
-  testCheckoutSession,
-  testInAppPayment,
-  testInAppIntent,
 } from '../controllers/stripeController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown, getRefundHistory, buyShippingLabel, markPickedUp } from '../controllers/payoutController';
 import { cashPayment } from '../controllers/cashPaymentController'; // moved 2026-09-09 (Square-changeover split-out) -- route path unchanged
@@ -27,7 +23,10 @@ router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
 // P2 Bug 2: Webhook failure recovery endpoint
 router.post('/recover-payment-intent', authenticate, paymentLimiter, recoverPaymentIntent);
 
-// Organizer refund
+// Organizer refund — live dual-processor dispatcher (Stripe- AND Square-processed purchases,
+// see stripeController.ts's createRefund purchase.processor branch); still called by
+// organizer/payouts.tsx, organizer/orders.tsx and admin/users/[id].tsx. NOT part of this
+// removal pass — flagged back to Patrick rather than deleted, see report.
 router.post('/refund/:purchaseId', authenticate, createRefund);
 
 // Subscription checkout (#23: Pricing page) -- POST /checkout-session removed 2026-09-20,
@@ -49,13 +48,9 @@ router.post('/purchases/:id/mark-picked-up', authenticate, markPickedUp); // ADR
 // Cash payment recording is processor-agnostic and stays live.
 router.post('/terminal/cash-payment', authenticate, paymentLimiter, cashPayment);
 
-// Test harness — verify POS + payment flows without real money
-router.post('/test-transaction', authenticate, testTransaction);
-router.post('/test-checkout-session', authenticate, testCheckoutSession);
-router.post('/test-in-app-payment', authenticate, testInAppPayment);
-router.post('/test-in-app-intent', authenticate, testInAppIntent);
-
-// Webhook
+// Webhook — still imported/tested by src/__tests__/stripe.e2e.test.ts (BLOCKING CI suite,
+// .github/workflows/ci-typecheck.yml). NOT part of this removal pass — flagged back to
+// Patrick rather than deleted, see report.
 router.post('/webhook', webhookHandler);
 
 export default router;

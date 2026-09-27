@@ -225,7 +225,13 @@ import './jobs/reputationJob'; // Phase 22: Creator Tier Program — weekly tier
 import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 min
 import './jobs/invoiceExpiryJob'; // S1179 fix: reclaim abandoned HoldInvoice rows (ADR-098 INVOICE_ISSUED stuck-item gap) every 10 min
 import './jobs/purchaseExpiryJob'; // S1187 fix: Stripe-verified reclaim of stuck PENDING Purchase rows (missed/never-fired webhook) every 10 min
-import './jobs/posPaymentRequestExpiryJob'; // S1187 fix: Stripe-verified sweep of expired PENDING POSPaymentRequest rows every 10 min
+// posPaymentRequestExpiryJob removed (Stripe-removal pass, 2026-09-27): the Stripe Terminal
+// in-person card-payment flow it guarded (POSPaymentRequest.stripePaymentIntentId) was removed
+// 2026-09-12, so its Stripe verification call could never succeed going forward -- it had been
+// logging "NO-PI-SKIPPED ... NOT auto-reverting; needs manual review" every ~10 min for 3 old
+// stuck rows that predate that removal. Patrick's decision: kill the auto revert. Those 3
+// pre-existing PENDING/expired/no-PI POSPaymentRequest rows are no longer checked by anything
+// and will sit in the DB permanently -- a separate DB cleanup decision, not done here.
 import './jobs/deadInvoicePaidSweepJob'; // P0 (2026-08-17): hourly sweep for money captured against a CANCELLED/EXPIRED HoldInvoice -- nothing else ever revisits a dead invoice
 import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
 import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
