@@ -974,7 +974,33 @@
   // array and showReviewOverlay renders it PERSISTENTLY on the final screen, so the organizer
   // actually sees every field that needs a manual check -- most importantly Category, which used to
   // fail completely silently (console.warn only) when the picker had no confident text match.
+  // DIAGNOSTIC 2026-09-27 ROUND 2 (S-EXT-VINTED-STEP-BREADCRUMB): durable, storage-based
+  // "last known step" pointer for the whole listing-fill sequence. Added after the earlier
+  // close-seq-only instrumentation (see openVintedSizingDetailsText() below) proved insufficient
+  // AND, on closer read, was targeting dead code: openVintedSizingDetailsText() is never called
+  // anywhere in this file as of the 2026-09-01 fix noted on it below -- its close-sequence
+  // diagnostics could never have fired. This breadcrumb instead covers the fields/steps that
+  // actually run. It does not depend on beforeunload firing or on any DevTools "preserve log"
+  // setting -- chrome.storage.local.set() is called synchronously (fire-and-forget, never
+  // awaited) the instant each step starts, so the write is already in flight before that step's
+  // own risk window even begins. Read via the extension's own service-worker console:
+  // chrome.storage.local.get('fasVintedLastStep').
+  let fasCurrentDiagItem = null;
+  function fasMarkStep(step) {
+    try {
+      chrome.storage.local.set({
+        fasVintedLastStep: {
+          itemId: fasCurrentDiagItem && fasCurrentDiagItem.id,
+          step: step,
+          pathname: location.pathname,
+          at: Date.now()
+        }
+      });
+    } catch (e) { /* best-effort, never throw from a diagnostic */ }
+  }
+
   async function tryFill(fieldLabel, value, fillFn, warnings) {
+    fasMarkStep('tryFill:' + fieldLabel);
     // BUG FIX 2026-08-29 (S-EXT-ROUND-9, P1): this guard used to skip completely silently when the
     // item itself simply had no value for this field (e.g. Item.color/brand is null in the DB) --
     // console and the review overlay both stayed quiet, so it looked exactly like a genuine fill
@@ -1670,6 +1696,7 @@
   async function fillPackageSize(item) {
     const byWeight = item ? await pickVintedSizeCardByRealWeight(item) : null;
     if (byWeight) {
+      fasMarkStep('packageSize:byWeightCardClick:' + byWeight.label);
       byWeight.card.click();
       await sleep(200);
       if (byWeight.source === 'unverified-hardcoded-fallback') {
@@ -1681,6 +1708,7 @@
     }
     const medium = clickableOptionByExactText('Medium');
     if (medium) {
+      fasMarkStep('packageSize:mediumCardClick');
       medium.click();
       await sleep(200);
       // BUG FIX 2026-08-29 round 2 (option c, honest-message fix): the old wording ("FindA.Sale has
@@ -1713,6 +1741,7 @@
       overlayWarn('Vinted requires a package size before you can publish -- FindA.Sale opened the field but couldn\'t find any options (UNVERIFIED). Please choose it yourself.');
       return false;
     }
+    fasMarkStep('packageSize:dropdownCandidateClick');
     candidate.click();
     await sleep(200);
     overlayWarn('Filled an UNVERIFIED best-guess package size (a middle tier -- FindA.Sale has no real package-size data for this item). Please confirm it before publishing.');
@@ -1862,6 +1891,8 @@
   }
 
   async function fillListing(item) {
+    fasCurrentDiagItem = item;
+    fasMarkStep('fillListing:start');
     overlay('<b>FindA.Sale</b> - filling the Vinted listing form...');
     const warnings = [];
     await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
@@ -2111,7 +2142,9 @@
       if (langAlreadySet) {
         console.log('[FAS Vinted] Language already shows "' + languageInput.value.trim() + '" -- leaving it untouched.');
       } else {
+        fasMarkStep('language:aboutToOpenModal');
         const langOk = await pickFromPanel('language', 'Language', 'English');
+        fasMarkStep('language:modalResolved');
         // Re-verify the value actually stuck -- pickFromPanel resolving true is not itself proof,
         // given the exact failure mode this fix addresses (a value that was set correctly getting
         // silently reset by something else). Read the real DOM one more time before trusting it.
@@ -2124,6 +2157,7 @@
         } else {
           warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
         }
+        fasMarkStep('language:reverifyDone');
       }
     }
     // BUG FIX 2026-09-27 (Patrick live report + live-observed via screenshot: mid-fill, after
@@ -2159,12 +2193,14 @@
     // Price already has its OWN dedicated re-check above (the 2026-08-30/09-02 stale-validation-
     // error fix), but that check runs BEFORE Language and only looks for a stale error banner, not
     // whether Language itself blanked the value out -- added a real value re-check for Price here too.
+    fasMarkStep('postLanguage:photosCheckStart');
     if (!photosOk || !(photoInput() && photoInput().files && photoInput().files.length)) {
       console.warn('[FAS Vinted] Photos missing after the Language step -- Vinted reset them, re-attaching.');
       const rePhotosOk = await injectPhotos(item.photoUrls);
       if (rePhotosOk) photosOk = true;
       else if (!photosOk) console.warn('[FAS Vinted] Photos still did not attach after re-attempting post-Language.');
     }
+    fasMarkStep('postLanguage:categoryCheckStart');
     const categoryFieldAfterLanguage = fieldByLabel('Category');
     const categoryTextAfterLanguage = categoryFieldAfterLanguage ? norm(categoryFieldAfterLanguage.value) : '';
     const categoryStillSet = categoryTextAfterLanguage && categoryTextAfterLanguage !== norm('Select a category');
@@ -2185,6 +2221,7 @@
     // is the most consequential gap of all of them, not a minor one. Re-verifying with the same
     // clear+retype+stuck-check sequence fillIsbn() uses earlier (vintedTypeLikePrice, not plain
     // fillText -- ISBN needs the real per-keystroke validation path, see that block's own comment).
+    fasMarkStep('postLanguage:isbnCheckStart');
     if (looksLikeVintedBookOrComicItem(item)) {
       const isbnFieldAfterLanguage = fieldByLabel('ISBN');
       const isbnStillSet = isbnFieldAfterLanguage && String(isbnFieldAfterLanguage.value || '').trim();
@@ -2203,6 +2240,7 @@
         }
       }
     }
+    fasMarkStep('postLanguage:sweepDone');
     if (item.title) {
       const titleFieldAfterLanguage = fieldByLabel('Title');
       const titleStillSet = titleFieldAfterLanguage && String(titleFieldAfterLanguage.value || '').trim();
@@ -2305,6 +2343,7 @@
       reachedStore[item.id] = Date.now();
       await chrome.storage.local.set({ [FAS_VINTED_REACHED_REVIEW_KEY]: reachedStore });
     } catch (e) { console.warn('[FAS Vinted] could not record reached-review marker (non-fatal):', e && e.message); }
+    fasMarkStep('fillListing:reachedReview');
     showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.warnings);
   }
 
