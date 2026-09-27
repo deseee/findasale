@@ -2490,13 +2490,39 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } catch (e) {
           console.warn('[FAS] Vinted tab autoDiscardable=false failed (non-fatal):', e && e.message);
         }
+        // BUG FIX 2026-09-27 (Patrick live report: "vinted tab is shared... still looping").
+        // Root cause, confirmed via chrome.storage.local dump: getVintedQueueItem/advanceVintedQueue
+        // had no tab-identity check at all, unlike the sibling removal queue
+        // (FAS_CROSS_PLATFORM_REMOVAL_CONFIG.VINTED's tabIdKey pattern). fas-vinted.js's content
+        // script runs on EVERY https://www.vinted.com/* page (manifest match pattern), and
+        // maybeShowVintedContinuePrompt() polls getVintedQueueItem every 800ms from ALL of them --
+        // so with several Vinted tabs open, every one of them independently asked "is there a
+        // queued item?" and got back the SAME global answer, each showing its own "Continue to
+        // next item?" prompt for the one pending item. Because nothing but an explicit human click
+        // ever advances the queue, and each tab's 20s re-prompt cooldown is tracked in that tab's
+        // own sessionStorage (not shared), the prompt kept reappearing across tabs/after cooldown
+        // for as long as that one item sat unconfirmed -- reading as "shared" and "looping."
+        // Fix: record which tab this queue actually belongs to (mirroring the removal queue's
+        // tabIdKey) and only serve/advance it for that tab; every other tab now sees "no item
+        // pending" and stays silent.
+        await chrome.storage.local.set({ fasVintedTabId: vintedTab.id });
         sendResponse({ ok: true });
       } else if (msg.type === 'getVintedQueueItem') {
-        const { fasVintedQueue = [], fasVintedIndex = 0 } =
-          await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex']);
-        sendResponse({ ok: true, item: fasVintedQueue[fasVintedIndex] || null, index: fasVintedIndex, total: fasVintedQueue.length });
+        const { fasVintedQueue = [], fasVintedIndex = 0, fasVintedTabId = null } =
+          await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex', 'fasVintedTabId']);
+        const isOwnVintedTab = fasVintedTabId != null && sender.tab && sender.tab.id === fasVintedTabId;
+        if (!isOwnVintedTab) {
+          sendResponse({ ok: true, item: null, index: fasVintedIndex, total: fasVintedQueue.length });
+        } else {
+          sendResponse({ ok: true, item: fasVintedQueue[fasVintedIndex] || null, index: fasVintedIndex, total: fasVintedQueue.length });
+        }
       } else if (msg.type === 'advanceVintedQueue') {
-        const st = await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex']);
+        const st = await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex', 'fasVintedTabId']);
+        const isOwnVintedTab = st.fasVintedTabId != null && sender.tab && sender.tab.id === st.fasVintedTabId;
+        if (!isOwnVintedTab) {
+          sendResponse({ ok: true, item: (st.fasVintedQueue || [])[st.fasVintedIndex || 0] || null, index: st.fasVintedIndex || 0, total: (st.fasVintedQueue || []).length, notOwner: true });
+          return;
+        }
         const next = (st.fasVintedIndex || 0) + 1;
         await chrome.storage.local.set({ fasVintedIndex: next });
         const item = (st.fasVintedQueue || [])[next] || null;
