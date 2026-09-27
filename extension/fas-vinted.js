@@ -2145,6 +2145,37 @@
       console.warn('[FAS Vinted] Category missing after the Language step -- Vinted reset it, re-selecting.');
       await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
     }
+    // BUG FIX 2026-09-27 ROUND 3 (Patrick-directed: "look at the magazines... figure out why
+    // it's looping on those"). Gap found in ROUND 2's own sweep above: ISBN was never re-checked.
+    // looksLikeVintedBookOrComicItem() matches on item.category containing "book" -- and Vinted's
+    // own category tree nests Magazines under "Books & Media", so a magazine item's category
+    // string legitimately contains "book" and routes it through the exact same ISBN-required +
+    // real-Language-MODAL path as an actual book/comic (see this gate's own header comment and the
+    // Language block below). ISBN is filled EARLIER than Photos and Category (right after Category,
+    // before Photos -- see the top of this function), so it is at least as exposed to the
+    // Language-step reset as the two fields ROUND 2 already covers, and per ADR-090 it is the one
+    // field Vinted HARD-BLOCKS submission without on this exact category -- so a silent reset here
+    // is the most consequential gap of all of them, not a minor one. Re-verifying with the same
+    // clear+retype+stuck-check sequence fillIsbn() uses earlier (vintedTypeLikePrice, not plain
+    // fillText -- ISBN needs the real per-keystroke validation path, see that block's own comment).
+    if (looksLikeVintedBookOrComicItem(item)) {
+      const isbnFieldAfterLanguage = fieldByLabel('ISBN');
+      const isbnStillSet = isbnFieldAfterLanguage && String(isbnFieldAfterLanguage.value || '').trim();
+      if (!isbnStillSet) {
+        console.warn('[FAS Vinted] ISBN missing after the Language step -- Vinted reset it (this item is Books & Media -- likely a magazine -- and Vinted hard-blocks submission without it), re-filling.');
+        const reIsbnValue = item.isbn || item.upc || item.ean || '0000000000000';
+        const reIsbnEl = fieldByLabel('ISBN');
+        if (reIsbnEl) {
+          const reIsbnWant = String(reIsbnValue).trim();
+          const reIsbnStuck = () => String(reIsbnEl.value || '').trim() === reIsbnWant;
+          await vintedTypeLikePrice(reIsbnEl, reIsbnValue);
+          if (!reIsbnStuck()) await vintedTypeLikePrice(reIsbnEl, reIsbnValue);
+          if (!reIsbnStuck()) warnings.push('ISBN was reset by the Language step and could not be re-filled automatically -- Vinted will block publishing until you enter one manually.');
+        } else {
+          warnings.push('ISBN was reset by the Language step and the field could not be found to re-fill -- Vinted will block publishing until you enter one manually.');
+        }
+      }
+    }
     if (item.title) {
       const titleFieldAfterLanguage = fieldByLabel('Title');
       const titleStillSet = titleFieldAfterLanguage && String(titleFieldAfterLanguage.value || '').trim();
@@ -3638,6 +3669,35 @@
   }
 
   async function start() {
+    // DIAGNOSTIC 2026-09-27 (Patrick live report of repeated automatic-feeling reloads on the
+    // Vinted listing page, cause not yet confirmed -- added observability instead of shipping a
+    // fix for an unverified cause. document.wasDiscarded is the real browser API for "was this
+    // page just restored after Chrome's Memory Saver discarded it" (true only on a discard-
+    // restore, never on a normal navigation/reload the user actually triggered).
+    // performance.getEntriesByType('navigation')[0].type distinguishes 'navigate' (fresh URL
+    // load, e.g. our own location.href calls or Vinted's own SPA routing), 'reload' (F5 / reload
+    // button), and 'back_forward'. Logged unconditionally, every start() call, so the next time
+    // this happens there is a real per-load record instead of another guess.
+    try {
+      const navEntry = performance.getEntriesByType('navigation')[0];
+      // ROUND 2 (Patrick live report: "I've refreshed the extension every time" -- not the page).
+      // navigationType alone is misleading here: it describes how the CURRENT DOCUMENT originally
+      // loaded, not whether this start() call is running in a document that has been open a while.
+      // Chrome auto-re-injects an unpacked extension's content_scripts into already-open matching
+      // tabs when you hit Reload in chrome://extensions -- if that is what is happening, start()
+      // would run again in the SAME long-lived document, with no new navigation at all, and
+      // navigationType would still read whatever it read the first time this document ever loaded.
+      // performance.now() is milliseconds since THIS document's real navigation start -- a small
+      // number (a few seconds) means a genuinely fresh page load just happened; a large one (tens
+      // of thousands+ ms) means this document has been sitting open and the script was re-injected
+      // into it just now, not freshly navigated. That distinguishes the two theories directly.
+      console.log('[FAS Vinted] start() diagnostic -- wasDiscarded=' + document.wasDiscarded +
+        ' navigationType=' + (navEntry ? navEntry.type : 'unknown') +
+        ' msSinceDocumentNavStart=' + Math.round(performance.now()) +
+        ' at=' + new Date().toISOString() + ' url=' + location.href);
+    } catch (e) {
+      console.warn('[FAS Vinted] start() diagnostic logging threw (non-fatal):', e && e.message);
+    }
     if (!fasContextAlive()) return;
     if (!looksLikeVintedListingPage()) { await maybeShowVintedContinuePrompt(); return; }
     await sleep(600);
