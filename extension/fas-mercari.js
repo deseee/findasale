@@ -1128,6 +1128,42 @@
     return finalMarkdownPrice < price ? finalMarkdownPrice : null;
   }
 
+  // GAP FIX 2026-09-26 (S-EXT-MERCARI-SMARTPRICING-OFF, Patrick's explicit call: "i don't want
+  // mercari to auto markdown, finda.sale should handle price drops" -- and again, more bluntly,
+  // when this was still gated behind a floor-sync-only approach: "smart pricing should be off").
+  // Supersedes the 2026-08-23 decision recorded above fillMercariSmartPricingFloor() (leave Smart
+  // Pricing ON, only sync its floor) -- that left Mercari's own price-drift mechanism running
+  // uncoordinated with FindA.Sale's own markdownCron.ts. Turning the toggle off UNCONDITIONALLY
+  // (not gated on allowBestOffer/saleMarkdownEnabled the way the floor-sync path was) makes
+  // FindA.Sale's own schedule the only thing that ever changes a live Mercari listing's price --
+  // matching the same already-shipped posture as eBay/Discogs/Reverb via
+  // markdownPricePropagationService.ts, and matching the already-accepted renewal-style
+  // background-automation risk posture (this runs during the same human-supervised assisted-fill
+  // pass as every other field here -- Mercari auto-publish itself stays removed, see
+  // S-EXT-MERCARI-NO-AUTOPUBLISH below).
+  // LIVE-VERIFIED 2026-09-26 via Claude in Chrome against two real listings on the production
+  // Mercari seller account (artifactmi): button[data-testid="SmartPricingButton"], role="button",
+  // state readable via aria-pressed ("true"=ON, "false"=OFF). Both real listings checked already
+  // showed OFF -- confirms Mercari's current default may no longer be ON as the 2026-08-23 comment
+  // assumed, but this function is idempotent either way (no-ops if already off) so it doesn't
+  // depend on knowing the real current default. Same element confirmed present on the
+  // create-listing form (this file's normal flow, mercari.com/sell/) and the edit-existing-listing
+  // page (mercari.com/sell/edit/<id>/, the page a future renewal price-push would drive) -- one
+  // selector covers both.
+  async function turnOffMercariSmartPricing() {
+    const btn = await waitForSelector(() => document.querySelector('button[data-testid="SmartPricingButton"]'), 5000);
+    if (!btn) {
+      console.warn('[FAS Mercari] Smart Pricing toggle button not found (UNVERIFIED selector on this form) -- please confirm Smart Pricing is OFF manually before publishing.');
+      return false;
+    }
+    if (btn.getAttribute('aria-pressed') !== 'true') return true; // already off, nothing to do
+    btn.click();
+    await sleep(300); // let the toggle's own state update settle before reading it back
+    const nowOff = btn.getAttribute('aria-pressed') === 'false';
+    if (!nowOff) console.warn('[FAS Mercari] Smart Pricing toggle click did not register as OFF afterward -- UNVERIFIED, please check before publishing.');
+    return nowOff;
+  }
+
   async function fillMercariSmartPricingFloor(item) {
     if (item.price == null || !isFinite(Number(item.price))) return false;
     const price = Number(item.price);
@@ -2187,7 +2223,10 @@
     // itself still scopes the best-offer-derived branch to item.allowBestOffer internally (see its
     // own comment) -- this widened gate only ever ADDS the Auto-Markdown path, never changes the
     // existing best-offer-only behavior.
-    if ((item.allowBestOffer || item.saleMarkdownEnabled) && !interstitialAt && !shippingLabelFailedReason) await fillMercariSmartPricingFloor(item);
+    // GAP FIX 2026-09-26: replaces the old conditional fillMercariSmartPricingFloor(item) call --
+    // Smart Pricing is now turned off outright (see turnOffMercariSmartPricing() above) instead of
+    // staying on with a synced floor, so the floor-price field is moot and no longer filled.
+    if (!interstitialAt && !shippingLabelFailedReason) await turnOffMercariSmartPricing();
     return { photosOk, interstitialAt, navigatedAwayFrom, shippingLabelFailedReason };
   }
 
