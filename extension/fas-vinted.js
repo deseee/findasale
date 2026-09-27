@@ -3542,7 +3542,29 @@
       await humanPause(1200, 1800);
       try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
       const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return null; } })();
-      if (next && next.ok && next.item) { location.href = LISTING_URL_HINT; } else { overlay('<b>FindA.Sale</b> \u2014 all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000); }
+      // BUG FIX 2026-09-27 (Patrick live report: the tab "just wanted to leave by itself" -- no
+      // click, Vinted's native "Leave site?" dialog blocked it). Root cause: this was the ONE
+      // navigation in this whole file that fired location.href with no human click at all -- every
+      // other transition (showReviewOverlay's "I posted" button, the continue-prompt's "Continue"
+      // button) only ever navigates from an onclick. The instant a prohibited item got auto-skipped,
+      // this jumped straight to the next /items/new -- and if the CURRENT page had any unsaved state
+      // (Vinted's own draft-restore, or leftover browser autofill) at that exact moment, Vinted's
+      // native beforeunload guard threw up a modal only a human can dismiss, which no page script
+      // (ours included) can suppress or click through. So the one case meant to be fully hands-off
+      // (an item FindA.Sale can't list at all) was the one most likely to silently freeze the tab.
+      // Fix: the queue still auto-advances past the prohibited item (no manual cleanup needed for
+      // that part), but the actual page navigation now waits for the same explicit click every
+      // other item transition already requires.
+      if (next && next.ok && next.item) {
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped an item Vinted won\'t allow. Ready for the next one?</div>' +
+          button('fas-vin-skip-next', 'Continue to next item &#9654;', true) +
+          button('fas-vin-close', 'Not yet', false));
+        const skipNext = document.getElementById('fas-vin-skip-next');
+        if (skipNext) skipNext.onclick = () => { location.href = LISTING_URL_HINT; };
+        closeBtnHandler();
+      } else {
+        overlay('<b>FindA.Sale</b> \u2014 all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000);
+      }
       return;
     }
 
