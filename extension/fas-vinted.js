@@ -1061,9 +1061,30 @@
     return Array.from(document.querySelectorAll('div, span, p')).some((e) => e.offsetParent !== null && /must be greater than or equal to/i.test(e.textContent || '') && e.textContent.length < 100);
   }
   async function vintedTypeLikePrice(el, value) {
-    const proto = window.HTMLInputElement.prototype;
+    // FIX 2026-09-27 (S-EXT-VINTED-ISBN-ILLEGAL-INVOCATION, Patrick live report: 'Something
+    // went wrong filling this listing (Illegal invocation)' on a Books-category item -- the
+    // real ISBN field, category-agnostic, reused this Price-originated helper). Root cause,
+    // read from this function's own history: it always assumed `el` is an HTMLInputElement and
+    // called that prototype's native value setter unconditionally. A native accessor's setter
+    // throws exactly 'Illegal invocation' (a TypeError, not a normal validation failure) when
+    // called via .call() on an element that isn't actually an instance of the interface the
+    // setter belongs to -- e.g. a real <textarea> (an HTMLTextAreaElement, not
+    // HTMLInputElement) for whatever field Vinted renders differently on this category. That
+    // threw, uncaught, all the way up through fillIsbn()/fillListing()/run() to start()'s outer
+    // catch, aborting the ENTIRE fill mid-way with zero photos/fields saved -- not a partial
+    // failure, a full one, from one field's DOM shape being different than expected. Two fixes:
+    // (1) mirror setNativeValue()'s already-correct tagName check instead of hardcoding
+    // HTMLInputElement; (2) wrap the setter call itself in try/catch and fall back to plain
+    // `el.value = v` on ANY throw, so an element type neither of those two branches anticipated
+    // degrades to a slightly-less-perfect fill instead of crashing the whole run.
+    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
-    const nativeSet = (v) => { if (setter) setter.call(el, v); else el.value = v; };
+    const nativeSet = (v) => {
+      if (setter) {
+        try { setter.call(el, v); return; } catch (e) { console.warn('[FAS Vinted] vintedTypeLikePrice: native setter threw (' + (e && e.message) + '), falling back to el.value ='); }
+      }
+      el.value = v;
+    };
     el.focus();
     nativeSet('');
     el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
@@ -1751,15 +1772,73 @@
   function photoInput() {
     return document.querySelector('input[type="file"][accept*="image"]') || document.querySelector('input[type="file"]');
   }
+  // FIX 2026-09-27 (S-EXT-VINTED-RESET-DURING-PHOTO-REFETCH, live-diagnosed via chrome.storage
+  // breadcrumbs across multiple live resets tonight): every reset's last recorded
+  // fasVintedLastStep landed on 'injectPhotos:sendMessageStart' with 'injectPhotos:gotResponse'
+  // never firing -- i.e. the reset happens while this function is AWAITING background.js's
+  // fetchPhotos round trip (a network re-fetch of every photo URL), not during any DOM
+  // interaction this file performs. background.js's own tab-touching code was read in full and
+  // confirmed NOT applicable to Vinted tabs (both chrome.tabs.onUpdated listeners there are
+  // scoped to other platforms' autopublish queues or to fasRemovalTabId/fasFacebookProbeTabId
+  // specifically -- neither ever matches a Vinted tab) -- ruling out this extension's own
+  // background script directly navigating the tab. injectPhotos() was being called TWICE per
+  // item with the exact same item.photoUrls (once up front, once again in the post-Language
+  // re-verification sweep after Vinted itself nulls the photo input) -- re-running the full
+  // network fetch a second time re-opens this same multi-second idle window on the page a
+  // second time. Caching the first successful fetch's dataUrls and reusing them on the second
+  // call removes that window from the re-attach path entirely (no message round trip, no
+  // network wait -- an immediate synchronous DOM update instead), which is the actual fix,
+  // independent of whatever exact Vinted-side behavior fills that idle window. Keyed by the
+  // joined URL list so a genuinely different photo set (should never happen for the same item,
+  // but don't trust that) still re-fetches for real. See also background.js's fetchPhotos
+  // handler, parallelized the same day to shrink the FIRST call's own wait too.
+  let fasCachedPhotoDataUrls = null;
+  let fasCachedPhotoUrlsKey = null;
   async function injectPhotos(urls) {
     if (!urls || !urls.length) return false;
-    let resp;
-    try { resp = await chrome.runtime.sendMessage({ type: 'fetchPhotos', urls: urls.slice(0, 20) }); } catch (e) { return false; }
-    if (!resp || !resp.ok || !resp.dataUrls || !resp.dataUrls.length) return false;
+    const cacheKey = urls.join('|');
+    let dataUrls;
+    if (fasCachedPhotoDataUrls && fasCachedPhotoUrlsKey === cacheKey) {
+      fasMarkStep('injectPhotos:usingCache');
+      dataUrls = fasCachedPhotoDataUrls;
+    } else {
+      // FIX 2026-09-27 (S-EXT-VINTED-PHOTO-FETCH-RETRY, live-diagnosed via breadcrumb +
+      // console output: itemId cmo3esuhy0019jqsuhmlikrij stuck at 'sendMessageStart' with no
+      // 'gotResponse' and no page reset -- 'Photos did not attach' logged immediately after,
+      // meaning chrome.runtime.sendMessage threw and was silently swallowed by the old bare
+      // catch(e){return false}, which never revealed WHAT failed. This was a different failure
+      // mode from the earlier navigation-reset bug: no reset happened here at all, the message
+      // call itself failed -- most likely the MV3 service worker was asleep and the very first
+      // message after idle hit 'Could not establish connection: Receiving end does not exist',
+      // a well-known MV3 gotcha that a short retry reliably recovers from (the SW wakes on the
+      // first attempt and is ready for the second). Retries up to 3 times with a short backoff
+      // and now logs the REAL exception message on every failure instead of swallowing it, so
+      // if this keeps happening the next occurrence shows the actual cause, not another guess.
+      let resp;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        fasMarkStep('injectPhotos:sendMessageStart:attempt' + attempt);
+        try {
+          resp = await chrome.runtime.sendMessage({ type: 'fetchPhotos', urls: urls.slice(0, 20) });
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          console.warn('[FAS Vinted] injectPhotos: fetchPhotos sendMessage failed (attempt ' + attempt + '/3):', e && e.message);
+          if (attempt < 3) await sleep(300 * attempt);
+        }
+      }
+      if (lastErr) { console.warn('[FAS Vinted] injectPhotos: giving up on fetchPhotos after 3 attempts:', lastErr.message); return false; }
+      fasMarkStep('injectPhotos:gotResponse');
+      if (!resp || !resp.ok || !resp.dataUrls || !resp.dataUrls.length) return false;
+      dataUrls = resp.dataUrls;
+      fasCachedPhotoDataUrls = dataUrls;
+      fasCachedPhotoUrlsKey = cacheKey;
+    }
     const input = photoInput();
     if (!input) return false;
     const dt = new DataTransfer();
-    resp.dataUrls.forEach((durl, i) => {
+    dataUrls.forEach((durl, i) => {
       const parts = durl.split(',');
       const meta = parts[0], b64 = parts[1];
       const type = (meta.match(/data:(.*?);/) || [])[1] || 'image/jpeg';
@@ -1768,8 +1847,11 @@
       for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
       dt.items.add(new File([bytes], 'photo-' + (i + 1) + '.jpg', { type })); // first photo = full item view, per array order
     });
+    fasMarkStep('injectPhotos:aboutToSetFiles');
     input.files = dt.files;
+    fasMarkStep('injectPhotos:filesSetDispatchingChange');
     input.dispatchEvent(new Event('change', { bubbles: true }));
+    fasMarkStep('injectPhotos:changeDispatched');
     return true;
   }
 
@@ -3778,6 +3860,11 @@
     }
     if (!fasContextAlive()) return;
     if (!looksLikeVintedListingPage()) { await maybeShowVintedContinuePrompt(); return; }
+    // FIX 2026-09-27 (S-EXT-VINTED-FALSE-CONTINUE-PROMPT companion): (re-)assert
+    // autoDiscardable=false on THIS tab every time start() runs on a real listing page, not
+    // just once at queue-creation time -- see markVintedTabNonDiscardable's comment in
+    // background.js. Fire-and-forget: never blocks or fails the fill if it doesn't land.
+    try { const p = chrome.runtime.sendMessage({ type: 'markVintedTabNonDiscardable' }); if (p && p.catch) p.catch(() => {}); } catch (e) { /* non-fatal */ }
     await sleep(600);
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
@@ -3793,9 +3880,31 @@
     const FAS_VINTED_REACHED_REVIEW_KEY = 'fasVintedReachedReview';
     const vintedReachedReviewStore = (await chrome.storage.local.get([FAS_VINTED_REACHED_REVIEW_KEY]))[FAS_VINTED_REACHED_REVIEW_KEY] || {};
     if (vintedReachedReviewStore[queued.item.id]) {
-      console.log('[FAS Vinted] start(): item ' + queued.item.id + ' already reached the review screen this session (recorded ' + new Date(vintedReachedReviewStore[queued.item.id]).toISOString() + ') -- showing the continue prompt instead of re-filling from scratch.');
-      await maybeShowVintedContinuePrompt();
-      return;
+      // BUG FIX 2026-09-27 (S-EXT-VINTED-FALSE-CONTINUE-PROMPT, Patrick live report: reached
+      // review, the tab went blank before he could click Vinted's real Publish button, and the
+      // item was confirmed NOT actually listed on Vinted -- yet this branch would still show the
+      // 'already reached review, continue?' prompt purely because the fasVintedReachedReview
+      // marker was set earlier this session, with no check that the page in front of the
+      // organizer right now still has anything filled in. If the tab was reset after reaching
+      // review (a Chrome tab-discard while idle, or anything else that lands back on a blank
+      // /items/new), the marker goes stale but nothing ever cleared it, so this would keep
+      // offering 'Continue to next item' -- and a click there calls markListed, falsely
+      // reporting an item as published that never actually was. Fix: before trusting the
+      // marker, check whether the page ACTUALLY still looks filled (a real Title value or at
+      // least one attached photo). If it doesn't, the review state is stale -- clear the marker
+      // and fall through to a real re-fill instead of a false success prompt.
+      const reviewTitleField = fieldByLabel('Title');
+      const reviewPhotosPresent = !!(photoInput() && photoInput().files && photoInput().files.length);
+      const reviewLooksStillFilled = !!(reviewTitleField && reviewTitleField.value) || reviewPhotosPresent;
+      if (reviewLooksStillFilled) {
+        console.log('[FAS Vinted] start(): item ' + queued.item.id + ' already reached the review screen this session (recorded ' + new Date(vintedReachedReviewStore[queued.item.id]).toISOString() + ') -- showing the continue prompt instead of re-filling from scratch.');
+        await maybeShowVintedContinuePrompt();
+        return;
+      }
+      console.warn('[FAS Vinted] start(): item ' + queued.item.id + ' previously reached review this session, but the page is now blank (no Title value, no photos attached) -- the tab was reset before you could actually publish on Vinted. Clearing the stale review marker and re-filling from scratch instead of assuming it was already listed.');
+      fasMarkStep('start:staleReachedReviewCleared');
+      delete vintedReachedReviewStore[queued.item.id];
+      try { await chrome.storage.local.set({ [FAS_VINTED_REACHED_REVIEW_KEY]: vintedReachedReviewStore }); } catch (e) {}
     }
 
     // BUG FIX 2026-09-27 (Patrick live report: repeated reload+refill cycles hammered the same
@@ -3812,7 +3921,12 @@
     // and tell the organizer plainly instead of silently retrying -- protects the account first,
     // regardless of what DOM issue (if any) is still causing retries.
     const FAS_VINTED_ATTEMPTS_KEY = 'fasVintedItemAttempts';
-    const FAS_VINTED_ATTEMPT_COOLDOWN_MS = 30 * 60 * 1000;
+    // COOLDOWN LOWERED 2026-09-27 (Patrick-directed, live debugging session): was 30 min,
+    // now 10 min -- 30 min was blocking rapid retest of the same item while actively chasing
+    // the injectPhotos()/reset bugs above. Still a real cooldown (not removed) to keep some
+    // protection against the rapid-refire pattern that got the account flagged in the first
+    // place -- revisit raising this back toward 30 once the current bug hunt is done.
+    const FAS_VINTED_ATTEMPT_COOLDOWN_MS = 10 * 60 * 1000;
     const FAS_VINTED_MAX_ATTEMPTS = 2;
     const vintedAttemptsNow = Date.now();
     const vintedAttemptsStore = (await chrome.storage.local.get([FAS_VINTED_ATTEMPTS_KEY]))[FAS_VINTED_ATTEMPTS_KEY] || {};
