@@ -1249,22 +1249,39 @@ function buildRenewalQueueItem(it, organizerEmail) {
 }
 
 // Auto-renew path (fasAutoRenew=true, now the default).
-// CORRECTED 2026-08-09 (ADR-100 §10/§11/§12): originally every due item re-drove the full
+// CORRECTED 2026-08-09 (ADR-100, S10/S11/S12): originally every due item re-drove the full
 // posting flow (a repost) regardless of platform or whether anything actually changed. Patrick
 // caught that this wastes resources and risks the account getting flagged for bulk automated
 // reposting, when Facebook already offers a lightweight, platform-sanctioned "Renew listing"
 // button for exactly this purpose. Due items are now split three ways:
 //   1. FACEBOOK, price unchanged since last post -- native "Renew listing" click via the
-//      lightweight fasRenewalQueue + fas-remove.js's renewOne() (new, see ADR-100 §10/§11).
+//      lightweight fasRenewalQueue + fas-remove.js's renewOne() (ADR-100, S10/S11).
 //   2. FACEBOOK, price changed since last post -- falls back to the existing full-repost fbQueue
 //      path (unchanged): a plain Renew click doesn't update listing content, only freshness/
 //      position (Craigslist's own docs list "editing" and "renewing" as separate actions for
 //      exactly this reason), so a changed item needs a real repost to carry the new price.
-//   3. CRAIGSLIST -- UNCHANGED, still the full-repost clQueue path for every due item. Native
-//      Craigslist renewal was investigated (ADR-100 §11) but the account page's manage-postings
-//      links resisted a plain DOM query when checked live -- automating it without confirming
-//      the real interaction mechanism would repeat the exact mistake ADR-086 already flagged
-//      (guessing at unverified platform UI). Flagged as a follow-up, not built this pass.
+//   3. CRAIGSLIST -- CHANGED 2026-09-27 (Patrick-approved switch to native "Renew All"). The old
+//      full-repost clQueue path for every due Craigslist item is REMOVED. ADR-100 S11's original
+//      blocker ("the account page's manage-postings links resisted a plain DOM query when
+//      checked live") is now root-caused and fixed: the postings table lives inside a
+//      cross-origin iframe (accounts.craigslist.org/login/home), invisible to a plain
+//      querySelector from the top-level www.craigslist.org/account page -- not a wrong selector,
+//      a wrong frame. fas-craigslist-removal-frame.js already runs inside that exact iframe
+//      (manifest: that path, all_frames) for the removal flow, so the native renew click lives
+//      there too (runCraigslistRenewAll()). LIVE-VERIFIED 2026-09-27 against Patrick's real
+//      account (artifactmi@gmail.com, 261 postings): the control is
+//      `#accountRenewAllForm button.account-renew-all-btn` (form carries class
+//      `has-renewables` when eligible postings exist); clicking it swaps the button's icon/text
+//      to "renewing, please wait..." confirming a real async bulk-renew request fires. Full
+//      completion signal (text reverting away from "please wait...") was not confirmed live in
+//      the verification window -- runCraigslistRenewAll() polls for that with a generous timeout
+//      and reports failure/UNVERIFIED rather than guessing success if it never resolves. Craigslist
+//      renews ALL eligible postings in one action (there is no per-item native renew control), so
+//      this is triggered once whenever ANY Craigslist item is due (not queued per-item like
+//      Facebook/Gumtree), and on a confirmed success every item currently listed+active on
+//      Craigslist (marketplaceListedCraigslist, from the same /extension/items response already
+//      fetched below) is marked renewed via the existing reportItemListedOnce() path -- Craigslist's
+//      bulk action doesn't distinguish which postings it touched, so FindA.Sale can't either.
 // "Price changed" reuses the EXISTING getPendingUpdates/marketplaceListedPrice staleness check
 // (ADR-086) -- not rebuilt. Shipping-change detection has no equivalent tracked field to diff
 // against today (no marketplaceListedShippingOverride-style snapshot exists); adding one is a
@@ -1289,18 +1306,20 @@ async function autoRenewDueItems(dueItems) {
   } catch (e) { /* non-fatal, see comment above */ }
 
   const fbQueue = [];       // full-repost fallback (price changed)
-  const clQueue = [];       // full-repost, unchanged for Craigslist (see comment above)
   const gtQueue = [];       // full-repost, unchanged for Gumtree Australia (ADR-102 -- no native
                              // renew/bump action has ever been verified live, see fas-gumtree-au.js's
-                             // trailing verification-needed list; always reposts, same reasoning as
-                             // Craigslist's clQueue above, never a guessed native-renew click)
+                             // trailing verification-needed list; always reposts, never a guessed
+                             // native-renew click)
   const fbRenewQueue = [];  // lightweight native-renew queue: {id, title, saleId}
+  let craigslistDueCount = 0; // CHANGED 2026-09-27: Craigslist no longer queues per item -- native
+                               // Renew All (see comment above) renews everything eligible in one
+                               // action, so only a count is needed to decide whether to trigger it.
 
   for (const due of dueItems) {
     const full = fullItemById.get(due.id);
     if (!full) continue; // no longer AVAILABLE/listable -- getExtensionItems already excludes it
     if (due.platform === 'CRAIGSLIST') {
-      clQueue.push(buildRenewalQueueItem(full, organizerEmail));
+      craigslistDueCount++;
     } else if (due.platform === 'GUMTREE_AU') {
       gtQueue.push(buildRenewalQueueItem(full, organizerEmail));
     } else if (full.facebookRestricted === true) {
@@ -1327,13 +1346,17 @@ async function autoRenewDueItems(dueItems) {
     chrome.tabs.create({ url: CFG.FB_CREATE_URL, active: false });
     started += fbQueue.length;
   }
-  if (clQueue.length && !(await hasActiveQueue('CRAIGSLIST'))) {
-    // fasCraigslistQueueTabId cleared first (fail-closed) then set to the real tab id once
-    // creation resolves -- see the S-EXT-AUTOPUBLISH-TAB-SCOPE fix in the onUpdated listener above.
-    await chrome.storage.local.set({ fasCraigslistQueue: clQueue, fasCraigslistIndex: 0, fasCraigslistAutoPublish: true, fasCraigslistQueueTabId: null });
-    const clRenewTab = await chrome.tabs.create({ url: CFG.CL_POST_URL, active: false });
-    await chrome.storage.local.set({ fasCraigslistQueueTabId: clRenewTab && clRenewTab.id != null ? clRenewTab.id : null });
-    started += clQueue.length;
+  // CHANGED 2026-09-27 (Patrick-approved native Renew All switch, see this function's header
+  // comment): shares the SAME cross-platform removal tab lifecycle as Craigslist's own removal
+  // flow (silentCrossPlatformRemovalInProgress/openSilentCrossPlatformRemovalTab/
+  // finishSilentCrossPlatformRemoval, defined above) rather than the old full-repost
+  // fasCraigslistQueue -- both land on the same accounts.craigslist.org iframe, and
+  // fas-craigslist-removal-frame.js's own entrypoint tries a queued removal first, then a
+  // requested renew-all, so the two flows never race for the tab.
+  if (craigslistDueCount > 0 && !(await silentCrossPlatformRemovalInProgress('CRAIGSLIST'))) {
+    await chrome.storage.local.set({ fasCraigslistRenewAllRequested: true });
+    await openSilentCrossPlatformRemovalTab('CRAIGSLIST');
+    started += craigslistDueCount;
   }
   if (gtQueue.length && !(await hasActiveQueue('GUMTREE_AU'))) {
     await chrome.storage.local.set({ fasGumtreeAuQueue: gtQueue, fasGumtreeAuIndex: 0 });
@@ -2565,6 +2588,52 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const queue = st[cfg.queueKey] || [];
           sendResponse({ ok: true, item: queue[next] || null, index: next, total: queue.length });
         }
+      } else if (msg.type === 'getCraigslistRenewAllRequested') {
+        // ADDED 2026-09-27 (Patrick-approved native Renew All switch, see autoRenewDueItems'
+        // header comment): fas-craigslist-removal-frame.js's own entrypoint asks this on every
+        // load of the accounts.craigslist.org iframe. Same tab-identity check as
+        // getRemovalQueueItemFor above -- only the dedicated tab this worker itself opened via
+        // openSilentCrossPlatformRemovalTab('CRAIGSLIST') may receive requested:true, so an
+        // organizer's own, separately-opened Craigslist tab can never auto-trigger a real click.
+        const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG.CRAIGSLIST;
+        const st = await chrome.storage.local.get(['fasCraigslistRenewAllRequested', cfg.tabIdKey]);
+        const senderTabId = (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null;
+        const removalTabId = st[cfg.tabIdKey] != null ? st[cfg.tabIdKey] : null;
+        if (!st.fasCraigslistRenewAllRequested || senderTabId == null || removalTabId == null || senderTabId !== removalTabId) {
+          sendResponse({ ok: true, requested: false });
+        } else {
+          sendResponse({ ok: true, requested: true });
+        }
+      } else if (msg.type === 'craigslistRenewAllFinished') {
+        // ADDED 2026-09-27: fas-craigslist-removal-frame.js reports the outcome of one
+        // runCraigslistRenewAll() attempt, fire-and-forget. Always clears the request flag and
+        // closes the shared removal/renew tab (mirrors removalQueueDoneFor) -- a failed or
+        // UNVERIFIED attempt is not retried until the next due-renewal poll (once/day, ADR-100
+        // S7 Q3), same backoff shape as every other renewal path here.
+        await chrome.storage.local.remove(['fasCraigslistRenewAllRequested']);
+        if (msg.ok) {
+          // Craigslist's Renew All has no per-item response -- it renews every eligible posting
+          // in one action, so FindA.Sale marks every item it currently believes is listed+active
+          // on Craigslist as renewed (advances renewDueAt via the same reportItemListedOnce()
+          // path a native Facebook renew or a fresh post already uses). A live DB read, not a
+          // snapshot from earlier in this run, since real time may have passed while the tab
+          // loaded and the button was clicked.
+          try {
+            const itemsResp = await apiFetch('/extension/items');
+            const items = (itemsResp.ok && itemsResp.data && itemsResp.data.items) || [];
+            const listed = items.filter((it) => it.marketplaceListedCraigslist === true);
+            for (const it of listed) {
+              await reportItemListedOnce(it.id, 'CRAIGSLIST', null);
+            }
+            console.log('[FAS Craigslist Renew All] succeeded, marked ' + listed.length + ' item(s) renewed.');
+          } catch (e) {
+            console.log('[FAS Craigslist Renew All FAILED to mark items renewed]', String((e && e.message) || e));
+          }
+        } else {
+          console.log('[FAS Craigslist Renew All] did not complete: ' + (msg.reason || 'unknown'));
+        }
+        await finishSilentCrossPlatformRemoval('CRAIGSLIST');
+        sendResponse({ ok: true });
       } else if (msg.type === 'facebookAccountUnavailable') {
         // S-EXT-FB-ACCOUNT-UNAVAILABLE: fas-remove.js saw a login wall / "can't use Marketplace" /
         // suspended-account page on you/selling itself (no redirect for onUpdated to catch).

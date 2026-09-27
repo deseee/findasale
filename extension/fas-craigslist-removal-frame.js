@@ -333,7 +333,104 @@
     return true;
   }
 
+  // ---- Native "Renew All" (ADDED 2026-09-27, Patrick-approved switch from full-repost) ----
+  // Replaces the old delete-and-repost Craigslist renewal path (background.js's former clQueue).
+  // ADR-100 S11's original blocker for native Craigslist renewal ("the account page's
+  // manage-postings links resisted a plain DOM query when checked live") is root-caused here: the
+  // postings table lives inside a cross-origin iframe (accounts.craigslist.org/login/home) that a
+  // content script on the top-level www.craigslist.org/account page cannot reach via
+  // document.querySelector or contentDocument -- it was never a wrong selector, it was the wrong
+  // frame. This file already runs INSIDE that iframe (manifest: this exact path, all_frames), so
+  // it has direct access.
+  //
+  // LIVE-VERIFIED 2026-09-27 against Patrick's real, logged-in account (artifactmi@gmail.com, 261
+  // real postings), via Claude in Chrome against Patrick's own shared tab, navigated directly to
+  // this iframe's own URL (https://accounts.craigslist.org/login/home) so it could be queried as a
+  // top-level document:
+  //   - The control is `<form id="accountRenewAllForm" class="account-renew-all-form
+  //     has-renewables"><button class="account-renew-all-btn"><span
+  //     class="account-renew-button-text">renew all postings</span></button></form>`. The
+  //     `has-renewables` class was present with a real, large, mixed-age posting set -- its
+  //     absence (nothing eligible) was not observed live, so this deliberately does NOT hard-gate
+  //     on that class (see below) rather than risk skipping a legitimate renew based on an
+  //     unconfirmed assumption.
+  //   - Clicking the button (a real, direct .click(), not a guess) swapped the button's icon to a
+  //     spinner and its text to "renewing, please wait..." -- confirmed proof a real async
+  //     bulk-renew request fires, not a dead/decorative control.
+  //   - The FULL completion signal (text/icon reverting away from "please wait...") was NOT
+  //     confirmed within the live verification window (session tooling stopped further automated
+  //     interaction with this real, in-flight transaction after the click, by design -- this is a
+  //     real action against Patrick's live account, not a sandboxed test). runCraigslistRenewAll()
+  //     below polls for that reversion with a generous timeout and reports failure/UNVERIFIED
+  //     rather than assuming success if it never resolves, consistent with this file's existing
+  //     delete-verification discipline (crRemVerifyDeleted above).
+  //   - Craigslist's Renew All has no per-item response or targeting -- it is a single bulk action
+  //     covering every one of the organizer's eligible postings, unlike Facebook's per-item native
+  //     renew. background.js accounts for this: it triggers this once whenever ANY Craigslist item
+  //     is due (not queued per item), and on a confirmed success marks EVERY item FindA.Sale
+  //     currently believes is listed+active on Craigslist as renewed, not just the ones that were
+  //     technically due -- because Craigslist itself doesn't distinguish, so FindA.Sale can't either.
+  const CR_RENEWALL_WAIT_TEXT_RE = /renewing|please wait/i;
+  const CR_RENEWALL_COMPLETION_TIMEOUT_MS = 45000;
+
+  function crRenewAllControl() {
+    const form = document.getElementById('accountRenewAllForm');
+    const btn = form ? form.querySelector('.account-renew-all-btn') : null;
+    return btn && !btn.disabled ? { form, btn } : null;
+  }
+
+  async function runCraigslistRenewAll() {
+    // Positive signal, same discipline as runCraigslistRemovalQueue above: wait for the real,
+    // logged-in postings dashboard rather than acting on whatever's on screen at load time.
+    const deadline = Date.now() + 8000;
+    let control = crRenewAllControl();
+    while (!control && Date.now() < deadline) { await sleep(250); control = crRenewAllControl(); }
+    if (!control) {
+      // Not necessarily a failure -- a form without has-renewables (nothing currently eligible)
+      // may render differently than what was live-verified (see comment above). Distinguish "the
+      // control never existed at all" (report so a real regression is visible) from a page that
+      // simply hasn't finished loading (already handled by the wait above).
+      return { ok: false, reason: 'renew_all_control_not_found' };
+    }
+    overlayInfo('Renewing all eligible Craigslist postings...');
+    control.btn.click(); // live-confirmed 2026-09-27: triggers Craigslist's own async bulk-renew request
+
+    const completionDeadline = Date.now() + CR_RENEWALL_COMPLETION_TIMEOUT_MS;
+    await sleep(1500); // let the "please wait" state actually appear before polling for its exit
+    while (Date.now() < completionDeadline) {
+      const still = crRenewAllControl();
+      const text = still && still.btn ? (still.btn.textContent || '') : '';
+      if (!CR_RENEWALL_WAIT_TEXT_RE.test(text)) {
+        overlayInfo('Renewed your eligible Craigslist postings.');
+        return { ok: true };
+      }
+      await sleep(2000);
+    }
+    overlayWarn('Clicked "renew all postings" but never saw it finish (UNVERIFIED) -- check your Craigslist postings manually.');
+    return { ok: false, reason: 'renew_all_timed_out_unverified' };
+  }
+
+  async function maybeRunCraigslistRenewAll() {
+    let requested;
+    try { requested = await chrome.runtime.sendMessage({ type: 'getCraigslistRenewAllRequested' }); } catch (e) { return false; }
+    if (!requested || !requested.ok || !requested.requested) return false;
+    let result;
+    try {
+      result = await runCraigslistRenewAll();
+    } catch (e) {
+      result = { ok: false, reason: 'exception:' + ((e && e.message) || 'unknown') };
+    }
+    try { await chrome.runtime.sendMessage(Object.assign({ type: 'craigslistRenewAllFinished' }, result)); } catch (e) {}
+    return true;
+  }
+
   // Page-scoping is the manifest match (accounts.craigslist.org/login/home*, all_frames) plus the
-  // dedicated-removal-tab check inside background.js's getRemovalQueueItemFor handler.
-  maybeRunCraigslistRemoval();
+  // dedicated-removal-tab check inside background.js's getRemovalQueueItemFor /
+  // getCraigslistRenewAllRequested handlers. Removal takes priority (a sold item's posting should
+  // come down before anything gets renewed); renew-all is only attempted when no removal item was
+  // queued this load, so the two flows never race for the same tab or the same click.
+  (async () => {
+    const didRemoval = await maybeRunCraigslistRemoval();
+    if (!didRemoval) await maybeRunCraigslistRenewAll();
+  })();
 })();
