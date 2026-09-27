@@ -2122,9 +2122,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: {} }));
       } else if (msg.type === 'fetchPhotos') {
-        const urls = (msg.urls || []).slice(0, 10); // FB caps ~10 photos/listing
-        const out = [];
-        for (const u of urls) { try { out.push(await fetchImageDataUrl(u)); } catch (e) { /* skip bad img */ } }
+        // FIX 2026-09-27 (S-EXT-VINTED-RESET-DURING-PHOTO-REFETCH): this handler is shared by
+        // every content script (fas-content/craigslist/grailed/mercari/poshmark/vinted.js), each
+        // of which already applies its OWN platform-appropriate cap (12-20 -- grep each file's
+        // own 'fetchPhotos' call site) before sending -- re-slicing to 10 here (a stale
+        // Facebook-specific limit from before this handler was shared across platforms) silently
+        // dropped photos 11+ for every other platform, Vinted's 20-photo cap included. Removed;
+        // each caller's own slice is respected as-is.
+        // Also switched the fetch loop from sequential to parallel (Promise.all) -- on Vinted,
+        // this round trip runs while the organizer's tab sits idle waiting for a response
+        // (live-diagnosed via chrome.storage breadcrumbs -- every observed reset's last recorded
+        // step was mid-await on this exact message, see injectPhotos()'s own comment in
+        // fas-vinted.js), so cutting its wall-clock time directly shrinks that idle window,
+        // independent of injectPhotos()'s own new caching fix for the second (re-attach) call.
+        // .catch(() => null) + filter(Boolean) preserves the original per-photo skip-on-failure
+        // behavior and the original array order (Promise.all resolves in input order regardless
+        // of completion order), just concurrently instead of one photo at a time.
+        const urls = msg.urls || [];
+        const out = (await Promise.all(urls.map((u) => fetchImageDataUrl(u).catch(() => null)))).filter(Boolean);
         sendResponse({ ok: true, dataUrls: out });
       } else if (msg.type === 'setQueue') {
         await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false, fasQueueSetAt: Date.now() });
@@ -2459,6 +2474,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (item) await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
+      } else if (msg.type === 'markVintedTabNonDiscardable') {
+        // FIX 2026-09-27 (S-EXT-VINTED-FALSE-CONTINUE-PROMPT companion): autoDiscardable=false
+        // used to be set ONLY on the tab this extension itself created at setVintedQueue time --
+        // a tab Patrick reuses across many items (via the continue-prompt's same-tab
+        // location.href, not a fresh chrome.tabs.create) never gets this call re-applied, and
+        // Chrome's own flag can in principle be dropped by later browser-internal state changes
+        // even on a tab that got it once. fas-vinted.js's start() now sends this on every load
+        // it runs on a real listing page, so whichever tab is actually running the fill gets the
+        // flag (re-)asserted directly, not just the one tab that happened to exist when the
+        // queue was first set. Best-effort only, same caveat as before: Chrome can still discard
+        // under severe memory pressure regardless of this flag.
+        if (sender.tab && sender.tab.id != null) {
+          try { await chrome.tabs.update(sender.tab.id, { autoDiscardable: false }); } catch (e) { /* non-fatal */ }
+        }
+        sendResponse({ ok: true });
       } else if (msg.type === 'setVintedQueue') {
         // 2026-08-18 dispatch (fas-vinted.js): same queue-storage shape as
         // setGumtreeAuQueue above -- no autoPublish flag, since fas-vinted.js never
