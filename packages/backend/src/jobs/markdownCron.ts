@@ -12,6 +12,9 @@ import { notifyPriceDropAlerts } from '../services/priceDropService';
  * AUCTION items are skipped.
  * Prices never drop below markdownFloor.
  * Creates ItemPriceHistory record for each markdown.
+ * Tracks progress via Item.markdownTierApplied (0/1/2) so an item already at the Day-2 tier is
+ * re-evaluated and advanced to Day-3+ instead of being excluded forever (fixed 2026-09-27, see
+ * ADR markdown-tier-mercari-pricing-renewal-coordination-2026-09-27.md).
  *
  * Runs every 5 minutes.
  */
@@ -48,26 +51,35 @@ export function scheduleMarkdownCron(): void {
         const timeElapsedMs = now.getTime() - sale.startDate.getTime();
         const dayOffset = timeElapsedMs / (1000 * 60 * 60 * 24);
 
-        // Determine discount tier
+        // BUG FIX 2026-09-27 (ADR markdown-tier-mercari-pricing-renewal-coordination, Patrick-
+        // reported): this used to compute a `discount` float and gate on the boolean
+        // `markdownApplied`, which meant an item marked down once (Day-2) was excluded from this
+        // query FOREVER and could never advance to the Day-3+ tier. Now expressed as an integer
+        // tier (0/1/2) checked against the new `markdownTierApplied` counter, so an item already
+        // at tier 1 is picked up again once the sale crosses into tier 2.
+        let targetTier = 0;
         let discount = 0;
         if (dayOffset >= 1 && dayOffset < 2) {
-          discount = 0.5; // Day 2: 50% off
+          targetTier = 1; // Day 2: 50% off
+          discount = 0.5;
         } else if (dayOffset >= 2) {
-          discount = 0.75; // Day 3+: 75% off
+          targetTier = 2; // Day 3+: 75% off
+          discount = 0.75;
         }
 
-        // Skip Day 1 (dayOffset < 1)
-        if (discount === 0) {
+        // Skip Day 1 (targetTier === 0 -- no markdown tier reached yet)
+        if (targetTier === 0) {
           continue;
         }
 
-        // Find items in this sale that haven't been marked down yet
-        // Skip AUCTION listing type
+        // Find items in this sale not yet at this tier (or a later one already skipped forward
+        // past it -- targetTier only ever increases with dayOffset within a single sale, so
+        // `lt: targetTier` is equivalent to "not yet at this tier"). Skip AUCTION listing type.
         const itemsToMarkdown = await prisma.item.findMany({
           where: {
             saleId: sale.id,
             listingType: { not: 'AUCTION' },
-            markdownApplied: false,
+            markdownTierApplied: { lt: targetTier },
             price: { gt: 0 }, // Only items with a price
           },
           select: {
@@ -93,12 +105,18 @@ export function scheduleMarkdownCron(): void {
             data: {
               price: newPrice,
               priceBeforeMarkdown: originalPrice,
+              // markdownTierApplied is this cron's own tier-progress counter (fixes the stuck-
+              // at-one-tier bug above). markdownApplied is kept in lockstep (always true from
+              // tier 1 onward) purely so markdownCycleCron.ts, itemController.ts's manual-edit
+              // display hack, and the Physical Markdown Alert List queue -- none of which know
+              // about tiers -- keep reading the exact same boolean they always have.
+              markdownTierApplied: targetTier,
               markdownApplied: true,
               // Physical Markdown Alert List (2026-09-25): a system markdown just changed
               // this item's price, so the shelf sticker/tag is now stale -- (re)surface it
               // on the staff "needs physical re-tagging" list. Explicit null (not just
-              // relying on the column default) so this stays correct even if a future
-              // change ever lets this cron revisit an item a second time.
+              // relying on the column default) so this stays correct on EVERY tier transition,
+              // including Day-2 -> Day-3+, now that this cron can revisit an item a second time.
               markdownPhysicallyAppliedAt: null,
             },
           });
@@ -109,7 +127,7 @@ export function scheduleMarkdownCron(): void {
               itemId: item.id,
               price: newPrice,
               changedBy: 'markdown',
-              note: `Day ${Math.floor(dayOffset) + 1} markdown (${(discount * 100).toFixed(0)}% off)`,
+              note: `Day ${Math.floor(dayOffset) + 1} markdown (tier ${targetTier}, ${(discount * 100).toFixed(0)}% off)`,
             },
           });
 

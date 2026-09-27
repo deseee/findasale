@@ -1600,6 +1600,16 @@ model Item {
   // Feature #91: Auto-Markdown (Smart Clearance)
   priceBeforeMarkdown             Float? // Original price before markdown applied
   markdownApplied                 Boolean                 @default(false) // Whether auto-markdown has been applied
+  // ADR markdown-tier-mercari-pricing-renewal-coordination (2026-09-27): markdownCron.ts's
+  // Feature #91 Day-2/Day-3 auto-markdown used markdownApplied above as its idempotency gate --
+  // once true, an item was excluded forever and could never advance from the Day-2 (50% off)
+  // tier to the Day-3+ (75% off) tier. This field replaces that role for markdownCron.ts
+  // specifically: 0 = no markdown yet, 1 = Day-2 tier applied, 2 = Day-3+ tier applied.
+  // markdownApplied above is left untouched in meaning/behavior for every OTHER existing reader
+  // (markdownCycleCron.ts's PRO-tier MarkdownCycle feature, itemController.ts's manual-price-edit
+  // display hack, and the Physical Markdown Alert List queue) -- markdownCron.ts now sets BOTH
+  // fields together so those other readers keep working unchanged.
+  markdownTierApplied             Int                     @default(0) // 0=none, 1=Day-2 (50% off), 2=Day-3+ (75% off) -- markdownCron.ts's own tier progress, see comment above
   // Physical Markdown Alert List (2026-09-25, Patrick): markdownApplied above means the
   // SYSTEM cut the price -- it says nothing about whether a staff member has re-tagged the
   // physical item on the shelf with the new price yet. Null = needs physical re-tagging
@@ -1819,7 +1829,7 @@ model Item {
   @@index([shippingMarginRiskTier]) // ADR-103 Phase 5: "listings at risk of eating margin on shipping" dashboard query
   @@index([saleId])
   @@index([saleId, status]) // Sentry slow query: SELECT Item WHERE saleId+status (1351ms) — public item browse + POS organizer item search with optional status filter
-  @@index([saleId, markdownApplied]) // Sentry slow query: markdownCron findMany WHERE saleId+markdownApplied=false — eliminates per-sale full scans in markdown job
+  @@index([saleId, markdownTierApplied]) // ADR markdown-tier-mercari-pricing-renewal-coordination (2026-09-27): repoints the old [saleId, markdownApplied] index (Sentry slow query: markdownCron findMany WHERE saleId+markdownApplied=false) at the new tier field markdownCron.ts now filters/orders on -- same query shape, same purpose (eliminates per-sale full scans in markdown job)
   @@index([organizerId, markdownApplied, markdownPhysicallyAppliedAt]) // Physical Markdown Alert List (2026-09-25): staff "needs re-tagging" queue query
   @@index([status, ebayNextRenewalAt]) // ADR ebay-renewal-forecasting (2026-09-15): forecast cron + insertions-forecast endpoint query pattern -- AVAILABLE items with an upcoming eBay GTC renewal date
   @@index([discogsMatchStatus]) // ADR-132: "Discogs: needs your pick" filter
