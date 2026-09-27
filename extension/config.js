@@ -36,6 +36,12 @@ self.FAS_CONFIG = {
   // marketplace-home guess ('https://www.mercari.com/'), which lists none of the organizer's own
   // listings -- so Mercari removal could never find anything from it.
   MERC_MANAGE_URL: 'https://www.mercari.com/mypage/listings/',
+  // S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved background price-sync push): prefix
+  // for a specific listing's edit page -- the full URL is this + <remoteListingId> + '/'. Same
+  // UNVERIFIED-until-live-confirmed posture as every other guessed URL in this file; the content
+  // script re-verifies it landed on the right listing before touching anything (see
+  // mercPricePushEditPageId() in fas-mercari.js).
+  MERC_EDIT_URL_PREFIX: 'https://www.mercari.com/sell/edit/',
   VINTED_MANAGE_URL: 'https://www.vinted.com/',
   // LIVE-CONFIRMED 2026-09-04 (value Patrick-provided, then verified against his real, logged-in
   // Grailed seller account): https://www.grailed.com/sell/for-sale IS the seller-listings page --

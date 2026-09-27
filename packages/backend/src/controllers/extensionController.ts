@@ -2116,13 +2116,26 @@ type PriceSyncPlatform = Exclude<AutoListPlatform, 'FACEBOOK'>;
  * Facebook) -- a platform needs a sync when its latest POST/POSTED row's priceSyncedAt is null
  * or older than the item's priceUpdatedAt.
  *
- * Deliberately does NOT attempt to auto-edit the live listing -- that would mean driving each
- * platform's own "edit my listing" DOM flow (a different, higher-risk flow than the initial-post
- * automation these content scripts already do, and unverified against any live account this
- * session had access to) -- same Phase-A-detection-only posture ADR-086 already established for
- * Facebook, extended here rather than reinvented. background.js's poller merges this into
- * chrome.storage.local and popup.js surfaces it as a plain "N items need a price update on X"
- * notice so the organizer knows exactly what to go fix by hand until a verified Phase B ships.
+ * Deliberately does NOT attempt to auto-edit the live listing for CRAIGSLIST/GUMTREE_AU/GRAILED/
+ * POSHMARK -- that would mean driving each platform's own "edit my listing" DOM flow (a
+ * different, higher-risk flow than the initial-post automation these content scripts already do,
+ * and unverified against any live account this session had access to) -- same Phase-A-detection-
+ * only posture ADR-086 already established for Facebook, extended here rather than reinvented.
+ * background.js's poller merges this into chrome.storage.local and popup.js surfaces it as a
+ * plain "N items need a price update on X" notice so the organizer knows exactly what to go fix
+ * by hand until a verified Phase B ships for those platforms.
+ *
+ * MERCARI IS THE EXCEPTION (Phase B, 2026-09-27, Patrick-approved -- see
+ * claude_docs/decisions-log.md same date and
+ * claude_docs/feature-notes/ADR-markdown-tier-mercari-pricing-renewal-coordination-2026-09-27.md
+ * Decision 2 Part B): bounded to the 3-tier markdown schedule (Item.markdownTierApplied 0/1/2),
+ * so this fires at most twice per item's whole lifetime -- once per tier transition, since
+ * markdownCycleCron.ts is the only thing that re-stamps Item.priceUpdatedAt on an already-live
+ * item without an organizer's own manual edit. Each MERCARI queue entry additionally requires a
+ * captured remoteListingId (id-first-only, no title-based fallback -- an item without one is
+ * filtered out of the MERCARI array entirely, see the loop below) so background.js's silent-mode
+ * automation (fas-mercari.js's maybeRunMercariPricePush) knows exactly which live listing to open
+ * and never guesses. Writes ONLY the Price field, never re-publishes the listing.
  */
 export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
@@ -2134,7 +2147,7 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
-  const emptyQueues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null }[]> = {
+  const emptyQueues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null; remoteListingId?: string }[]> = {
     CRAIGSLIST: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
 
@@ -2159,9 +2172,9 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
   const itemIds = items.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, priceSyncedAt: true },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, priceSyncedAt: true, remoteListingId: true },
   });
-  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; priceSyncedAt: Date | null }>();
+  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; priceSyncedAt: Date | null; remoteListingId: string | null }>();
   for (const j of jobs) {
     // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): ignore REMOVE/SKIPPED (failed removal attempt,
     // listing still live) -- otherwise a still-live platform silently dropped out of price sync.
@@ -2169,12 +2182,12 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
     const key = `${j.itemId}:${j.platform}`;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, priceSyncedAt: j.priceSyncedAt });
+      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, priceSyncedAt: j.priceSyncedAt, remoteListingId: j.remoteListingId ?? null });
     }
   }
 
   const PRICE_SYNC_PLATFORMS: PriceSyncPlatform[] = ['CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI'];
-  const queues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null }[]> = {
+  const queues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null; remoteListingId?: string }[]> = {
     CRAIGSLIST: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
 
@@ -2185,7 +2198,17 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
       if (!isLive) continue;
       const needsSync = latest!.priceSyncedAt == null || (it.priceUpdatedAt != null && latest!.priceSyncedAt < it.priceUpdatedAt);
       if (!needsSync) continue;
-      queues[platform].push({ id: it.id, title: it.title, price: it.price != null ? Number(it.price.toFixed(2)) : null });
+      // S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved): Phase B (background price-push)
+      // is id-first-only, no title-based fallback -- an item with no captured remoteListingId is
+      // skipped silently here rather than surfaced with nothing for the content script to act on.
+      // The other 4 platforms are unaffected -- still Phase-A/notify-only, no id requirement.
+      if (platform === 'MERCARI' && !latest!.remoteListingId) continue;
+      queues[platform].push({
+        id: it.id,
+        title: it.title,
+        price: it.price != null ? Number(it.price.toFixed(2)) : null,
+        ...(platform === 'MERCARI' ? { remoteListingId: latest!.remoteListingId as string } : {}),
+      });
     }
   }
 

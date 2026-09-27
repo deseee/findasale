@@ -630,6 +630,14 @@ async function checkPriceSyncQueue() {
   for (const platform of Object.keys(PLATFORM_LABELS)) {
     const items = queues[platform];
     if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
+    // S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved Phase B): silent mode drives the
+    // real background price-push instead of just notifying -- notify mode keeps the exact
+    // Phase-A behavior every other platform still uses (below), same off/notify/silent toggle
+    // that already gates every other silent DOM automation in this extension.
+    if (platform === 'MERCARI' && fasAutoRemoveMode === 'silent') {
+      outcomes.push('MERCARI:' + (await startMercariPricePush(items)));
+      continue;
+    }
     const label = PLATFORM_LABELS[platform];
     chrome.notifications.create('fasPriceSyncQueue_' + platform, {
       type: 'basic',
@@ -643,6 +651,78 @@ async function checkPriceSyncQueue() {
     outcomes.push(platform + ':notified_' + items.length);
   }
   return outcomes.join(',') || 'no_platforms';
+}
+
+// ---- Mercari background price-push (S-EXT-MERCARI-PRICE-PUSH, 2026-09-27, Patrick-approved --
+// see claude_docs/decisions-log.md same date). Bounded by getPriceSyncQueue's own MERCARI filter
+// (id-first-only, requires a captured remoteListingId) and by markdownCycleCron.ts being the only
+// thing that re-stamps Item.priceUpdatedAt on an already-live item -- in practice this queue only
+// ever fills on a markdown-tier transition, at most twice per item's whole lifetime. Mirrors the
+// proven silentCrossPlatformRemovalInProgress/openSilentCrossPlatformRemovalTab/
+// finishSilentCrossPlatformRemoval tab-lifecycle pattern above, kept as its own standalone
+// mechanism (separate storage keys, no shared backoff/stall state with the removal feature) so a
+// stall or bug in one can never block or corrupt the other.
+const FAS_MERCARI_PRICE_PUSH_MAX_MS = 10 * 60 * 1000; // a run not finished in 10 min is treated as dead, same bound as removal
+
+async function mercariPricePushInProgress() {
+  const st = await chrome.storage.local.get(['fasMercariPricePushTabId', 'fasMercariPricePushStartedAt']);
+  const tabId = st.fasMercariPricePushTabId || null;
+  if (!tabId) return false;
+  if (Date.now() - (st.fasMercariPricePushStartedAt || 0) > FAS_MERCARI_PRICE_PUSH_MAX_MS) {
+    await chrome.storage.local.remove(['fasMercariPricePushTabId', 'fasMercariPricePushPrevTabId', 'fasMercariPricePushStartedAt']);
+    console.warn('[FAS Mercari price-push] prior run timed out with no report -- clearing so the next poll can retry.');
+    return false;
+  }
+  const tab = await tabsGet(tabId);
+  if (!tab) {
+    await chrome.storage.local.remove(['fasMercariPricePushTabId', 'fasMercariPricePushPrevTabId', 'fasMercariPricePushStartedAt']);
+    return false;
+  }
+  return true;
+}
+
+async function openMercariPricePushTab(firstItem) {
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
+  const tab = await chrome.tabs.create({ url: CFG.MERC_EDIT_URL_PREFIX + firstItem.remoteListingId + '/', active: true });
+  await chrome.storage.local.set({ fasMercariPricePushTabId: tab.id, fasMercariPricePushPrevTabId: prevTabId, fasMercariPricePushStartedAt: Date.now() });
+}
+
+async function finishMercariPricePush() {
+  const st = await chrome.storage.local.get(['fasMercariPricePushTabId', 'fasMercariPricePushPrevTabId']);
+  await chrome.storage.local.remove(['fasMercariPricePushTabId', 'fasMercariPricePushPrevTabId', 'fasMercariPricePushStartedAt']);
+  if (st.fasMercariPricePushPrevTabId != null) {
+    await new Promise((resolve) => chrome.tabs.update(st.fasMercariPricePushPrevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+  }
+  if (st.fasMercariPricePushTabId != null) {
+    await new Promise((resolve) => chrome.tabs.remove(st.fasMercariPricePushTabId, () => { void chrome.runtime.lastError; resolve(); }));
+  }
+}
+
+async function startMercariPricePush(items) {
+  if (await mercariPricePushInProgress()) return 'skipped_in_progress';
+  await chrome.storage.local.set({ fasMercariPricePushQueue: items, fasMercariPricePushIndex: 0 });
+  await openMercariPricePushTab(items[0]);
+  return 'started:' + items.length;
+}
+
+// Called when advancing the queue (mercariPricePushCompleted/mercariPricePushFailed handlers
+// below) -- navigates the SAME tab to the next queued item's edit page (never opens a second
+// tab), or finishes the run when the queue is exhausted. Same pacing-before-navigate rationale as
+// advanceAndContinueCrossPlatformRemoval above (marketplace bot-detection risk).
+async function advanceMercariPricePush(tabId) {
+  const st = await chrome.storage.local.get(['fasMercariPricePushQueue', 'fasMercariPricePushIndex']);
+  const next = (st.fasMercariPricePushIndex || 0) + 1;
+  await chrome.storage.local.set({ fasMercariPricePushIndex: next });
+  const queue = st.fasMercariPricePushQueue || [];
+  const nextItem = queue[next] || null;
+  if (nextItem && tabId != null) {
+    await sleep(1500 + Math.random() * 1500);
+    await new Promise((resolve) => chrome.tabs.update(tabId, { url: CFG.MERC_EDIT_URL_PREFIX + nextItem.remoteListingId + '/' }, () => { void chrome.runtime.lastError; resolve(); }));
+  } else if (!nextItem) {
+    await finishMercariPricePush();
+  }
+  return { ok: true, next: !!nextItem, index: next, total: queue.length };
 }
 
 // (2026-07-26) Items the backend has given up retrying (see MAX_REMOVAL_SKIP_ATTEMPTS in
@@ -2661,6 +2741,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform]) {
           await clearStalledRemovalRuns(msg.platform);
           await finishSilentCrossPlatformRemoval(msg.platform);
+        }
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getMercariPricePushQueueItem') {
+        // Same tab-identity security check as getRemovalQueueItemFor above -- only the dedicated
+        // tab this worker itself opened via openMercariPricePushTab may receive a queued item, so
+        // an organizer's own, separately-opened Mercari edit tab can never trigger this.
+        const st = await chrome.storage.local.get(['fasMercariPricePushQueue', 'fasMercariPricePushIndex', 'fasMercariPricePushTabId']);
+        const queue = st.fasMercariPricePushQueue || [];
+        const index = st.fasMercariPricePushIndex || 0;
+        const senderTabId = (sender && sender.tab && sender.tab.id != null) ? sender.tab.id : null;
+        const pushTabId = st.fasMercariPricePushTabId != null ? st.fasMercariPricePushTabId : null;
+        if (senderTabId == null || pushTabId == null || senderTabId !== pushTabId) {
+          sendResponse({ ok: true, item: null, index, total: queue.length, reason: 'not_price_push_tab' });
+        } else {
+          sendResponse({ ok: true, item: queue[index] || null, index, total: queue.length });
+        }
+      } else if (msg.type === 'mercariPricePushCompleted') {
+        // Fire-and-forget from fas-mercari.js the instant its Save click succeeds. Marks THIS
+        // platform's price synced (MarketplaceListingJob.priceSyncedAt) so getPriceSyncQueue stops
+        // re-queuing it, then advances to the next queued item or finishes the run.
+        {
+          const tabId = (sender && sender.tab && sender.tab.id) || null;
+          try {
+            const r = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/price-synced-for-platform', {
+              method: 'POST',
+              body: { platform: 'MERCARI' },
+            });
+            if (!r.ok) console.warn('[FAS Mercari price-push] price-synced-for-platform call failed for', msg.itemId, r.error || r.status);
+          } catch (e) {
+            console.warn('[FAS Mercari price-push] price-synced-for-platform call threw for', msg.itemId, e && e.message);
+          }
+          await advanceMercariPricePush(tabId);
+        }
+        sendResponse({ ok: true });
+      } else if (msg.type === 'mercariPricePushFailed') {
+        // Reported, never retried by re-navigating within this same run (advances the queue like
+        // a success) -- the item stays un-synced (priceSyncedAt untouched) so it naturally comes
+        // back on a LATER poll rather than looping against a page that already failed once.
+        {
+          const tabId = (sender && sender.tab && sender.tab.id) || null;
+          console.warn('[FAS Mercari price-push] failed for', msg.itemId, '-', msg.reason);
+          await advanceMercariPricePush(tabId);
         }
         sendResponse({ ok: true });
       } else if (msg.type === 'crossPlatformRemovalDeleted') {

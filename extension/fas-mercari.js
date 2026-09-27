@@ -2842,6 +2842,80 @@
     location.href = link.href;
   }
 
+  // ---- S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved background price-push) ----
+  // Bounded by design: background.js's checkPriceSyncQueue only ever queues an item here when
+  // Item.priceUpdatedAt has moved past the last price FindA.Sale pushed to Mercari for THIS
+  // platform (MarketplaceListingJob.priceSyncedAt, ADR-129) -- in practice that means
+  // markdownCycleCron.ts crossing a markdown tier (Day-2/Day-3), since nothing else re-stamps
+  // Item.priceUpdatedAt on an already-live item without an organizer's own manual edit. At most
+  // two automated visits per item over its whole lifetime. Writes ONLY the Price field -- never
+  // Title/Description/Category/Condition/Shipping/the Smart Pricing toggle -- and never clicks
+  // anything that re-publishes the listing; if Mercari's edit page requires an explicit Save/
+  // Update click to persist just that one field, that click is the one action in scope beyond
+  // the fill itself.
+  //
+  // Runs ONLY on /sell/edit/<id>/ pages, and ONLY when the id in the URL matches the queue's
+  // current item's own captured remoteListingId (id-first, no fallback -- an item with no
+  // captured id is filtered out of the MERCARI queue entirely by getPriceSyncQueue on the
+  // backend, so it never reaches this function at all). Mirrors isNewListingPage()'s existing
+  // discipline of never running an auto-fill flow against a page the organizer opened by hand,
+  // just inverted: this flow acts ONLY on a page FindA.Sale itself navigated a dedicated,
+  // background-opened tab to (see background.js's getMercariPricePushQueueItem tab-identity
+  // check) -- an organizer who happens to open their own edit page for some other listing gets
+  // item:null back and nothing happens.
+  //
+  // Save/Update button selector is UNVERIFIED -- no live account access this session to confirm
+  // it against a real Mercari edit page. Scans visible buttons for one of several plausible
+  // labels rather than guessing one exact selector, and reports (never guesses) when none match,
+  // same discipline as mercRemFindButtonByText's own removal-flow callers.
+  function mercPricePushEditPageId() {
+    const m = /^\/sell\/edit\/(m\d+)\/?/i.exec(location.pathname);
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  const MERC_PRICE_PUSH_SAVE_LABELS = ['Save', 'Save changes', 'Save Changes', 'Update listing', 'Update Listing', 'Update', 'Done'];
+  function mercPricePushFindSaveButton() {
+    for (const label of MERC_PRICE_PUSH_SAVE_LABELS) {
+      const btn = mercRemFindButtonByText(label);
+      if (btn) return btn;
+    }
+    return null;
+  }
+
+  async function runMercariPricePush(item, index, total) {
+    overlay('<b>FindA.Sale</b> \u2014 syncing price ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    const filled = await fillMercariPrice(item.price);
+    if (!filled) {
+      overlayWarn('Couldn\'t confirm the price field updated for "' + escapeHtml(item.title) + '" -- please update it yourself on Mercari.' + button('fas-merc-close', 'Close', false));
+      try { chrome.runtime.sendMessage({ type: 'mercariPricePushFailed', itemId: item.id, reason: 'price_field_not_confirmed' }); } catch (e) {}
+      return;
+    }
+    await sleep(300);
+    const saveBtn = mercPricePushFindSaveButton();
+    if (!saveBtn) {
+      overlayWarn('Updated the price for "' + escapeHtml(item.title) + '" but couldn\'t find a Save/Update button (UNVERIFIED selector) -- please save it yourself on Mercari.' + button('fas-merc-close', 'Close', false));
+      try { chrome.runtime.sendMessage({ type: 'mercariPricePushFailed', itemId: item.id, reason: 'save_button_not_found' }); } catch (e) {}
+      return;
+    }
+    await realClick(saveBtn);
+    await sleep(800);
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Updated the price for <b>' + escapeHtml(item.title) + '</b> on Mercari.</div>');
+    try { chrome.runtime.sendMessage({ type: 'mercariPricePushCompleted', itemId: item.id }); } catch (e) {}
+  }
+
+  async function maybeRunMercariPricePush() {
+    const pageId = mercPricePushEditPageId();
+    if (!pageId) return false;
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getMercariPricePushQueueItem' }); } catch (e) { return false; }
+    if (!queued || !queued.ok || !queued.item) return false;
+    const item = queued.item;
+    const wantId = String(item.remoteListingId || '').toLowerCase();
+    if (!wantId || wantId !== pageId) return false; // never act on an edit page the organizer opened themselves
+    await runMercariPricePush(item, queued.index, queued.total);
+    return true;
+  }
+
   async function maybeRunMercariRemoval() {
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'MERCARI' }); } catch (e) { return false; }
@@ -2855,6 +2929,8 @@
     // filled a listing in the last 15 min AND this is (or looks like) the listings page -- never
     // awaited, so it can never block or delay the removal/fill flow below.
     mercCapMaybeCapture();
+    const ranPricePush = await maybeRunMercariPricePush();
+    if (ranPricePush) return;
     const ranRemoval = await maybeRunMercariRemoval();
     if (!ranRemoval) start();
   })();
