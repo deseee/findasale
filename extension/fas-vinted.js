@@ -1175,6 +1175,21 @@
   // fallback per this dispatch's explicit instruction, rather than leaving brand blank or
   // crashing.
   async function fillBrand(labelText, value) {
+    // BUG FIX 2026-09-27 (Patrick-reported "looping" false alarm, live-diagnosed via Patrick's
+    // shared live Vinted tab): Vinted's Magazines/Books & Media category (and likely other
+    // categories) has NO Brand field on the form at all -- a live DOM query against Patrick's real
+    // tab confirmed zero "Brand"-labeled elements exist for this category (only title/description/
+    // category/condition/price rows are present). Previously this function ran the FULL fallback
+    // chain below regardless and ended on the "no matching suggestion and no No-brand option"
+    // warning, which reads exactly like a real automation failure when it's actually just "this
+    // category has no Brand field to fill." #brand is the one stable, always-present anchor when
+    // Brand DOES exist on the form (see the 2026-08-19 fix immediately below) -- its absence up
+    // front means there is genuinely nothing here to set, so this returns success instead of
+    // running the noisy fallback chain and warning.
+    if (!document.getElementById('brand')) {
+      console.log('[FAS Vinted] Brand field is not present on this category\'s form -- nothing to fill.');
+      return true;
+    }
     // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the old version typed directly
     // into #brand -- but #brand is `readonly` (confirmed live) and only ever reflects the CONFIRMED
     // selection. The real live-filter is a separate nested input, #brand-search-input, that only
