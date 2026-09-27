@@ -1538,10 +1538,34 @@
       return bodyText().length > beforeLen + 20;
     }
 
+    // DIAGNOSTIC 2026-09-27 (S-EXT-VINTED-CLOSE-SEQ-TRACE, live-caught navigation loop): Patrick
+    // live-watched this exact close sequence run right before the page silently reloaded back to a
+    // blank /items/new -- which of the 4 close attempts below actually fires the navigation was NOT
+    // confirmed (no Network trace was available for that exact moment). This block only observes;
+    // it does not change which control gets clicked or in what order. Logs pathname +
+    // performance.now() before each attempt, and arms a one-shot beforeunload listener for the
+    // whole close sequence so that if a real navigation happens mid-sequence (even inside one of
+    // the sleep() waits between attempts), we capture which attempts had already run before it
+    // fired -- console output alone is not guaranteed to be visible/flushed once a real navigation
+    // starts. Best-effort only: never calls preventDefault, never blocks or delays the navigation,
+    // never shows a confirm dialog.
+    const fasCloseSeqLog = [];
+    function fasLogCloseStep(name) {
+      fasCloseSeqLog.push(name);
+      console.log('[FAS Vinted] Package size close-seq: about to try "' + name + '" -- pathname=' + location.pathname + ' t=' + Math.round(performance.now()) + 'ms attemptsSoFar=[' + fasCloseSeqLog.join(',') + ']');
+    }
+    function fasCloseSeqBeforeUnload() {
+      const info = { attemptsBeforeUnload: fasCloseSeqLog.slice(), pathname: location.pathname, at: new Date().toISOString() };
+      console.warn('[FAS Vinted] Package size close-seq: beforeunload fired mid-close-sequence -- attempts already tried: [' + info.attemptsBeforeUnload.join(',') + ']');
+      try { chrome.storage.local.set({ fasVintedLastCloseSeqBeforeUnload: info }); } catch (e) { /* best-effort, page is unloading */ }
+    }
+    window.addEventListener('beforeunload', fasCloseSeqBeforeUnload);
+
     if (dialog && stillOpen()) {
       const closeBtn = findDialogCloseButton(dialog);
       if (closeBtn) {
         console.log('[FAS Vinted] Package size: sizing-details dialog open -- clicking its own close control (tag=' + closeBtn.tagName + ', aria-label="' + (closeBtn.getAttribute('aria-label') || '') + '", text="' + norm(closeBtn.textContent).slice(0, 20) + '").');
+        fasLogCloseStep('close-button-click');
         try { closeBtn.click(); } catch (e) { console.warn('[FAS Vinted] Package size: clicking the dialog close control threw:', e && e.message); }
         await sleep(250);
       } else {
@@ -1549,14 +1573,17 @@
       }
     }
     if (stillOpen()) {
+      fasLogCloseStep('escape-keydown');
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
       await sleep(250);
     }
     if (stillOpen()) {
       console.log('[FAS Vinted] Package size: sizing-details dialog STILL open after Escape -- trying a real outside click on the page body.');
+      fasLogCloseStep('outside-click-body');
       realOutsideClick(document.body);
       await sleep(250);
     }
+    window.removeEventListener('beforeunload', fasCloseSeqBeforeUnload);
     const finalOpen = stillOpen();
     // BUG FIX 2026-08-30 (round 11, Patrick-directed -- "if people see them they might think it's
     // broken when it's not"): this whole Package Size block used console.warn for every step,
@@ -2266,6 +2293,18 @@
       closeBtnHandler();
       return;
     }
+    // FEATURE 2026-09-27 (S-EXT-VINTED-REVIEW-MEMORY, live-caught navigation loop): record that
+    // this item reached the review screen this session, so a later start() call for the same
+    // queued item -- e.g. a real navigation that lands back on a listing-page-shaped URL, from
+    // Vinted's own flow or from the package-size dialog-close sequence above -- shows the existing
+    // continue prompt instead of re-running the full automated fill from scratch. Fire-and-forget,
+    // non-fatal if it fails; never blocks showing the review overlay.
+    try {
+      const FAS_VINTED_REACHED_REVIEW_KEY = 'fasVintedReachedReview';
+      const reachedStore = (await chrome.storage.local.get([FAS_VINTED_REACHED_REVIEW_KEY]))[FAS_VINTED_REACHED_REVIEW_KEY] || {};
+      reachedStore[item.id] = Date.now();
+      await chrome.storage.local.set({ [FAS_VINTED_REACHED_REVIEW_KEY]: reachedStore });
+    } catch (e) { console.warn('[FAS Vinted] could not record reached-review marker (non-fatal):', e && e.message); }
     showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.warnings);
   }
 
@@ -3704,6 +3743,21 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+
+    // FEATURE 2026-09-27 (S-EXT-VINTED-REVIEW-MEMORY, live-caught navigation loop): start() had no
+    // memory that THIS item already reached the review screen this session -- only the coarse
+    // attempts counter below, which fires only after 2 attempts. If a real navigation (Vinted's own
+    // flow, or the package-size dialog-close sequence -- see openVintedSizingDetailsText()'s new
+    // diagnostic logging) lands back on a listing-page-shaped URL for an item that already got all
+    // the way to review, don't re-run the full fill from scratch -- show the existing continue
+    // prompt instead, same as the off-listing-page path above already does.
+    const FAS_VINTED_REACHED_REVIEW_KEY = 'fasVintedReachedReview';
+    const vintedReachedReviewStore = (await chrome.storage.local.get([FAS_VINTED_REACHED_REVIEW_KEY]))[FAS_VINTED_REACHED_REVIEW_KEY] || {};
+    if (vintedReachedReviewStore[queued.item.id]) {
+      console.log('[FAS Vinted] start(): item ' + queued.item.id + ' already reached the review screen this session (recorded ' + new Date(vintedReachedReviewStore[queued.item.id]).toISOString() + ') -- showing the continue prompt instead of re-filling from scratch.');
+      await maybeShowVintedContinuePrompt();
+      return;
+    }
 
     // BUG FIX 2026-09-27 (Patrick live report: repeated reload+refill cycles hammered the same
     // Vinted listing several times inside an hour tonight -- Vinted's own fraud/abuse detection
