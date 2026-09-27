@@ -2108,10 +2108,30 @@
     // Language last was meant to make it immune to being reset by anything after it. This is the
     // same bug hitting in the other direction: Language's own interaction (a real modal, not the
     // inline auto-apply panel every other field here uses) appears to trigger a broader re-render
-    // than usual, resetting fields filled well BEFORE it -- Photos and Category, both observed
-    // live. Same fix pattern already used for Price/Language above (re-verify the real DOM at the
-    // end rather than trusting an earlier-in-the-run snapshot): now that Language is done, check
-    // Photos and Category one more time and re-fill whichever one Vinted silently cleared.
+    // than usual, resetting fields filled well BEFORE it.
+    //
+    // BUG FIX 2026-09-27 ROUND 2 (Patrick-directed -- the first pass of this fix only re-verified
+    // Photos and Category, the two fields that happened to be visibly broken in the one screenshot
+    // available at the time. That was patching a single observed symptom, not the actual bug: this
+    // file's own history above (Price fixes 2026-08-30/09-02, the Language/ISBN ordering fix
+    // 2026-09-03) already establishes that Vinted's Item Details panel can reset ANY sibling field
+    // when another one is interacted with -- there is no principled reason Language's modal would
+    // reset exactly Photos and Category and nothing else. Expanded this final sweep to re-verify
+    // every field that can be reliably read back from the live DOM after Language runs, not just
+    // the two that were caught on camera. Two fields are deliberately left OUT of this sweep and
+    // documented here rather than silently skipped:
+    //   - Color: a multi-swatch panel with no single reliable `.value` to read back (its own
+    //     null-branch fallback above already reuses pickFromPanel's building blocks for the same
+    //     reason -- see acceptSuggestedColor's header comment). Blind re-verification here would
+    //     mean re-opening and re-scoring the swatch panel from scratch, which risks silently
+    //     overwriting an already-correct selection with a worse guess. Known gap.
+    //   - Package size: fillPackageSize() (above) selects a weight-tier CARD or a dropdown OPTION
+    //     by position, never a fieldByLabel-resolvable input with a stable value to read back --
+    //     confirmed by reading its body, there is nothing here to reliably re-verify against.
+    //     Known gap.
+    // Price already has its OWN dedicated re-check above (the 2026-08-30/09-02 stale-validation-
+    // error fix), but that check runs BEFORE Language and only looks for a stale error banner, not
+    // whether Language itself blanked the value out -- added a real value re-check for Price here too.
     if (!photosOk || !(photoInput() && photoInput().files && photoInput().files.length)) {
       console.warn('[FAS Vinted] Photos missing after the Language step -- Vinted reset them, re-attaching.');
       const rePhotosOk = await injectPhotos(item.photoUrls);
@@ -2124,6 +2144,70 @@
     if (!categoryStillSet) {
       console.warn('[FAS Vinted] Category missing after the Language step -- Vinted reset it, re-selecting.');
       await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
+    }
+    if (item.title) {
+      const titleFieldAfterLanguage = fieldByLabel('Title');
+      const titleStillSet = titleFieldAfterLanguage && String(titleFieldAfterLanguage.value || '').trim();
+      if (!titleStillSet) {
+        console.warn('[FAS Vinted] Title missing after the Language step -- Vinted reset it, re-filling.');
+        await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
+      }
+    }
+    if (item.description) {
+      const descFieldAfterLanguage = fieldByLabel('Description');
+      const descStillSet = descFieldAfterLanguage && String(descFieldAfterLanguage.value || '').trim();
+      if (!descStillSet) {
+        console.warn('[FAS Vinted] Description missing after the Language step -- Vinted reset it, re-filling.');
+        await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
+      }
+    }
+    const brandFieldAfterLanguage = fieldByLabel('Brand');
+    const brandStillSet = brandFieldAfterLanguage && String(brandFieldAfterLanguage.value || '').trim();
+    if (!brandStillSet) {
+      console.warn('[FAS Vinted] Brand missing after the Language step -- Vinted reset it, re-filling.');
+      if (item.brand === undefined || item.brand === null || item.brand === '') {
+        try {
+          await fillBrand('Brand', '');
+        } catch (e) {
+          console.warn('[FAS Vinted] Brand re-fill (No-brand fallback) after Language step threw an error:', e && e.message);
+        }
+      } else {
+        await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v), warnings);
+      }
+    }
+    if (item.size) {
+      const sizeFieldAfterLanguage = fieldByLabel('Size');
+      const sizeStillSet = sizeFieldAfterLanguage && String(sizeFieldAfterLanguage.value || '').trim();
+      if (!sizeStillSet) {
+        console.warn('[FAS Vinted] Size missing after the Language step -- Vinted reset it, re-filling.');
+        await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
+      }
+    }
+    if (item.material) {
+      const materialFieldAfterLanguage = fieldByLabel('Material');
+      const materialStillSet = materialFieldAfterLanguage && String(materialFieldAfterLanguage.value || '').trim();
+      if (!materialStillSet) {
+        console.warn('[FAS Vinted] Material missing after the Language step -- Vinted reset it, re-filling.');
+        lastMaterialFallbackUsed = false;
+        await tryFill('Material', item.material, (v) => fillSelectLike('Material', v), warnings);
+      }
+    }
+    if (conditionLabel) {
+      const conditionFieldAfterLanguage = fieldByLabel('Condition');
+      const conditionStillSet = conditionFieldAfterLanguage && String(conditionFieldAfterLanguage.value || '').trim();
+      if (!conditionStillSet) {
+        console.warn('[FAS Vinted] Condition missing after the Language step -- Vinted reset it, re-filling.');
+        await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
+      }
+    }
+    if (priceToUse != null && isFinite(Number(priceToUse))) {
+      const priceFieldAfterLanguage = fieldByLabel('Price');
+      const priceStillSet = priceFieldAfterLanguage && String(priceFieldAfterLanguage.value || '').trim();
+      if (!priceStillSet) {
+        console.warn('[FAS Vinted] Price missing after the Language step -- Vinted reset it, re-filling.');
+        const rePriceValAfterLanguage = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
+        await tryFill('Price', rePriceValAfterLanguage, (v) => fillVintedPrice(String(v)), warnings);
+      }
     }
     return { photosOk, warnings };
   }
