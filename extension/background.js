@@ -6,6 +6,11 @@
 importScripts('config.js');
 const CFG = self.FAS_CONFIG;
 
+// FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's matching postMessage
+// listener for the full rationale. Must match that file's FAS_DEBUG_TOKEN constant exactly, or the
+// 'debugSetVintedQueueForThisTab' handler below rejects every request.
+const FAS_DEBUG_TOKEN = 'fas-vinted-debug-bridge-8f3a1c2e9d4b7f60';
+
 // (2026-08-09, ADR-100) The "you/selling" management tab now lands directly on Facebook's own
 // OUT_OF_STOCK status filter instead of the bare unfiltered grid -- fas-remove.js's sold-
 // detection scan runs against this small, pre-filtered view (confirmed live it exists and
@@ -87,17 +92,49 @@ async function apiFetch(path, opts = {}, _retried = false, _token = null) {
 
 // Fetch one image and return a data URL (base64). Runs in the worker so cross-origin
 // image hosts (Cloudinary, i.ebayimg.com) are reachable via host_permissions.
+// FIX 2026-09-27 (S-EXT-VINTED-64MB-MESSAGE-LIMIT, Patrick live-confirmed via real console
+// error: "Message exceeded maximum allowed size of 64MiB"): this used to base64-encode the
+// FULL, original-resolution image straight through, uncapped since the round-trip Promise.all
+// change (same-session fix above, S-EXT-VINTED-RESET-DURING-PHOTO-REFETCH) removed the old
+// photo-count cap. A listing with several full-resolution photos (originals are frequently
+// several MB each; base64 adds ~33% on top) can blow past Chrome's hard 64MiB
+// runtime.sendMessage ceiling -- and that failure is all-or-nothing, so fetchPhotos comes back
+// with ZERO photos for the whole listing, not just the oversized one. Downsamples through
+// OffscreenCanvas (available in MV3 service workers, no DOM needed) to a max 1600px long edge /
+// JPEG q=0.82 before encoding -- more than enough resolution for a marketplace listing photo,
+// and shrinks typical multi-MB originals by 5-10x. Falls back to the original, un-resized blob
+// if OffscreenCanvas/createImageBitmap throws for any reason -- a resize failure should never be
+// why a photo doesn't make it into the listing at all.
 async function fetchImageDataUrl(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('img ' + res.status);
   const blob = await res.blob();
-  const buf = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  const b64 = btoa(bin);
-  const type = blob.type || 'image/jpeg';
-  return 'data:' + type + ';base64,' + b64;
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const maxEdge = 1600;
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.82 });
+    const buf = await resizedBlob.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return 'data:image/jpeg;base64,' + btoa(bin);
+  } catch (e) {
+    console.warn('[FAS background] fetchImageDataUrl: resize failed, falling back to original image:', e && e.message);
+    const buf = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(bin);
+    const type = blob.type || 'image/jpeg';
+    return 'data:' + type + ';base64,' + b64;
+  }
 }
 
 // ---- Cross-channel auto-removal (ADR-084 amendment 2026-07-15, Part C) ----
@@ -2001,6 +2038,62 @@ async function humanQueueDelay(tabId, range) {
   await sleep(ms);
 }
 
+// DIAGNOSTIC 2026-09-27 (S-EXT-VINTED-CDP-NAVDIAG): ground-truth navigation-cause capture for
+// the still-unexplained "Leave site?" beforeunload that fires ~200-270ms after the Language
+// modal's Save button click during a book/comic/magazine Vinted listing fill (see fas-vinted.js's
+// pickFromPanel, marker S-EXT-VINTED-CDP-NAVDIAG). Every JS-level navigation vector reachable from
+// the page's own realm (pushState/replaceState, location.assign/replace/href, window.open, anchor
+// clicks, the 'submit' DOM event, HTMLFormElement.prototype.submit(), meta-refresh injection,
+// service-worker navigation) has been instrumented in fas-vinted-bridge.js and NONE of them fired
+// in that window on two separate live runs. This listener uses chrome.debugger's CDP Page domain
+// (already an existing permission/pattern in this file -- see fasTrustedClick below) to ask the
+// browser engine itself what triggered the navigation, via Page.frameRequestedNavigation's
+// browser-assigned `reason` field -- something no page-level JS hook can be blind to, since it is
+// not implemented via any JS-visible API. Scoped per-tab and only active between fasNavDiagStart
+// and fasNavDiagStop so it never conflicts with fasTrustedClick's own separate, ephemeral
+// attach/detach used moments earlier for the same modal's leaf-option click.
+const FAS_NAV_DIAG_ACTIVE_TABS = new Set();
+const FAS_NAV_DIAG_LOG_CAP = 40;
+
+function fasNavDiagAppend(entry) {
+  chrome.storage.local.get(['fasVintedCdpNavLog'], (res) => {
+    const log = Array.isArray(res.fasVintedCdpNavLog) ? res.fasVintedCdpNavLog : [];
+    log.push(entry);
+    while (log.length > FAS_NAV_DIAG_LOG_CAP) log.shift();
+    chrome.storage.local.set({ fasVintedCdpNavLog: log });
+  });
+}
+
+chrome.debugger.onEvent.addListener((source, method, params) => {
+  const tabId = source && source.tabId;
+  if (tabId == null || !FAS_NAV_DIAG_ACTIVE_TABS.has(tabId)) return;
+  if (method === 'Page.frameRequestedNavigation') {
+    fasNavDiagAppend({
+      kind: 'frameRequestedNavigation',
+      reason: params && params.reason,
+      url: params && params.url,
+      disposition: params && params.disposition,
+      frameId: params && params.frameId,
+      t: Date.now()
+    });
+  } else if (method === 'Page.javascriptDialogOpening') {
+    fasNavDiagAppend({
+      kind: 'javascriptDialogOpening',
+      dialogType: params && params.type,
+      message: params && params.message,
+      url: params && params.url,
+      t: Date.now()
+    });
+    // Auto-cancel the native dialog ourselves (equivalent of clicking "Cancel"/"Stay") now that
+    // it's logged, so this diagnostic run doesn't depend on Patrick dismissing it by hand.
+    try {
+      chrome.debugger.sendCommand({ tabId }, 'Page.handleJavaScriptDialog', { accept: false }, () => { /* best-effort */ });
+    } catch (e) { /* best-effort */ }
+  } else if (method === 'Page.navigatedWithinDocument') {
+    fasNavDiagAppend({ kind: 'navigatedWithinDocument', url: params && params.url, t: Date.now() });
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
@@ -2139,7 +2232,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // behavior and the original array order (Promise.all resolves in input order regardless
         // of completion order), just concurrently instead of one photo at a time.
         const urls = msg.urls || [];
-        const out = (await Promise.all(urls.map((u) => fetchImageDataUrl(u).catch(() => null)))).filter(Boolean);
+        const fetchedPhotos = await Promise.all(urls.map((u) => fetchImageDataUrl(u).catch(() => null)));
+        // FIX 2026-09-27 (S-EXT-VINTED-64MB-MESSAGE-LIMIT, same incident as fetchImageDataUrl's
+        // resize fix above): belt-and-suspenders cap on top of the resize -- if photos are still
+        // large enough in aggregate to risk Chrome's hard 64MiB runtime.sendMessage ceiling (a
+        // pathological image, or simply many photos on one listing), stop adding more BEFORE
+        // building a message that fails wholesale and returns zero photos. Caps at ~45MiB of
+        // actual data-URL text, leaving headroom under the 64MiB limit for the rest of the
+        // message envelope.
+        const FAS_PHOTOS_MSG_BUDGET_CHARS = 45 * 1024 * 1024;
+        const out = [];
+        let fasPhotosBudgetUsed = 0;
+        for (const photoDataUrl of fetchedPhotos) {
+          if (!photoDataUrl) continue;
+          if (fasPhotosBudgetUsed + photoDataUrl.length > FAS_PHOTOS_MSG_BUDGET_CHARS) {
+            console.warn('[FAS background] fetchPhotos: stopping early, ' + out.length + '/' + fetchedPhotos.filter(Boolean).length + ' photos included -- remaining photos would exceed the safe message size budget.');
+            break;
+          }
+          out.push(photoDataUrl);
+          fasPhotosBudgetUsed += photoDataUrl.length;
+        }
         sendResponse({ ok: true, dataUrls: out });
       } else if (msg.type === 'setQueue') {
         await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false, fasQueueSetAt: Date.now() });
@@ -2537,6 +2649,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // pending" and stays silent.
         await chrome.storage.local.set({ fasVintedTabId: vintedTab.id });
         sendResponse({ ok: true });
+      } else if (msg.type === 'debugSetVintedQueueForThisTab') {
+        // FEATURE 2026-09-27 (S-EXT-VINTED-DEBUG-BRIDGE) -- see fas-vinted.js's postMessage
+        // listener for the full rationale. Same effect as setVintedQueue above, EXCEPT it scopes
+        // the queue to sender.tab.id (the tab that's already open and asking) instead of opening a
+        // brand new tab via chrome.tabs.create -- lets Claude's browser-automation tools drive a
+        // real, already-open Vinted tab through the exact same queue-consumption path
+        // (getVintedQueueItem/advanceVintedQueue's tab-identity check, see that fix's own
+        // 2026-09-27 comment above) a real popup click would use, without ever needing to open the
+        // popup. Gated behind FAS_DEBUG_TOKEN so a message from anywhere other than fas-vinted.js's
+        // own gated bridge is rejected outright.
+        if (msg.token !== FAS_DEBUG_TOKEN) {
+          sendResponse({ ok: false, error: 'bad_token' });
+        } else if (!sender.tab || sender.tab.id == null) {
+          sendResponse({ ok: false, error: 'no_sender_tab' });
+        } else {
+          await chrome.storage.local.set({
+            fasVintedQueue: Array.isArray(msg.queue) ? msg.queue : [],
+            fasVintedIndex: 0,
+            fasVintedTabId: sender.tab.id,
+          });
+          sendResponse({ ok: true, tabId: sender.tab.id });
+        }
       } else if (msg.type === 'getVintedQueueItem') {
         const { fasVintedQueue = [], fasVintedIndex = 0, fasVintedTabId = null } =
           await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex', 'fasVintedTabId']);
@@ -3016,6 +3150,44 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               sendResponse({ ok: false, error: String(e && e.message || e) });
             }
           }
+        }
+      } else if (msg.type === 'fasNavDiagStart') {
+        // See the FAS_NAV_DIAG_ACTIVE_TABS block above for the full rationale. Attaches CDP the
+        // same way fasTrustedClick does below, enables the Page domain, and marks this tab as
+        // actively diagnosed so the shared chrome.debugger.onEvent listener starts logging for it.
+        if (!sender.tab || sender.tab.id == null) {
+          sendResponse({ ok: false, error: 'no_sender_tab' });
+        } else {
+          const tabId = sender.tab.id;
+          try {
+            await new Promise((resolve, reject) => {
+              chrome.debugger.attach({ tabId }, '1.3', () => {
+                if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+                resolve();
+              });
+            });
+            await new Promise((resolve, reject) => {
+              chrome.debugger.sendCommand({ tabId }, 'Page.enable', {}, () => {
+                if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+                resolve();
+              });
+            });
+            FAS_NAV_DIAG_ACTIVE_TABS.add(tabId);
+            sendResponse({ ok: true });
+          } catch (e) {
+            sendResponse({ ok: false, error: String(e && e.message || e) });
+          }
+        }
+      } else if (msg.type === 'fasNavDiagStop') {
+        if (!sender.tab || sender.tab.id == null) {
+          sendResponse({ ok: false, error: 'no_sender_tab' });
+        } else {
+          const tabId = sender.tab.id;
+          FAS_NAV_DIAG_ACTIVE_TABS.delete(tabId);
+          try {
+            await new Promise((resolve) => chrome.debugger.detach({ tabId }, () => resolve()));
+          } catch (e) { /* best-effort */ }
+          sendResponse({ ok: true });
         }
       } else {
         sendResponse({ ok: false, error: 'unknown_message' });

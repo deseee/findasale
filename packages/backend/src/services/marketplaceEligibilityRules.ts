@@ -42,6 +42,32 @@ export interface EligibilityCheckItem {
    * always-allowed items were wrongly blocked. Optional -- omitting it just means less signal for
    * the exclude-keyword carve-out to work with, not a hard failure. */
   title?: string | null | undefined;
+
+  /**
+   * Package weight/dimensions, for the SIZE_WEIGHT_CEILING rule shape below
+   * (S-SIZE-WEIGHT-CEILING-2026-09-27, Patrick-requested: "why is the extension allowing me to
+   * push [oversized] items to Vinted" -- root cause was that no weight/size gating existed
+   * anywhere in the codebase for ANY marketplace, confirmed by direct code search this session).
+   *
+   * Effective weight is packageWeightOz ?? aiPackageWeightOz -- the SAME fallback fas-vinted.js
+   * and fas-mercari.js already use client-side for their own "does this fit" logic (see
+   * extensionController.ts's shaped-response comments), so this eligibility check reasons about
+   * the same effective number the extension will actually act on.
+   *
+   * Deliberately NOT gated on hasTrustedPackage()/packageConfirmedByOrganizer the way
+   * extensionController.ts gates the *exposed* weight fields for Facebook's real label-purchase
+   * flow -- that gate exists because a wrong guess there costs Patrick real money on a bought
+   * shipping label. This file is a permissive, defense-in-depth UX filter (see file header: "not
+   * the sole compliance gate -- each platform's own listing form still enforces its own rules at
+   * submission time"), so an unconfirmed AI estimate is still useful signal for "don't even
+   * suggest this platform." Missing data still defaults to eligible (see checkEligibility below)
+   * -- same permissive-on-missing-data posture as CATEGORY_BLOCKLIST.
+   */
+  packageWeightOz?: number | null;
+  aiPackageWeightOz?: number | null;
+  packageLengthIn?: number | null;
+  packageWidthIn?: number | null;
+  packageHeightIn?: number | null;
 }
 
 export interface EligibilityResult {
@@ -88,11 +114,50 @@ interface PrerequisiteLookupRule {
   reason: string;
 }
 
+/**
+ * S-SIZE-WEIGHT-CEILING-2026-09-27 (Patrick-requested full research pass, see
+ * claude/crosslister-automation-decisions-2026-09-26.md for the sourced per-marketplace matrix):
+ * a hard shipping-size/weight ceiling for a platform's OWN automated shipping flow -- the one
+ * this extension actually drives. Only added for platforms where exceeding the ceiling is a real
+ * dead end for automated crosslisting, not merely a UX nicety:
+ *   - VINTED: ~20kg/44lb (the extension's own fallback package-size tiers top out at "Large =
+ *     fits in a moving box"), confirmed LIVE against the real account 2026-09-27 -- no local
+ *     pickup exists on Vinted US at all (checked directly, both empty and filled /items/new), so
+ *     there is no fallback path once a package is too big.
+ *   - POSHMARK: 15lb (raised from 10lb as of Feb 2026; carrier is now USPS Ground Advantage, not
+ *     Priority Mail) -- Poshmark's Community Guidelines explicitly prohibit arranging local
+ *     pickup/meetups in lieu of shipping, so there is no fallback path here either.
+ *   - MERCARI: 50lb / 34"x20" (stated identically on two official pages, each with an explicit
+ *     "ship on your own beyond this" fallback statement -- but "on your own" means OUTSIDE
+ *     Mercari's own label-purchase flow, which is the flow this extension automates, so past this
+ *     ceiling the automation has nothing left to drive). A conflicting "100lb" figure appears on
+ *     one older page; flagged unreliable and not used, per the research this session.
+ *
+ * Deliberately NOT added for:
+ *   - EBAY / FACEBOOK: both have a real, working local-pickup fallback with no weight ceiling of
+ *     its own, so an oversized item is never a dead end on either -- eBay also supports LTL/
+ *     freight-class shipping via UPS/FedEx well above USPS's ~70lb ceiling (~150lb/108" girth).
+ *   - GRAILED: 20lb is a real threshold, but crossing it routes to a different self-ship XL flow
+ *     INSIDE Grailed (not a dead end) rather than a hard block -- no evidence the automation can't
+ *     also drive that path, so this file doesn't assume it can't and gate on it.
+ *   - CRAIGSLIST / GUMTREE_AU: local-pickup-only marketplaces, no shipping-size concept at all.
+ */
+interface SizeWeightCeilingRule {
+  type: 'SIZE_WEIGHT_CEILING';
+  platform: EligibilityPlatform;
+  /** Max effective weight in OUNCES (packageWeightOz ?? aiPackageWeightOz) via this platform's own automated shipping flow. Omit if this platform has no weight ceiling worth gating on. */
+  maxWeightOz?: number;
+  /** Max single longest side in INCHES (the largest of packageLengthIn/WidthIn/HeightIn). Omit if this platform has no documented dimension ceiling worth gating on. */
+  maxLongestSideIn?: number;
+  reason: string;
+}
+
 type EligibilityRule =
   | CategoryBlocklistRule
   | CategoryAllowlistRule
   | AttributeAgeAllowlistRule
-  | PrerequisiteLookupRule;
+  | PrerequisiteLookupRule
+  | SizeWeightCeilingRule;
 
 // ---- FACEBOOK (migrated verbatim from the original isFacebookRestrictedCoinOrCurrencyItem,
 // extensionController.ts, pre-2026-08-19) -- Facebook Commerce Policy prohibits listing currency,
@@ -970,10 +1035,57 @@ const RULES: EligibilityRule[] = [
     nameKeywords: ['musical instruments & gear'],
     reason: 'Reverb is for musical instruments & gear only (Listing Guidelines: Prohibited Items and Actions).',
   },
+
+  // ---- SIZE/WEIGHT CEILINGS (S-SIZE-WEIGHT-CEILING-2026-09-27) -- see the SizeWeightCeilingRule
+  // interface's own comment above for why these three platforms specifically, and why
+  // eBay/Facebook/Grailed/Craigslist/Gumtree AU are deliberately left out. Figures sourced this
+  // session via dedicated per-platform research (official/authoritative sources cited in
+  // claude/crosslister-automation-decisions-2026-09-26.md); re-verify there before changing these
+  // numbers.
+  {
+    type: 'SIZE_WEIGHT_CEILING',
+    platform: 'VINTED',
+    maxWeightOz: 704, // ~20kg / 44lb -- Vinted's own "Large" package-size tier ceiling, confirmed live 2026-09-27 (real account, empty and filled /items/new -- no meet-up/local-pickup option exists on Vinted US at all).
+    reason: 'Over Vinted\'s ~44lb (20kg) package-size ceiling -- Vinted has no local-pickup fallback for oversized items, so this is a dead end there, not just a bad fit.',
+  },
+  {
+    type: 'SIZE_WEIGHT_CEILING',
+    platform: 'POSHMARK',
+    maxWeightOz: 240, // 15lb, raised from 10lb as of Feb 2026 (carrier is now USPS Ground Advantage, not Priority Mail).
+    reason: 'Over Poshmark\'s 15lb shipping limit -- Poshmark\'s Community Guidelines prohibit arranging local pickup/meetups in place of shipping, so this is a dead end there, not just a bad fit.',
+  },
+  {
+    type: 'SIZE_WEIGHT_CEILING',
+    platform: 'MERCARI',
+    maxWeightOz: 800, // 50lb -- stated identically on two official Mercari pages, each with an explicit "ship on your own beyond this" fallback (i.e. OUTSIDE Mercari's own label flow, which is what this extension automates). A conflicting "100lb" figure on one older page is flagged unreliable and not used.
+    maxLongestSideIn: 34, // 34"x20" box ceiling, same two official pages.
+    reason: 'Over Mercari\'s 50lb / 34"x20" shipping ceiling -- beyond this Mercari requires shipping outside its own label flow, which this extension can\'t drive.',
+  },
 ];
 
 function normText(text: string | null | undefined): string {
   return (text || '').toLowerCase();
+}
+
+// S-SIZE-WEIGHT-CEILING-2026-09-27: same packageWeightOz ?? aiPackageWeightOz effective-weight
+// fallback fas-vinted.js/fas-mercari.js already use client-side (see EligibilityCheckItem's own
+// comment above) -- a positive, finite number only; anything else (null/undefined/0/NaN) means
+// "no usable weight data" and SIZE_WEIGHT_CEILING below falls through to eligible, same permissive
+// posture as CATEGORY_BLOCKLIST's own missing-data handling.
+function effectiveWeightOz(item: EligibilityCheckItem): number | null {
+  const raw = item.packageWeightOz ?? item.aiPackageWeightOz;
+  const n = Number(raw);
+  return raw != null && isFinite(n) && n > 0 ? n : null;
+}
+
+// Longest single side of whatever dimensions are actually present -- deliberately not "all three
+// or nothing," since a partial measurement (e.g. length known, width/height not) is still real
+// signal that this item won't fit a small flat-rate envelope.
+function effectiveLongestSideIn(item: EligibilityCheckItem): number | null {
+  const dims = [item.packageLengthIn, item.packageWidthIn, item.packageHeightIn]
+    .map((d) => (d != null && isFinite(Number(d)) && Number(d) > 0 ? Number(d) : null))
+    .filter((d): d is number => d != null);
+  return dims.length ? Math.max(...dims) : null;
 }
 
 // BUG FIX 2026-09-05 round 2 (Patrick-reported live, re-tested after the round-1 excludeKeywords
@@ -1050,6 +1162,19 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
       const isAllowed = rule.nameKeywords.some((kw) => hasWholeWordMatch(haystack, kw));
       const isExcluded = (rule.excludeKeywords || []).some((kw) => haystack.includes(kw));
       if (!isAllowed || isExcluded) return { eligible: false, reason: rule.reason };
+    }
+
+    if (rule.type === 'SIZE_WEIGHT_CEILING') {
+      const weightOz = effectiveWeightOz(item);
+      if (rule.maxWeightOz != null && weightOz != null && weightOz > rule.maxWeightOz) {
+        return { eligible: false, reason: rule.reason };
+      }
+      const longestSideIn = effectiveLongestSideIn(item);
+      if (rule.maxLongestSideIn != null && longestSideIn != null && longestSideIn > rule.maxLongestSideIn) {
+        return { eligible: false, reason: rule.reason };
+      }
+      // No usable weight/dimension data on the item -> nothing to block on this rule, same
+      // permissive missing-data posture as CATEGORY_BLOCKLIST above.
     }
 
     // ATTRIBUTE_AGE_ALLOWLIST / PREREQUISITE_LOOKUP: reserved, no rules of these shapes exist yet

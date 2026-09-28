@@ -497,13 +497,47 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // BY DEFAULT. This is what lets popup.js's PLATFORM_ELIGIBILITY_KEY map (see popup.js, updated
     // same session) hide/badge ineligible items on those two tabs the same way it already does for
     // Grailed/Poshmark/Mercari/Vinted.
+    // S-SIZE-WEIGHT-CEILING-2026-09-27: weight/dimension fields passed through raw (untrusted-source
+    // AI/SEED guesses included) for the SIZE_WEIGHT_CEILING rule shape (Vinted/Poshmark/Mercari) --
+    // deliberately NOT gated through hasTrustedPackage() the way the exposed packageWeightOz/dims
+    // fields further down are: those exist to protect FB's real label-purchase flow from an
+    // unconfirmed guess costing Patrick money, whereas this is a permissive UX filter where an
+    // unconfirmed estimate is still useful "don't even suggest this platform" signal (see
+    // marketplaceEligibilityRules.ts's own comment on EligibilityCheckItem for the full rationale).
     eligibility: {
       CRAIGSLIST: checkEligibility('CRAIGSLIST', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       GUMTREE_AU: checkEligibility('GUMTREE_AU', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
       GRAILED: checkEligibility('GRAILED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
-      POSHMARK: checkEligibility('POSHMARK', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
-      MERCARI: checkEligibility('MERCARI', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
-      VINTED: checkEligibility('VINTED', { category: it.ebayCategoryName || it.category, ebayCategoryId: it.ebayCategoryId, title: it.title }),
+      POSHMARK: checkEligibility('POSHMARK', {
+        category: it.ebayCategoryName || it.category,
+        ebayCategoryId: it.ebayCategoryId,
+        title: it.title,
+        packageWeightOz: it.packageWeightOz,
+        aiPackageWeightOz: it.aiPackageWeightOz,
+        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+      }),
+      MERCARI: checkEligibility('MERCARI', {
+        category: it.ebayCategoryName || it.category,
+        ebayCategoryId: it.ebayCategoryId,
+        title: it.title,
+        packageWeightOz: it.packageWeightOz,
+        aiPackageWeightOz: it.aiPackageWeightOz,
+        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+      }),
+      VINTED: checkEligibility('VINTED', {
+        category: it.ebayCategoryName || it.category,
+        ebayCategoryId: it.ebayCategoryId,
+        title: it.title,
+        packageWeightOz: it.packageWeightOz,
+        aiPackageWeightOz: it.aiPackageWeightOz,
+        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+      }),
     },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady)) : (it.photoUrls || []),
     // Gated 2026-09-14 (see hasTrustedPackage above) -- previously exposed the raw,
@@ -2083,7 +2117,22 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       if (isAlreadyListed(it.id, platform)) continue;
       // TOCTOU-safe: re-run fresh on every call, never cached -- a category/title edit between
       // polls is picked up automatically (per the handoff's section D).
-      const eligibility = checkEligibility(platform, { category: eligibilityCategory, ebayCategoryId: it.ebayCategoryId, title: it.title });
+      // S-SIZE-WEIGHT-CEILING-2026-09-27: weight/dimension fields included for every platform here
+      // (harmless no-op for CRAIGSLIST/FACEBOOK/GUMTREE_AU/GRAILED, which have no SIZE_WEIGHT_CEILING
+      // rule) so POSHMARK/MERCARI's automated autolist queue actually gates on real package size --
+      // this loop is exactly the unattended fan-out Patrick was asking about ("why is the extension
+      // allowing me to push those kind of items"), so it needs the same gate getExtensionItems' UI
+      // filter now has, not just the manual popup.js path.
+      const eligibility = checkEligibility(platform, {
+        category: eligibilityCategory,
+        ebayCategoryId: it.ebayCategoryId,
+        title: it.title,
+        packageWeightOz: it.packageWeightOz,
+        aiPackageWeightOz: it.aiPackageWeightOz,
+        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+      });
       if (!eligibility.eligible) continue;
       queues[platform].push(shapeItem(it));
     }
