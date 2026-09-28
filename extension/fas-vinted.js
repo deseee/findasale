@@ -1975,7 +1975,55 @@
     }
     return null; // nothing usable found anywhere -- caller keeps existing Medium-default behavior
   }
-  async function fillPackageSize(item) {
+  // FIX 2026-09-27 (S-EXT-VINTED-PARCEL-MEASUREMENTS-UI-CHANGE, Patrick live report: a "TCL Cool
+  // Carry Insulated Backpack Cooler" left its parcel-size Height/Width/Length fields blank with no
+  // warning shown, live-confirmed on his shared tab). Root cause: Vinted's "Sell an item" page no
+  // longer uses the Small/Medium/Large package-size CARDS this whole file's package-size logic
+  // (pickVintedSizeCardByRealWeight, clickableOptionByExactText('Medium'), the dropdown/opener
+  // fallback below) was built around -- it now shows a "Set your parcel size" panel with four plain
+  // number inputs: "A: Height (in)", "B: Width (in)", "C: Length (in)", and "Approximate weight
+  // (lb)" (Vinted pre-fills weight itself from the item's category -- confirmed live, 8.9lb
+  // appeared on the cooler with no FindA.Sale involvement -- but never pre-fills the three
+  // dimensions). None of the old card/dropdown logic matches this new DOM shape, so every one of
+  // its fallback branches silently missed, and one of them (not root-caused to the exact branch --
+  // not worth the time versus just fixing the real UI, see below) returned true without touching
+  // the real fields, which is worse than a normal miss: it suppressed fillListing()'s own generic
+  // "Package size could not be set automatically" warning too, leaving Patrick with zero signal
+  // that anything needed attention.
+  //
+  // This new check runs FIRST and takes over whenever the new numeric fields are present (found via
+  // the same openerByLabel() label-matching this file already uses for every other field, using the
+  // exact on-page label text). Falls through to the legacy card/dropdown logic untouched whenever
+  // these specific labels aren't found, so an older/different Vinted UI variant (if one still exists
+  // anywhere) keeps working exactly as before.
+  function fillParcelMeasurements(item, warnings) {
+    const heightInput = openerByLabel('A: Height (in)');
+    const widthInput = openerByLabel('B: Width (in)');
+    const lengthInput = openerByLabel('C: Length (in)');
+    if (!heightInput || !widthInput || !lengthInput) return null; // new UI not present -- caller falls through to legacy logic
+
+    const h = item && item.packageHeightIn != null ? Number(item.packageHeightIn) : null;
+    const w = item && item.packageWidthIn != null ? Number(item.packageWidthIn) : null;
+    const l = item && item.packageLengthIn != null ? Number(item.packageLengthIn) : null;
+    const hasAllDims = [h, w, l].every((n) => n != null && isFinite(n) && n > 0);
+
+    if (!hasAllDims) {
+      console.log('[FAS Vinted] Package size: Vinted\'s new numeric Height/Width/Length fields are present, but this item has no confirmed real package dimensions to fill them with -- left blank for the organizer.');
+      if (warnings) warnings.push('Parcel size (Height/Width/Length) is blank -- Vinted\'s "Sell an item" page now asks for exact measurements instead of a Small/Medium/Large size, and this item has no confirmed dimensions on file. Vinted already pre-filled an approximate weight from the category, but measure and enter the box dimensions yourself for an accurate shipping cost.');
+      return true; // field correctly identified and left alone on purpose -- not a "couldn't find it" failure
+    }
+
+    fasMarkStep('packageSize:parcelMeasurementsFill');
+    setNativeValue(heightInput, String(Math.round(h * 10) / 10));
+    setNativeValue(widthInput, String(Math.round(w * 10) / 10));
+    setNativeValue(lengthInput, String(Math.round(l * 10) / 10));
+    console.log('[FAS Vinted] Package size: filled Vinted\'s new Height/Width/Length fields from this item\'s real package dimensions (' + h + '" x ' + w + '" x ' + l + '").');
+    if (warnings) warnings.push('Parcel size (Height/Width/Length) filled from this item\'s real package dimensions -- please confirm before publishing.');
+    return true;
+  }
+  async function fillPackageSize(item, warnings) {
+    const newUiResult = fillParcelMeasurements(item, warnings);
+    if (newUiResult != null) return newUiResult;
     const byWeight = item ? await pickVintedSizeCardByRealWeight(item) : null;
     if (byWeight) {
       fasMarkStep('packageSize:byWeightCardClick:' + byWeight.label);
@@ -2498,7 +2546,7 @@
         warnings.push(item.vintedShippingNote);
       }
     }
-    const packageSizeOk = await fillPackageSize(item);
+    const packageSizeOk = await fillPackageSize(item, warnings);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
     // BUG FIX 2026-08-30 (round 10, Patrick live-reported "price input didn't take this time" +
     // live-confirmed on his actual open tab): the field's real value was correct ($10.00) and had
