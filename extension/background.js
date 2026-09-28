@@ -976,24 +976,16 @@ async function checkCrossPlatformRemovals(pendingItems) {
       await openSilentCrossPlatformRemovalTab(platform);
       outcomes.push(platform + ':silent_removal_started:' + itemsForPlatform.length);
     } else {
-      // S-COMPLIANCE-STALE-PUBLISHED-DOT (2026-09-28): same reason-aware wording as
-      // buildRemovalNotificationMessage above -- these items may need removal because a
-      // marketplace policy now blocks them, not only because they sold elsewhere.
-      const policyCountForPlatform = itemsForPlatform.filter((i) => i.reason === 'POLICY_INELIGIBLE').length;
-      const soldCountForPlatform = itemsForPlatform.length - policyCountForPlatform;
-      let crossPlatformMessage;
-      if (policyCountForPlatform && soldCountForPlatform) {
-        crossPlatformMessage = itemsForPlatform.length + ' items need removal from ' + FAS_PLATFORM_LABEL[platform] +
-          ' (' + soldCountForPlatform + ' sold elsewhere, ' + policyCountForPlatform + ' no longer allowed by policy) \u2014 remove them?';
-      } else if (policyCountForPlatform) {
-        crossPlatformMessage = policyCountForPlatform === 1
-          ? '1 item is no longer allowed on ' + FAS_PLATFORM_LABEL[platform] + ' \u2014 remove it now?'
-          : policyCountForPlatform + ' items are no longer allowed on ' + FAS_PLATFORM_LABEL[platform] + ' \u2014 remove them now?';
-      } else {
-        crossPlatformMessage = itemsForPlatform.length === 1
-          ? '1 item sold elsewhere \u2014 remove it from ' + FAS_PLATFORM_LABEL[platform] + '?'
-          : itemsForPlatform.length + ' items sold elsewhere are still listed on ' + FAS_PLATFORM_LABEL[platform] + ' \u2014 remove them?';
-      }
+      // S-COMPLIANCE-STALE-PUBLISHED-DOT (2026-09-28) + item-delete-cross-marketplace-removal
+      // (2026-09-28): same reason-aware wording as buildRemovalNotificationMessage above -- items
+      // may need removal because a marketplace policy now blocks them, because the FindA.Sale
+      // item they belonged to was deleted, or because they sold elsewhere. describeRemovalReasons
+      // (below) is the shared helper both call sites use so a new reason only needs adding there.
+      const reasonSummaryForPlatform = describeRemovalReasons(itemsForPlatform);
+      const crossPlatformMessage = itemsForPlatform.length === 1
+        ? '1 item needs removal from ' + FAS_PLATFORM_LABEL[platform] + ' (' + reasonSummaryForPlatform.summary + ') \u2014 remove it?'
+        : itemsForPlatform.length + ' items need removal from ' + FAS_PLATFORM_LABEL[platform] +
+          ' (' + reasonSummaryForPlatform.summary + ') \u2014 remove them?';
       chrome.notifications.create('fasPendingRemovals_' + platform, {
         type: 'basic',
         iconUrl: 'icon128.png',
@@ -1018,28 +1010,46 @@ async function checkCrossPlatformRemovals(pendingItems) {
 // account flagged) would be actively misleading, so the message now reflects which reason(s) are
 // actually in this batch. Items with no `reason` field (older cached response shape) are treated
 // as SOLD_ELSEWHERE, matching every prior release's behavior.
+// Shared by buildRemovalNotificationMessage (Facebook) and checkCrossPlatformRemovals'
+// per-platform notify block above -- one place to teach a new getPendingRemovals `reason` value
+// to both. Items with no `reason` field (older cached response shape) are treated as
+// SOLD_ELSEWHERE, matching every prior release's behavior.
+function describeRemovalReasons(removalItems) {
+  const counts = { SOLD_ELSEWHERE: 0, POLICY_INELIGIBLE: 0, ITEM_DELETED: 0 };
+  for (const i of removalItems) {
+    const key = Object.prototype.hasOwnProperty.call(counts, i.reason) ? i.reason : 'SOLD_ELSEWHERE';
+    counts[key]++;
+  }
+  const parts = [];
+  if (counts.SOLD_ELSEWHERE) parts.push(counts.SOLD_ELSEWHERE + (counts.SOLD_ELSEWHERE === 1 ? ' sold elsewhere' : ' sold elsewhere'));
+  if (counts.POLICY_INELIGIBLE) parts.push(counts.POLICY_INELIGIBLE + ' no longer allowed by policy');
+  if (counts.ITEM_DELETED) parts.push(counts.ITEM_DELETED + ' deleted from FindA.Sale');
+  return { counts, summary: parts.join(', ') || 'no longer needed' };
+}
+
+// Builds the 'fasPendingRemovals' notification body for checkPendingRemovals below. Split out
+// because the message now has three distinct cases (removals only, sold-checks only, or both at
+// once) instead of the original single case -- see the 2026-08-05 sold-detection note there.
+// UPDATED 2026-09-28 (S-COMPLIANCE-STALE-PUBLISHED-DOT + item-delete-cross-marketplace-removal):
+// `removalItems` replaces the old plain `removalCount` -- getPendingRemovals now also returns
+// items whose listing needs to come down because a marketplace policy rule now blocks it
+// (reason: 'POLICY_INELIGIBLE') or because the FindA.Sale item was deleted (reason:
+// 'ITEM_DELETED'), not only because the item sold elsewhere (reason: 'SOLD_ELSEWHERE'). Telling
+// Patrick "sold elsewhere" for a policy takedown (e.g. the dagger/currency-note incident that got
+// the Facebook account flagged) or a delete-driven one would be actively misleading, so the
+// message reflects which reason(s) are actually in this batch via describeRemovalReasons above.
 function buildRemovalNotificationMessage(removalItems, soldCheckCount) {
   const removalCount = removalItems.length;
-  const policyCount = removalItems.filter((i) => i.reason === 'POLICY_INELIGIBLE').length;
-  const soldCount = removalCount - policyCount;
+  const reasonSummary = describeRemovalReasons(removalItems);
   if (removalCount && soldCheckCount) {
     return removalCount + ' item' + (removalCount === 1 ? '' : 's') +
-      (policyCount ? ' need removal (policy or sold elsewhere)' : ' sold elsewhere') +
+      ' need removal (' + reasonSummary.summary + ')' +
       ', plus Facebook listings due for a sync check -- open Marketplace?';
   }
   if (removalCount) {
-    if (policyCount && soldCount) {
-      return removalCount + ' items need removal from Facebook Marketplace (' + soldCount +
-        ' sold elsewhere, ' + policyCount + ' no longer allowed by Facebook policy) — remove them?';
-    }
-    if (policyCount) {
-      return policyCount === 1
-        ? '1 item is no longer allowed on Facebook Marketplace — remove it now?'
-        : policyCount + ' items are no longer allowed on Facebook Marketplace — remove them now?';
-    }
     return removalCount === 1
-      ? '1 item sold elsewhere — remove it from Facebook Marketplace?'
-      : removalCount + ' items sold elsewhere — remove them from Facebook Marketplace?';
+      ? '1 item needs removal from Facebook Marketplace (' + reasonSummary.summary + ') — remove it?'
+      : removalCount + ' items need removal from Facebook Marketplace (' + reasonSummary.summary + ') — remove them?';
   }
   // soldCheckCount only -- nothing has been confirmed sold on Facebook yet at notify time (that
   // confirmation only happens once the tab opens and fas-remove.js's scan actually runs), so

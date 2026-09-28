@@ -6450,6 +6450,41 @@ model MarketplaceListingJob {
   @@index([platform, renewDueAt])
 }
 
+// ADR item-delete-cross-marketplace-removal (2026-09-28): deleteItem (itemController.ts)
+// hard-deletes the Item row immediately (Cloudinary cleanup, Shopify unpublish, then the
+// real DB delete -- organizer expects "delete" to mean gone, right away). eBay/Discogs/Reverb
+// withdrawals need nothing but the itemId and run synchronously before that delete, so those
+// are unaffected. The extension-driven platforms (Facebook, Vinted, Mercari, Poshmark,
+// Grailed, Craigslist, Gumtree AU) have no removal API at all -- the ONLY way to take a live
+// listing down on any of them is the browser extension polling GET /extension/pending-removals
+// and acting on each site directly, and that endpoint can only find items via an Item row
+// that still exists. Since deleteItem deletes that row immediately, this table is a
+// standalone snapshot (deliberately NOT a foreign key to Item -- the whole point is
+// surviving the row it describes being deleted) of exactly what getPendingRemovals +
+// background.js need to finish the job on each live platform: which one, its remote
+// listing id (if captured), and the item's title for the removal-review overlay.
+// One row per (deleted item, platform) that was still live at delete time -- mirrors
+// MarketplaceListingJob's own per-(item,platform) grain, so getPendingRemovals can surface
+// each row as its own single-platform pending-removal entry with no extra grouping key
+// needed. Deleted by markItemRemoved once background.js confirms the removal (same
+// confirm-removal endpoints real items already use -- see the assertItemOwned-fails
+// fallback there); skipCount/lastSkipReason/lastSkipAt mirror the REMOVE/SKIPPED bookkeeping
+// markItemRemovalSkipped keeps in MarketplaceListingJob for real items, since there's no
+// itemId left here to attach that history to.
+model PendingListingRemoval {
+  id              String                 @id @default(cuid())
+  organizerId     String // denormalized, no relation -- must outlive the deleted Item row
+  itemTitle       String
+  platform        MarketplaceJobPlatform
+  remoteListingId String?
+  skipCount       Int                    @default(0)
+  lastSkipReason  String?
+  lastSkipAt      DateTime?
+  createdAt       DateTime               @default(now())
+
+  @@index([organizerId])
+}
+
 // Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability.
 // Decision log for every buyer message the extension ran through the price/availability
 // autosend engine (messageAutosendService.ts), whether or not it actually autosent.

@@ -3126,7 +3126,7 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
     // Fetch item to verify ownership
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+      include: { sale: { include: { organizer: { select: { id: true, userId: true } } } } }
     });
 
     if (!item) {
@@ -3135,6 +3135,57 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
 
     if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // ADR item-delete-cross-marketplace-removal (2026-09-28): deleting an item previously
+    // left every live cross-listing behind -- Patrick's question ("what happens if i just
+    // delete an item that's already been pushed to ebay and other marketplaces") surfaced
+    // that eBay listings became permanently orphaned (endEbayListingIfExists needs the Item
+    // row it's about to lose) and every other marketplace was never even attempted. Fixed by
+    // mirroring soldFanOutService.ts's fanOutItemSoldWithdrawals -- same three real-API
+    // withdraw calls (eBay/Discogs/Reverb), run here instead since a delete is not a sale
+    // (Shopify's own removeItemFromShopify call two lines below already handles that one
+    // correctly and is unchanged). All three self-guard to a no-op when the item was never
+    // on that channel, and never throw -- fire-and-forget, same posture as every other call
+    // site of these three functions.
+    endEbayListingIfExists(id).catch((err: any) =>
+      console.warn(`[eBay] withdraw-on-delete failed for item ${id}:`, err?.message)
+    );
+    withdrawDiscogsListingIfExists(id).catch((err: any) =>
+      console.warn(`[Discogs] withdraw-on-delete failed for item ${id}:`, err?.message)
+    );
+    withdrawReverbListingIfExists(id).catch((err: any) =>
+      console.warn(`[Reverb] withdraw-on-delete failed for item ${id}:`, err?.message)
+    );
+
+    // The extension-driven platforms (Facebook/Vinted/Mercari/Poshmark/Grailed/Craigslist/
+    // Gumtree AU) have no removal API -- the only way to take a live listing down on any of
+    // them is the browser extension polling GET /extension/pending-removals and acting on
+    // the real site, which needs an Item row to query. Since this Item row is about to be
+    // hard-deleted, snapshot any still-live extension-platform listing into
+    // PendingListingRemoval (no FK to Item -- it exists specifically to survive this delete)
+    // BEFORE the delete, so getPendingRemovals can still find and queue it afterward.
+    const listingJobs = await prisma.marketplaceListingJob.findMany({
+      where: { itemId: id },
+      select: { platform: true, status: true, action: true, remoteListingId: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const latestJobByPlatform = new Map<string, (typeof listingJobs)[number]>();
+    for (const job of listingJobs) {
+      if (!latestJobByPlatform.has(job.platform)) latestJobByPlatform.set(job.platform, job);
+    }
+    const stillLivePlatforms = [...latestJobByPlatform.values()].filter(
+      (job) => job.action === 'POST' && job.status === 'POSTED'
+    );
+    if (stillLivePlatforms.length > 0) {
+      await prisma.pendingListingRemoval.createMany({
+        data: stillLivePlatforms.map((job) => ({
+          organizerId: item.sale!.organizer.id,
+          itemTitle: item.title,
+          platform: job.platform,
+          remoteListingId: job.remoteListingId,
+        })),
+      });
     }
 
     // Cleanup Cloudinary images before deleting item from DB

@@ -947,7 +947,25 @@ export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<
   const userId = req.user?.id;
   const itemId = req.params.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
-  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) {
+    // item-delete-cross-marketplace-removal (2026-09-28): `itemId` may not be a real Item at
+    // all -- getPendingRemovals also hands out PendingListingRemoval row ids (reason:
+    // 'ITEM_DELETED') through this exact same `id` field, and background.js/the content
+    // scripts call this endpoint the same way for either kind since they only ever round-trip
+    // whatever id the response gave them. Fall back to matching one of those rows, scoped to
+    // this organizer, before giving up with a 404.
+    const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+    const pending = organizer
+      ? await prisma.pendingListingRemoval.findFirst({ where: { id: itemId, organizerId: organizer.id } })
+      : null;
+    if (pending) {
+      await prisma.pendingListingRemoval.delete({ where: { id: pending.id } });
+      res.json({ ok: true });
+      return;
+    }
+    res.status(404).json({ message: 'Item not found' });
+    return;
+  }
 
   const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : 'FACEBOOK';
   const platform: MarketplaceListingPlatform = (VALID_LISTING_PLATFORMS as string[]).includes(platformRaw)
@@ -992,7 +1010,27 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
   const userId = req.user?.id;
   const itemId = req.params.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
-  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) {
+    // item-delete-cross-marketplace-removal (2026-09-28): same PendingListingRemoval fallback
+    // as markItemRemoved above -- this row has no itemId of its own to attach REMOVE/SKIPPED
+    // MarketplaceListingJob rows to, so skipCount/lastSkipReason/lastSkipAt live on the row
+    // itself instead (mirrors what those job rows track for a real item).
+    const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+    const pending = organizer
+      ? await prisma.pendingListingRemoval.findFirst({ where: { id: itemId, organizerId: organizer.id } })
+      : null;
+    if (pending) {
+      const skipReason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null;
+      await prisma.pendingListingRemoval.update({
+        where: { id: pending.id },
+        data: { skipCount: { increment: 1 }, lastSkipReason: skipReason, lastSkipAt: new Date() },
+      });
+      res.json({ ok: true });
+      return;
+    }
+    res.status(404).json({ message: 'Item not found' });
+    return;
+  }
 
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null;
   // BUG FIX 2026-09-04 (S-EXT-REMOVAL-SKIP-COUNTER-NOT-PLATFORM-SCOPED): this row was created
@@ -1379,12 +1417,54 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     }
   }
 
+  // ---- DELETED-ITEM REMOVALS (added 2026-09-28, item-delete-cross-marketplace-removal companion
+  // fix) --------------------------------------------------------------------------------------
+  // deleteItem (itemController.ts) hard-deletes the Item row immediately -- Patrick's question
+  // ("what happens if i just delete an item that's already been pushed to ebay and other
+  // marketplaces") surfaced that the extension-driven platforms (no removal API of their own)
+  // had nothing at all keeping their listings' removal alive past that delete. deleteItem now
+  // snapshots any still-live extension-platform listing into PendingListingRemoval (no FK to
+  // Item -- see that table's own schema comment) before the delete; this section reads those
+  // rows back and feeds them into the same `items`/`needsManualReview` shape SOLD_ELSEWHERE and
+  // POLICY_INELIGIBLE items already use, tagged reason: 'ITEM_DELETED'. Simpler than the
+  // sold-item pipeline above on purpose (no per-platform cooldown timer) -- deleted-item volume
+  // is expected to be a small fraction of sold-item volume, so a flat MAX_REMOVAL_SKIP_ATTEMPTS
+  // / REMOVAL_HARD_STOP_AFTER_ATTEMPTS gate (same two constants, same thresholds) gives the same
+  // "don't retry forever, don't hide it either" guarantee without the added complexity.
+  // markItemRemoved / markItemRemovalSkipped fall back to matching a PendingListingRemoval row
+  // by id when the id in the request doesn't resolve to a real Item (see the
+  // assertItemOwned-fails branch added to each) -- background.js needs no changes to call them,
+  // since it already just POSTs whatever `id` this response handed it back.
+  const deletedItemRows = await prisma.pendingListingRemoval.findMany({
+    where: { organizerId: organizer.id },
+  });
+  const deletedItemRetryable = deletedItemRows.filter(
+    (row) => row.skipCount < REMOVAL_HARD_STOP_AFTER_ATTEMPTS || !!row.remoteListingId
+  );
+  const deletedItemStuck = deletedItemRows.filter((row) => row.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS);
+
   res.json({
     items: [
       ...items.map((i) => ({ ...i, reason: 'SOLD_ELSEWHERE' as const })),
       ...complianceItems,
+      ...deletedItemRetryable.map((row) => ({
+        id: row.id,
+        title: row.itemTitle,
+        platforms: [row.platform],
+        listingRefs: row.remoteListingId ? { [row.platform]: row.remoteListingId } : {},
+        reason: 'ITEM_DELETED' as const,
+      })),
     ],
-    needsManualReview,
+    needsManualReview: [
+      ...needsManualReview,
+      ...deletedItemStuck.map((row) => ({
+        id: row.id,
+        title: row.itemTitle,
+        skipCount: row.skipCount,
+        lastErrorMessage: row.lastSkipReason,
+        platforms: [row.platform],
+      })),
+    ],
   });
 };
 
