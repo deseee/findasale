@@ -1785,9 +1785,26 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       const newPrice = price ? parseFloat(price) : null;
       updateData.rarity = assignRarity(newPrice);
 
-      // Bug fix: Initialize priceBeforeMarkdown if not already set by auto-markdown cron
-      // This ensures the strikethrough price display works when organizers manually edit prices
-      if (!item.priceBeforeMarkdown && newPrice && newPrice > 0) {
+      // Anchor fix (corrected 2026-09-28 -- see STATE.md P0 pricing-audit entry under
+      // ## Blocked Queue for the full root-cause writeup). priceBeforeMarkdown must only
+      // be treated as "already anchored" once a markdown cron has actually cut this
+      // item's price at least once. The OLD guard (`!item.priceBeforeMarkdown`) locked
+      // the anchor onto whichever manual price edit happened to land FIRST after item
+      // creation, then silently ignored every later organizer price correction -- so
+      // markdownCycleCron.ts / markdownCron.ts kept discounting from a stale, sometimes
+      // wildly wrong, first-ever price forever after. markdownApplied is the one flag
+      // BOTH crons set to true, and ONLY when they apply a real cut (markdownCron.ts
+      // ~line 118, markdownCycleCron.ts ~line 163) -- it starts false on every new item
+      // and stays false through any number of manual edits until a cron actually marks
+      // the item down, which is exactly the "no real markdown history yet, keep
+      // re-anchoring on every edit" window this needs. Once a cron sets
+      // markdownApplied=true, priceBeforeMarkdown becomes cron-owned and a later manual
+      // edit must leave it alone -- matches its own schema comment ("captured once, at
+      // the first-ever step applied... never cumulative", markdownCycleCron.ts ~line 141)
+      // and Item.originalPrice's schema comment, which explicitly calls
+      // priceBeforeMarkdown "markdown-cron-owned... NEVER touched by either markdown
+      // cron[via manual edit], by design".
+      if (newPrice && newPrice > 0 && !item.markdownApplied) {
         updateData.priceBeforeMarkdown = newPrice;
         updateData.markdownApplied = false;
       }
