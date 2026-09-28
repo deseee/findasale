@@ -27,7 +27,7 @@
 
 import { checkEligibility, EligibilityCheckItem } from './marketplaceEligibilityRules';
 
-export type ChannelStatusValue = 'PUBLISHED' | 'ELIGIBLE' | null;
+export type ChannelStatusValue = 'PUBLISHED' | 'ELIGIBLE' | 'PUBLISHED_INELIGIBLE' | null;
 
 export interface ItemChannelStatus {
   ebay: ChannelStatusValue;
@@ -93,7 +93,23 @@ function extensionChannelStatus(
   item: EligibilityCheckItem
 ): ChannelStatusValue {
   if (!organizerUsesPlatform) return null; // organizer has never used this channel -- don't show it at all
-  if (itemPublishedOnPlatform) return 'PUBLISHED';
+  if (itemPublishedOnPlatform) {
+    // FIX 2026-09-28 (S-COMPLIANCE-STALE-PUBLISHED-DOT): this used to return 'PUBLISHED'
+    // unconditionally once an item had ever been posted, even when a CATEGORY_BLOCKLIST rule
+    // added AFTER the fact now makes it ineligible on this platform. Live-caught by Patrick: a
+    // dagger and a $50 Federal Reserve Note were pushed to Facebook before the FACEBOOK
+    // weapons/coin-currency rules existed (S-FB-WEAPON-COIN-FIX-2026-09-03), got the account
+    // flagged, and this dot has shown a plain green "Published" for both ever since -- nothing
+    // ever re-checks an already-published item against rules added later. Re-running
+    // checkEligibility here doesn't change whether the dot is filled (it's still genuinely
+    // published, per the MarketplaceListingJob history), but a currently-failing check now
+    // reports 'PUBLISHED_INELIGIBLE' instead of plain 'PUBLISHED' so the UI can flag it as
+    // needing removal rather than implying it's a normal, compliant listing. See
+    // extensionController.ts's getPendingRemovals for the companion fix that actually queues
+    // these for removal through the extension, not just relabels the dot.
+    const liveCheck = checkEligibility(platform, item);
+    return liveCheck.eligible ? 'PUBLISHED' : 'PUBLISHED_INELIGIBLE';
+  }
   const result = checkEligibility(platform, item);
   return result.eligible ? 'ELIGIBLE' : null;
 }
@@ -133,10 +149,14 @@ export function computeChannelStatusForItems(
 
       // Reverb (2026-09-14 addendum): full Tier A parity -- PUBLISHED when a real listing id is
       // persisted, else ELIGIBLE when connected and the registry's REVERB allowlist rule passes.
+      // 2026-09-28 (S-COMPLIANCE-STALE-PUBLISHED-DOT companion): same re-check-on-published
+      // treatment as extensionChannelStatus below, for consistency -- Reverb's own
+      // CATEGORY_ALLOWLIST rule could in principle be tightened later the same way FACEBOOK's
+      // blocklist was, and a stale green dot would have the identical failure mode.
       reverb: !organizer.hasActiveReverbAccount
         ? null
         : item.reverbListingId
-          ? 'PUBLISHED'
+          ? (checkEligibility('REVERB', item).eligible ? 'PUBLISHED' : 'PUBLISHED_INELIGIBLE')
           : checkEligibility('REVERB', item).eligible
             ? 'ELIGIBLE'
             : null,

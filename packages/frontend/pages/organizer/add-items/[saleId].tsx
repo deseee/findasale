@@ -293,7 +293,7 @@ interface RapidItem {
 // claude_docs/ux-spotchecks/add-items-collapsed-row-publish-status-2026-09-14.md
 // and claude_docs/feature-notes/ADR-2026-09-14-add-items-multichannel-status-aggregation.md.
 // item.channelStatus comes from getDraftItemsBySaleId's response (itemController.ts).
-type ChannelDotState = 'PUBLISHED' | 'ELIGIBLE' | null | undefined;
+type ChannelDotState = 'PUBLISHED' | 'ELIGIBLE' | 'PUBLISHED_INELIGIBLE' | null | undefined;
 const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string; border: string; tint: string }> = [
   { key: 'ebay', label: 'eBay', color: 'bg-blue-500', border: 'border-blue-500', tint: 'bg-blue-500/25' },
   { key: 'shopify', label: 'Shopify', color: 'bg-emerald-500', border: 'border-emerald-500', tint: 'bg-emerald-500/25' },
@@ -315,12 +315,27 @@ const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string; bor
  * Wraps onto a second line via flex-wrap if an item has many active channels. */
 function ChannelStatusDots({ channelStatus }: { channelStatus?: Record<string, ChannelDotState> | null }) {
   if (!channelStatus) return null;
-  const active = CHANNEL_DOT_CONFIG.filter(c => channelStatus[c.key] === 'PUBLISHED' || channelStatus[c.key] === 'ELIGIBLE');
+  const active = CHANNEL_DOT_CONFIG.filter(c => channelStatus[c.key] === 'PUBLISHED' || channelStatus[c.key] === 'ELIGIBLE' || channelStatus[c.key] === 'PUBLISHED_INELIGIBLE');
   if (active.length === 0) return null;
   return (
     <div className="flex items-center flex-wrap gap-0.5 mt-0.5" aria-label="Marketplace publish status">
       {active.map(c => {
         const state = channelStatus[c.key];
+        // FIX 2026-09-28 (S-COMPLIANCE-STALE-PUBLISHED-DOT): a third dot state for an item that IS
+        // still live on this platform but is now blocked by a policy rule added after it was
+        // posted (e.g. the Facebook weapons/coin-currency rules) -- a plain green "Published" dot
+        // wrongly implied these were normal, compliant listings. Rendered as a solid red ring so it
+        // reads as "needs attention," distinct from both the filled brand-color dot (compliant and
+        // live) and the outlined tinted dot (eligible, not yet published).
+        if (state === 'PUBLISHED_INELIGIBLE') {
+          const title = `${c.label}: Published, but no longer eligible on this marketplace -- needs removal`;
+          return (
+            <span key={c.key} title={title} className="relative w-2.5 h-2.5 rounded-full">
+              <span className={`absolute inset-0 rounded-full ${c.color}`} />
+              <span className="absolute -inset-0.5 rounded-full border-2 border-red-600" />
+            </span>
+          );
+        }
         const title = `${c.label}: ${state === 'PUBLISHED' ? 'Live' : 'Eligible, not yet published'}`;
         return state === 'PUBLISHED' ? (
           <span key={c.key} title={title} className={`w-2 h-2 rounded-full ${c.color}`} />

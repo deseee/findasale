@@ -1293,7 +1293,99 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     });
   }
 
-  res.json({ items, needsManualReview });
+  // ---- COMPLIANCE-DRIVEN REMOVALS (added 2026-09-28, S-COMPLIANCE-STALE-PUBLISHED-DOT
+  // companion fix) --------------------------------------------------------------------
+  // Everything above only ever fires for items with status 'SOLD' -- this endpoint was built for
+  // exactly one trigger, "this sold on another platform, take the rest down." There has never been
+  // any mechanism that re-checks an already-PUBLISHED item against marketplaceEligibilityRules
+  // after a new CATEGORY_BLOCKLIST rule ships. Real-world cost, live-caught by Patrick: a dagger
+  // and a $50 Federal Reserve Note were pushed to Facebook before the FACEBOOK weapons/coin-
+  // currency rules existed (S-FB-WEAPON-COIN-FIX-2026-09-03), got Patrick's Facebook account
+  // flagged, and then sat showing a normal green "Published" dot on the Add Items page
+  // indefinitely -- the rule that would have blocked them from ever being posted again had
+  // nothing to say about listings that predated it (see itemChannelStatusService.ts's matching
+  // fix for the dot itself). This section finds AVAILABLE items with a still-live extension-
+  // platform listing that NOW fails checkEligibility for that platform, and feeds them into the
+  // same `items` shape (an additive `reason` field distinguishes them from the sold-elsewhere
+  // items above) so background.js's existing per-platform removal engine can take them down the
+  // same way it already does for sold-elsewhere items -- no second removal pathway to build.
+  const availableCandidateJobs = await prisma.marketplaceListingJob.findMany({
+    where: {
+      item: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
+      platform: { in: VALID_LISTING_PLATFORMS },
+    },
+    select: { itemId: true, platform: true, action: true, status: true, createdAt: true, remoteListingId: true },
+  });
+  const latestAvailableByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; remoteListingId: string | null }>();
+  for (const j of availableCandidateJobs) {
+    // Same rule as the sold-item computation above: a REMOVE/SKIPPED row is a failed removal
+    // attempt, not a state change -- the listing is still live.
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
+    const key = j.itemId + ':' + j.platform;
+    const existing = latestAvailableByItemPlatform.get(key);
+    if (!existing || j.createdAt > existing.createdAt) {
+      latestAvailableByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, remoteListingId: j.remoteListingId ?? null });
+    }
+  }
+  const stillLiveAvailablePlatformsByItem = new Map<string, string[]>();
+  for (const [key, latest] of latestAvailableByItemPlatform) {
+    if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
+    const sepIdx = key.lastIndexOf(':');
+    const itemId = key.slice(0, sepIdx);
+    const platform = key.slice(sepIdx + 1);
+    const arr = stillLiveAvailablePlatformsByItem.get(itemId) || [];
+    arr.push(platform);
+    stillLiveAvailablePlatformsByItem.set(itemId, arr);
+  }
+
+  const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE' }> = [];
+  if (stillLiveAvailablePlatformsByItem.size > 0) {
+    const candidateItemIds = [...stillLiveAvailablePlatformsByItem.keys()];
+    const candidateItems = await prisma.item.findMany({
+      where: { id: { in: candidateItemIds } },
+      select: {
+        id: true, title: true, category: true, ebayCategoryId: true,
+        packageWeightOz: true, aiPackageWeightOz: true,
+        packageLengthIn: true, packageWidthIn: true, packageHeightIn: true,
+      },
+    });
+    for (const it of candidateItems) {
+      // packageLengthIn/WidthIn/HeightIn are Prisma Decimal on the Item model, not number --
+      // EligibilityCheckItem wants plain numbers (same conversion ebayShippingResolver.ts already
+      // does for the identical fields). aiPackageWeightOz/packageWeightOz are already plain Float
+      // columns, no conversion needed.
+      const eligibilityItem = {
+        id: it.id,
+        title: it.title,
+        category: it.category,
+        ebayCategoryId: it.ebayCategoryId,
+        packageWeightOz: it.packageWeightOz,
+        aiPackageWeightOz: it.aiPackageWeightOz,
+        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+      };
+      const livePlatforms = stillLiveAvailablePlatformsByItem.get(it.id) || [];
+      const nowIneligiblePlatforms = livePlatforms.filter(
+        (p) => !checkEligibility(p as MarketplaceListingPlatform, eligibilityItem).eligible
+      );
+      if (nowIneligiblePlatforms.length === 0) continue;
+      const refs: Record<string, string> = {};
+      for (const p of nowIneligiblePlatforms) {
+        const latest = latestAvailableByItemPlatform.get(it.id + ':' + p);
+        if (latest?.remoteListingId) refs[p] = latest.remoteListingId;
+      }
+      complianceItems.push({ id: it.id, title: it.title, platforms: nowIneligiblePlatforms, listingRefs: refs, reason: 'POLICY_INELIGIBLE' });
+    }
+  }
+
+  res.json({
+    items: [
+      ...items.map((i) => ({ ...i, reason: 'SOLD_ELSEWHERE' as const })),
+      ...complianceItems,
+    ],
+    needsManualReview,
+  });
 };
 
 // POST /api/extension/items/:id/remote-listing-id — S-EXT-VINTED-REMOTE-LISTING-ID (2026-09-23).
