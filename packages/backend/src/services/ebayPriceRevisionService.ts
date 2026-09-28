@@ -621,7 +621,18 @@ export async function reviseEbayOfferPrice(
       // keeps failing normally here, no guessing) and (b) offerBody (this function's own
       // earlier GET) already shows a live listingId, so an offer that was never published in
       // the first place is never force-published by this branch.
-      if (aspectResult.alreadyValid && typeof offerBody.listingId === 'string' && offerBody.listingId) {
+      // Field-path fix (2026-09-28, confirmed live via direct GET on offer 241030444011,
+      // item cmo3etpx2005hjqsuvzlkt8qz -- one of the exact two items this escalation tier
+      // was built for): the Inventory API's real Offer response nests the live listing id at
+      // `listing.listingId` (confirmed identical to the shape ebayController.ts already reads
+      // correctly in three places, e.g. `offerBody?.listing?.listingId`), never at a top-level
+      // `listingId` field. The old check here (`offerBody.listingId`) always read `undefined`
+      // against the real API shape, so this entire escalation branch could never fire for any
+      // item, silently -- it was permanently dead code since the day it shipped. Confirmed this
+      // fix alone does not resolve these two items' actual failure (see STATE.md), but it does
+      // make the branch reachable at all for any other item whose failure mode it can help.
+      const liveListingId = (offerBody.listing as Record<string, unknown> | undefined)?.listingId as string | undefined;
+      if (aspectResult.alreadyValid && typeof liveListingId === 'string' && liveListingId) {
         try {
           const publishRes = await ebayFetch(`/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`, accessToken, { method: 'POST', body: {} });
           trackEbayCall();
