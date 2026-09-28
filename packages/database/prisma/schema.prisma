@@ -1628,6 +1628,11 @@ model Item {
   // cut lands, so a nightly run can tell which step an item last reached and never
   // double-apply or skip one when catching an item up across multiple thresholds at once.
   markdownStepIndexApplied        Int?
+  // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out checked by BOTH
+  // markdown crons (markdownCron.ts Feature #91 free-tier + markdownCycleCron.ts PRO-tier
+  // N-step cycles) as a query-level filter -- a flagged item is never selected by either
+  // job, so no price change, history row, alert, or marketplace propagation ever touches it.
+  excludeFromMarkdown             Boolean                 @default(false)
   // Feature #228: Settlement Hub — high-value item tracking + AI comp
   isHighValue                     Boolean                 @default(false)
   highValueThreshold              Decimal?

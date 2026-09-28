@@ -66,6 +66,7 @@ export function scheduleMarkdownCycleCron(): void {
           const itemFilter: any = {
             status: 'AVAILABLE',
             price: { gt: 0 }, // Only items with a price
+            excludeFromMarkdown: false, // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out
           };
 
           if (cycle.saleId) {

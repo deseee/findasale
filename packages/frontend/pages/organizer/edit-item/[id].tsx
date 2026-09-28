@@ -128,6 +128,8 @@ const EditItemPage = () => {
     isbn: '',
     // eBay Best Offers
     allowBestOffer: false,
+    // ADR item-exclude-from-markdown (2026-09-28)
+    excludeFromMarkdown: false,
     bestOfferAcceptPct: '' as number | '',
     bestOfferDeclinePct: '' as number | '',
     // eBay shipping override
@@ -530,6 +532,7 @@ const EditItemPage = () => {
       bestOfferMinimumAmt: formData.allowBestOffer && pushDeclinePct !== null && pushPrice > 0
         ? parseFloat((pushPrice * (1 - pushDeclinePct / 100)).toFixed(2))
         : null,
+      excludeFromMarkdown: formData.excludeFromMarkdown,
       ebayShippingOverride: formData.ebayShippingOverride || null,
       ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
       bestOfferAcceptPct: undefined,
@@ -953,6 +956,7 @@ const EditItemPage = () => {
         isbn: item.isbn || '',
         // eBay Best Offers: reverse-compute percentages from stored dollar amounts
         allowBestOffer: item.allowBestOffer === true,
+        excludeFromMarkdown: item.excludeFromMarkdown === true,
         bestOfferAcceptPct: (() => {
           const price = parseFloat(item.price);
           const amt = item.bestOfferAutoAcceptAmt != null ? parseFloat(item.bestOfferAutoAcceptAmt) : null;
@@ -1070,6 +1074,7 @@ const EditItemPage = () => {
         bestOfferMinimumAmt: formData.allowBestOffer && declinePct !== null && price > 0
           ? parseFloat((price * (1 - declinePct / 100)).toFixed(2))
           : null,
+        excludeFromMarkdown: formData.excludeFromMarkdown,
         ebayShippingOverride: formData.ebayShippingOverride || null,
         ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
         // ADR-106 (2026-08-15): only send shippingAvailable/shippingPrice as an
@@ -2575,6 +2580,23 @@ const EditItemPage = () => {
                       Accept Best Offers on eBay
                     </label>
                   </div>
+
+                  {/* ADR item-exclude-from-markdown (2026-09-28) */}
+                  <div className="flex items-center gap-2 pt-3 border-t border-warm-200 dark:border-gray-700">
+                    <input
+                      type="checkbox"
+                      id="excludeFromMarkdown"
+                      checked={formData.excludeFromMarkdown}
+                      onChange={(e) => setFormData(prev => ({ ...prev, excludeFromMarkdown: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                    />
+                    <label htmlFor="excludeFromMarkdown" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                      Exclude from auto-markdown
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+                    This item's price will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down.
+                  </p>
 
                   {formData.allowBestOffer && (() => {
                     const currentPrice = parseFloat(String(formData.price)) || 0;

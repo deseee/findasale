@@ -81,6 +81,7 @@ export function scheduleMarkdownCron(): void {
             listingType: { not: 'AUCTION' },
             markdownTierApplied: { lt: targetTier },
             price: { gt: 0 }, // Only items with a price
+            excludeFromMarkdown: false, // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out
           },
           select: {
             id: true,

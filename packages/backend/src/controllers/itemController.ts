@@ -1040,7 +1040,7 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
     // blank, because the reverse dollars-to-percent calc always saw undefined amounts.
     const item = await prisma.item.findUnique({
       where: { id },
-      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true }
+      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true }
     });
 
     if (!item) {
@@ -1580,7 +1580,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -1967,6 +1967,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (ebayEpid !== undefined) updateData.ebayEpid = ebayEpid || null;
     if (conditionNotes !== undefined) updateData.conditionNotes = conditionNotes || null;
     if (allowBestOffer !== undefined) updateData.allowBestOffer = allowBestOffer === true || allowBestOffer === 'true';
+    // ADR item-exclude-from-markdown (2026-09-28): organizer opt-out from both auto-markdown crons
+    if (excludeFromMarkdown !== undefined) updateData.excludeFromMarkdown = excludeFromMarkdown === true || excludeFromMarkdown === 'true';
     if (bestOfferAutoAcceptAmt !== undefined) updateData.bestOfferAutoAcceptAmt = bestOfferAutoAcceptAmt === null ? null : Number(bestOfferAutoAcceptAmt);
     if (bestOfferMinimumAmt !== undefined) updateData.bestOfferMinimumAmt = bestOfferMinimumAmt === null ? null : Number(bestOfferMinimumAmt);
     if (ebaySecondaryCategoryId !== undefined) updateData.ebaySecondaryCategoryId = ebaySecondaryCategoryId || null;
