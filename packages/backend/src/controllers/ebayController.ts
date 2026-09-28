@@ -5808,11 +5808,13 @@ function getCategoryLabel(categoryId: string): string {
 }
 
 /**
- * Withdraw an eBay offer when the item sells on FindA.Sale
+ * Withdraw an eBay offer when the item sells on FindA.Sale, or when it's deleted
+ * (P3 cleanup 2026-09-28: added the `reason` param so the success log and the
+ * renewal-forecast-clear race below can tell the two apart -- see that comment).
  * Fire-and-forget: logs errors but does not throw
  * Prevents double-sell risk (item stays active on eBay after FindA.Sale sale)
  */
-export async function endEbayListingIfExists(itemId: string): Promise<void> {
+export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'delete' = 'sold'): Promise<void> {
   try {
     // Query the item for offer and listing IDs
     const item = await prisma.item.findUnique({
@@ -6008,7 +6010,8 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
     }
 
     console.log(
-      `[eBay] Successfully withdrew offer ${offerId} for item ${itemId} — item sold on FindA.Sale`
+      `[eBay] Successfully withdrew offer ${offerId} for item ${itemId}` +
+        (reason === 'delete' ? ' — item deleted from FindA.Sale' : ' — item sold on FindA.Sale')
     );
 
     // ADR ebay-renewal-forecasting (2026-09-15): item is no longer eBay-live —
@@ -6022,7 +6025,17 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
         data: { ebayRenewalAnchorAt: null, ebayNextRenewalAt: null },
       });
     } catch (clearErr) {
-      console.warn(`[eBay] Failed to clear renewal-forecast fields for item ${itemId} after withdraw (non-fatal):`, (clearErr as Error).message);
+      // P3 fix (2026-09-28, live-caught during the delete-removal fix's own QA): this update
+      // always loses the race against a delete-triggered withdraw -- deleteItem calls this
+      // function fire-and-forget, then immediately runs its own prisma.item.delete, so by the
+      // time this update lands the Item row is already gone. Prisma's P2025 ("record to update
+      // not found") is the ONLY error this specific update can throw for that reason, and it's
+      // harmless: the row being gone means there are no stale forecast fields left to matter.
+      // Stay silent for that one known-expected code; still warn on anything genuinely
+      // unexpected (a real DB error, a schema drift, etc).
+      if ((clearErr as { code?: string })?.code !== 'P2025') {
+        console.warn(`[eBay] Failed to clear renewal-forecast fields for item ${itemId} after withdraw (non-fatal):`, (clearErr as Error).message);
+      }
     }
   } catch (error) {
     console.error(`[eBay] Error withdrawing eBay listing for item ${itemId}:`, error);

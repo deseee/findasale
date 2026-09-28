@@ -3165,7 +3165,7 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
     // correctly and is unchanged). All three self-guard to a no-op when the item was never
     // on that channel, and never throw -- fire-and-forget, same posture as every other call
     // site of these three functions.
-    endEbayListingIfExists(id).catch((err: any) =>
+    endEbayListingIfExists(id, 'delete').catch((err: any) =>
       console.warn(`[eBay] withdraw-on-delete failed for item ${id}:`, err?.message)
     );
     withdrawDiscogsListingIfExists(id).catch((err: any) =>
