@@ -648,6 +648,21 @@ async function startQueue() {
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt
     packageLengthIn: it.packageLengthIn, packageWidthIn: it.packageWidthIn, packageHeightIn: it.packageHeightIn,
+    // BUG FIX 2026-09-28 (real root cause of Patrick's "still no shipping cost given" report,
+    // and separately of the $100-shipping-cap price bump never showing up since it shipped
+    // 2026-09-17): fas-vinted.js reads item.vintedPrice/item.vintedShippingNote (shipping-cap
+    // price bump) and item.vintedDomesticShippingUsd (custom-shipping-price field) directly off
+    // the queue item this function builds for chrome.storage.local.fasVintedQueue -- but this
+    // field whitelist never forwarded any of the three, so fas-vinted.js always saw them as
+    // undefined regardless of what extensionController.ts computed server-side. This was NOT a
+    // package-confirmation issue -- confirmed live 2026-09-28 that GET /api/extension/items
+    // returned vintedDomesticShippingUsd: 42.79 for a real, organizer-confirmed-package item at
+    // the exact same moment the content script's own item object had it as undefined. My earlier
+    // same-day explanation to Patrick (that the field was correctly blank because the package
+    // wasn't organizer-confirmed) was wrong -- I never checked whether this whitelist forwarded
+    // the field at all, and should have before asserting a root cause.
+    vintedPrice: it.vintedPrice, vintedShippingNote: it.vintedShippingNote,
+    vintedDomesticShippingUsd: it.vintedDomesticShippingUsd,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
     // S-EXT-MERCARI-BATCH-4 (2026-08-23, Patrick-directed): bestOfferAutoAcceptAmt now flows

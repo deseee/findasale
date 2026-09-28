@@ -2040,8 +2040,27 @@
   // number here rather than guessing a new one. It is only ever a confirmed real rate or null
   // (never a guess), same posture as every other UNVERIFIED-guess field in this file: fill it when
   // present, otherwise leave the field blank and warn honestly that Patrick needs to set it himself.
-  function fillDomesticShippingPrice(item, warnings) {
-    const input = openerByLabel('Domestic shipping');
+  // BUG FIX 2026-09-28 (Patrick live-reported "reloaded, tab shared, no change" -- confirmed via
+  // console: the new Height/Width/Length fill logged normally, but NOT ONE of this function's own
+  // log lines (neither the "filled" success path nor the "left blank" honest-warning path) appeared
+  // at all, on two separate fresh runs after a real extension reload). Root-caused live: Vinted's
+  // "Set the shipping price" section is added to the DOM by ITS OWN React re-render AFTER the
+  // Height/Width/Length values are committed, not synchronously with them -- this function was
+  // originally called with zero delay right after fillPackageSize() returned, so on the real page
+  // openerByLabel('Domestic shipping') was very likely running before that re-render had happened,
+  // finding nothing, and silently returning null via the exact same "not found -> caller falls
+  // through" contract fillParcelMeasurements uses correctly for the (different) old-vs-new-UI case --
+  // except here there is no old-UI fallback, so a null here means total silence, not a handled miss.
+  // Fixed with the same bounded poll idiom this file already uses for Vinted's own live-search
+  // latency (Brand/Category/Material dropdowns, ~300ms x 10 above) -- now async, waits up to ~1.8s
+  // (300ms x 6, generous for a client-side React re-render vs. that ~2s real network-search case)
+  // for the field to appear before concluding it genuinely isn't required for this item.
+  async function fillDomesticShippingPrice(item, warnings) {
+    let input = openerByLabel('Domestic shipping');
+    for (let i = 0; i < 6 && !input; i++) {
+      await sleep(300);
+      input = openerByLabel('Domestic shipping');
+    }
     if (!input) return null; // this item's measurements don't trigger Vinted's custom-shipping requirement
 
     const rate = item && item.vintedDomesticShippingUsd != null ? Number(item.vintedDomesticShippingUsd) : null;
@@ -2584,7 +2603,7 @@
     }
     const packageSizeOk = await fillPackageSize(item, warnings);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
-    fillDomesticShippingPrice(item, warnings);
+    await fillDomesticShippingPrice(item, warnings);
     // BUG FIX 2026-08-30 (round 10, Patrick live-reported "price input didn't take this time" +
     // live-confirmed on his actual open tab): the field's real value was correct ($10.00) and had
     // already been cleanly set earlier in this function via fillVintedPrice's clear+retype fix, but
