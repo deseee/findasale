@@ -398,7 +398,7 @@ const MarkdownCyclesPage = () => {
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl dark:shadow-gray-900/50 max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl dark:shadow-gray-900/50 max-w-xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-warm-200 dark:border-gray-700">
               <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
