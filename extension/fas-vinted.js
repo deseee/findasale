@@ -4229,27 +4229,18 @@
   // 2026-09-03, never ported here).
   const VINTED_WEAPONS_EXCLUDE_KEYWORDS = ['butter knife', 'table knife', 'electric razor', 'cartridge razor', 'gunmetal', 'bladerunner'];
   const VINTED_WEAPONS_REASON = 'Vinted prohibits all sharp knives and bladed tools with a pointed tip (including kitchen knives), plus firearms, ammunition, and other weapons (Items Not Allowed policy). Only dull/rounded table knives and sealed electric or cartridge razors are allowed.';
-  // BONUS FIX found during the 2026-09-18 mirror-sync pass: dedicated MUSICAL INSTRUMENTS rule
-  // added to the backend registry on S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 but never
-  // ported here (see the removed stale 'musical instrument' keyword's comment above) --
-  // mirrored verbatim from marketplaceEligibilityRules.ts's VINTED MUSICAL INSTRUMENTS rule.
-  const VINTED_INSTRUMENTS_NAME_KEYWORDS = [
-    'guitar', 'piano', 'violin', 'viola', 'cello', 'double bass', 'upright bass',
-    'drum kit', 'drum set', 'saxophone', 'trumpet', 'trombone', 'clarinet', 'flute',
-    'banjo', 'ukulele', 'mandolin', 'harmonica', 'accordion', 'synthesizer', 'keyboard piano',
-    'harp', 'bagpipe', 'cornet', 'french horn', 'tuba', 'oboe', 'bassoon', 'xylophone',
-  ];
-  const VINTED_INSTRUMENTS_EXCLUDE_KEYWORDS = [
-    'strap', 'amplifier', 'combo amplifier', 'speaker', 'pickup', 'cable', 'tuner', 'case',
-    'pedal', 'effects', 'stand', 'string set', 'capo', 'gig bag', 'pedalboard', 'pedal board',
-  ];
-  const VINTED_INSTRUMENTS_REASON = 'Vinted does not allow listing musical instruments (Items Not Allowed policy).';
+  // MUSICAL INSTRUMENTS rule -- REMOVED 2026-09-27 (mirrors the same-day backend removal in
+  // marketplaceEligibilityRules.ts). Root cause: the rule was built on a misreading of Vinted's
+  // policy bullet "Adult musical instruments" (a "Non-Category Items" entry grouped with Adult
+  // furniture and Fetish items and sex services -- the same adult-content euphemism pattern, not
+  // a ban on real guitars/pianos/violins). Confirmed wrong by Patrick's direct live observation
+  // of ordinary instruments listed for sale on Vinted. No replacement -- see the backend file for
+  // the full writeup.
   function vintedRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
     const rules = [
       { nameKeywords: VINTED_NOT_ALLOWED_NAME_KEYWORDS, excludeKeywords: VINTED_NOT_ALLOWED_EXCLUDE_KEYWORDS, reason: VINTED_NOT_ALLOWED_REASON },
-      { nameKeywords: VINTED_INSTRUMENTS_NAME_KEYWORDS, excludeKeywords: VINTED_INSTRUMENTS_EXCLUDE_KEYWORDS, reason: VINTED_INSTRUMENTS_REASON },
       { nameKeywords: VINTED_WEAPONS_NAME_KEYWORDS, excludeKeywords: VINTED_WEAPONS_EXCLUDE_KEYWORDS, reason: VINTED_WEAPONS_REASON },
     ];
     for (const rule of rules) {

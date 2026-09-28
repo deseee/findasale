@@ -952,31 +952,24 @@ const RULES: EligibilityRule[] = [
     reason: 'This category isn’t allowed on Vinted (Items Not Allowed policy).',
   },
 
-  // ---- VINTED MUSICAL INSTRUMENTS (added S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03) -- split out
-  // of the general VINTED rule above, which used a single overbroad 'musical instrument' keyword
-  // that matched FindA.Sale's own "Musical Instruments & Gear" category label itself (see that
-  // rule's comment). Vinted's real policy (fetched live this session) bans "Musical instruments for
-  // adults" -- actual playable instruments, not gear/accessories. nameKeywords below list real
-  // instrument-family words (word-anchored where practical); excludeKeywords carves out the
-  // accessory/gear terms confirmed live in Artifact's real "Musical Instruments & Gear" items this
-  // session (speaker, pickup, cable, strap, tuner, amplifier, case, effects pedal) so those stay
-  // listable -- only the actual instruments (e.g. "Fanned Frets 6 Strings Headless Electric
-  // Guitar", "Yamaha F-325 Acoustic Guitar") are blocked, per policy.
-  {
-    type: 'CATEGORY_BLOCKLIST',
-    platform: 'VINTED',
-    nameKeywords: [
-      'guitar', 'piano', 'violin', 'viola', 'cello', 'double bass', 'upright bass',
-      'drum kit', 'drum set', 'saxophone', 'trumpet', 'trombone', 'clarinet', 'flute',
-      'banjo', 'ukulele', 'mandolin', 'harmonica', 'accordion', 'synthesizer', 'keyboard piano',
-      'harp', 'bagpipe', 'cornet', 'french horn', 'tuba', 'oboe', 'bassoon', 'xylophone',
-    ],
-    excludeKeywords: [
-      'strap', 'amplifier', 'combo amplifier', 'speaker', 'pickup', 'cable', 'tuner', 'case',
-      'pedal', 'effects', 'stand', 'string set', 'capo', 'gig bag', 'pedalboard', 'pedal board',
-    ],
-    reason: 'Vinted does not allow listing musical instruments (Items Not Allowed policy).',
-  },
+  // ---- VINTED MUSICAL INSTRUMENTS -- REMOVED 2026-09-27 (same day as the SIZE_WEIGHT_CEILING
+  // correction above). This rule was added S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 on a
+  // misreading of Vinted's own policy page. The prior session read the bullet "Musical
+  // instruments for adults" (paraphrased) as "actual playable instruments, restricted to adult
+  // sellers/buyers" and built a keyword list of real instrument names (guitar, piano, violin,
+  // saxophone, etc.) to block.
+  //
+  // Root cause, evidence (this session, Patrick live report: "that's not true i see plenty of
+  // musical instruments listed for sale on vinted"): re-fetched vinted.com/help/52-items-not-
+  // allowed-on-vinted directly. The REAL, current bullet text is "Adult musical instruments",
+  // and it sits under a "Non-Category Items" heading grouped with: Vape/heated tobacco
+  // accessories, Pet electronic items, ADULT FURNITURE, Adult musical instruments, FETISH ITEMS
+  // AND SEX SERVICES. Same pattern as "Adult furniture" (which does not mean "furniture for
+  // grown-ups" -- it means fetish/BDSM furniture): "Adult musical instruments" is that same
+  // adult-content euphemism, not a ban on guitars/pianos/violins. Confirmed by Patrick's direct,
+  // repeated observation of ordinary instruments listed live on Vinted.
+  //
+  // No replacement rule added -- ordinary musical instruments are not restricted on Vinted.
 
   // ---- VINTED SHARP KNIVES, BLADED TOOLS & WEAPONS (added S-CROSS-MARKETPLACE-AUDIT-2026-09-03) --
   // the old combined VINTED rule's weapon coverage was exactly as incomplete as Facebook's pre-fix
