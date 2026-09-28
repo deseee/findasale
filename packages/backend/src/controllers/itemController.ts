@@ -4163,6 +4163,13 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         legendaryPublishedAt: true,
         tagColor: true, // Feature #310: Color-tagged discount rules
         // eBay push card + editState shipping fields — required for review page
+        // S-SIZE-WEIGHT-CEILING-2026-09-27: aiPackageWeightOz added alongside the four fields
+        // above so this page's Add-Items collapsed-row ELIGIBLE/PUBLISHED dots (computed via
+        // itemChannelStatusService.ts -> checkEligibility) agree with the real gate the
+        // extension queue endpoints enforce -- without it, an item whose ONLY weight signal is
+        // an AI estimate (no organizer-confirmed packageWeightOz) would show ELIGIBLE here while
+        // actually being excluded from the Vinted/Poshmark/Mercari queue.
+        aiPackageWeightOz: true,
         packageWeightOz: true,
         packageLengthIn: true,
         packageWidthIn: true,

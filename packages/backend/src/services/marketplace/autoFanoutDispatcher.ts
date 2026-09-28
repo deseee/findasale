@@ -69,7 +69,21 @@ export async function dispatchApiTierAutoFanout(organizerId: string, item: Item)
   // Reverb -- independent try/catch; a Reverb failure must never block Discogs above.
   if (flags.reverbAutoListEnabled === true) {
     try {
-      const eligibility = checkEligibility('REVERB', item);
+      // S-SIZE-WEIGHT-CEILING-2026-09-27 CI FIX: this used to pass the whole Prisma `item` record
+      // straight through, relying on structural typing against EligibilityCheckItem's original
+      // 3-field shape (category/ebayCategoryId/title, all present on Item with matching types).
+      // Adding packageLengthIn/WidthIn/HeightIn (number | null) to EligibilityCheckItem broke that
+      // -- Item's real Prisma type for those fields is Decimal | null, not number | null, so the
+      // structural match failed (CI Typecheck caught this, not a local run -- device_bash can't
+      // touch this repo's real node_modules, see dev-environment skill). REVERB only has a
+      // CATEGORY_ALLOWLIST rule (no SIZE_WEIGHT_CEILING), so it never needed those fields anyway --
+      // fixed by passing the same narrow, explicit shape extensionController.ts's call sites
+      // already use, instead of the whole record.
+      const eligibility = checkEligibility('REVERB', {
+        category: item.category,
+        ebayCategoryId: item.ebayCategoryId,
+        title: item.title,
+      });
       if (eligibility.eligible) {
         await createReverbListing(organizerId, item, { publish: true });
       }
