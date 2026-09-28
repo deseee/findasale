@@ -143,6 +143,10 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // what's actually stored on the item.
       isbn: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
+      // FIX 2026-09-28 (S-VINTED-SHIPPING-PRICE-SOURCE): needed so the Vinted pricing block
+      // below can use the organizer's own confirmed/set shipping price instead of a second,
+      // independent computeCheapestForOrigin estimate -- see that block's comment for why.
+      shippingPrice: true, shippingPriceConfirmedByOrganizer: true,
       // 2026-08-27: organizer's per-item crosslister free-shipping toggle -- see the `shaped`
       // payload build below (crosslisterFreeShipping field) for why this exists.
       crosslisterFreeShipping: true,
@@ -396,6 +400,32 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   for (const it of items) {
     if (it.price == null) continue;
     const basePrice = Number(it.price.toFixed(2));
+    // FIX 2026-09-28 (S-VINTED-SHIPPING-PRICE-SOURCE, Patrick-directed): the item's own
+    // `shippingPrice` is FindA.Sale's real, organizer-set shipping cost -- Patrick confirmed
+    // it's intentionally cushioned above the raw carrier rate to cover rate fluctuation and
+    // marketplace final-value fees charged on shipping revenue (same reasoning applies to the
+    // $100-cap check below, not just the Domestic-shipping fill -- Patrick's explicit
+    // correction: "the price bump uses our shipping costs too"). Same
+    // feedback_organizer_intent_wins principle as every other organizer-set field in this
+    // file: it wins over a fresh AI/system-computed alternative. When shippingPrice is set,
+    // use it directly for both the $100-cap decision and vintedDomesticShippingUsd, skipping
+    // computeCheapestForOrigin entirely -- no more second, unreconciled shipping number for
+    // the same item. Falls through to the pre-existing computeCheapestForOrigin path only for
+    // items with no shippingPrice set at all.
+    if (it.shippingPrice != null && Number(it.shippingPrice) > 0) {
+      const ownRate = Math.round(Number(it.shippingPrice) * 100) / 100;
+      if (ownRate > VINTED_SHIPPING_CAP) {
+        const overage = Math.round((ownRate - VINTED_SHIPPING_CAP) * 100) / 100;
+        vintedPricingByItemId.set(it.id, {
+          vintedPrice: Math.round((basePrice + overage) * 100) / 100,
+          vintedShippingNote: `Price includes $${overage.toFixed(2)} to cover shipping over Vinted's $100 cap (your confirmed shipping cost: $${ownRate.toFixed(2)}).`,
+          vintedDomesticShippingUsd: ownRate,
+        });
+      } else {
+        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null, vintedDomesticShippingUsd: ownRate });
+      }
+      continue;
+    }
     if (!hasTrustedPackage(it) || it.packageWeightOz == null || Number(it.packageWeightOz) <= 0) {
       vintedPricingByItemId.set(it.id, {
         vintedPrice: basePrice,
