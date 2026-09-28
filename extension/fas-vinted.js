@@ -2021,6 +2021,42 @@
     if (warnings) warnings.push('Parcel size (Height/Width/Length) filled from this item\'s real package dimensions -- please confirm before publishing.');
     return true;
   }
+  // FIX 2026-09-27 (S-VINTED-CUSTOM-SHIPPING-PRICE): live-caught via Patrick's shared tab (TCL
+  // cooler, after fillParcelMeasurements() filled real 11x13x20in dimensions) that Vinted's real
+  // "Sell an item" form shows a "Set the shipping price" section with a required "Domestic
+  // shipping" price input once an item's measurements exceed Vinted's standard flat-rate size
+  // tiers ("For items of these measurements, you'll be responsible for custom shipping."). Left
+  // blank, Vinted marks it "Invalid price" and the listing cannot publish. Nothing in this file
+  // knew about this field before this fix -- it was silently left for Patrick to notice on his own.
+  //
+  // Live-confirmed the label resolves via openerByLabel()'s existing substring-match fallback tier
+  // (the exact-match tier misses because Vinted's own "Invalid price" validation note text lives
+  // inside the same <label> as "Domestic shipping", so the label's full textContent is
+  // "Domestic shippingInvalid price" -- not a bug in this file, just how Vinted structured the
+  // markup) resolving correctly to input#shipment_prices.domestic via its for= attribute.
+  //
+  // item.vintedDomesticShippingUsd (extensionController.ts) is the SAME real carrier-computed
+  // cheapest.rate already used for the $100-shipping-cap price-bump logic above -- reusing that
+  // number here rather than guessing a new one. It is only ever a confirmed real rate or null
+  // (never a guess), same posture as every other UNVERIFIED-guess field in this file: fill it when
+  // present, otherwise leave the field blank and warn honestly that Patrick needs to set it himself.
+  function fillDomesticShippingPrice(item, warnings) {
+    const input = openerByLabel('Domestic shipping');
+    if (!input) return null; // this item's measurements don't trigger Vinted's custom-shipping requirement
+
+    const rate = item && item.vintedDomesticShippingUsd != null ? Number(item.vintedDomesticShippingUsd) : null;
+    if (rate == null || !isFinite(rate) || rate <= 0) {
+      console.log('[FAS Vinted] Domestic shipping price: Vinted requires a custom shipping price for this item\'s measurements, but no confirmed real shipping-cost estimate is available -- left blank for the organizer.');
+      if (warnings) warnings.push('Domestic shipping price is blank -- Vinted requires a custom shipping price for items of these measurements ("Set the shipping price"), and FindA.Sale does not have a confirmed shipping-cost estimate for this item. Enter the real cost to ship it before publishing.');
+      return true; // field correctly identified and left alone on purpose -- not a "couldn't find it" failure
+    }
+
+    fasMarkStep('domesticShippingPrice:fill');
+    setNativeValue(input, rate.toFixed(2));
+    console.log('[FAS Vinted] Domestic shipping price: filled Vinted\'s "Domestic shipping" field from this item\'s real computed shipping cost ($' + rate.toFixed(2) + ').');
+    if (warnings) warnings.push('Domestic shipping price ($' + rate.toFixed(2) + ') filled from this item\'s real computed shipping cost -- please confirm before publishing.');
+    return true;
+  }
   async function fillPackageSize(item, warnings) {
     const newUiResult = fillParcelMeasurements(item, warnings);
     if (newUiResult != null) return newUiResult;
@@ -2548,6 +2584,7 @@
     }
     const packageSizeOk = await fillPackageSize(item, warnings);
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
+    fillDomesticShippingPrice(item, warnings);
     // BUG FIX 2026-08-30 (round 10, Patrick live-reported "price input didn't take this time" +
     // live-confirmed on his actual open tab): the field's real value was correct ($10.00) and had
     // already been cleanly set earlier in this function via fillVintedPrice's clear+retype fix, but

@@ -379,8 +379,20 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // trusted or a weight isn't set, this does NOT guess a bump -- it surfaces a warning asking the
   // organizer to confirm package weight/dimensions first, same posture as every other
   // UNVERIFIED-guess field in this payload.
+  // FIX 2026-09-27 (S-VINTED-CUSTOM-SHIPPING-PRICE): live-caught via Patrick's shared tab (TCL
+  // cooler) that Vinted's real "Sell an item" form DOES have a "Set the shipping price" / "Domestic
+  // shipping" required custom-price input for items whose parcel measurements exceed its standard
+  // flat-rate size tiers -- contradicting the 2026-09-17 ADR comment above, which treated "Custom
+  // shipping" as unavailable based on Vinted's help docs being self-contradictory. That assumption
+  // was never re-verified against the live form; it was wrong, same failure class as the weight-
+  // ceiling and musical-instruments corrections shipped earlier the same session (see project doc).
+  // vintedDomesticShippingUsd carries the SAME real cheapest.rate this block already computes for
+  // the $100-cap bump logic, so fas-vinted.js can fill Vinted's real "Domestic shipping" field with
+  // an actual carrier-computed number instead of leaving it blank -- never a guess: null whenever
+  // the rate wasn't confirmed (untrusted package, hard-block, or compute error), same posture as
+  // vintedShippingNote below.
   const VINTED_SHIPPING_CAP = 100;
-  const vintedPricingByItemId = new Map<string, { vintedPrice: number; vintedShippingNote: string | null }>();
+  const vintedPricingByItemId = new Map<string, { vintedPrice: number; vintedShippingNote: string | null; vintedDomesticShippingUsd: number | null }>();
   for (const it of items) {
     if (it.price == null) continue;
     const basePrice = Number(it.price.toFixed(2));
@@ -389,6 +401,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         vintedPrice: basePrice,
         vintedShippingNote:
           "This item's shipping cost hasn't been confirmed, so FindA.Sale could not check it against Vinted's $100 shipping cap -- confirm the item's package weight/dimensions, then re-check before publishing to Vinted.",
+        vintedDomesticShippingUsd: null,
       });
       continue;
     }
@@ -407,14 +420,16 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         categoryId: it.ebayCategoryId || null,
         priceUsd: basePrice,
       });
+      const realRate = Math.round(cheapest.rate * 100) / 100;
       if (cheapest.rate > VINTED_SHIPPING_CAP) {
         const overage = Math.round((cheapest.rate - VINTED_SHIPPING_CAP) * 100) / 100;
         vintedPricingByItemId.set(it.id, {
           vintedPrice: Math.round((basePrice + overage) * 100) / 100,
           vintedShippingNote: `Price includes $${overage.toFixed(2)} to cover shipping over Vinted's $100 cap (real shipping cost: $${cheapest.rate.toFixed(2)}).`,
+          vintedDomesticShippingUsd: realRate,
         });
       } else {
-        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null });
+        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null, vintedDomesticShippingUsd: realRate });
       }
     } catch (e: any) {
       if (e instanceof ShippingHardBlockError) {
@@ -422,10 +437,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
           vintedPrice: basePrice,
           vintedShippingNote:
             'Shipping cost for this item could not be estimated for Vinted (it exceeds standard carrier limits) -- please review shipping and pricing manually before publishing.',
+          vintedDomesticShippingUsd: null,
         });
       } else {
         console.warn('[Vinted pricing] computeCheapestForOrigin failed for item', it.id, e?.message || e);
-        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null });
+        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null, vintedDomesticShippingUsd: null });
       }
     }
   }
@@ -438,6 +454,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     price: it.price != null ? Number(it.price.toFixed(2)) : null,
     vintedPrice: vintedPricingByItemId.get(it.id)?.vintedPrice ?? (it.price != null ? Number(it.price.toFixed(2)) : null),
     vintedShippingNote: vintedPricingByItemId.get(it.id)?.vintedShippingNote ?? null,
+    vintedDomesticShippingUsd: vintedPricingByItemId.get(it.id)?.vintedDomesticShippingUsd ?? null,
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
     // S-EXT-BATCH-12 (2026-08-20, Patrick + live-Chrome-confirmed root cause): `category` on Item
