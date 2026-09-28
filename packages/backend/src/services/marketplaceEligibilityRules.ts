@@ -119,11 +119,8 @@ interface PrerequisiteLookupRule {
  * claude/crosslister-automation-decisions-2026-09-26.md for the sourced per-marketplace matrix):
  * a hard shipping-size/weight ceiling for a platform's OWN automated shipping flow -- the one
  * this extension actually drives. Only added for platforms where exceeding the ceiling is a real
- * dead end for automated crosslisting, not merely a UX nicety:
- *   - VINTED: ~20kg/44lb (the extension's own fallback package-size tiers top out at "Large =
- *     fits in a moving box"), confirmed LIVE against the real account 2026-09-27 -- no local
- *     pickup exists on Vinted US at all (checked directly, both empty and filled /items/new), so
- *     there is no fallback path once a package is too big.
+ * dead end for automated crosslisting, not merely a UX nicety, AND where the platform actually
+ * has a hard weight/size cutoff at all (see the VINTED note below for a case where it does not):
  *   - POSHMARK: 15lb (raised from 10lb as of Feb 2026; carrier is now USPS Ground Advantage, not
  *     Priority Mail) -- Poshmark's Community Guidelines explicitly prohibit arranging local
  *     pickup/meetups in lieu of shipping, so there is no fallback path here either.
@@ -134,6 +131,11 @@ interface PrerequisiteLookupRule {
  *     one older page; flagged unreliable and not used, per the research this session.
  *
  * Deliberately NOT added for:
+ *   - VINTED (REMOVED same day it was added, 2026-09-27) -- see the standalone comment above the
+ *     RULES array's Vinted section for the full story: this platform has no hard weight ceiling
+ *     at all, only a $100 shipping-COST cap that the extension already covers by bumping price
+ *     (extensionController.ts's VINTED_SHIPPING_CAP), and the ~44lb figure originally used here
+ *     was a misreading of UI copy, disproven by a real successfully-shipped arcade cabinet.
  *   - EBAY / FACEBOOK: both have a real, working local-pickup fallback with no weight ceiling of
  *     its own, so an oversized item is never a dead end on either -- eBay also supports LTL/
  *     freight-class shipping via UPS/FedEx well above USPS's ~70lb ceiling (~150lb/108" girth).
@@ -1042,12 +1044,25 @@ const RULES: EligibilityRule[] = [
   // session via dedicated per-platform research (official/authoritative sources cited in
   // claude/crosslister-automation-decisions-2026-09-26.md); re-verify there before changing these
   // numbers.
-  {
-    type: 'SIZE_WEIGHT_CEILING',
-    platform: 'VINTED',
-    maxWeightOz: 704, // ~20kg / 44lb -- Vinted's own "Large" package-size tier ceiling, confirmed live 2026-09-27 (real account, empty and filled /items/new -- no meet-up/local-pickup option exists on Vinted US at all).
-    reason: 'Over Vinted\'s ~44lb (20kg) package-size ceiling -- Vinted has no local-pickup fallback for oversized items, so this is a dead end there, not just a bad fit.',
-  },
+  // VINTED deliberately has NO SIZE_WEIGHT_CEILING rule (REMOVED 2026-09-27, same day it was
+  // added -- Patrick live-caught it: a Fatal Fury Neo Geo CARTRIDGE was wrongly flagged
+  // ineligible, while an actual arcade cabinet had already listed and shipped successfully on
+  // Vinted). Root cause: the ~44lb/20kg figure came from reading the Small/Medium/Large
+  // package-size SELECTOR's plain-English UI copy ("Large -- fits in a moving box") and wrongly
+  // treating it as an enforced physical weight limit. It is not one. extensionController.ts's own
+  // pre-existing ADR (eBay-freight-and-Vinted-shipping-cap-pricing, 2026-09-17, VINTED_SHIPPING_CAP)
+  // already root-caused Vinted's REAL constraint: a $100 shipping-COST cap, not a weight cap --
+  // when real carrier cost exceeds $100, the extension bumps the item's Vinted-specific price to
+  // cover the difference (vintedPrice/vintedShippingNote) instead of blocking anything. A heavy
+  // item still lists, it just costs the buyer more. The only genuine hard stop is the same
+  // absolute-carrier-max (ShippingHardBlockError, ebayRateEstimateService.ts -- ~150lb/108" for
+  // USPS/UPS/FedEx Ground, the same ceiling already used for eBay) computeCheapestForOrigin
+  // already throws when NO modeled carrier can ship the package at all -- that would be the
+  // correct signal for a Vinted SIZE_WEIGHT_CEILING, not a hardcoded number pulled from UI copy.
+  // Not wired up here because checkEligibility is a synchronous, DB-free pure function and
+  // computeCheapestForOrigin is async and needs real rate-table/zone data -- doing this properly
+  // is a real (small) architecture task, not a one-line fix, and should not be guessed at twice in
+  // one day. Flagged as a follow-up in claude/crosslister-automation-decisions-2026-09-26.md.
   {
     type: 'SIZE_WEIGHT_CEILING',
     platform: 'POSHMARK',
