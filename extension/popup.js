@@ -153,7 +153,7 @@ async function load() {
 // directly via chrome.storage.local (popup pages have direct access, no message roundtrip
 // needed) since it's a standing preference, not a per-queue-run flag like autoPublish.
 async function loadAutoRemoveMode() {
-  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   $('autoRemoveMode').value = fasAutoRemoveMode;
   $('autoRemoveMode').onchange = async () => {
     await chrome.storage.local.set({ fasAutoRemoveMode: $('autoRemoveMode').value });

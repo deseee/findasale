@@ -159,7 +159,7 @@ const FAS_REMOVAL_ALARM_PERIOD_MINUTES = 20;
 const FAS_REMOVAL_ALARM = 'fasCheckRemovals';
 
 async function ensureRemovalAlarm() {
-  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') { chrome.alarms.clear(FAS_REMOVAL_ALARM); return; }
   // Creating an alarm with an existing name CANCELS+REPLACES it, resetting the 20-min
   // countdown. onInstalled/onStartup fire on every reload, so unconditionally recreating meant
@@ -625,7 +625,7 @@ async function checkPendingUpdates() {
   // design) -- 'off' opts out of cross-channel FB sync entirely, both removal and price-sync
   // notifications. 'silent' has no Phase-A price-sync equivalent (no auto-edit action exists
   // yet to run silently), so both 'notify' and 'silent' behave identically here until Phase B.
-  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
   // S-EXT-FB-ACCOUNT-UNAVAILABLE: nothing can be updated on a Facebook account that is unavailable.
   if (await getPlatformUnavailable('FACEBOOK')) return 'facebook_account_unavailable';
@@ -657,7 +657,7 @@ async function checkPendingUpdates() {
 // into the SAME FAS_REMOVAL_ALARM tick as checkPendingUpdates, not a new poller -- same reasoning
 // ADR-086 already gave for doing that with Facebook's own check.
 async function checkPriceSyncQueue() {
-  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
   const resp = await apiFetch('/extension/price-sync-queue');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
@@ -936,7 +936,7 @@ async function removalReportIsDuplicate(platform, itemId) {
 // extensionController.ts getPendingRemovals' same-session fix) -- so no extra API call is needed
 // here to route each item to the right platform(s).
 async function checkCrossPlatformRemovals(pendingItems) {
-  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
   const outcomes = [];
   for (const platform of Object.keys(FAS_CROSS_PLATFORM_REMOVAL_CONFIG)) {
@@ -1074,7 +1074,7 @@ async function checkPendingRemovals(opts) {
   // opts.forceFacebook: the organizer clicked "Retry Facebook" in the popup -- probe now, in any
   // mode, even with nothing queued (the sold-filter page load alone tells us if access is back).
   const forceFacebook = !!(opts && opts.forceFacebook);
-  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
   // Guard: don't open another Facebook removal tab while one is mid-run. Also prevents
   // overwriting fasRemovalQueue/fasRemovalIndex under an in-progress content script, which would
