@@ -181,17 +181,32 @@ export interface ConsignorMarkdownPolicyNotice {
  * future items.
  */
 export async function getConsignorMarkdownPolicyNotice(organizerId: string): Promise<ConsignorMarkdownPolicyNotice> {
+  // ADR-markdown-cycle-n-steps (2026-09-28): a cycle now has 1-6 ordered steps instead of a
+  // fixed first/second pair -- steps included here, ordered ascending, to build N-clause prose.
   const cycles = await prisma.markdownCycle.findMany({
     where: { organizerId, isActive: true },
+    include: { steps: { orderBy: { stepOrder: 'asc' } } },
   });
 
   const general = cycles.find((c) => c.saleId === null);
-  if (general) {
-    let summary = `After ${general.daysUntilFirst} day${general.daysUntilFirst === 1 ? '' : 's'} unsold, items are automatically marked down ${general.firstPct}%`;
-    if (general.daysUntilSecond != null && general.secondPct != null) {
-      summary += `, and after ${general.daysUntilSecond} days, ${general.secondPct}% off`;
+  if (general && general.steps.length > 0) {
+    const clauses = general.steps.map(
+      (step) => `after ${step.dayThreshold} day${step.dayThreshold === 1 ? '' : 's'} unsold, ${step.pctOff}% off`
+    );
+
+    let summary: string;
+    if (clauses.length === 1) {
+      // Capitalize the single clause into its own sentence, matching the pre-existing phrasing.
+      summary = `After ${general.steps[0].dayThreshold} day${general.steps[0].dayThreshold === 1 ? '' : 's'} unsold, items are automatically marked down ${general.steps[0].pctOff}%.`;
+    } else {
+      // "After N1 days unsold, X% off, after N2 days unsold, Y% off, and after N3 days unsold, Z% off."
+      const joined =
+        clauses.length === 2
+          ? clauses.join(', and ')
+          : `${clauses.slice(0, -1).join(', ')}, and ${clauses[clauses.length - 1]}`;
+      summary = `Items are automatically marked down on a schedule: ${joined}.`;
     }
-    summary += '.';
+
     return { configured: true, summary };
   }
 

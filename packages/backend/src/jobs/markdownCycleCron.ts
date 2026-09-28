@@ -12,16 +12,22 @@ import {
 /**
  * Feature: Automatic Markdown Cycles (PRO Tier)
  * Apply time-based automatic price reductions based on organizer-defined markdown cycles.
- * 
- * For each active MarkdownCycle:
- * 1. Find items where organizerId matches (or saleId matches if cycle is sale-scoped)
- * 2. Check if item.createdAt >= daysUntilFirst days ago
- *    - If yes AND priceBeforeMarkdown is NULL: apply firstPct markdown, set priceBeforeMarkdown
- *    - If yes AND markdownApplied is TRUE (a real first markdown, not the manual-price-edit
- *      display hack in itemController.ts) AND createdAt >= daysUntilSecond days ago:
- *      apply secondPct markdown, skipping any item already at the target price
- * 3. Use updateMany for efficiency
- * 4. Log counts
+ *
+ * ADR-markdown-cycle-n-steps (2026-09-28): a cycle now has 1-6 ordered MarkdownCycleStep rows
+ * (dayThreshold, pctOff) instead of the old hardcoded first/second pair. For each active
+ * MarkdownCycle:
+ * 1. Find items where organizerId matches (or saleId matches if cycle is sale-scoped).
+ * 2. For each item, find the LAST step (highest stepOrder) whose dayThreshold has been reached
+ *    by item.createdAt. This is what makes the job catch-up safe: an item that aged past two
+ *    thresholds between runs (a skipped night, or a cycle just turned on for already-old items)
+ *    lands on the correct final step in one pass, never double-applying, never skipping one.
+ * 3. Skip if no step's threshold is met yet, or if that step is <= the step already applied
+ *    (Item.markdownStepIndexApplied -- null treated as 0). Every markdown percentage is off the
+ *    ORIGINAL price (Item.priceBeforeMarkdown, captured once at the first-ever step applied),
+ *    never cumulative -- unchanged from before.
+ * 4. Per-item update (never updateMany -- each item needs its own current price and its own
+ *    computed new price).
+ * 5. Log counts.
  *
  * Runs nightly at 3:00 AM UTC (after shopAutoRenewJob at 1:00 AM UTC, before reverseAuctionJob at 6:00 AM UTC)
  */
@@ -30,10 +36,13 @@ export function scheduleMarkdownCycleCron(): void {
   cron.schedule('8 3 * * *', cronGuard({ jobName: 'markdownCycleCron' }, async () => { // staggered off huntPassExpiryCron's 0 3 * * * 2026-08-04 cost-optimization batch
     const now = new Date();
 
-    // Find all active markdown cycles
+    // Find all active markdown cycles, with their steps ordered ascending
     const cycles = await prisma.markdownCycle.findMany({
       where: { isActive: true },
-      include: { sale: { select: { id: true, organizerId: true, saleType: true, moveOutDate: true } } },
+      include: {
+        sale: { select: { id: true, organizerId: true, saleType: true, moveOutDate: true } },
+        steps: { orderBy: { stepOrder: 'asc' } },
+      },
     });
 
     if (cycles.length === 0) {
@@ -47,6 +56,12 @@ export function scheduleMarkdownCycleCron(): void {
 
       for (const cycle of cycles) {
         try {
+          if (cycle.steps.length === 0) {
+            // No steps configured (e.g. a cycle created before this migration's backfill
+            // somehow ended up empty) -- nothing to apply, and nothing to log as an error.
+            continue;
+          }
+
           // Determine item query filter based on whether cycle is sale-scoped or organizer-wide
           const itemFilter: any = {
             status: 'AVAILABLE',
@@ -73,319 +88,179 @@ export function scheduleMarkdownCycleCron(): void {
             console.log(`[markdown-cycle-cron] DORM_DASH urgency detected for cycle ${cycle.id} — applying 2x markdown rate`);
           }
 
-          // Find items eligible for first markdown (createdAt >= daysUntilFirst days ago, priceBeforeMarkdown is NULL)
-          const firstMarkdownItems = await prisma.item.findMany({
+          const finalStepOrder = cycle.steps[cycle.steps.length - 1].stepOrder;
+
+          // Cheap SQL-side filter: only items that haven't reached the cycle's final step yet.
+          // The precise "which step is this item eligible for right now" decision happens in
+          // JS below, per item, since it depends on comparing item age against N thresholds.
+          const candidateItems = await prisma.item.findMany({
             where: {
               ...itemFilter,
-              priceBeforeMarkdown: null, // Not yet marked down
-              createdAt: {
-                lte: new Date(now.getTime() - cycle.daysUntilFirst * 24 * 60 * 60 * 1000),
-              },
+              OR: [
+                { markdownStepIndexApplied: null },
+                { markdownStepIndexApplied: { lt: finalStepOrder } },
+              ],
             },
-            select: { id: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true, ebaySyncAttempts: true },
+            select: {
+              id: true,
+              price: true,
+              createdAt: true,
+              priceBeforeMarkdown: true,
+              markdownStepIndexApplied: true,
+              ebayOfferId: true,
+              ebayListingId: true,
+              discogsListingId: true,
+              reverbListingId: true,
+              ebaySyncAttempts: true,
+            },
           });
 
-          if (firstMarkdownItems.length > 0) {
-            const effectiveFirstPct = Math.min(100, cycle.firstPct * dormDashMultiplier);
+          for (const item of candidateItems) {
+            const daysSinceCreated = (now.getTime() - new Date(item.createdAt).getTime()) / (24 * 60 * 60 * 1000);
 
-            // Per-item update: each item must store ITS OWN current price as
-            // priceBeforeMarkdown and have its own price reduced. A batch
-            // updateMany would (incorrectly) write item[0]'s price onto every item.
-            // The `priceBeforeMarkdown: null` filter above is the idempotency guard —
-            // items already marked down were excluded from firstMarkdownItems.
-            for (const item of firstMarkdownItems) {
-              const currentPrice = item.price!;
-              // ADR-128 follow-up (2026-09-19, fixed for real this time -- see markdown-sync-issues audit):
-              // eBay rejects any listing price below $0.99 (errorId 25016). A price cut computed
-              // without this floor gets stuck in the eBay sync-issues queue forever, since nothing
-              // about the stale value changes between retries. Never push the organizer's price
-              // below eBay's own minimum.
-              const newPrice = Math.max(0.99, currentPrice * (1 - effectiveFirstPct / 100));
-
-              await prisma.item.update({
-                where: { id: item.id },
-                data: {
-                  priceBeforeMarkdown: currentPrice,
-                  price: newPrice,
-                  markdownApplied: true,
-                  // Physical Markdown Alert List (2026-09-25): first markdown stage just
-                  // changed the price -- (re)surface this item on the staff "needs physical
-                  // re-tagging" list. See markdownCron.ts for the same field on the other
-                  // markdown cron.
-                  markdownPhysicallyAppliedAt: null,
-                  // ADR markdown-cycle-ebay-price-sync (2026-09-15): stamp so the
-                  // ebayListingSyncCron.ts pull-sync guard knows this price change
-                  // hasn't reached eBay yet and won't clobber it back on the next pull.
-                  priceUpdatedAt: new Date(),
-                  // ADR-128 (2026-09-19): the desired price just moved and eBay has not confirmed
-                  // it yet -- that in-flight gap now has a name instead of being inferred from two
-                  // timestamps. Gated on the same eBay-live condition buildHandlers() uses in
-                  // markdownPricePropagationService.ts, so an item with no eBay listing is never
-                  // marked PENDING for a push that will never be attempted. Resolved to SYNCED or
-                  // FAILED_* by the propagation block below, inside this same iteration.
-                  ...(item.ebayOfferId || item.ebayListingId
-                    ? { ebaySyncState: 'PENDING' as const, ebaySyncAttempts: 0 }
-                    : {}),
-                },
-              });
-
-              // Audit trail: markdownCron.ts writes an ItemPriceHistory row for every markdown it
-              // applies; this job wrote none, which is exactly why markdown-cycle discounts left
-              // no trace to reconstruct after the fact. Wrapped so a history-write failure can
-              // never break the markdown loop itself.
-              try {
-                await prisma.itemPriceHistory.create({
-                  data: {
-                    itemId: item.id,
-                    price: newPrice,
-                    changedBy: 'markdown',
-                    note: `First markdown (${effectiveFirstPct}% off, cycle ${cycle.id})`,
-                  },
-                });
-              } catch (historyErr) {
-                console.warn(
-                  `[markdown-cycle-cron] price history write failed for item ${item.id}:`,
-                  historyErr
-                );
-              }
-
-              // Tell anyone who favorited this item that its price just dropped.
-              notifyPriceDropAlerts(item.id, currentPrice, newPrice).catch(err =>
-                console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
-              );
-
-              // ADR markdown-cycle-ebay-price-sync (2026-09-15), Dev Instructions step 6:
-              // propagate the new price to eBay (Discogs/Reverb are extension points, not
-              // wired yet — see markdownPricePropagationService.ts). Awaited (unlike the
-              // fire-and-forget alert above) so a confirmed eBay push can stamp
-              // ebayPriceSyncedAt before moving to the next item, but wrapped in try/catch
-              // so a propagation failure never blocks the loop.
-              try {
-                const propResults = await propagateMarkdownPriceToMarketplaces({
-                  id: item.id,
-                  organizerId: cycle.organizerId,
-                  price: newPrice,
-                  ebayOfferId: item.ebayOfferId,
-                  ebayListingId: item.ebayListingId,
-                  discogsListingId: item.discogsListingId,
-                  reverbListingId: item.reverbListingId,
-                });
-                const ebayResult = propResults.find(r => r.platform === 'EBAY');
-                if (ebayResult?.ok) {
-                  await prisma.item.update({
-                    where: { id: item.id },
-                    data: {
-                      ebayPriceSyncedAt: new Date(),
-                      // ADR-128 (2026-09-19): eBay confirmed this price, so it is now also the
-                      // confirmed-live price a shopper on eBay would actually be charged. Clearing
-                      // the failure reason and resetting the attempt counter means a later failure
-                      // starts counting from zero rather than inheriting a stale history.
-                      ebayLivePrice: newPrice,
-                      ebaySyncState: 'SYNCED',
-                      ebaySyncFailureReason: null,
-                      ebaySyncAttempts: 0,
-                    },
-                  });
-                } else if (ebayResult) {
-                  // ADR-128 (2026-09-19): record the gap instead of collapsing every failure into
-                  // one console.warn. Item.price is deliberately NOT rolled back -- the markdown is
-                  // a real business decision the organizer configured, and ADR-128 rejects rollback
-                  // explicitly. What changes is that the failure is now classified, so
-                  // ebayListingSyncCron.ts can stop retrying what no retry can fix, and eBay's own
-                  // error text is kept for the organizer-facing alert.
-                  const failureClass = classifyPropagationFailure(ebayResult.reason, ebayResult.detail);
-                  // 2026-09-23 (ADR-128 Decision #4 cap): terminal only after TERMINAL_AFTER_ATTEMPTS
-                  // consecutive failures, so eBay auto-repair gets the cycles it needs to converge.
-                  const nextSyncState = resolveSyncStateAfterFailure(failureClass, (item.ebaySyncAttempts ?? 0) + 1, ebayResult.reason);
-                  await prisma.item.update({
-                    where: { id: item.id },
-                    data: {
-                      ebaySyncState: nextSyncState,
-                      ebaySyncFailureReason: formatPropagationFailureReason(ebayResult.reason, ebayResult.detail),
-                      ebaySyncAttempts: { increment: 1 },
-                    },
-                  });
-                  console.warn(
-                    `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass} -> ${nextSyncState}): ${ebayResult.reason ?? 'unknown'}`
-                  );
-                }
-              } catch (propErr) {
-                console.error(`[markdown-cycle-cron] propagation threw for item ${item.id}:`, propErr);
+            // Find the LAST (highest stepOrder) step whose threshold has been reached.
+            let targetStep: (typeof cycle.steps)[number] | null = null;
+            for (const step of cycle.steps) {
+              if (daysSinceCreated >= step.dayThreshold) {
+                targetStep = step;
+              } else {
+                break; // steps are ordered ascending by dayThreshold -- no later step qualifies either
               }
             }
 
-            totalMarkdownsApplied += firstMarkdownItems.length;
-            console.log(
-              `[markdown-cycle-cron] Applied first markdown (${effectiveFirstPct}% off${isDormDashUrgent ? ' — 2x DORM_DASH rate' : ''}) to ${firstMarkdownItems.length} items for cycle ${cycle.id}`
-            );
-          }
+            if (!targetStep) {
+              continue; // item hasn't reached even the first step's threshold yet
+            }
 
-          // Apply second markdown if configured
-          if (cycle.daysUntilSecond && cycle.secondPct) {
-            const secondMarkdownItems = await prisma.item.findMany({
-              where: {
-                ...itemFilter,
-                // `priceBeforeMarkdown` alone is NOT proof of markdown enrollment.
-                // itemController.ts's manual-price-edit path (~line 1670) sets
-                // priceBeforeMarkdown = newPrice together with markdownApplied = false purely
-                // so the strikethrough display has a reference price. Selecting on
-                // `priceBeforeMarkdown: { not: null }` alone therefore swept every
-                // manually-repriced item straight into the SECOND (deeper) markdown, while the
-                // first-markdown filter above (`priceBeforeMarkdown: null`) permanently excluded
-                // those same items from the first. `markdownApplied` is the real enrollment
-                // flag — only a genuine first markdown sets it true.
-                priceBeforeMarkdown: { not: null }, // Already has first markdown
-                markdownApplied: true, // ...and that first markdown was a REAL one, not the display hack
-                createdAt: {
-                  lte: new Date(now.getTime() - cycle.daysUntilSecond * 24 * 60 * 60 * 1000),
-                },
+            const alreadyAppliedStepOrder = item.markdownStepIndexApplied ?? 0;
+            if (targetStep.stepOrder <= alreadyAppliedStepOrder) {
+              continue; // already at or past this step
+            }
+
+            // priceBeforeMarkdown is captured once, at the first-ever step applied to this
+            // item (by ANY markdown mechanism) -- exactly as before. Every step's price is
+            // computed off this original price, never cumulative.
+            const originalPrice = item.priceBeforeMarkdown ?? item.price!;
+            const effectivePct = Math.min(100, targetStep.pctOff * dormDashMultiplier);
+            // ADR-128 follow-up (2026-09-19): eBay rejects any listing price below $0.99
+            // (errorId 25016) -- never push the organizer's price below eBay's own minimum.
+            const newPrice = Math.max(0.99, originalPrice * (1 - effectivePct / 100));
+
+            const currentPrice = item.price!;
+            const isNoopPriceMatch = Math.abs(currentPrice - newPrice) < 0.005;
+
+            if (isNoopPriceMatch) {
+              // Self-healing path for the migration to this N-step model: an item already
+              // marked down under the OLD 2-step logic (or a previous run of this same loop)
+              // is already sitting at this step's target price. Just stamp the pointer --
+              // no price write, no history row, no alert, no marketplace push.
+              await prisma.item.update({
+                where: { id: item.id },
+                data: { markdownStepIndexApplied: targetStep.stepOrder },
+              });
+              continue;
+            }
+
+            await prisma.item.update({
+              where: { id: item.id },
+              data: {
+                priceBeforeMarkdown: originalPrice,
+                price: newPrice,
+                markdownApplied: true,
+                markdownStepIndexApplied: targetStep.stepOrder,
+                // Physical Markdown Alert List (2026-09-25): this step just changed the
+                // price -- (re)surface this item on the staff "needs physical re-tagging"
+                // list, even if staff already re-tagged it for an earlier step.
+                markdownPhysicallyAppliedAt: null,
+                // ADR markdown-cycle-ebay-price-sync (2026-09-15): stamp so the
+                // ebayListingSyncCron.ts pull-sync guard knows this price change
+                // hasn't reached eBay yet and won't clobber it back on the next pull.
+                priceUpdatedAt: new Date(),
+                // ADR-128 (2026-09-19): the desired price just moved and eBay has not
+                // confirmed it yet. Resolved to SYNCED or FAILED_* by the propagation
+                // block below, inside this same iteration.
+                ...(item.ebayOfferId || item.ebayListingId
+                  ? { ebaySyncState: 'PENDING' as const, ebaySyncAttempts: 0 }
+                  : {}),
               },
-              select: { id: true, priceBeforeMarkdown: true, price: true, ebayOfferId: true, ebayListingId: true, discogsListingId: true, reverbListingId: true, ebaySyncAttempts: true },
             });
 
-            if (secondMarkdownItems.length > 0) {
-              const effectiveSecondPct = Math.min(100, cycle.secondPct * dormDashMultiplier);
+            // Audit trail: every markdown step writes an ItemPriceHistory row. Wrapped so a
+            // history-write failure can never break the markdown loop itself.
+            try {
+              await prisma.itemPriceHistory.create({
+                data: {
+                  itemId: item.id,
+                  price: newPrice,
+                  changedBy: 'markdown',
+                  note: `Markdown step ${targetStep.stepOrder} (${effectivePct}% off, cycle ${cycle.id})`,
+                },
+              });
+            } catch (historyErr) {
+              console.warn(
+                `[markdown-cycle-cron] price history write failed for item ${item.id}:`,
+                historyErr
+              );
+            }
 
-              // Per-item update: each item must have ITS OWN priceBeforeMarkdown used
-              // to compute ITS OWN new price and have its own price reduced. A batch
-              // updateMany would (incorrectly) write item[0]'s computed price onto
-              // every item — same class of bug the first-markdown loop above avoids.
-              for (const item of secondMarkdownItems) {
-                const originalPrice = item.priceBeforeMarkdown!;
-                // ADR-128 follow-up (2026-09-19): same $0.99 eBay minimum-price floor as the
-                // first-markdown loop above -- see that comment for the full rationale.
-                const newPrice = Math.max(0.99, originalPrice * (1 - effectiveSecondPct / 100));
+            // Tell anyone who favorited this item that its price just dropped.
+            notifyPriceDropAlerts(item.id, currentPrice, newPrice).catch(err =>
+              console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
+            );
 
-                // Idempotency guard. Unlike the first-markdown loop — whose
-                // `priceBeforeMarkdown: null` filter stops an item being re-selected once it has
-                // been marked down — this loop's filter (`priceBeforeMarkdown NOT NULL` +
-                // `createdAt <= now - daysUntilSecond`) stays true forever, so the same items are
-                // re-selected every single night. Without this skip each one is re-written,
-                // re-pushed to the eBay API, and has `priceUpdatedAt` re-stamped nightly in
-                // perpetuity — and that nightly re-stamp is what keeps items permanently flagged
-                // "unsynced" downstream in ebayListingSyncCron.ts. If the item already sits at the
-                // target price there is nothing to do: skip the update, the price-drop alert and
-                // the marketplace propagation alike.
-                // item.price is nullable in the schema (the query filters `price: { gt: 0 }`, so
-                // in practice it is always set); a null price cannot match and falls through.
-                const currentPrice = item.price;
-                if (currentPrice != null && Math.abs(currentPrice - newPrice) < 0.005) {
-                  continue;
-                }
-
+            // ADR markdown-cycle-ebay-price-sync (2026-09-15), Dev Instructions step 6:
+            // propagate the new price to eBay (Discogs/Reverb are wired too, see
+            // markdownPricePropagationService.ts). Awaited so a confirmed eBay push can
+            // stamp ebayPriceSyncedAt before moving to the next item, but wrapped in
+            // try/catch so a propagation failure never blocks the loop.
+            try {
+              const propResults = await propagateMarkdownPriceToMarketplaces({
+                id: item.id,
+                organizerId: cycle.organizerId,
+                price: newPrice,
+                ebayOfferId: item.ebayOfferId,
+                ebayListingId: item.ebayListingId,
+                discogsListingId: item.discogsListingId,
+                reverbListingId: item.reverbListingId,
+              });
+              const ebayResult = propResults.find(r => r.platform === 'EBAY');
+              if (ebayResult?.ok) {
                 await prisma.item.update({
                   where: { id: item.id },
                   data: {
-                    price: newPrice,
-                    // Physical Markdown Alert List (2026-09-25): this is the "LATER markdown
-                    // fires on the same item" case -- the second markdown stage just changed
-                    // the price again, so reset back to null even if staff already re-tagged
-                    // the item for the first markdown, so they get alerted again for the new
-                    // price. See markdownCron.ts / the first-markdown loop above for the same
-                    // field on a first-ever markdown.
-                    markdownPhysicallyAppliedAt: null,
-                    // ADR markdown-cycle-ebay-price-sync (2026-09-15): see first-markdown
-                    // loop above for why this is stamped on every FAS-initiated price write.
-                    priceUpdatedAt: new Date(),
-                    // ADR-128 (2026-09-19): the desired price just moved and eBay has not confirmed
-                    // it yet -- that in-flight gap now has a name instead of being inferred from two
-                    // timestamps. Gated on the same eBay-live condition buildHandlers() uses in
-                    // markdownPricePropagationService.ts, so an item with no eBay listing is never
-                    // marked PENDING for a push that will never be attempted. Resolved to SYNCED or
-                    // FAILED_* by the propagation block below, inside this same iteration.
-                    ...(item.ebayOfferId || item.ebayListingId
-                      ? { ebaySyncState: 'PENDING' as const, ebaySyncAttempts: 0 }
-                      : {}),
+                    ebayPriceSyncedAt: new Date(),
+                    ebayLivePrice: newPrice,
+                    ebaySyncState: 'SYNCED',
+                    ebaySyncFailureReason: null,
+                    ebaySyncAttempts: 0,
                   },
                 });
-
-                // Audit trail: same ItemPriceHistory row markdownCron.ts writes, and the same
-                // reason as the first-markdown loop above. Wrapped so a history-write failure can
-                // never break the markdown loop itself.
-                try {
-                  await prisma.itemPriceHistory.create({
-                    data: {
-                      itemId: item.id,
-                      price: newPrice,
-                      changedBy: 'markdown',
-                      note: `Second markdown (${effectiveSecondPct}% off, cycle ${cycle.id})`,
-                    },
-                  });
-                } catch (historyErr) {
-                  console.warn(
-                    `[markdown-cycle-cron] price history write failed for item ${item.id}:`,
-                    historyErr
-                  );
-                }
-
-                // Tell anyone who favorited this item that its price just dropped.
-                // Uses this item's own pre-write price as "old", and this item's own
-                // newly computed price as "new".
-                notifyPriceDropAlerts(item.id, item.price, newPrice).catch(err =>
-                  console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
+              } else if (ebayResult) {
+                const failureClass = classifyPropagationFailure(ebayResult.reason, ebayResult.detail);
+                const nextSyncState = resolveSyncStateAfterFailure(failureClass, (item.ebaySyncAttempts ?? 0) + 1, ebayResult.reason);
+                await prisma.item.update({
+                  where: { id: item.id },
+                  data: {
+                    ebaySyncState: nextSyncState,
+                    ebaySyncFailureReason: formatPropagationFailureReason(ebayResult.reason, ebayResult.detail),
+                    ebaySyncAttempts: { increment: 1 },
+                  },
+                });
+                console.warn(
+                  `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass} -> ${nextSyncState}): ${ebayResult.reason ?? 'unknown'}`
                 );
-
-                // ADR markdown-cycle-ebay-price-sync (2026-09-15), Dev Instructions step 6:
-                // same propagation call as the first-markdown loop above.
-                try {
-                  const propResults = await propagateMarkdownPriceToMarketplaces({
-                    id: item.id,
-                    organizerId: cycle.organizerId,
-                    price: newPrice,
-                    ebayOfferId: item.ebayOfferId,
-                    ebayListingId: item.ebayListingId,
-                    discogsListingId: item.discogsListingId,
-                    reverbListingId: item.reverbListingId,
-                  });
-                  const ebayResult = propResults.find(r => r.platform === 'EBAY');
-                  if (ebayResult?.ok) {
-                    await prisma.item.update({
-                      where: { id: item.id },
-                      data: {
-                        ebayPriceSyncedAt: new Date(),
-                        // ADR-128 (2026-09-19): eBay confirmed this price, so it is now also the
-                        // confirmed-live price a shopper on eBay would actually be charged. Clearing
-                        // the failure reason and resetting the attempt counter means a later failure
-                        // starts counting from zero rather than inheriting a stale history.
-                        ebayLivePrice: newPrice,
-                        ebaySyncState: 'SYNCED',
-                        ebaySyncFailureReason: null,
-                        ebaySyncAttempts: 0,
-                      },
-                    });
-                  } else if (ebayResult) {
-                    // ADR-128 (2026-09-19): record the gap instead of collapsing every failure into
-                    // one console.warn. Item.price is deliberately NOT rolled back -- the markdown is
-                    // a real business decision the organizer configured, and ADR-128 rejects rollback
-                    // explicitly. What changes is that the failure is now classified, so
-                    // ebayListingSyncCron.ts can stop retrying what no retry can fix, and eBay's own
-                    // error text is kept for the organizer-facing alert.
-                    const failureClass = classifyPropagationFailure(ebayResult.reason, ebayResult.detail);
-                    // 2026-09-23 (ADR-128 Decision #4 cap): terminal only after TERMINAL_AFTER_ATTEMPTS
-                    // consecutive failures, so eBay auto-repair gets the cycles it needs to converge.
-                    const nextSyncState = resolveSyncStateAfterFailure(failureClass, (item.ebaySyncAttempts ?? 0) + 1, ebayResult.reason);
-                    await prisma.item.update({
-                      where: { id: item.id },
-                      data: {
-                        ebaySyncState: nextSyncState,
-                        ebaySyncFailureReason: formatPropagationFailureReason(ebayResult.reason, ebayResult.detail),
-                        ebaySyncAttempts: { increment: 1 },
-                      },
-                    });
-                    console.warn(
-                      `[markdown-cycle-cron] item ${item.id} eBay propagation did not confirm (${failureClass} -> ${nextSyncState}): ${ebayResult.reason ?? 'unknown'}`
-                    );
-                  }
-                } catch (propErr) {
-                  console.error(`[markdown-cycle-cron] propagation threw for item ${item.id}:`, propErr);
-                }
               }
-
-              totalMarkdownsApplied += secondMarkdownItems.length;
-              console.log(
-                `[markdown-cycle-cron] Applied second markdown (${effectiveSecondPct}% off${isDormDashUrgent ? ' — 2x DORM_DASH rate' : ''}) to ${secondMarkdownItems.length} items for cycle ${cycle.id}`
-              );
+            } catch (propErr) {
+              console.error(`[markdown-cycle-cron] propagation threw for item ${item.id}:`, propErr);
             }
+
+            totalMarkdownsApplied += 1;
+          }
+
+          if (candidateItems.length > 0) {
+            console.log(
+              `[markdown-cycle-cron] Processed ${candidateItems.length} candidate items for cycle ${cycle.id}${isDormDashUrgent ? ' (2x DORM_DASH rate)' : ''}`
+            );
           }
         } catch (cycleError) {
           console.error(`[markdown-cycle-cron] Error processing cycle ${cycle.id}:`, cycleError);

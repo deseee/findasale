@@ -1621,6 +1621,13 @@ model Item {
   // from markdownApplied -- reusing that flag would break the markdown-cron idempotency
   // filters that already read it (see @@index([saleId, markdownApplied]) below).
   markdownPhysicallyAppliedAt     DateTime?
+  // ADR-markdown-cycle-n-steps (2026-09-28): idempotency pointer for markdownCycleCron.ts's
+  // N-step MarkdownCycleStep loop (PRO-tier MarkdownCycle feature only -- distinct from
+  // markdownTierApplied above, which is markdownCron.ts's own Day-2/Day-3 tier progress).
+  // Null = no step applied yet. Set to a MarkdownCycleStep.stepOrder once that step's price
+  // cut lands, so a nightly run can tell which step an item last reached and never
+  // double-apply or skip one when catching an item up across multiple thresholds at once.
+  markdownStepIndexApplied        Int?
   // Feature #228: Settlement Hub — high-value item tracking + AI comp
   isHighValue                     Boolean                 @default(false)
   highValueThreshold              Decimal?
@@ -5823,10 +5830,15 @@ model MarkdownCycle {
   organizer       Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   saleId          String? // null = applies to all organizer sales; set = applies only to this sale
   sale            Sale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  daysUntilFirst  Int // days after item creation before first markdown applies
-  firstPct        Int // first markdown percentage (e.g. 10 = 10% off)
-  daysUntilSecond Int? // optional: days after item creation before second markdown applies
-  secondPct       Int? // optional: second markdown percentage
+  // ADR-markdown-cycle-n-steps (2026-09-28): daysUntilFirst/firstPct/daysUntilSecond/secondPct
+  // below are DEPRECATED -- kept in place (not read by new code) purely so this migration stays
+  // additive-only. New code reads `steps` instead. A follow-up migration will drop these once
+  // the new path has run clean in production for a few days. See the ADR for the full plan.
+  daysUntilFirst  Int // deprecated -- see comment above
+  firstPct        Int // deprecated -- see comment above
+  daysUntilSecond Int? // deprecated -- see comment above
+  secondPct       Int? // deprecated -- see comment above
+  steps           MarkdownCycleStep[]
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -5834,6 +5846,25 @@ model MarkdownCycle {
   @@index([organizerId])
   @@index([saleId])
   @@index([organizerId, isActive])
+}
+
+// ADR-markdown-cycle-n-steps (2026-09-28): one cycle -> many ordered markdown steps.
+// Replaces MarkdownCycle's old fixed 2-step (daysUntilFirst/firstPct/daysUntilSecond/secondPct)
+// shape so an organizer can configure 1-6 steps (cap enforced in markdownCycleController.ts,
+// not here). pctOff is always a percentage off the item's ORIGINAL price
+// (Item.priceBeforeMarkdown, captured once at the first-ever step applied) -- never cumulative.
+model MarkdownCycleStep {
+  id           String        @id @default(cuid())
+  cycleId      String
+  cycle        MarkdownCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  stepOrder    Int // 1-based, ascending -- matches dayThreshold ascending order
+  dayThreshold Int // days after Item.createdAt this step's price kicks in
+  pctOff       Int // % off ORIGINAL price (0-100), NOT cumulative
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([cycleId, stepOrder])
+  @@index([cycleId])
 }
 
 model QRScannerEvent {

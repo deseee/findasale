@@ -1,9 +1,12 @@
 /**
  * Feature: Automatic Markdown Cycles Management
  * PRO+ tier only. Allows organizers to create time-based automatic price reductions.
+ *
+ * ADR-markdown-cycle-n-steps (2026-09-28): a cycle now holds 1-6 ordered steps
+ * (day threshold + % off, both increasing) instead of a fixed first/second pair.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
@@ -13,12 +16,18 @@ import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
 import { X, Plus, Edit2, Trash2, TrendingDown } from 'lucide-react';
 
+const MAX_STEPS = 6;
+
+interface MarkdownCycleStep {
+  id: string;
+  stepOrder: number;
+  dayThreshold: number;
+  pctOff: number;
+}
+
 interface MarkdownCycle {
   id: string;
-  daysUntilFirst: number;
-  firstPct: number;
-  daysUntilSecond: number | null;
-  secondPct: number | null;
+  steps: MarkdownCycleStep[];
   isActive: boolean;
   saleId: string | null;
   sale: { id: string; title: string } | null;
@@ -31,6 +40,13 @@ interface Sale {
   title: string;
 }
 
+interface StepFormRow {
+  dayThreshold: string;
+  pctOff: string;
+}
+
+const emptyStepRow = (): StepFormRow => ({ dayThreshold: '', pctOff: '' });
+
 const MarkdownCyclesPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
@@ -41,13 +57,8 @@ const MarkdownCyclesPage = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Form state
-  const [formData, setFormData] = useState({
-    daysUntilFirst: '',
-    firstPct: '',
-    daysUntilSecond: '',
-    secondPct: '',
-    saleId: '',
-  });
+  const [steps, setSteps] = useState<StepFormRow[]>([emptyStepRow()]);
+  const [saleId, setSaleId] = useState('');
 
   // Fetch markdown cycles
   const { data: cycles = [], isLoading, isError: cyclesError } = useQuery({
@@ -67,26 +78,19 @@ const MarkdownCyclesPage = () => {
     },
   });
 
+  const buildStepsPayload = () =>
+    steps.map((step) => ({
+      dayThreshold: parseInt(step.dayThreshold, 10),
+      pctOff: parseInt(step.pctOff, 10),
+    }));
+
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async () => {
-      const payload: any = {
-        daysUntilFirst: parseInt(formData.daysUntilFirst, 10),
-        firstPct: parseInt(formData.firstPct, 10),
-      };
-
-      if (formData.daysUntilSecond) {
-        payload.daysUntilSecond = parseInt(formData.daysUntilSecond, 10);
+      const payload: any = { steps: buildStepsPayload() };
+      if (saleId) {
+        payload.saleId = saleId;
       }
-
-      if (formData.secondPct) {
-        payload.secondPct = parseInt(formData.secondPct, 10);
-      }
-
-      if (formData.saleId) {
-        payload.saleId = formData.saleId;
-      }
-
       return api.post('/markdown-cycles', payload);
     },
     onSuccess: () => {
@@ -105,25 +109,7 @@ const MarkdownCyclesPage = () => {
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!editingCycle) throw new Error('No cycle selected');
-      const payload: any = {};
-
-      if (formData.daysUntilFirst) {
-        payload.daysUntilFirst = parseInt(formData.daysUntilFirst, 10);
-      }
-
-      if (formData.firstPct) {
-        payload.firstPct = parseInt(formData.firstPct, 10);
-      }
-
-      if (formData.daysUntilSecond) {
-        payload.daysUntilSecond = parseInt(formData.daysUntilSecond, 10);
-      }
-
-      if (formData.secondPct) {
-        payload.secondPct = parseInt(formData.secondPct, 10);
-      }
-
-      return api.put(`/markdown-cycles/${editingCycle.id}`, payload);
+      return api.put(`/markdown-cycles/${editingCycle.id}`, { steps: buildStepsPayload() });
     },
     onSuccess: () => {
       showToast('Markdown cycle updated', 'success');
@@ -171,59 +157,75 @@ const MarkdownCyclesPage = () => {
   });
 
   const resetForm = () => {
-    setFormData({
-      daysUntilFirst: '',
-      firstPct: '',
-      daysUntilSecond: '',
-      secondPct: '',
-      saleId: '',
-    });
+    setSteps([emptyStepRow()]);
+    setSaleId('');
     setEditingCycle(null);
   };
 
   const openEditModal = (cycle: MarkdownCycle) => {
     setEditingCycle(cycle);
-    setFormData({
-      daysUntilFirst: cycle.daysUntilFirst.toString(),
-      firstPct: cycle.firstPct.toString(),
-      daysUntilSecond: cycle.daysUntilSecond?.toString() || '',
-      secondPct: cycle.secondPct?.toString() || '',
-      saleId: cycle.saleId || '',
-    });
+    setSteps(
+      cycle.steps.length > 0
+        ? cycle.steps.map((step) => ({
+            dayThreshold: step.dayThreshold.toString(),
+            pctOff: step.pctOff.toString(),
+          }))
+        : [emptyStepRow()]
+    );
+    setSaleId(cycle.saleId || '');
     setModalOpen(true);
+  };
+
+  const addStepRow = () => {
+    if (steps.length >= MAX_STEPS) return;
+    setSteps([...steps, emptyStepRow()]);
+  };
+
+  const removeStepRow = (index: number) => {
+    if (steps.length <= 1) return; // at least one step required
+    setSteps(steps.filter((_, i) => i !== index));
+  };
+
+  const updateStepRow = (index: number, field: keyof StepFormRow, value: string) => {
+    setSteps(steps.map((step, i) => (i === index ? { ...step, [field]: value } : step)));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.daysUntilFirst || !formData.firstPct) {
-      showToast('Please fill in required fields', 'error');
+    if (steps.length === 0) {
+      showToast('Add at least one markdown step', 'error');
+      return;
+    }
+    if (steps.length > MAX_STEPS) {
+      showToast(`You can have at most ${MAX_STEPS} steps`, 'error');
       return;
     }
 
-    // Validate percentages
-    const firstPct = parseInt(formData.firstPct, 10);
-    if (firstPct < 0 || firstPct > 100) {
-      showToast('First percentage must be between 0 and 100', 'error');
-      return;
-    }
-
-    if (formData.secondPct) {
-      const secondPct = parseInt(formData.secondPct, 10);
-      if (secondPct < 0 || secondPct > 100) {
-        showToast('Second percentage must be between 0 and 100', 'error');
+    let prevDay = -Infinity;
+    let prevPct = -Infinity;
+    for (let i = 0; i < steps.length; i++) {
+      const { dayThreshold, pctOff } = steps[i];
+      if (!dayThreshold || !pctOff) {
+        showToast('Please fill in every step', 'error');
         return;
       }
-
-      // Validate daysUntilSecond is greater than daysUntilFirst
-      if (formData.daysUntilSecond) {
-        const daysFirst = parseInt(formData.daysUntilFirst, 10);
-        const daysSecond = parseInt(formData.daysUntilSecond, 10);
-        if (daysSecond <= daysFirst) {
-          showToast('Second markdown days must be greater than first markdown days', 'error');
-          return;
-        }
+      const day = parseInt(dayThreshold, 10);
+      const pct = parseInt(pctOff, 10);
+      if (pct <= 0 || pct > 100) {
+        showToast(`Step ${i + 1}: percentage must be between 1 and 100`, 'error');
+        return;
       }
+      if (day <= prevDay) {
+        showToast(`Step ${i + 1}: days must be greater than the previous step`, 'error');
+        return;
+      }
+      if (pct <= prevPct) {
+        showToast(`Step ${i + 1}: percentage must be greater than the previous step`, 'error');
+        return;
+      }
+      prevDay = day;
+      prevPct = pct;
     }
 
     if (editingCycle) {
@@ -232,6 +234,11 @@ const MarkdownCyclesPage = () => {
       createMutation.mutate();
     }
   };
+
+  const formatSteps = (cycleSteps: MarkdownCycleStep[]) =>
+    cycleSteps
+      .map((step) => `${step.dayThreshold} day${step.dayThreshold !== 1 ? 's' : ''}: ${step.pctOff}% off`)
+      .join(' + ');
 
   if (authLoading) {
     return (
@@ -314,12 +321,7 @@ const MarkdownCyclesPage = () => {
                     {/* Cycle details */}
                     <div className="mb-2">
                       <h3 className="font-bold text-warm-900 dark:text-warm-100">
-                        {cycle.daysUntilFirst} day{cycle.daysUntilFirst !== 1 ? 's' : ''}: {cycle.firstPct}% off
-                        {cycle.daysUntilSecond && cycle.secondPct && (
-                          <span className="ml-4">
-                            + {cycle.daysUntilSecond} day{cycle.daysUntilSecond !== 1 ? 's' : ''}: {cycle.secondPct}% off
-                          </span>
-                        )}
+                        {formatSteps(cycle.steps)}
                       </h3>
                     </div>
 
@@ -396,7 +398,7 @@ const MarkdownCyclesPage = () => {
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl dark:shadow-gray-900/50 max-w-md w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl dark:shadow-gray-900/50 max-w-md w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-warm-200 dark:border-gray-700">
               <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
@@ -415,90 +417,64 @@ const MarkdownCyclesPage = () => {
 
             {/* Modal Body */}
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Days Until First */}
+              {/* Steps */}
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Days Until First Markdown *
+                  Markdown Steps *
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.daysUntilFirst}
-                  onChange={(e) =>
-                    setFormData({ ...formData, daysUntilFirst: e.target.value })
-                  }
-                  placeholder="e.g., 5"
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                 aria-label="e.g., 5" />
-                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                  Days after item creation before first markdown applies
+                <p className="text-xs text-warm-500 dark:text-warm-400 mb-3">
+                  Each step's percentage is off the item's original price, not the previous step's
+                  price. Days and percentages must each increase from one step to the next.
                 </p>
-              </div>
-
-              {/* First Percentage */}
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  First Markdown % *
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.firstPct}
-                    onChange={(e) =>
-                      setFormData({ ...formData, firstPct: e.target.value })
-                    }
-                    placeholder="e.g., 10"
-                    className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                   aria-label="e.g., 10" />
-                  <span className="flex items-center px-3 py-2 bg-warm-50 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 font-semibold">
-                    %
-                  </span>
+                <div className="space-y-3">
+                  {steps.map((step, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-warm-500 dark:text-warm-400 w-14 flex-shrink-0">
+                        Step {index + 1}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={step.dayThreshold}
+                        onChange={(e) => updateStepRow(index, 'dayThreshold', e.target.value)}
+                        placeholder="Days, e.g. 30"
+                        aria-label={`Step ${index + 1} days`}
+                        className="flex-1 px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                      <div className="flex items-center gap-1 flex-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={step.pctOff}
+                          onChange={(e) => updateStepRow(index, 'pctOff', e.target.value)}
+                          placeholder="% off, e.g. 10"
+                          aria-label={`Step ${index + 1} percent off`}
+                          className="flex-1 px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                        <span className="text-warm-500 dark:text-warm-400 text-sm">%</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeStepRow(index)}
+                        disabled={steps.length <= 1}
+                        className="p-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                        title="Remove step"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              {/* Days Until Second (Optional) */}
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Days Until Second Markdown (optional)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.daysUntilSecond}
-                  onChange={(e) =>
-                    setFormData({ ...formData, daysUntilSecond: e.target.value })
-                  }
-                  placeholder="e.g., 10"
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                 aria-label="e.g., 10" />
-                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                  Must be greater than first markdown days
-                </p>
-              </div>
-
-              {/* Second Percentage (Optional) */}
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Second Markdown % (optional)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.secondPct}
-                    onChange={(e) =>
-                      setFormData({ ...formData, secondPct: e.target.value })
-                    }
-                    placeholder="e.g., 20"
-                    className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                   aria-label="e.g., 20" />
-                  <span className="flex items-center px-3 py-2 bg-warm-50 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 font-semibold">
-                    %
-                  </span>
-                </div>
+                <button
+                  type="button"
+                  onClick={addStepRow}
+                  disabled={steps.length >= MAX_STEPS}
+                  className="mt-3 flex items-center gap-1 text-sm font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus size={16} />
+                  Add step {steps.length >= MAX_STEPS ? `(max ${MAX_STEPS})` : ''}
+                </button>
               </div>
 
               {/* Sale Scope (Optional) */}
@@ -507,10 +483,8 @@ const MarkdownCyclesPage = () => {
                   Scope to Specific Sale (optional)
                 </label>
                 <select
-                  value={formData.saleId}
-                  onChange={(e) =>
-                    setFormData({ ...formData, saleId: e.target.value })
-                  }
+                  value={saleId}
+                  onChange={(e) => setSaleId(e.target.value)}
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 >
                   <option value="">All sales</option>

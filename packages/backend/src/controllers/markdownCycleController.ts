@@ -5,8 +5,57 @@ import { prisma } from '../lib/prisma';
 /**
  * Feature: Automatic Markdown Cycles (PRO Tier)
  * Time-based automatic price reductions. Organizers define when prices drop by percentage.
- * Example: 10% off after 5 days, 20% off after 10 days.
+ * Example: 10% off after 30 days, 20% off after 60 days, 30% off after 90 days.
+ *
+ * ADR-markdown-cycle-n-steps (2026-09-28): a cycle takes 1-6 ordered steps
+ * (`steps: [{ dayThreshold, pctOff }]`) instead of the old fixed first/second pair.
+ * `dayThreshold` and `pctOff` must both strictly increase across the array -- a markdown
+ * schedule that doesn't cut deeper at each later step isn't a markdown schedule.
  */
+
+const MAX_STEPS = 6;
+
+interface StepInput {
+  dayThreshold: number;
+  pctOff: number;
+}
+
+/**
+ * Validate a steps array for create/update. Returns an error message string, or null if valid.
+ */
+function validateSteps(steps: unknown): string | null {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return 'steps must be a non-empty array';
+  }
+  if (steps.length > MAX_STEPS) {
+    return `steps cannot exceed ${MAX_STEPS} (got ${steps.length})`;
+  }
+
+  let prevDayThreshold = -Infinity;
+  let prevPctOff = -Infinity;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i] as Partial<StepInput>;
+    const dayThreshold = step?.dayThreshold;
+    const pctOff = step?.pctOff;
+
+    if (typeof dayThreshold !== 'number' || !Number.isFinite(dayThreshold) || dayThreshold < 0) {
+      return `steps[${i}].dayThreshold must be a number >= 0`;
+    }
+    if (typeof pctOff !== 'number' || !Number.isFinite(pctOff) || pctOff <= 0 || pctOff > 100) {
+      return `steps[${i}].pctOff must be a number > 0 and <= 100`;
+    }
+    if (dayThreshold <= prevDayThreshold) {
+      return `steps[${i}].dayThreshold must be greater than the previous step's dayThreshold`;
+    }
+    if (pctOff <= prevPctOff) {
+      return `steps[${i}].pctOff must be greater than the previous step's pctOff`;
+    }
+    prevDayThreshold = dayThreshold;
+    prevPctOff = pctOff;
+  }
+
+  return null;
+}
 
 // GET /api/markdown-cycles — list all markdown cycles for authenticated organizer
 export const listMarkdownCycles = async (req: AuthRequest, res: Response) => {
@@ -27,10 +76,13 @@ export const listMarkdownCycles = async (req: AuthRequest, res: Response) => {
     // Tier check handled by requireTier('PRO') middleware in route registration
     // (reads Organizer.subscriptionTier — consistent with auth/me and other controllers)
 
-    // List all markdown cycles for this organizer
+    // List all markdown cycles for this organizer, with steps ordered ascending
     const cycles = await prisma.markdownCycle.findMany({
       where: { organizerId: organizer.id },
-      include: { sale: { select: { id: true, title: true } } },
+      include: {
+        sale: { select: { id: true, title: true } },
+        steps: { orderBy: { stepOrder: 'asc' } },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -48,20 +100,11 @@ export const createMarkdownCycle = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { saleId, daysUntilFirst, firstPct, daysUntilSecond, secondPct } = req.body;
+    const { saleId, steps } = req.body;
 
-    // Validate input
-    if (!daysUntilFirst || daysUntilFirst < 0) {
-      return res.status(400).json({ message: 'daysUntilFirst must be >= 0' });
-    }
-    if (!firstPct || firstPct < 0 || firstPct > 100) {
-      return res.status(400).json({ message: 'firstPct must be between 0 and 100' });
-    }
-    if (daysUntilSecond !== undefined && (daysUntilSecond < 0 || daysUntilSecond <= daysUntilFirst)) {
-      return res.status(400).json({ message: 'daysUntilSecond must be greater than daysUntilFirst' });
-    }
-    if (secondPct !== undefined && (secondPct < 0 || secondPct > 100)) {
-      return res.status(400).json({ message: 'secondPct must be between 0 and 100' });
+    const stepsError = validateSteps(steps);
+    if (stepsError) {
+      return res.status(400).json({ message: stepsError });
     }
 
     // Get organizer record
@@ -91,17 +134,31 @@ export const createMarkdownCycle = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Create markdown cycle
+    const stepInputs = steps as StepInput[];
+
+    // Create markdown cycle + its steps together. The deprecated daysUntilFirst/firstPct
+    // columns are still NOT NULL in the schema (see ADR-markdown-cycle-n-steps) so they're
+    // populated from step 1 for compatibility, but nothing reads them going forward.
     const cycle = await prisma.markdownCycle.create({
       data: {
         organizerId: organizer.id,
         saleId: saleId || null,
-        daysUntilFirst,
-        firstPct,
-        daysUntilSecond: daysUntilSecond || null,
-        secondPct: secondPct || null,
+        daysUntilFirst: stepInputs[0].dayThreshold,
+        firstPct: stepInputs[0].pctOff,
+        daysUntilSecond: stepInputs.length > 1 ? stepInputs[1].dayThreshold : null,
+        secondPct: stepInputs.length > 1 ? stepInputs[1].pctOff : null,
+        steps: {
+          create: stepInputs.map((step, index) => ({
+            stepOrder: index + 1,
+            dayThreshold: step.dayThreshold,
+            pctOff: step.pctOff,
+          })),
+        },
       },
-      include: { sale: { select: { id: true, title: true } } },
+      include: {
+        sale: { select: { id: true, title: true } },
+        steps: { orderBy: { stepOrder: 'asc' } },
+      },
     });
 
     res.status(201).json(cycle);
@@ -119,7 +176,14 @@ export const updateMarkdownCycle = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { daysUntilFirst, firstPct, daysUntilSecond, secondPct, isActive } = req.body;
+    const { steps, isActive } = req.body;
+
+    if (steps !== undefined) {
+      const stepsError = validateSteps(steps);
+      if (stepsError) {
+        return res.status(400).json({ message: stepsError });
+      }
+    }
 
     // Get organizer record
     const organizer = await prisma.organizer.findUnique({
@@ -143,31 +207,39 @@ export const updateMarkdownCycle = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'You do not own this markdown cycle' });
     }
 
-    // Validate input if provided
-    if (daysUntilFirst !== undefined && (daysUntilFirst < 0)) {
-      return res.status(400).json({ message: 'daysUntilFirst must be >= 0' });
-    }
-    if (firstPct !== undefined && (firstPct < 0 || firstPct > 100)) {
-      return res.status(400).json({ message: 'firstPct must be between 0 and 100' });
-    }
-    if (daysUntilSecond !== undefined && (daysUntilSecond < 0 || daysUntilSecond <= (daysUntilFirst ?? cycle.daysUntilFirst))) {
-      return res.status(400).json({ message: 'daysUntilSecond must be greater than daysUntilFirst' });
-    }
-    if (secondPct !== undefined && (secondPct < 0 || secondPct > 100)) {
-      return res.status(400).json({ message: 'secondPct must be between 0 and 100' });
-    }
+    // Replace all steps atomically when a new steps array is provided (simplest correct
+    // approach for a small, organizer-edited list — delete-then-recreate, same transaction).
+    const stepInputs = steps as StepInput[] | undefined;
 
-    // Update markdown cycle
-    const updatedCycle = await prisma.markdownCycle.update({
-      where: { id },
-      data: {
-        ...(daysUntilFirst !== undefined && { daysUntilFirst }),
-        ...(firstPct !== undefined && { firstPct }),
-        ...(daysUntilSecond !== undefined && { daysUntilSecond }),
-        ...(secondPct !== undefined && { secondPct }),
-        ...(isActive !== undefined && { isActive }),
-      },
-      include: { sale: { select: { id: true, title: true } } },
+    const updatedCycle = await prisma.$transaction(async (tx) => {
+      if (stepInputs) {
+        await tx.markdownCycleStep.deleteMany({ where: { cycleId: id } });
+        await tx.markdownCycleStep.createMany({
+          data: stepInputs.map((step, index) => ({
+            cycleId: id,
+            stepOrder: index + 1,
+            dayThreshold: step.dayThreshold,
+            pctOff: step.pctOff,
+          })),
+        });
+      }
+
+      return tx.markdownCycle.update({
+        where: { id },
+        data: {
+          ...(stepInputs && {
+            daysUntilFirst: stepInputs[0].dayThreshold,
+            firstPct: stepInputs[0].pctOff,
+            daysUntilSecond: stepInputs.length > 1 ? stepInputs[1].dayThreshold : null,
+            secondPct: stepInputs.length > 1 ? stepInputs[1].pctOff : null,
+          }),
+          ...(isActive !== undefined && { isActive }),
+        },
+        include: {
+          sale: { select: { id: true, title: true } },
+          steps: { orderBy: { stepOrder: 'asc' } },
+        },
+      });
     });
 
     res.json(updatedCycle);
@@ -208,7 +280,7 @@ export const deleteMarkdownCycle = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'You do not own this markdown cycle' });
     }
 
-    // Delete the cycle
+    // Delete the cycle (MarkdownCycleStep rows cascade via onDelete: Cascade)
     await prisma.markdownCycle.delete({
       where: { id },
     });
