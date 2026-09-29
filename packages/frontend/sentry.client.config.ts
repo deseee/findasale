@@ -65,6 +65,15 @@ Sentry.init({
       typeof originalException.stack === 'string' &&
       originalException.stack.includes('chrome-extension://')
     ) return null;
+    // Known noise: "Cannot redefine property: message"/"...: stack" (FINDASALE-NEXTJS-17,
+    // /sales/[id], stack shows XMLHttpRequest.g -> Function.defineProperty). A well-documented
+    // Sentry-SDK-vs-browser-extension collision: some extension (antivirus/ad-blocker/etc.)
+    // patches XMLHttpRequest and makes a property non-configurable before Sentry's own XHR
+    // breadcrumb instrumentation tries to redefine it. No first-party code in this app patches
+    // XMLHttpRequest (grepped, zero hits) and no other monitoring SDK is installed alongside
+    // Sentry, so this is not something FindA.Sale's own code can trigger or fix. Only 2 events
+    // ever, both from one visitor's single session -- not actionable.
+    if (msg.includes('Cannot redefine property')) return null;
     return event;
   },
 });
