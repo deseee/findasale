@@ -7,17 +7,20 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
 import Link from 'next/link';
+import TierGate from '../../components/TierGate';
 
 interface UserSettings {
   id: string;
   email: string;
   name: string;
   emailWeeklyOrganizerDigest: boolean;
+  // The preference the weekly digest sender and its email unsubscribe link actually read.
+  notificationPrefs?: Record<string, unknown> | null;
 }
 
 interface DigestPreviewData {
@@ -34,6 +37,7 @@ interface DigestPreviewData {
 export default function EmailDigestPreview() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [previewDate] = useState<string>(new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
 
   // Mock data for preview
@@ -65,19 +69,25 @@ export default function EmailDigestPreview() {
     enabled: !authLoading && !!user,
   });
 
-  // Mutation to update email preference
+  // Mutation to update email preference.
+  // The digest job and the unsubscribe link in the email both use notificationPrefs.emailWeeklyDigest.
+  // (This page used to PATCH `emailWeeklyOrganizerDigest`, which /users/me ignores, so the button did nothing.)
+  // PATCH /users/me replaces notificationPrefs wholesale, so send the merged object.
   const updatePreferenceMutation = useMutation({
-    mutationFn: async (emailWeeklyOrganizerDigest: boolean) => {
+    mutationFn: async (enabled: boolean) => {
       const response = await api.patch('/users/me', {
-        emailWeeklyOrganizerDigest,
+        notificationPrefs: { ...(userSettings?.notificationPrefs ?? {}), emailWeeklyDigest: enabled },
       });
       return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-settings'] });
     },
   });
 
   const handleToggleEmail = async () => {
     if (!userSettings) return;
-    await updatePreferenceMutation.mutateAsync(!userSettings.emailWeeklyOrganizerDigest);
+    await updatePreferenceMutation.mutateAsync(userSettings.notificationPrefs?.emailWeeklyDigest === false);
   };
 
   if (authLoading || settingsLoading) {
@@ -93,7 +103,7 @@ export default function EmailDigestPreview() {
     return null;
   }
 
-  const isEmailEnabled = userSettings?.emailWeeklyOrganizerDigest ?? true;
+  const isEmailEnabled = userSettings?.notificationPrefs?.emailWeeklyDigest !== false;
 
   return (
     <>
@@ -101,6 +111,7 @@ export default function EmailDigestPreview() {
         <title>Weekly Email Digest Preview - FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Weekly Email Digest" description="Preview the weekly performance email and manage it here. Included with PRO. Everyone can still unsubscribe from the link at the bottom of the email.">
       <div className="min-h-screen bg-stone-50 dark:bg-gray-900 py-8 px-4">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
@@ -272,6 +283,7 @@ export default function EmailDigestPreview() {
           </div>
         </div>
       </div>
+      </TierGate>
     </>
   );
 }

@@ -41,7 +41,6 @@ import {
   Activity,
   TrendingUp,
   TrendingDown,
-  Scale,
   ShieldAlert,
   Mail,
   Share2,
@@ -327,8 +326,13 @@ export function teamsNavGroupForSurface(
  *
  * requiredTier is verified against the destination pages (2026-09-29): flip-report,
  * markdown-cycles, fraud-signals, insights, brand-kit and marketplace-extension enforce PRO.
- * Appraisals, Email Digest and the Markdown Re-tag List enforce nothing, so they stay SIMPLE.
- * The Markdown Re-tag List is SIMPLE on purpose: the free-tier markdownCron feeds it too.
+ * The Markdown Re-tag List is PRO (2026-09-29, Patrick: Pro Tools are gated). Auto-markdown itself is
+ * PRO-only (PUT /sales/:id/markdown-config is requireTier('PRO')), and the page, both list endpoints and
+ * the daily alert job enforce PRO too.
+ * Email Digest is PRO too (page gated 2026-09-29; every digest email still carries its own
+ * one-click unsubscribe link, so free-tier organizers can opt out).
+ * Appraisals is NOT a Pro tool: it is a community, XP-priced feature (requests cost 250+ XP, decision
+ * S443; backend is deliberately not tier-gated), so it lives in CORE_NAV_ENTRIES under In-Sale Tools.
  */
 export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
   {
@@ -359,7 +363,7 @@ export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
     href: '/organizer/markdown-retag',
     icon: Tag,
     title: 'Auto-marked-down items that still need a new tag or sticker on the shelf',
-    requiredTier: 'SIMPLE',
+    requiredTier: 'PRO',
     group: 'proTools',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 40,
@@ -376,23 +380,12 @@ export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
     priority: 50,
   },
   {
-    id: 'appraisals',
-    label: 'Appraisals',
-    href: '/organizer/appraisals',
-    icon: Scale,
-    title: 'Crowdsourced item appraisals (also sold a la carte)',
-    requiredTier: 'SIMPLE',
-    group: 'proTools',
-    surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
-    priority: 60,
-  },
-  {
     id: 'email-digest',
     label: 'Email Digest',
     href: '/organizer/email-digest-preview',
     icon: Mail,
     title: 'Preview your email digest before it sends',
-    requiredTier: 'SIMPLE',
+    requiredTier: 'PRO',
     group: 'proTools',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 70,
@@ -487,6 +480,7 @@ export const CORE_NAV_ENTRIES: OrganizerNavEntry[] = [
   { id: 'checklist', label: 'Sale Checklist', href: '/organizer/checklist', icon: CheckCircle, title: 'Sale preparation checklist', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 70 },
   { id: 'offline', label: 'Offline Mode', href: '/organizer/offline', icon: Wifi, title: 'Keep selling when the connection drops', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 80 },
   { id: 'line-queue', label: 'Line Queue', href: '/organizer/line-queue', icon: Users, title: 'Virtual line management for your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 90 },
+  { id: 'appraisals', label: 'Appraisals', href: '/organizer/appraisals', icon: Star, title: 'Ask the community what an item is worth, or help appraise for XP', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 95 },
   { id: 'message-templates', label: 'Message Templates', href: '/organizer/message-templates', icon: FileText, title: 'Saved buyer communication templates', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 100 },
 
   { id: 'inventory', label: 'Inventory', href: '/organizer/inventory', icon: Package, title: 'Manage your persistent inventory across all sales', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },

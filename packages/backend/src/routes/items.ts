@@ -926,10 +926,10 @@ router.get('/:id/edit', authenticate, getItemForEdit);
 // GET '/:id' route immediately below, or Express would treat "markdown-retag-queue" as
 // an :id value and shadow this route (same ordering hazard the /:id/label comment above
 // already flags for this file).
-router.get('/markdown-retag-queue', authenticate, getMarkdownRetagQueue);
-router.get('/markdown-active', authenticate, getMarkdownActiveList);
-router.post('/mark-retagged/bulk', authenticate, markItemsRetaggedBulk);
-router.post('/:id/mark-retagged', authenticate, markItemRetagged);
+router.get('/markdown-retag-queue', authenticate, requireTier('PRO'), getMarkdownRetagQueue);
+router.get('/markdown-active', authenticate, requireTier('PRO'), getMarkdownActiveList);
+router.post('/mark-retagged/bulk', authenticate, requireTier('PRO'), markItemsRetaggedBulk);
+router.post('/:id/mark-retagged', authenticate, requireTier('PRO'), markItemRetagged);
 
 router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);

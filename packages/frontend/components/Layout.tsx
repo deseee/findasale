@@ -16,7 +16,6 @@ import {
   BarChart2,
   UserPlus,
   Sparkles,
-  TrendingUp,
   Tag,
   Heart,
   Star,
@@ -55,6 +54,8 @@ import useXpProfile from '../hooks/useXpProfile';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { teamsNavForSurface, teamsNavGroupForSurface, proNavForSurface, coreNavGroupForSurface, SIDEBAR_RETAIL_TIER } from '../lib/organizerNav';
 import type { NavGroup } from '../lib/organizerNav';
+import { shopperNavGroup } from '../lib/shopperNav';
+import type { ShopperNavGroup } from '../lib/shopperNav';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
@@ -116,14 +117,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [mobilePostSalesOpen, setMobilePostSalesOpen] = useState(false);
   const [mobileProToolsOpen, setMobileProToolsOpen] = useState(false);
   const [mobileSaleContextOpen, setMobileSaleContextOpen] = useState(false);
-  const [mobileExplorerOpen, setMobileExplorerOpen] = useState(false);
   const [mobileShopperCollectionOpen, setMobileShopperCollectionOpen] = useState(false);
   const [mobileShopperExploreOpen, setMobileShopperExploreOpen] = useState(false);
   const [mobileAdminOpen, setMobileAdminOpen] = useState(false);
   const [mobileTeamsOpen, setMobileTeamsOpen] = useState(false);
   const [mobileDevToolsOpen, setMobileDevToolsOpen] = useState(false);
   const [mobileInSaleToolsOpen, setMobileInSaleToolsOpen] = useState(false);
-  const [mobileDualRoleHuntPassOpen, setMobileDualRoleHuntPassOpen] = useState(false);
+  const [mobileShopperConnectOpen, setMobileShopperConnectOpen] = useState(false);
   const [mobileHuntPassOpen, setMobileHuntPassOpen] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [showIOSTooltip, setShowIOSTooltip] = useState(false);
@@ -307,6 +307,78 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           <Icon size={14} className="inline mr-2 text-amber-500" /> {label}
         </Link>
       ));
+
+  // Shopper sections of the mobile drawer. ONE renderer for both the dual-role and the shopper-only
+  // branch (they used to be two hand-copied blocks that drifted), fed by lib/shopperNav.ts.
+  // Each accordion has its own state: the dual-role "Connect" used to reuse mobileInSaleToolsOpen,
+  // so opening it also toggled the organizer "In-Sale Tools" section.
+  const mobileShopperLink = 'block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md';
+  const mobileShopperAccordion = (
+    label: string,
+    HeaderIcon: typeof ShoppingCart,
+    group: ShopperNavGroup,
+    open: boolean,
+    toggle: () => void,
+    accent: 'indigo' | 'amber' = 'indigo',
+  ) => (
+    <>
+      <button
+        onClick={toggle}
+        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider ${accent === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-indigo-600 dark:text-indigo-400'} hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors`}
+      >
+        <div className="flex items-center gap-2">
+          <HeaderIcon size={14} />
+          <span>{label}</span>
+        </div>
+        <ChevronRight
+          size={16}
+          className={`transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+      {open && (
+        <>
+          {shopperNavGroup(group).map(({ id, label: entryLabel, href, icon: Icon, soon }) => (
+            <Link key={id} href={href} className={mobileShopperLink}>
+              <Icon size={14} className={`inline mr-2 ${accent === 'amber' ? 'text-amber-500' : 'text-indigo-500'}`} /> {entryLabel}
+              {soon && <span className="text-xs text-gray-400"> (Soon)</span>}
+            </Link>
+          ))}
+        </>
+      )}
+    </>
+  );
+  const renderMobileShopperNav = () => (
+    <>
+      <Link href="/shopper/dashboard" className={mobileShopperLink}>
+        <LayoutDashboard size={14} className="inline mr-2 text-indigo-600" /> Shopper Dashboard
+      </Link>
+
+      <button
+        onClick={() => { openCart(); setMenuOpen(false); }}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors text-left"
+      >
+        <ShoppingCart size={14} className="text-indigo-500" />
+        <span>
+          Shopping Cart
+          {cartItems.length > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-indigo-600 dark:bg-indigo-500 rounded-full">
+              {cartItems.length}
+            </span>
+          )}
+        </span>
+      </button>
+
+      {mobileShopperAccordion('My Collection', Heart, 'collection', mobileShopperCollectionOpen, () => setMobileShopperCollectionOpen(!mobileShopperCollectionOpen))}
+      {mobileShopperAccordion('Explore', Compass, 'explore', mobileShopperExploreOpen, () => setMobileShopperExploreOpen(!mobileShopperExploreOpen))}
+      {mobileShopperAccordion('Connect', Share2, 'connect', mobileShopperConnectOpen, () => setMobileShopperConnectOpen(!mobileShopperConnectOpen))}
+
+      <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+        <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
+      </Link>
+
+      {mobileShopperAccordion('Hunt Exclusives', Award, 'huntExclusives', mobileHuntPassOpen, () => setMobileHuntPassOpen(!mobileHuntPassOpen), 'amber')}
+    </>
+  );
 
   const authLinks = isClient ? (
     user ? (
@@ -1167,194 +1239,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <>
                     <hr className="my-2 border-warm-200 dark:border-gray-700" />
 
-                    {/* Shopper Dashboard */}
-                    <Link href="/shopper/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <LayoutDashboard size={14} className="inline mr-2 text-indigo-600" /> Shopper Dashboard
-                    </Link>
-
-                    {/* Shopping Cart Button */}
-                    <button
-                      onClick={() => { openCart(); setMenuOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors text-left"
-                    >
-                      <ShoppingCart size={14} className="text-indigo-500" />
-                      <span>
-                        Shopping Cart
-                        {cartItems.length > 0 && (
-                          <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-indigo-600 dark:bg-indigo-500 rounded-full">
-                            {cartItems.length}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-
-                    {/* My Collection Section: Collapsible */}
-                    <button
-                      onClick={() => setMobileShopperCollectionOpen(!mobileShopperCollectionOpen)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Package size={14} />
-                        <span>My Collection</span>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform duration-200 ${mobileShopperCollectionOpen ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-                    {mobileShopperCollectionOpen && (
-                      <>
-                        <Link href="/shopper/wishlist" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Heart size={14} className="inline mr-2 text-indigo-500" /> Wishlist
-                        </Link>
-                        <Link href="/shopper/wishlist?tab=sellers" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Star size={14} className="inline mr-2 text-indigo-500" /> Following
-                        </Link>
-                        <Link href="/shopper/bids" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Gavel size={14} className="inline mr-2 text-indigo-500" /> My Bids
-                        </Link>
-                        <Link href="/shopper/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Clock size={14} className="inline mr-2 text-indigo-500" /> My Holds
-                        </Link>
-                        <Link href="/shopper/history" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Package size={14} className="inline mr-2 text-indigo-500" /> My History
-                        </Link>
-                      </>
-                    )}
-
-                    {/* Explore Section: Collapsible */}
-                    <button
-                      onClick={() => setMobileShopperExploreOpen(!mobileShopperExploreOpen)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Compass size={14} />
-                        <span>Explore</span>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform duration-200 ${mobileShopperExploreOpen ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-                    {mobileShopperExploreOpen && (
-                      <>
-                        <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Map size={14} className="inline mr-2 text-indigo-500" /> Map
-                        </Link>
-                        <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
-                        </Link>
-                        <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Zap size={14} className="inline mr-2 text-indigo-500" /> Feed
-                        </Link>
-                        <Link href="/inspiration" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Lightbulb size={14} className="inline mr-2 text-indigo-500" /> Inspiration
-                        </Link>
-                        <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
-                        </Link>
-                        <Link href="/clearance" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Tag size={14} className="inline mr-2 text-indigo-500" /> Clearance
-                        </Link>
-                        <Link href="/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Map size={14} className="inline mr-2 text-indigo-500" /> Treasure Trails
-                        </Link>
-                        <Link href="/shopper/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Compass size={14} className="inline mr-2 text-indigo-500" /> My Trails
-                        </Link>
-                        <Link href="/shopper/explorer-profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Profile
-                        </Link>
-                        <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts
-                        </Link>
-                        <Link href="/shopper/curio" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Sparkles size={14} className="inline mr-2 text-indigo-500" /> Curio
-                        </Link>
-                        <Link href="/shopper/early-access-cache" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Zap size={14} className="inline mr-2 text-indigo-500" /> Early Access Cache
-                        </Link>
-                      </>
-                    )}
-
-                    {/* Connect Section: Collapsible */}
-                    <button
-                      onClick={() => setMobileInSaleToolsOpen(!mobileInSaleToolsOpen)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Share2 size={14} />
-                        <span>Connect</span>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform duration-200 ${mobileInSaleToolsOpen ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-                    {mobileInSaleToolsOpen && (
-                      <>
-                        <Link href="/shopper/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Star size={14} className="inline mr-2 text-indigo-500" /> Appraisals
-                        </Link>
-                        <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Target size={14} className="inline mr-2 text-indigo-500" /> Bounty Board
-                        </Link>
-                        <Link href="/shopper/guild-primer" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Star size={14} className="inline mr-2 text-indigo-500" /> Explorer's Guild
-                        </Link>
-                        <Link href="/coupons" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Ticket size={14} className="inline mr-2 text-indigo-500" /> Rewards
-                        </Link>
-                        <Link href="/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Trophy size={14} className="inline mr-2 text-indigo-500" /> Leaderboard
-                        </Link>
-                        <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Award size={14} className="inline mr-2 text-indigo-500" /> Achievements
-                        </Link>
-                        <Link href="/shopper/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation
-                        </Link>
-                        <Link href="/referral-dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Gift size={14} className="inline mr-2 text-indigo-500" /> Refer a Friend
-                        </Link>
-                        <Link href="/shopper/trades" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                          <ArrowLeftRight size={14} className="inline mr-2 text-indigo-400" /> Trades <span className="text-xs text-gray-400">(Soon)</span>
-                        </Link>
-                      </>
-                    )}
-
-                    {/* Hunt Pass standalone link */}
-                    <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
-                    </Link>
-
-                    {/* Hunt Exclusives Section: Collapsible */}
-                    <button
-                      onClick={() => setMobileDualRoleHuntPassOpen(!mobileDualRoleHuntPassOpen)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Award size={14} />
-                        <span>Hunt Exclusives</span>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform duration-200 ${mobileDualRoleHuntPassOpen ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-                    {mobileDualRoleHuntPassOpen && (
-                      <>
-                        <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
-                        </Link>
-                        <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
-                        </Link>
-                        <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Trophy size={14} className="inline mr-2 text-amber-500" /> League
-                        </Link>
-                      </>
-                    )}
+                    {renderMobileShopperNav()}
                   </>
                 )}
 
@@ -1418,191 +1303,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* Shopper-only nav (when not organizer) */}
-                <Link href="/shopper/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <LayoutDashboard size={14} className="inline mr-2 text-indigo-600" /> Shopper Dashboard
-                </Link>
-
-                {/* Shopping Cart Button */}
-                <button
-                  onClick={() => { openCart(); setMenuOpen(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors text-left"
-                >
-                  <ShoppingCart size={14} className="text-indigo-500" />
-                  <span>
-                    Shopping Cart
-                    {cartItems.length > 0 && (
-                      <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-indigo-600 dark:bg-indigo-500 rounded-full">
-                        {cartItems.length}
-                      </span>
-                    )}
-                  </span>
-                </button>
-
-                    {/* My Collection Section: Collapsible */}
-                <button
-                  onClick={() => setMobileExplorerOpen(!mobileExplorerOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Heart size={14} />
-                    <span>My Collection</span>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform duration-200 ${mobileExplorerOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {mobileExplorerOpen && (
-                  <>
-                    <Link href="/shopper/wishlist" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Bookmark size={14} className="inline mr-2 text-indigo-500" /> Wishlist
-                    </Link>
-                    <Link href="/shopper/wishlist?tab=sellers" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Star size={14} className="inline mr-2 text-indigo-500" /> Following
-                    </Link>
-                    <Link href="/shopper/bids" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Gavel size={14} className="inline mr-2 text-indigo-500" /> My Bids
-                    </Link>
-                    <Link href="/shopper/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Clock size={14} className="inline mr-2 text-indigo-500" /> My Holds
-                    </Link>
-                    <Link href="/shopper/history" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Package size={14} className="inline mr-2 text-indigo-500" /> My History
-                    </Link>
-                  </>
-                )}
-
-                    {/* Explore Section: Collapsible */}
-                <button
-                  onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Compass size={14} />
-                    <span>Explore</span>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform duration-200 ${mobileProToolsOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {mobileProToolsOpen && (
-                  <>
-                    <Link href="/map" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Map size={14} className="inline mr-2 text-indigo-500" /> Map
-                    </Link>
-                    <Link href="/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Calendar size={14} className="inline mr-2 text-indigo-500" /> Calendar
-                    </Link>
-                    <Link href="/feed" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Zap size={14} className="inline mr-2 text-indigo-500" /> Feed
-                    </Link>
-                    <Link href="/inspiration" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Lightbulb size={14} className="inline mr-2 text-indigo-500" /> Inspiration
-                    </Link>
-                    <Link href="/trending" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <TrendingUp size={14} className="inline mr-2 text-indigo-500" /> Trending
-                    </Link>
-                    <Link href="/clearance" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Tag size={14} className="inline mr-2 text-indigo-500" /> Clearance
-                    </Link>
-                    <Link href="/trails" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Map size={14} className="inline mr-2 text-indigo-500" /> Treasure Trails
-                    </Link>
-                    <Link href="/shopper/explorer-profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Profile
-                    </Link>
-                    <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts
-                    </Link>
-                    <Link href="/shopper/curio" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Sparkles size={14} className="inline mr-2 text-indigo-500" /> Curio
-                    </Link>
-                    <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties
-                    </Link>
-                  </>
-                )}
-
-                    {/* Connect Section: Collapsible */}
-                <button
-                  onClick={() => setMobileShopperCollectionOpen(!mobileShopperCollectionOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Share2 size={14} />
-                    <span>Connect</span>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform duration-200 ${mobileShopperCollectionOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {mobileShopperCollectionOpen && (
-                  <>
-                    <Link href="/shopper/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Star size={14} className="inline mr-2 text-indigo-500" /> Appraisals
-                    </Link>
-                    <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Target size={14} className="inline mr-2 text-indigo-500" /> Bounty Board
-                    </Link>
-                    <Link href="/shopper/guild-primer" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Star size={14} className="inline mr-2 text-indigo-500" /> Explorer's Guild
-                    </Link>
-                    <Link href="/coupons" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Ticket size={14} className="inline mr-2 text-indigo-500" /> Rewards
-                    </Link>
-                    <Link href="/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Trophy size={14} className="inline mr-2 text-indigo-500" /> Leaderboard
-                    </Link>
-                    <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Award size={14} className="inline mr-2 text-indigo-500" /> Achievements
-                    </Link>
-                    <Link href="/shopper/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation
-                    </Link>
-                    <Link href="/referral-dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Gift size={14} className="inline mr-2 text-indigo-500" /> Refer a Friend
-                    </Link>
-                    <Link href="/shopper/trades" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <ArrowLeftRight size={14} className="inline mr-2 text-indigo-400" /> Trades <span className="text-xs text-gray-400">(Soon)</span>
-                    </Link>
-                  </>
-                )}
-
-                {/* Hunt Pass standalone link */}
-                <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
-                </Link>
-
-                    {/* Hunt Exclusives Section: Collapsible */}
-                <button
-                  onClick={() => setMobileHuntPassOpen(!mobileHuntPassOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Award size={14} />
-                    <span>Hunt Exclusives</span>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform duration-200 ${mobileHuntPassOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {mobileHuntPassOpen && (
-                  <>
-                    <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
-                    </Link>
-                    <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
-                    </Link>
-                    <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Trophy size={14} className="inline mr-2 text-amber-500" /> League
-                    </Link>
-                  </>
-                )}
+                {/* Shopper-only nav: same renderer as the dual-role branch */}
+                {renderMobileShopperNav()}
               </>
             ) : (
               authLinks

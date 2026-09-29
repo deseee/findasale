@@ -46,9 +46,11 @@ export async function runMarkdownRetagAlert(): Promise<{ organizers: number; not
     try {
       const organizer = await prisma.organizer.findUnique({
         where: { id: g.organizerId },
-        select: { userId: true },
+        select: { userId: true, subscriptionTier: true },
       });
       if (!organizer?.userId) continue;
+      // Markdown Re-tag List is a PRO feature (page + endpoints are gated), so do not email a link to a wall.
+      if ((organizer.subscriptionTier ?? 'SIMPLE') === 'SIMPLE') continue;
 
       const [items, ctx] = await Promise.all([
         prisma.item.findMany({

@@ -24,6 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
+import TierGate from '../../components/TierGate';
 
 interface RetagQueueItem {
   id: string;
@@ -168,6 +169,7 @@ const MarkdownRetagPage: React.FC = () => {
         <title>Markdown Re-tag List - FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Markdown Re-tag List" description="See every item your automatic markdowns repriced, with the exact sticker percent to put on it. Included with PRO.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -408,6 +410,7 @@ const MarkdownRetagPage: React.FC = () => {
           </>)}
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

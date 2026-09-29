@@ -3,7 +3,8 @@
  *
  * Feature #54: Organizer appraisal management (submit requests, view community feedback)
  * Route: /organizer/appraisals
- * Tier gating: Community Feed (browse) accessible to all. Submit Request (create) requires PRO.
+ * Tier gating: none. Browsing, responding and submitting are open to every tier; requesting costs 250+ XP
+ * (backend createAppraisalRequest, decision S443). Not a Pro Tool.
  */
 
 import React, { useState, useEffect } from 'react';
