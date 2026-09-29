@@ -41,7 +41,6 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { requireOrganizer } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { geocodeCityStateWithStatus, type GeocodeCityStateResult } from '../services/geocodingService'; // ADR-091: radius-aware city pages
-import { requireTier } from '../middleware/requireTier'; // Feature #91: PRO tier gate
 import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404: OG Buyer count
 
 const router = Router();
@@ -609,7 +608,11 @@ router.get('/:id/status', getSaleStatus); // Feature #14: Real-time status (publ
 router.get('/:id/calendar.ics', generateIcal); // BUG FIX #184: public, no auth needed — must be before /:id
 router.get('/:saleId/labels', authenticate, getSaleLabels); // W2: all-items label PDF
 router.get('/:id/markdown-config', authenticate, getMarkdownConfig);
-router.put('/:id/markdown-config', authenticate, requireTier('PRO'), updateMarkdownConfig); // Feature #91: Auto-Markdown
+// Feature #91: Auto-Markdown. 2026-09-29 (Patrick D3): the default Day-2 (50%) / Day-3+ (75%) schedule is a
+// FREE-TIER feature, so there is no route-level tier gate any more. The handler only accepts
+// markdownEnabled + markdownFloor (nothing custom), so nothing here needs PRO; PRO-only automation
+// (markdown cycles, marketplace price propagation) lives in routes/markdownCycles.ts.
+router.put('/:id/markdown-config', authenticate, updateMarkdownConfig);
 
 router.post('/', authenticate, createSale);
 router.post('/generate-description', authenticate, generateSaleDescriptionHandler); // AI sale description generator

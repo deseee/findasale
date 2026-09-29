@@ -1994,6 +1994,13 @@ export const getCities = async (req: Request, res: Response) => {
 };
 
 // Feature #91: Auto-Markdown (Smart Clearance)
+// 2026-09-29 (Patrick D3): enabling/disabling the default Day-2 (50%) / Day-3+ (75%) schedule is
+// available to EVERY tier, and any tier can always turn it off. This handler accepts only
+// `markdownEnabled` and `markdownFloor` (an optional minimum price, not a custom percentage or
+// step), so there is no PRO-only option to enforce here; anything beyond the default schedule
+// (custom steps, cycles) is created through /api/markdown-cycles, which stays PRO. If a custom
+// percentage/step option is ever added to this endpoint, gate it on the organizer's tier in
+// this handler (utils/tierAccess.ts organizerHasTier).
 export const updateMarkdownConfig = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';

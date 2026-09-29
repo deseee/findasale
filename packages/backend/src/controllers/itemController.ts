@@ -48,6 +48,7 @@ import { withdrawReverbListingIfExists } from '../services/marketplace/reverbCon
 import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
 import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
 import { computeChannelStatusForItems, ChannelStatusItemInput, ExtensionPlatformsUsed, PublishedExtensionPlatformsByItemId } from '../services/itemChannelStatusService'; // Add Items collapsed-row multi-channel status (2026-09-14), see ADR-2026-09-14-add-items-multichannel-status-aggregation.md
+import type { ActingOrganizerRequest } from '../utils/actingOrganizer'; // 2026-09-29: Markdown Re-tag handlers read req.actingOrganizer (owner or TEAMS staff)
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -5577,15 +5578,12 @@ export const getLiveShippingRateCheckHandler = async (req: AuthRequest, res: Res
 // organizer-resolution/ownership pattern above.
 export const getMarkdownRetagQueue = async (req: AuthRequest, res: Response) => {
   try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!req.user || !hasOrganizerRole) {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    // 2026-09-29: organizer resolved by requireRetagAccess (owner at any tier, or TEAMS staff with permission).
+    const acting = (req as ActingOrganizerRequest).actingOrganizer;
+    if (!acting) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.', code: 'NOT_ORGANIZER' });
     }
-
-    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
-    }
+    const organizer = { id: acting.organizerId };
 
     const { page = '1', limit = '50' } = req.query;
     const pageNum = Math.max(1, parseInt(page as string) || 1);
@@ -5653,15 +5651,12 @@ export const getMarkdownRetagQueue = async (req: AuthRequest, res: Response) => 
 // POST /api/items/:id/mark-retagged — single-item "I physically re-tagged this" action.
 export const markItemRetagged = async (req: AuthRequest, res: Response) => {
   try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!req.user || !hasOrganizerRole) {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    // 2026-09-29: organizer resolved by requireRetagAccess (owner at any tier, or TEAMS staff with permission).
+    const acting = (req as ActingOrganizerRequest).actingOrganizer;
+    if (!acting) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.', code: 'NOT_ORGANIZER' });
     }
-
-    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
-    }
+    const organizer = { id: acting.organizerId };
 
     const { id } = req.params;
     const item = await prisma.item.findUnique({ where: { id }, select: { id: true, organizerId: true } });
@@ -5687,15 +5682,12 @@ const MARK_RETAGGED_BULK_MAX = 200;
 
 export const markItemsRetaggedBulk = async (req: AuthRequest, res: Response) => {
   try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!req.user || !hasOrganizerRole) {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    // 2026-09-29: organizer resolved by requireRetagAccess (owner at any tier, or TEAMS staff with permission).
+    const acting = (req as ActingOrganizerRequest).actingOrganizer;
+    if (!acting) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.', code: 'NOT_ORGANIZER' });
     }
-
-    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
-    }
+    const organizer = { id: acting.organizerId };
 
     const { itemIds } = req.body as { itemIds?: unknown };
     if (!Array.isArray(itemIds) || itemIds.length === 0) {
@@ -5730,15 +5722,12 @@ export const markItemsRetaggedBulk = async (req: AuthRequest, res: Response) => 
 // "what is on sale right now" list. Grouped/sorted by sticker % (deepest first). Capped at 2000.
 export const getMarkdownActiveList = async (req: AuthRequest, res: Response) => {
   try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!req.user || !hasOrganizerRole) {
-      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    // 2026-09-29: organizer resolved by requireRetagAccess (owner at any tier, or TEAMS staff with permission).
+    const acting = (req as ActingOrganizerRequest).actingOrganizer;
+    if (!acting) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.', code: 'NOT_ORGANIZER' });
     }
-
-    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
-    }
+    const organizer = { id: acting.organizerId };
 
     const rows = await prisma.item.findMany({
       where: {

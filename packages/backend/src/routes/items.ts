@@ -53,6 +53,7 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { prisma } from '../lib/prisma';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
+import { requireRetagAccess } from '../utils/actingOrganizer'; // 2026-09-29: Markdown Re-tag routes serve owner (any tier) + TEAMS staff
 import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account age gate
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
 import { itemEndpointLimiter, bulkItemsLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting, P0-S3: Bulk operations rate limiting
@@ -926,10 +927,14 @@ router.get('/:id/edit', authenticate, getItemForEdit);
 // GET '/:id' route immediately below, or Express would treat "markdown-retag-queue" as
 // an :id value and shadow this route (same ordering hazard the /:id/label comment above
 // already flags for this file).
-router.get('/markdown-retag-queue', authenticate, requireTier('PRO'), getMarkdownRetagQueue);
-router.get('/markdown-active', authenticate, requireTier('PRO'), getMarkdownActiveList);
-router.post('/mark-retagged/bulk', authenticate, requireTier('PRO'), markItemsRetaggedBulk);
-router.post('/:id/mark-retagged', authenticate, requireTier('PRO'), markItemRetagged);
+// 2026-09-29 (Patrick D3/D6): the Re-tag list is FREE for the organizer at every tier (the free-tier
+// 50%/75% markdownCron feeds it). Staff (team members) may use it only while the owner is on TEAMS and
+// only with the mark_retagged permission (view_inventory also lets them read the two lists).
+// requireRetagAccess resolves the acting organizer and attaches req.actingOrganizer.
+router.get('/markdown-retag-queue', authenticate, requireRetagAccess('view'), getMarkdownRetagQueue);
+router.get('/markdown-active', authenticate, requireRetagAccess('view'), getMarkdownActiveList);
+router.post('/mark-retagged/bulk', authenticate, requireRetagAccess('mark'), markItemsRetaggedBulk);
+router.post('/:id/mark-retagged', authenticate, requireRetagAccess('mark'), markItemRetagged);
 
 router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);

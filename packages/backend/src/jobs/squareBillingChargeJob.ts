@@ -30,6 +30,7 @@ import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { createNotification } from '../lib/notificationService';
+import { notifyAutoMarkdownsPaused } from '../lib/syncTier'; // 2026-09-29: one-time "auto-markdown cycles paused" notice on downgrade
 import {
   SQUARE_TIER_PRICE_CENTS,
   HUNT_PASS_PRICE_CENTS,
@@ -70,6 +71,21 @@ async function downgradeOrganizerToSimple(organizerId: string, statusLabel: stri
   // re-upgrade later can reuse the card on file instead of forcing re-entry. Only the
   // active-period/dunning state is cleared. tokenVersion IS incremented here (a real tier
   // change, unlike a routine renewal success) to invalidate any stale tier claim in a live JWT.
+  //
+  // 2026-09-29 (Patrick D1): read the tier being left first, so a real PRO/TEAMS -> SIMPLE drop
+  // sends the one-time "auto-markdown cycles paused" notice after the downgrade succeeds. Nothing
+  // about MarkdownCycle rows or discounted prices is touched here (paid automation just pauses).
+  let previousTier: string | null = null;
+  try {
+    const before = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true },
+    });
+    previousTier = before?.subscriptionTier ?? null;
+  } catch (lookupErr) {
+    console.warn(`[squareBillingChargeJob] could not read previous tier for organizer ${organizerId}:`, lookupErr);
+  }
+
   const organizer = await prisma.organizer.update({
     where: { id: organizerId },
     data: {
@@ -90,6 +106,12 @@ async function downgradeOrganizerToSimple(organizerId: string, statusLabel: stri
       where: { userId: organizer.userId, role: 'ORGANIZER' },
       data: { subscriptionTier: 'SIMPLE', subscriptionStatus: null, tierLapsedAt: new Date() },
     });
+  }
+
+  // Best-effort: notifyAutoMarkdownsPaused swallows all errors and only sends when the organizer
+  // has an active MarkdownCycle, so it can never fail this downgrade.
+  if (previousTier === 'PRO' || previousTier === 'TEAMS') {
+    await notifyAutoMarkdownsPaused(organizerId);
   }
 }
 

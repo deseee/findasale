@@ -119,6 +119,25 @@ function extractImgAltRatio(html: string): number {
   return withAlt.length / allImgs.length;
 }
 
+// --- Host / redirect safety ---
+
+// 2026-09-29 security fix: the old check was hostname.endsWith('finda.sale'), which also matched
+// look-alike hosts such as evilfinda.sale, and fetch() followed redirects to anywhere. Now the host
+// must be exactly finda.sale or a subdomain (.finda.sale), no credentials or custom port, and every
+// redirect hop is validated against the same rule.
+const MAX_REDIRECTS = 3;
+
+function isAllowedAuditHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === 'finda.sale' || host.endsWith('.finda.sale');
+}
+
+function isAllowedAuditUrl(u: URL): boolean {
+  if (u.protocol !== 'https:') return false;
+  if (u.username || u.password || u.port) return false;
+  return isAllowedAuditHost(u.hostname);
+}
+
 // --- Route ---
 
 router.get('/ai-score', async (req: Request, res: Response): Promise<void> => {
@@ -143,7 +162,7 @@ router.get('/ai-score', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  if (!parsed.hostname.endsWith('finda.sale')) {
+  if (!isAllowedAuditUrl(parsed)) {
     res.status(400).json({ score: 0, error: 'URL must be a finda.sale domain' });
     return;
   }
@@ -153,20 +172,44 @@ router.get('/ai-score', async (req: Request, res: Response): Promise<void> => {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
-    const fetchRes = await fetch(url, {
-      signal: controller.signal,
-      headers: {
+    try {
+      const fetchHeaders = {
         'User-Agent': 'Mozilla/5.0 compatible FindASale-Auditor/1.0',
         'Accept': 'text/html,application/xhtml+xml',
-      },
-    });
-    clearTimeout(timeout);
+      };
+      // Redirects are handled by hand so each hop can be checked against the finda.sale rule.
+      let currentUrl = parsed;
+      let fetchRes = await fetch(currentUrl.toString(), {
+        signal: controller.signal,
+        redirect: 'manual',
+        headers: fetchHeaders,
+      });
+      let hops = 0;
+      while (fetchRes.status >= 300 && fetchRes.status < 400 && fetchRes.headers.get('location')) {
+        if (hops >= MAX_REDIRECTS) {
+          throw new Error('Too many redirects');
+        }
+        const next = new URL(fetchRes.headers.get('location') as string, currentUrl);
+        if (!isAllowedAuditUrl(next)) {
+          throw new Error('Redirected outside finda.sale');
+        }
+        currentUrl = next;
+        hops += 1;
+        fetchRes = await fetch(currentUrl.toString(), {
+          signal: controller.signal,
+          redirect: 'manual',
+          headers: fetchHeaders,
+        });
+      }
 
-    if (!fetchRes.ok) {
-      res.status(200).json({ score: 0, error: `Page returned HTTP ${fetchRes.status}` } as AiScoreError);
-      return;
+      if (!fetchRes.ok) {
+        res.status(200).json({ score: 0, error: `Page returned HTTP ${fetchRes.status}` } as AiScoreError);
+        return;
+      }
+      html = await fetchRes.text();
+    } finally {
+      clearTimeout(timeout);
     }
-    html = await fetchRes.text();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(200).json({ score: 0, error: `Failed to fetch URL: ${message}` } as AiScoreError);

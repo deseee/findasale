@@ -9,7 +9,7 @@ import {
   listSourcesController,
   updateSourceController,
 } from '../controllers/pricingController';
-import { authenticate, requireOrganizer } from '../middleware/auth';
+import { authenticate, requireOrganizer, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -20,6 +20,8 @@ router.post('/estimate', authenticate, requireOrganizer, estimatePriceController
 router.get('/sources', authenticate, requireOrganizer, listSourcesController);
 
 // PATCH /api/pricing/sources/:sourceId — Toggle source on/off
-router.patch('/sources/:sourceId', authenticate, requireOrganizer, updateSourceController);
+// 2026-09-29 security fix: this updates a GLOBAL pricingSourceConfig row (affects every organizer),
+// so it is admin-only. It used to be open to any organizer. No frontend caller exists.
+router.patch('/sources/:sourceId', authenticate, requireAdmin, updateSourceController);
 
 export default router;

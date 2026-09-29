@@ -67,9 +67,18 @@ export function scheduleMarkdownCycleCron(): void {
   cron.schedule('8 3 * * *', cronGuard({ jobName: 'markdownCycleCron' }, async () => { // staggered off huntPassExpiryCron's 0 3 * * * 2026-08-04 cost-optimization batch
     const now = new Date();
 
-    // Find all active markdown cycles, with their steps ordered ascending
+    // Find all active markdown cycles, with their steps ordered ascending.
+    // 2026-09-29 (Patrick D1/D2): markdown CYCLES are a paid feature, so only cycles whose organizer
+    // is currently PRO/TEAMS run (precedent: ebayListingQueueCron.ts). An organizer whose tier has
+    // dropped to SIMPLE keeps their cycle rows and already-discounted prices untouched; the cycle
+    // simply stops advancing and nothing is auto-restored. There is deliberately no grace-period
+    // clause: organizers keep paid features until the subscription actually runs out, at which
+    // point the tier column itself is SIMPLE.
     const cycles = await prisma.markdownCycle.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        organizer: { subscriptionTier: { in: ['PRO', 'TEAMS'] } },
+      },
       include: {
         sale: { select: { id: true, organizerId: true, saleType: true, moveOutDate: true } },
         steps: { orderBy: { stepOrder: 'asc' } },

@@ -10,8 +10,9 @@
  * crons, so it also covers direct price corrections and never touches money-affecting code.
  *
  * Safety (May 2026 digest incident lessons): only organizers that actually have queued items are
- * contacted, one message per organizer per day, fused at MAX_RECIPIENTS, kill switch
- * MARKDOWN_RETAG_ALERT_ENABLED=false.
+ * contacted, one message per organizer per day, fused on the number of real recipients
+ * (default 25, MARKDOWN_RETAG_ALERT_MAX_RECIPIENTS), kill switch MARKDOWN_RETAG_ALERT_ENABLED=false.
+ * All tiers are alerted (Patrick D3, 2026-09-29): the free-tier markdownCron feeds the same list.
  */
 import cron from 'node-cron';
 import { prisma } from '../index';
@@ -19,7 +20,13 @@ import { cronGuard } from '../utils/cronGuard';
 import { createNotification } from '../lib/notificationService';
 import { loadStickerContext, resolveStickerPct } from '../utils/markdownSticker';
 
-const MAX_RECIPIENTS = 25;
+// Fuse on REAL recipients (organizers that will actually be contacted). Default 25; raise with
+// MARKDOWN_RETAG_ALERT_MAX_RECIPIENTS now that every tier is alerted (2026-09-29).
+const DEFAULT_MAX_RECIPIENTS = 25;
+function maxRecipients(): number {
+  const n = parseInt(process.env.MARKDOWN_RETAG_ALERT_MAX_RECIPIENTS ?? '', 10);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_RECIPIENTS;
+}
 
 export async function runMarkdownRetagAlert(): Promise<{ organizers: number; notified: number }> {
   const groups = await prisma.item.groupBy({
@@ -35,23 +42,36 @@ export async function runMarkdownRetagAlert(): Promise<{ organizers: number; not
   });
 
   if (groups.length === 0) return { organizers: 0, notified: 0 };
-  if (groups.length > MAX_RECIPIENTS) {
-    console.error(`[markdownRetagAlert] ${groups.length} organizers queued (> fuse ${MAX_RECIPIENTS}) -- aborting without sending`);
-    return { organizers: groups.length, notified: 0 };
+
+  // Resolve every queued organizer to its owner user BEFORE applying the fuse, so the fuse
+  // counts organizers that will really be contacted. (It used to count queued organizers that
+  // were then skipped.) 2026-09-29 (Patrick D3): the Re-tag list is free for every tier, so
+  // every organizer with queued items is alerted regardless of subscription tier. The alert goes
+  // to the organizer (owner) only; staff alerts are not in scope.
+  const queuedIds = groups.map((g) => g.organizerId).filter((id): id is string => !!id);
+  const organizerRows = await prisma.organizer.findMany({
+    where: { id: { in: queuedIds } },
+    select: { id: true, userId: true },
+  });
+  const userIdByOrganizer = new Map<string, string>();
+  for (const o of organizerRows) {
+    if (o.userId) userIdByOrganizer.set(o.id, o.userId);
+  }
+  const recipients = groups.filter((g) => g.organizerId && userIdByOrganizer.has(g.organizerId));
+
+  if (recipients.length === 0) return { organizers: 0, notified: 0 };
+  const fuse = maxRecipients();
+  if (recipients.length > fuse) {
+    console.error(`[markdownRetagAlert] ${recipients.length} recipients queued (> fuse ${fuse}) -- aborting without sending`);
+    return { organizers: recipients.length, notified: 0 };
   }
 
   let notified = 0;
-  for (const g of groups) {
+  for (const g of recipients) {
     if (!g.organizerId) continue;
+    const ownerUserId = userIdByOrganizer.get(g.organizerId);
+    if (!ownerUserId) continue;
     try {
-      const organizer = await prisma.organizer.findUnique({
-        where: { id: g.organizerId },
-        select: { userId: true, subscriptionTier: true },
-      });
-      if (!organizer?.userId) continue;
-      // Markdown Re-tag List is a PRO feature (page + endpoints are gated), so do not email a link to a wall.
-      if ((organizer.subscriptionTier ?? 'SIMPLE') === 'SIMPLE') continue;
-
       const [items, ctx] = await Promise.all([
         prisma.item.findMany({
           where: {
@@ -84,7 +104,7 @@ export async function runMarkdownRetagAlert(): Promise<{ organizers: number; not
       const total = items.length;
 
       await createNotification({
-        userId: organizer.userId,
+        userId: ownerUserId,
         type: 'MARKDOWN_RETAG',
         title: `${total} item${total === 1 ? '' : 's'} need a new price tag`,
         body: `${total} marked-down item${total === 1 ? ' is' : 's are'} still waiting on a shelf re-tag: ${breakdown}. Open the list, re-tag or sticker them, and tick them off.`,
@@ -97,7 +117,7 @@ export async function runMarkdownRetagAlert(): Promise<{ organizers: number; not
       console.error(`[markdownRetagAlert] failed for organizer ${g.organizerId}:`, err);
     }
   }
-  return { organizers: groups.length, notified };
+  return { organizers: recipients.length, notified };
 }
 
 export function scheduleMarkdownRetagAlertJob(): void {

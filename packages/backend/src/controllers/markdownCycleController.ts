@@ -73,8 +73,9 @@ export const listMarkdownCycles = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer profile not found' });
     }
 
-    // Tier check handled by requireTier('PRO') middleware in route registration
-    // (reads Organizer.subscriptionTier — consistent with auth/me and other controllers)
+    // No tier check (2026-09-29, Patrick D1): any organizer may list their own cycles, including
+    // after a downgrade, so they can see what is paused. Ownership is enforced by the organizerId
+    // filter below. Creating/updating cycles stays PRO (requireTier('PRO') in routes/markdownCycles.ts).
 
     // List all markdown cycles for this organizer, with steps ordered ascending
     const cycles = await prisma.markdownCycle.findMany({
@@ -116,7 +117,7 @@ export const createMarkdownCycle = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer profile not found' });
     }
 
-    // Tier check handled by requireTier('PRO') middleware in route registration
+    // Tier check handled by requireTier('PRO') on POST in routes/markdownCycles.ts
 
     // If saleId is provided, verify organizer owns the sale
     if (saleId) {
@@ -169,6 +170,9 @@ export const createMarkdownCycle = async (req: AuthRequest, res: Response) => {
 };
 
 // PUT /api/markdown-cycles/:id — update a markdown cycle
+// PRO required to change steps or turn a cycle ON (requireProUnlessTurningOff in
+// routes/markdownCycles.ts). A body that ONLY sets isActive:false is allowed for every tier
+// (Patrick D1: any tier may always turn automation OFF); DELETE is open to every tier as well.
 export const updateMarkdownCycle = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -250,6 +254,7 @@ export const updateMarkdownCycle = async (req: AuthRequest, res: Response) => {
 };
 
 // DELETE /api/markdown-cycles/:id — delete a markdown cycle
+// Any tier (authenticate + ownership only, 2026-09-29): turning automation off must never be paywalled.
 export const deleteMarkdownCycle = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {

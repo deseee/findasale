@@ -17,6 +17,15 @@ import { applyCharmPricing } from '../utils/charmPricing';
  * re-evaluated and advanced to Day-3+ instead of being excluded forever (fixed 2026-09-27, see
  * ADR markdown-tier-mercari-pricing-renewal-coordination-2026-09-27.md).
  *
+ * FREE-TIER FEATURE (Patrick decision D3, 2026-09-29): this Day-2/Day-3 schedule runs for ALL
+ * subscription tiers (it is the informal industry standard for 2-3 day sales). There is
+ * intentionally no organizer-tier filter here. Only markdown CYCLES (markdownCycleCron.ts) and
+ * marketplace price propagation are PRO/TEAMS.
+ *
+ * Known overlap (not fixed here): if a sale is covered by both this cron and an active PRO
+ * MarkdownCycle, both can discount the same item (this cron works off the current price, the
+ * cycle off priceBeforeMarkdown), so the price can be cut twice.
+ *
  * Runs every 5 minutes.
  */
 export function scheduleMarkdownCron(): void {
@@ -79,6 +88,15 @@ export function scheduleMarkdownCron(): void {
         const itemsToMarkdown = await prisma.item.findMany({
           where: {
             saleId: sale.id,
+            // 2026-09-29 (Patrick D3 + bug fix): only live, unsold, undeleted items are discounted.
+            // This query used to have no status/deletedAt filter, so SOLD, DONATED, GRACE_LOCKED and
+            // soft-deleted items were repriced too. Mirrors markdownCycleCron (status AVAILABLE).
+            // RESERVED/INVOICE_ISSUED are deliberately excluded: those are held for a specific buyer at
+            // an agreed price, and repricing under a hold would change what that buyer owes. An item
+            // that returns to AVAILABLE is picked up on the next 5-minute run (markdownTierApplied is
+            // still below the sale's tier), so nothing is skipped permanently.
+            status: 'AVAILABLE',
+            deletedAt: null,
             listingType: { not: 'AUCTION' },
             markdownTierApplied: { lt: targetTier },
             price: { gt: 0 }, // Only items with a price
