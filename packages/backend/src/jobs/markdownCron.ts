@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
+import { applyCharmPricing } from '../utils/charmPricing';
 
 /**
  * Auto-apply markdown to items based on sale age.
@@ -94,8 +95,11 @@ export function scheduleMarkdownCron(): void {
           // ADR-128 follow-up (2026-09-19): add eBay's own $0.99 minimum-price floor alongside
           // the organizer's own markdownFloor -- an organizer-set floor of $0 (or none) used to
           // let this cron compute a sub-$0.99 price that eBay silently rejects forever after.
+          // 2026-09-29 (Patrick decision): every markdown lands on the nearest keystone
+          // (.49/.99) via applyCharmPricing. The organizer's own markdownFloor is an explicit
+          // organizer-set price and is honored as-is (never re-rounded).
           const newPrice = Math.max(
-            originalPrice * (1 - discount),
+            applyCharmPricing(originalPrice * (1 - discount)),
             sale.markdownFloor ?? 0,
             0.99
           );

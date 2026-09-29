@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
 import { notifyPriceDropAlerts } from '../services/priceDropService';
+import { applyCharmPricing } from '../utils/charmPricing';
 import {
   classifyPropagationFailure,
   resolveSyncStateAfterFailure,
@@ -179,7 +180,10 @@ export function scheduleMarkdownCycleCron(): void {
             const effectivePct = Math.min(100, targetStep.pctOff * dormDashMultiplier);
             // ADR-128 follow-up (2026-09-19): eBay rejects any listing price below $0.99
             // (errorId 25016) -- never push the organizer's price below eBay's own minimum.
-            const newPrice = Math.max(0.99, originalPrice * (1 - effectivePct / 100));
+            // 2026-09-29 (Patrick decision): markdown prices land on the nearest keystone (.49/.99).
+            // originalPrice may itself be an organizer's manual override -- that stays the true
+            // price; only the computed markdown result is rounded.
+            const newPrice = Math.max(0.99, applyCharmPricing(originalPrice * (1 - effectivePct / 100)));
 
             const currentPrice = item.price!;
             const isNoopPriceMatch = Math.abs(currentPrice - newPrice) < 0.005;
