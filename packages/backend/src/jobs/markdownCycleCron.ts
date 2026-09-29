@@ -9,6 +9,36 @@ import {
   propagateMarkdownPriceToMarketplaces,
 } from '../services/markdownPricePropagationService';
 
+// Manual reschedule (2026-09-28): Patrick rejected the freshly-added 30%-at-90-days step for
+// these specific items -- they're re-anchored to count their markdown age from TODAY instead of
+// their real Item.createdAt, so the existing 10%/20%/30% step schedule naturally lands on 20%
+// ~30 days from today and 30% ~60 days from today, through this SAME cron -- no separate
+// mechanism, no scheduled task, no manual re-visit needed. Full rationale + item list:
+// claude_docs/STATE.md, 2026-09-28 "Markdown cycle re-anchored to today" entry. Safe to delete
+// this block (and the matching Item.excludeFromMarkdown=false flip already applied in prod) once
+// these items have genuinely progressed through step 3 on their own.
+const MANUAL_RESCHEDULE_2026_09_28_RESET_DATE = new Date('2026-09-28T00:00:00.000Z');
+const MANUAL_RESCHEDULE_2026_09_28 = new Set<string>([
+  'cmo3etpx2005hjqsuvzlkt8qz', 'cmqty043y000d10d709l1bvmh', 'cmo3eu1fs0071jqsuty6i4ylj',
+  'cmrqqed8b000o65c9j2tc3zvm', 'cmrny4bx1001qzziuj4px4uge', 'cmrl2jchz0040toh5ueiwwe0x',
+  'cmp5t9ti70011aez9qhibef89', 'cmraxz51l000j4oj3i4f2phda', 'cmrw8nhz5000fttrxfrdmph9n',
+  'cmrxod7ke07tx964qb11j1g8k', 'cmo3et5xq002tjqsuysekqdgn', 'cmrxrtogd0040c635xs353n4t',
+  'cmrw9y9y00057ttrx70bmy0yb', 'cmrqoo320003nl0suipskoaaq', 'cmo3et2pb002djqsuyta1cslc',
+  'cmqquxqzt03lzvg73obk6zjl4', 'cmrw9x5cf004tttrxl5fcseek', 'cmo3esx0d001ljqsu04f1sqce',
+  'cmrw99uuj001httrx6pq1x54y', 'cmnzf780a0009pf19ru5qppqn', 'cmrqomljh0036l0sun11zqpme',
+  'cmrz4zcic00165u6ij51u9jw5', 'cmo3etg510045jqsuonjetsxy', 'cmrqpqatn005ul0sum3ij77kx',
+  'cmrwfr4fx00cnttrxaoapddis', 'cmrw99p6k001bttrx748zp8gj', 'cmrpc4cmi000dp898frzfig5d',
+  'cmpbizn7z000j3lq1rjrvn5js', 'cmrw9bgzt0029ttrx1var3b5l', 'cmrxoc33307tg964qy9z1svk7',
+  'cmo3eu8nx0081jqsu6sllmvrz', 'cmrxva48p0018yfdtyiokw6by', 'cmo3espav000ljqsu3bnov2y1',
+  'cmrquyyx1000dgf1d44docskn', 'cmqbb252i000i60qq7eilco9z', 'cmo3et6qm002xjqsuthjk52y1',
+  'cmrayoh6l000p4oj3bqi8i7ml', 'cmp5s7yws000jaez9syc3uibr', 'cmrayp7vw000x4oj3qyycn0j3',
+  'cmrw9af83001zttrxjzaj1gfx', 'cmo3eu4ku007hjqsun9d5whez', 'cmo3etk7l004pjqsuzxte6o6c',
+  'cmo3etdqw003tjqsuafrmio8v', 'cmo3et3h3002hjqsunq585y4q', 'cmrquadyw001i1ai5knbo035l',
+  'cmo3eths3004djqsuy581midm', 'cmrqv767s000ygf1dm4wsve8n', 'cmrxr9kjp001fc6356wrji9fi',
+  'cmr10n7gn001q9s0og8f6qgv8', 'cmo3eu67c007pjqsu72da045s', 'cmrazyk1r001b4oj34vx5nvyk',
+  'cmp5prjex000gaez9d5e9fjic', 'cmqquygw903m3vg730xi5sbov', 'cmr3xian9000da80uqhepuyad',
+]);
+
 /**
  * Feature: Automatic Markdown Cycles (PRO Tier)
  * Apply time-based automatic price reductions based on organizer-defined markdown cycles.
@@ -117,7 +147,11 @@ export function scheduleMarkdownCycleCron(): void {
           });
 
           for (const item of candidateItems) {
-            const daysSinceCreated = (now.getTime() - new Date(item.createdAt).getTime()) / (24 * 60 * 60 * 1000);
+            // See MANUAL_RESCHEDULE_2026_09_28 above -- everything else about this loop is unchanged.
+            const effectiveStartDate = MANUAL_RESCHEDULE_2026_09_28.has(item.id)
+              ? MANUAL_RESCHEDULE_2026_09_28_RESET_DATE
+              : new Date(item.createdAt);
+            const daysSinceCreated = (now.getTime() - effectiveStartDate.getTime()) / (24 * 60 * 60 * 1000);
 
             // Find the LAST (highest stepOrder) step whose threshold has been reached.
             let targetStep: (typeof cycle.steps)[number] | null = null;
