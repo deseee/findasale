@@ -339,7 +339,7 @@ const IntakeAppointmentsPage: React.FC = () => {
           onClick={() => setShowAddModal(false)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
@@ -447,7 +447,7 @@ const IntakeAppointmentsPage: React.FC = () => {
           onClick={() => setRescheduleTarget(null)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold text-warm-900 dark:text-white mb-4">

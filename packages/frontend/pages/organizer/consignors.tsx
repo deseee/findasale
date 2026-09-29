@@ -901,7 +901,7 @@ const ConsignorsPage: React.FC = () => {
           onClick={handleCloseModal}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold text-warm-900 dark:text-white mb-4">
@@ -1140,7 +1140,7 @@ const ConsignorsPage: React.FC = () => {
           onClick={() => setRapidCaptureTarget(null)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
@@ -1339,7 +1339,7 @@ const ConsignorsPage: React.FC = () => {
           onClick={handleCloseDecline}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold text-warm-900 dark:text-white mb-1">
@@ -1395,7 +1395,7 @@ const ConsignorsPage: React.FC = () => {
           once right after a new consignor is created -- see the markdownNotice state above. */}
       {markdownNotice && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 max-w-md w-full">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">
               Markdown Policy
             </h2>

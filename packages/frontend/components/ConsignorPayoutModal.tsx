@@ -98,7 +98,7 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
       ariaLabelledBy="consignor-payout-modal-title"
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <h2 id="consignor-payout-modal-title" className="text-xl font-bold text-warm-900 dark:text-white mb-1">
