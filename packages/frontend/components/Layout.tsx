@@ -1463,6 +1463,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <ul className="space-y-2">
                 <li><Link href="/terms" className="text-warm-400 hover:text-white">Terms of Service</Link></li>
                 <li><Link href="/privacy" className="text-warm-400 hover:text-white">Privacy Policy</Link></li>
+                <li><Link href="/return-policy" className="text-warm-400 hover:text-white">Return &amp; Refund Policy</Link></li>
+                <li><Link href="/do-not-sell" className="text-warm-400 hover:text-white">Do Not Sell My Info</Link></li>
               </ul>
             </div>
           </div>

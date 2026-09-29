@@ -10,6 +10,7 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useToast } from '../../components/ToastContext';
 import OrganizerSaleCard from '../../components/OrganizerSaleCard';
 import Head from 'next/head';
@@ -41,6 +42,7 @@ interface Sale {
 const OrganizerSalesPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { canAccess } = useOrganizerTier();
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const [pinningStates, setPinningStates] = useState<Record<string, boolean>>({});
@@ -227,6 +229,22 @@ const OrganizerSalesPage = () => {
                       className="flex-1 text-center bg-amber-100 dark:bg-amber-900 hover:bg-amber-200 dark:hover:bg-amber-800 text-amber-900 dark:text-amber-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
                     >
                       Items
+                    </Link>
+                    {canAccess('PRO') && (
+                      <Link
+                        href={`/organizer/sales/${sale.id}/analytics`}
+                        className="flex-1 text-center bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                        title="Sales, revenue and shopper activity for this sale"
+                      >
+                        Analytics
+                      </Link>
+                    )}
+                    <Link
+                      href={`/organizer/trails/${sale.id}`}
+                      className="flex-1 text-center bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                      title="Build a Treasure Trail that includes this sale"
+                    >
+                      Trail
                     </Link>
                     {sale.status === 'ENDED' && (
                       <Link
