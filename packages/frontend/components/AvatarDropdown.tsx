@@ -12,24 +12,16 @@ import {
   ChevronRight,
   Store,
   Zap,
-  List,
-  PlusCircle,
   Calendar,
   Network,
   Users,
-  Wrench,
   Bookmark,
   ShoppingCart,
-  Printer,
   Map,
-  QrCode,
   BarChart2,
-  DollarSign,
   UserPlus,
   Sparkles,
-
   TrendingUp,
-  Webhook,
   Tag,
   Heart,
   Star,
@@ -46,27 +38,19 @@ import {
   ShieldAlert,
   LayoutDashboard,
   Search,
-  MapPin,
   Lightbulb,
   MessageSquare,
   Share2,
   Camera,
   Activity,
-
-  BookOpen,
-
-  Image,
-  Wallet,
   UserCircle,
   Settings,
   Gift,
-
   Smartphone,
-  CheckCircle,
-  Wifi,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
-import { teamsNavForSurface, proNavForSurface } from '../lib/organizerNav';
+import { teamsNavForSurface, proNavForSurface, coreNavGroupForSurface } from '../lib/organizerNav';
+import type { NavGroup } from '../lib/organizerNav';
 import { useShopperCart } from '../hooks/useShopperCart';
 import useXpProfile from '../hooks/useXpProfile';
 import { useCart } from '../context/CartContext';
@@ -159,6 +143,23 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
     setIsOpen(false);
   };
 
+
+  // Organizer nav rows render from lib/organizerNav.ts (CORE_NAV_ENTRIES), shared with the sidebar and mobile drawer.
+  const coreLinks = (group: NavGroup) =>
+    coreNavGroupForSurface('avatarDropdown', group)
+      .filter((e) => canAccess(e.requiredTier))
+      .map(({ id, label, href, icon: Icon, title }) => (
+        <Link
+          key={id}
+          href={href}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+          onClick={() => setIsOpen(false)}
+          title={title}
+        >
+          <Icon size={16} className="text-amber-500" />
+          <span>{label}</span>
+        </Link>
+      ));
 
   const isOrganizer = user?.roles?.includes('ORGANIZER');
   const isUser = user?.roles?.includes('USER');
@@ -474,14 +475,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
           {/* ORGANIZER Menu Items */}
           {isOrganizer && (
             <>
-              <Link
-                href="/organizer/dashboard"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                <LayoutDashboard size={16} className="text-amber-600" />
-                <span>Organizer Dashboard</span>
-              </Link>
+              {coreLinks('top')}
 
               {/* Your Sales Section: Collapsible */}
               <button
@@ -499,63 +493,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
               </button>
               {orgToolsOpen && (
                 <>
-                  <Link
-                    href="/organizer/sales"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <List size={16} className="text-amber-500" />
-                    <span>All Sales</span>
-                  </Link>
-                  <Link
-                    href="/organizer/create-sale"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <PlusCircle size={16} className="text-amber-500" />
-                    <span>Create Sale</span>
-                  </Link>
-                  <Link
-                    href="/plan"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Calendar size={16} className="text-amber-500" />
-                    <span>Plan a Sale</span>
-                  </Link>
-                  <Link
-                    href="/organizer/add-items"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Add items to any sale or your inventory"
-                  >
-                    <PlusCircle size={16} className="text-amber-500" />
-                    <span>Add Items</span>
-                  </Link>
-                  <Link
-                    href="/organizer/holds"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Bookmark size={16} className="text-amber-500" />
-                    <span>Holds</span>
-                  </Link>
-                  <Link
-                    href="/organizer/pos"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <ShoppingCart size={16} className="text-amber-500" />
-                    <span>POS / Checkout</span>
-                  </Link>
-                  <Link
-                    href="/organizer/ripples"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Activity size={16} className="text-amber-500" />
-                    <span>Sale Ripples</span>
-                  </Link>
+                  {coreLinks('yourSales')}
                 </>
               )}
 
@@ -575,62 +513,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
               </button>
               {inSaleToolsOpen && (
                 <>
-                  <Link
-                    href="/organizer/promote"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Share2 size={16} className="text-amber-400" />
-                    <span>Share & Promote</span>
-                  </Link>
-                  <Link
-                    href="/organizer/send-update"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <MessageSquare size={16} className="text-amber-400" />
-                    <span>Send Update</span>
-                  </Link>
-                  <Link
-                    href="/organizer/photo-ops"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Camera size={16} className="text-amber-400" />
-                    <span>Photo Ops</span>
-                  </Link>
-                  <Link
-                    href="/organizer/qr-codes"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Tag size={16} className="text-amber-400" />
-                    <span>QR Analytics</span>
-                  </Link>
-                  <Link
-                    href="/organizer/print-kit"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Printer size={16} className="text-amber-500" />
-                    <span>Print Kit</span>
-                  </Link>
-                  <Link
-                    href="/organizer/checklist"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <CheckCircle size={16} className="text-amber-500" />
-                    <span>Sale Checklist</span>
-                  </Link>
-                  <Link
-                    href="/organizer/offline"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Wifi size={16} className="text-amber-500" />
-                    <span>Offline Mode</span>
-                  </Link>
+                  {coreLinks('inSaleTools')}
                 </>
               )}
 
@@ -650,81 +533,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
               </button>
               {postSalesOpen && (
                 <>
-                  <Link
-                    href="/organizer/inventory"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Manage your persistent inventory across all sales"
-                  >
-                    <Package size={16} className="text-amber-500" />
-                    <span>Inventory</span>
-                  </Link>
-                  <Link
-                    href="/organizer/bounties"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Buyer bounty requests for your sale items"
-                  >
-                    <Trophy size={16} className="text-amber-500" />
-                    <span>Bounties</span>
-                  </Link>
-                  <Link
-                    href="/coupons"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Generate and manage coupons for shoppers and your purchases"
-                  >
-                    <Ticket size={16} className="text-amber-500" />
-                    <span>Coupons</span>
-                  </Link>
-                  <Link
-                    href="/organizer/print-inventory"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Printer size={16} className="text-amber-500" />
-                    <span>Print & Labels</span>
-                  </Link>
-                  <Link
-                    href="/organizer/earnings"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <DollarSign size={16} className="text-amber-500" />
-                    <span>Earnings</span>
-                  </Link>
-                  <Link
-                    href="/organizer/payouts"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Wallet size={16} className="text-amber-500" />
-                    <span>Payouts</span>
-                  </Link>
-                  <Link
-                    href="/organizer/orders"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Package size={16} className="text-amber-500" />
-                    <span>Orders</span>
-                  </Link>
-                  <Link
-                    href="/organizer/ugc-moderation"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Image size={16} className="text-amber-500"/>
-                    <span>Manage Photos</span>
-                  </Link>
-                  <Link
-                    href="/organizer/reputation"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Star size={16} className="text-amber-500" />
-                    <span>Reputation</span>
-                  </Link>
+                  {coreLinks('postSales')}
                 </>
               )}
 
@@ -746,15 +555,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                       : 'Upgrade to PRO'}</span>
               </Link>
 
-              <Link
-                href="/organizer/referrals"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-                title="Refer other organizers. Earn XP and 30-day tier discount"
-              >
-                <Gift size={16} className="text-amber-500" />
-                <span>Refer Organizers</span>
-              </Link>
+              {coreLinks('account')}
 
               {/* Pro Tools Section: Collapsible */}
               <button
@@ -772,10 +573,14 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
               </button>
               {proToolsOpen && (
                 <>
-                  {!canAccess('PRO') && (
-                    <div className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                  {tierKnown && !canAccess('PRO') && (
+                    <Link
+                      href="/organizer/subscription"
+                      className="block px-3 py-2 text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                      onClick={() => setIsOpen(false)}
+                    >
                       Upgrade to PRO for advanced tools
-                    </div>
+                    </Link>
                   )}
                   {/* Rendered from lib/organizerNav.ts PRO_NAV_ENTRIES (shared with the desktop sidebar and mobile menu). */}
                   {proNavForSurface('avatarDropdown').filter((e) => canAccess(e.requiredTier)).map(({ id, label, href, icon: Icon, title }) => (
@@ -1210,15 +1015,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
           >
             <Tag size={16} className="text-warm-500" />
             <span>Pricing</span>
-          </Link>
-          <Link
-            href="/organizer/starter-kit"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            onClick={() => setIsOpen(false)}
-            title="Printable sale day guide. Checklists, pricing tips, day-of runbook"
-          >
-            <BookOpen size={16} className="text-warm-500" />
-            <span>Sale Starter Kit</span>
           </Link>
           <Link
             href="/ai-score"

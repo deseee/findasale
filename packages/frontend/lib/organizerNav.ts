@@ -48,6 +48,28 @@ import {
   BarChart2,
   Palette,
   FileText,
+  List,
+  PlusCircle,
+  Bookmark,
+  ShoppingCart,
+  Send,
+  Package,
+  Trophy,
+  Ticket,
+  Printer,
+  DollarSign,
+  Wallet,
+  Image as ImageIcon,
+  Star,
+  Camera,
+  BookOpen,
+  CheckCircle,
+  Wifi,
+  Gift,
+  UserCircle,
+  Settings,
+  Clock,
+  MessageSquare,
 } from 'lucide-react';
 
 export type OrganizerTier = 'SIMPLE' | 'PRO' | 'TEAMS';
@@ -60,7 +82,17 @@ export type OrganizerTier = 'SIMPLE' | 'PRO' | 'TEAMS';
 export type NavSurface = 'sidebar' | 'mobileMenu' | 'avatarDropdown' | 'bottomTab';
 
 /** Presentation grouping. Only the desktop sidebar renders section headers. */
-export type NavGroup = 'teams' | 'developerTools' | 'workspace' | 'retail' | 'proTools';
+export type NavGroup =
+  | 'top'
+  | 'yourSales'
+  | 'inSaleTools'
+  | 'postSales'
+  | 'account'
+  | 'teams'
+  | 'developerTools'
+  | 'workspace'
+  | 'retail'
+  | 'proTools';
 
 export interface OrganizerNavEntry {
   /** Stable key. Also used as the React key on every surface. */
@@ -106,8 +138,6 @@ export const TEAMS_NAV_ENTRIES: OrganizerNavEntry[] = [
     priority: 10,
   },
   {
-    // Not on 'sidebar': the desktop sidebar already renders Calendar under
-    // "Your Sales". Listing it here too would render it twice in one nav.
     id: 'calendar',
     label: 'Calendar',
     href: '/organizer/calendar',
@@ -115,11 +145,10 @@ export const TEAMS_NAV_ENTRIES: OrganizerNavEntry[] = [
     title: 'Plan and coordinate your sales',
     requiredTier: 'TEAMS',
     group: 'teams',
-    surfaces: ['mobileMenu', 'avatarDropdown'],
+    surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 20,
   },
   {
-    // Not on 'sidebar': already rendered under "Selling Tools" there.
     id: 'members',
     label: 'Team Members',
     href: '/organizer/members',
@@ -127,7 +156,7 @@ export const TEAMS_NAV_ENTRIES: OrganizerNavEntry[] = [
     title: 'Invite and manage team members',
     requiredTier: 'TEAMS',
     group: 'teams',
-    surfaces: ['mobileMenu', 'avatarDropdown'],
+    surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 30,
   },
   {
@@ -291,37 +320,24 @@ export function teamsNavGroupForSurface(
  * Each surface renders the entries whose `surfaces` include it, filtered by
  * canAccess(entry.requiredTier), and keeps its own presentation.
  *
- * An entry is left OFF a surface only where that surface already renders the same link
- * elsewhere in the same nav, to avoid a double link (same rule as Calendar/Team Members above):
- *   ripples          sidebar only  -- mobile has it under Selling, avatar under Sales
- *   insights         not sidebar   -- sidebar has its own "Insights" header (Advanced Analytics)
- *   brand-kit        not sidebar   -- sidebar has its own "Branding" header
- *   message-templates not sidebar  -- sidebar lists it in the general section
- *   line-queue       not sidebar   -- sidebar lists it under Selling Tools
+ * Every entry here is on all three surfaces (sidebar, mobileMenu, avatarDropdown). Ripples,
+ * Line Queue and Message Templates moved to CORE_NAV_ENTRIES (they are free-tier tools, not
+ * Pro Tools). Insights and Brand Kit are on the sidebar too now that its separate "Insights"
+ * and "Branding" headers are gone.
  *
- * requiredTier mirrors the gate these surfaces already applied on desktop (canAccess('PRO')).
- * It has NOT been re-verified against each destination page the way TEAMS_NAV_ENTRIES was.
+ * requiredTier is verified against the destination pages (2026-09-29): flip-report,
+ * markdown-cycles, fraud-signals, insights, brand-kit and marketplace-extension enforce PRO.
+ * Appraisals, Email Digest and the Markdown Re-tag List enforce nothing, so they stay SIMPLE.
  * The Markdown Re-tag List is SIMPLE on purpose: the free-tier markdownCron feeds it too.
  */
 export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
-  {
-    id: 'ripples',
-    label: 'Sale Ripples',
-    href: '/organizer/ripples',
-    icon: Activity,
-    title: 'Free sale performance analytics',
-    requiredTier: 'SIMPLE',
-    group: 'proTools',
-    surfaces: ['sidebar'],
-    priority: 10,
-  },
   {
     id: 'flip-report',
     label: 'Flip Report',
     href: '/organizer/flip-report',
     icon: TrendingUp,
     title: 'Smart analysis of your best-performing item categories',
-    requiredTier: 'SIMPLE',
+    requiredTier: 'PRO',
     group: 'proTools',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 20,
@@ -400,7 +416,7 @@ export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
     title: 'Advanced analytics and sale performance insights',
     requiredTier: 'PRO',
     group: 'proTools',
-    surfaces: ['mobileMenu', 'avatarDropdown'],
+    surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 90,
   },
   {
@@ -411,36 +427,88 @@ export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
     title: 'Custom logos, colors, and banners for your sale pages',
     requiredTier: 'PRO',
     group: 'proTools',
-    surfaces: ['mobileMenu', 'avatarDropdown'],
+    surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 100,
-  },
-  {
-    id: 'message-templates',
-    label: 'Message Templates',
-    href: '/organizer/message-templates',
-    icon: FileText,
-    title: 'Saved buyer communication templates',
-    requiredTier: 'SIMPLE',
-    group: 'proTools',
-    surfaces: ['mobileMenu', 'avatarDropdown'],
-    priority: 110,
-  },
-  {
-    id: 'line-queue',
-    label: 'Line Queue',
-    href: '/organizer/line-queue',
-    icon: Users,
-    title: 'Virtual line management for your sale',
-    requiredTier: 'SIMPLE',
-    group: 'proTools',
-    surfaces: ['mobileMenu', 'avatarDropdown'],
-    priority: 120,
   },
 ];
 
 /** Pro Tools entries a surface should render, in display order (caller applies the tier gate). */
 export function proNavForSurface(surface: NavSurface): OrganizerNavEntry[] {
   return PRO_NAV_ENTRIES.filter((entry) => entry.surfaces.includes(surface)).sort(
+    (a, b) => a.priority - b.priority,
+  );
+}
+
+/**
+ * CORE ORGANIZER NAV — every organizer-facing link that is not Pro Tools or
+ * TEAMS. Same rule as above: one entry, one label, one gate, one href, and an
+ * explicit list of the surfaces that render it.
+ *
+ * Group order on every surface: top → yourSales → inSaleTools → postSales →
+ * (Subscription link, hand-rendered: its copy depends on tier) → account →
+ * proTools → teams.
+ *
+ * TIER GATES verified against the destination pages (2026-09-29):
+ *   send-invoice.tsx     TierGate requiredTier="PRO"
+ *   photo-ops/index.tsx  TierGate requiredTier="PRO"
+ * Every other entry below is open to SIMPLE. print-inventory.tsx is open to
+ * everyone (only its marketplace export is PRO) so it stays SIMPLE here.
+ *
+ * LOCKED ENTRIES ARE HIDDEN, not shown dimmed. That matches the 2026-07-28
+ * retail decision (links that wall on arrival are worse than no link). The one
+ * upgrade hint lives at the top of the Pro Tools group on every surface.
+ *
+ * DELIBERATELY NOT HERE
+ *  - "Add Items": /organizer/add-items has no saleId and redirects to the
+ *    dashboard; the working route is /organizer/add-items/[saleId], reached
+ *    from All Sales or the dashboard. The old links were a dead end (avatar) or
+ *    a duplicate of All Sales (mobile).
+ *  - Subscription/Upgrade: label depends on tier, rendered per surface.
+ *  - My Profile / Settings on the avatarDropdown: it renders its own footer
+ *    because it also handles dual-role (organizer + shopper) labelling.
+ */
+export const CORE_NAV_ENTRIES: OrganizerNavEntry[] = [
+  { id: 'dashboard', label: 'Organizer Dashboard', href: '/organizer/dashboard', icon: LayoutDashboard, title: 'Your sales at a glance', requiredTier: 'SIMPLE', group: 'top', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
+
+  { id: 'all-sales', label: 'All Sales', href: '/organizer/sales', icon: List, title: 'Every sale you have created. Pick one to add items', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
+  { id: 'create-sale', label: 'Create Sale', href: '/organizer/create-sale', icon: PlusCircle, requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
+  { id: 'plan-sale', label: 'Plan a Sale', href: '/plan', icon: Clock, requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
+  { id: 'holds', label: 'Holds', href: '/organizer/holds', icon: Bookmark, title: 'Reserve items for buyers before the sale starts', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
+  { id: 'pos', label: 'POS / Checkout', href: '/organizer/pos', icon: ShoppingCart, title: 'Process in-person payments at your sale', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50 },
+  { id: 'send-invoice', label: 'Email Invoice', href: '/organizer/send-invoice', icon: Send, title: 'Email a one-off invoice to anyone. No hold, no account required', requiredTier: 'PRO', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 60 },
+  { id: 'ripples', label: 'Sale Ripples', href: '/organizer/ripples', icon: Activity, title: 'Live activity around your sale', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 70 },
+
+  { id: 'promote', label: 'Share & Promote', href: '/organizer/promote', icon: Share2, title: 'Share and promote your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
+  { id: 'send-update', label: 'Send Update', href: '/organizer/send-update', icon: MessageSquare, title: 'Send updates to buyers', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
+  { id: 'photo-ops', label: 'Photo Ops', href: '/organizer/photo-ops', icon: Camera, title: 'Mark photo spots at your sale', requiredTier: 'PRO', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
+  { id: 'qr-codes', label: 'QR Codes', href: '/organizer/qr-codes', icon: Tag, title: 'QR codes for your sale and how often they are scanned', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
+  { id: 'print-kit', label: 'Print Kit', href: '/organizer/print-kit', icon: Printer, title: 'Signs and flyers for your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50 },
+  { id: 'starter-kit', label: 'Starter Kit', href: '/organizer/starter-kit', icon: BookOpen, title: 'Printable sale day guide. Checklists, pricing tips, day-of runbook', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 60 },
+  { id: 'checklist', label: 'Sale Checklist', href: '/organizer/checklist', icon: CheckCircle, title: 'Sale preparation checklist', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 70 },
+  { id: 'offline', label: 'Offline Mode', href: '/organizer/offline', icon: Wifi, title: 'Keep selling when the connection drops', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 80 },
+  { id: 'line-queue', label: 'Line Queue', href: '/organizer/line-queue', icon: Users, title: 'Virtual line management for your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 90 },
+  { id: 'message-templates', label: 'Message Templates', href: '/organizer/message-templates', icon: FileText, title: 'Saved buyer communication templates', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 100 },
+
+  { id: 'inventory', label: 'Inventory', href: '/organizer/inventory', icon: Package, title: 'Manage your persistent inventory across all sales', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
+  { id: 'orders', label: 'Orders', href: '/organizer/orders', icon: Package, title: 'Orders placed on your sales', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
+  { id: 'bounties', label: 'Bounties', href: '/organizer/bounties', icon: Trophy, title: 'Buyer bounty requests for your sale items', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
+  { id: 'coupons', label: 'Coupons', href: '/coupons', icon: Ticket, title: 'Generate and manage coupons for shoppers and your purchases', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
+  { id: 'print-inventory', label: 'Print & Labels', href: '/organizer/print-inventory', icon: Printer, title: 'Print item sheets, labels and signage', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50 },
+  { id: 'earnings', label: 'Earnings', href: '/organizer/earnings', icon: DollarSign, requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 60 },
+  { id: 'payouts', label: 'Payouts', href: '/organizer/payouts', icon: Wallet, title: 'Payout schedule and on-demand transfers', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 70 },
+  { id: 'ugc-moderation', label: 'Manage Photos', href: '/organizer/ugc-moderation', icon: ImageIcon, title: 'Approve or reject buyer-submitted photos', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 80 },
+  { id: 'reputation', label: 'Reputation', href: '/organizer/reputation', icon: Star, title: 'Your organizer rating and trust score', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 90 },
+
+  // avatarDropdown renders My Profile / Settings in its own footer (dual-role labels).
+  { id: 'my-profile', label: 'My Profile', href: '/organizer/profile', icon: UserCircle, title: 'Your public organizer profile', requiredTier: 'SIMPLE', group: 'account', surfaces: ['sidebar', 'mobileMenu'], priority: 10 },
+  { id: 'settings', label: 'Settings', href: '/organizer/settings', icon: Settings, title: 'Account and sale preferences', requiredTier: 'SIMPLE', group: 'account', surfaces: ['sidebar', 'mobileMenu'], priority: 20 },
+  { id: 'referrals', label: 'Refer Organizers', href: '/organizer/referrals', icon: Gift, title: 'Refer other organizers. Earn XP and 30-day tier discount', requiredTier: 'SIMPLE', group: 'account', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
+  { id: 'affiliate', label: 'Affiliate Program', href: '/organizer/affiliate', icon: TrendingUp, title: 'Earn commissions by referring other organizers', requiredTier: 'SIMPLE', group: 'account', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
+];
+
+/** Core entries for one surface and group, in display order (caller applies the tier gate). */
+export function coreNavGroupForSurface(surface: NavSurface, group: NavGroup): OrganizerNavEntry[] {
+  return CORE_NAV_ENTRIES.filter((e) => e.group === group && e.surfaces.includes(surface)).sort(
     (a, b) => a.priority - b.priority,
   );
 }
