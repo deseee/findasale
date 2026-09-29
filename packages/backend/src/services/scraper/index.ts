@@ -2153,7 +2153,9 @@ export async function ingestScrapedListing(
       null;
 
     // Create the Sale
-    const sale = await prisma.sale.create({
+    let sale;
+    try {
+      sale = await prisma.sale.create({
       data: {
         title: listing.title,
         address: listing.address,
@@ -2185,7 +2187,15 @@ export async function ingestScrapedListing(
         // multi-month "TODAY"/"Live" badge as real time drifts past it.
         isOngoing: listing.isOngoing ?? false,
       },
-    });
+      });
+    } catch (createErr: any) {
+      // Race backstop: Sale_sourceUrl_unique_idx (partial unique on sourceUrl, deletedAt IS NULL).
+      // A concurrent ingest of the same sourceUrl slipped past the check above; treat as skip.
+      if (createErr?.code === 'P2002' && JSON.stringify(createErr?.meta ?? {}).includes('sourceUrl')) {
+        return { status: 'skipped', reason: 'Duplicate: unique sourceUrl constraint (race backstop)' };
+      }
+      throw createErr;
+    }
 
     enqueueRevalidationTouch(sale.id, listing.city, listing.state);
     return { saleId: sale.id, status: 'created' };
