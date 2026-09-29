@@ -90,6 +90,25 @@ async function apiFetch(path, opts = {}, _retried = false, _token = null) {
   return { ok: res.ok, status: res.status, data, error: res.ok ? null : (data && data.message) || 'request_failed' };
 }
 
+// Extension Runtime Log (2026-09-28): fire-and-forget shipping of background-worker activity
+// to POST /api/extension/logs, so classes of problem that leave no other server-side trace
+// (e.g. Craigslist Renew-All, which finishes entirely inside this service worker -- see the
+// craigslistRenewAllFinished handler below) are queryable later instead of requiring a live
+// console attached at the exact moment. Deliberately best-effort: never throws, never retries,
+// never blocks the caller -- a dropped log line is acceptable, a stalled removal/renewal flow
+// because logging failed is not. Uses apiFetch (existing Bearer/refresh handling) but does not
+// await its result on the caller's behalf.
+function fasLog(level, source, message, context) {
+  try {
+    apiFetch('/extension/logs', {
+      method: 'POST',
+      body: { logs: [{ level: level, source: source, message: String(message), context: context || undefined }] }
+    }).catch(() => {});
+  } catch (e) {
+    // swallow -- logging must never break the calling flow
+  }
+}
+
 // Fetch one image and return a data URL (base64). Runs in the worker so cross-origin
 // image hosts (Cloudinary, i.ebayimg.com) are reachable via host_permissions.
 // FIX 2026-09-27 (S-EXT-VINTED-64MB-MESSAGE-LIMIT, Patrick live-confirmed via real console
@@ -2943,11 +2962,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               await reportItemListedOnce(it.id, 'CRAIGSLIST', null);
             }
             console.log('[FAS Craigslist Renew All] succeeded, marked ' + listed.length + ' item(s) renewed.');
+            fasLog('info', 'craigslistRenewAllFinished', 'succeeded, marked ' + listed.length + ' item(s) renewed', { itemCount: listed.length });
           } catch (e) {
             console.log('[FAS Craigslist Renew All FAILED to mark items renewed]', String((e && e.message) || e));
+            fasLog('error', 'craigslistRenewAllFinished', 'renew reported ok but marking items renewed failed', { error: String((e && e.message) || e) });
           }
         } else {
           console.log('[FAS Craigslist Renew All] did not complete: ' + (msg.reason || 'unknown'));
+          fasLog('warn', 'craigslistRenewAllFinished', 'did not complete', { reason: msg.reason || 'unknown' });
         }
         await finishSilentCrossPlatformRemoval('CRAIGSLIST');
         sendResponse({ ok: true });

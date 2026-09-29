@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold, postExtensionLogs } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -52,5 +52,12 @@ router.get('/autolist-queue', authenticate, requireOrganizer, requireTier('PRO')
 // pending-updates/price-synced above doesn't cover (Facebook has its own). Same auth/tier gating.
 router.get('/price-sync-queue', authenticate, requireOrganizer, requireTier('PRO'), getPriceSyncQueue);
 router.post('/items/:id/price-synced-for-platform', authenticate, requireOrganizer, requireTier('PRO'), markItemPriceSyncedForPlatform);
+
+// Extension Runtime Log (2026-09-28): lightweight observability for the background-worker
+// automation that has no other server-side trace today (e.g. Craigslist Renew-All completion,
+// which runs entirely inside the extension's own service worker -- see postExtensionLogs in
+// extensionController.ts for validation/batch-size/truncation rules). Additive-only, PRO-gated
+// like every other extension route in this file.
+router.post('/logs', authenticate, requireOrganizer, requireTier('PRO'), postExtensionLogs);
 
 export default router;

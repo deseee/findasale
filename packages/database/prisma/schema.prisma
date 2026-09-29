@@ -644,6 +644,9 @@ model Organizer {
   testimonials                    Testimonial[]                  @relation("OrganizerTestimonials")
   // Feature #602: AI Message-Reply Autosend decision log (monitoring/observability)
   messageAutosendLogs             MessageAutosendLog[]
+  // Feature (2026-09-29): Extension Runtime Log -- observability for the browser extension's
+  // background-worker activity, which previously had no server-side trace at all.
+  extensionRuntimeLogs             ExtensionRuntimeLog[]
 
   // Corroboration fields — merge conflict resolution
   sourceCount        Int     @default(1)
@@ -6518,6 +6521,34 @@ model MessageAutosendLog {
   @@index([organizerId, createdAt])
   @@index([itemId])
   @@index([category, decision])
+}
+
+// Feature (2026-09-29): Extension Runtime Log -- observability for the browser extension's
+// own background-worker activity (chrome.alarms-driven cross-platform removals, Craigslist
+// Renew-All, crosslist queue posts), which previously had NO server-side trace at all -- every
+// debugging session before this had to infer what the extension actually did indirectly from
+// PendingListingRemoval/MarketplaceListingJob row changes, with no way to see a real outcome,
+// error, or reason. This is a lightweight event log, not a message/conversation store: short,
+// truncated fields only (message capped client-side to ~500 chars, context is small structured
+// data -- counts, error names -- never full page HTML or PII). No retention/rotation job exists
+// yet; add one if volume ever becomes a real storage concern (unlikely at FindA.Sale's current
+// scale -- this logs lifecycle events, not per-request/per-poll noise).
+model ExtensionRuntimeLog {
+  id          String    @id @default(cuid())
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizerId String
+  level       String // 'info' | 'warn' | 'error'
+  source      String // the background.js function name that logged this, e.g. 'craigslistRenewAllFinished'
+  platform    String? // MarketplaceJobPlatform value when the event is platform-specific, else null
+  // Denormalized, no relation -- must outlive a deleted Item row (same pattern as PendingListingRemoval).
+  itemId      String?
+  message     String
+  context     Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([organizerId, createdAt])
+  @@index([source, createdAt])
+  @@index([level, createdAt])
 }
 
 // ============================================================================

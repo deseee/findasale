@@ -2524,3 +2524,51 @@ export const markItemPriceSyncedForPlatform = async (req: AuthRequest, res: Resp
   });
   res.json({ ok: true });
 };
+
+
+// POST /api/extension/logs -- Extension Runtime Log (2026-09-29). The browser extension's
+// background worker previously had no server-side trace at all: every debugging session had to
+// infer what it did indirectly from PendingListingRemoval/MarketplaceListingJob row changes, with
+// no way to see a real outcome, error, or reason (surfaced concretely by a session unable to
+// verify the Craigslist Renew-All completion path any other way). background.js's fasLog() helper
+// posts here, fire-and-forget, alongside its existing console.log/error calls -- this never
+// replaces those, it just also gives this event a server-side home that a future session can
+// query directly instead of guessing. Accepts a small batch to avoid one HTTP request per log
+// line. Deliberately lenient: a malformed entry in the batch is skipped, not a 400 for the whole
+// request -- a logging endpoint should never be why a real extension action fails.
+const EXTENSION_LOG_MAX_BATCH = 50;
+const EXTENSION_LOG_LEVELS = ['info', 'warn', 'error'];
+const EXTENSION_LOG_MESSAGE_MAX_LEN = 500;
+
+export const postExtensionLogs = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer not found' }); return; }
+
+  const rawLogs = Array.isArray(req.body?.logs) ? req.body.logs : [];
+  const rows = rawLogs
+    .slice(0, EXTENSION_LOG_MAX_BATCH)
+    .filter((entry: any) =>
+      entry &&
+      typeof entry.source === 'string' && entry.source.length > 0 &&
+      typeof entry.message === 'string' && entry.message.length > 0
+    )
+    .map((entry: any) => ({
+      organizerId: organizer.id,
+      level: EXTENSION_LOG_LEVELS.includes(entry.level) ? entry.level : 'info',
+      source: String(entry.source).slice(0, 100),
+      platform: typeof entry.platform === 'string' ? entry.platform.slice(0, 30) : null,
+      itemId: typeof entry.itemId === 'string' ? entry.itemId.slice(0, 30) : null,
+      message: String(entry.message).slice(0, EXTENSION_LOG_MESSAGE_MAX_LEN),
+      // Guard against a caller accidentally passing something huge (e.g. a full page's worth of
+      // data) -- this is an event log, not a blob store. JSON.stringify a second time is cheap at
+      // this size and keeps the cap exact regardless of what shape `context` is.
+      context: entry.context != null && JSON.stringify(entry.context).length <= 2000 ? entry.context : undefined,
+    }));
+
+  if (rows.length > 0) {
+    await prisma.extensionRuntimeLog.createMany({ data: rows });
+  }
+  res.json({ ok: true, accepted: rows.length, rejected: rawLogs.length - rows.length });
+};
