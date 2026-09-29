@@ -40,6 +40,7 @@ import {
   getSuggestedShippingPriceHandler,
   getLiveShippingRateCheckHandler,
   getMarkdownRetagQueue,
+  getMarkdownActiveList,
   markItemRetagged,
   markItemsRetaggedBulk,
 } from '../controllers/itemController';
@@ -926,6 +927,7 @@ router.get('/:id/edit', authenticate, getItemForEdit);
 // an :id value and shadow this route (same ordering hazard the /:id/label comment above
 // already flags for this file).
 router.get('/markdown-retag-queue', authenticate, getMarkdownRetagQueue);
+router.get('/markdown-active', authenticate, getMarkdownActiveList);
 router.post('/mark-retagged/bulk', authenticate, markItemsRetaggedBulk);
 router.post('/:id/mark-retagged', authenticate, markItemRetagged);
 

@@ -35,6 +35,15 @@ interface RetagQueueItem {
   saleId: string | null;
   saleTitle: string | null;
   markedDownAt: string;
+  stickerPct?: number | null;
+  discountPct?: number | null;
+  needsRetag?: boolean;
+}
+
+interface ActiveListResponse {
+  items: RetagQueueItem[];
+  total: number;
+  countsByPct: Record<string, number>;
 }
 
 interface RetagQueueResponse {
@@ -50,12 +59,29 @@ const PAGE_SIZE = 50;
 const formatPrice = (value: number | null): string =>
   value == null ? '—' : `$${value.toFixed(2)}`;
 
+// Sticker guide (2026-09-29): one colour per markdown step so staff can grab the right
+// sticker/highlighter without reading the price maths. Text label always shown too.
+const stickerClasses = (pct: number | null | undefined): string => {
+  if (pct == null || pct <= 0) return 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+  if (pct <= 10) return 'bg-yellow-300 text-yellow-950';
+  if (pct <= 20) return 'bg-orange-400 text-orange-950';
+  if (pct <= 30) return 'bg-red-500 text-white';
+  return 'bg-purple-600 text-white';
+};
+
+const StickerBadge: React.FC<{ pct?: number | null }> = ({ pct }) => (
+  <span className={`inline-block px-2 py-1 rounded-md text-xs font-bold whitespace-nowrap ${stickerClasses(pct)}`}>
+    {pct != null && pct > 0 ? `${pct}% OFF` : 'MARKED DOWN'}
+  </span>
+);
+
 const MarkdownRetagPage: React.FC = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
+  const [tab, setTab] = useState<'retag' | 'active'>('retag');
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -70,8 +96,18 @@ const MarkdownRetagPage: React.FC = () => {
     enabled: !!user && user.roles?.includes('ORGANIZER'),
   });
 
+  const { data: activeData, isLoading: activeLoading, error: activeError } = useQuery<ActiveListResponse>({
+    queryKey: ['markdown-active-list'],
+    queryFn: async () => {
+      const res = await api.get('/items/markdown-active');
+      return res.data;
+    },
+    enabled: !!user && user.roles?.includes('ORGANIZER'),
+  });
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['markdown-retag-queue'] });
+    queryClient.invalidateQueries({ queryKey: ['markdown-active-list'] });
     setSelectedIds(new Set());
   };
 
@@ -161,6 +197,85 @@ const MarkdownRetagPage: React.FC = () => {
             )}
           </div>
 
+          {/* Tabs */}
+          <div className="flex gap-2 mb-4 print:hidden">
+            <button
+              onClick={() => setTab('retag')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'retag' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 border border-warm-200 dark:border-gray-700'}`}
+            >
+              Needs re-tagging{data ? ` (${data.total})` : ''}
+            </button>
+            <button
+              onClick={() => setTab('active')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === 'active' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 border border-warm-200 dark:border-gray-700'}`}
+            >
+              All discounted now{activeData ? ` (${activeData.total})` : ''}
+            </button>
+          </div>
+
+          {tab === 'active' && (
+            <div>
+              <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                <div className="flex flex-wrap gap-2 items-center">
+                  {activeData &&
+                    Object.entries(activeData.countsByPct)
+                      .sort((a, b) => Number(a[0]) - Number(b[0]))
+                      .map(([pct, n]) => (
+                        <span key={pct} className="flex items-center gap-1 text-sm text-warm-800 dark:text-gray-200">
+                          <StickerBadge pct={Number(pct)} /> × {n}
+                        </span>
+                      ))}
+                </div>
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-100 rounded-lg text-sm font-medium print:hidden"
+                >
+                  Print this list
+                </button>
+              </div>
+
+              {activeLoading && <div className="bg-white dark:bg-gray-800 rounded-lg h-20 animate-pulse" />}
+              {!!activeError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-300">
+                  Error loading the discounted items list. Please try again later.
+                </div>
+              )}
+              {!activeLoading && !activeError && activeData && activeData.items.length === 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center text-warm-600 dark:text-gray-400">
+                  Nothing is discounted right now.
+                </div>
+              )}
+              {activeData && activeData.items.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 overflow-hidden divide-y divide-warm-100 dark:divide-gray-700">
+                  {activeData.items.map((item) => (
+                    <div key={item.id} className="flex items-center gap-4 p-4">
+                      <div className="w-24 flex-shrink-0">
+                        <StickerBadge pct={item.stickerPct} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-warm-900 dark:text-gray-100 truncate">{item.title}</p>
+                        <p className="text-xs text-warm-500 dark:text-gray-500">
+                          {item.sku && <span className="mr-2">SKU: {item.sku}</span>}
+                          {item.saleTitle && <span>{item.saleTitle}</span>}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-xs font-medium flex-shrink-0 ${item.needsRetag ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}
+                      >
+                        {item.needsRetag ? 'Needs re-tag' : 'Tag updated'}
+                      </span>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm text-warm-500 dark:text-gray-500 line-through">{formatPrice(item.priceBeforeMarkdown)}</p>
+                        <p className="font-semibold text-amber-600 dark:text-amber-400">{formatPrice(item.price)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'retag' && (<>
           {/* Bulk action bar */}
           {items.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
@@ -245,6 +360,10 @@ const MarkdownRetagPage: React.FC = () => {
                     </p>
                   </div>
 
+                  <div className="flex-shrink-0">
+                    <StickerBadge pct={item.stickerPct} />
+                  </div>
+
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm text-warm-500 dark:text-gray-500 line-through">
                       {formatPrice(item.priceBeforeMarkdown)}
@@ -286,6 +405,7 @@ const MarkdownRetagPage: React.FC = () => {
               </button>
             </div>
           )}
+          </>)}
         </div>
       </div>
     </>

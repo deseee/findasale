@@ -3,6 +3,7 @@ import { parse } from 'csv-parse';
 import { AuthRequest } from '../middleware/auth';
 import { Readable } from 'stream';
 import { prisma } from '../index';
+import { actualDiscountPct, loadStickerContext, resolveStickerPct } from '../utils/markdownSticker';
 import { v2 as cloudinary } from 'cloudinary';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ItemRarity } from '@prisma/client';
@@ -5590,10 +5591,14 @@ export const getMarkdownRetagQueue = async (req: AuthRequest, res: Response) => 
     const pageNum = Math.max(1, parseInt(page as string) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit as string) || 50));
 
+    // status/deletedAt (2026-09-29): a marked-down item that has since SOLD or been deleted no
+    // longer has a shelf tag to change, so it must not linger on the staff list.
     const where = {
       organizerId: organizer.id,
       markdownApplied: true,
       markdownPhysicallyAppliedAt: null,
+      status: { in: ['AVAILABLE', 'RESERVED'] },
+      deletedAt: null,
     };
 
     const [items, total] = await Promise.all([
@@ -5609,6 +5614,8 @@ export const getMarkdownRetagQueue = async (req: AuthRequest, res: Response) => 
           saleId: true,
           sale: { select: { title: true } },
           updatedAt: true,
+          markdownStepIndexApplied: true,
+          markdownTierApplied: true,
         },
         orderBy: { updatedAt: 'desc' },
         skip: (pageNum - 1) * limitNum,
@@ -5616,6 +5623,7 @@ export const getMarkdownRetagQueue = async (req: AuthRequest, res: Response) => 
       }),
       prisma.item.count({ where }),
     ]);
+    const stickerCtx = await loadStickerContext(organizer.id);
 
     res.json({
       items: items.map((i) => ({
@@ -5624,6 +5632,8 @@ export const getMarkdownRetagQueue = async (req: AuthRequest, res: Response) => 
         sku: i.sku,
         price: i.price,
         priceBeforeMarkdown: i.priceBeforeMarkdown,
+        stickerPct: resolveStickerPct(i, stickerCtx),
+        discountPct: actualDiscountPct(i.price, i.priceBeforeMarkdown),
         photoUrl: i.photoUrls?.[0] || null,
         saleId: i.saleId,
         saleTitle: i.sale?.title || null,
@@ -5712,5 +5722,76 @@ export const markItemsRetaggedBulk = async (req: AuthRequest, res: Response) => 
   } catch (error) {
     console.error('[markItemsRetaggedBulk] Error:', error);
     res.status(500).json({ message: 'Server error marking items as re-tagged' });
+  }
+};
+
+// GET /api/items/markdown-active — EVERY item of this organizer that is currently discounted by
+// the markdown system (whether or not staff have re-tagged it yet), so staff always have a
+// "what is on sale right now" list. Grouped/sorted by sticker % (deepest first). Capped at 2000.
+export const getMarkdownActiveList = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const rows = await prisma.item.findMany({
+      where: {
+        organizerId: organizer.id,
+        markdownApplied: true,
+        status: { in: ['AVAILABLE', 'RESERVED'] },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        title: true,
+        sku: true,
+        price: true,
+        priceBeforeMarkdown: true,
+        photoUrls: true,
+        saleId: true,
+        sale: { select: { title: true } },
+        updatedAt: true,
+        markdownStepIndexApplied: true,
+        markdownTierApplied: true,
+        markdownPhysicallyAppliedAt: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 2000,
+    });
+    const stickerCtx = await loadStickerContext(organizer.id);
+
+    const items = rows
+      .map((i) => ({
+        id: i.id,
+        title: i.title,
+        sku: i.sku,
+        price: i.price,
+        priceBeforeMarkdown: i.priceBeforeMarkdown,
+        stickerPct: resolveStickerPct(i, stickerCtx),
+        discountPct: actualDiscountPct(i.price, i.priceBeforeMarkdown),
+        photoUrl: i.photoUrls?.[0] || null,
+        saleId: i.saleId,
+        saleTitle: i.sale?.title || null,
+        markedDownAt: i.updatedAt,
+        needsRetag: i.markdownPhysicallyAppliedAt == null,
+      }))
+      .sort((a, b) => (b.stickerPct ?? 0) - (a.stickerPct ?? 0) || a.title.localeCompare(b.title));
+
+    const countsByPct: Record<string, number> = {};
+    for (const i of items) {
+      const k = String(i.stickerPct ?? 0);
+      countsByPct[k] = (countsByPct[k] ?? 0) + 1;
+    }
+
+    res.json({ items, total: items.length, countsByPct });
+  } catch (error) {
+    console.error('[getMarkdownActiveList] Error:', error);
+    res.status(500).json({ message: 'Server error loading discounted items' });
   }
 };
