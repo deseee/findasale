@@ -52,13 +52,13 @@ import {
   Share2,
   Send,
   Camera,
-  Scale,
+
   Gift,
   Smartphone,
   CheckCircle,
   Wifi,
   CreditCard,
-  TrendingDown,
+
   ShoppingBag,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -69,7 +69,7 @@ import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 import useXpProfile from '../hooks/useXpProfile';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
-import { teamsNavForSurface, teamsNavGroupForSurface, SIDEBAR_RETAIL_TIER } from '../lib/organizerNav';
+import { teamsNavForSurface, teamsNavGroupForSurface, proNavForSurface, SIDEBAR_RETAIL_TIER } from '../lib/organizerNav';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
@@ -486,34 +486,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             )}
 
             <SectionHeader icon={Sparkles} label="Pro Tools" color="purple" />
-            <Link href="/organizer/ripples" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Free sale performance analytics">
-              <Activity size={16} className="text-purple-400" />
-              <span>Sale Ripples</span>
-            </Link>
-            <Link href="/organizer/flip-report" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Smart analysis of your best-performing item categories">
-              <TrendingUp size={16} className="text-purple-400" />
-              <span>Flip Report</span>
-            </Link>
-            {canAccess('PRO') && (
-              <>
-                <Link href="/organizer/fraud-signals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Bid bot and fraud detection">
-                  <ShieldAlert size={16} className="text-purple-400" />
-                  <span>Fraud Signals</span>
-                </Link>
-                <Link href="/organizer/markdown-cycles" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="PRO feature: automatic time-based price reductions">
-                  <TrendingDown size={16} className="text-purple-400" />
-                  <span>Auto Markdown</span>
-                </Link>
-              </>
-            )}
-            <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals (also sold à la carte)">
-              <Scale size={16} className="text-purple-400" />
-              <span>Appraisals</span>
-            </Link>
-            <Link href="/organizer/email-digest-preview" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Preview your email digest before it sends">
-              <MessageSquare size={16} className="text-purple-400" />
-              <span>Email Digest</span>
-            </Link>
+            {/* Rendered from lib/organizerNav.ts PRO_NAV_ENTRIES (shared with the mobile menu and AvatarDropdown). */}
+            {proNavForSurface('sidebar').filter((e) => canAccess(e.requiredTier)).map(({ id, label, href, icon: Icon, title }) => (
+              <Link key={id} href={href} className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title={title}>
+                <Icon size={16} className="text-purple-400" />
+                <span>{label}</span>
+              </Link>
+            ))}
 
             {(isTeams || isAdmin) && (
               <>
@@ -1328,27 +1307,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileProToolsOpen && (
                   <>
-                    <Link href="/organizer/brand-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Palette size={14} className="inline mr-2 text-purple-400" /> Brand Kit
-                    </Link>
-                    <Link href="/organizer/insights" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <BarChart2 size={14} className="inline mr-2 text-purple-400" /> Insights
-                    </Link>
-                    <Link href="/organizer/flip-report" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <TrendingUp size={14} className="inline mr-2 text-purple-400" /> Flip Report
-                    </Link>
-                    <Link href="/organizer/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Scale size={14} className="inline mr-2 text-purple-400" /> Appraisals
-                    </Link>
-                    <Link href="/organizer/message-templates" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <FileText size={14} className="inline mr-2 text-purple-400" /> Message Templates
-                    </Link>
-                    <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <ShieldAlert size={14} className="inline mr-2 text-purple-400" /> Fraud Signals
-                    </Link>
-                    <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Users size={14} className="inline mr-2 text-purple-400" /> Line Queue
-                    </Link>
+                    {/* Rendered from lib/organizerNav.ts PRO_NAV_ENTRIES (shared with the desktop sidebar and AvatarDropdown). */}
+                    {proNavForSurface('mobileMenu').filter((e) => canAccess(e.requiredTier)).map(({ id, label, href, icon: Icon }) => (
+                      <Link key={id} href={href} className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                        <Icon size={14} className="inline mr-2 text-purple-400" /> {label}
+                      </Link>
+                    ))}
                   </>
                 )}
 

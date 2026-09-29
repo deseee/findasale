@@ -27,7 +27,7 @@ import {
   DollarSign,
   UserPlus,
   Sparkles,
-  Palette,
+
   TrendingUp,
   Webhook,
   Tag,
@@ -52,21 +52,21 @@ import {
   Share2,
   Camera,
   Activity,
-  Scale,
+
   BookOpen,
-  FileText,
+
   Image,
   Wallet,
   UserCircle,
   Settings,
   Gift,
-  Mail,
+
   Smartphone,
   CheckCircle,
   Wifi,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
-import { teamsNavForSurface } from '../lib/organizerNav';
+import { teamsNavForSurface, proNavForSurface } from '../lib/organizerNav';
 import { useShopperCart } from '../hooks/useShopperCart';
 import useXpProfile from '../hooks/useXpProfile';
 import { useCart } from '../context/CartContext';
@@ -772,112 +772,24 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
               </button>
               {proToolsOpen && (
                 <>
-                  {canAccess('PRO') ? (
-                    <>
-                      <Link
-                        href="/organizer/brand-kit"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Custom logos, colors, and banners for your sale pages"
-                      >
-                        <Palette size={16} className="text-purple-400" />
-                        <span>Brand Kit</span>
-                      </Link>
-                      <Link
-                        href="/organizer/marketplace-extension"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Post your inventory to Facebook Marketplace with the browser extension"
-                      >
-                        <Share2 size={16} className="text-purple-400" />
-                        <span>Marketplace Autofill</span>
-                      </Link>
-                      <Link
-                        href="/organizer/insights"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Advanced analytics and sale performance insights"
-                      >
-                        <BarChart2 size={16} className="text-purple-400" />
-                        <span>Insights</span>
-                      </Link>
-                    </>
-                  ) : (
+                  {!canAccess('PRO') && (
                     <div className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                       Upgrade to PRO for advanced tools
                     </div>
                   )}
-                  <Link
-                    href="/organizer/flip-report"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Smart analysis of your best-performing item categories"
-                  >
-                    <TrendingUp size={16} className="text-purple-400" />
-                    <span>Flip Report</span>
-                  </Link>
-                  {/* S-TIER-RECONCILE: gate consistent with Fraud Signals below and with
-                      the sidebar's canAccess('PRO') gate in Layout.tsx -- previously this link
-                      rendered unconditionally for every tier. */}
-                  {canAccess('PRO') && (
+                  {/* Rendered from lib/organizerNav.ts PRO_NAV_ENTRIES (shared with the desktop sidebar and mobile menu). */}
+                  {proNavForSurface('avatarDropdown').filter((e) => canAccess(e.requiredTier)).map(({ id, label, href, icon: Icon, title }) => (
                     <Link
-                      href="/organizer/markdown-cycles"
+                      key={id}
+                      href={href}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                       onClick={() => setIsOpen(false)}
-                      title="Auto-reduce prices after set days. PRO"
+                      title={title}
                     >
-                      <TrendingUp size={16} className="text-purple-400" />
-                      <span>Markdown Cycles</span>
+                      <Icon size={16} className="text-purple-400" />
+                      <span>{label}</span>
                     </Link>
-                  )}
-                  <Link
-                    href="/organizer/appraisals"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Crowdsourced item appraisals. Also available as à la carte"
-                  >
-                    <Scale size={16} className="text-purple-400" />
-                    <span>Appraisals</span>
-                  </Link>
-                  <Link
-                    href="/organizer/message-templates"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Saved buyer communication templates"
-                  >
-                    <FileText size={16} className="text-purple-400" />
-                    <span>Message Templates</span>
-                  </Link>
-                  {canAccess('PRO') && (
-                    <>
-                      <Link
-                        href="/organizer/fraud-signals"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Bid bot and fraud detection"
-                      >
-                        <ShieldAlert size={16} className="text-purple-400" />
-                        <span>Fraud Signals</span>
-                      </Link>
-                    </>
-                  )}
-                  <Link
-                    href="/organizer/email-digest-preview"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Preview your email digest before it sends"
-                  >
-                    <Mail size={16} className="text-purple-400" />
-                    <span>Email Digest</span>
-                  </Link>
-                  <Link
-                    href="/organizer/line-queue"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Users size={16} className="text-purple-400" />
-                    <span>Line Queue</span>
-                  </Link>
+                  ))}
                 </>
               )}
 
