@@ -59,7 +59,7 @@ export default function UGCModerationPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Link href="/organizer" className="text-blue-600 hover:text-blue-700">
+                  <Link href="/organizer/dashboard" className="text-blue-600 hover:text-blue-700">
                     Dashboard
                   </Link>
                   <span className="text-gray-400">/</span>

@@ -15,6 +15,7 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useFeedbackSurvey } from '../../../hooks/useFeedbackSurvey';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import Head from 'next/head';
 import Link from 'next/link';
 import PickupSlotManager from '../../../components/PickupSlotManager';
@@ -43,6 +44,7 @@ const EditSalePage = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { showSurvey } = useFeedbackSurvey();
+  const { canAccess, tierKnown } = useOrganizerTier();
   const [isCloning, setIsCloning] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
@@ -317,19 +319,28 @@ const EditSalePage = () => {
       // First update the sale (includes treasure hunt fields and holdsEnabled)
       await api.put(`/sales/${id}`, saleData);
 
-      // Then update markdown config: PRO-only endpoint, silently skip for lower tiers
+      // Then update markdown config. The default Day 2 / Day 3 markdown schedule is free for every
+      // tier (Patrick, 2026-09-29, D3), so a failure here is a real failure and must be shown, not
+      // swallowed. The sale update above already succeeded, so report the markdown failure back to
+      // onSuccess (instead of throwing) to keep the "sale saved" outcome accurate.
+      let markdownError: string | null = null;
       try {
         await api.put(`/sales/${id}/markdown-config`, {
           markdownEnabled,
           markdownFloor,
         });
       } catch (err: any) {
-        if (err?.response?.status !== 403) throw err;
-        // 403 = user isn't PRO: markdown settings not saved, but sale update succeeded
+        markdownError = err?.response?.data?.message || 'The markdown settings could not be saved.';
       }
+      return { markdownError };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['sale', id] });
+      if (result?.markdownError) {
+        // Stay on the page so the organizer can retry the markdown setting.
+        showToast(`Sale updated, but the auto markdown setting was not saved: ${result.markdownError}`, 'error');
+        return;
+      }
       showToast('Sale updated', 'success');
       router.push(`/organizer/dashboard`);
     },
@@ -1265,6 +1276,24 @@ const EditSalePage = () => {
                     </span>
                   </label>
                 </div>
+
+                {/* Only options beyond the default schedule are PRO: custom markdown steps (cycles). */}
+                {canAccess('PRO') ? (
+                  <p className="ml-7 text-xs text-warm-500 dark:text-gray-400">
+                    Want different steps or timing?{' '}
+                    <Link href="/organizer/markdown-cycles" className="text-amber-600 dark:text-amber-400 hover:underline">
+                      Set up custom markdown steps
+                    </Link>
+                  </p>
+                ) : tierKnown ? (
+                  <p className="ml-7 text-xs text-warm-500 dark:text-gray-400">
+                    <span className="inline-block px-1.5 py-0.5 mr-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 font-semibold">PRO</span>
+                    Custom markdown steps and timing.{' '}
+                    <Link href="/organizer/subscription" className="text-amber-600 dark:text-amber-400 hover:underline">
+                      See PRO plans
+                    </Link>
+                  </p>
+                ) : null}
 
                 {formData.markdownEnabled && (
                   <div className="ml-7">

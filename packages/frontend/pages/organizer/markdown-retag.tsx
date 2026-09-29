@@ -13,10 +13,16 @@
  * empty states, per-row action button) and organizer/holds.tsx (checkbox Set + "select
  * all on this page" bulk action).
  *
+ * Access (Patrick, 2026-09-29, decisions D3 + D6): the list is free for EVERY tier (the default
+ * 50%/75% markdown schedule is a free feature). Staff (team members) can use it through a
+ * dedicated permission while the owner is on TEAMS; the backend is the real gate and answers
+ * 403 otherwise. Staff users do not carry the ORGANIZER role, so this page only bounces
+ * visitors who are not logged in (same rule as organizer/pos.tsx) and turns 403s into a clear message.
+ *
  * Route: /organizer/markdown-retag
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -24,7 +30,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
-import TierGate from '../../components/TierGate';
 
 interface RetagQueueItem {
   id: string;
@@ -56,6 +61,32 @@ interface RetagQueueResponse {
 }
 
 const PAGE_SIZE = 50;
+
+// Backend codes whose server message is already written for the user (requireTier).
+const USER_READY_403_CODES = ['TIER_REQUIRED', 'GRACE_PERIOD_RESTRICTION'];
+const NO_ACCESS_DETAIL = 'Ask the account owner to check your team permissions.';
+
+// Turns a failed list request into a title and detail line. A 403 is a permission problem
+// (staff without the re-tag permission, or an owner whose plan no longer covers the feature),
+// not a broken page, so it gets its own message instead of the generic load error.
+const describeListError = (err: unknown, genericTitle: string): { title: string; detail: string } => {
+  const e = err as any;
+  const status = e?.response?.status;
+  const code = e?.response?.data?.code;
+  const message = e?.response?.data?.message;
+  if (status === 403) {
+    return {
+      title: 'You do not have access to this list',
+      detail: USER_READY_403_CODES.includes(code) && message ? message : NO_ACCESS_DETAIL,
+    };
+  }
+  return { title: genericTitle, detail: 'Please try again later.' };
+};
+
+const serverMessage = (err: unknown, fallback: string): string => {
+  const message = (err as any)?.response?.data?.message;
+  return typeof message === 'string' && message.length > 0 ? message : fallback;
+};
 
 const formatPrice = (value: number | null): string =>
   value == null ? '—' : `$${value.toFixed(2)}`;
@@ -94,7 +125,7 @@ const MarkdownRetagPage: React.FC = () => {
       const res = await api.get('/items/markdown-retag-queue', { params: { page, limit: PAGE_SIZE } });
       return res.data;
     },
-    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    enabled: !!user,
   });
 
   const { data: activeData, isLoading: activeLoading, error: activeError } = useQuery<ActiveListResponse>({
@@ -103,7 +134,7 @@ const MarkdownRetagPage: React.FC = () => {
       const res = await api.get('/items/markdown-active');
       return res.data;
     },
-    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    enabled: !!user,
   });
 
   const invalidate = () => {
@@ -119,8 +150,8 @@ const MarkdownRetagPage: React.FC = () => {
     onSuccess: () => {
       invalidate();
     },
-    onError: () => {
-      showToast('Failed to mark item as re-tagged', 'error');
+    onError: (err: unknown) => {
+      showToast(serverMessage(err, 'Failed to mark item as re-tagged'), 'error');
     },
   });
 
@@ -133,16 +164,23 @@ const MarkdownRetagPage: React.FC = () => {
       showToast(`Marked ${result.updated} item${result.updated === 1 ? '' : 's'} as re-tagged`, 'success');
       invalidate();
     },
-    onError: () => {
-      showToast('Failed to mark items as re-tagged', 'error');
+    onError: (err: unknown) => {
+      showToast(serverMessage(err, 'Failed to mark items as re-tagged'), 'error');
     },
   });
 
-  if (authLoading) return null;
-  if (!user || !user.roles?.includes('ORGANIZER')) {
-    router.push('/login');
-    return null;
-  }
+  // Bounce only visitors who are not logged in. Do NOT require the ORGANIZER role here: staff
+  // (team members) do not carry it, and the backend is the real gate (403 handled below).
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login');
+    }
+  }, [authLoading, user, router]);
+
+  if (authLoading || !user) return null;
+
+  const retagError = error ? describeListError(error, 'Error loading the re-tag list') : null;
+  const activeListError = activeError ? describeListError(activeError, 'Error loading the discounted items list') : null;
 
   const items = data?.items || [];
   const allOnPageSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
@@ -169,7 +207,6 @@ const MarkdownRetagPage: React.FC = () => {
         <title>Markdown Re-tag List - FindA.Sale</title>
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Markdown Re-tag List" description="See every item your automatic markdowns repriced, with the exact sticker percent to put on it. Included with PRO.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -237,9 +274,10 @@ const MarkdownRetagPage: React.FC = () => {
               </div>
 
               {activeLoading && <div className="bg-white dark:bg-gray-800 rounded-lg h-20 animate-pulse" />}
-              {!!activeError && (
+              {activeListError && (
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-300">
-                  Error loading the discounted items list. Please try again later.
+                  <p className="font-medium">{activeListError.title}</p>
+                  <p className="text-sm mt-1">{activeListError.detail}</p>
                 </div>
               )}
               {!activeLoading && !activeError && activeData && activeData.items.length === 0 && (
@@ -312,10 +350,10 @@ const MarkdownRetagPage: React.FC = () => {
           )}
 
           {/* Error State */}
-          {!!error && (
+          {retagError && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 text-red-700 dark:text-red-300">
-              <p className="font-medium">Error loading the re-tag list</p>
-              <p className="text-sm mt-1">Please try again later.</p>
+              <p className="font-medium">{retagError.title}</p>
+              <p className="text-sm mt-1">{retagError.detail}</p>
             </div>
           )}
 
@@ -410,7 +448,6 @@ const MarkdownRetagPage: React.FC = () => {
           </>)}
         </div>
       </div>
-      </TierGate>
     </>
   );
 };

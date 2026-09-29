@@ -322,13 +322,16 @@ export function teamsNavGroupForSurface(
  * Every entry here is on all three surfaces (sidebar, mobileMenu, avatarDropdown). Ripples,
  * Line Queue and Message Templates moved to CORE_NAV_ENTRIES (they are free-tier tools, not
  * Pro Tools). Insights and Brand Kit are on the sidebar too now that its separate "Insights"
- * and "Branding" headers are gone.
+ * and "Branding" headers are gone. The Markdown Re-tag List is in CORE_NAV_ENTRIES (Post Sales)
+ * as a free-tier entry, see the note below.
  *
  * requiredTier is verified against the destination pages (2026-09-29): flip-report,
  * markdown-cycles, fraud-signals, insights, brand-kit and marketplace-extension enforce PRO.
- * The Markdown Re-tag List is PRO (2026-09-29, Patrick: Pro Tools are gated). Auto-markdown itself is
- * PRO-only (PUT /sales/:id/markdown-config is requireTier('PRO')), and the page, both list endpoints and
- * the daily alert job enforce PRO too.
+ * Markdown split (Patrick, 2026-09-29, decision D3): the default 50% Day 2 / 75% Day 3 markdown
+ * schedule (Sale.markdownEnabled, the "auto markdown" checkbox on edit-sale) is a FREE-TIER feature for
+ * every tier, so the Markdown Re-tag List, its daily alert and the mark-retagged actions are free-tier
+ * too and live in CORE_NAV_ENTRIES under Post Sales ('markdown-retag', SIMPLE). Only Markdown CYCLES
+ * ("Auto Markdown", /organizer/markdown-cycles, the 'markdown-cycles' entry below) stay PRO.
  * Email Digest is PRO too (page gated 2026-09-29; every digest email still carries its own
  * one-click unsubscribe link, so free-tier organizers can opt out).
  * Appraisals is NOT a Pro tool: it is a community, XP-priced feature (requests cost 250+ XP, decision
@@ -356,17 +359,6 @@ export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
     group: 'proTools',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 30,
-  },
-  {
-    id: 'markdown-retag',
-    label: 'Markdown Re-tag List',
-    href: '/organizer/markdown-retag',
-    icon: Tag,
-    title: 'Auto-marked-down items that still need a new tag or sticker on the shelf',
-    requiredTier: 'PRO',
-    group: 'proTools',
-    surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
-    priority: 40,
   },
   {
     id: 'fraud-signals',
@@ -485,6 +477,7 @@ export const CORE_NAV_ENTRIES: OrganizerNavEntry[] = [
 
   { id: 'inventory', label: 'Inventory', href: '/organizer/inventory', icon: Package, title: 'Manage your persistent inventory across all sales', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
   { id: 'orders', label: 'Orders', href: '/organizer/orders', icon: Package, title: 'Orders placed on your sales', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
+  { id: 'markdown-retag', label: 'Markdown Re-tag List', href: '/organizer/markdown-retag', icon: Tag, title: 'Auto-marked-down items that still need a new tag or sticker on the shelf', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 25 },
   { id: 'bounties', label: 'Bounties', href: '/organizer/bounties', icon: Trophy, title: 'Buyer bounty requests for your sale items', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
   { id: 'coupons', label: 'Coupons', href: '/coupons', icon: Ticket, title: 'Generate and manage coupons for shoppers and your purchases', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
   { id: 'print-inventory', label: 'Print & Labels', href: '/organizer/print-inventory', icon: Printer, title: 'Print item sheets, labels and signage', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50 },

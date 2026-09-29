@@ -931,7 +931,7 @@ const OrganizerDashboard = () => {
                       <p>Your subscription has lapsed. You're temporarily on SIMPLE tier (200 items/sale, 5 photos/item, 100 Auto Tags/month). Update your billing info to restore full PRO features.</p>
                     </div>
                     <div className="mt-4">
-                      <Link href="/organizer/billing" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline">
+                      <Link href="/organizer/subscription" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline">
                         Update Billing →
                       </Link>
                     </div>

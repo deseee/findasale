@@ -169,7 +169,7 @@ export default function GuidePage({
             <p className="text-warm-700 dark:text-warm-300 mb-6 text-lg">{content.cta}</p>
             <div className="flex gap-4 justify-center">
               <Link
-                href="/organizer/new"
+                href="/organizer/create-sale"
                 className="inline-block bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white font-medium py-3 px-6 rounded-lg transition-colors"
               >
                 List Your Sale

@@ -410,7 +410,7 @@ const ProfilePage = () => {
                     Active
                   </span>
                 ) : (
-                  <Link href="/shopper/subscription" className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
+                  <Link href="/shopper/hunt-pass" className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm">
                     Upgrade
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

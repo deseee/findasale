@@ -411,7 +411,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
               {!searchQuery && (
                 <p className="mt-3 text-sm text-white/60">
                   Running a sale?{' '}
-                  <a href="/organizer/register" className="text-white/85 underline underline-offset-2 hover:text-white transition-colors">
+                  <a href="/register" className="text-white/85 underline underline-offset-2 hover:text-white transition-colors">
                     List it free
                   </a>
                 </p>

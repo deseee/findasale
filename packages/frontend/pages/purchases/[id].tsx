@@ -236,7 +236,7 @@ const PurchaseConfirmationPage = () => {
               <div className="mt-4 max-w-sm mx-auto p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
                   This seller hasn't finished payment setup yet. Please{' '}
-                  <Link href="/shopper/messages" className="font-semibold underline">
+                  <Link href="/messages" className="font-semibold underline">
                     contact the organizer
                   </Link>{' '}
                   directly to arrange payment for this item.
@@ -397,7 +397,7 @@ const PurchaseConfirmationPage = () => {
                 and processed securely{purchase.processor === 'SQUARE' ? ' by Square' : ' by Stripe'}. If you have any questions about your order (pickup,
                 condition, timing), {organizer.businessName} is who to contact first.
                 Send them a message via your{' '}
-                <Link href="/shopper/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
+                <Link href="/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
                   messages
                 </Link>
                 . FindA.Sale is here if you need help finding them or navigating the platform.
@@ -405,7 +405,7 @@ const PurchaseConfirmationPage = () => {
             ) : (
               <p>
                 Questions about your purchase? Visit your{' '}
-                <Link href="/shopper/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
+                <Link href="/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
                   messages
                 </Link>
                 {' '}to contact the organizer.
