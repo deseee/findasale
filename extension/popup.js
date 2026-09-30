@@ -164,6 +164,22 @@ async function loadAutoRemoveMode() {
   };
   await send({ type: 'refreshRemovalAlarm' }); // re-assert the alarm in case the worker never woke since install
   await renderRemovalDiag();
+  const resyncBtn = $('resyncListingsBtn');
+  if (resyncBtn) {
+    resyncBtn.onclick = async () => {
+      resyncBtn.disabled = true;
+      $('resyncListingsResult').textContent = 'Checking every listing FindA.Sale thinks is still live\u2026';
+      const res = await send({ type: 'resyncListings' });
+      resyncBtn.disabled = false;
+      const outcome = (res && res.outcome) || 'no response';
+      $('resyncListingsResult').textContent = outcome === 'off'
+        ? 'Turn "Keep listings in sync" on first.'
+        : String(outcome).indexOf('error:') === 0
+          ? 'Could not resync (' + outcome + ').'
+          : 'Resync started. Listings that are already gone will be marked removed as each marketplace is checked; anything else is removed normally.';
+      await renderRemovalDiag();
+    };
+  }
 }
 
 // (2026-07-21) Surfaces the alarm-fire instrumentation added in background.js so "is the

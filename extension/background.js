@@ -1094,6 +1094,8 @@ async function checkPendingRemovals(opts) {
   // opts.forceFacebook: the organizer clicked "Retry Facebook" in the popup -- probe now, in any
   // mode, even with nothing queued (the sold-filter page load alone tells us if access is back).
   const forceFacebook = !!(opts && opts.forceFacebook);
+  // S-EXT-RESYNC (2026-09-30): organizer-initiated repair run from the popup's "Resync listings".
+  const resync = !!(opts && opts.resync);
   const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
   // Guard: don't open another Facebook removal tab while one is mid-run. Also prevents
@@ -1106,7 +1108,7 @@ async function checkPendingRemovals(opts) {
   // noteStalledRemovalRun) when the previous tab ended without a report.
   const facebookRunInProgress = await silentRemovalInProgress();
 
-  const resp = await apiFetch('/extension/pending-removals');
+  const resp = await apiFetch('/extension/pending-removals' + (resync ? '?resync=1' : ''));
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const items = (resp.data && resp.data.items) || [];
   await notifyManualReviewIfNew(resp.data && resp.data.needsManualReview);
@@ -1119,6 +1121,9 @@ async function checkPendingRemovals(opts) {
   // getPendingRemovals' same-session fix); checkCrossPlatformRemovals filters it per platform
   // itself. Wrapped so a failure here can never take down the proven, working Facebook flow below.
   try { await checkCrossPlatformRemovals(items); } catch (e) { console.log('[FAS cross-platform removal check FAILED]', e && e.message); }
+  // A resync run only repairs the non-Facebook platforms (it never opens a Facebook tab -- see
+  // fas-remove.js's own bot-fingerprint notes); Facebook keeps its normal 20-min path.
+  if (resync) return 'resync:' + items.filter((i) => Array.isArray(i.platforms) && i.platforms.some((p) => p !== 'FACEBOOK')).length + '_items';
 
   // BUG FIX 2026-09-04 (S-EXT-FACEBOOK-QUEUE-FED-OTHER-PLATFORMS-ITEMS): `items` is
   // platform-agnostic -- each entry now carries a `platforms` array saying which platforms still
@@ -3073,8 +3078,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // 2026-09-04: `platform` now sent -- without it the backend files every skip under the
         // schema default (FACEBOOK), so Poshmark's skips counted against Facebook's budget and
         // per-platform skip counting in getPendingRemovals was meaningless.
+        const { fasResyncUntil = 0 } = await chrome.storage.local.get(['fasResyncUntil']);
+        const resyncActive = Date.now() < fasResyncUntil;
         const skipResp = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
-          { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform } });
+          { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform, confirmedGone: resyncActive && msg.reason === 'listing_not_found' } });
         // S-EXT-LISTING-GONE (2026-09-29): removal skips previously left NO server-side trace beyond
         // the job row itself. resolved:true means the backend confirmed the listing gone (3
         // consecutive zero-match reports) and marked it removed.
@@ -3169,6 +3176,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else if (msg.type === 'refreshRemovalAlarm') {
         await ensureRemovalAlarm();
         sendResponse({ ok: true });
+      } else if (msg.type === 'resyncListings') {
+        // S-EXT-RESYNC (2026-09-30): popup "Resync listings" -- see extensionController.ts
+        // getPendingRemovals' `resync` note. Opens a 30-min window in which a zero-match removal
+        // report counts as confirmed (the organizer asked for this run), then polls right now.
+        await chrome.storage.local.set({ fasResyncUntil: Date.now() + 30 * 60 * 1000, fasLastRemovalCheckAt: 0 });
+        const outcome = await checkPendingRemovals({ resync: true }).catch((e) => 'error:' + String((e && e.message) || e));
+        fasLog('info', 'resyncListings', 'organizer-initiated resync: ' + outcome, null, {});
+        sendResponse({ ok: true, outcome });
       } else if (msg.type === 'removalModeChanged') {
         // Mode just changed in the popup -- (re)ensure the alarm for the new mode and poll
         // immediately (throttled) so switching to 'silent'/'notify' acts without waiting 20 min.

@@ -2219,6 +2219,18 @@
     return true;
   }
 
+  // Counts photo thumbnails Vinted itself rendered for the item being listed (blob:/data: previews or
+  // Vinted-CDN images inside a photo/upload region). 0 = nothing attached (or region not recognized).
+  function fasCountVintedPhotoThumbs() {
+    const seen = new Set();
+    const sel = 'img[src^="blob:"], img[src^="data:image"], [data-testid*="photo" i] img, [class*="photo" i] img, [class*="upload" i] img, [class*="image-upload" i] img';
+    document.querySelectorAll(sel).forEach((im) => {
+      const r = im.getBoundingClientRect();
+      if (r.width >= 24 && r.height >= 24) seen.add(im.currentSrc || im.src);
+    });
+    return seen.size;
+  }
+
   function looksLikeListingForm() {
     return !!(fieldByLabel('Title') || fieldByLabel('Description') || photoInput());
   }
@@ -2735,7 +2747,16 @@
     // outside.
     fasMarkStep('postLanguage:photosCheckStart');
     await sleep(250 + Math.floor(Math.random() * 450));
-    if (!photosOk || !(photoInput() && photoInput().files && photoInput().files.length)) {
+    // FIX 2026-09-30 (S-EXT-VINTED-DUPLICATE-PHOTOS, Patrick live report: photos added twice).
+    // The old test read the hidden <input type=file>'s .files, but Vinted's uploader consumes the
+    // files into its own state and clears that input -- so after a SUCCESSFUL first attach the
+    // input looks empty, this block "re-attached" the same photos, and Vinted appended them a
+    // second time. Trust what Vinted actually rendered (thumbnails) over the input's leftover state.
+    const vintedThumbs = fasCountVintedPhotoThumbs();
+    fasMarkStep('postLanguage:photoThumbs:' + vintedThumbs);
+    if (photosOk && vintedThumbs > 0) {
+      console.log('[FAS Vinted] Photos already attached (' + vintedThumbs + ' thumbnail(s) on the form) -- not re-attaching.');
+    } else if (!photosOk || !(photoInput() && photoInput().files && photoInput().files.length)) {
       console.warn('[FAS Vinted] Photos missing after the Language step -- Vinted reset them, re-attaching.');
       const rePhotosOk = await injectPhotos(item.photoUrls);
       if (rePhotosOk) photosOk = true;

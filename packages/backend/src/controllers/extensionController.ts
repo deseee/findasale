@@ -1021,6 +1021,12 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
       : null;
     if (pending) {
       const skipReason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null;
+      if (skipReason === 'listing_not_found' && req.body?.confirmedGone === true) {
+        // Resync run confirmed the deleted item's listing is already gone: the snapshot row is done.
+        await prisma.pendingListingRemoval.delete({ where: { id: pending.id } });
+        res.json({ ok: true, resolved: true });
+        return;
+      }
       await prisma.pendingListingRemoval.update({
         where: { id: pending.id },
         data: { skipCount: { increment: 1 }, lastSkipReason: skipReason, lastSkipAt: new Date() },
@@ -1060,6 +1066,24 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
   // LISTING_GONE_CONFIRMATIONS consecutive independent zero-match reports (this one plus the
   // previous N-1 rows for this item+platform, all REMOVE/SKIPPED/'listing_not_found', no other row
   // in between) before treating the listing as gone and writing the REMOVED row.
+  // confirmedGone (2026-09-30, S-EXT-RESYNC): sent only during an organizer-initiated "Resync
+  // listings" run, where the extension has just done a full scan of the platform's own listings and
+  // found zero cards for this item. That IS the confirmation, so no 3-strike streak is needed.
+  const confirmedGone = req.body?.confirmedGone === true;
+  if (reason === 'listing_not_found' && confirmedGone) {
+    await prisma.marketplaceListingJob.create({
+      data: {
+        itemId,
+        action: 'REMOVE',
+        status: 'REMOVED',
+        platform,
+        lastAttemptAt: new Date(),
+        lastErrorMessage: 'resync:listing_not_found',
+      },
+    });
+    res.json({ ok: true, resolved: true });
+    return;
+  }
   if (reason === 'listing_not_found') {
     const LISTING_GONE_CONFIRMATIONS = 3;
     const recent = await prisma.marketplaceListingJob.findMany({
@@ -1168,13 +1192,22 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const organizer = await prisma.organizer.findUnique({ where: { userId } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
+  // S-EXT-RESYNC (2026-09-30): the popup's "Resync listings" button passes ?resync=1. That is an
+  // organizer-initiated repair run, so the automatic retry brakes (skip cap, hourly cooldown, hard
+  // stop) are bypassed and every still-listed removal is served again; the extension then reports
+  // confirmedGone for listings a full scan of the marketplace no longer shows (see
+  // markItemRemovalSkipped). needsManualReview is still reported as before.
+  const resync = req.query?.resync === '1' || req.query?.resync === 'true';
+
   const soldItems = await prisma.item.findMany({
     // 2026-07-26 (S1169): same sale.deletedAt gap as getExtensionItems -- a sold item under a
     // soft-deleted sale must not keep surfacing as a pending Facebook removal forever.
     where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD' },
     select: { id: true, title: true },
   });
-  if (!soldItems.length) { res.json({ items: [], needsManualReview: [] }); return; }
+  // (2026-09-30) The old `if (!soldItems.length) return empty` early exit lived here. It also
+  // skipped the POLICY_INELIGIBLE and ITEM_DELETED removal sections below, so an organizer with
+  // no SOLD items never had those served. Every query below handles an empty id list.
 
   const itemIds = soldItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
@@ -1252,6 +1285,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   // 2026-09-04: now scoped to ONE platform's own skip history. The internal logic below is
   // unchanged from S1179 -- only the counters it reads are per-platform instead of per-item.
   const isRetryEligible = (itemId: string, platform: string): boolean => {
+    if (resync) return true;
     const skipKey = itemId + ':' + platform;
     const skipCount = skipCountByItemPlatform.get(skipKey) || 0;
     if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
@@ -1475,6 +1509,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         });
       }
       const retryablePlatforms = nowIneligiblePlatforms.filter((p) => {
+        if (resync) return true;
         const sk = it.id + ':' + p;
         const skipCount = complianceSkipCount.get(sk) || 0;
         if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
@@ -1515,7 +1550,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     where: { organizerId: organizer.id },
   });
   const deletedItemRetryable = deletedItemRows.filter(
-    (row) => row.skipCount < REMOVAL_HARD_STOP_AFTER_ATTEMPTS || !!row.remoteListingId
+    (row) => resync || row.skipCount < REMOVAL_HARD_STOP_AFTER_ATTEMPTS || !!row.remoteListingId
   );
   const deletedItemStuck = deletedItemRows.filter((row) => row.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS);
 
