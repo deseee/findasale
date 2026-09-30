@@ -353,7 +353,7 @@ describe('inbound webhook flow', () => {
 
   it('a chatty non-keyword message is logged masked and does not change consent', async () => {
     seed({ smsConsentAt: new Date() });
-    const res = await call({ From: '+12695550142', Body: 'stop by around noon? I will bring a truck' });
+    const res = await call({ From: '+12695550142', Body: 'see you around noon? I will bring a truck' });
     expect(res.body).toBe('<Response></Response>');
     expect(mockFake.prisma.smsOptOut.rows).toHaveLength(0);
     const logged = (console.info as jest.Mock).mock.calls.map((c) => c.join(' ')).join('\n');
@@ -377,3 +377,161 @@ describe('inbound webhook flow', () => {
     expect(mockFake.prisma.smsOptOut.rows).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 2026-09-30 review fixes
+// ---------------------------------------------------------------------------------------------------------------------
+import { isAllowedNanpAreaCode, US_AREA_CODES, CA_AREA_CODES } from '../services/smsComplianceService';
+import { safeErrorForLog, redactEmailsInText } from '../utils/logMask';
+
+describe('classifyInboundKeyword: an exact carrier keyword as the FIRST word always opts out', () => {
+  it.each([
+    'stop, thanks a lot',
+    'STOP thanks a lot',
+    'Stop. Thanks!',
+    'stop - thank you so much for everything',
+    "STOP, don't keep texting me",
+    'Stop, I want to keep my number private',
+    "stop!! I can't stop getting these",
+    'stop, i never asked for these and it is not okay',
+    'STOP\nthanks',
+    'stop,thanks',
+    'STOPALL thanks',
+    'stopall, please',
+    'Unsubscribe, thanks',
+    'UNSUBSCRIBE! now',
+    'cancel, thanks a lot',
+    'CANCEL my subscription to everything that you have ever sent me',
+    'end, thanks',
+    'End. of. story. I do not want these anymore ok',
+    'quit, thanks',
+    'QUIT texting',
+    '  Stop  ',
+    'ＳＴＯＰ, thanks', // fullwidth
+    'stop by mistake? no, stop please', // conservative: first word wins
+  ])('%j is a STOP', (b) => expect(classifyInboundKeyword(b)).toBe('STOP'));
+
+  it.each(['please stop texting me', 'Please STOP', 'pls stop', 'can you stop texting me please', 'i want to unsubscribe', 'do not text me again', 'opt out please', 'remove me'])(
+    'still a STOP: %j',
+    (b) => expect(classifyInboundKeyword(b)).toBe('STOP')
+  );
+
+  it.each(['START', 'yes', 'HELP', 'info'])('the rest of the keyword handling is unchanged: %s', (b) => {
+    expect(classifyInboundKeyword(b)).toBe(b.toLowerCase() === 'help' || b.toLowerCase() === 'info' ? 'HELP' : 'START');
+  });
+
+  it.each([
+    'see you at the sale, stop by around noon',
+    'the bus stop is on Oak Street',
+    "don't stop",
+    'we cannot stop by until noon',
+    'keep them coming',
+    'what time does it open',
+    'thanks a lot, see you there',
+    'yes I will be there Saturday with my truck',
+  ])('a message that does not start with a carrier keyword and means something else is not a STOP: %j', (b) => expect(classifyInboundKeyword(b)).toBeNull());
+
+  it('the webhook honors "stop, thanks a lot" (opt-out recorded, consent revoked)', async () => {
+    mockFake.prisma.saleSubscriber.insert({ saleId: 's1', userId: 'u1', phone: '+12695550142', smsConsentAt: new Date(), smsConsentPendingAt: null });
+    const res: any = { statusCode: 0, status(c: number) { this.statusCode = c; return this; }, type() { return this; }, send(b: string) { this.body = b; return this; } };
+    await handleInboundSms({ body: { From: '+12695550142', Body: "STOP, don't keep texting me" }, headers: { 'x-twilio-signature': 'sig' }, protocol: 'https', originalUrl: '/api/notifications/sms-webhook', get: () => 'example.com' } as any, res);
+    expect(mockFake.prisma.smsOptOut.rows).toHaveLength(1);
+    expect(mockFake.prisma.saleSubscriber.rows[0].smsConsentAt).toBeNull();
+  });
+});
+
+describe('normalizePhoneE164: United States and Canada only (explicit area-code allowlist)', () => {
+  it.each([
+    ['+1 269 555 0142', '+12695550142'], // Michigan
+    ['(212) 555-0123', '+12125550123'], // New York
+    ['310-555-0100', '+13105550100'], // California
+    ['+1 416 555 0199', '+14165550199'], // Toronto
+    ['604.555.0177', '+16045550177'], // Vancouver
+    ['+1 514 555 0111', '+15145550111'], // Montreal
+    ['+1 907 555 0100', '+19075550100'], // Alaska
+    ['+1 808 555 0100', '+18085550100'], // Hawaii
+    ['+1 202 555 0100', '+12025550100'], // DC
+  ])('accepts %s', (raw, out) => expect(normalizePhoneE164(raw)).toBe(out));
+
+  it.each([
+    // Caribbean nations sharing +1
+    '+1 242 555 0100', '+1 246 555 0100', '+1 264 555 0100', '+1 268 555 0100', '+1 284 555 0100', '+1 345 555 0100',
+    '+1 441 555 0100', '+1 473 555 0100', '+1 649 555 0100', '+1 664 555 0100', '+1 721 555 0100', '+1 758 555 0100',
+    '+1 767 555 0100', '+1 784 555 0100', '+1 809 555 0100', '+1 829 555 0100', '+1 849 555 0100', '+1 868 555 0100',
+    '+1 869 555 0100', '+1 876 555 0100',
+    // US territories: decision is US states + DC and Canada only
+    '+1 787 555 0100', '+1 939 555 0100', '+1 340 555 0100', '+1 671 555 0100', '+1 684 555 0100', '+1 670 555 0100',
+    // premium / pay-per-call / toll free / personal numbers
+    '+1 900 555 0100', '900-555-0100', '(976) 555-0100', '976 555 0100', '+1 800 555 0100', '888-555-0100', '+1 500 555 0100', '+1 700 555 0100',
+    // N9X-style codes that are not assigned
+    '+1 299 555 0100', '+1 399 555 0100', '+1 999 555 0100', '+1 899 555 0100',
+  ])('rejects %s', (raw) => expect(normalizePhoneE164(raw)).toBeNull());
+
+  it('N9X codes that ARE assigned US/Canadian areas stay allowed (989 Michigan, 519 Ontario, 909 California)', () => {
+    expect(normalizePhoneE164('+1 989 555 0100')).toBe('+19895550100');
+    expect(normalizePhoneE164('+1 519 555 0100')).toBe('+15195550100');
+    expect(normalizePhoneE164('909-555-0100')).toBe('+19095550100');
+  });
+
+  it('the allowlist has the shape of the real assignments and no overlap between countries', () => {
+    expect(US_AREA_CODES.size).toBeGreaterThan(300);
+    expect(CA_AREA_CODES.size).toBeGreaterThan(40);
+    for (const c of [...US_AREA_CODES, ...CA_AREA_CODES]) expect(c).toMatch(/^[2-9]\d{2}$/);
+    for (const c of CA_AREA_CODES) expect(US_AREA_CODES.has(c)).toBe(false);
+    for (const c of ['900', '976', '800', '888', '877', '866', '855', '844', '833', '500', '600', '700', '787', '939', '340', '809']) expect(isAllowedNanpAreaCode(c)).toBe(false);
+    for (const c of ['269', '231', '517', '616', '734', '810', '906', '989', '313', '248', '586', '947', '679']) expect(isAllowedNanpAreaCode(c)).toBe(true); // Michigan
+  });
+
+  it('SMS_EXTRA_AREA_CODES can add a territory, but never a premium code', () => {
+    process.env.SMS_EXTRA_AREA_CODES = '787, 939,900,976';
+    try {
+      expect(normalizePhoneE164('+1 787 555 0100')).toBe('+17875550100');
+      expect(normalizePhoneE164('+1 939 555 0100')).toBe('+19395550100');
+      expect(normalizePhoneE164('+1 900 555 0100')).toBeNull();
+      expect(normalizePhoneE164('+1 976 555 0100')).toBeNull();
+    } finally {
+      delete process.env.SMS_EXTRA_AREA_CODES;
+    }
+    expect(normalizePhoneE164('+1 787 555 0100')).toBeNull();
+  });
+
+  it('applies to prefixed and unprefixed numbers alike, and other countries still need the country allowlist', () => {
+    expect(normalizePhoneE164('787-555-0100')).toBeNull();
+    expect(normalizePhoneE164('+17875550100')).toBeNull();
+    expect(normalizePhoneE164('+44 20 7946 0958')).toBeNull();
+  });
+});
+
+describe('log masking: errors that can embed phone numbers or emails (2026-09-30)', () => {
+  it('safeErrorForLog keeps the code and masks numbers and emails, one line, capped', () => {
+    const err = Object.assign(new Error('Invalid `prisma.saleSubscriber.updateMany()` invocation:\n where: { phone: "+12695550142" }\n owner jane.doe@example.com'), { code: 'P2010' });
+    const out = safeErrorForLog(err);
+    expect(out).toContain('code=P2010');
+    expect(out).not.toContain('2695550142');
+    expect(out).not.toContain('jane.doe@example.com');
+    expect(out).toContain('***0142');
+    expect(out).not.toMatch(/[\r\n]/);
+    expect(safeErrorForLog(new Error('x'.repeat(5000))).length).toBeLessThanOrEqual(260);
+  });
+
+  it('safeErrorForLog never throws on odd input', () => {
+    expect(() => safeErrorForLog(undefined)).not.toThrow();
+    expect(() => safeErrorForLog(null)).not.toThrow();
+    expect(() => safeErrorForLog('plain string +12695550142')).not.toThrow();
+    expect(safeErrorForLog('plain string +12695550142')).not.toContain('2695550142');
+    expect(redactEmailsInText('mail a.b@c.example now')).toBe('mail a***@c.example now');
+  });
+
+  it('the inbound webhook 500 path logs a masked message', async () => {
+    jest.spyOn(mockFake.prisma.smsOptOut, 'upsert').mockRejectedValue(
+      Object.assign(new Error('Invalid invocation: where phone "+12695550142"'), { code: 'P2010' })
+    );
+    const res: any = { statusCode: 0, status(c: number) { this.statusCode = c; return this; }, type() { return this; }, send(b: string) { this.body = b; return this; } };
+    await handleInboundSms({ body: { From: '+12695550142', Body: 'STOP' }, headers: { 'x-twilio-signature': 'sig' }, protocol: 'https', originalUrl: '/api/notifications/sms-webhook', get: () => 'example.com' } as any, res);
+    expect(res.statusCode).toBe(500);
+    const logged = (console.error as jest.Mock).mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logged).toContain('code=P2010');
+    expect(logged).not.toContain('2695550142');
+  });
+});
+

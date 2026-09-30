@@ -11,9 +11,17 @@
 
 var mockPrisma: any = {
   sale: { findUnique: jest.fn() },
-  saleCheckin: { upsert: jest.fn() },
+  saleCheckin: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
 };
 jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
+
+// The check-in now runs the shared anti-spoof guard (services/qrScanGuardService); Redis is "unavailable" here so it
+// uses its in-memory counters.
+jest.mock('../middleware/rateLimitShared', () => ({
+  redisIncrWithWindow: jest.fn().mockResolvedValue(null),
+  redisGetValue: jest.fn().mockResolvedValue(null),
+  redisSetValue: jest.fn().mockResolvedValue(undefined),
+}));
 
 var mockAwardStamp = jest.fn();
 jest.mock('../services/loyaltyService', () => ({
@@ -28,6 +36,7 @@ jest.mock('../lib/socket', () => ({
 }));
 
 import { checkinAtSale } from '../controllers/reservationController';
+import { __resetQrScanGuardState } from '../services/qrScanGuardService';
 
 const makeRes = () => {
   const res: any = {};
@@ -40,12 +49,21 @@ const makeReq = (body: any = { saleId: 'sale-1', latitude: 42.2, longitude: -85.
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetQrScanGuardState();
   mockPrisma.sale.findUnique.mockReset();
-  mockPrisma.saleCheckin.upsert.mockReset();
+  mockPrisma.saleCheckin.findUnique.mockReset();
+  mockPrisma.saleCheckin.create.mockReset();
+  mockPrisma.saleCheckin.update.mockReset();
   mockAwardStamp.mockReset();
   mockAwardStamp.mockResolvedValue(undefined);
-  mockPrisma.sale.findUnique.mockResolvedValue({ id: 'sale-1' });
-  mockPrisma.saleCheckin.upsert.mockResolvedValue({ id: 'ci-1', saleId: 'sale-1', userId: 'shopper-1' });
+  // An open sale right where the shopper stands (the guard checks window, then radius).
+  mockPrisma.sale.findUnique.mockResolvedValue({
+    id: 'sale-1', status: 'PUBLISHED', lat: 42.2, lng: -85.9,
+    startDate: new Date(Date.now() - 60 * 60 * 1000), endDate: new Date(Date.now() + 5 * 60 * 60 * 1000),
+    organizer: { timezone: 'America/Chicago' },
+  });
+  mockPrisma.saleCheckin.findUnique.mockResolvedValue(null);
+  mockPrisma.saleCheckin.create.mockResolvedValue({ id: 'ci-1', saleId: 'sale-1', userId: 'shopper-1' });
 });
 
 describe('reservationController.checkinAtSale passport stamp', () => {

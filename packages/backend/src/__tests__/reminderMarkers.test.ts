@@ -39,6 +39,10 @@ jest.mock('../utils/webpush', () => ({ sendPushNotification: (...a: unknown[]) =
 jest.mock('../services/emailTemplateService', () => ({ buildSaleDayReminderEmail: jest.fn(() => '<p>x</p>') }));
 const mockEmailSend = jest.fn();
 jest.mock('../lib/emailService', () => ({ emailService: { emails: { send: (...a: unknown[]) => mockEmailSend(...a) } } }));
+const mockTransactionalSend = jest.fn();
+jest.mock('../lib/transactionalEmailService', () => ({
+  transactionalEmailService: { emails: { send: (...a: unknown[]) => mockTransactionalSend(...a) } },
+}));
 jest.mock('../services/suppressionService', () => ({ suppressionService: { isSuppressed: jest.fn().mockResolvedValue(false) } }));
 const mockGenToken = jest.fn();
 jest.mock('../controllers/unsubscribeController', () => ({ generateUnsubscribeToken: (...a: unknown[]) => mockGenToken(...a) }));
@@ -84,20 +88,27 @@ const sale = (subscribers: any[], over: Record<string, unknown> = {}) => {
     ...over,
   };
 };
-const subscriber = (over: Record<string, unknown> = {}) => ({
-  id: 'sub1',
-  email: 'shopper@example.com',
-  phone: null,
-  userId: 'u1',
-  smsConsentAt: null,
-  emailOptOutAt: null,
-  ...over,
-});
+const subscriber = (over: Record<string, unknown> = {}) => {
+  const row: Record<string, any> = {
+    id: 'sub1',
+    email: 'shopper@example.com',
+    phone: null,
+    userId: 'u1',
+    smsConsentAt: null,
+    emailOptOutAt: null,
+    ...over,
+  };
+  // The reminder pass reads the ACCOUNT's email (User.email) through the `user` relation, never SaleSubscriber.email
+  // (that column is only an "email me" flag). By default the account's email is the row's own, like a normal signup.
+  if (!('user' in over)) row.user = row.userId ? { email: row.email ?? 'account@example.com' } : null;
+  return row;
+};
 const smsSub = (over: Record<string, unknown> = {}) =>
   subscriber({ email: null, userId: null, phone: '(269) 555-0142', smsConsentAt: consent, ...over });
 
 const ledgerKinds = () => ledgerRows.map((r) => r.kind).sort();
 let sends: Array<{ subject: string; to: string }> = [];
+let guestMail: any[] = [];
 const dayEmails = () => sends.filter((s) => /^Your sale is (today|tomorrow)/.test(s.subject));
 const twoHourEmails = () => sends.filter((s) => s.subject.includes('starts in about 2 hours'));
 
@@ -109,6 +120,7 @@ beforeEach(() => {
   ledgerRows = [];
   allSales = [];
   sends = [];
+  guestMail = [];
   // Sale query: honours the same filters the service sends to Prisma.
   mockSaleFindMany.mockImplementation(async ({ where }: any) =>
     allSales.filter(
@@ -143,6 +155,11 @@ beforeEach(() => {
   mockSmsAggregate.mockResolvedValue({ _sum: { sentCount: 0 } });
   mockUserFindUnique.mockResolvedValue({ notificationPrefs: {} });
   mockTwilioCreate.mockResolvedValue({ sid: 'SM1' });
+  mockTransactionalSend.mockImplementation(async (arg: any) => {
+    sends.push({ subject: arg.subject, to: arg.to });
+    guestMail.push(arg);
+    return { sent: true };
+  });
   mockEmailSend.mockImplementation(async (arg: any) => {
     sends.push({ subject: arg.subject, to: arg.to });
     return { id: 'e1' };
@@ -618,5 +635,79 @@ describe('reminder email: wording, timezone and opt-out', () => {
     allSales = [sale([subscriber()], { title: 'Sale\r\nBcc: evil@example.com' })];
     await processReminderPass('DAY_BEFORE', DAY_NOON, {});
     expect(sends[0].subject).not.toMatch(/[\r\n]/);
+  });
+});
+
+describe('reminder email recipient: the account\'s own address only (2026-09-30)', () => {
+  it('sends to User.email, never to a different address stored on the subscriber row', async () => {
+    allSales = [sale([subscriber({ email: 'victim@third-party.example', user: { email: 'Owner@Example.com' } })])];
+    await processReminderPass('DAY_BEFORE', DAY_NOON, {});
+    expect(sends).toHaveLength(1);
+    expect(sends[0].to).toBe('owner@example.com');
+    expect(sends.some((s) => s.to.includes('third-party'))).toBe(false);
+  });
+
+  it('a guest / orphaned row (no account) with an email on it is never emailed, and is counted as skipped', async () => {
+    allSales = [sale([subscriber({ userId: null, user: null, email: 'guest@example.com' })])];
+    const outcomes: Record<string, number> = {};
+    await processReminderPass('DAY_BEFORE', DAY_NOON, outcomes);
+    expect(sends).toHaveLength(0);
+    expect(outcomes.skipped_email_no_account).toBe(1);
+  });
+
+  it('a CONFIRMED guest row is emailed on the transactional rail with an opt-out link and one-click headers (2026-09-30)', async () => {
+    process.env.JWT_SECRET = 'test-secret-not-real';
+    allSales = [sale([subscriber({ userId: null, user: null, email: 'Guest@Example.com', emailConfirmedAt: new Date('2026-09-29T00:00:00Z') })])];
+    const outcomes: Record<string, number> = {};
+    await processReminderPass('DAY_BEFORE', DAY_NOON, outcomes);
+    expect(guestMail).toHaveLength(1);
+    expect(guestMail[0].to).toBe('guest@example.com');
+    // the template receives the stateless guest opt-out link as its unsubscribe URL (the template itself is mocked here)
+    const { buildSaleDayReminderEmail } = require('../services/emailTemplateService');
+    const tplArg = (buildSaleDayReminderEmail as jest.Mock).mock.calls.at(-1)![0];
+    expect(tplArg.unsubUrl).toMatch(/\/api\/notifications\/guest-unsubscribe\?token=/);
+    expect(guestMail[0].headers['List-Unsubscribe']).toMatch(/guest-unsubscribe\?token=/);
+    expect(guestMail[0].headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+    expect(mockEmailSend).not.toHaveBeenCalled();
+    expect(outcomes.skipped_email_no_account).toBeUndefined();
+  });
+
+  it('a confirmed guest who opted out, and an unconfirmed guest, are never emailed', async () => {
+    process.env.JWT_SECRET = 'test-secret-not-real';
+    allSales = [
+      sale([
+        subscriber({ id: 'g1', userId: null, user: null, email: 'out@example.com', emailConfirmedAt: new Date(), emailOptOutAt: new Date() }),
+        subscriber({ id: 'g2', userId: null, user: null, email: 'pending@example.com', emailConfirmedAt: null }),
+      ]),
+    ];
+    const outcomes: Record<string, number> = {};
+    await processReminderPass('DAY_BEFORE', DAY_NOON, outcomes);
+    expect(guestMail).toHaveLength(0);
+    expect(mockEmailSend).not.toHaveBeenCalled();
+    expect(outcomes.skipped_email_opt_out).toBe(1);
+    expect(outcomes.skipped_email_no_account).toBe(1);
+  });
+
+  it('a confirmed guest whose address is suppressed is not emailed', async () => {
+    process.env.JWT_SECRET = 'test-secret-not-real';
+    const { suppressionService } = require('../services/suppressionService');
+    (suppressionService.isSuppressed as jest.Mock).mockResolvedValueOnce(true);
+    allSales = [sale([subscriber({ userId: null, user: null, email: 'supp@example.com', emailConfirmedAt: new Date() })])];
+    await processReminderPass('DAY_BEFORE', DAY_NOON, {});
+    expect(guestMail).toHaveLength(0);
+  });
+
+  it('an account with no email on file is not emailed (fail closed, never falls back to the row address)', async () => {
+    allSales = [sale([subscriber({ email: 'typed@example.com', user: { email: null } })])];
+    const outcomes: Record<string, number> = {};
+    await processReminderPass('DAY_BEFORE', DAY_NOON, outcomes);
+    expect(sends).toHaveLength(0);
+    expect(outcomes.skipped_email_no_account).toBe(1);
+  });
+
+  it('a row that is not flagged for email (email null) gets no reminder email even though the account has an address', async () => {
+    allSales = [sale([subscriber({ email: null, user: { email: 'owner@example.com' } })])];
+    await processReminderPass('DAY_BEFORE', DAY_NOON, {});
+    expect(sends).toHaveLength(0);
   });
 });

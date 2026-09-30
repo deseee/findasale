@@ -33,6 +33,8 @@ function cond(val: any, c: any): boolean {
         return val !== null && val !== undefined && num(val) < num(arg);
       case 'endsWith':
         return typeof val === 'string' && val.endsWith(arg);
+      case 'startsWith':
+        return typeof val === 'string' && val.startsWith(arg);
       default:
         throw new Error(`fake prisma: unsupported operator ${op}`);
     }
@@ -74,7 +76,19 @@ class Table {
   }
   async findMany({ where, take, orderBy, select }: Row = {}) {
     let out = this.rows.filter((r) => matches(r, where));
-    if (orderBy?.createdAt) out = [...out].sort((a, b) => (a.createdAt - b.createdAt) * (orderBy.createdAt === 'desc' ? -1 : 1));
+    // orderBy: one { field: 'asc' | 'desc' } object or an array of them (nulls sort first ascending, like Postgres NULLS LAST inverted is not needed here).
+    const orders: Row[] = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
+    if (orders.length) {
+      out = [...out].sort((a, b) => {
+        for (const o of orders) {
+          const [field, dir] = Object.entries(o)[0] as [string, string];
+          const av = num(a[field]) ?? -Infinity;
+          const bv = num(b[field]) ?? -Infinity;
+          if (av !== bv) return (av < bv ? -1 : 1) * (dir === 'desc' ? -1 : 1);
+        }
+        return 0;
+      });
+    }
     if (take) out = out.slice(0, take);
     return out.map((r) => (select ? Object.fromEntries(Object.keys(select).map((k) => [k, r[k]])) : { ...r }));
   }

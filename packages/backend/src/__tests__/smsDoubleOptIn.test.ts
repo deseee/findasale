@@ -179,7 +179,8 @@ describe('subscribeToSale: double opt-in', () => {
     expect((await subscribe('u1', {})).statusCode).toBe(400);
   });
 
-  it('email-only subscribing works and sends no text', async () => {
+  it('email-only subscribing works and sends no text (the ACCOUNT email is stored, not the typed one)', async () => {
+    mockFake.prisma.user.insert({ id: 'u1', email: 'Shopper@Example.com' });
     const res = await subscribe('u1', { saleId: 's1', email: 'Shopper@Example.com' });
     expect(res.statusCode).toBe(200);
     expect(res.body.smsStatus).toBe('NONE');

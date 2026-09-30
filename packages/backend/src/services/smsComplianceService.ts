@@ -27,10 +27,12 @@
  * revokeSmsConsentForPhone below and controllers/smsWebhookController.ts.
  */
 
+import crypto from 'crypto';
 import type { Request } from 'express';
 import twilio from 'twilio';
 import { prisma } from '../lib/prisma';
 import { regionConfig } from '../config/regionConfig';
+import { safeErrorForLog } from '../utils/logMask';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -74,6 +76,74 @@ export function getAllowedCountryCodes(): string[] {
 };
 
 /**
+ * NANP area codes we text (2026-09-30): an explicit allowlist of United States and Canadian geographic area codes.
+ * "+1" alone is not "US or Canada": the same country code covers Caribbean nations (242, 246, 264, 268, 284, 345, 441,
+ * 473, 649, 664, 721, 758, 767, 784, 809, 829, 849, 868, 869, 876), US territories (PR 787/939, USVI 340, Guam 671,
+ * American Samoa 684, Northern Marianas 670) and premium or non-geographic codes (900, 976, 800-series toll free,
+ * 500/533/544/566/577/588 personal numbers). Decision: US states + DC and Canada only; everything else is rejected,
+ * which also keeps international-rate and premium-rate destinations out of the send path. Territories can be turned on
+ * with SMS_EXTRA_AREA_CODES="787,939,340" (comma separated three-digit codes) without a deploy of new code.
+ * Sourced from the NANPA assignment list; a brand-new overlay that is missing here fails CLOSED (number rejected), and
+ * SMS_EXTRA_AREA_CODES is the release valve.
+ */
+export const US_AREA_CODES: ReadonlySet<string> = new Set([
+  '201', '202', '203', '205', '206', '207', '208', '209', '210', '212', '213', '214',
+  '215', '216', '217', '218', '219', '220', '223', '224', '225', '227', '228', '229',
+  '231', '234', '239', '240', '248', '251', '252', '253', '254', '256', '260', '262',
+  '267', '269', '270', '272', '274', '276', '279', '281', '301', '302', '303', '304',
+  '305', '307', '308', '309', '310', '312', '313', '314', '315', '316', '317', '318',
+  '319', '320', '321', '323', '324', '325', '326', '327', '329', '330', '331', '332',
+  '334', '336', '337', '339', '341', '346', '347', '350', '351', '352', '353', '360',
+  '361', '363', '364', '369', '380', '385', '386', '401', '402', '404', '405', '406',
+  '407', '408', '409', '410', '412', '413', '414', '415', '417', '419', '423', '424',
+  '425', '430', '432', '434', '435', '440', '442', '443', '445', '447', '448', '458',
+  '463', '464', '469', '470', '475', '478', '479', '480', '484', '501', '502', '503',
+  '504', '505', '507', '508', '509', '510', '512', '513', '515', '516', '517', '518',
+  '520', '530', '531', '534', '539', '540', '541', '551', '557', '559', '561', '562',
+  '563', '564', '567', '570', '571', '572', '573', '574', '575', '580', '585', '586',
+  '601', '602', '603', '605', '606', '607', '608', '609', '610', '612', '614', '615',
+  '616', '617', '618', '619', '620', '623', '624', '626', '628', '629', '630', '631',
+  '636', '640', '641', '645', '646', '650', '651', '656', '657', '659', '660', '661',
+  '662', '667', '669', '678', '679', '680', '681', '682', '689', '701', '702', '703',
+  '704', '706', '707', '708', '712', '713', '714', '715', '717', '718', '719', '720',
+  '724', '725', '726', '727', '728', '730', '731', '732', '734', '737', '738', '740',
+  '743', '747', '754', '757', '760', '762', '763', '764', '765', '769', '770', '771',
+  '772', '773', '774', '775', '779', '781', '785', '786', '801', '802', '803', '804',
+  '805', '806', '808', '810', '812', '813', '814', '815', '816', '817', '818', '820',
+  '828', '830', '831', '832', '835', '838', '839', '840', '843', '845', '847', '848',
+  '850', '854', '856', '857', '858', '859', '860', '862', '863', '864', '865', '870',
+  '872', '878', '901', '903', '904', '906', '907', '908', '909', '910', '912', '913',
+  '914', '915', '916', '917', '918', '919', '920', '925', '928', '929', '930', '931',
+  '934', '936', '937', '938', '940', '941', '943', '945', '947', '948', '949', '951',
+  '952', '954', '956', '959', '970', '971', '972', '973', '975', '978', '979', '980',
+  '983', '984', '985', '986', '989',
+]);
+export const CA_AREA_CODES: ReadonlySet<string> = new Set([
+  '204', '226', '236', '249', '250', '257', '263', '289', '306', '343', '354', '365',
+  '367', '368', '382', '403', '416', '418', '428', '431', '437', '438', '450', '468',
+  '474', '506', '514', '519', '548', '579', '581', '584', '587', '604', '613', '639',
+  '647', '672', '683', '705', '709', '742', '753', '778', '780', '782', '807', '819',
+  '825', '867', '873', '879', '902', '905', '942',
+]);
+/** Never allowed, even through SMS_EXTRA_AREA_CODES: premium-rate and pay-per-call. */
+const PREMIUM_AREA_CODES: ReadonlySet<string> = new Set(['900', '976']);
+
+const extraAreaCodes = (): Set<string> =>
+  new Set(
+    (process.env.SMS_EXTRA_AREA_CODES || '')
+      .split(',')
+      .map((c) => c.replace(/\D/g, ''))
+      .filter((c) => c.length === 3 && /^[2-9]/.test(c) && !PREMIUM_AREA_CODES.has(c))
+  );
+
+/** True when the three-digit NANP area code is a US or Canadian geographic code we may text. */
+export function isAllowedNanpAreaCode(areaCode: string): boolean {
+  if (typeof areaCode !== 'string' || !/^[2-9]\d{2}$/.test(areaCode)) return false;
+  if (PREMIUM_AREA_CODES.has(areaCode)) return false;
+  return US_AREA_CODES.has(areaCode) || CA_AREA_CODES.has(areaCode) || extraAreaCodes().has(areaCode);
+}
+
+/**
  * Normalize to E.164. US/Canada (NANP) numbers may be typed with any punctuation; anything else
  * must already carry a leading + AND be in the SMS_ALLOWED_COUNTRY_CODES allowlist (default: +1 only).
  * Returns null when the number cannot be a valid mobile target. Strict on purpose: only the characters
@@ -106,6 +176,8 @@ export function normalizePhoneE164(raw: unknown): string | null {
     const national = e164Digits.slice(1);
     if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(national)) return null;
     if (national.slice(1, 3) === '11' || national.slice(4, 6) === '11') return null;
+    // Only US and Canadian geographic area codes: no Caribbean, territories, premium (900/976) or toll-free.
+    if (!isAllowedNanpAreaCode(national.slice(0, 3))) return null;
   }
   return `+${e164Digits}`;
 }
@@ -146,7 +218,11 @@ const STOP_CONTAINS: RegExp[] = [
   /\b(DO NOT|DONT|DON'T) (TEXT|MESSAGE|SMS|CONTACT)\b/,
   /\bNO MORE (TEXTS?|MESSAGES?)\b/,
 ];
-// Obvious non-opt-out uses of the same words.
+// Carrier keywords that opt the number out whenever they are the FIRST word, whatever follows ("STOP, thanks a lot",
+// "Stop. I don't want to keep getting these", "END"). Checked before any "this is not an opt-out" pattern: a false
+// opt-out costs a subscription, a missed one is a TCPA violation. Strict superset of what CTIA requires as an exact match.
+const STOP_FIRST_TOKEN = new Set(['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'OPTOUT', 'REVOKE']);
+// Obvious non-opt-out uses of the same words. Only consulted when the first word is NOT a carrier keyword.
 const STOP_POSITIVE: RegExp[] = [
   /\bSTOP BY\b/,
   /\bSTOP (IN|OVER|ON)\b/,
@@ -170,6 +246,8 @@ function normalizeInboundWords(body: string): string[] {
 /**
  * Classify an inbound text. Twilio's own OptOutType param (Advanced Opt-Out) wins when present.
  * Otherwise (industry-conservative, "when in doubt treat it as an opt-out"):
+ *  - the FIRST word is a carrier stop keyword (STOP, STOPALL, UNSUBSCRIBE, CANCEL, END, QUIT, OPTOUT, REVOKE), in any
+ *    case or punctuation, whatever follows it: this rule runs before every "means something else" exception, OR
  *  - the whole message is a stop word/phrase (STOP, STOPALL, STOP ALL, UNSUBSCRIBE, CANCEL, END, QUIT,
  *    OPT OUT, OPTOUT, REVOKE, REMOVE ME), fullwidth and punctuation tolerant ("Stop!", "ＳＴＯＰ"), OR
  *  - the message STARTS with a strong stop word (or CANCEL/END/QUIT in a message of 3 words or fewer), OR
@@ -192,8 +270,9 @@ export function classifyInboundKeyword(body: unknown, optOutType?: unknown): Inb
   if (words.length === 1 && START_WORDS.has(whole)) return 'START';
   if (words.length === 1 && HELP_WORDS.has(whole)) return 'HELP';
 
-  if (STOP_POSITIVE.some((re) => re.test(whole))) return null;
   const first = words[0];
+  if (STOP_FIRST_TOKEN.has(first)) return 'STOP'; // exact carrier keyword as first token always wins
+  if (STOP_POSITIVE.some((re) => re.test(whole))) return null;
   if (words.length <= 12 && STOP_STRONG.has(first)) return 'STOP';
   if (words.length <= 3 && STOP_WEAK.has(first)) return 'STOP';
   if (words.length <= 12 && STOP_PHRASES.some((ph) => whole.startsWith(`${ph} `))) return 'STOP';
@@ -403,7 +482,8 @@ export async function recordSmsOptOut(phone: string, keyword: string | null, sou
   // A STOP ends consent for EVERY row of this number (all sales, all organizers). START/YES later
   // never brings old consent back: the person has to opt in again and confirm by text.
   await revokeSmsConsentForPhone(phone).catch((err: unknown) =>
-    console.error(`[SMS] Failed to revoke stored consent for ${maskPhone(phone)}:`, err)
+    // Masked: Prisma errors can embed the phone number in the failing query text.
+    console.error(`[SMS] Failed to revoke stored consent for ${maskPhone(phone)}: ${safeErrorForLog(err)}`)
   );
 }
 
@@ -423,16 +503,86 @@ export async function revokeSmsConsentForPhone(phone: string): Promise<number> {
   return res?.count ?? 0;
 }
 
+// ---------------------------------------------------------------------------
+// Confirmation-text ledger (per phone) and scoped YES handling
+// ---------------------------------------------------------------------------
+
+/** Confirmation texts to one number per rolling day, across every sale, organizer and account. */
+export const SMS_CONFIRMATION_MAX_PER_PHONE_PER_DAY = 3;
+/** ...and per rolling hour (stops one sale-per-request burst at a victim's number). */
+export const SMS_CONFIRMATION_MAX_PER_PHONE_PER_HOUR = 2;
+export const SMS_CONFIRMATION_LOG_TAG = '[confirmation]';
+
 /**
- * The number replied YES/START: confirm ONLY rows that are still pending (submitted in the last 48h).
- * Rows without a pending marker (never confirmed, expired, or revoked by an earlier STOP) stay
- * unconsented. Returns rows confirmed.
+ * Non-reversible per-number key (HMAC-SHA256 of the E.164 number, 24 hex chars). SmsSendLog has no phone column
+ * (and must never hold a raw number), so the double opt-in confirmation writes this key into the start of its log
+ * message: `[confirmation] [ph_<key>] <sale title>`. Used to count confirmation texts per number and to find the
+ * sale a YES reply belongs to.
+ */
+export function phoneConfirmationKey(e164: string): string {
+  const secret = process.env.SMS_PHONE_KEY_SECRET || process.env.JWT_SECRET || 'sms-phone-key-dev-only';
+  return `ph_${crypto.createHmac('sha256', secret).update(String(e164)).digest('hex').slice(0, 24)}`;
+}
+
+/** Exact start of every SmsSendLog message written by the confirmation text to this number. */
+export const confirmationLogPrefix = (e164: string): string => `${SMS_CONFIRMATION_LOG_TAG} [${phoneConfirmationKey(e164)}]`;
+
+/** Confirmation texts attempted to this number since `since`, over ALL sales and organizers (no exclusions). */
+export async function countConfirmationTextsToPhone(e164: string, since: Date): Promise<number> {
+  return prisma.smsSendLog.count({
+    where: { message: { startsWith: confirmationLogPrefix(e164) }, createdAt: { gte: since } },
+  });
+}
+
+/**
+ * True when one more confirmation text to this number would exceed the per-number caps (2 per hour, 3 per day, over
+ * all sales). Callers answer exactly as for a normal number (no oracle); throws when the ledger cannot be read, so the
+ * caller can fail closed.
+ */
+export async function isConfirmationThrottled(e164: string, now: Date = new Date()): Promise<boolean> {
+  const [lastHour, lastDay] = await Promise.all([
+    countConfirmationTextsToPhone(e164, new Date(now.getTime() - 60 * 60 * 1000)),
+    countConfirmationTextsToPhone(e164, new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+  ]);
+  return lastHour >= SMS_CONFIRMATION_MAX_PER_PHONE_PER_HOUR || lastDay >= SMS_CONFIRMATION_MAX_PER_PHONE_PER_DAY;
+}
+
+/**
+ * The number replied YES/START. Confirms ONLY the pending row(s) that belong to the MOST RECENT confirmation text sent
+ * to this number: the SmsSendLog confirmation entry (keyed by phoneConfirmationKey, newest within the 48 hour window)
+ * names the organizer and sale that text was about, and only that sale's still-pending row for this number is
+ * confirmed. A YES therefore never turns on texts for other sales or other organizers that also have a pending row for
+ * the number (someone else may have typed the number there), and never revives expired or STOP-revoked rows.
+ * When no confirmation entry exists (log write failed, or a row from before the ledger existed) it falls back to the
+ * single most recently submitted pending row, still never more than one sale. Throws when the lookup fails (the webhook
+ * answers 500 and confirms nothing). Returns rows confirmed.
  */
 export async function confirmPendingSmsConsent(phone: string, now: Date = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - SMS_CONSENT_PENDING_TTL_MS);
+  const e164 = normalizePhoneE164(phone) ?? phone;
+  const variants = phoneStorageVariants(e164);
+
+  const latestText = await prisma.smsSendLog.findFirst({
+    where: { message: { startsWith: confirmationLogPrefix(e164) }, createdAt: { gte: cutoff } },
+    orderBy: { createdAt: 'desc' },
+    select: { saleId: true, organizerId: true },
+  });
+
+  let saleId: string | null = latestText?.saleId ?? null;
+  if (!saleId) {
+    const latestPending = await prisma.saleSubscriber.findFirst({
+      where: { phone: { in: variants }, smsConsentAt: null, smsConsentPendingAt: { gte: cutoff } },
+      orderBy: { smsConsentPendingAt: 'desc' },
+      select: { saleId: true },
+    });
+    saleId = latestPending?.saleId ?? null;
+  }
+  if (!saleId) return 0;
+
   const res = await prisma.saleSubscriber.updateMany({
     where: {
-      phone: { in: phoneStorageVariants(phone) },
+      phone: { in: variants },
+      saleId,
       smsConsentAt: null,
       smsConsentPendingAt: { gte: cutoff },
     },

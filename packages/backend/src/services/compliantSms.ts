@@ -24,11 +24,12 @@ import twilio from 'twilio';
 import { prisma } from '../lib/prisma';
 import { organizerHasTier } from '../utils/tierAccess';
 import type { SubscriptionTier } from '../utils/tierAccess';
-import { redactPhonesInText } from '../utils/logMask';
+import { redactPhonesInText, safeErrorForLog } from '../utils/logMask';
 import {
   SMS_MAX_SEGMENTS,
   checkQuietHours,
   composeSmsBody,
+  confirmationLogPrefix,
   estimateSmsSegments,
   getOptedOutPhoneSet,
   getSentInLast24h,
@@ -278,7 +279,7 @@ export async function sendCompliantSms(item: SmsItem, ctx: SmsSenderContext): Pr
 
   const result = await twilioSend(client, composed.body, phone, Math.max(1, ctx.maxAttempts ?? 1), ctx.baseDelayMs ?? 1000);
   if (!result.ok && result.carrierBlocked) {
-    await recordSmsOptOut(phone, null, 'TWILIO_21610').catch((e: unknown) => console.error('[SMS] Failed to record 21610 opt-out:', e));
+    await recordSmsOptOut(phone, null, 'TWILIO_21610').catch((e: unknown) => console.error(`[SMS] Failed to record 21610 opt-out: ${safeErrorForLog(e)}`));
     console.log(`[SMS] skipped: ${maskPhone(phone)} blocked our number at the carrier (21610)`);
     return noSend('skipped_opted_out', composed.segments);
   }
@@ -510,7 +511,27 @@ export async function sendCompliantSmsBatch(items: SmsItem[], opts: SmsBatchOpti
   let carrierBlocked = 0;
   try {
     for (let i = 0; i < toSend.length; i += SMS_SEND_CONCURRENCY) {
-      const chunk = toSend.slice(i, i + SMS_SEND_CONCURRENCY);
+      let chunk = toSend.slice(i, i + SMS_SEND_CONCURRENCY);
+      // 2026-09-29: opt-out re-checked at send time. The snapshot taken above can be minutes old on a large
+      // audience (quiet-hours wait, reservation, slow carrier retries), and a STOP that arrives mid-batch used to
+      // still get the remaining messages. Every chunk after the first re-reads the opt-out table for just its
+      // own phones; a lookup failure fails CLOSED for that chunk (not sent, counted as failed).
+      if (i > 0) {
+        try {
+          const nowOptedOut = await getOptedOutPhoneSet(chunk.map((c) => c.phone));
+          if (nowOptedOut.size > 0) {
+            const still = chunk.filter((c) => !nowOptedOut.has(c.phone));
+            result.skippedOptedOut += chunk.length - still.length;
+            result.audience = Math.max(0, result.audience - (chunk.length - still.length));
+            chunk = still;
+          }
+        } catch (err) {
+          console.error('[SMS] chunk skipped: opt-out re-check failed:', (err as Error)?.message);
+          result.failed += chunk.length;
+          continue;
+        }
+        if (chunk.length === 0) continue;
+      }
       const settled = await Promise.all(
         chunk.map((c) => twilioSend(client, c.body, c.phone, Math.max(1, opts.maxAttempts ?? 1), opts.baseDelayMs ?? 1000))
       );
@@ -521,7 +542,7 @@ export async function sendCompliantSmsBatch(items: SmsItem[], opts: SmsBatchOpti
         } else if (r.carrierBlocked) {
           carrierBlocked++;
           await recordSmsOptOut(chunk[j].phone, null, 'TWILIO_21610').catch((e: unknown) =>
-            console.error('[SMS] Failed to record 21610 opt-out:', e)
+            console.error(`[SMS] Failed to record 21610 opt-out: ${safeErrorForLog(e)}`)
           );
         } else {
           result.failed++;
@@ -565,6 +586,10 @@ export async function sendConsentConfirmationSms(p: {
   now?: Date;
 }): Promise<CompliantSmsOutcome> {
   const title = cleanSmsText(p.saleTitle, 40) || 'this sale';
+  // The log message starts with a non-reversible per-number key (see phoneConfirmationKey) so confirmation texts can be
+  // counted per number across sales and a later YES can be tied to the sale this text was about.
+  const e164 = normalizePhoneE164(p.to);
+  const logTag = e164 ? confirmationLogPrefix(e164) : '[confirmation]';
   const { outcome } = await sendCompliantSms(
     {
       to: p.to,
@@ -579,7 +604,7 @@ export async function sendConsentConfirmationSms(p: {
       requireConsent: false,
       enforceQuietHours: false,
       enforceDailyCap: !!p.organizerId,
-      logMessage: `[confirmation] ${title}`,
+      logMessage: `${logTag} ${title}`,
       now: p.now,
     }
   );

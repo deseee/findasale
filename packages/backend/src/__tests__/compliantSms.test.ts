@@ -332,3 +332,32 @@ describe('cleanSmsText', () => {
     expect(cleanSmsText(null)).toBe('');
   });
 });
+
+describe('21610 handling logs codes and masked messages, never raw errors (2026-09-30)', () => {
+  const failingOptOutWrite = () =>
+    jest.spyOn(mockFake.prisma.smsOptOut, 'upsert').mockRejectedValue(
+      Object.assign(new Error('Invalid `prisma.smsOptOut.upsert()` invocation:\n  where: { phone: "+12695551001" }, owner: jane@example.com'), { code: 'P2010' })
+    );
+
+  it('single send: a failing STOP-list write does not leak the number or email', async () => {
+    mockCreate.mockRejectedValue(Object.assign(new Error('blocked'), { code: 21610 }));
+    failingOptOutWrite();
+    const r = await sendCompliantSms(item(1), ctx());
+    expect(r.outcome).toBe('skipped_opted_out');
+    const logged = allLogged();
+    expect(logged).toContain('code=P2010');
+    expect(logged).not.toContain('2695551001');
+    expect(logged).not.toContain('jane@example.com');
+  });
+
+  it('batch send: the same failure is masked too', async () => {
+    mockCreate.mockRejectedValue(Object.assign(new Error('blocked'), { code: 21610 }));
+    failingOptOutWrite();
+    await sendCompliantSmsBatch([item(1)], ctx());
+    const logged = allLogged();
+    expect(logged).toContain('code=P2010');
+    expect(logged).not.toContain('2695551001');
+    expect(logged).not.toContain('jane@example.com');
+  });
+});
+

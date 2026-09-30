@@ -8,7 +8,7 @@ interface NotificationPrefs {
   emailFlashDeals?: boolean;
   emailWeeklyDigest?: boolean;
   pushSalesNearMe?: boolean;
-  // Privacy (default OFF): show my first name and last initial in the public "going" list on sales.
+  // Privacy (default OFF): show my first name and last initial on leaderboards, crews and going lists.
   showNameInGoingList?: boolean;
 }
 
@@ -110,7 +110,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
           </span>
         </label>
 
-        {/* Privacy: name in the public "going" list (off unless the shopper opts in) */}
+        {/* Privacy: public name on leaderboards, crews and going lists (off unless the shopper opts in) */}
         <label className="flex items-start cursor-pointer">
           <input
             type="checkbox"
@@ -120,9 +120,9 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
             className="w-4 h-4 mt-0.5 text-amber-600 rounded focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           />
           <span className="ml-3 text-sm text-warm-900 dark:text-warm-200">
-            Show my first name and last initial in the public &quot;going&quot; list on sales I RSVP to
+            Show my first name and last initial on leaderboards, crews and going lists
             <span className="block text-xs text-warm-500 dark:text-warm-400 mt-0.5">
-              Off by default. Otherwise you are counted but not named.
+              Off by default. When off, you appear as &quot;Explorer&quot; on leaderboards and crews, and you are counted but not named in going lists.
             </span>
           </span>
         </label>

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import api from '../../../lib/api';
+import { getQuickPosition } from '../../../lib/geolocation';
 import Head from 'next/head';
 import { claimUnlockToasts } from '../../../components/MilestoneUnlockedToast'; // Sale Passport: shared toast dedupe so PassportUnlockManager never toasts the same stamp again
 import { useMarkPassportSeen, UnlockedStamp, UnlockedMilestone } from '../../../hooks/useLoyaltyPassport';
@@ -32,6 +33,8 @@ const CheckInPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [checkInResult, setCheckInResult] = useState<CheckInResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const markPassportSeen = useMarkPassportSeen();
 
   // Redirect to login if not authenticated
@@ -51,8 +54,15 @@ const CheckInPage: React.FC = () => {
       try {
         setIsLoading(true);
         setError(null);
+        setErrorCode(null);
 
-        const response = await api.post(`/sales/${id}/checkin`);
+        // Location confirms you are at the sale. It is best effort: a denied prompt, no GPS or a slow
+        // signal never blocks the check-in by itself (the server decides whether location is required).
+        const position = await getQuickPosition(6000);
+        const response = await api.post(
+          `/sales/${id}/checkin`,
+          position ? { latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy } : {}
+        );
         const data = response.data as CheckInResponse;
 
         setCheckInResult(data);
@@ -102,6 +112,7 @@ const CheckInPage: React.FC = () => {
       } catch (err: any) {
         const message = err.response?.data?.message || 'Failed to check in';
         setError(message);
+        setErrorCode(err.response?.data?.code ?? null);
         showToast(message, 'error');
       } finally {
         setIsLoading(false);
@@ -111,12 +122,11 @@ const CheckInPage: React.FC = () => {
     performCheckIn();
     // markPassportSeen is intentionally not a dependency (a new mutation object every render would re-run the check-in).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user, showToast]);
+  }, [id, user, showToast, attempt]);
 
   const handleRetry = () => {
-    if (id && typeof id === 'string') {
-      router.push(`/sales/${id}/checkin`);
-    }
+    // Re-run the check-in in place (pushing the same URL would not re-trigger it) and ask for location again.
+    setAttempt((n) => n + 1);
   };
 
   const handleBrowseItems = () => {
@@ -138,6 +148,9 @@ const CheckInPage: React.FC = () => {
             </div>
             <p className="mt-4 text-lg font-semibold text-warm-900 dark:text-warm-100">
               Checking you in...
+            </p>
+            <p className="mt-2 text-sm text-warm-600 dark:text-warm-400 max-w-xs mx-auto">
+              Your browser may ask to share your location. We use it only to confirm you are at the sale.
             </p>
           </div>
         </div>
@@ -161,6 +174,12 @@ const CheckInPage: React.FC = () => {
               <p className="text-warm-600 dark:text-warm-400 mb-6">
                 {error}
               </p>
+              {(errorCode === 'LOCATION_REQUIRED' || errorCode === 'OUT_OF_RANGE' || /location/i.test(error)) && (
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-6">
+                  We check your location to make sure you are at the sale. If you skipped the prompt, allow
+                  location access in your browser settings and tap Try Again.
+                </p>
+              )}
               <div className="flex gap-3">
                 <button
                   onClick={handleRetry}

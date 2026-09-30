@@ -21,6 +21,8 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 import { applyCrewInvasionDiscount, releaseCrewInvasionRedemption, linkCrewInvasionRedemptionToInvoice, releaseCrewInvasionRedemptionsForInvoice, countCrewDiscountEligibleShoppers } from '../services/crewInvasionRedemptionService'; // Feature #397 (2026-09-29): real redemption of the Crew Invasion code on Hold-to-Pay invoices
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Sale Passport (ATTEND_SALE stamp on the second check-in path)
+import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // 2026-09-30: the same anti-spoof guard saleController.checkInToSale uses (sale window, rate limits, radius, impossible speed)
+import { parseBodyLatitude, parseBodyLongitude, parseBodyAccuracyMeters } from '../utils/qrScanGuards';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): CHECKOUT_LINK mode's Hold-to-Pay invoice is a hosted Square checkout completed by the buyer remotely -- ONLINE channel. RECORD-mode's cash commission already migrated separately, through cashFeeService.ts's resolveCashCommissionRate/cashCommissionOn (imported below).
@@ -1078,9 +1080,10 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             });
           }
           console.error('[settlement] CHECKOUT_LINK payment link creation failed:', stripeErr);
+          // 2026-09-30: no raw processor text to the client (it is logged above); a stable code instead.
           return res.status(400).json({
             message: 'Failed to create checkout link',
-            error: stripeErr?.message,
+            code: 'CHECKOUT_LINK_FAILED',
           });
         }
 
@@ -1781,33 +1784,82 @@ export const checkinAtSale = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const { saleId, latitude, longitude, qrScanned, qrScanId } = req.body;
-    if (!saleId || latitude === undefined || longitude === undefined) {
+    const { saleId, qrScanned, qrScanId } = req.body ?? {};
+    const userId = req.user.id;
+    // Coordinates must be real numbers in range (strings like '12abc', NaN, arrays and out-of-range values are rejected,
+    // not "cleaned"): they feed the geofence below. This endpoint has always required them, so the 400 stays.
+    const latitude = parseBodyLatitude(req.body?.latitude);
+    const longitude = parseBodyLongitude(req.body?.longitude);
+    if (typeof saleId !== 'string' || !saleId || latitude === undefined || longitude === undefined) {
       return res.status(400).json({ message: 'saleId, latitude, longitude are required' });
     }
 
-    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
-    if (!sale) return res.status(404).json({ message: 'Sale not found' });
-
-    // Create or update check-in
-    const checkin = await prisma.saleCheckin.upsert({
-      where: { saleId_userId: { saleId, userId: req.user.id } },
-      create: {
-        saleId,
-        userId: req.user.id,
-        latitude,
-        longitude,
-        qrScanned: qrScanned ?? false,
-        qrScanId: qrScanId || null,
-      },
-      update: {
-        latitude,
-        longitude,
-        qrScanned: qrScanned ?? false,
-        qrScanId: qrScanId || null,
-        checkinAt: new Date(),
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: {
+        id: true, status: true, lat: true, lng: true, startDate: true, endDate: true,
+        organizer: { select: { timezone: true } },
       },
     });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    if (sale.status !== 'PUBLISHED') return res.status(403).json({ message: 'Sale is not published' });
+
+    // Anti-spoof guard (2026-09-30), the same one saleController.checkInToSale runs: sale active window in the sale's
+    // timezone, per user+sale and per IP+sale rate limits, radius from the sale and impossible-speed check. Location is
+    // mandatory here (always was); QR_CHECKIN_REQUIRE_LOCATION additionally makes a sale without verified coordinates
+    // reject instead of skip the radius check, exactly as on the other check-in path. A rejection awards and writes nothing.
+    const checkinGuard = await checkQrScan({
+      kind: 'checkin',
+      userId,
+      ip: req.ip,
+      lat: latitude,
+      lng: longitude,
+      accuracyMeters: parseBodyAccuracyMeters(req.body?.accuracy),
+      sale: {
+        id: sale.id,
+        lat: sale.lat,
+        lng: sale.lng,
+        startDate: sale.startDate,
+        endDate: sale.endDate,
+        timeZone: sale.organizer?.timezone ?? null,
+      },
+    });
+    if (!checkinGuard.ok) {
+      return res.status(checkinGuard.status).json(qrScanRejectionBody(checkinGuard));
+    }
+
+    // One check-in per user per sale per (UTC) day, idempotent: a repeat returns the existing check-in untouched (no
+    // error, no new timestamp, no second stamp). A row from an earlier day is refreshed; the (saleId, userId) unique
+    // index also makes a concurrent double submit safe (the loser reads the winner's row).
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const existingCheckin = await prisma.saleCheckin.findUnique({
+      where: { saleId_userId: { saleId, userId } },
+    });
+    if (existingCheckin && new Date(existingCheckin.checkinAt).getTime() >= dayStart.getTime()) {
+      return res.status(200).json(existingCheckin);
+    }
+
+    const checkinFields = {
+      latitude,
+      longitude,
+      qrScanned: qrScanned === true,
+      qrScanId: typeof qrScanId === 'string' && qrScanId ? qrScanId.slice(0, 100) : null,
+    };
+    let checkin;
+    try {
+      checkin = existingCheckin
+        ? await prisma.saleCheckin.update({
+            where: { saleId_userId: { saleId, userId } },
+            data: { ...checkinFields, checkinAt: new Date() },
+          })
+        : await prisma.saleCheckin.create({ data: { saleId, userId, ...checkinFields } });
+    } catch (writeErr: any) {
+      if (writeErr?.code !== 'P2002') throw writeErr;
+      const winner = await prisma.saleCheckin.findUnique({ where: { saleId_userId: { saleId, userId } } });
+      if (!winner) throw writeErr;
+      return res.status(200).json(winner);
+    }
 
     // Sale Passport (2026-09-29): this is the second check-in path (saleController.checkInToSale is
     // the first) and a check-in is real attendance either way. Same call shape and idempotency as
@@ -1815,7 +1867,7 @@ export const checkinAtSale = async (req: AuthRequest, res: Response) => {
     // check-in here or a check-in through the other path can never double count. awardStamp never
     // throws; the try/catch is belt and braces so it can never change this response.
     try {
-      await awardStamp(req.user.id, 'ATTEND_SALE', saleId, saleId);
+      await awardStamp(userId, 'ATTEND_SALE', saleId, saleId);
     } catch (stampErr) {
       console.error('[loyalty] Sale Passport check-in stamp failed (reservations check-in):', stampErr);
     }
@@ -2167,7 +2219,8 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           });
         }
         console.error('[hold-invoice] Square payment link creation failed:', squareError);
-        return res.status(400).json({ message: 'Failed to create Square payment link', error: squareError?.message });
+        // 2026-09-30: no raw processor text to the client (it is logged above); a stable code instead.
+        return res.status(400).json({ message: 'Failed to create Square payment link', code: 'SQUARE_PAYMENT_LINK_FAILED' });
       }
 
       if (!squareResult.ok) {
@@ -3232,7 +3285,7 @@ export const releaseInvoiceById = async (req: AuthRequest, res: Response) => {
     // invoice canceller -- see the header comment above.
     if (invoice.reservationId || invoice.reservations.length > 0) {
       return res.status(409).json({
-        message: "This payment request is linked to a hold \u2014 cancel it from the hold instead.",
+        message: "This payment request is linked to a hold. Cancel it from the hold instead.",
       });
     }
 

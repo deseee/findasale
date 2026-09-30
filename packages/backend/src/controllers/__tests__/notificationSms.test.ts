@@ -16,6 +16,7 @@ const mockSubCount = jest.fn();
 const mockSubFindUnique = jest.fn();
 const mockSubUpsert = jest.fn();
 const mockSubUpdateMany = jest.fn();
+const mockUserFindUnique = jest.fn();
 const mockOptOutFindMany = jest.fn();
 const mockOptOutUpsert = jest.fn();
 const mockLogAggregate = jest.fn();
@@ -35,6 +36,7 @@ const mockLogModel = {
 jest.mock('../../lib/prisma', () => ({
   prisma: {
     sale: { findUnique: (...a: any[]) => mockSaleFindUnique(...a) },
+    user: { findUnique: (...a: any[]) => mockUserFindUnique(...a) },
     organizer: { findUnique: (...a: any[]) => mockOrganizerFindUnique(...a) },
     saleSubscriber: {
       findMany: (...a: any[]) => mockSubFindMany(...a),
@@ -102,7 +104,7 @@ const setAudience = (phones: string[], opts: { noConsent?: number; optedOut?: st
 
 const OLD_ENV = { ...process.env };
 const allMocks = [
-  mockSaleFindUnique, mockOrganizerFindUnique, mockSubFindMany, mockSubCount, mockSubFindUnique, mockSubUpsert, mockSubUpdateMany,
+  mockSaleFindUnique, mockOrganizerFindUnique, mockSubFindMany, mockSubCount, mockSubFindUnique, mockSubUpsert, mockSubUpdateMany, mockUserFindUnique,
   mockOptOutFindMany, mockOptOutUpsert, mockLogAggregate, mockLogCreate, mockLogUpdate, mockLogCount, mockQueryRaw, mockTwilioCreate,
 ];
 let consoleSpies: jest.SpyInstance[] = [];
@@ -121,6 +123,8 @@ beforeEach(() => {
   mockOptOutFindMany.mockResolvedValue([]);
   mockOptOutUpsert.mockResolvedValue({});
   mockSubUpdateMany.mockResolvedValue({ count: 0 });
+  // The subscriber's own account email: the only address a reminder is ever addressed to.
+  mockUserFindUnique.mockResolvedValue({ email: 'account@example.com' });
   mockLogAggregate.mockResolvedValue({ _sum: { sentCount: 0 } });
   mockLogCount.mockResolvedValue(0);
   mockLogCreate.mockResolvedValue({ id: 'log_1' });
@@ -561,8 +565,24 @@ describe('subscribeToSale (double opt-in consent)', () => {
 
   it('omitted fields are left unchanged (email-only call does not wipe the phone)', async () => {
     await subscribeToSale(shopperReq({ saleId: 'sale_1', email: 'A@B.com' }), mkRes());
-    expect(mockSubUpsert.mock.calls[0][0].update).toEqual({ email: 'a@b.com' });
+    // the typed address is validated but IGNORED: the signed-in account's own email is stored instead
+    expect(mockSubUpsert.mock.calls[0][0].update).toEqual({ email: 'account@example.com' });
     expect(mockTwilioCreate).not.toHaveBeenCalled();
+  });
+
+  it('a typed email that belongs to someone else is never stored (no third-party reminder injection)', async () => {
+    mockUserFindUnique.mockResolvedValue({ email: 'me@example.com' });
+    await subscribeToSale(shopperReq({ saleId: 'sale_1', email: 'victim@example.org' }), mkRes());
+    expect(mockUserFindUnique.mock.calls[0][0].where).toEqual({ id: 'u_shopper' });
+    const stored = mockSubUpsert.mock.calls[0][0].update;
+    expect(stored).toEqual({ email: 'me@example.com' });
+    expect(JSON.stringify(mockSubUpsert.mock.calls)).not.toMatch(/victim@example\.org/);
+  });
+
+  it('an account with no usable email stores no email at all', async () => {
+    mockUserFindUnique.mockResolvedValue({ email: null });
+    await subscribeToSale(shopperReq({ saleId: 'sale_1', email: 'victim@example.org' }), mkRes());
+    expect(mockSubUpsert.mock.calls[0][0].update).toEqual({ email: null });
   });
 
   it('a phone already confirmed by another subscriber of the sale is neither a 409 nor a 500 (no oracle): caller data is kept, no phone stored, no text', async () => {
@@ -574,7 +594,7 @@ describe('subscribeToSale (double opt-in consent)', () => {
     expect(res.status).not.toHaveBeenCalled();
     expect(mockSubUpsert).toHaveBeenCalledTimes(2);
     const retryUpdate = mockSubUpsert.mock.calls[1][0].update;
-    expect(retryUpdate).toEqual({ email: 'a@b.com' });
+    expect(retryUpdate).toEqual({ email: 'account@example.com' });
     expect(mockTwilioCreate).not.toHaveBeenCalled();
     expect(res.json.mock.calls[0][0].smsStatus).toBe('PENDING');
   });
