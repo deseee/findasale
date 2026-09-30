@@ -77,6 +77,8 @@ import squarePaymentRoutes from './routes/squarePayment'; // Square migration Wa
 import squareRoutes from './routes/square';           // Square migration Wave 1 #5: webhooks
 import notificationRoutes from './routes/notifications';
 import affiliateRoutes from './routes/affiliate';
+import syndicationRoutes from './routes/syndication'; // #459: public per-sale syndication feed (rate limited, public data only)
+import { scheduleCreatorWeeklySummaryJob } from './jobs/creatorWeeklySummaryJob'; // Creator Program: Monday in-app summaries
 import lineRoutes from './routes/lines';
 import geocodeRoutes from './routes/geocode';
 import uploadRoutes from './routes/upload';
@@ -145,6 +147,8 @@ import itemInventoryRoutes from './routes/itemInventory';     // Feature #25: It
 import brandKitRoutes from './routes/brandKit';               // #31 Brand Kit expansion
 import wishlistAlertRoutes from './routes/wishlistAlerts';     // Feature #32: Wishlist Alerts
 import smartFollowRoutes from './routes/smartFollows';         // Feature #32: Smart Follow
+import shopperWaitlistRoutes from './routes/shopperWaitlist';   // Feature #455: Shopper Notify Me waitlist (logged-in) + public unsubscribe link
+import { scheduleNotifyMeSenderCron } from './jobs/notifyMeSenderJob'; // Feature #455: Notify Me sender (inert unless NOTIFY_ME_SENDER_ENABLED=true)
 import loyaltyRoutes from './routes/loyalty';                 // Feature #29: Loyalty Passport
 import flipReportRoutes from './routes/flipReport';           // Feature #41: Flip Report
 import verificationRoutes from './routes/verification';       // Feature #16: Verified Organizer Badge
@@ -308,6 +312,7 @@ import { scheduleMarketplacePosterCron } from './jobs/marketplacePosterCron'; //
 import { scheduleEngagementMonitorCron } from './jobs/engagementMonitorCron'; // Comment/mention monitor (hourly) + approved-reply poster (every 30 min)
 import { scheduleFootageBatchSealCron } from './jobs/footageBatchSealJob'; // ADR-080 Stage 1b: quiet-seal OPEN FootageBatches (every 5 min)
 import { scheduleFootageStalledBatchCron, runFootageBootReconciliation } from './jobs/footageStalledBatchCron'; // S-BATCH-STUCK-2026-09-18: daily watchdog -- re-nags stale NEEDS_INPUT/AWAITING_REVIEW batches, reclaims batches orphaned mid-flight (ANALYZING/ASSEMBLING) by a redeploy; runFootageBootReconciliation does the same reclaim immediately at boot instead of waiting for the daily sweep
+import { startSeasonalResetJob } from './jobs/seasonalResetJob'; // Guild seasonal reset: 00:05 UTC Jan 1-7, idempotent catch-up window
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -572,6 +577,9 @@ app.use('/api/ebay/notifications', express.raw({ type: '*/*' }));
 // Resend webhook: svix signature verification needs the raw body, so capture it
 // before the global json parser consumes the stream (same pattern as Stripe above).
 app.use('/api/outreach/resend-webhook', express.raw({ type: 'application/json' }));
+// MailerLite snooze webhook: the HMAC Signature header is computed over the exact bytes sent, so the
+// handler (controllers/snoozeController.ts) needs the raw Buffer before express.json re-serializes it.
+app.use('/api/snooze/webhook', express.raw({ type: 'application/json' }));
 
 // JSON parser with 1 MB body size limit to prevent payload attacks
 app.use(express.json({ limit: '1mb' }));
@@ -723,6 +731,7 @@ app.use('/api/square-payment', squarePaymentRoutes); // Square migration Wave 1 
 app.use('/api/square', squareRoutes);                   // Square migration Wave 1 #5: webhooks
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/affiliate', affiliateRoutes);
+app.use('/api/syndication', syndicationRoutes); // #459: GET /api/syndication/sale/:saleId (public, cached, noindex)
 app.use('/api/lines', lineRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.post('/api/upload/batch-analyze', requestTimeout(120000)); // AI batch analysis needs up to 2 min
@@ -796,6 +805,7 @@ app.use('/api/item-inventory', itemInventoryRoutes);                // Feature #
 app.use('/api/brand-kit', brandKitRoutes);                           // #31 Brand Kit expansion
 app.use('/api/wishlist-alerts', wishlistAlertRoutes);                // Feature #32: Wishlist Alerts
 app.use('/api/smart-follows', smartFollowRoutes);                    // Feature #32: Smart Follow
+app.use('/api/shopper/waitlist', shopperWaitlistRoutes);             // Feature #455: Shopper Notify Me waitlist
 app.use('/api/loyalty', loyaltyRoutes);                              // Feature #29: Loyalty Passport
 app.use('/api/collector-passport', collectorPassportRoutes);        // Feature #45: Collector Passport
 app.use('/api/challenges', challengeRoutes);                         // Feature #55: Seasonal Discovery Challenges
@@ -1048,6 +1058,12 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   scheduleMarkdownCycleCron();
   scheduleMarkdownRetagAlertJob();
 
+  // Creator Program: weekly in-app summary for creators who opted in (Mondays 15:07 UTC)
+  scheduleCreatorWeeklySummaryJob();
+
+  // Guild seasonal reset (Jan 1-7 00:05 UTC catch-up window, idempotent per year)
+  startSeasonalResetJob();
+
   // Feature #463: Register Google Merchant Center feed cron (3:30 AM UTC daily)
   scheduleGoogleMerchantFeedCron();
 
@@ -1064,6 +1080,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   scheduleConsignmentUnclaimedItemsCron();
 
   scheduleOutwardEmailAutomationsCron();
+
+  // Feature #455: Shopper Notify Me sender (every 2h). No-op unless NOTIFY_ME_SENDER_ENABLED=true; per-run fuse + dry-run flag.
+  scheduleNotifyMeSenderCron();
 
   // ADR shipping-resync Phase 3 / Part C: Register daily carrier-rate drift re-pin sweep (4 AM UTC)
   scheduleResyncShippingDriftCron();
