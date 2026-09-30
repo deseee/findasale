@@ -10,6 +10,7 @@ import { Search, Filter } from 'lucide-react';
 import EmptyState from '../../components/EmptyState';
 import api from '../../lib/api';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import TierGate from '../../components/TierGate';
 
 interface PullModalState {
   isOpen: boolean;
@@ -54,7 +55,9 @@ const InventoryPage: React.FC = () => {
 
   const { showToast } = useToast();
   const { inventoryItems, loading, isRemovingFromInventory, isPullingFromInventory, removeFromInventory, pullFromInventory, getPriceHistory } =
-    useInventory(user?.roles?.includes('ORGANIZER') ? user?.id : undefined);
+    // Persistent Inventory is PRO (roadmap #25, GET /api/item-inventory is requireTier('PRO')).
+    // Do not fire the list query for SIMPLE organizers: it would 403 behind the upgrade overlay.
+    useInventory(user?.roles?.includes('ORGANIZER') && canAccess('PRO') ? user?.id : undefined);
 
   // Fetch locations for filter
   useEffect(() => {
@@ -177,6 +180,7 @@ const InventoryPage: React.FC = () => {
       <Head>
         <title>Inventory | FindA.Sale</title>
       </Head>
+      <TierGate requiredTier="PRO" featureName="Inventory" description="Keep unsold items in a persistent inventory and pull them into your next sale. Available on PRO and above.">
       {/* Check authorization */}
       {!user || !user.roles?.includes('ORGANIZER') ? (
         <div className="text-center py-12">
@@ -410,6 +414,7 @@ const InventoryPage: React.FC = () => {
           )}
         </div>
         )}
+      </TierGate>
     </>
   );
 };

@@ -98,11 +98,12 @@ async function apiFetch(path, opts = {}, _retried = false, _token = null) {
 // never blocks the caller -- a dropped log line is acceptable, a stalled removal/renewal flow
 // because logging failed is not. Uses apiFetch (existing Bearer/refresh handling) but does not
 // await its result on the caller's behalf.
-function fasLog(level, source, message, context) {
+function fasLog(level, source, message, context, extra) {
   try {
     apiFetch('/extension/logs', {
       method: 'POST',
-      body: { logs: [{ level: level, source: source, message: String(message), context: context || undefined }] }
+      body: { logs: [{ level: level, source: source, message: String(message), context: context || undefined,
+        platform: extra && extra.platform ? extra.platform : undefined, itemId: extra && extra.itemId ? extra.itemId : undefined }] }
     }).catch(() => {});
   } catch (e) {
     // swallow -- logging must never break the calling flow
@@ -797,8 +798,8 @@ async function notifyManualReviewIfNew(needsManualReview) {
     iconUrl: 'icon128.png',
     title: 'FindA.Sale',
     message: (needsManualReview.length === 1
-      ? '1 sold item couldn\'t be auto-matched on Facebook after multiple tries'
-      : needsManualReview.length + ' sold items couldn\'t be auto-matched on Facebook after multiple tries') +
+      ? '1 item couldn\'t be auto-removed from a marketplace after multiple tries'
+      : needsManualReview.length + ' items couldn\'t be auto-removed from a marketplace after multiple tries') +
       ' -- remove manually: ' + needsManualReview.map((i) => i.title).join(', '),
     priority: 1
   });
@@ -3041,6 +3042,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         {
           const tabId = (sender && sender.tab && sender.tab.id) || null;
           console.warn('[FAS Mercari price-push] failed for', msg.itemId, '-', msg.reason);
+          fasLog('warn', 'mercariPricePushFailed', String(msg.reason || 'unknown'), null, { platform: 'MERCARI', itemId: msg.itemId });
           await advanceMercariPricePush(tabId);
         }
         sendResponse({ ok: true });
@@ -3071,8 +3073,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // 2026-09-04: `platform` now sent -- without it the backend files every skip under the
         // schema default (FACEBOOK), so Poshmark's skips counted against Facebook's budget and
         // per-platform skip counting in getPendingRemovals was meaningless.
-        await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
+        const skipResp = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
           { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform } });
+        // S-EXT-LISTING-GONE (2026-09-29): removal skips previously left NO server-side trace beyond
+        // the job row itself. resolved:true means the backend confirmed the listing gone (3
+        // consecutive zero-match reports) and marked it removed.
+        const skipResolved = !!(skipResp && skipResp.ok && skipResp.data && skipResp.data.resolved);
+        fasLog(skipResolved ? 'info' : 'warn', 'crossPlatformRemovalSkipped',
+          skipResolved ? 'listing confirmed gone -- marked removed' : 'skipped: ' + (msg.reason || 'unknown'),
+          null, { platform: msg.platform, itemId: msg.itemId });
         await clearRemovalAttempt(msg.platform, msg.itemId);
         const cont = await advanceAndContinueCrossPlatformRemoval(msg.platform, tabId, msg.continueUrl || null);
         sendResponse({ ok: true, next: cont.next });
@@ -3085,6 +3094,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // per-item attempt cap below handles it.
         await clearStalledRemovalRuns(msg.platform);
         const attempts = await bumpRemovalAttempt(msg.platform, msg.itemId);
+        fasLog('warn', 'crossPlatformRemovalAttemptFailed', 'attempt ' + attempts + ': ' + (msg.reason || 'unknown'),
+          null, { platform: msg.platform, itemId: msg.itemId });
         if (attempts >= FAS_REMOVAL_MAX_ATTEMPTS) {
           await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
             { method: 'POST', body: { reason: 'delete_unconfirmed_after_' + attempts + '_attempts: ' + (msg.reason || 'unknown'), platform: msg.platform } });

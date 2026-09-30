@@ -26,6 +26,8 @@ import { useHeartAnimation } from '../../hooks/useHeartAnimation';
 import Skeleton from '../../components/Skeleton';
 import ItemOGMeta from '../../components/ItemOGMeta';
 import QrCodeModal from '../../components/QrCodeModal'; // Feature #85: Treasure Hunt QR
+import ItemQrScanPrompt from '../../components/ItemQrScanPrompt'; // #85/#317/#408: QR-visit scan client (location only on tap)
+import TreasureHuntClaim from '../../components/TreasureHuntClaim'; // Daily Treasure Hunt: Claim your XP
 import HoldButton from '../../components/HoldButton'; // Feature #121: Hold Button
 import HoldTimer from '../../components/HoldTimer'; // Feature #121: Hold Timer
 import HoldToPayModal from '../../components/HoldToPayModal'; // Hold-to-Pay: Organizer invoice modal
@@ -704,6 +706,12 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               ← Back to {item.sale.title}
             </a>
           </Link>
+
+          {/* Renders only for visits that arrived via a QR code (utm_source starting with "qr") */}
+          <ItemQrScanPrompt itemId={item.id} />
+
+          {/* Daily Treasure Hunt claim: renders only when this item is today's treasure (server-validated) */}
+          <TreasureHuntClaim itemId={item.id} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             {/* Photo Section */}

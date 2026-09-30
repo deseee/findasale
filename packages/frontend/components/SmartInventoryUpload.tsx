@@ -11,6 +11,7 @@
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
 import { CATEGORIES, CONDITIONS } from '../lib/itemConstants';
@@ -36,6 +37,21 @@ interface AnalysisItem extends AIAnalysis {
 
 type WizardStep = 'upload' | 'review' | 'complete';
 
+/**
+ * The server explains its own refusals (monthly Smart tagging limit, bad photo list, no files). Show that
+ * text instead of a generic "Failed to ..." for 429 AI_QUOTA_EXCEEDED and for 400 responses; anything
+ * else keeps the generic wording. `quota` is true for the limit case so the UI can add an upgrade link.
+ */
+export function surfaceServerError(error: any): { message: string; quota: boolean } | null {
+  const status = error?.response?.status;
+  const data = error?.response?.data;
+  const message = typeof data?.message === 'string' ? data.message.trim() : '';
+  if (!message) return null;
+  if (status === 429 && data?.code === 'AI_QUOTA_EXCEEDED') return { message, quota: true };
+  if (status === 400) return { message, quota: false };
+  return null;
+}
+
 interface SmartInventoryUploadProps {
   saleId: string;
   onComplete?: () => void;
@@ -55,6 +71,8 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
   const [analyses, setAnalyses] = useState<AnalysisItem[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [saveProgress, setSaveProgress] = useState(0);
+  // Server message for a Smart tagging limit refusal (429 AI_QUOTA_EXCEEDED); drives the upgrade banner.
+  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
 
   // Mutation: Upload to Cloudinary first
   const uploadPhotosMutation = useMutation({
@@ -78,6 +96,14 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       return response.data.urls || response.data.imageVariants?.map((v: any) => v.original) || [];
     },
     onError: (error: any) => {
+      const surfaced = surfaceServerError(error);
+      if (surfaced) {
+        showToast(surfaced.message, 'error');
+        if (surfaced.quota) setQuotaMessage(surfaced.message);
+        setUploadProgress(0);
+        (uploadPhotosMutation as any).isTransient = false;
+        return;
+      }
       const isTransient = error.code === 'ECONNREFUSED' || error.message?.includes('timeout') || error.response?.status === 503;
       const message = isTransient ? 'Upload failed. Network issue' : 'Failed to upload photos';
       showToast(message, 'error');
@@ -96,6 +122,14 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       return response.data.clusters;
     },
     onError: (error: any) => {
+      const surfaced = surfaceServerError(error);
+      if (surfaced) {
+        showToast(surfaced.message, 'error');
+        if (surfaced.quota) setQuotaMessage(surfaced.message);
+        setUploadProgress(0);
+        (batchAnalyzeMutation as any).isTransient = false;
+        return;
+      }
       const isTransient = error.code === 'ECONNREFUSED' || error.message?.includes('timeout') || error.response?.status === 503;
       const message = isTransient ? 'Analysis failed. Try again shortly' : 'Failed to analyze photos';
       showToast(message, 'error');
@@ -184,6 +218,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       return;
     }
 
+    setQuotaMessage(null);
     setUploadProgress(25);
 
     try {
@@ -243,9 +278,13 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       setAnalyses([]);
       onComplete?.();
       router.push(`/organizer/add-items/${saleId}/review`);
-    } catch {
-      // mutateAsync re-throws after onError fires — reset progress so UI doesn't stay stuck
-      showToast('Some photos failed to upload. Please try again.', 'error');
+    } catch (err: any) {
+      // mutateAsync re-throws after onError fires — reset progress so UI doesn't stay stuck.
+      // When onError already showed the server's own message (429 limit / 400), do not replace it
+      // with the generic text.
+      if (!surfaceServerError(err)) {
+        showToast('Some photos failed to upload. Please try again.', 'error');
+      }
       setUploadProgress(0);
     }
   };
@@ -373,6 +412,20 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
   if (step === 'upload') {
     return (
       <div className="space-y-6">
+        {quotaMessage && (
+          <div
+            role="alert"
+            className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-900 dark:text-amber-100"
+          >
+            <p>{quotaMessage}</p>
+            <Link
+              href="/organizer/subscription"
+              className="mt-2 inline-block font-semibold underline hover:no-underline"
+            >
+              See upgrade options
+            </Link>
+          </div>
+        )}
         <div className="bg-blue-50 dark:bg-gray-800 border border-blue-200 dark:border-gray-700 rounded-lg p-8 text-center">
           <div
             onDragOver={handleDragOver}

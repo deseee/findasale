@@ -8,6 +8,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ItemRarity } from '@prisma/client';
 import axios from 'axios';
+import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'; // SSRF guard for stored photoUrls
 import { classifyPackageSurchargeTrigger } from '../services/ebayRateEstimateService'; // ADR-103 Phase 5: persisted margin-risk flag
 import FormData from 'form-data';
 import { z } from 'zod';
@@ -20,6 +21,7 @@ import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSe
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sale Feed
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
+import { listPublicItemIds, parseSitemapPaging } from '../services/publicItemIndexService'; // GET /items/sitemap
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
@@ -49,18 +51,9 @@ import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHar
 import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
 import { computeChannelStatusForItems, ChannelStatusItemInput, ExtensionPlatformsUsed, PublishedExtensionPlatformsByItemId } from '../services/itemChannelStatusService'; // Add Items collapsed-row multi-channel status (2026-09-14), see ADR-2026-09-14-add-items-multichannel-status-aggregation.md
 import type { ActingOrganizerRequest } from '../utils/actingOrganizer'; // 2026-09-29: Markdown Re-tag handlers read req.actingOrganizer (owner or TEAMS staff)
-
-/** Decode HTML entities from CSV/eBay data before writing to the DB. */
-function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'");
-}
+import { decodeHtmlEntities } from '../utils/htmlEntities'; // 2026-09-29: single-pass decode + tag strip for imported category text
+import { parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey } from '../utils/qrScanGuards'; // 2026-09-29: strict scan coordinates + advisory-lock key for the QR-scan dedupe
+import { IMPORT_FIELD_KEYS, IMPORT_MAX_ROWS, buildImportItem, detectImportColumnMapping, importPhotoCapForTier, RawImportRow, ImportRowContext } from '../services/itemCsvImport'; // 2026-09-29: one shared, hardened row validator for bulk-import + legacy import-items
 
 /**
  * Bug #469: Live-listing edit propagation.
@@ -349,7 +342,72 @@ const uploadImages = async (files: Express.Multer.File[]): Promise<string[]> => 
   return files.map(file => `https://example.com/uploads/${file.filename}`);
 };
 
-// Bulk import items from CSV
+// ─── CSV item import (shared helpers for bulk-import + legacy import-items) ───────────────────────
+// Row validation lives in services/itemCsvImport.ts (unit-tested). Every imported row lands as a DRAFT
+// (draftStatus DRAFT, status AVAILABLE) so the organizer reviews + publishes it; photoUrls are https-only
+// strings; max 200 rows per import; `status` cannot be used to create SOLD / AUCTION_ENDED items.
+
+const BULK_IMPORT_MAX = IMPORT_MAX_ROWS;
+
+/** Parse an uploaded CSV buffer (BOM-safe: Excel "CSV UTF-8" files start with a byte-order mark). */
+async function parseImportCsv(buffer: Buffer): Promise<Record<string, string>[]> {
+  const records: Record<string, string>[] = [];
+  const parser = Readable.from(buffer).pipe(
+    parse({ columns: true, skip_empty_lines: true, trim: true, bom: true })
+  );
+  for await (const record of parser) {
+    records.push(record);
+  }
+  return records;
+}
+
+/**
+ * Turn CSV rows into createMany-ready item data. columnMap: FindA.Sale field -> CSV header.
+ * Never throws for bad rows: they are reported in `errors` (row is skipped) or `warnings` (row imported).
+ */
+function collectImportRows(
+  rows: Record<string, string>[],
+  columnMap: Record<string, string>,
+  ctx: ImportRowContext
+): { items: any[]; errors: { row: number; reason: string }[]; warnings: { row: number; reason: string }[] } {
+  const items: any[] = [];
+  const errors: { row: number; reason: string }[] = [];
+  const warnings: { row: number; reason: string }[] = [];
+
+  rows.forEach((record, i) => {
+    const rowNum = i + 2; // +2: 1-indexed + header row
+    const rawRow: Record<string, string> = {};
+    for (const key of IMPORT_FIELD_KEYS) {
+      const col = columnMap[key];
+      if (typeof col === 'string' && col && Object.prototype.hasOwnProperty.call(record, col)) {
+        rawRow[key] = String(record[col] ?? '');
+      }
+    }
+    if (rawRow.category !== undefined) rawRow.category = decodeHtmlEntities(rawRow.category.trim());
+
+    const result = buildImportItem(rawRow as RawImportRow, ctx);
+    if (!result.ok) {
+      errors.push({ row: rowNum, reason: result.error });
+      return;
+    }
+    result.warnings.forEach((reason) => warnings.push({ row: rowNum, reason }));
+    items.push({
+      ...result.data,
+      // Same derived fields createItem sets (Feature #57 rarity, eBay shipping tier)
+      rarity: assignRarity(result.data.price),
+      ebayShippingClassification: classifyEbayShipping(result.data.category, []),
+    });
+  });
+
+  return { items, errors, warnings };
+}
+
+const MAX_WARNINGS_RETURNED = 50;
+
+// Bulk import items from CSV (legacy route: POST /api/items/:saleId/import-items).
+// Header names are matched case-insensitively against the same aliases bulk-import uses (title, price,
+// description, condition, category, photoUrls, status, auctionStartPrice, bidIncrement, auctionEndTime,
+// reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate). Rows import as DRAFT.
 export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -369,7 +427,7 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
       where: { id: saleId },
       include: {
         organizer: {
-          select: { userId: true }
+          select: { userId: true, subscriptionTier: true }
         }
       }
     });
@@ -383,57 +441,31 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
     }
 
     // Parse CSV
-    const records: any[] = [];
-    const parser = Readable.from(file.buffer).pipe(
-      parse({
-        columns: true,
-        skip_empty_lines: true
-      })
-    );
-
-    for await (const record of parser) {
-      records.push(record);
+    let records: Record<string, string>[];
+    try {
+      records = await parseImportCsv(file.buffer);
+    } catch (parseErr: any) {
+      return res.status(400).json({ message: `Could not read the CSV file: ${parseErr?.message ?? 'invalid format'}` });
     }
 
-    // H7: Validate and sanitise each row with Zod before inserting
-    const itemsToCreate: any[] = [];
-    const rowErrors: { row: number; errors: string[] }[] = [];
+    if (records.length === 0) {
+      return res.status(400).json({ message: 'CSV is empty or has no data rows.' });
+    }
 
-    records.forEach((record, idx) => {
-      // Convert empty strings to undefined for optional fields before validation
-      const cleanedRecord = Object.fromEntries(
-        Object.entries(record).map(([k, v]) => [k, v === '' ? undefined : v])
-      );
-      const result = csvRowSchema.safeParse(cleanedRecord);
-      if (!result.success) {
-        rowErrors.push({
-          row: idx + 2, // +2 for 1-indexed + header row
-          errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`),
-        });
-      } else {
-        const d = result.data;
-        itemsToCreate.push({
-          saleId,
-          organizerId: sale.organizerId,
-          title: d.title,
-          description: d.description || '',
-          price: toNumber(d.price),
-          auctionStartPrice: toNumber(d.auctionStartPrice),
-          bidIncrement: toNumber(d.bidIncrement),
-          auctionEndTime: d.auctionEndTime ? new Date(d.auctionEndTime) : null,
-          status: d.status || 'AVAILABLE',
-          category: d.category || null,
-          condition: d.condition || null,
-          photoUrls: d.photoUrls ? d.photoUrls.split(',').map((url: string) => url.trim()) : [],
-          // CD2 Phase 4: Reverse Auction
-          reverseAuction: d.reverseAuction === 'true' || d.reverseAuction === '1',
-          reverseDailyDrop: d.reverseDailyDrop ? Math.round(parseFloat(d.reverseDailyDrop) * 100) : null,
-          reverseFloorPrice: d.reverseFloorPrice ? Math.round(parseFloat(d.reverseFloorPrice) * 100) : null,
-          reverseStartDate: d.reverseStartDate ? new Date(d.reverseStartDate) : null,
-          embedding: [], // embedding default dropped in migration — must supply explicitly; Ollama will backfill async
-          draftStatus: 'PUBLISHED', // Phase 1A: CSV-imported items are deliberate organizer actions — publish immediately
-        });
-      }
+    const columnMap = detectImportColumnMapping(Object.keys(records[0]));
+    if (!columnMap.title) {
+      return res.status(400).json({ message: 'CSV must include a title column (title, name, item name, product).' });
+    }
+
+    // Cap at 200 rows (same cap as bulk-import)
+    const rowsToProcess = records.slice(0, BULK_IMPORT_MAX);
+    const skippedDueToCap = Math.max(0, records.length - BULK_IMPORT_MAX);
+
+    const { items: itemsToCreate, errors: rowErrors, warnings } = collectImportRows(rowsToProcess, columnMap, {
+      saleId,
+      organizerId: sale.organizerId,
+      maxPhotos: importPhotoCapForTier(sale.organizer.subscriptionTier),
+      requirePrice: false,
     });
 
     if (itemsToCreate.length === 0) {
@@ -443,22 +475,24 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Create items in database
+    // Create items in database (DRAFT: organizer reviews and publishes from Review & Publish)
     const createdItems = await prisma.item.createMany({
       data: itemsToCreate,
       skipDuplicates: false
     });
 
     res.json({
-      message: `Successfully imported ${createdItems.count} items${rowErrors.length > 0 ? ` (${rowErrors.length} row(s) skipped due to validation errors)` : ''}`,
+      message: `Successfully imported ${createdItems.count} items as drafts${rowErrors.length > 0 ? ` (${rowErrors.length} row(s) skipped due to validation errors)` : ''}`,
       itemCount: createdItems.count,
+      savedAs: 'DRAFT',
       ...(rowErrors.length > 0 ? { rowErrors } : {}),
+      ...(warnings.length > 0 ? { warnings: warnings.slice(0, MAX_WARNINGS_RETURNED), warningCount: warnings.length } : {}),
+      ...(skippedDueToCap > 0 ? { cappedAt200: true, rowsIgnoredBeyondCap: skippedDueToCap } : {}),
     });
   } catch (error: any) {
     console.error('CSV import error:', error);
     res.status(500).json({
-      message: 'Failed to import items from CSV',
-      error: error.message
+      message: 'Failed to import items from CSV'
     });
   }
 };
@@ -469,32 +503,12 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
 // ?confirm=true → performs actual import (createMany)
 // Without confirm → returns preview of first 5 rows + detected column names
 // Max 200 items per import. draftStatus: DRAFT.
-
-const BULK_IMPORT_MAX = 200;
-
-// Supported column names per FindA.Sale field (case-insensitive)
-const FIELD_ALIASES: Record<string, string[]> = {
-  title:       ['title', 'name', 'item name', 'item', 'product', 'product name'],
-  price:       ['price', 'cost', 'amount', 'sale price', 'retail price', 'asking price'],
-  description: ['description', 'desc', 'details', 'notes', 'about'],
-  condition:   ['condition', 'grade', 'quality', 'state'],
-  category:    ['category', 'type', 'genre', 'department'],
-};
-
-const VALID_CONDITIONS = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
+// Mappable fields: title, price, description, condition, category, photoUrls, status (DRAFT/AVAILABLE only),
+// auctionStartPrice, bidIncrement, auctionEndTime, reverseAuction, reverseDailyDrop, reverseFloorPrice,
+// reverseStartDate (see services/itemCsvImport.ts for the per-row rules).
 
 function detectColumnMapping(headers: string[]): Record<string, string> {
-  const mapping: Record<string, string> = {};
-  for (const header of headers) {
-    const lower = header.toLowerCase().trim();
-    for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
-      if (aliases.includes(lower) && !mapping[field]) {
-        mapping[field] = header;
-        break;
-      }
-    }
-  }
-  return mapping;
+  return detectImportColumnMapping(headers);
 }
 
 export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
@@ -517,7 +531,7 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
     // Verify organizer owns the sale
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { organizer: { select: { userId: true } } },
+      include: { organizer: { select: { userId: true, subscriptionTier: true } } },
     });
     if (!sale) {
       res.status(404).json({ error: 'Sale not found.' });
@@ -529,12 +543,12 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
     }
 
     // Parse CSV from memory buffer
-    const records: Record<string, string>[] = [];
-    const parser = Readable.from(file.buffer).pipe(
-      parse({ columns: true, skip_empty_lines: true, trim: true })
-    );
-    for await (const record of parser) {
-      records.push(record);
+    let records: Record<string, string>[];
+    try {
+      records = await parseImportCsv(file.buffer);
+    } catch (parseErr: any) {
+      res.status(400).json({ error: `Could not read the CSV file: ${parseErr?.message ?? 'invalid format'}` });
+      return;
     }
 
     if (records.length === 0) {
@@ -567,13 +581,17 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: 'columnMap must be valid JSON: { "title": "YourTitleColumn", "price": "YourPriceColumn" }' });
       return;
     }
+    if (!columnMap || typeof columnMap !== 'object' || Array.isArray(columnMap)) {
+      res.status(400).json({ error: 'columnMap must be a JSON object: { "title": "YourTitleColumn", "price": "YourPriceColumn" }' });
+      return;
+    }
 
     if (!columnMap.title) {
       res.status(400).json({ error: 'columnMap must include a mapping for "title".' });
       return;
     }
-    if (!columnMap.price) {
-      res.status(400).json({ error: 'columnMap must include a mapping for "price".' });
+    if (!columnMap.price && !columnMap.auctionStartPrice) {
+      res.status(400).json({ error: 'columnMap must include a mapping for "price" (or "auctionStartPrice" for auction files).' });
       return;
     }
 
@@ -581,52 +599,12 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
     const rowsToProcess = records.slice(0, BULK_IMPORT_MAX);
     const skippedDueToCap = records.length > BULK_IMPORT_MAX ? records.length - BULK_IMPORT_MAX : 0;
 
-    const itemsToCreate: any[] = [];
-    const errors: { row: number; reason: string }[] = [];
-
-    for (let i = 0; i < rowsToProcess.length; i++) {
-      const record = rowsToProcess[i];
-      const rowNum = i + 2; // +2: 1-indexed + header row
-
-      const rawTitle = columnMap.title ? (record[columnMap.title] ?? '').trim() : '';
-      const rawPrice = columnMap.price ? (record[columnMap.price] ?? '').trim() : '';
-      const rawDescription = columnMap.description ? (record[columnMap.description] ?? '').trim() : '';
-      const rawCondition = columnMap.condition ? (record[columnMap.condition] ?? '').trim().toUpperCase() : '';
-      const rawCategory = decodeHtmlEntities(columnMap.category ? (record[columnMap.category] ?? '').trim() : '');
-
-      if (!rawTitle) {
-        errors.push({ row: rowNum, reason: 'title is required and cannot be empty' });
-        continue;
-      }
-
-      let price: number | null = null;
-      if (rawPrice) {
-        const parsed = parseFloat(rawPrice.replace(/[^0-9.]/g, ''));
-        if (isNaN(parsed)) {
-          errors.push({ row: rowNum, reason: `price "${rawPrice}" is not a valid number` });
-          continue;
-        }
-        price = parsed;
-      } else {
-        errors.push({ row: rowNum, reason: 'price is required and cannot be empty' });
-        continue;
-      }
-
-      const condition = rawCondition && VALID_CONDITIONS.includes(rawCondition) ? rawCondition : null;
-
-      itemsToCreate.push({
-        saleId,
-        organizerId: sale.organizerId,
-        title: rawTitle,
-        description: rawDescription || '',
-        price,
-        condition,
-        category: rawCategory || null,
-        status: 'AVAILABLE',
-        draftStatus: 'DRAFT',
-        embedding: [],
-      });
-    }
+    const { items: itemsToCreate, errors, warnings } = collectImportRows(rowsToProcess, columnMap, {
+      saleId,
+      organizerId: sale.organizerId,
+      maxPhotos: importPhotoCapForTier(sale.organizer.subscriptionTier),
+      requirePrice: true,
+    });
 
     if (itemsToCreate.length === 0) {
       res.status(400).json({
@@ -647,11 +625,13 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
       imported: result.count,
       skipped: errors.length + skippedDueToCap,
       errors,
+      savedAs: 'DRAFT',
+      ...(warnings.length > 0 ? { warnings: warnings.slice(0, MAX_WARNINGS_RETURNED), warningCount: warnings.length } : {}),
       ...(skippedDueToCap > 0 ? { cappedAt200: true, rowsIgnoredBeyondCap: skippedDueToCap } : {}),
     });
   } catch (error: any) {
     console.error('Bulk import error:', error);
-    res.status(500).json({ error: 'Bulk import failed.', detail: error.message });
+    res.status(500).json({ error: 'Bulk import failed.' });
   }
 };
 // ─── End Feature #395 ─────────────────────────────────────────────────────────
@@ -832,7 +812,8 @@ type HoldForViewer = {
 // expired hold exposes nothing about its former holder.
 const ACTIVE_HOLD_STATUSES = ['PENDING', 'CONFIRMED', 'HOLD_IN_CART', 'INVOICE_ISSUED'];
 
-async function buildHoldFieldsForViewer(
+// exported (2026-09-29) so the single-item discounted-invoice total is unit-testable
+export async function buildHoldFieldsForViewer(
   reservation: HoldForViewer,
   viewer: { isOwnerOrAdmin: boolean; viewerUserId?: string }
 ): Promise<Record<string, unknown>> {
@@ -888,10 +869,15 @@ async function buildHoldFieldsForViewer(
     // page, even though clicking through correctly charged $1.50 for both items.
     // Expose the invoice's real total + item count so the card can show the true amount.
     const invoiceItemCount = reservation.invoice?.itemIds?.length ?? 1;
-    const invoiceTotalAmount =
-      invoiceItemCount > 1 && reservation.invoice
-        ? reservation.invoice.totalAmount / 100
-        : null; // null = not bundled, frontend falls back to this item's own price
+    // 2026-09-29 (Crew Invasion): the invoice's real total is returned for EVERY invoice, not just
+    // bundled ones, so a single-item invoice carrying the crew discount shows the true (lower)
+    // amount instead of the list price. The card still treats it as "bundled" only when
+    // invoiceItemCount > 1 (see HoldInvoiceStatusCard.isBundled) and compares against the item
+    // price to show the discount line, so multi-item behavior is unchanged. null only when the
+    // reservation has no invoice.
+    const invoiceTotalAmount = reservation.invoice
+      ? reservation.invoice.totalAmount / 100
+      : null;
     return {
       reservedBy: reservation.userId,
       invoiceExpiresAt,
@@ -3680,7 +3666,13 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
     let suggestedTags: string[] = [];
     if (isCloudAIAvailable()) {
       try {
+        // SSRF guard: photoUrls can come from imports/scrapers, so only fetch allowlisted https hosts
+        // (Cloudinary + SAFE_FETCH_ALLOWED_HOSTS) with redirects disabled.
+        if (!isSafeFetchUrl(firstPhotoUrl)) {
+          throw new Error('photo URL is not an allowed https image host');
+        }
         const imageResponse = await axios.get(firstPhotoUrl, {
+          ...SAFE_FETCH_AXIOS_OPTIONS,
           responseType: 'arraybuffer',
           timeout: 10000,
         });
@@ -4468,8 +4460,9 @@ export const getQrCode = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Generate QR code pointing to item page
-    const qrContent = `https://finda.sale/items/${itemId}`;
+    // Generate QR code pointing to item page. utm_source=qr_item marks the visit as QR-originated so
+    // the item page can offer the location-verified scan (components/ItemQrScanPrompt.tsx).
+    const qrContent = `${process.env.FRONTEND_URL || 'https://finda.sale'}/items/${itemId}?utm_source=qr_item`;
 
     const QRCode = await import('qrcode');
     const qrImageBuffer = await QRCode.toBuffer(qrContent, {
@@ -4492,8 +4485,13 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const { itemId } = req.params;
     const userId = req.user?.id;
-    const latitude = req.query.latitude ? parseFloat(req.query.latitude as string) : undefined;
-    const longitude = req.query.longitude ? parseFloat(req.query.longitude as string) : undefined;
+    // Strict numeric parsing (2026-09-29): only plain finite decimals in range are accepted; '12abc',
+    // exponents, arrays and NaN/Infinity all read as "no coordinate" (LOCATION_REQUIRED below).
+    const latitude = parseLatitude(req.query.latitude);
+    const longitude = parseLongitude(req.query.longitude);
+    // Optional GPS accuracy in meters reported by the browser; widens the geofence a little so a real
+    // shopper standing in the driveway is not rejected because of a noisy fix (capped to 100m).
+    const accuracyMeters = parseAccuracyMeters(req.query.accuracy);
 
     if (!itemId || !userId) {
       res.status(400).json({ message: 'itemId and authentication required.' });
@@ -4506,22 +4504,47 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       where: { id: itemId },
       include: {
         sale: {
-          select: { id: true, lat: true, lng: true },
+          select: { id: true, lat: true, lng: true, status: true, deletedAt: true },
         },
       },
     });
 
-    if (!item) {
+    // Only items of a live (PUBLISHED, not deleted) sale can be scanned for XP. A DRAFT/ENDED/deleted sale
+    // answers exactly like a missing item so scans cannot probe unpublished inventory.
+    if (!item || !item.sale || item.sale.status !== 'PUBLISHED' || item.sale.deletedAt) {
       res.status(404).json({ message: 'Item not found.' });
       return;
     }
 
-    // Geofence check: if client provided lat/lng, enforce 100m radius from sale location
-    if (latitude !== undefined && longitude !== undefined && item.sale && item.sale.lat !== null && item.sale.lng !== null) {
+    // Geofence (#317): when the sale has coordinates, the scan must carry valid ones and they must be
+    // within 100m of the sale (plus the browser-reported GPS accuracy, capped at 100m). Previously a
+    // request that simply omitted lat/lng skipped the check entirely, which made the geofence optional.
+    // A sale WITHOUT coordinates cannot be geofenced. That used to fail OPEN (XP awarded to anyone anywhere);
+    // it now fails closed: the scan is acknowledged but no XP or badge is awarded.
+    if (item.sale.lat === null || item.sale.lng === null) {
+      res.status(200).json({
+        message: 'QR scan recorded. This sale has no verified location yet, so no XP was awarded.',
+        xpAwarded: 0,
+        scanAndSplitTriggered: false,
+      });
+      return;
+    }
+    if (item.sale.lat !== null && item.sale.lng !== null) {
+      if (latitude === undefined || longitude === undefined) {
+        res.status(400).json({
+          error: 'Location is required to scan this QR code.',
+          message: 'Location is required to scan this QR code.',
+          code: 'LOCATION_REQUIRED',
+        });
+        return;
+      }
       const distance = haversineDistance(latitude, longitude, item.sale.lat, item.sale.lng);
-      const MAX_DISTANCE = 100; // 100 meters
+      const MAX_DISTANCE = 100 + accuracyMeters; // meters
       if (distance > MAX_DISTANCE) {
-        res.status(403).json({ error: 'You must be at the sale location to scan this QR code.' });
+        res.status(403).json({
+          error: 'You must be at the sale location to scan this QR code.',
+          message: 'You must be at the sale location to scan this QR code.',
+        });
         return;
       }
     }
@@ -4529,56 +4552,70 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     // Import awardXp and cap check here to avoid circular dependency
     const { awardXp, checkDailyXpCap, computeTreasureHuntScanXp } = await import('../services/xpService');
 
-    // Check if user has already scanned this item today (prevent duplicate scans)
+    // Dedupe-then-award must be ATOMIC (2026-09-29): the old findFirst-then-awardXp let N parallel requests all
+    // pass the "already scanned today" check and each collect XP. PointsTransaction has no unique key for
+    // (user, item, day), so the check + award run under a per-(user, item, day) Postgres advisory lock held for
+    // the whole transaction: a second request blocks on the lock, then re-checks and sees the committed
+    // TREASURE_HUNT_SCAN row awardXp wrote (awardXp commits on its own connection before the lock is released).
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-    const alreadyScannedToday = await prisma.pointsTransaction.findFirst({
-      where: {
-        userId,
-        type: 'TREASURE_HUNT_SCAN',
-        itemId,
-        createdAt: {
-          gte: today,
-        },
-      },
-    });
+    const scanLockKey = buildQrScanLockKey(userId, itemId, today);
 
-    if (alreadyScannedToday) {
+    const scanOutcome = await prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${scanLockKey}))`;
+
+        // Check if user has already scanned this item today (prevent duplicate scans)
+        const alreadyScannedToday = await tx.pointsTransaction.findFirst({
+          where: { userId, type: 'TREASURE_HUNT_SCAN', itemId, createdAt: { gte: today } },
+          select: { id: true },
+        });
+        if (alreadyScannedToday) return { kind: 'duplicate' as const };
+
+        // Get user's current rank for XP multiplier calculation
+        const scanUser = await tx.user.findUnique({ where: { id: userId }, select: { explorerRank: true } });
+        if (!scanUser) return { kind: 'no_user' as const };
+
+        // Shared helper: rank multiplier + Hunt Pass +10% bonus (fetches Hunt Pass status fresh)
+        const multipliedXp = await computeTreasureHuntScanXp(userId, scanUser.explorerRank);
+
+        // Check daily cap for TREASURE_HUNT_SCAN XP
+        const dailyRemaining = await checkDailyXpCap(userId, 'TREASURE_HUNT_SCAN');
+        const xpToAward = Math.min(multipliedXp, dailyRemaining);
+        if (xpToAward === 0) return { kind: 'capped' as const };
+
+        // Award XP (respecting daily cap; rank + Hunt Pass multiplier already applied above)
+        const awarded = await awardXp(userId, 'TREASURE_HUNT_SCAN', xpToAward, { itemId, preMultipliedHuntPassXp: true });
+        return { kind: 'awarded' as const, xpResult: awarded };
+      },
+      { maxWait: 10000, timeout: 30000 }
+    );
+
+    if (scanOutcome.kind === 'duplicate') {
       res.status(200).json({
         message: 'Item already scanned today.',
         guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
       });
       return;
     }
-
-    // Get user's current rank for XP multiplier calculation
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { explorerRank: true },
-    });
-
-    if (!user) {
+    if (scanOutcome.kind === 'no_user') {
       res.status(404).json({ message: 'User not found.' });
       return;
     }
-
-    // Shared helper: rank multiplier + Hunt Pass +10% bonus (fetches Hunt Pass status fresh)
-    const multipliedXp = await computeTreasureHuntScanXp(userId, user.explorerRank);
-
-    // Check daily cap for TREASURE_HUNT_SCAN XP
-    const dailyRemaining = await checkDailyXpCap(userId, 'TREASURE_HUNT_SCAN');
-    const xpToAward = Math.min(multipliedXp, dailyRemaining);
-
-    if (xpToAward === 0) {
+    if (scanOutcome.kind === 'capped') {
       res.status(200).json({
         message: 'Daily item scan XP cap reached. Try again tomorrow.',
         guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
       });
       return;
     }
+    const xpResult = scanOutcome.xpResult;
 
-    // Award XP (respecting daily cap; rank + Hunt Pass multiplier already applied above)
-    const xpResult = await awardXp(userId, 'TREASURE_HUNT_SCAN', xpToAward, { itemId, preMultipliedHuntPassXp: true });
+    // Sale Passport decision (2026-09-29): a geofenced item-QR scan deliberately awards NO Sale Passport
+    // stamp. ADR-sale-passport-2026-09-29 defines ATTEND_SALE / First Steps / Weekend Warrior / Road
+    // Tripper as a pure function of SaleCheckin rows (saleController.checkInToSale), and nowhere counts
+    // an item-QR scan as attendance. Awarding ATTEND_SALE here would only bump the legacy counter without
+    // a SaleCheckin row and would diverge from the derived passport. Revisit only if the ADR is amended.
 
     // Find or create "Item Scout" badge
     let badge = await prisma.badge.findUnique({
@@ -5143,25 +5180,27 @@ export const getSimilarItems = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error fetching similar items' });
   }
 };
-// SEO: Sitemap items endpoint — returns id + updatedAt for all items in PUBLISHED sales
-// Public, no auth required. Cap at 10,000 to keep response lightweight.
+// GET /api/items/sitemap: machine-readable list of publicly viewable item ids (id + updatedAt).
+// Public, no auth. This is a DATA endpoint for partners and tooling. It is NOT wired into any sitemap:
+// item pages (/items/[id]) are deliberately noindex until they move to ISR, so item URLs must not be
+// advertised to crawlers (see pages/server-sitemap.xml.tsx, the note above `fields`, S1070/S1071).
+// Do not add these ids to sitemap.xml or server-sitemap.xml until that ISR decision is reversed.
+//
+// Visibility matches the public sale page (getSale for an anonymous viewer):
+//  - item: PUBLIC_ITEM_FILTER (isActive, not GRACE_LOCKED, draftStatus PUBLISHED)
+//  - sale: PUBLISHED, not soft-deleted, not an inventory container, past its early-access window
+//    (anonymous viewers are rank INITIATE, which has no early access, so publishedAt must be null or <= now)
+// Query: ?limit= (default 5000, max 10000), ?cursor=<item id> from the previous page's nextCursor.
+// Order is updatedAt desc, id desc (stable). Response: { items: [{ id, updatedAt }], nextCursor: string | null }.
 export const getSitemapItems = async (req: Request, res: Response) => {
   try {
-    const items = await prisma.item.findMany({
-      where: {
-        sale: {
-          status: 'PUBLISHED',
-        },
-      },
-      select: {
-        id: true,
-        updatedAt: true,
-      },
-      take: 10000,
-      orderBy: { updatedAt: 'desc' },
-    });
+    // Visibility rules and pagination live in services/publicItemIndexService.ts (unit tested).
+    const { items, nextCursor } = await listPublicItemIds(parseSitemapPaging(req.query));
 
-    res.json({ items });
+    // Ids change rarely relative to how often partners poll; let the CDN absorb repeat reads.
+    res.set('Cache-Control', 'public, max-age=300, s-maxage=900, stale-while-revalidate=120');
+    res.set('X-Robots-Tag', 'noindex');
+    res.json({ items, nextCursor });
   } catch (error) {
     console.error('[getSitemapItems] Error:', error);
     res.status(500).json({ message: 'Server error fetching sitemap items' });

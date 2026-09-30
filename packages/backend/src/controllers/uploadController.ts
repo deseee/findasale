@@ -9,6 +9,8 @@ import { enqueueProcessRapidDraft } from '../jobs/processRapidDraft';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
+import { getAiGate, resolveTier, MAX_RAPID_BATCH_FILES } from '../middleware/aiUploadGate'; // paid-AI route gate (organizer + ownership + atomic quota reservation)
+import { checkAiTagQuota } from '../lib/aiTagsQuotaTracker';
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -244,18 +246,12 @@ export const uploadItemPhoto = async (req: Request, res: Response): Promise<void
   }
 };
 
-// POST /api/upload/rapid-batch — CB1: upload + AI analyze in one call
-// Cloud AI (Google Vision + Claude Haiku) with Ollama fallback.
-// Accepts up to 20 images. Returns { results: Array<{ index, cloudinaryUrl, ai, error? }> }
-export const rapidBatchUpload = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const files = req.files as Express.Multer.File[];
-    if (!files || files.length === 0) {
-      res.status(400).json({ message: 'No files provided' });
-      return;
-    }
+// ── rapid-batch analysis helpers (2026-09-29) ─────────────────────────────────────────────────────
+const RAPID_BATCH_AI_CONCURRENCY = 3; // photos analyzed in parallel per request
+const RAPID_BATCH_AI_PER_PHOTO_MS = 40_000; // bounded wait per photo (cloud AI + Ollama fallback)
+const RAPID_BATCH_AI_DEADLINE_MS = 90_000; // hard overall ceiling for the whole request
 
-    const ollamaPrompt = `You are a secondary-sale pricing assistant (estate sales, yard sales, auctions, flea markets, consignment). Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
+const OLLAMA_JSON_PROMPT = `You are a secondary-sale pricing assistant (estate sales, yard sales, auctions, flea markets, consignment). Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
 {
   "title": "short descriptive item title",
   "description": "1-2 sentence description mentioning condition and notable features",
@@ -264,84 +260,152 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
   "suggestedPrice": 12.50
 }`;
 
+/** Resolve with { timedOut: true } instead of waiting forever; never rejects. */
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<{ timedOut: boolean; value: T | null }> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p.then(value => ({ timedOut: false, value })),
+      new Promise<{ timedOut: boolean; value: T | null }>(resolve => {
+        timer = setTimeout(() => resolve({ timedOut: true, value: null }), ms);
+      }),
+    ]);
+  } catch {
+    return { timedOut: false, value: null };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * One photo through the paid chain: Cloud AI (Vision + Haiku) then Ollama fallback. Returns the tags
+ * or null when every provider failed. Never throws.
+ */
+async function analyzeBufferForUpload(buffer: Buffer, mimeType: string, useCloudAI: boolean): Promise<Record<string, unknown> | null> {
+  if (useCloudAI) {
+    try {
+      const cloud = (await analyzeItemImage(buffer, mimeType)) as Record<string, unknown> | null;
+      if (cloud) return cloud;
+    } catch {
+      // Cloud AI failed: fall through to Ollama
+    }
+  }
+  try {
+    const base64Image = buffer.toString('base64');
+    let catalogMatchContext = '';
+    if (isCatalogMatchEnabled()) {
+      try {
+        catalogMatchContext = buildCatalogMatchContext(await findCatalogMatches(buffer, mimeType));
+      } catch {
+        // catalog match best-effort
+      }
+    }
+    let ebayMatchContext = '';
+    try {
+      ebayMatchContext = buildEbayMatchContext(await getEbayImageMatch(base64Image));
+    } catch { /* eBay image-search best-effort */ }
+    const aiResponse = await axios.post(
+      `${OLLAMA_URL}/api/generate`,
+      { model: OLLAMA_VISION_MODEL, prompt: OLLAMA_JSON_PROMPT + catalogMatchContext + ebayMatchContext, images: [base64Image], stream: false },
+      { timeout: 35000 }
+    );
+    const raw = String(aiResponse.data?.response ?? '').replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null; // AI unavailable: organizer fills in manually
+  }
+}
+
+// POST /api/upload/rapid-batch — CB1: upload + AI analyze in one call
+// Cloud AI (Google Vision + Claude Haiku) with Ollama fallback.
+// Accepts up to MAX_RAPID_BATCH_FILES images. Returns { results: Array<{ index, cloudinaryUrl, imageVariants, ai, aiStatus, error? }>, smartTagsUsed }
+// The paid analysis is awaited (bounded) so the tags the organizer paid for are in the response.
+export const rapidBatchUpload = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Fail closed: this handler spends Vision + Haiku + eBay image-search money, so it must only run
+    // behind organizerAiGate (organizer role, sale ownership, monthly Smart-tag quota). See routes/upload.ts.
+    const gate = getAiGate(res);
+    if (!gate) {
+      res.status(403).json({ message: 'Smart tagging access could not be verified.' });
+      return;
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ message: 'No files provided' });
+      return;
+    }
+    if (files.length > MAX_RAPID_BATCH_FILES) {
+      res.status(400).json({ message: `Maximum ${MAX_RAPID_BATCH_FILES} photos per batch.` });
+      return;
+    }
+
     const useCloudAI = isCloudAIAvailable();
 
-    // #113: Async AI Tagging — upload immediately, process AI in background
-    // Process each file: upload to Cloudinary synchronously, defer AI analysis
-    const results = await Promise.allSettled(
-      files.map(async (file, index) => {
-        // Upload to Cloudinary (multi-res) — synchronous
-        const imageUrls = await uploadToCloudinary(file.buffer);
+    // 2026-09-29 (review finding): the paid analysis used to run in setImmediate and the call returned
+    // ai:null, so the organizer paid for tags they never received. The analysis is now AWAITED under a
+    // bounded per-photo timeout + overall deadline and the tags come back in the response. The gate
+    // reserved files.length Smart tags atomically; we keep one per photo that actually produced tags
+    // (or timed out, where the paid work may have happened) and refund the rest via gate.settle().
+    let spent = 0;
+    try {
+      // Step 1: upload every photo to Cloudinary (multi-res).
+      const uploads = await Promise.allSettled(files.map(file => uploadToCloudinary(file.buffer)));
 
-        // #113: Defer AI analysis to background via setImmediate
-        // Return immediately without waiting for AI
-        const mimeType = (file.mimetype as string) || 'image/jpeg';
-
-        setImmediate(async () => {
-          try {
-            let ai: Record<string, unknown> | null = null;
-
-            if (useCloudAI) {
-              // ── Cloud AI path (CB1): Google Vision + Claude Haiku ──────────────
-              try {
-                ai = await analyzeItemImage(file.buffer, mimeType) as Record<string, unknown> | null;
-              } catch {
-                // Cloud AI failed — fall through to Ollama
-              }
-            }
-
-            if (!ai) {
-              // ── Ollama fallback ────────────────────────────────────────────────
-              // ADR 2026-07-01 §6: pass catalog-match evidence into the Ollama
-              // fallback prompt too, so even full-fallback mode (paid APIs down)
-              // benefits from the self-hosted reverse-image corpus. Best-effort —
-              // never blocks the fallback path if the embedding service is down.
-              try {
-                const base64Image = file.buffer.toString('base64');
-                let catalogMatchContext = '';
-                if (isCatalogMatchEnabled()) {
-                  try {
-                    const matches = await findCatalogMatches(file.buffer, mimeType);
-                    catalogMatchContext = buildCatalogMatchContext(matches);
-                  } catch {
-                    // catalog match best-effort — proceed without it
-                  }
-                }
-                let ebayMatchContext = '';
-                try {
-                  ebayMatchContext = buildEbayMatchContext(await getEbayImageMatch(base64Image));
-                } catch { /* eBay image-search best-effort (ADR-ebay-searchbyimage-tagging-2026-07-02) */ }
-                const aiResponse = await axios.post(
-                  `${OLLAMA_URL}/api/generate`,
-                  { model: OLLAMA_VISION_MODEL, prompt: ollamaPrompt + catalogMatchContext + ebayMatchContext, images: [base64Image], stream: false },
-                  { timeout: 45000 }
-                );
-                const raw = aiResponse.data.response.replace(/```json\n?|\n?```/g, '').trim();
-                ai = JSON.parse(raw);
-              } catch {
-                // AI unavailable — organizer fills in manually
-              }
-            }
-
-            // Best-effort: log if AI processing succeeded
-            if (ai) {
-              console.log(`[async-ai-tagging] Background AI analysis completed for image ${index}`);
-            }
-          } catch (error) {
-            console.error(`[async-ai-tagging] Background error for image ${index}:`, error);
+      // Step 2: analyze the uploaded photos with bounded concurrency and a hard overall deadline.
+      const aiByIndex = new Map<number, { ai: Record<string, unknown> | null; status: 'ok' | 'unavailable' | 'timeout' | 'skipped' }>();
+      const toAnalyze = files.map((_, i) => i).filter(i => uploads[i].status === 'fulfilled');
+      const deadline = Date.now() + RAPID_BATCH_AI_DEADLINE_MS;
+      let cursor = 0;
+      const worker = async (): Promise<void> => {
+        while (cursor < toAnalyze.length) {
+          const index = toAnalyze[cursor++];
+          const remainingMs = deadline - Date.now();
+          if (remainingMs <= 500) {
+            aiByIndex.set(index, { ai: null, status: 'skipped' });
+            continue;
           }
-        });
+          const file = files[index];
+          const mimeType = (file.mimetype as string) || 'image/jpeg';
+          const outcome = await withTimeout(
+            analyzeBufferForUpload(file.buffer, mimeType, useCloudAI),
+            Math.min(RAPID_BATCH_AI_PER_PHOTO_MS, remainingMs)
+          );
+          if (outcome.timedOut) {
+            spent += 1; // the paid call may have been made; do not refund a timeout
+            aiByIndex.set(index, { ai: null, status: 'timeout' });
+          } else if (outcome.value) {
+            spent += 1;
+            aiByIndex.set(index, { ai: outcome.value, status: 'ok' });
+          } else {
+            aiByIndex.set(index, { ai: null, status: 'unavailable' });
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(RAPID_BATCH_AI_CONCURRENCY, toAnalyze.length) }, () => worker()));
 
-        return { index, cloudinaryUrl: imageUrls.original, imageVariants: imageUrls, ai: null };
-      })
-    );
+      const output = uploads.map((r, i) => {
+        if (r.status === 'fulfilled') {
+          const a = aiByIndex.get(i);
+          return {
+            index: i,
+            cloudinaryUrl: r.value.original,
+            imageVariants: r.value,
+            ai: a?.ai ?? null,
+            aiStatus: a?.status ?? 'skipped',
+          };
+        }
+        return { index: i, cloudinaryUrl: null, ai: null, aiStatus: 'skipped' as const, error: (r.reason as Error)?.message ?? 'Failed' };
+      });
 
-    const output = results.map((r, i) => {
-      if (r.status === 'fulfilled') return r.value;
-      return { index: i, cloudinaryUrl: null, ai: null, error: (r.reason as Error)?.message ?? 'Failed' };
-    });
-
-    res.json({ results: output });
+      await gate.settle(spent);
+      res.json({ results: output, smartTagsUsed: spent });
+      return;
+    } finally {
+      // Any throw above (before settle ran) refunds everything that was not spent.
+      await gate.settle(spent);
+    }
   } catch (error) {
     console.error('rapidBatchUpload error:', error);
     res.status(500).json({ message: 'Batch processing failed' });
@@ -352,6 +416,13 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
 // Returns { title, description, category, condition, suggestedPrice }
 export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<void> => {
   try {
+    // Fail closed: only runs behind organizerAiGate (organizer role, sale ownership, monthly quota).
+    const gate = getAiGate(res);
+    if (!gate) {
+      res.status(403).json({ message: 'Smart tagging access could not be verified.' });
+      return;
+    }
+
     const file = req.file;
     if (!file) {
       res.status(400).json({ message: 'No file provided' });
@@ -365,6 +436,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
       try {
         const result = await analyzeItemImage(file.buffer, mimeType);
         if (result) {
+          await gate.settle(1); // keep the atomically reserved tag
           res.json(result);
           return;
         }
@@ -417,6 +489,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
       return;
     }
 
+    await gate.settle(1); // keep the atomically reserved tag
     res.json(parsed);
   } catch (error: any) {
     if (error.code === 'ECONNREFUSED') {
@@ -471,6 +544,24 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     if (sale.organizer.userId !== req.user.id) {
       res.status(403).json({ message: 'Not your sale' });
       return;
+    }
+
+    // Smart-tag metering (2026-09-29): the background job (jobs/processRapidDraft.ts) calls the paid
+    // vision model, so it is metered like analyze-photo. Capture itself is never blocked by an
+    // exhausted quota (the photo still lands as a DRAFT the organizer can fill in by hand; the job
+    // skips the paid call and advances the item to PENDING_REVIEW). We only tell the client so it can
+    // show the upgrade prompt. Best-effort: a quota lookup failure must not block capture, because the
+    // job re-checks before spending anything.
+    let aiQuota: { exceeded: boolean; remaining: number | null; limit: number | null } | undefined;
+    try {
+      const q = await checkAiTagQuota(sale.organizer.id, resolveTier(sale.organizer.subscriptionTier));
+      aiQuota = {
+        exceeded: q.exceeded,
+        remaining: Number.isFinite(q.remaining) ? q.remaining : null,
+        limit: Number.isFinite(q.limit) ? q.limit : null,
+      };
+    } catch (quotaErr) {
+      console.warn('[rapidfire] Smart-tag quota lookup failed (capture continues):', quotaErr instanceof Error ? quotaErr.message : quotaErr);
     }
 
     // Consignor-scoped rapid capture (Feature #309/#70 follow-up, 2026-09-25): mirrors
@@ -541,7 +632,11 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     res.status(201).json({
       itemId: item.id,
       status: 'DRAFT',
-      photoUrl
+      photoUrl,
+      ...(aiQuota ? { aiQuota } : {}),
+      ...(aiQuota?.exceeded
+        ? { code: 'AI_QUOTA_EXCEEDED', message: 'Monthly Smart tagging limit reached. Your photo was saved; fill in the details by hand or upgrade to keep Smart tagging.' }
+        : {}),
     });
   } catch (error) {
     console.error('[rapidfire] uploadRapidfire error:', error);

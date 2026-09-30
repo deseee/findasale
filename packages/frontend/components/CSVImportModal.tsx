@@ -7,6 +7,11 @@
  *
  * On confirm: POST /api/items/:saleId/bulk-import?confirm=true with columnMap JSON
  * On preview: POST /api/items/:saleId/bulk-import (no confirm param)
+ *
+ * Optional columns (collapsed by default, opened automatically when the CSV has them): photoUrls (https links),
+ * auction fields (auctionStartPrice, bidIncrement, auctionEndTime) and reverse-auction fields (reverseAuction,
+ * reverseDailyDrop, reverseFloorPrice, reverseStartDate). Column auto-detection lives on the server
+ * (services/itemCsvImport.ts IMPORT_FIELD_ALIASES). Imported items are always saved as drafts.
  */
 
 import React, { useState, useRef } from 'react';
@@ -21,14 +26,25 @@ interface CSVImportModalProps {
 }
 
 const FINDASALE_FIELDS = [
-  { key: 'title',       label: 'Title',       required: true },
-  { key: 'price',       label: 'Price',       required: true },
-  { key: 'description', label: 'Description', required: false },
-  { key: 'condition',   label: 'Condition',   required: false },
-  { key: 'category',    label: 'Category',    required: false },
+  { key: 'title',       label: 'Title',       required: true,  group: 'core' },
+  { key: 'price',       label: 'Price',       required: true,  group: 'core' },
+  { key: 'description', label: 'Description', required: false, group: 'core' },
+  { key: 'condition',   label: 'Condition',   required: false, group: 'core' },
+  { key: 'category',    label: 'Category',    required: false, group: 'core' },
+  { key: 'photoUrls',         label: 'Photo URLs (https)',   required: false, group: 'more' },
+  { key: 'auctionStartPrice', label: 'Auction start price',  required: false, group: 'more' },
+  { key: 'bidIncrement',      label: 'Bid increment',        required: false, group: 'more' },
+  { key: 'auctionEndTime',    label: 'Auction end time',     required: false, group: 'more' },
+  { key: 'reverseAuction',    label: 'Reverse auction (true/false)', required: false, group: 'more' },
+  { key: 'reverseDailyDrop',  label: 'Reverse daily drop',   required: false, group: 'more' },
+  { key: 'reverseFloorPrice', label: 'Reverse floor price',  required: false, group: 'more' },
+  { key: 'reverseStartDate',  label: 'Reverse start date',   required: false, group: 'more' },
 ] as const;
 
 type FieldKey = typeof FINDASALE_FIELDS[number]['key'];
+
+const emptyColumnMap = (): Record<FieldKey, string> =>
+  Object.fromEntries(FINDASALE_FIELDS.map((f) => [f.key, ''])) as Record<FieldKey, string>;
 
 interface PreviewData {
   headers: string[];
@@ -41,6 +57,8 @@ interface ImportResult {
   imported: number;
   skipped: number;
   errors: { row: number; reason: string }[];
+  warnings?: { row: number; reason: string }[];
+  warningCount?: number;
   cappedAt200?: boolean;
 }
 
@@ -53,9 +71,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
-  const [columnMap, setColumnMap] = useState<Record<FieldKey, string>>({
-    title: '', price: '', description: '', condition: '', category: '',
-  });
+  const [columnMap, setColumnMap] = useState<Record<FieldKey, string>>(emptyColumnMap());
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,7 +82,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
     setIsLoading(false);
     setError(null);
     setPreviewData(null);
-    setColumnMap({ title: '', price: '', description: '', condition: '', category: '' });
+    setColumnMap(emptyColumnMap());
     setImportResult(null);
   };
 
@@ -107,14 +123,12 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
       const data = response.data;
       setPreviewData(data);
       // Pre-fill column map with auto-detected values
-      const auto = data.detectedMapping;
-      setColumnMap({
-        title:       auto.title       || '',
-        price:       auto.price       || '',
-        description: auto.description || '',
-        condition:   auto.condition   || '',
-        category:    auto.category    || '',
+      const auto = data.detectedMapping || {};
+      const next = emptyColumnMap();
+      FINDASALE_FIELDS.forEach(({ key }) => {
+        next[key] = auto[key] || '';
       });
+      setColumnMap(next);
       setStep('mapping');
     } catch (err: any) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Failed to read CSV. Please check the file format.');
@@ -129,8 +143,8 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
       setError('Title mapping is required.');
       return;
     }
-    if (!columnMap.price) {
-      setError('Price mapping is required.');
+    if (!columnMap.price && !columnMap.auctionStartPrice) {
+      setError('Price mapping is required (or Auction start price for auction files).');
       return;
     }
     setIsLoading(true);
@@ -153,7 +167,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
   };
 
   const downloadTemplate = () => {
-    const csvContent = `title,price,description,condition,category\nExample Lamp,25.99,Brass floor lamp in good condition,USED,Lighting\nVintage Chair,75.00,Mid-century modern armchair,USED,Furniture\nAntique Mirror,120.00,Ornate gilt frame,USED,Decor`;
+    const csvContent = `title,price,description,condition,category,photoUrls\nExample Lamp,25.99,Brass floor lamp in good condition,USED,Lighting,\nVintage Chair,75.00,Mid-century modern armchair,USED,Furniture,\nAntique Mirror,120.00,Ornate gilt frame,USED,Decor,`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -170,7 +184,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
 
   return (
     <AccessibleModal isOpen={isOpen} onClose={handleClose} ariaLabelledBy="bulk-import-modal-title">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-5">
           <h3 id="bulk-import-modal-title" className="text-xl font-bold text-warm-900 dark:text-warm-100">
@@ -210,6 +224,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
           <div>
             <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
               Upload a CSV file with your items. We will detect column names and let you map them in the next step.
+              Optional columns: photo links (https), auction and reverse-auction fields. Items are saved as drafts for you to review.
             </p>
 
             <button onClick={downloadTemplate} className="mb-4 text-amber-600 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1">
@@ -294,25 +309,50 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
             </div>
 
             {/* Mapping selectors */}
-            <div className="space-y-2 mb-5">
-              {FINDASALE_FIELDS.map(({ key, label, required }) => (
-                <div key={key} className="flex items-center gap-3">
-                  <span className="w-28 text-sm text-warm-700 dark:text-warm-300 font-medium flex-shrink-0">
-                    {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-                  </span>
-                  <select
-                    value={columnMap[key]}
-                    onChange={(e) => setColumnMap((prev) => ({ ...prev, [key]: e.target.value }))}
-                    className="flex-1 text-sm border border-warm-300 dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  >
-                    <option value="">{required ? 'Select column' : 'Skip'}</option>
-                    {previewData.headers.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
+            {(() => {
+              const renderField = ({ key, label, required }: typeof FINDASALE_FIELDS[number]) => {
+                // Price is only mandatory when the file has no auction start price column mapped
+                const isRequired = key === 'price' ? !columnMap.auctionStartPrice : required;
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="w-28 sm:w-44 text-sm text-warm-700 dark:text-warm-300 font-medium flex-shrink-0">
+                      {label}{isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                    </span>
+                    <select
+                      value={columnMap[key]}
+                      onChange={(e) => setColumnMap((prev) => ({ ...prev, [key]: e.target.value }))}
+                      aria-label={`CSV column for ${label}`}
+                      className="flex-1 min-w-0 text-sm border border-warm-300 dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    >
+                      <option value="">{isRequired ? 'Select column' : 'Skip'}</option>
+                      {previewData.headers.map((h) => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              };
+              const coreFields = FINDASALE_FIELDS.filter((f) => f.group === 'core');
+              const moreFields = FINDASALE_FIELDS.filter((f) => f.group === 'more');
+              const moreDetected = moreFields.some((f) => !!columnMap[f.key]);
+              return (
+                <div className="space-y-2 mb-5">
+                  {coreFields.map(renderField)}
+                  <details className="pt-1" open={moreDetected}>
+                    <summary className="cursor-pointer text-sm font-medium text-amber-700 dark:text-amber-400 hover:underline">
+                      Photos and auction columns (optional)
+                    </summary>
+                    <div className="space-y-2 mt-2">
+                      {moreFields.map(renderField)}
+                      <p className="text-xs text-warm-500 dark:text-warm-400">
+                        Photo URLs must be public https links. Auction rows need a start price and a future end time;
+                        reverse-auction rows need a price, daily drop and floor price.
+                      </p>
+                    </div>
+                  </details>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
             <div className="flex justify-between gap-3">
               <button onClick={() => setStep('upload')} className="px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-md text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 text-sm">
@@ -324,7 +364,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
                 </button>
                 <button
                   onClick={handleConfirmImport}
-                  disabled={!columnMap.title || !columnMap.price || isLoading}
+                  disabled={!columnMap.title || (!columnMap.price && !columnMap.auctionStartPrice) || isLoading}
                   className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50 text-sm font-medium"
                 >
                   {isLoading ? 'Importing...' : `Import ${Math.min(previewData.totalRows, 200)} Items`}
@@ -355,6 +395,21 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
                 </p>
               )}
             </div>
+
+            {importResult.warnings && importResult.warnings.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Imported with notes{importResult.warningCount && importResult.warningCount > importResult.warnings.length ? ` (showing ${importResult.warnings.length} of ${importResult.warningCount})` : ''}:
+                </p>
+                <div className="max-h-32 overflow-y-auto rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 text-xs">
+                  {importResult.warnings.map((w, i) => (
+                    <div key={i} className="px-3 py-1.5 border-b border-amber-100 dark:border-amber-900/40 last:border-0 text-warm-700 dark:text-warm-300">
+                      <span className="font-medium">Row {w.row}:</span> {w.reason}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {importResult.errors.length > 0 && (
               <div className="mb-4">

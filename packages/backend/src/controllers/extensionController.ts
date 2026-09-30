@@ -1050,6 +1050,41 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
   const platform: MarketplaceListingPlatform = (VALID_LISTING_PLATFORMS as string[]).includes(platformRaw)
     ? (platformRaw as MarketplaceListingPlatform)
     : 'FACEBOOK';
+  // S-EXT-LISTING-GONE (2026-09-29): the extension now reports reason 'listing_not_found' when a
+  // full search of the platform's own listings page found ZERO cards matching this item (as opposed
+  // to 'no_confident_*_match', which also covers ambiguous multi-matches). Live evidence that
+  // prompted this: 9 AVAILABLE items (5 Poshmark, 4 Mercari) were skipped ~90 times each over ~28h
+  // against listings that a direct look at the seller's own Poshmark closet / Mercari active list
+  // confirmed were already gone -- nothing ever told the backend, so the job row stayed POST/POSTED
+  // forever. A single zero-match could be a page that hadn't rendered, so require
+  // LISTING_GONE_CONFIRMATIONS consecutive independent zero-match reports (this one plus the
+  // previous N-1 rows for this item+platform, all REMOVE/SKIPPED/'listing_not_found', no other row
+  // in between) before treating the listing as gone and writing the REMOVED row.
+  if (reason === 'listing_not_found') {
+    const LISTING_GONE_CONFIRMATIONS = 3;
+    const recent = await prisma.marketplaceListingJob.findMany({
+      where: { itemId, platform },
+      orderBy: { createdAt: 'desc' },
+      take: LISTING_GONE_CONFIRMATIONS - 1,
+      select: { action: true, status: true, lastErrorMessage: true },
+    });
+    const confirmed = recent.length === LISTING_GONE_CONFIRMATIONS - 1 &&
+      recent.every((r) => r.action === 'REMOVE' && r.status === 'SKIPPED' && r.lastErrorMessage === 'listing_not_found');
+    if (confirmed) {
+      await prisma.marketplaceListingJob.create({
+        data: {
+          itemId,
+          action: 'REMOVE',
+          status: 'REMOVED',
+          platform,
+          lastAttemptAt: new Date(),
+          lastErrorMessage: 'auto_resolved:listing_not_found_x' + LISTING_GONE_CONFIRMATIONS,
+        },
+      });
+      res.json({ ok: true, resolved: true });
+      return;
+    }
+  }
   const priorSkips = await prisma.marketplaceListingJob.count({
     where: { itemId, action: 'REMOVE', status: 'SKIPPED', platform },
   });
@@ -1352,13 +1387,30 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
       item: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
       platform: { in: VALID_LISTING_PLATFORMS },
     },
-    select: { itemId: true, platform: true, action: true, status: true, createdAt: true, remoteListingId: true },
+    select: { itemId: true, platform: true, action: true, status: true, createdAt: true, remoteListingId: true, lastAttemptAt: true, lastErrorMessage: true },
   });
   const latestAvailableByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; remoteListingId: string | null }>();
+  // S-EXT-COMPLIANCE-REMOVAL-RETRY-CAP (2026-09-29): this path had NO skip cap or cooldown at all
+  // (the SOLD path above has both). Live: 9 AVAILABLE items got ~90 REMOVE/SKIPPED rows each in ~28h
+  // (~every 20min poll). Counters below feed complianceRetryEligible, same semantics as the SOLD
+  // path's isRetryEligible: fast retries under MAX_REMOVAL_SKIP_ATTEMPTS, then 1h cooldown, then a
+  // hard stop past REMOVAL_HARD_STOP_AFTER_ATTEMPTS when no remoteListingId was ever captured.
+  const complianceSkipCount = new Map<string, number>();
+  const complianceLastSkipAt = new Map<string, Date>();
+  const complianceLastReason = new Map<string, string | null>();
   for (const j of availableCandidateJobs) {
     // Same rule as the sold-item computation above: a REMOVE/SKIPPED row is a failed removal
     // attempt, not a state change -- the listing is still live.
-    if (j.action === 'REMOVE' && j.status === 'SKIPPED') continue;
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
+      const sk = j.itemId + ':' + j.platform;
+      complianceSkipCount.set(sk, (complianceSkipCount.get(sk) || 0) + 1);
+      const at = j.lastAttemptAt || j.createdAt;
+      if (!complianceLastSkipAt.has(sk) || at > complianceLastSkipAt.get(sk)!) {
+        complianceLastSkipAt.set(sk, at);
+        complianceLastReason.set(sk, j.lastErrorMessage ?? null);
+      }
+      continue;
+    }
     const key = j.itemId + ':' + j.platform;
     const existing = latestAvailableByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
@@ -1408,12 +1460,36 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         (p) => !checkEligibility(p as MarketplaceListingPlatform, eligibilityItem).eligible
       );
       if (nowIneligiblePlatforms.length === 0) continue;
+      // Surface anything past the fast-fail cap for organizer visibility, same as the SOLD path.
+      const stuckCompliance = nowIneligiblePlatforms
+        .map((p) => ({ platform: p, skipCount: complianceSkipCount.get(it.id + ':' + p) || 0 }))
+        .filter((p) => p.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS)
+        .sort((a, b) => b.skipCount - a.skipCount);
+      if (stuckCompliance.length) {
+        needsManualReview.push({
+          id: it.id,
+          title: it.title,
+          skipCount: stuckCompliance[0].skipCount,
+          lastErrorMessage: complianceLastReason.get(it.id + ':' + stuckCompliance[0].platform) || null,
+          platforms: stuckCompliance.map((p) => p.platform),
+        });
+      }
+      const retryablePlatforms = nowIneligiblePlatforms.filter((p) => {
+        const sk = it.id + ':' + p;
+        const skipCount = complianceSkipCount.get(sk) || 0;
+        if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
+        if (skipCount >= REMOVAL_HARD_STOP_AFTER_ATTEMPTS && !latestAvailableByItemPlatform.get(sk)?.remoteListingId) return false;
+        const last = complianceLastSkipAt.get(sk);
+        if (!last) return true;
+        return now - last.getTime() >= RETRY_COOLDOWN_MS;
+      });
+      if (retryablePlatforms.length === 0) continue;
       const refs: Record<string, string> = {};
-      for (const p of nowIneligiblePlatforms) {
+      for (const p of retryablePlatforms) {
         const latest = latestAvailableByItemPlatform.get(it.id + ':' + p);
         if (latest?.remoteListingId) refs[p] = latest.remoteListingId;
       }
-      complianceItems.push({ id: it.id, title: it.title, platforms: nowIneligiblePlatforms, listingRefs: refs, reason: 'POLICY_INELIGIBLE' });
+      complianceItems.push({ id: it.id, title: it.title, platforms: retryablePlatforms, listingRefs: refs, reason: 'POLICY_INELIGIBLE' });
     }
   }
 

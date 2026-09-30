@@ -383,20 +383,48 @@ interface FeedbackRecord {
   dismissed: number;
   edited: number;
 }
-const feedbackStats: Record<string, FeedbackRecord> = {};
+/** Fields organizers can give feedback on (allowlist: the endpoint is user-reachable). */
+export const AI_FEEDBACK_FIELDS = ['title', 'description', 'category', 'condition', 'price', 'tags', 'brand', 'photos', 'overall'] as const;
+export type AIFeedbackField = (typeof AI_FEEDBACK_FIELDS)[number];
+export const AI_FEEDBACK_ACTIONS = ['accepted', 'dismissed', 'edited'] as const;
+export type AIFeedbackAction = (typeof AI_FEEDBACK_ACTIONS)[number];
 
-/** Record organizer feedback on an AI suggestion field. */
-export function recordAIFeedback(field: string, action: 'accepted' | 'dismissed' | 'edited'): void {
-  if (!feedbackStats[field]) {
-    feedbackStats[field] = { accepted: 0, dismissed: 0, edited: 0 };
+const AI_FEEDBACK_FIELD_SET: ReadonlySet<string> = new Set<string>(AI_FEEDBACK_FIELDS);
+const AI_FEEDBACK_ACTION_SET: ReadonlySet<string> = new Set<string>(AI_FEEDBACK_ACTIONS);
+/** Hard ceiling on tracked keys so memory stays bounded even if the allowlist is widened later. */
+const MAX_FEEDBACK_KEYS = 64;
+
+/** Type guards used by the route (400 on anything else). */
+export function isAIFeedbackField(v: unknown): v is AIFeedbackField {
+  return typeof v === 'string' && AI_FEEDBACK_FIELD_SET.has(v);
+}
+export function isAIFeedbackAction(v: unknown): v is AIFeedbackAction {
+  return typeof v === 'string' && AI_FEEDBACK_ACTION_SET.has(v);
+}
+
+// Map (not a plain object): keys like '__proto__' / 'constructor' can never touch Object.prototype.
+const feedbackStats = new Map<string, FeedbackRecord>();
+
+/**
+ * Record organizer feedback on an AI suggestion field. Returns false (and records nothing) for an
+ * unknown field/action or when the key cap is reached; never throws and never mutates a prototype.
+ */
+export function recordAIFeedback(field: string, action: 'accepted' | 'dismissed' | 'edited'): boolean {
+  if (!isAIFeedbackField(field) || !isAIFeedbackAction(action)) return false;
+  let rec = feedbackStats.get(field);
+  if (!rec) {
+    if (feedbackStats.size >= MAX_FEEDBACK_KEYS) return false;
+    rec = { accepted: 0, dismissed: 0, edited: 0 };
+    feedbackStats.set(field, rec);
   }
-  feedbackStats[field][action]++;
+  rec[action]++;
+  return true;
 }
 
 /** Return current acceptance rates per field (for diagnostic logging). */
 export function getAIFeedbackStats(): Record<string, FeedbackRecord & { acceptRate: string }> {
-  const result: Record<string, FeedbackRecord & { acceptRate: string }> = {};
-  for (const [field, stats] of Object.entries(feedbackStats)) {
+  const result: Record<string, FeedbackRecord & { acceptRate: string }> = Object.create(null);
+  for (const [field, stats] of feedbackStats.entries()) {
     const total = stats.accepted + stats.dismissed + stats.edited;
     result[field] = {
       ...stats,

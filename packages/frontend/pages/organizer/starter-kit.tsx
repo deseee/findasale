@@ -31,7 +31,7 @@ const PRICING_TIPS = [
   { bold: 'Price for a quick sale, not retail', detail: '25–50% of retail is the sweet spot. People come for deals. Honor that expectation.' },
   { bold: 'Use round numbers', detail: '$5, $10, $25 makes checkout fast and avoids coin-hunting delays.' },
   { bold: 'Bundle deals boost revenue', detail: 'Group small items in a "fill a bag for $5" bin to clear clutter and move volume.' },
-  { bold: 'Let Markdown Cycles do the work', detail: "Turn on automatic Day 2 markdowns in your FindA.Sale settings. No manual repricing needed." },
+  { bold: 'Let automatic markdowns do the work', detail: "Turn on Auto-Markdown when you edit your sale. Items drop to 50% off on Day 2 and 75% off on Day 3 on every plan, no manual repricing. Check the Markdown Re-tag List each morning to see which items need a new sticker." },
 ];
 
 const DAYOF_RUNBOOK = [

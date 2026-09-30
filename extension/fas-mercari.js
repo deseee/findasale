@@ -2515,7 +2515,12 @@
     return targets.some((t) => t && t === c);
   }
   const MERC_REM_MIN_SAFE_TITLE_LEN = 8;
+  // S-EXT-LISTING-GONE (2026-09-29): see fas-poshmark.js's poshRemLastMatchCount. Only set to 0 when
+  // the page DID render other listings (byId.size > 0) -- a blank/unrendered page is -1, never
+  // "zero matches", so a slow load can't be mistaken for a gone listing.
+  let mercRemLastMatchCount = -1;
   function findMercariListingLinkByTitle(title) {
+    mercRemLastMatchCount = -1;
     const want = mercRemNorm(title);
     if (!want || want.length < MERC_REM_MIN_SAFE_TITLE_LEN) return null;
     const itemLinks = qa('a[data-testid="ItemLink"]').filter((a) => mercRemItemIdFromHref(a.getAttribute('href') || a.href));
@@ -2546,6 +2551,7 @@
     }
     const matches = [];
     byId.forEach((entry) => { if (entry.texts.some((t) => mercRemTitleMatches(t, title))) matches.push(entry); });
+    mercRemLastMatchCount = byId.size > 0 ? matches.length : -1;
     if (matches.length !== 1) {
       console.log('[FAS Mercari] removal: ' + matches.length + ' listing(s) matched "' + title + '"' + (matches.length > 1 ? ' -- ambiguous, refusing.' : '.'));
       return null;
@@ -2835,7 +2841,7 @@
     const link = findMercariListingLinkByTitle(item.title);
     if (!link) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Mercari listings (zero or more than one found) -- skipped, not guessed.' + button('fas-merc-close', 'Close', false));
-      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'no_confident_listing_match', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: mercRemLastMatchCount === 0 ? 'listing_not_found' : 'no_confident_listing_match', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
     try { sessionStorage.setItem('fasMercDeleteTargetId', link.fasMercItemId || mercRemItemIdFromHref(link.href) || ''); } catch (e) {}

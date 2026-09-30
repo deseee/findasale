@@ -5,7 +5,8 @@
         "https://finda.sale/",
         "https://finda.sale/pricing",
         "https://finda.sale/map",
-        "https://finda.sale/estate-sales/denver-co"
+        "https://finda.sale/city/denver-co",
+        "https://finda.sale/city/denver-co/estate-sales"
       ],
       "numberOfRuns": 3,
       "settings": {

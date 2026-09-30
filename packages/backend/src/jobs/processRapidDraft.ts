@@ -3,6 +3,9 @@ import { Prisma } from '@prisma/client';
 import { analyzeItemImage, analyzeItemImages, suggestPrice, AITagResult } from '../services/cloudAIService';
 import { applyCharmPricing } from '../utils/charmPricing';
 import { checkAITagLimit } from '../lib/tierEnforcement';
+import { checkAiTagQuota, reserveAiTags, refundAiTags } from '../lib/aiTagsQuotaTracker'; // shared monthly Smart-tag counter (same one analyze-photo / batch-analyze use); atomic reserve-then-refund
+import { TIER_LIMITS, SubscriptionTier } from '../constants/tierLimits';
+import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'; // SSRF guard for stored photoUrls
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { suggestCategories } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken, computeEffectivePackageWeight } from '../controllers/ebayController';
@@ -17,6 +20,16 @@ import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fi
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
+
+/**
+ * Organizer.subscriptionTier is the entitlement truth (decisions D1/D2: PRO/TEAMS continues until the
+ * subscription actually ends; no lapse-flag downgrade). Unknown values degrade to SIMPLE.
+ */
+function tierOf(rawTier: unknown): SubscriptionTier {
+  return typeof rawTier === 'string' && Object.prototype.hasOwnProperty.call(TIER_LIMITS, rawTier)
+    ? (rawTier as SubscriptionTier)
+    : 'SIMPLE';
+}
 
 /**
  * Ollama fallback for Rapidfire — mirrors the analyze-photo Ollama path in
@@ -120,7 +133,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
     });
 
     if (organizer) {
-      const aiTagLimit = await checkAITagLimit(organizer.id, organizer.subscriptionTier);
+      const aiTagLimit = await checkAITagLimit(organizer.id, tierOf(organizer.subscriptionTier));
       if (aiTagLimit.isOverLimit) {
         // AI tag limit reached — skip AI analysis and mark as PENDING_REVIEW without tags
         console.log(`[rapidfire] AI tag limit reached for item ${itemId}. Organizer ${organizer.id} has used ${aiTagLimit.tagCount}/${aiTagLimit.limit} tags this month.`);
@@ -129,6 +142,27 @@ export async function processRapidDraft(itemId: string): Promise<void> {
           data: { draftStatus: 'PENDING_REVIEW' }
         });
         return;
+      }
+
+      // Shared monthly Smart-tag counter (2026-09-29): the check above counts tagged items; this is the
+      // same counter analyze-photo, rapid-batch, batch-analyze and re-analyze meter against, so a
+      // rapidfire session cannot bypass the tier quota. This is only a cheap read-only pre-check so an
+      // exhausted organizer skips the photo downloads; the binding decision is the atomic
+      // reserveAiTags() right before the paid call below. Exhausted quota degrades gracefully: no paid
+      // call, item still lands in PENDING_REVIEW for manual entry. A read error here is not fatal
+      // (the reservation below fails closed).
+      try {
+        const quota = await checkAiTagQuota(organizer.id, tierOf(organizer.subscriptionTier));
+        if (quota.exceeded) {
+          console.log(`[rapidfire] Smart-tag quota exhausted for item ${itemId} (${quota.used}/${quota.limit}); marking PENDING_REVIEW without AI`);
+          await prisma.item.update({
+            where: { id: itemId },
+            data: { draftStatus: 'PENDING_REVIEW' }
+          });
+          return;
+        }
+      } catch (quotaErr) {
+        console.warn(`[rapidfire] Smart-tag quota lookup failed for item ${itemId}; continuing:`, quotaErr instanceof Error ? quotaErr.message : quotaErr);
       }
     }
 
@@ -143,7 +177,13 @@ export async function processRapidDraft(itemId: string): Promise<void> {
 
       for (const photoUrl of item.photoUrls) {
         try {
-          const response = await axios.get(photoUrl, { responseType: 'arraybuffer' });
+          // SSRF guard: stored photoUrls can come from imports, so only fetch https Cloudinary
+          // (or SAFE_FETCH_ALLOWED_HOSTS) URLs and never follow redirects to another host.
+          if (!isSafeFetchUrl(photoUrl)) {
+            console.warn(`[rapidfire] Skipping photo with disallowed host for item ${itemId}`);
+            continue;
+          }
+          const response = await axios.get(photoUrl, { responseType: 'arraybuffer', ...SAFE_FETCH_AXIOS_OPTIONS });
           const photoBuffer = Buffer.from(response.data);
           photoBuffers.push(photoBuffer);
 
@@ -184,6 +224,40 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         return;
       }
 
+      // ATOMIC reserve-then-refund (2026-09-29): reserve one Smart tag right before the paid call so
+      // parallel jobs cannot all pass the check and overspend. Refunded below when no tags result.
+      // Capture is never blocked by exhausted quota: the item is already created, we only skip the paid
+      // call and advance it to PENDING_REVIEW for manual entry. Fails closed if the organizer or the
+      // counter cannot be resolved (never spend unmetered).
+      let tagReserved = false;
+      if (!organizer) {
+        console.warn(`[rapidfire] No organizer resolved for item ${itemId}; skipping paid AI, marking PENDING_REVIEW`);
+        await prisma.item.update({ where: { id: itemId }, data: { draftStatus: 'PENDING_REVIEW' } });
+        return;
+      }
+      try {
+        const reservation = await reserveAiTags(organizer.id, tierOf(organizer.subscriptionTier), 1);
+        if (!reservation.ok) {
+          console.log(`[rapidfire] Smart-tag quota exhausted at reservation for item ${itemId}; marking PENDING_REVIEW without AI`);
+          await prisma.item.update({ where: { id: itemId }, data: { draftStatus: 'PENDING_REVIEW' } });
+          return;
+        }
+        tagReserved = true;
+      } catch (reserveErr) {
+        console.warn(`[rapidfire] Smart-tag reservation failed for item ${itemId}; skipping paid AI:`, reserveErr instanceof Error ? reserveErr.message : reserveErr);
+        await prisma.item.update({ where: { id: itemId }, data: { draftStatus: 'PENDING_REVIEW' } });
+        return;
+      }
+      const refundReservedTag = async (): Promise<void> => {
+        if (!tagReserved) return;
+        tagReserved = false;
+        try {
+          await refundAiTags(organizer.id, 1);
+        } catch (refundErr) {
+          console.warn(`[rapidfire] refundAiTags failed for item ${itemId}:`, refundErr instanceof Error ? refundErr.message : refundErr);
+        }
+      };
+
       // Call Vision → Haiku chain with all photos (or single if only one available)
       let aiResult: AITagResult | null;
       let aiUnavailableError: any = null;
@@ -209,6 +283,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       }
 
       if (!aiResult) {
+        await refundReservedTag(); // nothing was produced: hand the reserved Smart tag back
         // Cloud AI (and Ollama fallback) unavailable — advance to PENDING_REVIEW for manual entry.
         // Persist a diagnostic aiErrorLog entry (so ops can see AI was unavailable) in the SAME
         // update that sets PENDING_REVIEW — never leave the item in DRAFT.
@@ -225,6 +300,8 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         });
         return;
       }
+
+      // The Smart tag reserved before the paid call stays counted on success (no separate increment).
 
       // #319/#325/#328: Backfill Photo.orderIndex from Vision quality scores (fire-and-forget)
       // analyzeItemImages() returns photoOrderIndices sorted by Vision label confidence.
@@ -615,9 +692,38 @@ export async function processRapidDraft(itemId: string): Promise<void> {
  * Uses setImmediate to ensure caller response is sent first.
  */
 export function enqueueProcessRapidDraft(itemId: string): void {
-  setImmediate(() => {
-    processRapidDraft(itemId).catch((err: unknown) => {
-      console.error(`[rapidfire] Uncaught error in processRapidDraft(${itemId}):`, err);
-    });
-  });
+  // 2026-09-29: bounded in-process queue. Each job can fan out to Vision + Haiku + eBay lookups, so a
+  // burst of captures must not launch dozens of concurrent paid pipelines. Concurrency is capped and an
+  // item that is already queued or running is not enqueued twice (debounce re-fires, retries).
+  if (rapidDraftQueuedIds.has(itemId)) return;
+  rapidDraftQueuedIds.add(itemId);
+  rapidDraftQueue.push(itemId);
+  setImmediate(pumpRapidDraftQueue);
+}
+
+/** Max processRapidDraft jobs running at once in this process. */
+export const RAPID_DRAFT_CONCURRENCY = 3;
+const rapidDraftQueue: string[] = [];
+const rapidDraftQueuedIds = new Set<string>(); // queued OR running
+let rapidDraftActive = 0;
+
+function pumpRapidDraftQueue(): void {
+  while (rapidDraftActive < RAPID_DRAFT_CONCURRENCY && rapidDraftQueue.length > 0) {
+    const itemId = rapidDraftQueue.shift() as string;
+    rapidDraftActive += 1;
+    processRapidDraft(itemId)
+      .catch((err: unknown) => {
+        console.error(`[rapidfire] Uncaught error in processRapidDraft(${itemId}):`, err);
+      })
+      .finally(() => {
+        rapidDraftActive -= 1;
+        rapidDraftQueuedIds.delete(itemId);
+        pumpRapidDraftQueue();
+      });
+  }
+}
+
+/** Diagnostics / tests: current queue depth and running job count. */
+export function getRapidDraftQueueStats(): { queued: number; active: number } {
+  return { queued: rapidDraftQueue.length, active: rapidDraftActive };
 }

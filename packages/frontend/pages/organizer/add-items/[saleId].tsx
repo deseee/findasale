@@ -421,7 +421,7 @@ const AddItemsDetailPage = () => {
   const router = useRouter();
   const { saleId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
-  const { tier: orgTier, canAccess } = useOrganizerTier();
+  const { tier: orgTier, canAccess, tierKnown, isLapsed } = useOrganizerTier();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { showSurvey } = useFeedbackSurvey();
@@ -717,6 +717,9 @@ const AddItemsDetailPage = () => {
   // QuickBooks CSV export state
   const [quickbooksExportOpen, setQuickbooksExportOpen] = useState(false);
   const [quickbooksExporting, setQuickbooksExporting] = useState(false);
+  // True once the server (or the known tier) says this account cannot use the QuickBooks export;
+  // the modal then shows the PRO upsell instead of the Download button.
+  const [quickbooksTierBlocked, setQuickbooksTierBlocked] = useState(false);
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
   const [bulkCategoryModalOpen, setBulkCategoryModalOpen] = useState(false);
   const [bulkConsignorModalOpen, setBulkConsignorModalOpen] = useState(false);
@@ -1419,11 +1422,43 @@ const AddItemsDetailPage = () => {
     }
   };
 
+  // The export request uses responseType 'blob', so an error body arrives as a Blob. Read it back into JSON
+  // so the organizer sees the server's real message (tier, ownership, no matching items) instead of a generic failure.
+  const readExportError = async (error: any): Promise<{ message?: string; code?: string }> => {
+    const data = error?.response?.data;
+    try {
+      if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        return JSON.parse(await data.text());
+      }
+    } catch {
+      /* not JSON: fall through to the generic message */
+    }
+    return data && typeof data === 'object' ? data : {};
+  };
+
+  // The selection travels in the GET query string, so the server caps it (csvExportController MAX_EXPORT_ITEM_IDS).
+  const QUICKBOOKS_MAX_SELECTED = 250;
+
   const handleQuickbooksExport = async () => {
+    if (selectedItems.size > QUICKBOOKS_MAX_SELECTED) {
+      showToast(
+        `Select ${QUICKBOOKS_MAX_SELECTED} items or fewer, or clear the selection to export all available items.`,
+        'error'
+      );
+      return;
+    }
     try {
       setQuickbooksExporting(true);
-      const itemIdParam = selectedItems.size > 0 ? `&itemIds=${Array.from(selectedItems).join(',')}` : '';
-      const response = await api.get(`/organizer/export/csv?saleId=${saleId}&format=quickbooks${itemIdParam}`, {
+      // Route is /api/organizers/export/csv (plural). With a selection, export exactly those items; otherwise export
+      // the available items, which is what the modal promises.
+      const params: Record<string, string> = { saleId: String(saleId), format: 'quickbooks' };
+      if (selectedItems.size > 0) {
+        params.itemIds = Array.from(selectedItems).join(',');
+      } else {
+        params.status = 'AVAILABLE';
+      }
+      const response = await api.get('/organizers/export/csv', {
+        params,
         responseType: 'blob',
       });
 
@@ -1440,8 +1475,14 @@ const AddItemsDetailPage = () => {
       showToast('CSV ready. Import into QuickBooks.', 'success');
       setQuickbooksExportOpen(false);
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to export to QuickBooks';
-      showToast(message, 'error');
+      const body = await readExportError(error);
+      if (error.response?.status === 403 && body.code === 'TIER_REQUIRED') {
+        // Stale or unknown tier on the client: switch the modal to the upgrade message
+        setQuickbooksTierBlocked(true);
+        showToast(body.message || 'QuickBooks export requires a PRO or TEAMS subscription.', 'error');
+      } else {
+        showToast(body.message || 'Failed to export to QuickBooks', 'error');
+      }
     } finally {
       setQuickbooksExporting(false);
     }
@@ -2219,7 +2260,7 @@ const AddItemsDetailPage = () => {
           {scopedConsignor && (
             <div className="flex items-center justify-between gap-3 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3 mb-6">
               <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
-                Capturing for: {scopedConsignor.name} — every item captured now is attributed to them automatically
+                Capturing for: {scopedConsignor.name}. Every item captured now is attributed to them automatically
               </p>
               <button
                 onClick={endConsignorSession}
@@ -2825,23 +2866,20 @@ const AddItemsDetailPage = () => {
                   >
                     📦 Export to eBay
                   </button>
-                  {canAccess('PRO') ? (
-                    <button
-                      onClick={() => setQuickbooksExportOpen(true)}
-                      className="text-xs font-medium text-green-700 dark:text-green-400 hover:underline px-2 py-1 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20"
-                    >
-                      💼 Export to QuickBooks
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setEbayExportOpen(false)}
-                      className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg opacity-60 cursor-not-allowed"
-                      disabled
-                      title="QuickBooks export requires PRO tier"
-                    >
-                      💼 Export to QuickBooks
-                    </button>
-                  )}
+                  {/* Always clickable: a known non-PRO account gets the upgrade message in the modal instead of a dead, disabled button */}
+                  <button
+                    onClick={() => {
+                      setQuickbooksTierBlocked(false);
+                      setQuickbooksExportOpen(true);
+                    }}
+                    className={
+                      tierKnown && !canAccess('PRO')
+                        ? 'text-xs font-medium text-gray-600 dark:text-gray-300 hover:underline px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700'
+                        : 'text-xs font-medium text-green-700 dark:text-green-400 hover:underline px-2 py-1 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }
+                  >
+                    💼 Export to QuickBooks{tierKnown && !canAccess('PRO') ? ' (PRO)' : ''}
+                  </button>
                   <Link
                     href={`/organizer/add-items/${saleId}/review?preview=true`}
                     className="text-xs font-medium text-warm-600 dark:text-warm-400 hover:underline px-2 py-1 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700"
@@ -3895,36 +3933,79 @@ const AddItemsDetailPage = () => {
       )}
 
       {/* QuickBooks CSV Export Modal */}
-      {quickbooksExportOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md">
-            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Export to QuickBooks</h3>
-            <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
-              Export {selectedItems.size > 0 ? selectedItems.size : items.filter((i: any) => i.status === 'AVAILABLE').length} {selectedItems.size > 0 ? 'selected' : 'available'} items as QuickBooks CSV
-            </p>
+      {quickbooksExportOpen && (() => {
+        const quickbooksLocked = quickbooksTierBlocked || (tierKnown && !canAccess('PRO'));
+        const quickbooksCount = selectedItems.size > 0
+          ? selectedItems.size
+          : items.filter((i: any) => i.status === 'AVAILABLE').length;
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="quickbooks-export-title"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <h3 id="quickbooks-export-title" className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Export to QuickBooks</h3>
 
-            <p className="text-xs text-warm-500 dark:text-warm-400 mb-6">
-              Download CSV to import inventory and pricing into QuickBooks.
-            </p>
+              {quickbooksLocked ? (
+                <>
+                  <p className="text-warm-700 dark:text-warm-300 text-sm mb-2 font-medium">
+                    {isLapsed ? 'Your subscription has lapsed.' : 'QuickBooks export is a PRO feature.'}
+                  </p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mb-6">
+                    {isLapsed
+                      ? 'Renew your plan to download QuickBooks, eBay and Amazon CSV exports again.'
+                      : 'Upgrade to PRO or TEAMS to download your items as a QuickBooks CSV.'}
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setQuickbooksExportOpen(false)}
+                      className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-warm-700 dark:text-warm-300 font-medium hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Close
+                    </button>
+                    <Link
+                      href="/organizer/pricing"
+                      className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors text-center"
+                    >
+                      See plans
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
+                    Export {quickbooksCount} {selectedItems.size > 0 ? 'selected' : 'available'} item{quickbooksCount !== 1 ? 's' : ''} as QuickBooks CSV
+                  </p>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => setQuickbooksExportOpen(false)}
-                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-warm-700 dark:text-warm-300 font-medium hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleQuickbooksExport}
-                disabled={quickbooksExporting}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
-              >
-                {quickbooksExporting ? 'Generating...' : 'Download CSV'}
-              </button>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mb-6">
+                    {quickbooksCount === 0
+                      ? 'No available items to export yet. Add or publish items, or select items to export.'
+                      : 'Download CSV to import inventory and pricing into QuickBooks.'}
+                  </p>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setQuickbooksExportOpen(false)}
+                      className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-warm-700 dark:text-warm-300 font-medium hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleQuickbooksExport}
+                      disabled={quickbooksExporting || quickbooksCount === 0}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {quickbooksExporting ? 'Generating...' : 'Download CSV'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Bounty Match Modal */}
       <BountyMatchModal

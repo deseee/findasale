@@ -19,6 +19,7 @@
  */
 
 import axios from 'axios';
+import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'; // SSRF guard for stored + caller-supplied image URLs
 import { prisma } from '../lib/prisma';
 import { analyzeItemImages } from './cloudAIService';
 import { enrichItem, planEnrichmentApply } from './productEnrichment';
@@ -108,10 +109,13 @@ export async function reanalyzeItem(
   // FORCE apply=false so a test-image run can NEVER write fields back to the item.
   const rawTestUrls = Array.isArray(opts.testImageUrls) ? opts.testImageUrls : [];
   const testImageUrls = rawTestUrls
-    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u.trim()))
+    .filter((u): u is string => typeof u === 'string' && isSafeFetchUrl(u.trim())) // SSRF guard: https + allowlisted host only
     .map((u) => u.trim())
     .slice(0, 6);
-  const usingTestImages = testImageUrls.length > 0;
+  // Fail safe: if the caller asked for test images but none passed the SSRF allowlist, do NOT silently
+  // fall back to the item's stored photos (that would run an apply-capable pass the caller did not intend).
+  // usingTestImages stays true, apply is forced false, and the run ends in PHOTO_DOWNLOAD_FAILED.
+  const usingTestImages = rawTestUrls.length > 0;
 
   const apply = usingTestImages ? false : opts.apply === true;
   const syncEbay = opts.syncEbay !== false;
@@ -158,14 +162,17 @@ export async function reanalyzeItem(
 
   // Download images into Buffers (skip failures). When test-image URLs are supplied,
   // download THOSE (capped at 6) instead of the item's stored photos; otherwise use the
-  // first 5 stored photoUrls. Only http(s) URLs are fetched (non-http already filtered above).
+  // first 5 stored photoUrls. Only https URLs on the SSRF allowlist are fetched (see utils/safeFetchUrl).
   const sourceUrls = usingTestImages ? testImageUrls : item.photoUrls.slice(0, 5);
   const buffers: Buffer[] = [];
   const mimeTypes: string[] = [];
   for (const url of sourceUrls) {
-    if (!/^https?:\/\//i.test(url)) continue;
+    if (!isSafeFetchUrl(url)) {
+      console.warn('[Reanalyze] skipped photo URL that is not an allowed https image host');
+      continue;
+    }
     try {
-      const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000, headers: { 'User-Agent': 'FindaSale-ImageTagger/1.0 (+https://finda.sale; secondary-sale item tagging)' } });
+      const resp = await axios.get(url, { ...SAFE_FETCH_AXIOS_OPTIONS, responseType: 'arraybuffer', timeout: 10000, headers: { 'User-Agent': 'FindaSale-ImageTagger/1.0 (+https://finda.sale; secondary-sale item tagging)' } });
       const contentType = String(resp.headers?.['content-type'] || '').split(';')[0].trim();
       buffers.push(Buffer.from(resp.data));
       mimeTypes.push(contentType.startsWith('image/') ? contentType : 'image/jpeg');

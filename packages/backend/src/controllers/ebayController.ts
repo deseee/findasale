@@ -61,6 +61,7 @@ import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetPr
 import { estimatePackageProfile, isNeverShippableItem } from '../services/ebayPackageEstimateService';
 import { modelTokenFrom } from '../services/ebayCatalogLookup';
 import { fetchAndCacheEbayStoreSubscription } from '../services/ebayStoreSubscriptionService';
+import { csvCell } from '../utils/csvSafe'; // CSV formula-injection-safe cell writer
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -169,7 +170,7 @@ function buildConditionDescription(item: { condition: string | null; conditionGr
   if (item.condition === 'NEW' || !item.condition) return undefined;
   const parts: string[] = [];
   if (item.conditionGrade) {
-    const gradeLabels: Record<string, string> = { S: 'Grade S — Mint condition', A: 'Grade A — Excellent condition', B: 'Grade B — Very good condition', C: 'Grade C — Good condition', D: 'Grade D — Fair condition' };
+    const gradeLabels: Record<string, string> = { S: 'Grade S: Mint condition', A: 'Grade A: Excellent condition', B: 'Grade B: Very good condition', C: 'Grade C: Good condition', D: 'Grade D: Fair condition' };
     parts.push(gradeLabels[item.conditionGrade] || `Grade ${item.conditionGrade}`);
   }
   if (item.conditionNotes) parts.push(item.conditionNotes);
@@ -544,14 +545,9 @@ function generateEbayCsv(
   includeWatermark: boolean = false,
   organizer: WatermarkPolicyOrganizer | null = null
 ): string {
-  // Escape CSV values (quote if contains comma, quote, or newline)
-  const escapeCsvValue = (value: string | number): string => {
-    const str = String(value);
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-  };
+  // Escape CSV values: RFC 4180 quoting plus formula-injection neutralisation (a text cell that starts
+  // with = + - @ / tab / CR gets a leading apostrophe). Numbers stay numeric. See utils/csvSafe.ts.
+  const escapeCsvValue = (value: string | number): string => csvCell(value);
 
   // eBay template header rows (required for Seller Hub bulk upload)
   const infoRows: string[] = [

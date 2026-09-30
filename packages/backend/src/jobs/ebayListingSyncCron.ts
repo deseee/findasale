@@ -530,7 +530,7 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
               userId: organizer.userId,
               type: 'markdown_sync_failure',
               title: `eBay won't accept the new price on "${terminal.title}"`,
-              body: `eBay rejected this price change and retrying won't fix it: ${terminal.reason.slice(0, 200)}. FindA.Sale is still showing your marked-down price — fix the listing on eBay, then re-save the item's price in FindA.Sale to push it through.`,
+              body: `eBay rejected this price change and retrying won't fix it: ${terminal.reason.slice(0, 200)}. FindA.Sale is still showing your marked-down price. Fix the listing on eBay, then re-save the item's price in FindA.Sale to push it through.`,
               link,
             },
           });

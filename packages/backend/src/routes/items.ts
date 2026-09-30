@@ -125,7 +125,9 @@ const uploadCsv = multer({
 router.use(itemEndpointLimiter);
 
 // SEO sitemap — MUST be before /:id to avoid param capture
-router.get('/sitemap', getSitemapItems); // GET /api/items/sitemap — public, no auth
+// GET /api/items/sitemap: public data endpoint (published items in public sales, cursor paginated, cached).
+// NOT a crawler sitemap: item pages stay noindex until ISR, so never link this into sitemap.xml. See getSitemapItems.
+router.get('/sitemap', getSitemapItems);
 
 // Sprint 4a: FTS search endpoints — MUST be declared before /:id to avoid param capture
 router.get('/search', searchItemsHandler);           // GET /api/items/search?q=...

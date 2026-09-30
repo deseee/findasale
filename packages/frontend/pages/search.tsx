@@ -57,7 +57,12 @@ const SearchPage = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   // #455: Notify Me state
   const [notifyEmail, setNotifyEmail] = useState('');
-  const [notifySubmitted, setNotifySubmitted] = useState(false);
+  // idle -> submitting -> success | error. Never shows success unless the server confirmed it.
+  const [notifyStatus, setNotifyStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [notifyMessage, setNotifyMessage] = useState('');
+  // Anonymous alerts are double opt-in: the server accepts the request and emails a confirmation link,
+  // so the honest state is "check your email", not "you're all set".
+  const [notifyNeedsConfirm, setNotifyNeedsConfirm] = useState(false);
 
   // Initialize filters from URL query params
   const [filters, setFilters] = useState<SearchFilters>({
@@ -73,15 +78,58 @@ const SearchPage = () => {
   const q = ((router.query.q as string) || '').trim();
 
   // #455: Notify Me handler
+  // Logged-in shoppers save to their account waitlist (POST /shopper/waitlist, manageable at
+  // /shopper/notify-me); visitors leave an email (POST /search/notify). Both report real outcomes.
   const handleNotifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (notifyStatus === 'submitting') return;
+    if (!user && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notifyEmail.trim())) {
+      setNotifyStatus('error');
+      setNotifyMessage('Please enter a valid email address.');
+      return;
+    }
+    setNotifyStatus('submitting');
+    setNotifyMessage('');
+    setNotifyNeedsConfirm(false);
     try {
-      await api.post('/search/notify', { email: notifyEmail, query: q });
-      setNotifySubmitted(true);
-    } catch {
-      setNotifySubmitted(true); // show success even on error to avoid leaking info
+      if (user) {
+        const res = await api.post('/shopper/waitlist', { itemType: q });
+        setNotifyMessage(
+          res.data?.rearmed
+            ? 'Alert turned back on. We will email you at the next match.'
+            : "You're on the list. We'll email you when a match is listed."
+        );
+      } else {
+        const res = await api.post('/search/notify', { email: notifyEmail.trim(), query: q });
+        if (res.data?.status === 'pending_confirmation') {
+          setNotifyNeedsConfirm(true);
+          setNotifyMessage(res.data?.message || 'Check your email to confirm your alert. We only start watching once you confirm.');
+        } else {
+          setNotifyMessage(res.data?.message || "You're on the list. We'll email you when a match is listed.");
+        }
+      }
+      setNotifyStatus('success');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (user && status === 409) {
+        // Already waiting for this search: that is a success from the shopper's point of view.
+        setNotifyMessage("You're already on the list for this search.");
+        setNotifyStatus('success');
+        return;
+      }
+      setNotifyMessage(
+        err?.response?.data?.message || 'We could not save your alert. Please check your connection and try again.'
+      );
+      setNotifyStatus('error');
     }
   };
+
+  // A new search starts a fresh Notify Me form.
+  useEffect(() => {
+    setNotifyStatus('idle');
+    setNotifyMessage('');
+    setNotifyNeedsConfirm(false);
+  }, [q]);
 
   // Load filters from URL on mount
   useEffect(() => {
@@ -540,23 +588,43 @@ const SearchPage = () => {
                         {/* #455: Notify Me Waitlist */}
                         <div className="mt-8 p-5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg max-w-md mx-auto">
                           <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">🔔 Get notified when this appears</h3>
-                          <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">We&apos;ll email you when matching sales or items are listed.</p>
-                          {notifySubmitted ? (
-                            <p className="text-green-700 dark:text-green-300 font-medium">✓ We&apos;ll let you know!</p>
+                          <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">We&apos;ll email you once when a matching sale or item is listed.</p>
+                          {notifyStatus === 'success' ? (
+                            <div role="status" aria-live="polite">
+                              <p className="text-green-700 dark:text-green-300 font-medium">{notifyNeedsConfirm ? 'Check your email to confirm' : `✓ ${notifyMessage}`}</p>
+                              {notifyNeedsConfirm && (
+                                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">{notifyMessage} If it does not arrive in a few minutes, check your spam folder.</p>
+                              )}
+                              {user && (
+                                <Link href="/shopper/notify-me" className="text-sm text-blue-700 dark:text-blue-300 underline">
+                                  Manage your alerts
+                                </Link>
+                              )}
+                            </div>
                           ) : (
-                            <form onSubmit={handleNotifySubmit} className="flex gap-2">
-                              <input
-                                type="email"
-                                value={notifyEmail}
-                                onChange={e => setNotifyEmail(e.target.value)}
-                                placeholder="your@email.com"
-                                className="flex-1 px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                                required
-                              />
-                              <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">
-                                Notify Me
+                            <form onSubmit={handleNotifySubmit} className="flex flex-col sm:flex-row gap-2" noValidate>
+                              {!user && (
+                                <input
+                                  type="email"
+                                  value={notifyEmail}
+                                  onChange={e => setNotifyEmail(e.target.value)}
+                                  placeholder="your@email.com"
+                                  aria-label="Your email address"
+                                  className="flex-1 px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                  required
+                                />
+                              )}
+                              <button
+                                type="submit"
+                                disabled={notifyStatus === 'submitting'}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {notifyStatus === 'submitting' ? 'Saving...' : user ? 'Notify me' : 'Notify Me'}
                               </button>
                             </form>
+                          )}
+                          {notifyStatus === 'error' && notifyMessage && (
+                            <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{notifyMessage}</p>
                           )}
                         </div>
                       </div>
