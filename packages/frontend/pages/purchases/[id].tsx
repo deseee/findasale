@@ -420,7 +420,7 @@ const PurchaseConfirmationPage = () => {
               <p className="max-w-xl mx-auto leading-relaxed">
                 This purchase was made directly with{' '}
                 <span className="font-medium text-gray-700 dark:text-gray-300">{organizer.businessName}</span>{' '}
-                and processed securely{purchase.processor === 'SQUARE' ? ' by Square' : ' by Stripe'}. If you have any questions about your order (pickup,
+                and processed securely{purchase.processor === 'SQUARE' ? ' by Square' : purchase.processor === 'STRIPE' ? ' by Stripe' : ''}. If you have any questions about your order (pickup,
                 condition, timing), {organizer.businessName} is who to contact first.
                 Send them a message via your{' '}
                 <Link href="/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
