@@ -5,7 +5,7 @@ import { getPlatformFeeRate, getInclusivePlatformFeeRate, MINIMUM_TRANSACTION_FE
 /**
  * ── CASH / OFF-PLATFORM COMMISSION ACCRUAL ───────────────────────────────────────────────
  *
- * FindA.Sale charges the organizer commission (10% SIMPLE / 8% PRO+TEAMS -- see
+ * FindA.Sale charges the organizer commission (inclusive rate: SIMPLE 8% in person / 9.5% online, PRO+TEAMS 6% / 7.5% -- see
  * utils/feeCalculator.ts, the source of truth) on EVERY sale, including sales the platform's
  * Stripe account never touches. On a card sale Stripe collects that commission for us as
  * `application_fee_amount`. On a CASH / in-person sale the organizer physically pockets the

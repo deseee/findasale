@@ -5,7 +5,7 @@ interface SplitPaymentInputProps {
   totalAmountCents: number;
   cashAmountCents: number;
   onCashChange: (cents: number) => void;
-  /** Organizer's subscription tier — drives the commission rate. Defaults to SIMPLE (10%). */
+  /** Organizer's subscription tier — drives the commission rate. Defaults to SIMPLE (see lib/platformFees for the inclusive rates). */
   organizerTier?: OrganizerTier;
 }
 

@@ -458,7 +458,7 @@ export async function processCashSaleCore(params: {
  *
  * Records a cash sale immediately without Stripe processing.
  * Creates Purchase records with status PAID and marks items SOLD.
- * Accumulates 10% platform fees into organizer.cashFeeBalance for later payout deduction.
+ * Accumulates the inclusive platform fee (utils/feeCalculator.ts) into organizer.cashFeeBalance for later payout deduction.
  * platformFeeAmount tracks fee for accounting; collection is handled outside Stripe.
  *
  * clientTransactionId (#561): optional idempotency key. The offline-sync replay path

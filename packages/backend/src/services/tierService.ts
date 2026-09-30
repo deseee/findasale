@@ -11,9 +11,9 @@ interface TierBenefits {
 
 /**
  * Tier thresholds and benefits:
- * - BRONZE: 1+ completed sales | 10% flat platform fee
- * - SILVER: 5+ completed sales OR 50+ items sold | 10% flat platform fee
- * - GOLD: 15+ completed sales OR 200+ items sold | 10% flat platform fee
+ * - BRONZE: 1+ completed sales | platform fee is set by subscription tier and channel (utils/feeCalculator.ts), not by reputation tier
+ * - SILVER: 5+ completed sales OR 50+ items sold | same tier-based platform fee (no reputation discount)
+ * - GOLD: 15+ completed sales OR 200+ items sold | same tier-based platform fee (no reputation discount)
  * Tier-based fee discounts deferred post-beta.
  */
 

@@ -1,7 +1,7 @@
 /**
  * Vendor Booth Payments — Vendor-Facing Booth View (2026-07-07)
  * ADR-015/016/017. Public/token-gated read + claim CTA. Once claimed, shows
- * itemized fee disclosure (platform's flat 10% + THIS booth's boothFee + THIS
+ * itemized fee disclosure (the platform's inclusive fee + THIS booth's boothFee + THIS
  * booth's revenueSharePercent — never a blended number, since one vendor can
  * have different terms at different malls) and Square onboarding status. Stripe
  * onboarding removed 2026-09-09 -- the Stripe platform account is permanently closed.

@@ -1376,7 +1376,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           // REVENUE-LEAK FIX (2026-08-17). This block used to write `platformFeeAmount: 0` and
           // touch nothing else, on the reasoning that a cash sale is money the platform never
           // handles. That is true of the MONEY and false of the FEE: the organizer commission
-          // (10% SIMPLE / 8% PRO+TEAMS, utils/feeCalculator.ts) is owed on every sale type, cash
+          // (inclusive rate by tier and channel, utils/feeCalculator.ts) is owed on every sale type, cash
           // included, and the mechanism for collecting it on money we never touch already
           // existed and already worked -- terminalController's cash sale accrues it to
           // Organizer.cashFeeBalance, and payoutController nets that balance out of the

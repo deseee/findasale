@@ -1291,7 +1291,7 @@ model Sale {
   claimEmails                 ClaimEmail[]
   // Feature: Sale Share Links — referral share links for this sale
   shareLinks                  SaleShareLink[]
-  // S696: organizer absorbs the 10% platform fee
+  // S696: organizer absorbs the platform fee
   coversFee                   Boolean                    @default(false)
   // S696: optional safety/parking/entry notes shown on sale detail
   safetyNotes                 String?
