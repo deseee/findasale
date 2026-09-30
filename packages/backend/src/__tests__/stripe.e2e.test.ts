@@ -687,6 +687,10 @@ describe('Stripe Connect + Fee Capture E2E', () => {
             platformFeeAmount:     parseFloat((REGULAR_PRICE * SIMPLE_RATE).toFixed(2)),   // 10.00
             stripePaymentIntentId: 'pi_test_fee_report_regular',
             status:                'PAID',
+            // Pre-inclusive-model row (before INCLUSIVE_FEE_MODEL_EFFECTIVE_AT, 2026-09-24): with no fee
+            // snapshot, reports restate it at the legacy 10/8 it was really charged at. A row created
+            // "now" would be restated at the inclusive 9.5%/7.5% rate and break these 10%/8% expectations.
+            createdAt:             new Date('2026-09-01T12:00:00.000Z'),
           },
           {
             id:                    'test-purchase-auction-fee-report',
@@ -700,6 +704,10 @@ describe('Stripe Connect + Fee Capture E2E', () => {
             platformFeeAmount:     parseFloat((AUCTION_PREMIUM + AUCTION_COMMISSION).toFixed(2)), // 30.00
             stripePaymentIntentId: 'pi_test_fee_report_auction',
             status:                'PAID',
+            // Pre-inclusive-model row (before INCLUSIVE_FEE_MODEL_EFFECTIVE_AT, 2026-09-24): with no fee
+            // snapshot, reports restate it at the legacy 10/8 it was really charged at. A row created
+            // "now" would be restated at the inclusive 9.5%/7.5% rate and break these 10%/8% expectations.
+            createdAt:             new Date('2026-09-01T12:00:00.000Z'),
           },
         ],
       });
