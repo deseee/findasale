@@ -327,8 +327,10 @@ export interface HubMutationError extends Error {
  * `throw new Error(err.response?.data?.message || 'Failed to delete hub')`,
  * which flattened every failure to one string. The Close-this-market UI has to
  * tell four different failures apart and say something different for each:
- * 409 HUB_NOT_EMPTY (name the vendors in the way), 403 TIER_REQUIRED,
- * 403 GRACE_PERIOD_RESTRICTION, and 429 rate limiting. With only a message
+ * 409 HUB_NOT_EMPTY (name the vendors in the way), 403 TIER_REQUIRED (the page
+ * shows an upgrade link), and 429 rate limiting. 403 GRACE_PERIOD_RESTRICTION is no
+ * longer emitted by requireTier (2026-09-29); the page keeps a harmless branch for
+ * it. With only a message
  * string the page could not do better than one generic red box.
  * The thrown value is still an Error, so nothing that only reads `.message`
  * changes behaviour.

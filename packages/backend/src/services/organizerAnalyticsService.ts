@@ -4,6 +4,7 @@
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { isOrganizerDigestEnabled } from '../utils/digestPrefs';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -293,7 +294,7 @@ async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<vo
 
   const { generateUnsubscribeToken } = await import('../controllers/unsubscribeController');
   const unsubToken = stats.userId
-    ? await generateUnsubscribeToken(stats.userId, 'weekly') // FIX (findasale-hacker 2026-09-05): 'emailWeeklyDigest' is a TYPE_TO_PREF_MAP *value*, not a key -- always 400'd on click. 'weekly' is the correct key.
+    ? await generateUnsubscribeToken(stats.userId, 'organizerWeekly') // 2026-09-29: own opt-out type (writes emailWeeklyOrganizerDigest) so a dual-role user's shopper weekly email ('weekly' -> emailWeeklyDigest) is unaffected. (2026-09-05 note: type keys are TYPE_TO_PREF_MAP keys, not the pref names.)
     : null;
   const html = buildOrganizerDigestHtml(stats, unsubToken);
 
@@ -310,8 +311,9 @@ async function sendOrganizerDigestEmail(stats: OrganizerWeeklyStats): Promise<vo
       where: { id: stats.userId },
       select: { notificationPrefs: true },
     });
-    const prefs = (userPrefs?.notificationPrefs as Record<string, unknown> | null) ?? {};
-    if (prefs['emailWeeklyDigest'] === false) {
+    // Own key first, old shared key as fallback (utils/digestPrefs.ts), so nobody silently
+    // loses or regains the email when this ships.
+    if (!isOrganizerDigestEnabled(userPrefs?.notificationPrefs)) {
       console.log(`[OrganizerDigest] Opted out: ${stats.organizerEmail}`);
       return;
     }

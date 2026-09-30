@@ -764,7 +764,7 @@ const EditSalePage = () => {
               // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
               if (formData.saleType === 'BOOTH') {
                 if (vendorBoothsLoading || vendorBooths === undefined) {
-                  showToast('Still checking your vendor booths — try again in a moment.', 'error');
+                  showToast('Still checking your vendor booths. Try again in a moment.', 'error');
                   return;
                 }
                 if (vendorBooths.length === 0) {
@@ -889,7 +889,7 @@ const EditSalePage = () => {
                   <option value="" disabled>Choose a booth…</option>
                   {(vendorBooths ?? []).map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.vendorName}{b.hub?.name ? ` — ${b.hub.name}` : ''}
+                      {b.vendorName}{b.hub?.name ? ` (${b.hub.name})` : ''}
                     </option>
                   ))}
                 </select>
@@ -1350,7 +1350,7 @@ const EditSalePage = () => {
                       Enable Crew Invasion (group discount)
                     </span>
                     <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
-                      When 4 or more crew members hold items simultaneously, each receives a 10% discount code valid for 45 minutes.
+                      When 4 or more members of the same crew hold items at this sale at the same time, those shoppers earn bonus XP and the crew gets 10% off its held items at this sale. Each crew member gets one use of the discount, it lasts 45 minutes, and it is applied automatically when you invoice a crew member&apos;s held items. It comes off your item prices, and the platform fee is charged on the discounted price.
                     </span>
                   </label>
                 </div>

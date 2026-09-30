@@ -182,6 +182,11 @@ export const updateMarkdownCycle = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { steps, isActive } = req.body;
 
+    // isActive is a switch, not a truthy value: "false", 0 and {} must not silently turn a cycle on or off.
+    if (isActive !== undefined && typeof isActive !== 'boolean') {
+      return res.status(400).json({ message: 'isActive must be true or false' });
+    }
+
     if (steps !== undefined) {
       const stepsError = validateSteps(steps);
       if (stepsError) {

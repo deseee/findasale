@@ -846,7 +846,7 @@ function Step1({ c, form, setForm, vendorBooths, vendorBoothsLoading }: Step1Pro
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif' }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
               Which vendor booth is this sale for?{' '}
-              <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>Required — you operate more than one</span>
+              <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>Required: you operate more than one</span>
             </span>
             <select
               value={form.vendorBoothId ?? ''}
@@ -863,7 +863,7 @@ function Step1({ c, form, setForm, vendorBooths, vendorBoothsLoading }: Step1Pro
               <option value="" disabled>Choose a booth…</option>
               {(vendorBooths ?? []).map(b => (
                 <option key={b.id} value={b.id}>
-                  {b.vendorName}{b.hub?.name ? ` — ${b.hub.name}` : ''}
+                  {b.vendorName}{b.hub?.name ? ` (${b.hub.name})` : ''}
                 </option>
               ))}
             </select>
@@ -1239,7 +1239,7 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors, vendor
               const hub = vendorBooths?.find(b => b.id === form.vendorBoothId)?.hub;
               return hub?.address ? (
                 <p style={{ fontSize: 11, color: c.textDim, marginTop: -8, marginBottom: 14, fontFamily: 'Inter, sans-serif' }}>
-                  Venue address on file: {hub.address} — copy the city/state/zip above.
+                  Venue address on file: {hub.address}. Copy the city/state/zip above.
                 </p>
               ) : null;
             })()}
@@ -2532,7 +2532,7 @@ const CreateSalePage: React.FC = () => {
       // ADR vendor-booth-sale-onboarding-gate (2026-09-25)
       if (form.saleType === 'BOOTH') {
         if (vendorBoothsLoading || vendorBooths === null) {
-          showToast('Still checking your vendor booths — try again in a moment.', 'error');
+          showToast('Still checking your vendor booths. Try again in a moment.', 'error');
           return false;
         }
         if (vendorBooths.length === 0) {

@@ -17,6 +17,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../components/Skeleton';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { useSalesSummary } from '../../hooks/useConsignorSettlement';
 
 interface Sale {
   id: string;
@@ -62,6 +63,11 @@ const OrganizerSalesPage = () => {
     },
     enabled: !!user?.id && isClient,
   });
+
+  // Consignor payouts: how many sold consignor items are still unpaid, per sale. TEAMS only, so
+  // SIMPLE and PRO organizers make no request. A failure just hides the link (no toast).
+  const consignorSummaryQuery = useSalesSummary(canAccess('TEAMS') && !!user?.id && isClient);
+  const consignorSummary: Record<string, { unsettledCount: number }> = consignorSummaryQuery.data || {};
 
   // Auth guard — after all hooks
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -254,6 +260,17 @@ const OrganizerSalesPage = () => {
                         Settle
                       </Link>
                     )}
+                    {canAccess('TEAMS') &&
+                      consignorSummary[sale.id] &&
+                      consignorSummary[sale.id].unsettledCount > 0 && (
+                        <Link
+                          href={`/organizer/consignor-settlement/${sale.id}`}
+                          className="flex-1 text-center bg-amber-100 dark:bg-amber-900 hover:bg-amber-200 dark:hover:bg-amber-800 text-amber-900 dark:text-amber-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                          title="Work out what each consignor is owed for this sale and record what you paid them"
+                        >
+                          Consignor payouts ({consignorSummary[sale.id].unsettledCount})
+                        </Link>
+                      )}
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(sale)}

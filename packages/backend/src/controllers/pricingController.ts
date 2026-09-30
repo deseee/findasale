@@ -47,7 +47,7 @@ export async function estimatePriceController(req: Request, res: Response): Prom
     console.error('[Pricing] Estimate error:', error);
     res.status(500).json({
       error: 'Failed to estimate price',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Server error. Please try again.', // never echo error.message to the client (details are logged above)
     });
   }
 }
@@ -86,7 +86,7 @@ export async function listSourcesController(_req: Request, res: Response): Promi
     console.error('[Pricing] Sources error:', error);
     res.status(500).json({
       error: 'Failed to list sources',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Server error. Please try again.', // never echo error.message to the client (details are logged above)
     });
   }
 }
@@ -117,7 +117,7 @@ export async function updateSourceController(req: Request, res: Response): Promi
     console.error('[Pricing] Update source error:', error);
     res.status(500).json({
       error: 'Failed to update source',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Server error. Please try again.', // never echo error.message to the client (details are logged above)
     });
   }
 }

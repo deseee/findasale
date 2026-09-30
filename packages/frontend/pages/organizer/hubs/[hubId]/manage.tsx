@@ -84,7 +84,8 @@ export default function HubManagePage() {
       setEditMode(false);
       showToast('Hub updated successfully', 'success');
     } catch (err) {
-      showToast('Failed to update hub', 'error');
+      // useUpdateHub already carries the server message (e.g. the TEAMS plan requirement).
+      showToast(err instanceof Error && err.message ? err.message : 'Failed to update hub', 'error');
     }
   };
 
@@ -106,7 +107,7 @@ export default function HubManagePage() {
       setShowEventForm(false);
       showToast('Event date set successfully', 'success');
     } catch (err) {
-      showToast('Failed to set event date', 'error');
+      showToast(err instanceof Error && err.message ? err.message : 'Failed to set event date', 'error');
     }
   };
 

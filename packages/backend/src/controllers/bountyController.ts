@@ -29,6 +29,7 @@ import * as Sentry from '@sentry/node';
 // purchase flows already use for the fully-sold-out / partial-sale marketplace hooks, so a
 // bounty-fulfillment Item is kept in sync with eBay/Shopify/Facebook exactly like any other Item.
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // Wave 2 (2026-09-29): bounty purchases are real paid Purchase rows, so they earn purchase XP / milestones / Sale Passport MAKE_PURCHASE stamp like every other completed purchase
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
@@ -1076,6 +1077,17 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
           buyerCardFingerprint: chargeResult.cardFingerprint ?? undefined,
         },
       });
+
+      // Wave 2 (2026-09-29) Sale Passport parity: this Square bounty purchase is created PAID with no
+      // other award hook (the Stripe bounty branch fires the same shared engagement call from
+      // stripeController's payment_intent.succeeded BOUNTY_SUBMISSION branch, which breaks out before
+      // the Standard Purchase award block). DECISION: a bounty
+      // fulfillment IS a purchase for MAKE_PURCHASE. It is a real settled Purchase row for a real item at
+      // a real sale, the derive-on-read passport already counts it toward First Find / Treasure Hunter /
+      // Lakefront Haul, and no design doc excludes it, so the counter, XP and stamp must agree with it.
+      // Idempotent (passport ledger ACT:MAKE_PURCHASE:<id>, PointsTransaction purchaseId), deferred off the
+      // response path, never throws.
+      fireSquarePurchaseEngagement(squarePurchase.id);
 
       // BUG FIX (2026-09-09, findasale-dev BUG MODE, Item.status SOLD gap): the purchased Item
       // was never marked SOLD or its stock decremented -- charge succeeded and the submission

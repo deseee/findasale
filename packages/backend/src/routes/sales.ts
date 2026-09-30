@@ -36,9 +36,11 @@ import { getApproachNotes, updateApproachNotes, sendApproachNotification } from 
 import { exportSaleToEbay } from '../controllers/ebayController'; // Feature #244: eBay CSV export
 import { exportCommerceManagerFeed } from '../controllers/exportController'; // Commerce Manager data feed
 import { returnItemsToInventoryHandler } from '../controllers/returnToInventoryController'; // Feature #300: Return to Inventory
-import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAttendees } from '../controllers/rsvpController'; // Feature #154: Sale RSVP
+import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAttendees, setRSVPNameVisibility } from '../controllers/rsvpController'; // Feature #154: Sale RSVP
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
+import { requireTier } from '../middleware/requireTier';
+import { trackScanLimiter } from '../middleware/trackScanLimiter'; // per-IP/per-sale cap for the public track-scan route
 import { prisma } from '../lib/prisma';
 import { geocodeCityStateWithStatus, type GeocodeCityStateResult } from '../services/geocodingService'; // ADR-091: radius-aware city pages
 import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404: OG Buyer count
@@ -618,7 +620,7 @@ router.post('/', authenticate, createSale);
 router.post('/generate-description', authenticate, generateSaleDescriptionHandler); // AI sale description generator
 router.post('/:id/visit', authenticate, recordVisit); // Phase 2a: Record visit and award XP
 router.post('/:saleId/checkin', authenticate, checkInToSale); // Award XP for QR check-in
-router.post('/:id/track-scan', trackQrScan); // public, no auth needed
+router.post('/:id/track-scan', trackScanLimiter, trackQrScan); // public, no auth needed; capped per IP + sale (middleware/trackScanLimiter.ts)
 router.post('/:id/generate-qr', authenticate, generateQRCode);
 router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);
 router.post('/:id/ala-carte-checkout', authenticate, createAlaCarteSquarePayment); // #132: À La Carte (2026-09-18: Square)
@@ -816,14 +818,18 @@ router.get('/:saleId/ebay-export', authenticate, requireOrganizer, exportSaleToE
 router.get('/:saleId/export/commerce-feed', exportCommerceManagerFeed);
 
 // Feature #300: Return to Inventory — return unsold items from ENDED sale to inventory
-router.post('/:saleId/return-items', authenticate, requireOrganizer, returnItemsToInventoryHandler);
+// PRO: the destination is Persistent Inventory (roadmap #25, PRO; GET /api/item-inventory is PRO), and the
+// only UI entry (flip-report ReturnToInventoryPanel) is already PRO. Without this a SIMPLE organizer could
+// strand items in an inventory they cannot open. Resolved decision 2026-09-29 (Inventory tier).
+router.post('/:saleId/return-items', authenticate, requireOrganizer, requireTier('PRO'), returnItemsToInventoryHandler);
 
 // Feature #154: Sale RSVP — shoppers can RSVP to attend a sale
 router.post('/:id/rsvp', authenticate, toggleSaleRSVP); // Toggle RSVP for current user + award XP + trigger notification
 router.delete('/:id/rsvp', authenticate, removeRSVP); // Remove RSVP for current user
 router.get('/:id/rsvp/count', getRSVPCount); // Get count of people going (public)
 router.get('/:id/rsvp/mine', authenticate, getMyRSVPStatus); // Check if current user has RSVP'd
-router.get('/:id/rsvp/attendees', getRSVPAttendees); // Get list of attendees (names only, for organizer/public modal)
+router.get('/:id/rsvp/attendees', optionalAuthenticate, getRSVPAttendees); // Who is going: count for the public (names only for opted-in shoppers, first name + last initial); full names for the sale's organizer/staff/admin
+router.put('/:id/rsvp/name-visibility', authenticate, setRSVPNameVisibility); // Shopper opt-in (default off) to be named in the public going list
 
 // Feature #51: Sale Ripples — social proof activity tracking
 router.use('/:saleId/ripples', rippleRoutes);

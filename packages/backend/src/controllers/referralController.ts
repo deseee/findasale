@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import * as referralService from '../services/referralService';
 import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
+import { awardReferralStampForReferee } from '../services/loyaltyService'; // Feature #29: Sale Passport (Friend Finder stamp)
 
 // GET /api/referrals/dashboard
 // Returns referral stats for the authenticated user
@@ -226,6 +227,14 @@ export const reviewFraudSignal = async (req: AuthRequest, res: Response) => {
       const reward = await prisma.referralReward.findUnique({
         where: { id: signal.referralReward.id }
       });
+
+      // Sale Passport (2026-09-29): the fraud gate is now cleared, so the referrer's Friend Finder stamp
+      // can be credited if the referred shopper has completed a purchase (idempotent, never throws).
+      if (reward) {
+        awardReferralStampForReferee(reward.referredUserId).catch(err =>
+          console.error('[admin] Failed to award Friend Finder stamp after fraud approval:', err)
+        );
+      }
 
       if (reward && reward.deferredReason === 'DEVICE_ABUSE') {
         // Award XP to referrer now that fraud is cleared

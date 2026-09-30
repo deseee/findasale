@@ -12,6 +12,7 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
 import AddressAutocomplete from '../../../components/AddressAutocomplete';
+import TierGate from '../../../components/TierGate';
 
 function generateSlug(name: string): string {
   return name
@@ -104,6 +105,8 @@ export default function CreateHubPage() {
         <meta name="description" content="Create a new sale hub" />
       </Head>
 
+      {/* Market Hubs are TEAMS (decisions-log S436). The API enforces the same tier. */}
+      <TierGate requiredTier="TEAMS" featureName="Market Hubs" description="Organize multi-vendor events like flea markets, antique malls, popup markets, and farmers markets.">
       <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white dark:from-gray-900 dark:to-gray-900">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Navigation */}
@@ -292,6 +295,7 @@ export default function CreateHubPage() {
           </div>
         </div>
       </div>
+      </TierGate>
     </>
   );
 }

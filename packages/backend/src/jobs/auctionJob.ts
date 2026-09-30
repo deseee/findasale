@@ -7,6 +7,7 @@ import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
 import { createSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square migration Wave S2 #2 (2026-09-09): auction-winner-pays-later replacement for the Stripe PaymentIntent below
 import { buildSquareIdempotencyKey } from '../services/squarePaymentService';
+import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // Wave 2 (2026-09-29): engagement parity if an auction Purchase is ever created already PAID
 import { calculateApplicationFee, getInclusivePlatformFeeRate, applyInclusiveFloor, snapshotFromBreakdown, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared with services/auctionService.closeAuction — see that file's header
 
@@ -189,6 +190,7 @@ export const endAuctions = async () => {
         // needs a real purchase id to link to (see payUrl construction below) -- captured off
         // the tx.purchase.create() result once it runs, further down.
         let createdPurchaseId: string | null = null;
+        let createdPurchaseStatus: 'PENDING' | 'PAID' | null = null;
 
         // Square migration Wave S2 #2 (2026-09-09): Square-onboarded organizers route here
         // automatically, not optionally -- Stripe's platform account is permanently closed
@@ -268,15 +270,22 @@ export const endAuctions = async () => {
               ...(purchaseSquareOrderId ? { squareOrderId: purchaseSquareOrderId } : {}),
               // Only mark PAID when there's no processor payment pending (organizer not onboarded
               // on either Square or Stripe)
+              // Wave 2 audit note (2026-09-29): inside `if (highestBid)` hasPendingPayment is always true, so
+              // an auction win is ALWAYS created PENDING and the PAID branch is unreachable today. The win
+              // earns its MAKE_PURCHASE stamp / purchase XP when it settles: the Square payment-link webhook
+              // (squareWebhookController fires fireSquarePurchaseEngagement) or, if that webhook is missed,
+              // purchaseExpiryJob's stranded-PAID reclaim (fireReclaimEngagement). The post-transaction hook
+              // below only fires for a row that was really created PAID, so it can never award early.
               status: hasPendingPayment ? 'PENDING' : 'PAID',
               chargeType: purchaseChargeType,
               ...(purchaseStripeAccountId ? { stripeAccountId: purchaseStripeAccountId } : {}),
             },
           });
           createdPurchaseId = createdPurchase.id;
+          createdPurchaseStatus = hasPendingPayment ? 'PENDING' : 'PAID';
         }
 
-        return { status: 'SUCCESS', item: currentItem, highestBid, stripePaymentIntentId, squareCheckoutUrl, purchaseId: createdPurchaseId, price };
+        return { status: 'SUCCESS', item: currentItem, highestBid, stripePaymentIntentId, squareCheckoutUrl, purchaseId: createdPurchaseId, purchaseStatus: createdPurchaseStatus, price };
       });
 
       // All transaction-critical operations complete. Now handle post-transaction side effects.
@@ -285,6 +294,12 @@ export const endAuctions = async () => {
       if (result.status === 'RESERVE_NOT_MET') {
         // TODO Phase 2: organizer dashboard UI to approve/relist
         continue;
+      }
+
+      // Engagement parity (Wave 2): only a Purchase actually created PAID earns purchase awards now;
+      // PENDING wins are awarded on settlement (see the note at the Purchase.create above). Idempotent, never throws.
+      if (result.purchaseId && result.purchaseStatus === 'PAID') {
+        fireSquarePurchaseEngagement(result.purchaseId);
       }
 
       // Award XP to shopper for winning auction — flat 20 XP, no value multiplier (D-XP-009)

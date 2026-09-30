@@ -46,6 +46,7 @@ import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import MyVendorBoothsCard from '../../components/MyVendorBoothsCard';
+import SellingToolsCard from '../../components/SellingToolsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 import { OGBuyerCountBadge } from '../../components/OGBuyerBadge'; // Feature #404: OG Buyer
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Store, Package } from 'lucide-react';
@@ -55,6 +56,11 @@ import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
 import DemandSignalsCard from '../../components/DemandSignalsCard';
 import PlatformHighlightsWidget from '../../components/PlatformHighlightsWidget';
 
+// DEAD CODE, intentionally kept (not approved for removal): this constant was never rendered.
+// The Selling Tools quick-access grid is now built from lib/organizerNav.ts (entries flagged
+// `quickAccess`, filtered by useOrganizerTier().canAccess) and rendered by
+// components/SellingToolsCard.tsx. Edit that source, not this list; some hrefs below are stale
+// (/organizer/qr, /organizer/platforms).
 // Selling Tools grid configuration (8 tools, tier-gated)
 const SELLING_TOOLS = [
   { label: 'Create Sale', icon: '📋', href: '/organizer/create-sale', requiredTier: null },
@@ -88,7 +94,7 @@ const OrganizerDashboard = () => {
   const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed } = useOrganizerTier();
+  const { tier: orgTier, isSimple, isTeams, canAccess, isLapsed, inDunning, entitlementEndsAt } = useOrganizerTier();
   const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
@@ -769,10 +775,10 @@ const OrganizerDashboard = () => {
             <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  Grace period active, {Math.ceil((new Date(orgProfile.graceEndAt).getTime() - Date.now()) / 86400000)} days remaining
+                  Downgrade grace window: {Math.ceil((new Date(orgProfile.graceEndAt).getTime() - Date.now()) / 86400000)} days remaining
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                  Some items are hidden from shoppers. Upgrade to restore them.
+                  Your plan features stay available until your subscription ends, and nothing is hidden from shoppers. Upgrade any time to keep them.
                 </p>
               </div>
               <a href="/organizer/upgrade" className="text-xs font-semibold text-amber-800 dark:text-amber-200 underline ml-4 whitespace-nowrap">
@@ -913,8 +919,29 @@ const OrganizerDashboard = () => {
             </Link>
           </div>
 
+          {/* Payment failed but the plan is still active (2026-09-29, D2): shown instead of the lapse banner while inside the retry window */}
+          {inDunning && !isLapsed && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-400 dark:border-amber-600 p-4 mb-4 rounded">
+              <h2 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Your last payment did not go through
+              </h2>
+              <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                <p>
+                  Your {orgTier} plan stays fully active
+                  {entitlementEndsAt ? ` until ${entitlementEndsAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+                  {' '}while we retry your card. Update your billing to keep it.
+                </p>
+              </div>
+              <div className="mt-4">
+                <Link href="/organizer/subscription" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline">
+                  Update Billing →
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Tier Lapse Banner: sticky, non-dismissible until payment is updated */}
-          {orgProfile?.subscriptionLapsed && (
+          {isLapsed && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-400 dark:border-amber-600 p-4 mb-4 rounded">
               <div className="flex items-start justify-between">
                 <div className="flex items-start flex-1">
@@ -925,10 +952,10 @@ const OrganizerDashboard = () => {
                   </div>
                   <div className="ml-3">
                     <h2 className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                      Payment required to restore PRO access
+                      Your paid plan has ended
                     </h2>
                     <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                      <p>Your subscription has lapsed. You're temporarily on SIMPLE tier (200 items/sale, 5 photos/item, 100 Auto Tags/month). Update your billing info to restore full PRO features.</p>
+                      <p>Your subscription has ended and your account is on the free plan (5 photos per item, 100 Auto Tags per month, 10% fee when items sell). Your sales, items and settings are unchanged. Automatic markdown cycles are paused, and nothing is restored on its own. Renew to turn your PRO features back on.</p>
                     </div>
                     <div className="mt-4">
                       <Link href="/organizer/subscription" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline">
@@ -998,17 +1025,17 @@ const OrganizerDashboard = () => {
           )}
 
           {isClient && user?.organizerTier === 'PRO' && (
-            <div className={`bg-gradient-to-r ${orgProfile?.subscriptionLapsed ? 'from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20' : 'from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20'} ${orgProfile?.subscriptionLapsed ? 'border-amber-200 dark:border-amber-800' : 'border-teal-200 dark:border-teal-800'} border rounded-lg p-6 mb-8`}>
+            <div className={`bg-gradient-to-r ${isLapsed ? 'from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20' : 'from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20'} ${isLapsed ? 'border-amber-200 dark:border-amber-800' : 'border-teal-200 dark:border-teal-800'} border rounded-lg p-6 mb-8`}>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex-1">
-                  <h3 className={`text-lg font-bold mb-1 ${orgProfile?.subscriptionLapsed ? 'text-amber-900 dark:text-amber-100' : 'text-warm-900 dark:text-warm-100'}`}>Your Plan: PRO {orgProfile?.subscriptionLapsed && '(Payment Required)'}</h3>
-                  <p className={`text-sm mb-3 ${orgProfile?.subscriptionLapsed ? 'text-amber-600 dark:text-amber-400' : 'text-warm-600 dark:text-warm-400'}`}>{orgProfile?.subscriptionLapsed ? 'Your subscription payment is overdue. Renew now to restore full access.' : 'Scale with your team. TEAMS is $79/mo'}</p>
-                  <p className={`text-sm ${orgProfile?.subscriptionLapsed ? 'text-amber-700 dark:text-amber-300' : 'text-warm-700 dark:text-warm-300'}`}>
-                    {orgProfile?.subscriptionLapsed ? <strong>You are temporarily on SIMPLE tier.</strong> : <><strong>TEAMS includes:</strong> Shared workspace • Team members • Collaboration tools</>}
+                  <h3 className={`text-lg font-bold mb-1 ${isLapsed ? 'text-amber-900 dark:text-amber-100' : 'text-warm-900 dark:text-warm-100'}`}>Your Plan: PRO {isLapsed && '(Payment Required)'}</h3>
+                  <p className={`text-sm mb-3 ${isLapsed ? 'text-amber-600 dark:text-amber-400' : 'text-warm-600 dark:text-warm-400'}`}>{isLapsed ? 'Your subscription has ended. Renew to turn PRO features back on.' : 'Scale with your team. TEAMS is $79/mo'}</p>
+                  <p className={`text-sm ${isLapsed ? 'text-amber-700 dark:text-amber-300' : 'text-warm-700 dark:text-warm-300'}`}>
+                    {isLapsed ? <strong>Your account is on the free plan.</strong> : <><strong>TEAMS includes:</strong> Shared workspace • Team members • Collaboration tools</>}
                   </p>
                 </div>
-                <Link href={orgProfile?.subscriptionLapsed ? "/organizer/subscription" : "/pricing"} className={`flex-shrink-0 px-6 py-2 text-white font-medium rounded-lg transition-colors whitespace-nowrap ${orgProfile?.subscriptionLapsed ? 'bg-amber-600 hover:bg-amber-700' : 'bg-teal-600 hover:bg-teal-700'}`}>
-                  {orgProfile?.subscriptionLapsed ? 'Renew Now' : 'Learn about TEAMS'}
+                <Link href={isLapsed ? "/organizer/subscription" : "/pricing"} className={`flex-shrink-0 px-6 py-2 text-white font-medium rounded-lg transition-colors whitespace-nowrap ${isLapsed ? 'bg-amber-600 hover:bg-amber-700' : 'bg-teal-600 hover:bg-teal-700'}`}>
+                  {isLapsed ? 'Renew Now' : 'Learn about TEAMS'}
                 </Link>
               </div>
             </div>
@@ -1646,6 +1673,9 @@ const OrganizerDashboard = () => {
                   the very bottom of the page as the first pass placed it. */}
               <MyVendorBoothsCard />
 
+              {/* Selling tools quick access (built from organizerNav quickAccess entries) */}
+              <SellingToolsCard />
+
               {/* Sale Progress Tracker Widget */}
               {activeSale && (
                 <SaleProgressWidget saleId={activeSale.id} saleTitle={activeSale.title} />
@@ -1852,6 +1882,9 @@ const OrganizerDashboard = () => {
                   Create Another Sale
                 </Link>
               </div>
+
+              {/* Selling tools quick access (built from organizerNav quickAccess entries) */}
+              <SellingToolsCard />
 
               {/* Feature #228: Post-Sale Momentum + Efficiency Coaching: State 3 */}
               {salesData && salesData.length > 0 && (() => {

@@ -33,7 +33,7 @@ import TierGate from '../../components/TierGate';
 const PERMISSION_CATEGORIES = [
   {
     name: 'Inventory',
-    permissions: ['view_inventory', 'add_items', 'edit_items', 'delete_items', 'bulk_import', 'approve_ai_tags'],
+    permissions: ['view_inventory', 'add_items', 'edit_items', 'delete_items', 'bulk_import', 'approve_ai_tags', 'mark_retagged'],
   },
   {
     name: 'Pricing',
@@ -61,6 +61,7 @@ const PERMISSION_CATEGORIES = [
 const PERMISSION_DISPLAY_NAMES: Record<string, string> = {
   view_ai_suggestions: 'View Suggestions',
   approve_ai_tags: 'Approve Tags',
+  mark_retagged: 'Mark items as re-tagged',
   view_staff: 'View Members',
   invite_staff: 'Invite Members',
   edit_staff_roles: 'Edit Member Roles',

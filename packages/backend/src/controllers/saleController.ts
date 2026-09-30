@@ -16,6 +16,7 @@ import { pingIndexNowForSale } from '../services/indexNowService';
 import { generateSaleDescription, isAnthropicAvailable } from '../services/cloudAIService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { canRemoveWatermark } from '../utils/watermarkPolicy'; // #27b: iCal watermark footer
+import { buildSaleIcs } from '../utils/icalBuilder'; // RFC 5545 builder for GET /sales/:id/calendar.ics
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
 import { triggerSaleAndCityRevalidation, citySlugFromCityState, debouncedTriggerSaleAndCityRevalidation } from '../services/revalidationService'; // ADR 2026-07-11: on-demand ISR revalidation
 import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #51 Sale Ripples
@@ -25,6 +26,7 @@ import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feat
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 import { awardXp, XP_AWARDS, applyHuntPassMultiplier, RANK_EARLY_ACCESS_HOURS } from '../services/xpService'; // Explorer's Guild XP awards
 import { checkAndAwardLocalLegend } from '../services/badgeService'; // Feature #399: Local Legend badge
+import { awardStampDetailed } from '../services/loyaltyService'; // Feature #29: Sale Passport (check-in stamps)
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature: Referral tranche system
 import { awardOrgReferralFirstSale } from '../services/referralService'; // Feature #398: Org referral loop
 import { checkCrewVisitBonus } from '../services/crewService'; // Crew visit XP multiplier
@@ -32,6 +34,7 @@ import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurre
 import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
 import { geocodeAddress } from '../services/geocodingService'; // Map pin fix: geocode platform sales on publish
 import { redis } from '../lib/redis'; // Perf: short-TTL cache for getCities GROUP BY
+import { publicShopperLabel } from '../utils/publicDisplayName'; // Privacy: public activity names are opt-in, first name + last initial
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -1449,8 +1452,12 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
 export const trackQrScan = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    // Public route: only count scans for sales that exist, are not deleted and are not DRAFT
+    // (status is a non-null String column, so `not` does not drop rows). Per-IP/per-sale
+    // rate limiting lives in routes/sales.ts (trackScanLimiter); the client also sends at most one
+    // scan per browser session per sale. Always 204 so a printed sign never shows an error.
     await prisma.sale.updateMany({
-      where: { id },
+      where: { id, deletedAt: null, status: { not: 'DRAFT' } },
       data: { qrScanCount: { increment: 1 } },
     });
     res.status(204).end();
@@ -1480,7 +1487,13 @@ export const generateQRCode = async (req: AuthRequest, res: Response) => {
     }
     
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const saleUrl = `${frontendUrl}/sales/${id}?utm_source=qr`;
+    // Optional utm_source (body or query) lets each surface stamp its own source, e.g. the organizer
+    // sale page asks for qr_sign. Restricted to "qr" or "qr_<letters/digits/underscores>" so the
+    // scan tracker (which counts any utm_source starting with "qr") and the URL stay well formed.
+    // Default stays "qr" for backward compatibility with existing callers.
+    const requestedSource = String((req.body && req.body.utm_source) || req.query.utm_source || 'qr');
+    const utmSource = /^qr(_[a-z0-9_]{1,40})?$/.test(requestedSource) ? requestedSource : 'qr';
+    const saleUrl = `${frontendUrl}/sales/${id}?utm_source=${utmSource}`;
     const qrCodeSvg = await QRCode.toString(saleUrl, { type: 'svg' });
     res.setHeader('Content-Type', 'image/svg+xml');
     res.send(qrCodeSvg);
@@ -1499,36 +1512,41 @@ export const generateIcal = async (req: Request, res: Response) => {
       include: { organizer: { select: { businessName: true, subscriptionTier: true, removeWatermarkEnabled: true } } },
     });
 
-    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    // Public route: never expose drafts or deleted sales.
+    if (!sale || sale.deletedAt || sale.status === 'DRAFT') {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
     if (!sale.startDate || !sale.endDate) {
       return res.status(400).json({ message: 'Sale is missing required start or end date' });
     }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const saleUrl = `${frontendUrl}/sales/${id}`;
-    const now = new Date().toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
-    const toIcalDate = (d: Date) => d.toISOString().replace(/[-:.]/g, '').slice(0, 15) + 'Z';
-    const esc = (s: string) =>
-      (s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
-
-    const location = `${sale.address}\\, ${sale.city}\\, ${sale.state} ${sale.zip}`;
-    const baseDescription = esc(sale.description || '') + (sale.description ? '\\n\\n' : '') + `View items online: ${saleUrl}`;
-    const description = baseDescription + (!canRemoveWatermark(sale.organizer) ? '\\n\\nShared via FindA.Sale: finda.sale' : '');
-
-    const ical = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FindA.Sale//FindA.Sale//EN',
-      'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
-      `UID:sale-${id}@finda.sale`, `DTSTAMP:${now}`,
-      `DTSTART:${toIcalDate(new Date(sale.startDate))}`,
-      `DTEND:${toIcalDate(new Date(sale.endDate))}`,
-      `SUMMARY:${esc(sale.title)}`, `DESCRIPTION:${description}`,
-      `LOCATION:${location}`, `URL:${saleUrl}`,
-      `ORGANIZER;CN=${esc(sale.organizer.businessName)}:MAILTO:noreply@finda.sale`,
-      'END:VEVENT', 'END:VCALENDAR',
-    ].join('\r\n');
+    // RFC 5545 output (CRLF, folding, escaping, ORGANIZER, UID, DTSTAMP, UTC times) is built and
+    // unit tested in utils/icalBuilder.ts. #27b: TEAMS organizers with removeWatermarkEnabled get no
+    // "Shared via FindA.Sale" footer (utils/watermarkPolicy.canRemoveWatermark).
+    const ical = buildSaleIcs(
+      {
+        id,
+        title: sale.title,
+        description: sale.description,
+        address: sale.address,
+        city: sale.city,
+        state: sale.state,
+        zip: sale.zip,
+        lat: sale.lat,
+        lng: sale.lng,
+        startDate: new Date(sale.startDate),
+        endDate: new Date(sale.endDate),
+        updatedAt: sale.updatedAt,
+        organizerName: sale.organizer?.businessName,
+      },
+      { frontendUrl, includeWatermark: !canRemoveWatermark(sale.organizer) }
+    );
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="sale-${id}.ics"`);
+    // inline lets iOS Safari offer "Add to Calendar" directly; desktop browsers download the file.
+    res.setHeader('Content-Disposition', `inline; filename="sale-${id}.ics"`);
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(ical);
   } catch (error) {
     console.error('Error generating iCal:', error);
@@ -1750,9 +1768,13 @@ export const cloneSale = async (req: AuthRequest, res: Response) => {
  * Real-time activity feed for a sale showing:
  * - Recent item favorites (last 10)
  * - Recent purchases (last 10)
- * - Current viewing count (estimated based on sale ID hash)
  *
- * Returns: { activities: Activity[], viewCount: number }
+ * Returns: { activities: Activity[] }
+ *
+ * 2026-09-29 (privacy): this endpoint is public, so shopper names are minimized. A shopper who opted
+ * in (notificationPrefs.showNameInGoingList) appears as "First name + last initial"; everyone else is
+ * "Someone". It also used to return a fabricated hash-based viewCount ((hash % 15) + 1) that no client
+ * read; that field is gone. Live viewer counts come from the viewers ping data (POST /api/viewers/:saleId/ping).
  */
 export const getSaleActivity = async (req: Request, res: Response) => {
   try {
@@ -1777,7 +1799,6 @@ export const getSaleActivity = async (req: Request, res: Response) => {
     if (sale.status === 'ENDED') {
       return res.json({
         activities: [],
-        viewCount: 0,
       });
     }
 
@@ -1786,7 +1807,7 @@ export const getSaleActivity = async (req: Request, res: Response) => {
     // FK rows can exist in the DB (user deleted without cascading), causing:
     // PrismaClientUnknownRequestError: Field user is required to return data, got null
     // Graceful fallback to [] keeps the activity feed alive when orphaned rows exist.
-    let recentFavorites: Array<{ id: string; createdAt: Date; user: { name: string | null } | null; item: { title: string } | null }> = [];
+    let recentFavorites: Array<{ id: string; createdAt: Date; user: { name: string | null; notificationPrefs?: unknown } | null; item: { title: string } | null }> = [];
     try {
       recentFavorites = await prisma.favorite.findMany({
         where: {
@@ -1797,7 +1818,7 @@ export const getSaleActivity = async (req: Request, res: Response) => {
           // Orphan-FK runtime errors (rare) are caught by the surrounding try/catch.
         },
         include: {
-          user: { select: { name: true } },
+          user: { select: { name: true, notificationPrefs: true } },
           item: { select: { title: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -1813,10 +1834,14 @@ export const getSaleActivity = async (req: Request, res: Response) => {
     const recentPurchases = await prisma.purchase.findMany({
       where: {
         saleId: id,
-        user: { isNot: null },
+        // Only money that actually moved: PENDING, FAILED, REFUNDED and disputed rows are never
+        // announced as "just bought". Shoppers who hid their purchases (purchasesVisible = false,
+        // the same switch that hides purchase history on their public profile) are excluded too.
+        status: 'PAID',
+        user: { is: { purchasesVisible: true } },
       },
       include: {
-        user: { select: { name: true } },
+        user: { select: { name: true, notificationPrefs: true } },
         item: { select: { title: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -1828,13 +1853,13 @@ export const getSaleActivity = async (req: Request, res: Response) => {
       ...recentFavorites.map((fav) => ({
         id: fav.id,
         type: 'save' as const,
-        message: `${fav.user?.name || 'Someone'} just saved ${fav.item?.title || 'an item'}`,
+        message: `${publicShopperLabel(fav.user?.name, fav.user?.notificationPrefs)} just saved ${fav.item?.title || 'an item'}`,
         timestamp: fav.createdAt.toISOString(),
       })),
       ...recentPurchases.map((purch) => ({
         id: purch.id,
         type: 'purchase' as const,
-        message: `${purch.user?.name || 'Someone'} just bought ${purch.item?.title || 'an item'}`,
+        message: `${publicShopperLabel(purch.user?.name, purch.user?.notificationPrefs)} just bought ${purch.item?.title || 'an item'}`,
         timestamp: purch.createdAt.toISOString(),
       })),
     ];
@@ -1844,16 +1869,8 @@ export const getSaleActivity = async (req: Request, res: Response) => {
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
 
-    // Estimate viewing count using a simple hash-based seeded random
-    // This gives consistent per-sale numbers without database overhead
-    const hash = id.split('').reduce((acc, char) => {
-      return ((acc << 5) - acc) + char.charCodeAt(0);
-    }, 0);
-    const viewCount = (Math.abs(hash) % 15) + 1; // Random number 1-15 per sale ID
-
     res.json({
       activities: activities.slice(0, 20),
-      viewCount,
     });
   } catch (error) {
     console.error('Error fetching sale activity:', error);
@@ -2463,6 +2480,22 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       console.error('[Local Legend] Error during badge check:', err);
     }
 
+    // Sale Passport (2026-09-29): a check-in is real attendance. Awards the legacy ATTEND_SALE tally
+    // (once per sale, idempotent via saleId) and derives First Steps / Weekend Warrior / Road Tripper
+    // from SaleCheckin. Never throws, so it can never fail the check-in itself.
+    let passportUnlocks: { stamps: { key: string; name: string; icon: string }[]; milestones: { milestone: number; badgeType: string; name: string }[] } | null = null;
+    try {
+      const passportResult = await awardStampDetailed(userId, 'ATTEND_SALE', saleId, saleId);
+      if (passportResult.newStamps.length > 0 || passportResult.newMilestones.length > 0) {
+        passportUnlocks = {
+          stamps: passportResult.newStamps.map((st) => ({ key: st.key, name: st.name, icon: st.icon })),
+          milestones: passportResult.newMilestones.map((m) => ({ milestone: m.milestone, badgeType: m.badgeType, name: m.name })),
+        };
+      }
+    } catch (err) {
+      console.error('[loyalty] Sale Passport check-in stamp failed:', err);
+    }
+
     res.json({
       success: true,
       xpEarned: finalXp,
@@ -2473,6 +2506,7 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       rankIncreased: awardResult.rankIncreased,
       queuePosition,
       ...(localLegendAwarded ? { localLegendBadge: localLegendAwarded } : {}),
+      ...(passportUnlocks ? { passportUnlocks } : {}),
     });
   } catch (error) {
     console.error('Check-in error:', error);

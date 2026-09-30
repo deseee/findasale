@@ -17,6 +17,12 @@ export interface WorkspaceTemplate {
 /**
  * System-defined templates
  * Each template defines role → permissions mapping
+ *
+ * mark_retagged (2026-09-29, Patrick decision D6): MEMBER and MANAGER include it, VIEWER never does,
+ * matching DEFAULT_ROLE_PERMISSIONS in workspacePermissions.ts. This matters because
+ * setPermissionsForRole (workspacePermissionService.ts) stores the COMPLETE state: it deletes the
+ * role's rows and writes one row per known permission, allowed only if listed. A template that omits
+ * mark_retagged therefore writes an explicit allowed:false row that overrides the default grant.
  */
 export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
   EMPTY: {
@@ -44,6 +50,7 @@ export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
       MEMBER: [
         WORKSPACE_PERMISSIONS.VIEW_INVENTORY,
         WORKSPACE_PERMISSIONS.ADD_ITEMS,
+        WORKSPACE_PERMISSIONS.MARK_RETAGGED,
         WORKSPACE_PERMISSIONS.VIEW_PRICING,
         WORKSPACE_PERMISSIONS.PROCESS_POS,
         WORKSPACE_PERMISSIONS.SEND_TEAM_CHAT,
@@ -65,6 +72,7 @@ export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
         WORKSPACE_PERMISSIONS.EDIT_PRICING,
         WORKSPACE_PERMISSIONS.VIEW_AI_SUGGESTIONS,
         WORKSPACE_PERMISSIONS.APPROVE_AI_TAGS,
+        WORKSPACE_PERMISSIONS.MARK_RETAGGED,
         WORKSPACE_PERMISSIONS.PROCESS_POS,
         WORKSPACE_PERMISSIONS.VIEW_SALES_ANALYTICS,
         WORKSPACE_PERMISSIONS.VIEW_STAFF,
@@ -75,6 +83,7 @@ export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
       MEMBER: [
         WORKSPACE_PERMISSIONS.VIEW_INVENTORY,
         WORKSPACE_PERMISSIONS.ADD_ITEMS,
+        WORKSPACE_PERMISSIONS.MARK_RETAGGED,
         WORKSPACE_PERMISSIONS.VIEW_PRICING,
         WORKSPACE_PERMISSIONS.PROCESS_POS,
         WORKSPACE_PERMISSIONS.SEND_TEAM_CHAT,

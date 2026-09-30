@@ -89,7 +89,7 @@ const serverMessage = (err: unknown, fallback: string): string => {
 };
 
 const formatPrice = (value: number | null): string =>
-  value == null ? '—' : `$${value.toFixed(2)}`;
+  value == null ? 'N/A' : `$${value.toFixed(2)}`;
 
 // Sticker guide (2026-09-29): one colour per markdown step so staff can grab the right
 // sticker/highlighter without reading the price maths. Text label always shown too.

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { recalculateShopperRating } from '../services/reputationService';
 import { awardXp, XP_AWARDS } from '../services/xpService';
+import { awardStamp } from '../services/loyaltyService'; // Feature #29: Sale Passport (Storyteller stamp)
 
 // POST /api/reviews — authenticated shoppers only, one review per sale
 export const createReview = async (req: AuthRequest, res: Response) => {
@@ -117,6 +118,15 @@ export const createReview = async (req: AuthRequest, res: Response) => {
         description: '5-star review received'
       }).catch((err) => {
         console.error('[reviewController] XP award failed:', err);
+      });
+    }
+
+    // Sale Passport (2026-09-29): Storyteller stamp + legacy WRITE_REVIEW tally. Only APPROVED
+    // reviews count (RAPID/BULK-flagged ones wait in PENDING moderation and the stamp is derived
+    // later, on the next passport read, once approved). Fire-and-forget, idempotent per review id.
+    if (moderationStatus === 'APPROVED') {
+      awardStamp(userId, 'WRITE_REVIEW', saleId, review.id).catch((err) => {
+        console.error('[reviewController] Sale Passport stamp failed:', err);
       });
     }
 

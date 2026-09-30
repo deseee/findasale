@@ -23,6 +23,16 @@ interface UserSettings {
   notificationPrefs?: Record<string, unknown> | null;
 }
 
+// The organizer digest has its OWN preference key (emailWeeklyOrganizerDigest) so a user who is
+// both a shopper and an organizer can turn one weekly email off without losing the other. Accounts
+// that never touched it fall back to the old shared key (emailWeeklyDigest), so nobody silently
+// loses or regains emails. Mirrors backend utils/digestPrefs.ts.
+const isOrganizerDigestOn = (prefs?: Record<string, unknown> | null): boolean => {
+  const own = prefs?.emailWeeklyOrganizerDigest;
+  if (typeof own === 'boolean') return own;
+  return prefs?.emailWeeklyDigest !== false;
+};
+
 interface DigestPreviewData {
   businessName: string;
   totalItemsSold: number;
@@ -70,13 +80,14 @@ export default function EmailDigestPreview() {
   });
 
   // Mutation to update email preference.
-  // The digest job and the unsubscribe link in the email both use notificationPrefs.emailWeeklyDigest.
-  // (This page used to PATCH `emailWeeklyOrganizerDigest`, which /users/me ignores, so the button did nothing.)
-  // PATCH /users/me replaces notificationPrefs wholesale, so send the merged object.
+  // The organizer digest job and the unsubscribe link in the organizer email both use
+  // notificationPrefs.emailWeeklyOrganizerDigest (the shopper weekly email keeps emailWeeklyDigest,
+  // which this page no longer touches). PATCH /users/me replaces notificationPrefs wholesale, so
+  // send the merged object.
   const updatePreferenceMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
       const response = await api.patch('/users/me', {
-        notificationPrefs: { ...(userSettings?.notificationPrefs ?? {}), emailWeeklyDigest: enabled },
+        notificationPrefs: { ...(userSettings?.notificationPrefs ?? {}), emailWeeklyOrganizerDigest: enabled },
       });
       return response.data;
     },
@@ -87,7 +98,7 @@ export default function EmailDigestPreview() {
 
   const handleToggleEmail = async () => {
     if (!userSettings) return;
-    await updatePreferenceMutation.mutateAsync(userSettings.notificationPrefs?.emailWeeklyDigest === false);
+    await updatePreferenceMutation.mutateAsync(!isOrganizerDigestOn(userSettings.notificationPrefs));
   };
 
   if (authLoading || settingsLoading) {
@@ -103,7 +114,7 @@ export default function EmailDigestPreview() {
     return null;
   }
 
-  const isEmailEnabled = userSettings?.notificationPrefs?.emailWeeklyDigest !== false;
+  const isEmailEnabled = isOrganizerDigestOn(userSettings?.notificationPrefs);
 
   return (
     <>
@@ -149,6 +160,11 @@ export default function EmailDigestPreview() {
                 {updatePreferenceMutation.isPending ? 'Updating...' : isEmailEnabled ? 'Disable' : 'Enable'}
               </button>
             </div>
+            {updatePreferenceMutation.isError && (
+              <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+                We could not save that change. Please try again.
+              </p>
+            )}
           </div>
 
           {/* Email Preview */}

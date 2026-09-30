@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../components/AuthContext';
 import TierGate from '../../../components/TierGate';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import { useDeleteHub, useReopenHub } from '../../../hooks/useHubs';
 import api from '../../../lib/api';
 
@@ -84,11 +85,14 @@ const blockerLines = (c: CloseBlockerCounts): string[] => {
 const marketActionFailure = (err: any): string => {
   const status = err?.status;
   const code = err?.code;
+  // Dead branch (2026-09-29): requireTier no longer emits GRACE_PERIOD_RESTRICTION (organizers keep
+  // their paid features until the subscription actually ends). Kept only so an old cached response
+  // is still handled harmlessly.
   if (code === 'GRACE_PERIOD_RESTRICTION') {
     return 'Your plan is in its grace period, so market changes are switched off. Nothing was changed. Renew your plan, then try again.';
   }
   if (code === 'TIER_REQUIRED') {
-    return 'Your plan does not include market hubs right now, so this cannot be done. Nothing was changed. Open your plan page to upgrade, then try again.';
+    return 'Market hubs are part of the TEAMS plan, and your account is not on TEAMS right now. Nothing was changed. Use the link below to see the plans, then try again.';
   }
   if (status === 403) {
     return 'This market belongs to a different account. Nothing was changed. Sign in with the account that created it.';
@@ -104,6 +108,21 @@ const marketActionFailure = (err: any): string => {
   }
   return 'The server did not answer. Nothing was changed. Wait a minute and try again. If it keeps failing, email support@finda.sale.';
 };
+
+// True when the server refused because the plan does not include market hubs. The caller shows an
+// upgrade link next to the message (see UpgradeLink), so the organizer has somewhere to go.
+const needsUpgrade = (err: any): boolean => err?.code === 'TIER_REQUIRED';
+
+function UpgradeLink() {
+  return (
+    <Link
+      href="/pricing"
+      className="inline-flex items-center justify-center min-h-[48px] mt-3 px-4 py-2 text-base font-semibold underline text-amber-800 dark:text-amber-200"
+    >
+      See plans and upgrade to TEAMS
+    </Link>
+  );
+}
 
 const ACTION_BUTTON = 'inline-flex items-center justify-center min-h-[48px] px-5 py-3 text-base font-semibold rounded-lg transition-colors';
 
@@ -127,6 +146,7 @@ function CloseMarketDialog({
   const deleteHub = useDeleteHub(hub.id);
   const [serverBlockers, setServerBlockers] = useState<CloseBlockerCounts | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [failureNeedsUpgrade, setFailureNeedsUpgrade] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -147,6 +167,7 @@ function CloseMarketDialog({
 
   const handleConfirm = async () => {
     setFailure(null);
+    setFailureNeedsUpgrade(false);
     try {
       await deleteHub.mutateAsync();
       onClosed(hub.name);
@@ -160,6 +181,7 @@ function CloseMarketDialog({
         return;
       }
       setFailure(marketActionFailure(err));
+      setFailureNeedsUpgrade(needsUpgrade(err));
     }
   };
 
@@ -184,6 +206,12 @@ function CloseMarketDialog({
             className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 text-base text-red-800 dark:text-red-200"
           >
             {failure}
+            {failureNeedsUpgrade && (
+              <>
+                <br />
+                <UpgradeLink />
+              </>
+            )}
           </p>
         )}
 
@@ -255,7 +283,7 @@ function ReopenMarketButton({
 }: {
   hub: HubEvent;
   onReopened: (name: string) => void;
-  onFailed: (message: string) => void;
+  onFailed: (message: string, upgrade?: boolean) => void;
 }) {
   const reopenHub = useReopenHub(hub.id);
 
@@ -264,7 +292,7 @@ function ReopenMarketButton({
       await reopenHub.mutateAsync();
       onReopened(hub.name);
     } catch (err: any) {
-      onFailed(marketActionFailure(err));
+      onFailed(marketActionFailure(err), needsUpgrade(err));
     }
   };
 
@@ -315,13 +343,19 @@ export default function FleaMarketEventsPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { canAccess, tierKnown } = useOrganizerTier();
+  // The backend lets any organizer list their markets and close one (GET and DELETE have no tier
+  // gate), but creating, editing and reopening need TEAMS. Same split as markdown-cycles.tsx: TEAMS
+  // gets every control; a downgraded organizer keeps the list and Close, and sees an upgrade note in
+  // place of the create and reopen controls.
+  const canManage = canAccess('TEAMS');
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [closingHub, setClosingHub] = useState<HubEvent | null>(null);
   // A banner, not a toast. A toast disappears on its own, and this list is the one place an
   // organizer needs to be certain what just happened to their market.
-  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string; upgrade?: boolean } | null>(null);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -377,12 +411,24 @@ export default function FleaMarketEventsPage() {
     fetchEvents();
   };
 
-  const handleActionFailed = (text: string) => {
-    setNotice({ kind: 'error', text });
+  const handleActionFailed = (text: string, upgrade?: boolean) => {
+    setNotice({ kind: 'error', text, upgrade: !!upgrade });
   };
 
   const openEvents = events.filter((event) => event.isActive !== false);
   const closedEvents = events.filter((event) => event.isActive === false);
+
+  // Whole-page upsell only when there is nothing to show: not TEAMS AND (plan unknown, or the
+  // organizer has no markets). A downgraded organizer who already has markets sees them.
+  const gateWholePage = !canManage && (!tierKnown || (!eventsLoading && !eventsError && events.length === 0));
+  const wrapTier = (children: React.ReactNode) =>
+    gateWholePage ? (
+      <TierGate requiredTier="TEAMS" featureName="Market Hubs" description="Organize multi-vendor events like flea markets, antique malls, popup markets, and farmers markets.">
+        {children}
+      </TierGate>
+    ) : (
+      <>{children}</>
+    );
 
   if (authLoading) {
     return (
@@ -411,7 +457,8 @@ export default function FleaMarketEventsPage() {
         <meta name="description" content="Organize multi-vendor market events" />
       </Head>
 
-      <TierGate requiredTier="TEAMS" featureName="Market Hubs" description="Organize multi-vendor events like flea markets, antique malls, popup markets, and farmers markets.">
+      {wrapTier(
+      <>
         <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
           {/* Header */}
           <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -467,12 +514,22 @@ export default function FleaMarketEventsPage() {
                     Set up booths, invite vendors, and manage payouts. All from one dashboard.
                   </p>
                 </div>
-                <Link
-                  href="/organizer/hubs/create"
-                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
-                >
-                  Create Hub
-                </Link>
+                {canManage ? (
+                  <Link
+                    href="/organizer/hubs/create"
+                    className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    Create Hub
+                  </Link>
+                ) : (
+                  <div className="max-w-sm">
+                    <p className="text-sm text-amber-900 dark:text-amber-100">
+                      Creating and editing markets is part of the TEAMS plan. Your existing markets stay
+                      listed below, and you can still close them.
+                    </p>
+                    <UpgradeLink />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -519,6 +576,7 @@ export default function FleaMarketEventsPage() {
                   }`}
                 >
                   <p>{notice.text}</p>
+                  {notice.upgrade && <UpgradeLink />}
                   <button
                     type="button"
                     onClick={() => setNotice(null)}
@@ -615,11 +673,20 @@ export default function FleaMarketEventsPage() {
                             Closed · {event.boothCount} {event.boothCount === 1 ? 'booth' : 'booths'} kept
                           </p>
                         </div>
-                        <ReopenMarketButton
-                          hub={event}
-                          onReopened={handleReopened}
-                          onFailed={handleActionFailed}
-                        />
+                        {canManage ? (
+                          <ReopenMarketButton
+                            hub={event}
+                            onReopened={handleReopened}
+                            onFailed={handleActionFailed}
+                          />
+                        ) : (
+                          <div className="sm:max-w-xs">
+                            <p className="text-sm text-warm-700 dark:text-gray-300">
+                              Reopening a market is part of the TEAMS plan.
+                            </p>
+                            <UpgradeLink />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -637,7 +704,8 @@ export default function FleaMarketEventsPage() {
             onClosed={handleClosed}
           />
         )}
-      </TierGate>
+      </>
+      )}
     </>
   );
 }

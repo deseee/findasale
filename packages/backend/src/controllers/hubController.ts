@@ -185,7 +185,7 @@ export const getHub = async (req: Request, res: Response) => {
 };
 
 // POST /api/organizer/hubs
-// Auth + PRO tier required
+// Auth + TEAMS tier required (S436 locked decision; enforced by requireTier('TEAMS') in routes/hubs.ts)
 export const createHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerProfile?.id) {
