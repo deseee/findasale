@@ -223,6 +223,21 @@
     return { ok: false, reason: last };
   }
 
+  // 2026-09-30 (S-EXT-DUPLICATE-POSTINGS): the backend sets item.deleteAllMatches only when no OTHER live
+  // FindA.Sale item shares this title, i.e. every posting carrying it belongs to the item being removed
+  // (live: two postings of one deleted item -- $7 and $8 -- were refused as 'ambiguous_duplicate_title'
+  // and retried 11 times). In that case delete them one at a time (each deletion verified) until none remain.
+  let crRemDupLoop = 0;
+  async function crRemMoreDuplicates(item, wanted) {
+    if (item.deleteAllMatches !== true || crRemDupLoop >= 6) return false;
+    const all = await crRemAllRows();
+    if (!all.ok) return false;
+    const left = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
+    if (!left.length) return false;
+    crRemDupLoop++;
+    return true;
+  }
+
   async function runCraigslistRemovalQueue(item) {
     const wanted = fasFoldTitle(item.title);
     overlayInfo('This item sold elsewhere. Looking for the matching Craigslist posting for <b>' + escapeHtml(item.title) + '</b>...');
@@ -242,6 +257,7 @@
       overlayInfo('Checking that the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> was deleted...');
       const v = await crRemVerifyDeleted(pending.postingId, pending.page);
       await setPending(null);
+      if (v.ok && await crRemMoreDuplicates(item, wanted)) { return runCraigslistRemovalQueue(item); }
       if (v.ok) {
         overlayInfo('Removed the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> (confirmed deleted).');
         await report('crossPlatformRemovalDeleted', item);
@@ -271,7 +287,7 @@
       }
       const matches = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
       const ids = Array.from(new Set(matches.map((r) => r.postingId)));
-      if (ids.length !== 1) {
+      if (ids.length !== 1 && !(ids.length > 1 && item.deleteAllMatches === true)) {
         // 2026-09-30 (S-EXT-RESYNC): crRemAllRows() read EVERY page of the postings dashboard (all.ok),
         // so zero active matches is a real "already gone" -- report it as listing_not_found like
         // Poshmark/Mercari do, so the backend can resolve it instead of retrying forever.
@@ -314,6 +330,7 @@
 
     const v = await crRemVerifyDeleted(target.postingId, target.page);
     await setPending(null);
+    if (v.ok && await crRemMoreDuplicates(item, wanted)) { return runCraigslistRemovalQueue(item); }
     if (v.ok) {
       overlayInfo('Removed the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> (confirmed deleted).');
       await report('crossPlatformRemovalDeleted', item);

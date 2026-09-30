@@ -2872,7 +2872,7 @@
     // deletePoshmarkListingOnEditPage's comment above for the full evidence. Nothing here advances
     // the queue locally any more: background.js decides whether a failure is transient (retry the
     // same item) or permanent (skip it), and drives every navigation from there.
-    if (location.pathname.indexOf('/edit-listing/') !== -1) {
+    if (location.pathname.indexOf('/edit-listing/') !== -1 && item.reason !== 'RESYNC_VERIFY') {
       const pageId = extractPoshmarkListingId(location.pathname);
       const targetId = sessionStorage.getItem('fasPoshDeleteTargetId');
       if (pageId && targetId && pageId === targetId) {
@@ -3020,7 +3020,7 @@
       // IS a plausibly transient failure for the exact item currently mid-flow.
       try {
         chrome.runtime.sendMessage({
-          type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: poshRemLastMatchCount === 0 ? 'listing_not_found' : 'no_confident_closet_match', continueUrl: closetUrl || null
+          type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: poshRemLastMatchCount === 0 ? 'listing_not_found' : 'no_confident_closet_match', verifyOnly: item.reason === 'RESYNC_VERIFY', continueUrl: closetUrl || null
         });
       } catch (e) {}
       return;
@@ -3029,6 +3029,11 @@
     // skipped (S-EXT-POSHMARK-CLOSET-MATCH-BY-LISTING-ID): live-confirmed that every closet href
     // carries the real 24-hex listing id and that Poshmark resolves /edit-listing/<id> by id while
     // ignoring the slug, so the detail page was a pure extra failure point in this flow.
+    if (item.reason === 'RESYNC_VERIFY') {
+      // Resync verify run: the listing IS in the closet -- report it and stop. Never delete.
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: closetUrl || null }); } catch (e) {}
+      return;
+    }
     sessionStorage.setItem('fasPoshDeleteTargetId', match.id);
     sessionStorage.removeItem('fasPoshClosetSearchedFor'); // 2026-09-23: a later retry of this item must search again
     await humanPause(1200, 2200); // SAFETY FIX 2026-09-04 (S-EXT-POSHMARK-REMOVAL-PACING) -- see comment above

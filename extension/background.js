@@ -955,8 +955,11 @@ async function removalReportIsDuplicate(platform, itemId) {
 // /extension/pending-removals -- now platform-aware (each item carries a `platforms` array, see
 // extensionController.ts getPendingRemovals' same-session fix) -- so no extra API call is needed
 // here to route each item to the right platform(s).
-async function checkCrossPlatformRemovals(pendingItems) {
-  const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+async function checkCrossPlatformRemovals(pendingItems, opts) {
+  const stored = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  // An organizer-initiated Resync runs its checks silently even in "Notify me" mode (it is a repair
+  // the organizer just asked for), but never overrides an explicit "Off".
+  const fasAutoRemoveMode = (opts && opts.forceSilent && (stored.fasAutoRemoveMode || 'silent') !== 'off') ? 'silent' : (stored.fasAutoRemoveMode || 'silent');
   if (fasAutoRemoveMode === 'off') return 'off';
   const outcomes = [];
   for (const platform of Object.keys(FAS_CROSS_PLATFORM_REMOVAL_CONFIG)) {
@@ -1120,7 +1123,7 @@ async function checkPendingRemovals(opts) {
   // above (each item now carries a `platforms` array -- see extensionController.ts
   // getPendingRemovals' same-session fix); checkCrossPlatformRemovals filters it per platform
   // itself. Wrapped so a failure here can never take down the proven, working Facebook flow below.
-  try { await checkCrossPlatformRemovals(items); } catch (e) { console.log('[FAS cross-platform removal check FAILED]', e && e.message); }
+  try { await checkCrossPlatformRemovals(items, { forceSilent: resync }); } catch (e) { console.log('[FAS cross-platform removal check FAILED]', e && e.message); }
   // A resync run only repairs the non-Facebook platforms (it never opens a Facebook tab -- see
   // fas-remove.js's own bot-fingerprint notes); Facebook keeps its normal 20-min path.
   if (resync) return 'resync:' + items.filter((i) => Array.isArray(i.platforms) && i.platforms.some((p) => p !== 'FACEBOOK')).length + '_items';
@@ -3081,7 +3084,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { fasResyncUntil = 0 } = await chrome.storage.local.get(['fasResyncUntil']);
         const resyncActive = Date.now() < fasResyncUntil;
         const skipResp = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
-          { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform, confirmedGone: resyncActive && msg.reason === 'listing_not_found' } });
+          { method: 'POST', body: { reason: msg.reason || null, platform: msg.platform, confirmedGone: resyncActive && msg.reason === 'listing_not_found', verifyOnly: msg.verifyOnly === true } });
         // S-EXT-LISTING-GONE (2026-09-29): removal skips previously left NO server-side trace beyond
         // the job row itself. resolved:true means the backend confirmed the listing gone (3
         // consecutive zero-match reports) and marked it removed.

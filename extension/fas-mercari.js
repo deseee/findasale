@@ -2776,6 +2776,11 @@
         onListingDetailPage = false;
       }
     }
+    if (onListingDetailPage && item.reason === 'RESYNC_VERIFY') {
+      // Resync verify run: the listing page exists and matches -- report it and stop. Never delete.
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      return;
+    }
     if (onListingDetailPage) {
       try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
       const result = await deleteMercariListingOnDetailPage();
@@ -2828,7 +2833,7 @@
     // onListingDetailPage) still runs unchanged on the resulting page load before any delete is
     // attempted, so a bad id is re-verified, never trusted blindly.
     const refId = mercRemListingRefFor(item);
-    if (refId) {
+    if (refId && item.reason !== 'RESYNC_VERIFY') {
       try { sessionStorage.setItem('fasMercDeleteTargetId', refId); } catch (e) {}
       overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Mercari listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
       location.href = 'https://www.mercari.com/us/item/' + refId + '/';
@@ -2841,7 +2846,12 @@
     const link = findMercariListingLinkByTitle(item.title);
     if (!link) {
       overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Mercari listings (zero or more than one found) -- skipped, not guessed.' + button('fas-merc-close', 'Close', false));
-      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: mercRemLastMatchCount === 0 ? 'listing_not_found' : 'no_confident_listing_match', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: mercRemLastMatchCount === 0 ? 'listing_not_found' : 'no_confident_listing_match', verifyOnly: item.reason === 'RESYNC_VERIFY', continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      return;
+    }
+    if (item.reason === 'RESYNC_VERIFY') {
+      // Resync verify run: exactly one listing card matched -- it is live. Report and stop.
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'verify_still_live', verifyOnly: true, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
       return;
     }
     try { sessionStorage.setItem('fasMercDeleteTargetId', link.fasMercItemId || mercRemItemIdFromHref(link.href) || ''); } catch (e) {}

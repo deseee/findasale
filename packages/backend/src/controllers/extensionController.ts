@@ -5,7 +5,7 @@ import { getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryW
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { applyNeverShippableOverride, computeEffectivePackageWeight } from './ebayController';
 import { commitFacebookNativeSale } from '../services/facebookNativeSaleService';
-import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENTRIES } from '../services/vintedSoldDetectionService';
+import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENTRIES, normalizeListingTitle } from '../services/vintedSoldDetectionService';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
@@ -1070,6 +1070,15 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
   // listings" run, where the extension has just done a full scan of the platform's own listings and
   // found zero cards for this item. That IS the confirmation, so no 3-strike streak is needed.
   const confirmedGone = req.body?.confirmedGone === true;
+  // verifyOnly (2026-09-30, RESYNC_VERIFY items): the extension only LOOKED for the listing. "Still
+  // live" / "ambiguous" are not failures of a removal, so they write no SKIPPED row at all; only a
+  // confirmed zero-match closes the record, marked 'resync:' so the autolist queue leaves it alone
+  // (organizer relists by hand from the Add Items page).
+  const verifyOnly = req.body?.verifyOnly === true;
+  if (verifyOnly && !(reason === 'listing_not_found' && confirmedGone)) {
+    res.json({ ok: true, verified: reason === 'verify_still_live' });
+    return;
+  }
   if (reason === 'listing_not_found' && confirmedGone) {
     await prisma.marketplaceListingJob.create({
       data: {
@@ -1078,7 +1087,7 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
         status: 'REMOVED',
         platform,
         lastAttemptAt: new Date(),
-        lastErrorMessage: 'resync:listing_not_found',
+        lastErrorMessage: verifyOnly ? 'resync:verify_not_found' : 'resync:listing_not_found',
       },
     });
     res.json({ ok: true, resolved: true });
@@ -1185,6 +1194,16 @@ const RETRY_COOLDOWN_MS = 60 * 60 * 1000; // 1h between retries once past the fa
 // MAX_REMOVAL_SKIP_ATTEMPTS this never applies (existing fast-fail-then-cooldown owns 1..N-1).
 const REMOVAL_HARD_STOP_AFTER_ATTEMPTS = 10; // ~10 hourly cooldown retries past the fast-fail cap before giving up automated retry entirely
 
+// S-EXT-REMOVAL-RETRY-BRAKES (2026-09-30): reasons that repeat identically forever because nothing
+// about the marketplace changes between polls. Live: a Craigslist removal that kept reporting
+// 'ambiguous_duplicate_title' was retried 11 times over ~23h. After DETERMINISTIC_SKIP_STOP_AFTER
+// identical reports the automatic retry stops (the item stays in needsManualReview, and the
+// popup's "Resync listings" still re-serves it on demand).
+const DETERMINISTIC_SKIP_REASONS = ['ambiguous_duplicate_title', 'title_too_short_for_safe_match'];
+const DETERMINISTIC_SKIP_STOP_AFTER = 2;
+const isDeterministicSkipReason = (r: string | null | undefined): boolean =>
+  !!r && DETERMINISTIC_SKIP_REASONS.includes(r);
+
 export const getPendingRemovals = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
@@ -1288,6 +1307,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     if (resync) return true;
     const skipKey = itemId + ':' + platform;
     const skipCount = skipCountByItemPlatform.get(skipKey) || 0;
+    if (isDeterministicSkipReason(lastSkipReasonByItemPlatform.get(skipKey)) && skipCount >= DETERMINISTIC_SKIP_STOP_AFTER) return false;
     if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
     // HARD STOP (2026-09-24, see REMOVAL_HARD_STOP_AFTER_ATTEMPTS above): past this much higher
     // threshold, stop offering a retry AT ALL when no remoteListingId has ever been captured for
@@ -1462,7 +1482,11 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     stillLiveAvailablePlatformsByItem.set(itemId, arr);
   }
 
-  const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE' }> = [];
+  const complianceItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'POLICY_INELIGIBLE'; deleteAllMatches?: boolean }> = [];
+  // S-EXT-RESYNC-VERIFY (2026-09-30): AVAILABLE items whose Poshmark/Mercari listing FindA.Sale still
+  // thinks is live. Only ever served on an organizer-initiated resync, and tagged RESYNC_VERIFY so the
+  // content scripts LOOK for the listing but never delete it (see markItemRemovalSkipped's verifyOnly).
+  const resyncVerifyCandidates = new Map<string, { title: string; platforms: string[] }>();
   if (stillLiveAvailablePlatformsByItem.size > 0) {
     const candidateItemIds = [...stillLiveAvailablePlatformsByItem.keys()];
     const candidateItems = await prisma.item.findMany({
@@ -1474,6 +1498,10 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
       },
     });
     for (const it of candidateItems) {
+      if (resync) {
+        const vp = (stillLiveAvailablePlatformsByItem.get(it.id) || []).filter((p) => p === 'POSHMARK' || p === 'MERCARI');
+        if (vp.length) resyncVerifyCandidates.set(it.id, { title: it.title, platforms: vp });
+      }
       // packageLengthIn/WidthIn/HeightIn are Prisma Decimal on the Item model, not number --
       // EligibilityCheckItem wants plain numbers (same conversion ebayShippingResolver.ts already
       // does for the identical fields). aiPackageWeightOz/packageWeightOz are already plain Float
@@ -1512,6 +1540,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
         if (resync) return true;
         const sk = it.id + ':' + p;
         const skipCount = complianceSkipCount.get(sk) || 0;
+        if (isDeterministicSkipReason(complianceLastReason.get(sk)) && skipCount >= DETERMINISTIC_SKIP_STOP_AFTER) return false;
         if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
         if (skipCount >= REMOVAL_HARD_STOP_AFTER_ATTEMPTS && !latestAvailableByItemPlatform.get(sk)?.remoteListingId) return false;
         const last = complianceLastSkipAt.get(sk);
@@ -1549,22 +1578,59 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const deletedItemRows = await prisma.pendingListingRemoval.findMany({
     where: { organizerId: organizer.id },
   });
-  const deletedItemRetryable = deletedItemRows.filter(
-    (row) => resync || row.skipCount < REMOVAL_HARD_STOP_AFTER_ATTEMPTS || !!row.remoteListingId
-  );
+  // (2026-09-30) This gate used to be a flat skipCount < 10 with NO cooldown, so a deleted item's
+  // removal was retried on every ~20 min poll (11 attempts in ~23h, live). Now the same shape as the
+  // sold/compliance paths: 3 fast tries, then hourly, none at all for a deterministic reason after 2,
+  // and a hard stop at REMOVAL_HARD_STOP_AFTER_ATTEMPTS when no listing id was ever captured.
+  const deletedItemRetryable = deletedItemRows.filter((row) => {
+    if (resync) return true;
+    if (isDeterministicSkipReason(row.lastSkipReason) && row.skipCount >= DETERMINISTIC_SKIP_STOP_AFTER) return false;
+    if (row.skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
+    if (row.skipCount >= REMOVAL_HARD_STOP_AFTER_ATTEMPTS && !row.remoteListingId) return false;
+    return !row.lastSkipAt || now - row.lastSkipAt.getTime() >= RETRY_COOLDOWN_MS;
+  });
   const deletedItemStuck = deletedItemRows.filter((row) => row.skipCount >= MAX_REMOVAL_SKIP_ATTEMPTS);
+
+  const complianceHandled = new Set(complianceItems.flatMap((c) => c.platforms.map((p) => c.id + ':' + p)));
+  const verifyItems: Array<{ id: string; title: string; platforms: string[]; listingRefs: Record<string, string>; reason: 'RESYNC_VERIFY' }> = [];
+  for (const [id, v] of resyncVerifyCandidates) {
+    const platforms = v.platforms.filter((p) => !complianceHandled.has(id + ':' + p));
+    if (platforms.length) verifyItems.push({ id, title: v.title, platforms, listingRefs: {}, reason: 'RESYNC_VERIFY' });
+  }
+
+  // S-EXT-DUPLICATE-POSTINGS (2026-09-30): two Craigslist postings existed for ONE deleted item and the
+  // removal refused both ('ambiguous_duplicate_title'), retrying 11 times. When no OTHER AVAILABLE item
+  // of this organizer shares the title, every posting carrying it belongs to the item being removed, so
+  // the extension may delete all of them. Only ever set for removals (never RESYNC_VERIFY).
+  const availableTitleRows = await prisma.item.findMany({
+    where: { deletedAt: null, status: 'AVAILABLE', OR: [{ sale: { organizerId: organizer.id, deletedAt: null } }, { saleId: null, organizerId: organizer.id }] },
+    select: { id: true, title: true },
+  });
+  const availableIdsByTitle = new Map<string, Set<string>>();
+  for (const r of availableTitleRows) {
+    const k = normalizeListingTitle(r.title);
+    if (!availableIdsByTitle.has(k)) availableIdsByTitle.set(k, new Set());
+    availableIdsByTitle.get(k)!.add(r.id);
+  }
+  const noOtherLiveItemWithTitle = (title: string, selfId: string | null): boolean => {
+    const ids = availableIdsByTitle.get(normalizeListingTitle(title));
+    if (!ids) return true;
+    return [...ids].every((x) => x === selfId);
+  };
 
   res.json({
     items: [
-      ...items.map((i) => ({ ...i, reason: 'SOLD_ELSEWHERE' as const })),
-      ...complianceItems,
+      ...items.map((i) => ({ ...i, reason: 'SOLD_ELSEWHERE' as const, deleteAllMatches: noOtherLiveItemWithTitle(i.title, i.id) })),
+      ...complianceItems.map((c) => ({ ...c, deleteAllMatches: noOtherLiveItemWithTitle(c.title, c.id) })),
       ...deletedItemRetryable.map((row) => ({
         id: row.id,
         title: row.itemTitle,
         platforms: [row.platform],
         listingRefs: row.remoteListingId ? { [row.platform]: row.remoteListingId } : {},
         reason: 'ITEM_DELETED' as const,
+        deleteAllMatches: noOtherLiveItemWithTitle(row.itemTitle, null),
       })),
+      ...verifyItems,
     ],
     needsManualReview: [
       ...needsManualReview,
@@ -2364,9 +2430,9 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   const itemIds = items.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, platform: true, createdAt: true },
+    select: { itemId: true, action: true, status: true, platform: true, createdAt: true, lastErrorMessage: true },
   });
-  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
+  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date; lastErrorMessage: string | null }>();
   for (const j of jobs) {
     // 2026-09-22 (S-EXT-REMOVAL-SKIP-ENDS-LISTING): ignore REMOVE/SKIPPED (failed removal attempt,
     // listing still live) -- otherwise isAlreadyListed returned false and auto-list re-posted it.
@@ -2374,11 +2440,15 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     const key = `${j.itemId}:${j.platform}`;
     const existing = latestByItemPlatform.get(key);
     if (!existing || j.createdAt > existing.createdAt) {
-      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
+      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt, lastErrorMessage: j.lastErrorMessage ?? null });
     }
   }
+  // 'resync:*' = the organizer's Resync found this listing already gone and closed the record. Do NOT
+  // auto-relist it (organizer decision 2026-09-30): the item shows on the Add Items page as
+  // not-listed, and is relisted deliberately. A later POST row supersedes the hold automatically.
   const isAlreadyListed = (itemId: string, platform: AutoListPlatform): boolean => {
     const latest = latestByItemPlatform.get(`${itemId}:${platform}`);
+    if (latest && latest.action === 'REMOVE' && latest.status === 'REMOVED' && (latest.lastErrorMessage || '').startsWith('resync:')) return true;
     return !!latest && latest.action === 'POST' && latest.status === 'POSTED';
   };
 
