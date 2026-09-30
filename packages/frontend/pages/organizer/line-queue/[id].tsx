@@ -18,6 +18,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
+import TierGate from '../../../components/TierGate';
 
 interface LineEntry {
   id: string;
@@ -46,6 +48,8 @@ const LineQueuePage = () => {
   const { id: saleId } = router.query as { id: string };
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { canAccess } = useOrganizerTier();
+  const canUseLine = canAccess('PRO');
 
   const [entries, setEntries] = useState<LineEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,6 +61,12 @@ const LineQueuePage = () => {
 
   const loadStatus = useCallback(async () => {
     if (!saleId) return;
+    // The line endpoints are PRO and above. Below PRO the upgrade card shows instead, so do not
+    // poll an endpoint that would only answer 403.
+    if (!canUseLine) {
+      setIsLoading(false);
+      return;
+    }
     try {
       const res = await api.get(`/lines/${saleId}/status`);
       setEntries(res.data);
@@ -72,7 +82,7 @@ const LineQueuePage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [saleId]);
+  }, [saleId, canUseLine]);
 
   useEffect(() => {
     loadStatus();
@@ -126,6 +136,11 @@ const LineQueuePage = () => {
         <title>Virtual Line Manager | FindA.Sale</title>
       </Head>
 
+      <TierGate
+        requiredTier="PRO"
+        featureName="Line Queue"
+        description="Manage a virtual line at your sale and text shoppers when it is their turn. The line queue is included with PRO and TEAMS because every text message has a real cost."
+      >
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 pt-6 pb-24">
 
@@ -262,6 +277,7 @@ const LineQueuePage = () => {
 
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

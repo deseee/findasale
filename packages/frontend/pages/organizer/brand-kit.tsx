@@ -287,9 +287,9 @@ const BrandKitPage = () => {
                       name="customStorefrontSlug"
                       value={formData.customStorefrontSlug || ''}
                       onChange={handleInputChange}
-                      placeholder="e.g., janes-estate-sales"
+                      placeholder="e.g., janes-secondhand-sales"
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-warm-100"
-                    aria-label="e.g., janes-estate-sales" />
+                    aria-label="e.g., janes-secondhand-sales" />
                     <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">Use lowercase letters, numbers, and hyphens only</p>
                   </div>
                 </div>

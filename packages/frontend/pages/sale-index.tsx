@@ -40,7 +40,7 @@ export default function SaleIndexPage({
 }: SaleIndexProps) {
   const title = 'The Weekend Sale Index. U.S. Secondary Sales by Metro | FindA.Sale';
   const description =
-    'A ranked, continuously-updated count of upcoming estate sales, yard sales, auctions, and flea markets across U.S. metro areas.';
+    'A ranked, continuously-updated count of upcoming yard sales, auctions, and flea markets across U.S. metro areas.';
 
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq';
   const ogImageUrl = generateSaleOGImage({
@@ -56,7 +56,7 @@ export default function SaleIndexPage({
     '@type': 'Dataset',
     name: 'The Weekend Sale Index. U.S. Secondary Sales by Metro',
     description:
-      'Ranked count of upcoming estate sales, yard sales, auctions, and flea markets by U.S. metro area, updated continuously.',
+      'Ranked count of upcoming yard sales, auctions, and flea markets by U.S. metro area, updated continuously.',
     url: CANONICAL_URL,
     creator: {
       '@type': 'Organization',
@@ -67,7 +67,6 @@ export default function SaleIndexPage({
     dateModified: generatedAt || undefined,
     license: CANONICAL_URL,
     keywords: [
-      'estate sales',
       'yard sales',
       'auctions',
       'flea markets',
@@ -85,7 +84,7 @@ export default function SaleIndexPage({
         <meta name="description" content={description} />
         <meta
           name="keywords"
-          content="weekend sale index, estate sales by city, yard sales by metro, auctions, flea markets, secondary sales rankings, US sale data"
+          content="weekend sale index, sales by city, yard sales by metro, auctions, flea markets, secondary sales rankings, US sale data"
         />
         <link rel="canonical" href={CANONICAL_URL} key="canonical" />
         <meta property="og:title" content="The Weekend Sale Index" />
@@ -172,7 +171,7 @@ export default function SaleIndexPage({
             </h2>
             <p className="text-sm text-warm-600 dark:text-warm-300 leading-relaxed">
               The Weekend Sale Index counts <strong>published, upcoming sales</strong>{' '}
-              listed on FindA.Sale. Estate sales, yard and garage sales, auctions,
+              listed on FindA.Sale. Yard and garage sales, auctions,
               and flea markets. Grouped by the metro area where each sale takes
               place. Each sale is counted once, on its start date. We exclude
               permanent retail storefronts and consignment shops, since those are

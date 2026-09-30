@@ -3,9 +3,15 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Fuse from 'fuse.js';
 import api from '../lib/api';
+import { auctionWorkedExample, describeInclusiveRates, MINIMUM_TRANSACTION_FEE_LABEL } from '../lib/platformFees';
 import styles from '../styles/support.module.css';
 
-// FAQ Data — searchable via fuse.js
+// Fee figures come from lib/platformFees so this page cannot drift from the real rates.
+const FEE_SIMPLE = describeInclusiveRates('SIMPLE');
+const FEE_PRO = describeInclusiveRates('PRO');
+const AUCTION_EX = auctionWorkedExample(200, 'SIMPLE');
+
+// FAQ data, searchable via fuse.js
 const FAQ_DATA = [
   // Getting Started FAQs
   {
@@ -20,7 +26,7 @@ const FAQ_DATA = [
     category: 'Getting Started',
     question: 'What is the platform fee and how is it calculated?',
     answer:
-      'FindA.Sale charges a flat 10% platform fee on each completed purchase. If an item sells for $100, we keep $10 and you receive $90 (minus any card payment processing fee, typically 2.9% + $0.30). There are no listing fees, no monthly fees on SIMPLE, and no per-photo charges. PRO and TEAMS plans reduce the fee to 8%. Auctions add one more fee, paid by the winning bidder rather than by you: a flat 5% buyer premium on top of the winning bid, set by FindA.Sale. It is not something you configure and it does not change your platform fee. On a $200 winning bid at the 10% platform rate, the buyer pays $210, your fee is $20, and you receive $180 before card processing fees. If you would rather your winner paid exactly their bid, turn on "Cover the buyer\'s premium" on the sale and the 5% comes out of your payout instead.',
+      `FindA.Sale charges one inclusive platform fee on each completed purchase, and card processing is included. SIMPLE pays ${FEE_SIMPLE}. PRO and TEAMS pay ${FEE_PRO}. There is a ${MINIMUM_TRANSACTION_FEE_LABEL} minimum per transaction. If an item sells for $100 online on SIMPLE, we keep $9.50 and you receive $90.50, with no separate processing charge. There are no listing fees, no monthly fees on SIMPLE, and no per-photo charges. Auctions add one more fee, paid by the winning bidder rather than by you: a flat 5% buyer premium on top of the winning bid, set by FindA.Sale. It is not something you configure and it does not change your platform fee. On a $${AUCTION_EX.bid} winning bid at the SIMPLE online rate, the buyer pays $${AUCTION_EX.buyerTotal.toFixed(2)}, your fee is $${AUCTION_EX.fee.toFixed(2)}, and you receive $${AUCTION_EX.net.toFixed(2)}. If you would rather your winner paid exactly their bid, turn on "Cover the buyer's premium" on the sale and the 5% comes out of your payout instead.`,
   },
   {
     id: 'getting-started-3',
@@ -131,7 +137,7 @@ const FAQ_DATA = [
     category: 'Community Appraisals',
     question: 'What qualifies someone to submit an appraisal?',
     answer:
-      'You don\'t need formal credentials. Appraisers are community members with collecting experience, professional backgrounds (estate sale organizers, antiques dealers, eBay powersellers), or strong research skills. What matters is specificity. Cite your sources, describe what you\'re seeing, and explain your reasoning. A collector with deep knowledge of one category is more valuable than a generalist.',
+      'You don\'t need formal credentials. Appraisers are community members with collecting experience, professional backgrounds (sale organizers, antiques dealers, eBay powersellers), or strong research skills. What matters is specificity. Cite your sources, describe what you\'re seeing, and explain your reasoning. A collector with deep knowledge of one category is more valuable than a generalist.',
   },
   {
     id: 'appraisals-3',
@@ -237,7 +243,7 @@ const FAQ_DATA = [
     category: 'Analytics & Command Center',
     question: 'Can I export my sales data?',
     answer:
-      'Yes. From your sale dashboard, click Export to download a CSV of your full inventory including titles, descriptions, prices, categories, tags, and sold status. Useful for accounting, record-keeping, or importing into other systems.',
+      'Yes. From your sale dashboard, click Export to download a CSV of your full inventory including titles, descriptions, prices, categories, tags, and sold status. Useful for accounting, record-keeping, or importing into other systems. Exports are included with PRO and TEAMS.',
   },
 
   // Teams & Permissions FAQs

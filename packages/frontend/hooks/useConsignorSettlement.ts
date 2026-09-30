@@ -105,7 +105,7 @@ export const csApi = {
     return { added: countOf(d.added), removed: countOf(d.removed), changed: countOf(d.changed) };
   },
 
-  approve: async (batchId: string, body: { sendStatements?: boolean }) => {
+  approve: async (batchId: string, body: { sendStatements?: boolean; acknowledgeVariance?: boolean }) => {
     const res = await api.post(`${CS_BASE}/${enc(batchId)}/approve`, body);
     return res.data;
   },

@@ -154,12 +154,12 @@ const CalendarPage = () => {
         <title>Sale Calendar - FindA.Sale</title>
         <meta
           name="description"
-          content="Browse upcoming estate sales, yard sales, auctions, and flea markets by date. Sales happening this weekend near you."
+          content="Browse upcoming yard sales, auctions, and flea markets by date. Sales happening this weekend near you."
         />
         <meta property="og:title" content="Sale Calendar - FindA.Sale" />
         <meta
           property="og:description"
-          content="Browse upcoming estate sales, yard sales, auctions, and flea markets by date. Sales happening this weekend near you."
+          content="Browse upcoming yard sales, auctions, and flea markets by date. Sales happening this weekend near you."
         />
         <meta property="og:url" content="https://finda.sale/calendar" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
@@ -170,7 +170,7 @@ const CalendarPage = () => {
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: 'Sale Calendar',
-              description: 'Browse upcoming estate sales, yard sales, auctions, and flea markets by date. Sales happening this weekend near you.',
+              description: 'Browse upcoming yard sales, auctions, and flea markets by date. Sales happening this weekend near you.',
               url: 'https://finda.sale/calendar',
             }),
           }}

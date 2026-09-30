@@ -562,12 +562,12 @@ const CategoriesIndexPage = ({ initialData }: Props) => {
         <title>Browse by Category. FindA.Sale</title>
         <meta
           name="description"
-          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you."
+          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from auctions and yard sales near you."
         />
         <meta property="og:title" content="Browse by Category. FindA.Sale" />
         <meta
           property="og:description"
-          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you."
+          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from auctions and yard sales near you."
         />
         <meta property="og:url" content="https://finda.sale/categories" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
@@ -578,7 +578,7 @@ const CategoriesIndexPage = ({ initialData }: Props) => {
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: 'Browse by Category',
-              description: 'Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you.',
+              description: 'Shop antiques, furniture, jewelry, tools, collectibles, and more from auctions and yard sales near you.',
               url: 'https://finda.sale/categories',
             }),
           }}

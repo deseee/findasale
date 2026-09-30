@@ -15,6 +15,7 @@ import { useToast } from '../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
 
+import { calculateInclusiveCommission, formatInclusiveFeeRate, describeInclusiveRates, MINIMUM_TRANSACTION_FEE_LABEL } from '../../lib/platformFees';
 type Interval = 'daily' | 'weekly' | 'monthly' | 'manual';
 
 const INTERVAL_LABELS: Record<Interval, string> = {
@@ -80,9 +81,14 @@ const OrganizerPayoutsPage = () => {
     // Processor-fee mislabeling fix (2026-09-09): fee is now per-row processor-aware -- see
     // payoutController.ts's EarningsBreakdownItem for the full rationale.
     processor: 'STRIPE' | 'SQUARE';
-    processorFee: number;
-    processorFeeLabel: string;
+    // Legacy: card processing is now included in platformFee. Kept optional so an older server response still parses.
+    processorFee?: number;
+    processorFeeLabel?: string;
     netPayout: number;
+    // Card-not-present surcharge (2026-09-30): only on a manually keyed card sale. Charged on top of
+    // salePrice, not revenue; returned in proportion to the amount refunded.
+    cnpSurchargeAmount?: number;
+    cnpSurchargeRefundedAmount?: number;
     // ADR-110 Decision Flag 3: buyer's ship-to address for a native-checkout physical
     // shipment. Undefined/absent when this purchase didn't request shipping.
     shippingAddressLine1?: string | null;
@@ -99,7 +105,7 @@ const OrganizerPayoutsPage = () => {
   interface EarningsTotals {
     grossRevenue: number;
     totalPlatformFees: number;
-    totalProcessorFees: number;
+    totalProcessorFees?: number;
     totalNetPayout: number;
   }
 
@@ -131,6 +137,7 @@ const OrganizerPayoutsPage = () => {
     refundedAmount: number | null;
     refundedAt: string | null;
     refundInitiatedBy: string | null;
+    cnpSurchargeRefundedAmount?: number;
   }
 
   const { data: refundHistory, isLoading: refundHistoryLoading, isError: refundHistoryError } = useQuery({
@@ -206,7 +213,16 @@ const OrganizerPayoutsPage = () => {
       // Cash + card split sale: the card part was refunded automatically, the cash part is handed
       // back by the organizer. The server sends the exact amounts in cashRefundMessage.
       const cashRefundMessage: string | undefined = res?.data?.cashRefundMessage;
-      showToast(cashRefundMessage ? `Refund issued. ${cashRefundMessage}` : 'Refund issued', 'success');
+      const surchargeRefunded: number = Number(res?.data?.surchargeRefundedAmount) || 0;
+      const surchargeNote = surchargeRefunded > 0 ? `Card-not-present fee returned: $${surchargeRefunded.toFixed(2)}.` : '';
+      showToast(
+        cashRefundMessage
+          ? `Refund issued. ${surchargeNote ? `${surchargeNote} ` : ''}${cashRefundMessage}`
+          : surchargeNote
+            ? `Refund issued. ${surchargeNote}`
+            : 'Refund issued',
+        'success'
+      );
       setRefundModalItem(null);
       setRefundError('');
     },
@@ -359,7 +375,9 @@ const OrganizerPayoutsPage = () => {
                   <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
                     Commission on sales you collected in cash or in person. We never touched that
                     money, so we take our share out of your next payout instead. A $100 cash sale
-                    at 10% adds $10.00 here.
+                    at the in-person rate ({formatInclusiveFeeRate('SIMPLE', 'IN_PERSON')} on SIMPLE, {formatInclusiveFeeRate('PRO', 'IN_PERSON')} on PRO and TEAMS,
+                    {MINIMUM_TRANSACTION_FEE_LABEL} minimum) adds ${calculateInclusiveCommission(100, 'SIMPLE', 'IN_PERSON').toFixed(2)} on SIMPLE
+                    or ${calculateInclusiveCommission(100, 'PRO', 'IN_PERSON').toFixed(2)} on PRO and TEAMS here.
                   </p>
                   {earnings?.cashFeeBalanceUpdatedAt && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -546,8 +564,9 @@ const OrganizerPayoutsPage = () => {
               </a>
             </div>
             <p className="text-xs text-gray-400 mb-4">
-              Item-level breakdown of your sold items. Processor fee is estimated per sale at
-              that sale's own processor's rate (Stripe or Square, both currently 2.9% + $0.30).
+              Item-level breakdown of your sold items. The platform fee includes card processing, so there is
+              no separate processing charge. SIMPLE pays {describeInclusiveRates('SIMPLE')}; PRO and TEAMS pay{' '}
+              {describeInclusiveRates('PRO')}. Every sale has a {MINIMUM_TRANSACTION_FEE_LABEL} minimum fee.
             </p>
 
             {earningsLoading ? (
@@ -557,12 +576,13 @@ const OrganizerPayoutsPage = () => {
             ) : (
               <>
                 {/* Summary totals */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-5">
                   {[
                     { label: 'Gross Revenue', value: earnings.totals.grossRevenue, color: 'text-gray-900 dark:text-gray-100' },
-                    { label: 'Platform Fees', value: -earnings.totals.totalPlatformFees, color: 'text-red-600 dark:text-red-400' },
-                    { label: 'Est. Processor Fees', value: -earnings.totals.totalProcessorFees, color: 'text-orange-500 dark:text-orange-400' },
-                    { label: 'Est. Net Payout', value: earnings.totals.totalNetPayout, color: 'text-green-600 dark:text-green-400' },
+                    { label: 'Platform Fees (card processing included)', value: -earnings.totals.totalPlatformFees, color: 'text-red-600 dark:text-red-400' },
+                    // Card processing is inside the platform fee. Any legacy separate processor fee the server still
+                    // reports is added back here so the net shown is gross minus the inclusive fee only.
+                    { label: 'Est. Net Payout', value: earnings.totals.totalNetPayout + (earnings.totals.totalProcessorFees || 0), color: 'text-green-600 dark:text-green-400' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="rounded-lg border border-gray-100 bg-gray-50 dark:bg-gray-900 p-3 text-center">
                       <p className={`text-lg font-bold ${color}`}>
@@ -582,8 +602,7 @@ const OrganizerPayoutsPage = () => {
                         <th className="text-left text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden sm:table-cell">Sale</th>
                         <th className="text-left text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden md:table-cell">Date</th>
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Price</th>
-                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden sm:table-cell">Platform</th>
-                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden md:table-cell">Processor Fee</th>
+                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden sm:table-cell">Platform fee</th>
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Net</th>
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pl-3 sticky right-0 bg-white dark:bg-gray-800">Action</th>
                       </tr>
@@ -603,12 +622,8 @@ const OrganizerPayoutsPage = () => {
                             <td className="py-2 pr-3 text-right text-red-500 dark:text-red-400 text-xs hidden sm:table-cell whitespace-nowrap">
                               −${item.platformFee.toFixed(2)}
                             </td>
-                            <td className="py-2 pr-3 text-right text-orange-400 dark:text-orange-300 text-xs hidden md:table-cell whitespace-nowrap">
-                              ~−${item.processorFee.toFixed(2)}
-                              <span className="block text-[10px] text-gray-400 dark:text-gray-500 font-normal">{item.processorFeeLabel}</span>
-                            </td>
                             <td className="py-2 pr-3 text-right text-green-600 dark:text-green-400 font-semibold whitespace-nowrap">
-                              ${item.netPayout.toFixed(2)}
+                              ${(item.netPayout + (item.processorFee || 0)).toFixed(2)}
                             </td>
                             <td className="py-2 pl-3 text-right whitespace-nowrap sticky right-0 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700">
                               <button
@@ -624,7 +639,7 @@ const OrganizerPayoutsPage = () => {
                               purchases that requested native-checkout shipping. */}
                           {item.shippingZip && (
                             <tr className="border-b border-gray-50 dark:border-gray-700">
-                              <td colSpan={8} className="pb-2 pr-3 pt-0">
+                              <td colSpan={7} className="pb-2 pr-3 pt-0">
                                 <p className="text-xs text-gray-400 dark:text-gray-500">
                                   📦 Ship to: {[item.shippingAddressLine1, item.shippingAddressLine2, item.shippingCity, item.shippingState].filter(Boolean).join(', ')} {item.shippingZip}
                                 </p>
@@ -718,6 +733,11 @@ const OrganizerPayoutsPage = () => {
                         </td>
                         <td className="py-2 pr-3 text-right text-red-500 dark:text-red-400 font-medium whitespace-nowrap">
                           ${(r.refundedAmount ?? r.originalAmount).toFixed(2)}
+                          {(r.cnpSurchargeRefundedAmount ?? 0) > 0 && (
+                            <span className="block text-xs font-normal text-gray-400 dark:text-gray-500">
+                              + ${(r.cnpSurchargeRefundedAmount ?? 0).toFixed(2)} Card-not-present fee
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-gray-400 dark:text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
                           {r.refundedAt ? new Date(r.refundedAt).toLocaleDateString() : 'N/A'}
@@ -757,6 +777,11 @@ const OrganizerPayoutsPage = () => {
                 <span className="font-semibold">{refundModalItem.itemTitle}</span> ({refundModalItem.saleTitle})?
                 This reverses the buyer's charge and cannot be undone.
               </p>
+              {(refundModalItem.cnpSurchargeAmount ?? 0) > 0 && (
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  This sale also carried a Card-not-present fee of ${(refundModalItem.cnpSurchargeAmount ?? 0).toFixed(2)}. It is returned to the buyer in proportion to the amount refunded, so a full refund returns all of it.
+                </p>
+              )}
               {refundError && (
                 <p className="text-sm text-red-600 dark:text-red-400">{refundError}</p>
               )}

@@ -1,7 +1,7 @@
 {
   "name": "FindA.Sale",
   "short_name": "FindA.Sale",
-  "description": "Find sales near you: estate sales, yard sales, auctions, flea markets and more. Shoppers discover deals, organizers manage sales.",
+  "description": "Find sales near you: yard sales, auctions, flea markets and more. Shoppers discover deals, organizers manage sales.",
   "theme_color": "#F97316",
   "background_color": "#F9F7F4",
   "display": "standalone",
@@ -83,7 +83,7 @@
     {
       "name": "Organizer Dashboard",
       "short_name": "Dashboard",
-      "description": "Manage your sales: estate sales, yard sales, auctions &amp; more",
+      "description": "Manage your sales: yard sales, auctions &amp; more",
       "url": "/organizer/dashboard?source=pwa-shortcut",
       "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
     }

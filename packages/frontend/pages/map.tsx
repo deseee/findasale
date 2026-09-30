@@ -293,12 +293,12 @@ const MapPage = ({ initialSales }: MapPageProps) => {
         <title>FindA.Sale Map. Sales Near You</title>
         <meta
           name="description"
-          content="View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
+          content="View yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
         />
         <meta property="og:title" content="FindA.Sale Map. Sales Near You" />
         <meta
           property="og:description"
-          content="View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
+          content="View yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
         />
         <meta property="og:url" content="https://finda.sale/map" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
@@ -310,7 +310,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: 'Sales Near You. Interactive Map',
-              description: 'View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time.',
+              description: 'View yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time.',
               url: 'https://finda.sale/map',
             }),
           }}

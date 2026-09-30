@@ -2,8 +2,8 @@
   "schema_version": "v1",
   "name_for_model": "findasale",
   "name_for_human": "FindA.Sale",
-  "description_for_model": "Search active secondary sales (estate sales, yard sales, auctions, flea markets, consignment) across the United States. Find sales by location, browse items with prices and photos, check organizer profiles, and discover trending sales near any city.",
-  "description_for_human": "Discover estate sales, yard sales, auctions, and more near you. Browse items, check prices, and find sales happening this weekend.",
+  "description_for_model": "Search active secondary sales (yard sales, auctions, flea markets, consignment) across the United States. Find sales by location, browse items with prices and photos, check organizer profiles, and discover trending sales near any city.",
+  "description_for_human": "Discover yard sales, auctions, and more near you. Browse items, check prices, and find sales happening this weekend.",
   "auth": {
     "type": "none"
   },

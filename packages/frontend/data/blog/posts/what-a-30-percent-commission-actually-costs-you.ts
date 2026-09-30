@@ -3,32 +3,32 @@ import { BlogPost } from '../index';
 export const postS: BlogPost = {
   slug: 'what-a-30-percent-commission-actually-costs-you',
   title: "MaxSold's Fees vs. FindA.Sale's: What You Actually Keep",
-  metaDescription: "MaxSold charges 30% commission plus a $2,000 flat fee on managed auctions. Here's the real payout math against FindA.Sale's flat rate, sale by sale.",
+  metaDescription: "MaxSold charges 30% commission plus a $2,000 flat fee on managed auctions. Here's the real payout math against FindA.Sale's inclusive rate, sale by sale.",
   publishDate: '2026-09-03',
   category: 'guides',
   readingTimeMinutes: 7,
-  excerpt: "MaxSold's managed auctions charge 30% commission plus a $2,000 flat fee. We ran the actual payout numbers against FindA.Sale's flat rate on three sale sizes, plus MaxSold's own seller-managed option.",
+  excerpt: "MaxSold's managed auctions charge 30% commission plus a $2,000 flat fee. We ran the actual payout numbers against FindA.Sale's inclusive rate on three sale sizes, plus MaxSold's own seller-managed option.",
   body: `## Two platforms, two fee structures
 
 MaxSold runs managed online auctions for estate sales, downsizing, and business liquidations. Its fee structure is public: a managed auction (MaxSold handles photography, cataloging, hosting, marketing, invoicing, and pickup) charges 30% commission plus a $2,000 flat fee, with a $500 deposit required upfront. A seller-managed auction, where the organizer or family does the cataloging and pickup themselves, charges the greater of 30% of proceeds or a $99 minimum commission.
 
-FindA.Sale charges a flat commission with no flat fee and no deposit: 10% on standard accounts, 8% on PRO and TEAMS accounts, plus standard card payment processing of about 3.2%. All-in, that's roughly 13.2% or 11.2% depending on tier.
+FindA.Sale charges one inclusive commission with no flat fee and no deposit, and card processing is included. For online sales it is 9.5% on standard accounts and 7.5% on PRO and TEAMS accounts. In person it is 8% and 6%. There is a $0.75 minimum per transaction. The numbers below use the online rates.
 
 Those numbers only mean something once you run them against a real sale. Here's the payout on three sale sizes.
 
 ## On a $3,000 sale
 
-This is where the flat fee does the most damage. On MaxSold's managed auction, 30% commission is $900, plus the $2,000 flat fee, for $2,900 total in fees. The seller keeps $100, out of $3,000 in sold inventory. On MaxSold's seller-managed option, there's no flat fee, so the fee is just $900 and the seller keeps $2,100. On FindA.Sale, the standard 13.2% all-in rate is $396 in fees, keeping $2,604; the PRO/TEAMS 11.2% rate is $336 in fees, keeping $2,664.
+This is where the flat fee does the most damage. On MaxSold's managed auction, 30% commission is $900, plus the $2,000 flat fee, for $2,900 total in fees. The seller keeps $100, out of $3,000 in sold inventory. On MaxSold's seller-managed option, there's no flat fee, so the fee is just $900 and the seller keeps $2,100. On FindA.Sale, the standard 9.5% rate is $285 in fees, keeping $2,715; the PRO/TEAMS 7.5% rate is $225 in fees, keeping $2,775.
 
 ## On a $10,000 sale
 
-MaxSold managed: $3,000 commission plus the $2,000 flat fee, $5,000 total fees, seller keeps $5,000. MaxSold seller-managed: $3,000 in fees, seller keeps $7,000. FindA.Sale standard: $1,320 in fees, seller keeps $8,680. FindA.Sale PRO/TEAMS: $1,120 in fees, seller keeps $8,880.
+MaxSold managed: $3,000 commission plus the $2,000 flat fee, $5,000 total fees, seller keeps $5,000. MaxSold seller-managed: $3,000 in fees, seller keeps $7,000. FindA.Sale standard: $950 in fees, seller keeps $9,050. FindA.Sale PRO/TEAMS: $750 in fees, seller keeps $9,250.
 
 ## On a $20,000 sale
 
-MaxSold managed: $6,000 commission plus the $2,000 flat fee, $8,000 total fees, seller keeps $12,000. MaxSold seller-managed: $6,000 in fees, seller keeps $14,000. FindA.Sale standard: $2,640 in fees, seller keeps $17,360. FindA.Sale PRO/TEAMS: $2,240 in fees, seller keeps $17,760.
+MaxSold managed: $6,000 commission plus the $2,000 flat fee, $8,000 total fees, seller keeps $12,000. MaxSold seller-managed: $6,000 in fees, seller keeps $14,000. FindA.Sale standard: $1,900 in fees, seller keeps $18,100. FindA.Sale PRO/TEAMS: $1,500 in fees, seller keeps $18,500.
 
-The gap narrows as sale size grows, since the flat fee matters less against a bigger number, but it never closes. The commission percentage alone (30% versus 8-10%) keeps the gap open regardless of sale size.
+The gap narrows as sale size grows, since the flat fee matters less against a bigger number, but it never closes. The commission percentage alone (30% versus 7.5% to 9.5% online) keeps the gap open regardless of sale size.
 
 ## Where the higher fee actually buys something
 

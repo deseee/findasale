@@ -157,12 +157,12 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
         <link rel="canonical" href={`https://finda.sale/categories/${category}`} key="canonical" />
         <meta
           name="description"
-          content={`Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`}
+          content={`Browse ${label} items from auctions, yard sales, and consignment near you. New listings added daily.`}
         />
         <meta property="og:title" content={`${label}. FindA.Sale`} />
         <meta
           property="og:description"
-          content={`Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`}
+          content={`Browse ${label} items from auctions, yard sales, and consignment near you. New listings added daily.`}
         />
         <meta property="og:url" content={`https://finda.sale/categories/${category}`} />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
@@ -173,7 +173,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: label,
-              description: `Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`,
+              description: `Browse ${label} items from auctions, yard sales, and consignment near you. New listings added daily.`,
               url: `https://finda.sale/categories/${category}`,
             }),
           }}

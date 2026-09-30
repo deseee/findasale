@@ -422,7 +422,7 @@ const EditSalePage = () => {
       });
       setFormData(prev => ({ ...prev, description: response.data.description }));
     } catch {
-      showToast("Couldn't generate description \u2014 try again", 'error');
+      showToast("Couldn't generate description, try again", 'error');
     } finally {
       setIsGeneratingDesc(false);
     }

@@ -4176,12 +4176,15 @@ export default function POSPage() {
           paymentLinkUrl={paymentLinkUrl}
           paymentLinkStatus={paymentLinkStatus}
           buyerEmail={buyerEmail}
-          onEmailLink={buyerEmail && paymentLinkUrl ? async () => {
-            await api.post('/pos/payment-links/email', {
-              paymentLinkUrl,
-              buyerEmail,
-              amount: paymentLinkAmount || cardAmount,
-            });
+          onEmailLink={buyerEmail && paymentLinkUrl && paymentLinkId ? async () => {
+            // 2026-09-30: the server looks up this organizer's own link by id and uses the stored URL and
+            // amount, so only the link id and the recipient are sent.
+            try {
+              await api.post('/pos/payment-links/email', { linkId: paymentLinkId, buyerEmail });
+            } catch (err: any) {
+              showToast(err?.response?.data?.message || 'Could not email the payment link', 'error');
+              throw err;
+            }
           } : undefined}
           onGenerate={handleGeneratePaymentQr}
           onNewTransaction={handleNewTransaction}

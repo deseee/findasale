@@ -8,6 +8,7 @@ import api from '../../lib/api';
 import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
 import DowngradePreviewModal from '../../components/DowngradePreviewModal';
 import SquareBillingCardForm from '../../components/SquareBillingCardForm';
+import { describeInclusiveRates, formatInclusiveFeeRate, MINIMUM_TRANSACTION_FEE_LABEL } from '../../lib/platformFees';
 
 interface Subscription {
   status: string | null;
@@ -194,7 +195,7 @@ export default function SubscriptionPage() {
                 <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
                   <h2 className="font-semibold text-blue-900 dark:text-blue-200 mb-3">You're on the Free Plan</h2>
                   <p className="text-blue-800 dark:text-blue-300 mb-4">
-                    You get unlimited items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
+                    You get unlimited items per sale, 5 photos each, and 100 auto tags per month. Pay {describeInclusiveRates('SIMPLE')} when items sell.
                   </p>
                 </div>
 
@@ -221,8 +222,8 @@ export default function SubscriptionPage() {
                       <p className="text-sm text-amber-700 dark:text-amber-300">Every item tagged and described automatically.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Lower fees (8%)</p>
-                      <p className="text-sm text-amber-700 dark:text-amber-300">Save 2% on every sale. Breakeven after 14 sales/month.</p>
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Lower fees ({describeInclusiveRates('PRO')})</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">Save 2 points on every sale, card processing included. Breakeven at about $1,450 in sales a month.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Advanced analytics</p>
@@ -268,7 +269,7 @@ export default function SubscriptionPage() {
                   </div>
 
                   <p className="text-sm text-purple-700 dark:text-purple-300 mb-6">
-                    One-time $9.99 charge when you publish the sale. Same 10% platform fee applies.
+                    One-time $9.99 charge when you publish the sale. Same platform fee as SIMPLE applies ({describeInclusiveRates('SIMPLE')}, card processing included).
                   </p>
 
                   <Link href="/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
@@ -467,8 +468,8 @@ export default function SubscriptionPage() {
                       <p className="text-sm text-teal-700 dark:text-teal-300">Connect to your other business systems.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Same 8% platform fee</p>
-                      <p className="text-sm text-teal-700 dark:text-teal-300">Save 2% per sale vs. Free. ROI on team coordination.</p>
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Same PRO platform fee ({describeInclusiveRates('PRO')})</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">Save 2 points per sale vs. Free. ROI on team coordination.</p>
                     </div>
                   </div>
 
@@ -507,7 +508,7 @@ export default function SubscriptionPage() {
               <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
                 <h2 className="font-semibold text-blue-900 dark:text-blue-200 mb-3">You're on the Free Plan</h2>
                 <p className="text-blue-800 dark:text-blue-300">
-                  You get unlimited items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
+                  You get unlimited items per sale, 5 photos each, and 100 auto tags per month. Pay {describeInclusiveRates('SIMPLE')} when items sell.
                 </p>
               </div>
 
@@ -568,8 +569,8 @@ export default function SubscriptionPage() {
                     <p className="text-sm text-amber-700 dark:text-amber-300">Every item tagged and described automatically.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Lower fees (8%)</p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">Save 2% on every sale. Breakeven after 14 sales/month.</p>
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Lower fees ({describeInclusiveRates('PRO')})</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Save 2 points on every sale, card processing included. Breakeven at about $1,450 in sales a month.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Advanced analytics</p>
@@ -615,7 +616,7 @@ export default function SubscriptionPage() {
                 </div>
 
                 <p className="text-sm text-purple-700 dark:text-purple-300 mb-6">
-                  One-time $9.99 charge when you publish the sale. Same 10% platform fee applies.
+                  One-time $9.99 charge when you publish the sale. Same platform fee as SIMPLE applies ({describeInclusiveRates('SIMPLE')}, card processing included).
                 </p>
 
                 <Link href="/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
@@ -730,7 +731,7 @@ export default function SubscriptionPage() {
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900 dark:text-gray-100">Platform fee</p>
-                      <p>8%</p>
+                      <p>{describeInclusiveRates('PRO')}</p>
                     </div>
                   </div>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">

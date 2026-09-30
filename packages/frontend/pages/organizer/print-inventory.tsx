@@ -184,8 +184,8 @@ const PrintInventoryPage = () => {
     } catch (error) {
       console.error('Export error:', error);
       showToast(
-        error instanceof Error && error.message === 'PRO tier required for advanced brand kit features (font, banner, accent color)'
-          ? 'CSV export requires PRO subscription'
+        (error as any)?.response?.status === 403
+          ? 'CSV export requires a PRO or TEAMS subscription.'
           : 'Failed to export CSV',
         'error'
       );

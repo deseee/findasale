@@ -383,7 +383,7 @@ const normalizeToArray = (value: string | undefined, arr: string[]): string => {
 };
 
 const formatCategory = (category: string | null | undefined): string => {
-  if (!category) return '\u2014';
+  if (!category) return '';
   return decodeHtmlEntities(category);
 };
 
@@ -714,6 +714,9 @@ const AddItemsDetailPage = () => {
   const [ebayExportOpen, setEbayExportOpen] = useState(false);
   const [ebayPhotoMode, setEbayPhotoMode] = useState<'watermarked' | 'clean'>('watermarked');
   const [ebayExporting, setEbayExporting] = useState(false);
+  // True once the server (or the known tier) says this account cannot use the eBay export;
+  // the modal then shows the PRO upsell instead of the Download button.
+  const [ebayTierBlocked, setEbayTierBlocked] = useState(false);
   // QuickBooks CSV export state
   const [quickbooksExportOpen, setQuickbooksExportOpen] = useState(false);
   const [quickbooksExporting, setQuickbooksExporting] = useState(false);
@@ -1415,8 +1418,15 @@ const AddItemsDetailPage = () => {
       showToast('CSV ready. Upload to eBay Seller Hub → Bulk Listings.', 'success');
       setEbayExportOpen(false);
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to export to eBay';
-      showToast(message, 'error');
+      // The request uses responseType 'blob', so read the server's real message back out of the Blob.
+      const body = await readExportError(error);
+      if (error.response?.status === 403 && body.code === 'TIER_REQUIRED') {
+        // Stale or unknown tier on the client: switch the modal to the upgrade message
+        setEbayTierBlocked(true);
+        showToast(body.message || 'eBay export requires a PRO or TEAMS subscription.', 'error');
+      } else {
+        showToast(body.message || 'Failed to export to eBay', 'error');
+      }
     } finally {
       setEbayExporting(false);
     }
@@ -2861,10 +2871,17 @@ const AddItemsDetailPage = () => {
                 {/* Row 2: secondary actions */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
-                    onClick={() => setEbayExportOpen(true)}
-                    className="text-xs font-medium text-blue-700 dark:text-blue-400 hover:underline px-2 py-1 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    onClick={() => {
+                      setEbayTierBlocked(false);
+                      setEbayExportOpen(true);
+                    }}
+                    className={
+                      tierKnown && !canAccess('PRO')
+                        ? 'text-xs font-medium text-gray-600 dark:text-gray-300 hover:underline px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700'
+                        : 'text-xs font-medium text-blue-700 dark:text-blue-400 hover:underline px-2 py-1 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }
                   >
-                    📦 Export to eBay
+                    📦 Export to eBay{tierKnown && !canAccess('PRO') ? ' (PRO)' : ''}
                   </button>
                   {/* Always clickable: a known non-PRO account gets the upgrade message in the modal instead of a dead, disabled button */}
                   <button
@@ -3792,7 +3809,41 @@ const AddItemsDetailPage = () => {
       />
 
       {/* Feature #244: eBay CSV Export Modal */}
-      {ebayExportOpen && (
+      {ebayExportOpen && (ebayTierBlocked || (tierKnown && !canAccess('PRO'))) && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ebay-export-locked-title"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-md"
+          >
+            <h3 id="ebay-export-locked-title" className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Export to eBay</h3>
+            <p className="text-warm-700 dark:text-warm-300 text-sm mb-2 font-medium">
+              {isLapsed ? 'Your subscription has lapsed.' : 'eBay export is a PRO feature.'}
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-6">
+              {isLapsed
+                ? 'Renew your plan to download eBay, QuickBooks and Amazon CSV exports again.'
+                : 'Upgrade to PRO or TEAMS to download your items as an eBay CSV.'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setEbayExportOpen(false)}
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-warm-700 dark:text-warm-300 font-medium hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+              <Link
+                href="/organizer/pricing"
+                className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors text-center"
+              >
+                See plans
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+      {ebayExportOpen && !(ebayTierBlocked || (tierKnown && !canAccess('PRO'))) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Export to eBay</h3>

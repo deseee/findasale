@@ -109,7 +109,19 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
             runHref
           );
         }
-        await csApi.approve(batch.id, { sendStatements: false });
+        try {
+          await csApi.approve(batch.id, { sendStatements: false });
+        } catch (approveErr: any) {
+          // A run with lines that sold for a different amount than the tag price needs an explicit
+          // acknowledgement, which belongs on the run page, not silently inside a one-click payment.
+          if (approveErr && approveErr.response && approveErr.response.data && approveErr.response.data.code === 'VARIANCE_ACK_REQUIRED') {
+            throw blockedError(
+              `${consignorName} has items that sold for a different amount than the tag price. Review and approve that run first, then record the payment there.`,
+              runHref
+            );
+          }
+          throw approveErr;
+        }
       } else if (LIVE_BATCH_STATUSES.indexOf(batch.status) === -1) {
         throw new Error('That payout run cannot take payments right now.');
       }

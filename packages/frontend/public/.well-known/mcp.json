@@ -1,7 +1,7 @@
 {
   "mcpVersion": "1.0",
   "name": "FindA.Sale",
-  "description": "Discover estate sales, yard sales, auctions, flea markets, and consignment sales. Search by location, date, and type. Browse items for sale across all active listings.",
+  "description": "Discover yard sales, auctions, flea markets, and consignment sales. Search by location, date, and type. Browse items for sale across all active listings.",
   "server": {
     "url": "https://mcp.finda.sale",
     "transport": "sse",

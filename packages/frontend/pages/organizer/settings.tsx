@@ -32,6 +32,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io as socketIO } from 'socket.io-client';
 import WebsiteEmbedTab from '../../components/WebsiteEmbedTab';
 import DiscogsListingCheck from '../../components/DiscogsListingCheck'; // ADR-132 dry-run listing check
+import { describeInclusiveRates } from '../../lib/platformFees';
 
 const OrganizerSettingsPage = () => {
   const router = useRouter();
@@ -886,7 +887,7 @@ const OrganizerSettingsPage = () => {
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Payment Settings</h2>
-                  <Tooltip content="Connect Square to receive payouts. Your tier determines the platform fee: SIMPLE 10%, PRO/TEAMS 8%. Payouts are deposited on a weekly schedule." position="right" />
+                  <Tooltip content={`Connect Square to receive payouts. Your tier determines the platform fee: SIMPLE ${describeInclusiveRates('SIMPLE')}, PRO/TEAMS ${describeInclusiveRates('PRO')}. Card processing is included. Payouts are deposited on a weekly schedule.`} position="right" />
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-6">
                   Connect your Square account to receive payouts from your sales.

@@ -16,6 +16,7 @@ import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import api from '../../../lib/api';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
@@ -101,6 +102,10 @@ export default function PromotePage(): JSX.Element {
   const router = useRouter();
   const { saleId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
+  // Listing exports are PRO and above on the backend (routes/export.ts). Below PRO the buttons are
+  // disabled and an upgrade note shows, instead of buttons that can only answer 403.
+  const { canAccess: canAccessTier, tierKnown } = useOrganizerTier();
+  const exportsLocked = !canAccessTier('PRO');
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [itemCount, setItemCount] = useState(0);
@@ -611,24 +616,38 @@ export default function PromotePage(): JSX.Element {
               Export your inventory to reach buyers on listing platforms
             </p>
 
+            {exportsLocked && tierKnown && (
+              <div className="mb-6 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <p className="text-sm text-warm-800 dark:text-warm-200">
+                  Listing exports are included with PRO and TEAMS. Upgrade to download or copy them.
+                </p>
+                <Link
+                  href="/pricing"
+                  className="inline-block text-center bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors whitespace-nowrap"
+                >
+                  Upgrade to PRO →
+                </Link>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                 <div className="text-4xl mb-3">📋</div>
                 <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">EstateSales.NET</h3>
                 <p className="text-warm-700 dark:text-warm-300 text-sm mb-4">
-                  CSV for EstateSales.NET. Reaches dedicated estate sale shoppers
+                  CSV for EstateSales.NET. Reaches dedicated sale shoppers
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={downloadEstatesalesCSV}
-                    disabled={loading}
+                    disabled={loading || exportsLocked}
                     className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
                     Download
                   </button>
                   <button
                     onClick={copyEstatesalesCSV}
-                    disabled={loading}
+                    disabled={loading || exportsLocked}
                     className="flex-1 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 disabled:bg-warm-200 text-warm-900 dark:text-warm-100 py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
                     Copy
@@ -645,14 +664,14 @@ export default function PromotePage(): JSX.Element {
                 <div className="flex gap-3">
                   <button
                     onClick={downloadFacebookXLSX}
-                    disabled={loading}
+                    disabled={loading || exportsLocked}
                     className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
                     Download Spreadsheet
                   </button>
                   <button
                     onClick={downloadFacebookJSON}
-                    disabled={loading}
+                    disabled={loading || exportsLocked}
                     className="flex-1 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 disabled:bg-warm-200 text-warm-900 dark:text-warm-100 py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
                     JSON
@@ -701,14 +720,14 @@ export default function PromotePage(): JSX.Element {
                 <div className="flex gap-3">
                   <button
                     onClick={downloadCraigslistText}
-                    disabled={loading}
+                    disabled={loading || exportsLocked}
                     className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
                     Download
                   </button>
                   <button
                     onClick={copyCraigslistText}
-                    disabled={loading}
+                    disabled={loading || exportsLocked}
                     className="flex-1 bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 disabled:bg-warm-200 text-warm-900 dark:text-warm-100 py-2 px-3 rounded-lg font-medium transition text-sm"
                   >
                     Copy

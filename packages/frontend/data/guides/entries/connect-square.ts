@@ -64,7 +64,7 @@ Square will let you know directly what it needs. If FindA.Sale also flags your a
 Yes. Click **Manage in Square** on your Payments tab to open your Square dashboard and update your payout details there.
 
 **What's the platform fee?**
-FindA.Sale charges 10% on all sales, regardless of your plan. This is deducted before your payout is calculated. So if your sale earns $1,000, your payout is $900 before Square's own processing fees.
+FindA.Sale charges one platform fee on every sale, and card processing is included. On Simple it is 8% in person and 9.5% online. On Pro and Teams it is 6% in person and 7.5% online. There is a $0.75 minimum per transaction. The fee is deducted before your payout is calculated, so if a Simple sale earns $1,000 online, the fee is $95 and your payout is $905, with no separate processing charge.
 
 ---
 

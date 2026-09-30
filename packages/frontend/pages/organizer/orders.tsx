@@ -32,6 +32,10 @@ interface OrderItem {
   saleTitle: string;
   purchaseDate: string;
   salePrice: number;
+  // Card-not-present surcharge (2026-09-30): only on a manually keyed card sale; returned in proportion
+  // to the amount refunded.
+  cnpSurchargeAmount?: number;
+  cnpSurchargeRefundedAmount?: number;
   deliveryMethod?: string | null;
   // SHIP fields
   shippingAddressLine1?: string | null;
@@ -98,7 +102,16 @@ const OrganizerOrdersPage = () => {
       // Cash + card split sale: the card part was refunded automatically, the cash part is handed
       // back by the organizer. The server sends the exact amounts in cashRefundMessage.
       const cashRefundMessage: string | undefined = res?.data?.cashRefundMessage;
-      showToast(cashRefundMessage ? `Refund issued. ${cashRefundMessage}` : 'Refund issued', 'success');
+      const surchargeRefunded: number = Number(res?.data?.surchargeRefundedAmount) || 0;
+      const surchargeNote = surchargeRefunded > 0 ? `Card-not-present fee returned: $${surchargeRefunded.toFixed(2)}.` : '';
+      showToast(
+        cashRefundMessage
+          ? `Refund issued. ${surchargeNote ? `${surchargeNote} ` : ''}${cashRefundMessage}`
+          : surchargeNote
+            ? `Refund issued. ${surchargeNote}`
+            : 'Refund issued',
+        'success'
+      );
       setRefundModalItem(null);
       setRefundError('');
     },
@@ -277,6 +290,11 @@ const OrganizerOrdersPage = () => {
                 <span className="font-semibold">{refundModalItem.itemTitle}</span> ({refundModalItem.saleTitle})?
                 This reverses the buyer's charge and cannot be undone.
               </p>
+              {(refundModalItem.cnpSurchargeAmount ?? 0) > 0 && (
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  This sale also carried a Card-not-present fee of ${(refundModalItem.cnpSurchargeAmount ?? 0).toFixed(2)}. It is returned to the buyer in proportion to the amount refunded, so a full refund returns all of it.
+                </p>
+              )}
               {refundError && <p className="text-sm text-red-600 dark:text-red-400">{refundError}</p>}
             </div>
             <div className="flex justify-end gap-3 px-5 pb-5">

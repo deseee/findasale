@@ -21,6 +21,11 @@ interface ReceiptCardProps {
     id: number;
     items: ReceiptItem[];
     total: number;
+    // Card-not-present surcharge (2026-09-30): present only on a manually keyed card sale. `total` stays the
+    // sale amount; the fee is charged on top and shown as its own line. totalCharged = total + fee.
+    cnpSurchargeAmount?: number;
+    cnpSurchargeRefundedAmount?: number;
+    totalCharged?: number;
     issuedAt: string;
     purchase: {
       id: string;
@@ -109,10 +114,24 @@ export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDa
 
         {/* Total */}
         <div className="border-t-2 border-gray-200 dark:border-gray-700 pt-4 pb-6">
+          {(receipt.cnpSurchargeAmount ?? 0) > 0 && (
+            <div className="mb-2 space-y-1">
+              <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>Card-not-present fee</span>
+                <span>${(receipt.cnpSurchargeAmount ?? 0).toFixed(2)}</span>
+              </div>
+              {(receipt.cnpSurchargeRefundedAmount ?? 0) > 0 && (
+                <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                  <span>Card-not-present fee refunded</span>
+                  <span>-${(receipt.cnpSurchargeRefundedAmount ?? 0).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <span className="text-base font-semibold text-gray-900 dark:text-gray-100">Total</span>
             <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-              ${receipt.total.toFixed(2)}
+              ${(receipt.totalCharged ?? receipt.total).toFixed(2)}
             </span>
           </div>
         </div>

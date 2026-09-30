@@ -185,7 +185,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
             {report.periodLabel} Report
           </h1>
           <p style={{ margin: 0, fontSize: 16, color: '#6b7280', lineHeight: 1.6 }}>
-            Platform-wide activity across estate sales, yard sales, auctions, flea markets,
+            Platform-wide activity across yard sales, auctions, flea markets,
             and consignment shops listed on FindA.Sale.
           </p>
         </header>
@@ -294,7 +294,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
               Search Engine Activity
             </h2>
             <p style={{ margin: '0 0 20px', fontSize: 14, color: '#6b7280' }}>
-              Search engines and AI crawlers that visited FindA.Sale listings this month.
+              Search engines and assistant crawlers that visited FindA.Sale listings this month.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
               {report.crawlerBreakdown.map((row) => (

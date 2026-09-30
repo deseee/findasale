@@ -398,8 +398,8 @@ export default function PosManualCard({
                 <div>
                   <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
                   <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
-                    Processing fee: {(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
-                    {' '}(Square's rate for a manually keyed card), added to the card amount.
+                    Card-not-present fee: {(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
+                    {' '}(Square's rate for a manually keyed card), added to the card amount and shown as its own line on the receipt. It is refunded in proportion to any refund.
                   </p>
                   <p className="text-xs text-amber-800 dark:text-amber-300">
                     <strong>No dispute protection.</strong> If a shopper disputes this charge, you may lose the sale amount plus a dispute fee with no recourse.
@@ -427,7 +427,7 @@ export default function PosManualCard({
                     Cash already collected: ${(splitCashCents / 100).toFixed(2)} of ${cartTotal.toFixed(2)}
                   </p>
                   <p className="text-emerald-700 dark:text-emerald-400 mt-0.5">
-                    The card is charged only the remaining ${(cardSubtotalCents / 100).toFixed(2)}, plus the processing fee.
+                    The card is charged only the remaining ${(cardSubtotalCents / 100).toFixed(2)}, plus the card-not-present fee.
                   </p>
                   {onClearCash && (
                     <button
@@ -567,14 +567,26 @@ export default function PosManualCard({
           </div>
 
           <div className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-warm-600 dark:text-warm-400">Amount:</span>
-              <span className="font-semibold text-warm-900 dark:text-warm-100">${totalWithFee.toFixed(2)}</span>
-            </div>
-            {!isSetupIntentMode && cnpFeeAmount > 0 && (
+            {!isSetupIntentMode && cnpFeeAmount > 0 ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-warm-600 dark:text-warm-400">Sale amount:</span>
+                  <span className="font-semibold text-warm-900 dark:text-warm-100">${(totalWithFee - cnpFeeAmount).toFixed(2)}</span>
+                </div>
+                {/* Card-not-present fee: its own receipt line (never folded into the sale amount). */}
+                <div className="flex justify-between">
+                  <span className="text-warm-600 dark:text-warm-400">Card-not-present fee:</span>
+                  <span className="font-semibold text-warm-900 dark:text-warm-100">${cnpFeeAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-warm-600 dark:text-warm-400">Total charged to card:</span>
+                  <span className="font-semibold text-warm-900 dark:text-warm-100">${totalWithFee.toFixed(2)}</span>
+                </div>
+              </>
+            ) : (
               <div className="flex justify-between">
-                <span className="text-warm-600 dark:text-warm-400">Incl. processing fee:</span>
-                <span className="font-semibold text-warm-900 dark:text-warm-100">${cnpFeeAmount.toFixed(2)}</span>
+                <span className="text-warm-600 dark:text-warm-400">Amount:</span>
+                <span className="font-semibold text-warm-900 dark:text-warm-100">${totalWithFee.toFixed(2)}</span>
               </div>
             )}
             {successTimestamp && (

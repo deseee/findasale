@@ -14,6 +14,8 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 import { useAuth } from '../../../../components/AuthContext';
+import { useOrganizerTier } from '../../../../hooks/useOrganizerTier';
+import TierGate from '../../../../components/TierGate';
 import Head from 'next/head';
 import Link from 'next/link';
 import { PieChart, Pie, Cell, Legend, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
@@ -53,6 +55,8 @@ const PerSaleAnalyticsPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { id: saleId } = router.query;
+  const { canAccess, tierKnown } = useOrganizerTier();
+  const canSeeAnalytics = canAccess('PRO');
   const [isClient, setIsClient] = React.useState(false);
 
   React.useEffect(() => {
@@ -66,7 +70,7 @@ const PerSaleAnalyticsPage = () => {
       const response = await api.get(`/insights/organizer/sale/${saleId}`);
       return response.data as PerSaleAnalytics;
     },
-    enabled: !!saleId && typeof saleId === 'string',
+    enabled: !!saleId && typeof saleId === 'string' && canSeeAnalytics,
   });
 
   // Redirect if not authenticated or not an organizer
@@ -77,6 +81,30 @@ const PerSaleAnalyticsPage = () => {
 
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  // Per-sale analytics is PRO and above on the backend (GET /insights/organizer/sale/:saleId).
+  // Below PRO show the upgrade card instead of a page that can only answer 403.
+  if (!canSeeAnalytics) {
+    if (!tierKnown) {
+      return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    }
+    return (
+      <TierGate
+        requiredTier="PRO"
+        featureName="Sale Analytics"
+        description="See revenue, item status, and shopper activity for each sale. Sale analytics are included with PRO and TEAMS."
+      >
+        <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+          <div className="max-w-6xl mx-auto px-4 py-8">
+            <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm">
+              ← Dashboard
+            </Link>
+            <h1 className="mt-6 text-2xl font-bold text-warm-900 dark:text-gray-100">Sale Analytics</h1>
+          </div>
+        </div>
+      </TierGate>
+    );
   }
 
   if (error) {

@@ -100,7 +100,7 @@ They can't co-own a single sale: each sale belongs to one organizer. For collabo
 Yes. If you work with two separate businesses, you can accept invites from both. You switch between workspace views from the account menu.
 
 **Does the workspace owner get a cut of other members' revenue?**
-No. The workspace is a coordination layer, not a revenue-sharing arrangement. Each organizer keeps 100% of their earnings (minus the 10% platform fee). If your business arrangement involves revenue sharing, that's handled outside FindA.Sale.
+No. The workspace is a coordination layer, not a revenue-sharing arrangement. Each organizer keeps 100% of their earnings (minus the platform fee for their plan). If your business arrangement involves revenue sharing, that's handled outside FindA.Sale.
 
 **Can I rename or delete a workspace?**
 Yes. Both options are in **/organizer/workspace → Settings**. Deleting a workspace removes the shared connection. All member accounts remain intact.

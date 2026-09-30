@@ -138,6 +138,10 @@ const ConsignorPayoutsContent: React.FC<{ saleId?: string }> = ({ saleId }) => {
 
   const emailCount = rows.filter((r) => r.status !== 'VOID' && !!r.email).length;
   const emailKnown = rows.some((r) => r.emailKnown);
+  // Lines in this run that sold for a different amount than the tag price: approving needs an acknowledgement.
+  const varianceCount = batch
+    ? batch.payouts.reduce((n, p) => n + (p.items || []).filter((i) => i.varianceFlag === true).length, 0)
+    : 0;
 
   // ---- handlers --------------------------------------------------------------------------
   const startRun = () =>
@@ -163,9 +167,9 @@ const ConsignorPayoutsContent: React.FC<{ saleId?: string }> = ({ saleId }) => {
       };
     }, 'We could not refresh the sales.');
 
-  const doApprove = async (sendStatements: boolean) => {
+  const doApprove = async (sendStatements: boolean, acknowledgeVariance: boolean) => {
     if (!batch) return;
-    await csApi.approve(batch.id, { sendStatements });
+    await csApi.approve(batch.id, { sendStatements, acknowledgeVariance });
     setDialog({ kind: 'none' });
     setNotice({
       tone: 'success',
@@ -543,6 +547,7 @@ const ConsignorPayoutsContent: React.FC<{ saleId?: string }> = ({ saleId }) => {
         <ApproveDialog
           emailCount={emailCount}
           emailKnown={emailKnown}
+          varianceCount={varianceCount}
           onClose={() => setDialog({ kind: 'none' })}
           onConfirm={doApprove}
         />

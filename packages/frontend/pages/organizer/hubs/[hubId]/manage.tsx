@@ -12,6 +12,7 @@ import HubManagementNav from '../../../../components/HubManagementNav';
 import AddressAutocomplete from '../../../../components/AddressAutocomplete';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
+import TierGate from '../../../../components/TierGate';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function HubManagePage() {
@@ -126,6 +127,11 @@ export default function HubManagePage() {
         <meta name="description" content="Manage your sale hub" />
       </Head>
 
+      <TierGate
+        requiredTier="TEAMS"
+        featureName="Market Hubs"
+        description="Organize multi-vendor events like flea markets, antique malls, popup markets, and farmers markets."
+      >
       <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white dark:from-gray-900 dark:to-gray-900">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Navigation */}
@@ -442,6 +448,7 @@ export default function HubManagePage() {
           )}
         </div>
       </div>
+      </TierGate>
     </>
   );
 }

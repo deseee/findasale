@@ -151,7 +151,7 @@ export default function CreateHubPage() {
                   type="text"
                   value={formData.slug}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                  placeholder="downtown-estate-sales-weekend"
+                  placeholder="downtown-sales-weekend"
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
                   required
                 />

@@ -7,6 +7,13 @@ import React, { useState } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
+import { auctionWorkedExample, describeInclusiveRates, MINIMUM_TRANSACTION_FEE_LABEL } from '../lib/platformFees';
+
+
+// Fee figures come from lib/platformFees so this page cannot drift from the real rates.
+const FEE_SIMPLE = describeInclusiveRates('SIMPLE');
+const FEE_PRO = describeInclusiveRates('PRO');
+const AUCTION_EX = auctionWorkedExample(200, 'SIMPLE');
 
 interface FAQItem {
   question: string;
@@ -164,9 +171,9 @@ const shopperFAQs: FAQItem[] = [
         at closing wins. Auction end times are clearly marked so you always know the deadline.
         <br /><br />
         Winning bids carry a <strong>buyer&apos;s premium</strong> added at checkout, so plan your
-        maximum bid around it. It is <strong>5% unless the organizer sets a different rate</strong>, and
-        the exact percentage for a sale is shown on the sale page and on every bid form before you bid.
-        At 5%, win at $200 and you pay $210.
+        maximum bid around it. It is a flat <strong>5%</strong> set by FindA.Sale, the same on every auction, and
+        it is shown on the sale page and on every bid form before you bid.
+        Win at $200 and you pay $210.
       </>
     ),
   },
@@ -309,7 +316,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Treasure Trails?',
     answer: (
       <>
-        Treasure Trails are curated multi-stop local experiences. For example, a Saturday morning hitting a yard sale, an estate sale, and a scenic café on the way home. You check in at each stop and earn a tiered completion bonus (40 XP for 3 stops, scaling up to 80 XP for 7+ stops) when you finish. Trail access scales with rank: Ranger gets 3 per week, Sage gets unlimited. Hunt Pass subscribers can create and share their own trails. Full XP details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link>.
+        Treasure Trails are curated multi-stop local experiences. For example, a Saturday morning hitting a yard sale, a flea market, and a scenic café on the way home. You check in at each stop and earn a tiered completion bonus (40 XP for 3 stops, scaling up to 80 XP for 7+ stops) when you finish. Trail access scales with rank: Ranger gets 3 per week, Sage gets unlimited. Hunt Pass subscribers can create and share their own trails. Full XP details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link>.
       </>
     ),
   },
@@ -369,16 +376,18 @@ const organizerFAQs: FAQItem[] = [
     question: 'What is the platform fee?',
     answer: (
       <>
-        FindA.Sale charges the same flat <strong>10%</strong> platform fee on every completed purchase,
-        on every plan, regardless of sale type (fixed-price or auction). SIMPLE, PRO, and TEAMS all pay
-        the same rate. Upgrading your plan unlocks tools like bulk operations, discount rules, and staff
-        accounts, not a lower fee.
+        FindA.Sale charges one inclusive platform fee on every completed purchase, regardless of sale
+        type (fixed-price or auction). Card processing is included, so there is no separate processing
+        charge. SIMPLE pays {FEE_SIMPLE}. PRO and TEAMS pay {FEE_PRO}. There is a{' '}
+        {MINIMUM_TRANSACTION_FEE_LABEL} minimum per transaction. Upgrading your plan also unlocks tools
+        like bulk operations, discount rules, and staff accounts.
         <br /><br />
         Auctions add a second, separate fee that the <em>winning bidder</em> pays, not you: a{' '}
         <strong>buyer&apos;s premium</strong> on top of the winning bid, a flat <strong>5%</strong> set by
-        FindA.Sale. It is not something you configure, and it does not change your platform fee. On a $200
-        winning bid, the buyer pays $210.00, your platform fee is $20.00, and you
-        receive $180.00 before Square's processing fee. If you would rather your winner paid exactly their bid,
+        FindA.Sale. It is not something you configure, and it does not change your platform fee. On a $
+        {AUCTION_EX.bid} winning bid at the SIMPLE online rate, the buyer pays ${AUCTION_EX.buyerTotal.toFixed(2)},
+        your platform fee is ${AUCTION_EX.fee.toFixed(2)}, and you receive ${AUCTION_EX.net.toFixed(2)}. If you
+        would rather your winner paid exactly their bid,
         turn on &ldquo;Cover the buyer&apos;s premium&rdquo; and it comes out of your payout instead.
       </>
     ),
@@ -456,7 +465,7 @@ const organizerFAQs: FAQItem[] = [
         When creating your sale, enable the <strong>Auction</strong> option. Then, for each item you
         want to auction, mark it as an auction item and set a starting bid. Bidding is live. Shoppers
         see real-time bids. At the end time you set, the highest bidder wins and payment is processed
-        automatically. Your standard 10% platform fee applies, the same on every plan. The
+        automatically. Your standard platform fee applies ({FEE_SIMPLE} on SIMPLE, {FEE_PRO} on PRO and TEAMS, card processing included). The
         winning bidder separately pays a flat 5% buyer&apos;s premium on top of their bid, set by
         FindA.Sale. It is disclosed to them before they bid and again at checkout.
       </>
@@ -532,7 +541,8 @@ const organizerFAQs: FAQItem[] = [
       <>
         From your sale dashboard, click <strong>Export</strong> to download a CSV of your full inventory.
         The file includes titles, descriptions, prices, categories, tags, and sold status. Useful for
-        accounting, record-keeping, or import into other systems.
+        accounting, record-keeping, or import into other systems. CSV and marketplace exports (eBay,
+        Facebook, Craigslist, EstateSales.net) are included with PRO and TEAMS.
       </>
     ),
   },
@@ -627,9 +637,9 @@ const FAQPage = () => {
     <>
       <Head>
         <title>FAQ. FindA.Sale</title>
-        <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the community resale marketplace." />
+        <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale, the community resale marketplace." />
         <meta property="og:title" content="FAQ \u2013 FindA.Sale" />
-        <meta property="og:description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the community resale marketplace." />
+        <meta property="og:description" content="Frequently asked questions about buying and selling on FindA.Sale, the community resale marketplace." />
         <meta property="og:url" content="https://finda.sale/faq" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
         <script

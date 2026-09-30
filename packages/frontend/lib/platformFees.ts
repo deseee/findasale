@@ -109,6 +109,13 @@ export const getInclusivePlatformFeeRate = (tier: OrganizerTier, channel: Paymen
 export const formatInclusiveFeeRate = (tier: OrganizerTier, channel: PaymentChannel): string =>
   `${parseFloat((getInclusivePlatformFeeRate(tier, channel) * 100).toFixed(1))}%`;
 
+/** The minimum fee as display copy: "$0.75". Derived from MINIMUM_TRANSACTION_FEE_CENTS. */
+export const MINIMUM_TRANSACTION_FEE_LABEL = `$${(MINIMUM_TRANSACTION_FEE_CENTS / 100).toFixed(2)}`;
+
+/** Both channel rates for a tier as plain copy, e.g. "8% in person and 9.5% online". */
+export const describeInclusiveRates = (tier: OrganizerTier): string =>
+  `${formatInclusiveFeeRate(tier, 'IN_PERSON')} in person and ${formatInclusiveFeeRate(tier, 'ONLINE')} online`;
+
 /** The inclusive commission in dollars on `amount` dollars, floored at the $0.75 minimum (0 for a
  *  0-or-negative amount). Display estimate only: the server computes the real fee. */
 export const calculateInclusiveCommission = (amount: number, tier: OrganizerTier, channel: PaymentChannel): number => {
@@ -132,3 +139,22 @@ export const formatFeeRate = (tier: OrganizerTier): string => formatInclusiveFee
  *  rate, including the $0.75 minimum. */
 export const calculateOrganizerCommission = (amount: number, tier: OrganizerTier): number =>
   calculateInclusiveCommission(amount, tier, 'ONLINE');
+
+/**
+ * Worked auction example for copy (FAQ, guide, pricing, terms): a winning bid at a tier's ONLINE
+ * rate. Display only: the server computes the real amounts. `netIfCovered` is what the organizer
+ * receives when Sale.coversFee is on (the buyer pays exactly the bid and the premium comes out of
+ * the organizer's payout). Amounts are in dollars.
+ */
+export const auctionWorkedExample = (bid = 200, tier: OrganizerTier = 'SIMPLE') => {
+  const premium = buyerPremiumOn(bid);
+  const fee = calculateInclusiveCommission(bid, tier, 'ONLINE');
+  return {
+    bid,
+    premium,
+    buyerTotal: parseFloat((bid + premium).toFixed(2)),
+    fee,
+    net: parseFloat((bid - fee).toFixed(2)),
+    netIfCovered: parseFloat((bid - fee - premium).toFixed(2)),
+  };
+};

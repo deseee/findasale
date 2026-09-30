@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AccessibleModal from './AccessibleModal';
+import { describeInclusiveRates } from '../lib/platformFees';
 
 interface DowngradePreview {
   currentTier: string;
@@ -100,7 +101,7 @@ export default function DowngradePreviewModal({ isOpen, onClose, preview, onConf
           )}
           <li className="flex gap-2">
             <span className="text-amber-500">⚠</span>
-            Free plan limits apply again: 5 photos per item, 100 auto tags per month, and the standard 10% fee when items sell
+            Free plan limits apply again: 5 photos per item, 100 auto tags per month, and the standard {describeInclusiveRates('SIMPLE')} fee when items sell
           </li>
           <li className="flex gap-2">
             <span className="text-gray-500">•</span>

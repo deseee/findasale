@@ -330,7 +330,7 @@ const CheckoutSuccessPage = () => {
                 <button
                   onClick={async () => {
                     const shareUrl = 'https://finda.sale/register';
-                    const shareText = 'I just found something great on FindA.Sale! If you run yard sales, estate sales, or similar events, you can list for free at https://finda.sale/register';
+                    const shareText = 'I just found something great on FindA.Sale! If you run yard sales or similar events, you can list for free at https://finda.sale/register';
                     try {
                       if (navigator.share) {
                         await navigator.share({ title: 'List your sale on FindA.Sale', text: shareText, url: shareUrl });

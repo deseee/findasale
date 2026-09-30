@@ -47,6 +47,8 @@ export default function PosPaymentQr({
       await onEmailLink();
       setEmailSent(true);
       setTimeout(() => setEmailSent(false), 3000);
+    } catch {
+      // The caller already showed the error toast; the button just returns to its idle state.
     } finally {
       setEmailSending(false);
     }

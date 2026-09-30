@@ -55,6 +55,7 @@ import SocialPostGenerator from '../../components/SocialPostGenerator';
 import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
 import DemandSignalsCard from '../../components/DemandSignalsCard';
 import PlatformHighlightsWidget from '../../components/PlatformHighlightsWidget';
+import { describeInclusiveRates, formatInclusiveFeeRate, getInclusivePlatformFeeRate } from '../../lib/platformFees';
 
 // DEAD CODE, intentionally kept (not approved for removal): this constant was never rendered.
 // The Selling Tools quick-access grid is now built from lib/organizerNav.ts (entries flagged
@@ -955,7 +956,7 @@ const OrganizerDashboard = () => {
                       Your paid plan has ended
                     </h2>
                     <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                      <p>Your subscription has ended and your account is on the free plan (5 photos per item, 100 Auto Tags per month, 10% fee when items sell). Your sales, items and settings are unchanged. Automatic markdown cycles are paused, and nothing is restored on its own. Renew to turn your PRO features back on.</p>
+                      <p>Your subscription has ended and your account is on the free plan (5 photos per item, 100 Auto Tags per month, {describeInclusiveRates('SIMPLE')} fee when items sell). Your sales, items and settings are unchanged. Automatic markdown cycles are paused, and nothing is restored on its own. Renew to turn your PRO features back on.</p>
                     </div>
                     <div className="mt-4">
                       <Link href="/organizer/subscription" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline">
@@ -1002,7 +1003,7 @@ const OrganizerDashboard = () => {
                     You've completed {analyticsData.completedSalesCount} sales and earned <strong>${(analyticsData.totalGMV || 0).toFixed(2)}</strong>.
                   </p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
-                    At SIMPLE, you paid <strong>${((analyticsData.totalGMV || 0) * 0.1).toFixed(2)}</strong> in fees (10%). On PRO, you'd pay just <strong>${((analyticsData.totalGMV || 0) * 0.08).toFixed(2)}</strong> (8%). That's <strong>${(((analyticsData.totalGMV || 0) * 0.1) - ((analyticsData.totalGMV || 0) * 0.08) - 29).toFixed(2)}</strong> saved per month at your current volume.
+                    At SIMPLE, you paid <strong>${((analyticsData.totalGMV || 0) * getInclusivePlatformFeeRate('SIMPLE', 'ONLINE')).toFixed(2)}</strong> in fees ({formatInclusiveFeeRate('SIMPLE', 'ONLINE')} online). On PRO, you'd pay just <strong>${((analyticsData.totalGMV || 0) * getInclusivePlatformFeeRate('PRO', 'ONLINE')).toFixed(2)}</strong> ({formatInclusiveFeeRate('PRO', 'ONLINE')} online). That's <strong>${(((analyticsData.totalGMV || 0) * getInclusivePlatformFeeRate('SIMPLE', 'ONLINE')) - ((analyticsData.totalGMV || 0) * getInclusivePlatformFeeRate('PRO', 'ONLINE')) - 29).toFixed(2)}</strong> saved per month at your current volume.
                   </p>
                 </div>
                 <div className="flex-shrink-0 flex gap-2">

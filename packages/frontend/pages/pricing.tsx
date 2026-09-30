@@ -16,6 +16,7 @@ import BecomeOrganizerModal from '../components/BecomeOrganizerModal';
 import PremiumCTA from '../components/PremiumCTA';
 import TierComparisonTable from '../components/TierComparisonTable';
 import TooltipHelper from '../components/TooltipHelper';
+import { auctionWorkedExample, describeInclusiveRates, formatInclusiveFeeRate, MINIMUM_TRANSACTION_FEE_LABEL } from '../lib/platformFees';
 
 interface PricingTier {
   id: 'SIMPLE' | 'PRO' | 'TEAMS';
@@ -28,12 +29,17 @@ interface PricingTier {
   stripePrice: string | null;
 }
 
+// Fee figures come from lib/platformFees so this page cannot drift from the real rates.
+const FEE_SIMPLE = describeInclusiveRates('SIMPLE');
+const FEE_PRO = describeInclusiveRates('PRO');
+const AUCTION_EX = auctionWorkedExample(200, 'SIMPLE');
+
 const TIERS: PricingTier[] = [
   {
     id: 'SIMPLE',
     name: 'SIMPLE',
     price: null,
-    period: 'Free, 10% when items sell',
+    period: `Free, ${describeInclusiveRates('SIMPLE')} when items sell`,
     description: 'Perfect for trying FindA.Sale',
     featured: false,
     stripePrice: null,
@@ -46,7 +52,6 @@ const TIERS: PricingTier[] = [
       'Built-in point-of-sale',
       'Social post generator',
       'Batch operations',
-      'Marketplace exports (Ebay, Facebook, + more)',
       'Ripples: track clicks, saves and shares',
       'Self-serve help center + organizer guides',
     ],
@@ -70,6 +75,7 @@ const TIERS: PricingTier[] = [
       'Insights - Advanced sale analytics',
       'Brand Kit: custom logo, colors, storefront',
       'Data exports (Accounting, Mailings, + more)',
+      'Marketplace exports (Ebay, Facebook, + more)',
       'Weekly email digest',
       '24/7 support assistant + help center',
     ],
@@ -186,9 +192,9 @@ const PricingPage = () => {
     <>
       <Head>
         <title>Pricing - FindA.Sale</title>
-        <meta name="description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free and keep 90% of what you sell." />
+        <meta name="description" content="Simple, fair pricing for garage sale hosts, yard sale organizers, auctioneers, flea market operators, and consignment shops. Start free with one inclusive fee that covers card processing." />
         <meta property="og:title" content="Pricing - FindA.Sale" />
-        <meta property="og:description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free and keep 90% of what you sell." />
+        <meta property="og:description" content="Simple, fair pricing for garage sale hosts, yard sale organizers, auctioneers, flea market operators, and consignment shops. Start free with one inclusive fee that covers card processing." />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -202,7 +208,7 @@ const PricingPage = () => {
                 {
                   '@type': 'Offer',
                   name: 'SIMPLE',
-                  description: 'Free plan with 10% platform fee per sale',
+                  description: `Free plan with ${FEE_SIMPLE} platform fee per sale, card processing included`,
                   price: '0',
                   priceCurrency: 'USD',
                   eligibleCustomer: {
@@ -213,7 +219,7 @@ const PricingPage = () => {
                 {
                   '@type': 'Offer',
                   name: 'PRO',
-                  description: '$29/month plan with 8% platform fee, smart pricing, and advanced analytics',
+                  description: `$29/month plan with ${FEE_PRO} platform fee, smart pricing, and advanced analytics`,
                   price: '29',
                   priceCurrency: 'USD',
                   priceSpecification: {
@@ -230,7 +236,7 @@ const PricingPage = () => {
                 {
                   '@type': 'Offer',
                   name: 'TEAMS',
-                  description: '$79/month plan with 8% platform fee, unlimited items, team collaboration',
+                  description: `$79/month plan with ${FEE_PRO} platform fee, unlimited items, team collaboration`,
                   price: '79',
                   priceCurrency: 'USD',
                   priceSpecification: {
@@ -319,7 +325,7 @@ const PricingPage = () => {
                   List everywhere at once
                 </h3>
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  One-click exports for Facebook Marketplace, Craigslist, eBay, EstateSales.net + more
+                  One-click exports for Facebook Marketplace, Craigslist, eBay, EstateSales.net + more (PRO and TEAMS)
                 </p>
               </div>
 
@@ -401,9 +407,9 @@ const PricingPage = () => {
                       <TooltipHelper
                         text={
                           tier.id === 'SIMPLE'
-                            ? 'Free plan with a 10% fee per item sold. Perfect for trying out FindA.Sale.'
+                            ? `Free plan with a ${FEE_SIMPLE} fee per item sold. Perfect for trying out FindA.Sale.`
                             : tier.id === 'PRO'
-                              ? 'Pro plan for active organizers. Monthly subscription with 8% fees and advanced tooling and analytics.'
+                              ? `Pro plan for active organizers. Monthly subscription with ${FEE_PRO} fees and advanced tooling and analytics.`
                               : 'Teams plan for large operators and high-volume sellers. Dedicated workspace supports multiple team members.'
                         }
                         position="right"
@@ -415,9 +421,9 @@ const PricingPage = () => {
                     {/* Inline explainer */}
                     <p className="text-warm-500 dark:text-warm-500 text-xs mb-6">
                       {tier.id === 'SIMPLE' &&
-                        'No monthly cost, just 10% when items sell.'}
+                        `No monthly cost, just ${FEE_SIMPLE} when items sell.`}
                       {tier.id === 'PRO' &&
-                        'Lower fees (8%) plus tools that speed your workflow and attract more buyers.'}
+                        `Lower fees (${FEE_PRO}) plus tools that speed your workflow and attract more buyers.`}
                       {tier.id === 'TEAMS' &&
                         'Manage your team members. Webhooks connect your other systems.'}
                     </p>
@@ -445,19 +451,19 @@ const PricingPage = () => {
                       <p className="text-xs text-warm-600 dark:text-warm-400 leading-relaxed">
                         {tier.id === 'SIMPLE' && (
                           <>
-                            <span className="font-semibold">10% platform</span> + ~3.2% payment processing = <span className="font-semibold">~13.2% total per sale</span><br />
+                            <span className="font-semibold">{FEE_SIMPLE}</span>, card processing included<br />
                             <span className="text-warm-500 dark:text-warm-500 italic">Competitors typically charge 20–30%</span>
                           </>
                         )}
                         {tier.id === 'PRO' && (
                           <>
-                            <span className="font-semibold">8% platform</span> + ~3.2% payment processing = <span className="font-semibold">~11.2% total per sale</span><br />
+                            <span className="font-semibold">{FEE_PRO}</span>, card processing included<br />
                             <span className="text-warm-500 dark:text-warm-500 italic">Plus $29/mo subscription</span>
                           </>
                         )}
                         {tier.id === 'TEAMS' && (
                           <>
-                            <span className="font-semibold">8% platform</span> + ~3.2% payment processing = <span className="font-semibold">~11.2% total per sale</span><br />
+                            <span className="font-semibold">{FEE_PRO}</span>, card processing included<br />
                             <span className="text-warm-500 dark:text-warm-500 italic">Plus $79/mo subscription</span>
                           </>
                         )}
@@ -556,7 +562,7 @@ const PricingPage = () => {
               </div>
 
               <p className="text-sm text-warm-600 dark:text-warm-300 mb-6">
-                Same 10% platform fee as Simple. One-time $9.99 payment.
+                Same platform fee as Simple ({FEE_SIMPLE}, card processing included). One-time $9.99 payment.
               </p>
 
               <Link
@@ -580,7 +586,7 @@ const PricingPage = () => {
                 description="Upgrade to PRO for more capacity, lower fees, and expert support."
                 benefits={[
                   'More Photos, More Tags',
-                  'Drop fees from 10% to 8%',
+                  `Drop fees to ${formatInclusiveFeeRate('PRO', 'IN_PERSON')} in person and ${formatInclusiveFeeRate('PRO', 'ONLINE')} online`,
                   'Run up to 3 sales at once',
                   'Smart Pricing and Flip Reports',
                   '24/7 support assistant',
@@ -669,9 +675,9 @@ const PricingPage = () => {
                   How do fees work?
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                  When you sell an item for $100, we receive $10 (10%) as a platform fee. PRO and TEAMS drop that to $8 (8%). If the shopper pays with credit card, card processing fees average $3.20 (2.9% + $0.30).
+                  When you sell an item for $100 online, the platform fee is $9.50 on SIMPLE ({formatInclusiveFeeRate('SIMPLE', 'ONLINE')}) and $7.50 on PRO and TEAMS ({formatInclusiveFeeRate('PRO', 'ONLINE')}). In person it is {formatInclusiveFeeRate('SIMPLE', 'IN_PERSON')} on SIMPLE and {formatInclusiveFeeRate('PRO', 'IN_PERSON')} on PRO and TEAMS. Card processing is included, so there is no separate processing charge, and there is a {MINIMUM_TRANSACTION_FEE_LABEL} minimum per transaction.
                   <br /><br />
-                  Auctions add a second fee that the winning bidder pays, not you: a flat 5% buyer&apos;s premium on top of the winning bid, set by FindA.Sale. It is not something you configure, and your platform fee is unchanged either way. A $200 winning bid charges the buyer $210, your fee is $20, and you receive $180 before card processing fees. If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the buyer&apos;s premium&rdquo; on the sale: the buyer is charged $200 and the 5% comes out of your payout, so you receive $170.
+                  Auctions add a second fee that the winning bidder pays, not you: a flat 5% buyer&apos;s premium on top of the winning bid, set by FindA.Sale. It is not something you configure, and your platform fee is unchanged either way. A ${AUCTION_EX.bid} winning bid at the SIMPLE online rate charges the buyer ${AUCTION_EX.buyerTotal.toFixed(2)}, your fee is ${AUCTION_EX.fee.toFixed(2)}, and you receive ${AUCTION_EX.net.toFixed(2)}. If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the buyer&apos;s premium&rdquo; on the sale: the buyer is charged ${AUCTION_EX.bid} and the 5% comes out of your payout, so you receive ${AUCTION_EX.netIfCovered.toFixed(2)}.
                 </p>
               </div>
 

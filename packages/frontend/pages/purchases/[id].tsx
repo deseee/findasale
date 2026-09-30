@@ -155,6 +155,20 @@ const PurchaseConfirmationPage = () => {
       ? Number(snapshotPremium)
       : purchaseAmount - purchaseAmount / (1 + AUCTION_BUYER_PREMIUM_RATE);
   const winningBid = purchaseAmount - buyerPremiumPaid;
+  // Card-not-present surcharge (2026-09-30): a manually keyed card sale carries a fee charged ON TOP of
+  // purchase.amount. It gets its own line, and the refunded share shows once any refund has returned it.
+  const cnpSurchargeAmount = (Number(purchase.cnpSurchargeCents) || 0) / 100;
+  const cnpSurchargeRefunded = (() => {
+    const cents = Math.round(cnpSurchargeAmount * 100);
+    if (cents <= 0) return 0;
+    if (purchase.status === 'REFUNDED') return cnpSurchargeAmount;
+    const cardCents = Math.max(0, Math.round(purchaseAmount * 100) - Math.round((Number(purchase.cashLegAmount) || 0) * 100));
+    const refundedCents = Math.max(0, Math.round((Number(purchase.refundedAmount) || 0) * 100));
+    const cashBackCents = Math.min(refundedCents, Math.max(0, Math.round((Number(purchase.refundCashPortion) || 0) * 100)));
+    const principal = Math.min(cardCents, refundedCents - cashBackCents);
+    if (cardCents <= 0 || principal <= 0) return 0;
+    return Math.min(cents, Math.floor((2 * cents * principal + cardCents) / (2 * cardCents))) / 100;
+  })();
 
   // Determine status badge color
   const getStatusBadge = () => {
@@ -342,6 +356,18 @@ const PurchaseConfirmationPage = () => {
                   ${purchaseAmount.toFixed(2)}
                 </span>
               </div>
+              {cnpSurchargeAmount > 0 && (
+                <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <span className="text-gray-600 dark:text-gray-400">Card-not-present fee</span>
+                  <span className="text-gray-900 dark:text-white">${cnpSurchargeAmount.toFixed(2)}</span>
+                </div>
+              )}
+              {cnpSurchargeRefunded > 0 && (
+                <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <span className="text-gray-600 dark:text-gray-400">Card-not-present fee refunded</span>
+                  <span className="text-gray-900 dark:text-white">-${cnpSurchargeRefunded.toFixed(2)}</span>
+                </div>
+              )}
               {(purchase.stripePaymentIntentId || purchase.squarePaymentId) && (
                 <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400 text-xs font-mono">Reference ID</span>

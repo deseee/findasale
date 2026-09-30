@@ -9,7 +9,7 @@ const PrivacyPage = () => {
     <>
       <Head>
         <title>Privacy Policy. FindA.Sale</title>
-        <meta name="description" content="Privacy Policy for FindA.Sale. Estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
+        <meta name="description" content="Privacy Policy for FindA.Sale. Yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -43,7 +43,7 @@ const PrivacyPage = () => {
 
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Location Information</h3>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
-              Listings for estate sales, yard sales, auctions, and flea markets include organizer-provided addresses,
+              Listings for yard sales, auctions, and flea markets include organizer-provided addresses,
               which we geocode and store as latitude/longitude coordinates to power map features. We do not continuously
               track your device location.
             </p>

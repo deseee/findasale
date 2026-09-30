@@ -1,12 +1,19 @@
 /**
  * CA7: Organizer Guide Page
- * Full walkthrough for estate sale organizers. Linked from footer + organizer dashboard.
+ * Full walkthrough for sale organizers. Linked from footer + organizer dashboard.
  */
 
 import React, { useState } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
+import { auctionWorkedExample, describeInclusiveRates, MINIMUM_TRANSACTION_FEE_LABEL } from '../lib/platformFees';
+
+
+// Fee figures come from lib/platformFees so this page cannot drift from the real rates.
+const FEE_SIMPLE = describeInclusiveRates('SIMPLE');
+const FEE_PRO = describeInclusiveRates('PRO');
+const AUCTION_EX = auctionWorkedExample(200, 'SIMPLE');
 
 interface Section {
   id: string;
@@ -67,7 +74,7 @@ const sections: Section[] = [
           </li>
           <li>
             <strong>Sale Type</strong>. Choose Regular (fixed price) or Auction (competitive bidding).
-            All items carry a 10% flat platform fee regardless of sale type. On auctions, the winning
+            All items carry the platform fee for your plan ({FEE_SIMPLE} on SIMPLE, {FEE_PRO} on PRO and TEAMS, card processing included) regardless of sale type. On auctions, the winning
             bidder also pays a separate 5% buyer&apos;s premium on top of their bid, set by FindA.Sale.
           </li>
         </ul>
@@ -100,7 +107,7 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Setting Price</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          Pricing varies by event type. Estate sale items typically go for 20–50% of retail. Auction items may exceed retail with competitive bidding; garage sale and flea market items often go lower. Research comparable items online if you're unsure. You can adjust prices any time before or during the sale. For auction items, set a starting bid price; the 10% platform fee applies to the final bid, and the winning bidder pays a separate 5% buyer&apos;s premium on top of that bid.
+          Pricing varies by event type. Whole-house sale items typically go for 20–50% of retail. Auction items may exceed retail with competitive bidding; garage sale and flea market items often go lower. Research comparable items online if you're unsure. You can adjust prices any time before or during the sale. For auction items, set a starting bid price; the 10% platform fee applies to the final bid, and the winning bidder pays a separate 5% buyer&apos;s premium on top of that bid.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Tags and Categories</h3>
@@ -127,7 +134,7 @@ const sections: Section[] = [
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">What Qualifies You to Appraise</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           You don't need formal credentials. What matters is specificity and honesty. Appraisers
-          with collecting experience, professional backgrounds (antiques dealer, estate sale organizer,
+          with collecting experience, professional backgrounds (antiques dealer, sale organizer,
           eBay powerseller), or solid research skills can all contribute valuable insights.
           A collector with 20 years of pottery knowledge is more useful than a generalist with a degree.
         </p>
@@ -180,7 +187,7 @@ const sections: Section[] = [
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           <strong>CSV Export</strong>. Go to your sale dashboard and click <strong>Export</strong> to
           download your full inventory as a CSV. The file includes titles, descriptions, prices, categories,
-          tags, and sold status. Useful for record-keeping and accounting.
+          tags, and sold status. Useful for record-keeping and accounting. Exports are included with PRO and TEAMS.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           <strong>Holds and Reservations</strong>. Shoppers can request holds before the sale opens.
@@ -202,19 +209,20 @@ const sections: Section[] = [
           is collected automatically.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          All items carry a <strong>10% flat platform fee</strong> on the final sale price, deducted from
-          your payout.
+          All items carry the <strong>platform fee for your plan</strong> on the final sale price, deducted from
+          your payout: {FEE_SIMPLE} on SIMPLE, {FEE_PRO} on PRO and TEAMS. Card processing is included, and there is
+          a {MINIMUM_TRANSACTION_FEE_LABEL} minimum per transaction.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Auctions carry one more fee, and the <strong>winning bidder</strong> pays it: a{' '}
           <strong>buyer&apos;s premium</strong> added to their bid at checkout. It is{' '}
           a flat <strong>5%</strong>, set by FindA.Sale on every auction. Bidders see it on the sale page
           and on the bid form before they bid, and confirm it before paying. Worked example on a $200
-          winning bid at the 10% platform rate: the buyer is charged <strong>$210.00</strong>, your
-          platform fee is <strong>$20.00</strong>, and you receive <strong>$180.00</strong> before Square
-          processing. If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the
+          winning bid at the SIMPLE online rate: the buyer is charged <strong>${AUCTION_EX.buyerTotal.toFixed(2)}</strong>, your
+          platform fee is <strong>${AUCTION_EX.fee.toFixed(2)}</strong>, and you receive <strong>${AUCTION_EX.net.toFixed(2)}</strong>.
+          If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the
           buyer&apos;s premium&rdquo; on the sale. The 5% then comes out of your payout, so you receive{' '}
-          <strong>$170.00</strong> and the buyer is charged <strong>$200.00</strong>.
+          <strong>${AUCTION_EX.netIfCovered.toFixed(2)}</strong> and the buyer is charged <strong>${AUCTION_EX.bid.toFixed(2)}</strong>.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           After the auction ends, we notify winners and process payments. Payouts are deposited to
@@ -248,7 +256,7 @@ const sections: Section[] = [
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Once Square is connected, payouts happen automatically. Your share of each completed
           sale is deposited to your connected Square account on a weekly schedule.
-          The 10% platform fee is deducted before payout.
+          The platform fee for your plan (card processing included) is deducted before payout.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           View your full payout history and pending balance at <strong>Settings → Payments</strong>

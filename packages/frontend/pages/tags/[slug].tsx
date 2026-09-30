@@ -215,7 +215,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
               <div className="text-5xl mb-4">🏺</div>
               <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">No items found</h2>
               <p className="text-warm-600 dark:text-warm-400 mb-6">
-                We don't have any {tag} items listed yet. Check back soon or browse estate sales, garage sales, yard sales, flea markets, auctions, and more.
+                We don't have any {tag} items listed yet. Check back soon or browse garage sales, yard sales, flea markets, auctions, and more.
               </p>
               <Link href="/" className="text-amber-600 hover:underline font-medium">
                 Browse all items

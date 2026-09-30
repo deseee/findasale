@@ -179,6 +179,8 @@ export interface ItemLine {
   net: number | null;
   /** Consignor's rate on this item (percent), when the server sends it. */
   ratePct: number | null;
+  /** True when this line sold for a different amount than the tag price (needs acknowledging to approve). */
+  varianceFlag?: boolean;
 }
 
 export interface UnsettledLine {
@@ -290,6 +292,7 @@ export const normalizeItem = (raw: any): ItemLine => {
     salePrice: toNum(firstDefined(r.salePrice, r.soldPrice, r.collectedAmount, r.listPrice, r.price, r.amount, r.gross)),
     net: toNumOrNull(firstDefined(r.net, r.netAmount, r.consignorShare, r.owed, r.netPayout)),
     ratePct: toNumOrNull(r.ratePct),
+    varianceFlag: r.varianceFlag === true,
   };
 };
 

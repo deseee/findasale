@@ -30,9 +30,9 @@ export default function Document() {
         {/* Default SEO meta: pages should override these with next/head */}
         <meta
           name="description"
-          content="FindA.Sale. Discover estate sales, yard sales, garage sales, auctions, flea markets, and more near you. Browse items, favorite sales, and buy online."
+          content="FindA.Sale. Discover yard sales, garage sales, auctions, flea markets, and more near you. Browse items, favorite sales, and buy online."
         />
-        <meta name="keywords" content="estate sales, yard sales, garage sales, auctions, flea markets, antiques, thrift, local sales" />
+        <meta name="keywords" content="yard sales, garage sales, auctions, flea markets, antiques, thrift, local sales" />
         <meta name="author" content="FindA.Sale" />
 
         {/* Facebook app id: global, never overridden per-page, so safe in next/document <Head>.

@@ -11,7 +11,7 @@ const ReturnPolicyPage = () => {
         <title>Return &amp; Refund Policy | FindA.Sale</title>
         <meta
           name="description"
-          content="Return and refund policy for FindA.Sale. A marketplace for estate sales, yard sales, auctions, and flea markets. Each seller sets their own return policy."
+          content="Return and refund policy for FindA.Sale. A marketplace for yard sales, auctions, and flea markets. Each seller sets their own return policy."
         />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
@@ -20,7 +20,7 @@ const ReturnPolicyPage = () => {
           <p className="text-warm-500 dark:text-warm-400 mb-10">Effective date: {effectiveDate}</p>
 
           <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-8">
-            FindA.Sale is a marketplace that connects shoppers with independent sale organizers. Estate sale
+            FindA.Sale is a marketplace that connects shoppers with independent sale organizers. Liquidation
             companies, yard sale hosts, auctioneers, flea market vendors, and consignment sellers. Because each
             seller is an independent business, <strong>FindA.Sale does not set a single blanket return policy.</strong>{' '}
             Return eligibility, timeframes, and procedures are determined by each individual seller for each sale.

@@ -49,7 +49,7 @@ export default function EmbedSaleIndex({ generatedAt, metros }: EmbedSaleIndexPr
         <div className="mb-3">
           <h1 className="text-lg font-bold">The Weekend Sale Index</h1>
           <p className="text-xs text-warm-500">
-            Top {EMBED_TOP_N} U.S. metros by upcoming estate sales, yard sales,
+            Top {EMBED_TOP_N} U.S. metros by upcoming yard sales,
             auctions &amp; flea markets
             {generatedAt ? ` · Updated ${formatGeneratedAt(generatedAt)}` : ''}
           </p>

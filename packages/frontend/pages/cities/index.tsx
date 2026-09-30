@@ -45,7 +45,7 @@ interface CitiesPageProps {
 export default function CitiesPage({ stateGroups, totalCities }: CitiesPageProps) {
   const title = 'Browse Sales by City | FindA.Sale';
   const description =
-    'Find estate sales, yard sales, auctions and more near you. Browse sales in cities across the US on FindA.Sale.';
+    'Find yard sales, auctions and more near you. Browse sales in cities across the US on FindA.Sale.';
   const canonicalUrl = 'https://finda.sale/cities';
 
   const collectionPageJsonLd = {

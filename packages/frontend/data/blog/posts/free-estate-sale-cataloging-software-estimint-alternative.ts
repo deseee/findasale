@@ -44,15 +44,15 @@ FindA.Sale is built for the full loop, from photo capture to buyer discovery, in
 
 **No app install required.** FindA.Sale is a PWA. It runs in the browser on any phone without downloading anything. Buyers and organizers both access it the same way.
 
-**Free to start.** There's no monthly subscription to access the cataloging tools or the marketplace. FindA.Sale charges a flat 10% platform fee on completed sales, so you pay only when you sell something, not upfront for software that may or may not deliver results.
+**Free to start.** There's no monthly subscription to access the cataloging tools or the marketplace. FindA.Sale charges one inclusive platform fee on completed sales (8% in person and 9.5% online on the free plan, with card processing included), so you pay only when you sell something, not upfront for software that may or may not deliver results.
 
-## The flat-fee model versus the subscription model
+## The pay-per-sale model versus the subscription model
 
 This is worth running the math on.
 
 A $29/month subscription is $348/year before you sell a single item. At $149/month, that's $1,788, regardless of sale volume, regardless of whether turnout was good or bad, regardless of whether you ran two sales that month or eight.
 
-A 10% platform fee on $5,000 in monthly sales is $500. On a slow $2,000 month, it's $200. The cost scales with the result, not with the calendar.
+A 9.5% online platform fee on $5,000 in monthly sales is $475. On a slow $2,000 month, it's $190. The cost scales with the result, not with the calendar.
 
 For organizers running variable volume, which is most organizers, the flat-fee model is lower risk. You're not subsidizing the platform's fixed costs during slow months.
 

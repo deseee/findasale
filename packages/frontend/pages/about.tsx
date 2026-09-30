@@ -11,9 +11,9 @@ const AboutPage = () => {
     <>
       <Head>
         <title>About FindA.Sale</title>
-        <meta name="description" content="Learn how FindA.Sale helps organizers of estate sales, garage sales, auctions, flea markets, and more reach local buyers. And helps shoppers discover secondhand treasures near them." />
+        <meta name="description" content="Learn how FindA.Sale helps organizers of garage sales, auctions, flea markets, and more reach local buyers. And helps shoppers discover secondhand treasures near them." />
         <meta property="og:title" content="About FindA.Sale" />
-        <meta property="og:description" content="FindA.Sale connects organizers of estate sales, yard sales, auctions, flea markets, and consignment events with local shoppers. Reduce manual work. Reach more buyers." />
+        <meta property="og:description" content="FindA.Sale connects organizers of yard sales, auctions, flea markets, and consignment events with local shoppers. Reduce manual work. Reach more buyers." />
         <meta property="og:url" content="https://finda.sale/about" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
@@ -55,7 +55,7 @@ const AboutPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">Our Mission</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-              We're here to connect communities through yard sales, garage sales, estate sales, flea markets,
+              We're here to connect communities through yard sales, garage sales, flea markets,
               auctions, consignment, and every kind of secondhand event worth visiting. FindA.Sale helps organizers
               reach shoppers and reduces the administrative burden that keeps events from happening.
             </p>

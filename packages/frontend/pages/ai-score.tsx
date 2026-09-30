@@ -147,7 +147,7 @@ export default function AiScorePage() {
         <title>Search Visibility Score | FindA.Sale</title>
         <meta
           name="description"
-          content="Check how visible your sale listing is to AI search assistants like ChatGPT, Perplexity, and Claude. Free GEO analysis tool."
+          content="Check how visible your sale listing is to chat and search assistants like ChatGPT, Perplexity, and Claude. Free GEO analysis tool."
         />
         <meta property="og:title" content="Search Visibility Score | FindA.Sale" />
         <meta
@@ -179,7 +179,7 @@ export default function AiScorePage() {
               Search Visibility Score
             </h1>
             <p style={{ fontSize: '16px', color: '#9ca3af', margin: 0, lineHeight: 1.6 }}>
-              Check how visible any FindA.Sale page is to AI search assistants like ChatGPT, Perplexity, and Google AI.
+              Check how visible any FindA.Sale page is to chat and search assistants like ChatGPT, Perplexity, and Gemini.
             </p>
           </div>
 
@@ -418,7 +418,7 @@ export default function AiScorePage() {
             <p style={{ margin: '0 0 12px', fontSize: '14px', color: '#9ca3af', lineHeight: 1.7 }}>
               This tool measures <strong style={{ color: '#f3f4f6' }}>Generative Engine Optimization (GEO)</strong>. How well a
               page communicates its content to generative search tools. Unlike traditional search engines that rank pages
-              by links and keywords, AI assistants like ChatGPT, Perplexity, and Google AI Overviews extract structured
+              by links and keywords, chat assistants like ChatGPT, Perplexity, and Google's search summaries extract structured
               facts from your page to generate direct answers.
             </p>
             <p style={{ margin: 0, fontSize: '14px', color: '#9ca3af', lineHeight: 1.7 }}>
