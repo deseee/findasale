@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { suppressionService } from '../services/suppressionService';
+import { maskEmail } from '../utils/logMask';
 
 /**
  * Unsubscribe type to notification preference field mapping.
@@ -15,6 +16,10 @@ import { suppressionService } from '../services/suppressionService';
 const TYPE_TO_PREF_MAP: Record<string, string> = {
   all: 'all',
   weekly: 'emailWeeklyDigest',
+  // Added 2026-09-29: the organizer weekly performance digest has its OWN opt-out so a user who is
+  // both a shopper and an organizer can turn off one weekly email without losing the other.
+  // Readers fall back to emailWeeklyDigest when this key was never set (utils/digestPrefs.ts).
+  organizerWeekly: 'emailWeeklyOrganizerDigest',
   flash: 'emailFlashDeals',
   newSales: 'emailNewSalesFromFollowed',
   messages: 'pushMessages',
@@ -34,7 +39,28 @@ const TYPE_TO_PREF_MAP: Record<string, string> = {
   // emailPriceDropAlerts field itself is untouched -- it is still written by the shared
   // 'all' unsubscribe/resubscribe branches below alongside the other legacy pref flags.
   priceAlerts: 'priceAlerts',
+  // Added 2026-09-29: the "Stop sale-day reminders" link in sale reminder emails. It used to carry type
+  // 'newSales' (followed-organizer alerts), so clicking it switched off an unrelated email and reminders kept
+  // coming (nothing on the reminder path read that pref). Reminders now check emailSaleReminders and the
+  // subscriber's emailOptOutAt (see markSaleReminderRowsOptedOut). Old 'newSales' tokens still work.
+  saleReminders: 'emailSaleReminders',
 };
+
+/**
+ * Sale reminders are sent per SaleSubscriber row, so the 'saleReminders' opt-out is also written onto the
+ * user's rows (emailOptOutAt). The preference above is what sendReminderEmail reads and is the source of
+ * truth; the row flag is best-effort on top of it (a missing column must never break an unsubscribe click).
+ */
+async function markSaleReminderRowsOptedOut(userId: string, optedOut: boolean): Promise<void> {
+  try {
+    await prisma.saleSubscriber.updateMany({
+      where: { userId },
+      data: { emailOptOutAt: optedOut ? new Date() : null },
+    });
+  } catch (err) {
+    console.error('[unsubscribeController] Could not update SaleSubscriber.emailOptOutAt (preference still saved):', (err as Error)?.message);
+  }
+}
 
 /**
  * Type to human-readable label mapping for email templates and responses.
@@ -42,11 +68,13 @@ const TYPE_TO_PREF_MAP: Record<string, string> = {
 const TYPE_TO_LABEL_MAP: Record<string, string> = {
   all: 'all FindA.Sale emails',
   weekly: 'weekly digest',
+  organizerWeekly: 'organizer weekly digest',
   flash: 'flash deal alerts',
   newSales: 'new sale alerts',
   messages: 'message notifications',
   saleEndingSoon: 'sale ending soon alerts',
   priceAlerts: 'price drop alerts',
+  saleReminders: 'sale day reminders',
 };
 
 /**
@@ -54,7 +82,7 @@ const TYPE_TO_LABEL_MAP: Record<string, string> = {
  * Used by email services to include unsubscribe links in emails.
  *
  * @param userId - The user ID
- * @param type - The unsubscribe type (all, weekly, flash, newSales, priceAlerts, saleEndingSoon, messages)
+ * @param type - The unsubscribe type (all, weekly, organizerWeekly, flash, newSales, priceAlerts, saleEndingSoon, saleReminders, messages)
  * @returns The unsubscribe token string
  */
 export async function generateUnsubscribeToken(
@@ -179,20 +207,29 @@ export async function handleUnsubscribe(
     // this, clicking "unsubscribe from all" looked successful but left every one
     // of those senders unaffected.
     if (type === 'all') {
+      // MERGE into the existing prefs (2026-09-29). This branch used to replace the whole object,
+      // which silently erased every other key a user had set (priceAlerts, organizer digest,
+      // showNameInGoingList, ...) and so re-enabled emails they had opted out of.
+      const currentAllPrefs = (user.notificationPrefs as Record<string, any> | null) || {};
       await prisma.user.update({
         where: { id: user.id },
         data: {
           notificationPrefs: {
+            ...currentAllPrefs,
             emailWeeklyDigest: false,
+            emailWeeklyOrganizerDigest: false,
             emailFlashDeals: false,
             emailNewSalesFromFollowed: false,
             emailPriceDropAlerts: false,
+            priceAlerts: false,
             pushMessages: false,
             emailSaleEndingSoon: false,
+            emailSaleReminders: false,
           },
         },
       });
       await suppressionService.processOptOut(user.email);
+      await markSaleReminderRowsOptedOut(user.id, true);
     } else {
       // Handle type-specific unsubscribe
       const prefKey = TYPE_TO_PREF_MAP[type];
@@ -215,6 +252,7 @@ export async function handleUnsubscribe(
           notificationPrefs: updatedPrefs,
         },
       });
+      if (type === 'saleReminders') await markSaleReminderRowsOptedOut(user.id, true);
     }
 
     // Delete the token (one-time use)
@@ -228,7 +266,9 @@ export async function handleUnsubscribe(
       success: true,
       type,
       label,
-      email: user.email,
+      // Masked (2026-09-29): this endpoint is authenticated only by the token in the link, so it must not
+      // hand the account's full email address to whoever holds (or guesses at) a token.
+      email: maskEmail(user.email),
       message: `You've been unsubscribed from ${label}.`,
     });
   } catch (error) {
@@ -284,23 +324,30 @@ export async function resubscribe(
     // Only the opted-out flag is cleared -- a real hard-bounce/complaint
     // suppression is never undone by a user action.
     if (type === 'all') {
-      const userForResub = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+      const userForResub = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, notificationPrefs: true } });
+      // MERGE (2026-09-29), same reason as the unsubscribe 'all' branch: keep unrelated keys.
+      const currentResubPrefs = (userForResub?.notificationPrefs as Record<string, any> | null) || {};
       await prisma.user.update({
         where: { id: userId },
         data: {
           notificationPrefs: {
+            ...currentResubPrefs,
             emailWeeklyDigest: true,
+            emailWeeklyOrganizerDigest: true,
             emailFlashDeals: true,
             emailNewSalesFromFollowed: true,
             emailPriceDropAlerts: true,
+            priceAlerts: true,
             pushMessages: true,
             emailSaleEndingSoon: true,
+            emailSaleReminders: true,
           },
         },
       });
       if (userForResub?.email) {
         await suppressionService.clearOptOut(userForResub.email);
       }
+      await markSaleReminderRowsOptedOut(userId, false);
     } else {
       // Handle type-specific re-subscribe
       const user = await prisma.user.findUnique({
@@ -326,6 +373,7 @@ export async function resubscribe(
           notificationPrefs: updatedPrefs,
         },
       });
+      if (type === 'saleReminders') await markSaleReminderRowsOptedOut(userId, false);
     }
 
     const label = TYPE_TO_LABEL_MAP[type] || type;

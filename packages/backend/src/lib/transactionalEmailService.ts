@@ -56,6 +56,8 @@ export const transactionalEmailService = {
       subject: string;
       html: string;
       text?: string;
+      // Optional extra message headers (e.g. RFC 8058 List-Unsubscribe / List-Unsubscribe-Post).
+      headers?: Record<string, string>;
     }): Promise<{ sent: boolean; reason?: string }> {
       if (!process.env.RESEND_API_KEY) {
         // Soft failure in dev/test environments where Resend isn't configured.
@@ -94,6 +96,9 @@ export const transactionalEmailService = {
         subject: options.subject,
         html: options.html,
         ...(options.text ? { text: options.text } : {}),
+        ...(options.headers && Object.keys(options.headers).length > 0
+          ? { headers: options.headers }
+          : {}),
       });
 
       if (error) {

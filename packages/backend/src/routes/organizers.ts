@@ -4,7 +4,7 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { isTrustedServerRequest } from '../middleware/rateLimitShared';
 import { prisma } from '../index';
-import { authenticate, AuthRequest, checkTierLapse, requireOrganizer } from '../middleware/auth';
+import { authenticate, AuthRequest, checkTierLapse, requireOrganizer, requireAdmin } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
 import { exportOrganizer, exportOrganizerCommerceManagerFeed } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
@@ -30,6 +30,12 @@ import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue, getEbayInsertionsForecast, getEbaySyncIssues, retryEbaySync } from '../controllers/platformStatsController';
 import { startStandardMigration, getHubOwnerStripeStatus, initiateHubOwnerStripeOnboarding } from '../controllers/stripeConnectController';
+import { requireTier } from '../middleware/requireTier';
+import { resolveAudienceAccess } from '../utils/audienceAccess';
+import { firstNameLastInitial } from '../utils/publicDisplayName';
+import { csvCell } from '../utils/csvSafe';
+import { normalizeBusinessName, BUSINESS_NAME_MAX_LENGTH } from '../utils/businessName';
+import { unfollowOrganizerEverywhere } from '../services/organizerFollowService';
 
 const router = Router();
 
@@ -49,8 +55,19 @@ const publicDirectoryRateLimiter = rateLimit({
 });
 
 // Organizer profile validation schema
+/**
+ * Display-name hygiene (2026-09-29): control characters (CR/LF/tab/U+2028/U+2029/U+0085 ...) become a
+ * space, whitespace collapses, empty after trim is rejected, max 120. See utils/businessName.ts.
+ */
+const businessNameSchema = z
+  .string()
+  .max(1000, 'Business name is too long')
+  .transform(normalizeBusinessName)
+  .refine((v) => v.length > 0, { message: 'Business name is required' })
+  .refine((v) => v.length <= BUSINESS_NAME_MAX_LENGTH, { message: `Business name must be ${BUSINESS_NAME_MAX_LENGTH} characters or fewer` });
+
 const organizerProfileSchema = z.object({
-  businessName: z.string().optional(),
+  businessName: businessNameSchema.optional(),
   phone: z.string().optional(),
   bio: z.string().optional(),
   tagline: z.string().max(120).optional(),
@@ -821,7 +838,8 @@ router.get('/me/sales', authenticate, async (req: AuthRequest, res: Response) =>
 
 // Phase 32: CSV export — GET /api/organizers/me/export/items/:saleId
 // Streams a CSV of all items in the given sale (organizer-owned sales only)
-router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, res: Response) => {
+// 2026-09-29: PRO and above (roadmap #125, CSV export is a PRO feature) and formula-injection safe.
+router.get('/me/export/items/:saleId', authenticate, requireTier('PRO'), async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (!req.user || !hasOrganizerRole) {
@@ -856,15 +874,9 @@ router.get('/me/export/items/:saleId', authenticate, async (req: AuthRequest, re
       },
     });
 
-    // Build CSV — escape fields containing commas/quotes
-    const esc = (v: any): string => {
-      if (v == null) return '';
-      const s = String(v);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
+    // Build CSV. csvCell (utils/csvSafe.ts) quotes fields containing commas/quotes/newlines and
+    // neutralizes spreadsheet formula injection (text cells starting with = + - @ get a leading apostrophe).
+    const esc = csvCell;
 
     const header = ['id', 'title', 'description', 'price', 'auctionStartPrice', 'currentBid',
                     'condition', 'category', 'status', 'auctionEndTime', 'createdAt'];
@@ -1178,6 +1190,11 @@ router.get('/off-platform-sales', authenticate, async (req: AuthRequest, res: Re
   }
 });
 
+// GET /organizers/pos-tiers — POS Value Unlock Tiers (Roadmap #127)
+// Returns organizer's current tier status based on transaction count + minimum revenue
+// Declared before the public organizer lookup below so 'pos-tiers' is not captured as an organizer id.
+router.get('/pos-tiers', authenticate, getPosTierStatus);
+
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 // Supports lookup by ID (CUID) or by customStorefrontSlug (user-friendly slug)
 // P1 Security: Strip PII (phone, address) from unauthenticated responses
@@ -1488,9 +1505,10 @@ router.delete('/:id/follow', authenticate, async (req: AuthRequest, res: Respons
 
     const organizerId = req.params.id;
 
-    await prisma.follow.deleteMany({
-      where: { userId: req.user.id, organizerId },
-    });
+    // Delete the canonical Follow AND any legacy SmartFollow row for the same pair in ONE transaction.
+    // getUserFollows re-syncs Follow rows from SmartFollow, so removing only Follow let the follow
+    // resurrect itself on the next read.
+    await unfollowOrganizerEverywhere(req.user.id, organizerId);
 
     const count = await prisma.follow.count({ where: { organizerId } });
 
@@ -1501,18 +1519,41 @@ router.delete('/:id/follow', authenticate, async (req: AuthRequest, res: Respons
   }
 });
 
-// GET /:id/followers — list followers of an organizer (public, paginated)
-// P1 Security: Rate limit to prevent bulk user enumeration
-router.get('/:id/followers', publicDirectoryRateLimiter, async (req: Request, res: Response) => {
+// GET /:id/followers/count — public follower COUNT only (no shopper data)
+router.get('/:id/followers/count', publicDirectoryRateLimiter, async (req: Request, res: Response) => {
+  try {
+    const count = await prisma.follow.count({ where: { organizerId: req.params.id } });
+    res.json({ count });
+  } catch (error) {
+    console.error('Error fetching follower count:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /:id/followers — list followers of an organizer.
+// 2026-09-29 (data minimization, GDPR/CCPA): this used to be PUBLIC and returned every follower's
+// userId and full name, i.e. anyone could harvest a shopper list. It now requires sign-in, is limited
+// to the organizer who owns the audience (or an admin, or workspace staff with the broadcast_alerts
+// permission), never returns a userId, and shows names as "First name + last initial".
+// The public follower count lives in GET /:id (followerCount) and GET /:id/followers/count.
+router.get('/:id/followers', publicDirectoryRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const organizerId = req.params.id;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const access = await resolveAudienceAccess(req, organizerId);
+    if (!access.allowed) {
+      return res.status(403).json({
+        message: 'Only the organizer (or their team) can view the follower list.',
+        code: 'FOLLOWERS_FORBIDDEN',
+      });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 20), 50);
 
     const [followers, total] = await Promise.all([
       prisma.follow.findMany({
         where: { organizerId },
-        include: { user: { select: { id: true, name: true } } },
+        include: { user: { select: { name: true } } },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -1522,8 +1563,7 @@ router.get('/:id/followers', publicDirectoryRateLimiter, async (req: Request, re
 
     res.json({
       followers: followers.map((f: any) => ({
-        userId: f.user.id,
-        name: f.user.name,
+        name: firstNameLastInitial(f.user?.name) ?? 'Shopper',
         followedAt: f.createdAt,
       })),
       total,
@@ -1537,11 +1577,8 @@ router.get('/:id/followers', publicDirectoryRateLimiter, async (req: Request, re
 });
 
 // Admin: award badges to organizers based on criteria
-router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/admin/award-badges', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user || req.user.role !== 'ADMIN') {
-      return res.status(403).json({ message: 'Admin access required.' });
-    }
 
     // Ensure default badges exist
     const defaultBadges = [
@@ -1660,10 +1697,6 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-// GET /organizers/pos-tiers — POS Value Unlock Tiers (Roadmap #127)
-// Returns organizer's current tier status based on transaction count + minimum revenue
-router.get('/pos-tiers', authenticate, getPosTierStatus);
 
 // GET /organizers/export/csv?saleId=X&format=ebay|amazon|facebook — CSV Export (Roadmap #125)
 // Export inventory items for a sale in platform-specific CSV formats (PRO tier required)
