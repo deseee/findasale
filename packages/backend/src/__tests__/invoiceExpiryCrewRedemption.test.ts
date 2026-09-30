@@ -76,6 +76,16 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
+// Stripe branches of these jobs are gated on isStripePlatformClosed(process.env) now that the Stripe
+// platform account is shut down (STRIPE_PLATFORM_CLOSED defaults to closed). These tests exercise the
+// legacy Stripe branches with a mocked Stripe client, so they opt out of the gate explicitly.
+const __prevStripeClosed = process.env.STRIPE_PLATFORM_CLOSED;
+beforeAll(() => { process.env.STRIPE_PLATFORM_CLOSED = 'false'; });
+afterAll(() => {
+  if (__prevStripeClosed === undefined) delete process.env.STRIPE_PLATFORM_CLOSED;
+  else process.env.STRIPE_PLATFORM_CLOSED = __prevStripeClosed;
+});
+
 describe('invoiceExpiryJob: crew redemption restore', () => {
   it('restores the member\'s redemption once, after the revert transaction committed (no-session invoice)', async () => {
     db.holdInvoice.findMany.mockResolvedValue([invoice()]);
