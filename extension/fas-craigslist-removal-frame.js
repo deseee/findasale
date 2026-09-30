@@ -272,7 +272,10 @@
       const matches = all.rows.filter((r) => r.active && (r.title === wanted || r.rawTitle === wanted));
       const ids = Array.from(new Set(matches.map((r) => r.postingId)));
       if (ids.length !== 1) {
-        const reason = ids.length ? 'ambiguous_duplicate_title' : 'no_confident_listing_match';
+        // 2026-09-30 (S-EXT-RESYNC): crRemAllRows() read EVERY page of the postings dashboard (all.ok),
+        // so zero active matches is a real "already gone" -- report it as listing_not_found like
+        // Poshmark/Mercari do, so the backend can resolve it instead of retrying forever.
+        const reason = ids.length ? 'ambiguous_duplicate_title' : 'listing_not_found';
         overlayWarn('Could not find exactly one active Craigslist posting titled "' + escapeHtml(item.title) + '" (' + reason + '). Please check it yourself.');
         await setPending(null);
         await report('crossPlatformRemovalSkipped', item, reason);
