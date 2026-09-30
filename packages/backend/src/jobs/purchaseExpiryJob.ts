@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe, getTestStripe } from '../utils/stripe';
 import { createNotification } from '../lib/notificationService';
+import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // Wave 2 (2026-09-29): reclaimed-PAID rows earn the same XP, milestones, achievement and Sale Passport stamp as a webhook-settled purchase (shared, idempotent, never throws)
 import { getSquareOrderPaymentStatus } from '../services/squareCheckoutLinkService'; // Square reconciliation follow-up (2026-09-09): reuses the shared Orders-API lookup built for posStrandedSaleReconcileCron.ts's Square branch -- see that file's own getSquareOrderPaymentStatus usage.
 
 /**
@@ -31,9 +32,10 @@ import { getSquareOrderPaymentStatus } from '../services/squareCheckoutLinkServi
  * doing anything, same philosophy as invoiceExpiryJob.ts / posStrandedSaleReconcileCron.ts:
  *   - succeeded            -> STRANDED-PAID safety net: the webhook was missed/delayed.
  *                             Flip PENDING -> PAID (does NOT duplicate the webhook's
- *                             other side effects like stock decrement/eBay sync -- those
- *                             are a separate, narrower gap; flagged in the handoff, not
- *                             silently "fixed" here).
+ *                             stock decrement/eBay sync -- a separate, narrower gap; flagged
+ *                             in the handoff, not silently "fixed" here). Engagement side
+ *                             effects (XP, milestones, achievement, Sale Passport stamp) ARE
+ *                             replayed since Wave 2 (2026-09-29), see fireReclaimEngagement.
  *   - canceled /
  *     requires_payment_method /
  *     requires_confirmation  -> genuinely abandoned, no forward progress possible.
@@ -87,6 +89,26 @@ import { getSquareOrderPaymentStatus } from '../services/squareCheckoutLinkServi
  */
 
 const PENDING_EXPIRY_HOURS = parseFloat(process.env.PURCHASE_PENDING_EXPIRY_HOURS ?? '2');
+
+/**
+ * Engagement parity for a stranded-PAID reclaim (Wave 2, 2026-09-29). The webhook that would normally
+ * have run the purchase side effects (XP, first-purchase milestones, referral rewards, OG Buyer badge,
+ * achievement, Sale Passport MAKE_PURCHASE stamp) was missed, so the reclaim owns them. One call per
+ * payment group: the shared service resolves the whole cart from the processor reference (one
+ * PaymentIntent or one Square payment shared by N rows), picks the canonical PAID row, and is
+ * idempotent on the passport ledger key ACT:MAKE_PURCHASE:<purchaseId> and on PointsTransaction
+ * (userId, type, purchaseId), so a later webhook replay or a second sweep can not double-award. Guests
+ * (no userId) and POS / test rows are skipped inside the service. Never throws into the job.
+ */
+export function fireReclaimEngagement(ids: string[], userIds: (string | null)[]): void {
+  try {
+    const idx = userIds.findIndex((u) => !!u);
+    if (idx < 0 || !ids[idx]) return; // guest-only group, nothing to award
+    fireSquarePurchaseEngagement(ids[idx]);
+  } catch (err) {
+    console.warn('[purchaseExpiryJob] could not schedule reclaim engagement (non-fatal):', err);
+  }
+}
 
 const ABANDONED_STATUSES = new Set(['canceled', 'requires_payment_method', 'requires_confirmation']);
 const IN_FLIGHT_STATUSES = new Set(['requires_action', 'requires_capture', 'processing']);
@@ -228,6 +250,7 @@ export const reclaimStalePurchases = async (): Promise<void> => {
           });
           if (result.count > 0) {
             paidCount += result.count;
+            fireReclaimEngagement(group.ids, group.userIds);
             const msg = `[purchaseExpiryJob] STRANDED-PAID-RECLAIMED pi=${piId} rows=${result.count} purchaseIds=${group.ids.join(',')} -- Stripe shows succeeded but still PENDING past ${PENDING_EXPIRY_HOURS}h (webhook missed). Flipped to PAID. NOTE: does not replay stock-decrement/eBay-sync side effects -- verify downstream state if this fires often.`;
             console.error(msg);
             try { Sentry.captureMessage(msg, 'error'); } catch { /* Sentry may not be initialized */ }
@@ -358,6 +381,7 @@ export const reclaimStalePurchases = async (): Promise<void> => {
             });
             if (result.count > 0) {
               paidCount += result.count;
+              fireReclaimEngagement(group.ids, group.userIds);
               const msg = `[purchaseExpiryJob] SQUARE-STRANDED-PAID-RECLAIMED order=${orderId} rows=${result.count} purchaseIds=${group.ids.join(',')} -- Square shows COMPLETED but still PENDING past ${PENDING_EXPIRY_HOURS}h (webhook missed). Flipped to PAID. NOTE: does not replay stock-decrement/eBay-sync side effects -- verify downstream state if this fires often.`;
               console.error(msg);
               try { Sentry.captureMessage(msg, 'error'); } catch { /* Sentry may not be initialized */ }

@@ -12,6 +12,7 @@ import { formatBuyerPremiumPct, AUCTION_BUYER_PREMIUM_LABEL } from '../lib/platf
 import AccessibleModal from './AccessibleModal';
 import { useAuth } from './AuthContext';
 import { SquarePaymentRequestForm } from './SquarePaymentRequestForm';
+import { getAffiliateLinkIdForCheckout } from '../lib/affiliateAttribution';
 
 // Lazy-initialize Stripe on client-side only to avoid SSR errors
 let stripePromise: Promise<Stripe | null> | null = null;
@@ -657,9 +658,12 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
       // the same guestCheckoutVelocityGuard.ts carding-hardening check createSquarePayment
       // already runs (see squarePaymentController.ts's assertGuestCheckoutAllowed call).
       const deviceFingerprint = isGuest ? await generateDeviceFingerprint() : undefined;
+      // Creator Program attribution (validated server-side; undefined when there is none).
+      const affiliateLinkId = getAffiliateLinkIdForCheckout();
       const response = await api.post('/square-payment/create-payment', {
         itemId,
         sourceId,
+        ...(affiliateLinkId ? { affiliateLinkId } : {}),
         ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint } : {}),
       });
       if (response.data?.purchase || response.data?.squarePaymentId || response.data?.purchaseId) {

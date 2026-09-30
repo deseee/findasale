@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
@@ -6,6 +7,7 @@ import { createNotification } from '../lib/notificationService';
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder';
 import { shouldUseDirectCharge } from '../services/stripeConnectService';
 import { getSquareOrderPaymentStatus, deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square changeover Wave S3 (2026-09-09): POSPaymentLink reconciliation, Square branch
+import { prepareSquareInvoiceForRelease } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square payment link is checked for payment and cancelled BEFORE its POS link row is flipped, same gate reservationController.releasePaymentLink uses
 import type { POSPaymentLink } from '@prisma/client';
 
 /**
@@ -84,8 +86,47 @@ const reclaimExpiredPaymentLink = async (
   // notification copy from the cron's own timeout-driven 'EXPIRED' path. Defaults to
   // 'EXPIRED' so every existing call site (both branches above) is unaffected.
   targetStatus: 'EXPIRED' | 'CANCELLED' = 'EXPIRED'
-): Promise<{ flipped: boolean; revertedItemIds: string[] }> => {
+): Promise<{ flipped: boolean; revertedItemIds: string[]; gate?: 'PAID' | 'RETRY' }> => {
   try {
+    // Money review P0-2 (2026-09-29): a Square Payment Link stays payable until it is deleted, and the
+    // best-effort delete further down runs AFTER the row flip and treats a failure as non-fatal, which
+    // used to leave an expired-looking link still payable. Square links now run the shared release
+    // gate FIRST (services/holdInvoiceSquareRelease.ts, the same one releasePaymentLink uses):
+    //   PAID  -> record the sale and skip the reclaim (never hand items back after money moved);
+    //   RETRY -> leave the link ACTIVE so the next run tries again (Square unreachable, cancel refused);
+    //   CLEAR -> the link is cancelled at Square, safe to flip. Stripe links skip this block entirely.
+    if (link.processor === 'SQUARE') {
+      const squareContext = `reclaimExpiredPaymentLink link=${link.id} (${targetStatus})`;
+      const gate = await prepareSquareInvoiceForRelease({
+        invoice: {
+          id: link.id,
+          processor: 'SQUARE',
+          squareOrderId: link.squareOrderId ?? null,
+          squarePaymentLinkId: link.squarePaymentLinkId ?? null,
+          squarePaymentId: null,
+        },
+        organizerId: link.organizerId,
+        context: squareContext,
+      });
+      if (gate.outcome === 'PAID') {
+        try {
+          await recordPosPaymentLinkSale(link, {
+            source: 'reconcile',
+            processor: 'SQUARE',
+            externalPaymentId: gate.paymentId ?? undefined,
+          });
+        } catch (recErr: any) {
+          console.error(`[pos-reconcile] ${squareContext}: Square shows the link paid but recording failed (the next run retries):`, recErr?.message ?? recErr);
+        }
+        console.error(`[pos-reconcile] SQUARE-PAID link=${link.id} -- reclaim skipped (${gate.detail}).`);
+        return { flipped: false, revertedItemIds: [], gate: 'PAID' };
+      }
+      if (gate.outcome === 'RETRY') {
+        console.warn(`[pos-reconcile] SQUARE-RETRY link=${link.id} left ACTIVE for the next run: ${gate.detail}`);
+        return { flipped: false, revertedItemIds: [], gate: 'RETRY' };
+      }
+    }
+
     const { revertIds: revertedItemIds, affectedReservations, flipped } = await prisma.$transaction(async (tx) => {
       // Atomic link flip: only proceed if still ACTIVE -- a concurrent
       // webhook/reconcile completing this link in the same window wins the
@@ -165,7 +206,8 @@ const reclaimExpiredPaymentLink = async (
       if (link.processor === 'SQUARE') {
         if (link.squarePaymentLinkId) {
           const delResult = await deleteSquareCheckoutLink({ organizerId: link.organizerId, paymentLinkId: link.squarePaymentLinkId });
-          if (!delResult.ok) {
+          // The release gate above normally deleted this link already; "already gone" is expected here.
+          if (!delResult.ok && delResult.code !== 'NOT_FOUND' && delResult.code !== 'RESOURCE_NOT_FOUND') {
             console.warn(`[pos-reconcile] Failed to cancel Square payment link ${link.squarePaymentLinkId} (non-fatal): ${delResult.code} -- ${delResult.message}`);
           }
         } else {
@@ -269,12 +311,17 @@ export const manuallyReclaimPosPaymentLink = async (
     return { outcome: 'error', message: 'Could not verify this payment link with our payment processor just now. Please try again in a moment.' };
   }
 
-  const { flipped, revertedItemIds } = await reclaimExpiredPaymentLink(
+  const { flipped, revertedItemIds, gate } = await reclaimExpiredPaymentLink(
     link,
     'manually reclaimed by organizer via /organizer/holds',
     stripeRequestOptions,
     'CANCELLED'
   );
+
+  if (gate === 'PAID') return { outcome: 'already_paid' };
+  if (gate === 'RETRY') {
+    return { outcome: 'error', message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.' };
+  }
 
   if (!flipped) {
     // Lost a race -- a webhook or the cron resolved this link in the moment between
@@ -551,7 +598,52 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
   }
 };
 
+/**
+ * Money review follow-up (2026-09-29): two refund-side sweeps ride on this cron's 10-minute tick.
+ *   - reconcileStuckSquareRefunds (services/squareRefundService.ts): finishes Square refunds that Square
+ *     accepted but whose finalize write failed (Purchase left REFUNDING), or puts the purchase back to PAID.
+ *   - reconcilePosFulfillmentFailures (same file): refunds POS requests left FULFILLMENT_FAILED.
+ * Each sweep is individually try/caught so one failing sweep never stops the other. squareRefundService is
+ * imported lazily so this module (and its tests) never load the Square SDK / token chain unless a sweep runs.
+ * Same POS_RECONCILE_DISABLED kill-switch as the rest of this job.
+ */
+export const runPosRefundSweeps = async (): Promise<void> => {
+  if (process.env.POS_RECONCILE_DISABLED === '1') return;
+
+  try {
+    const { reconcileStuckSquareRefunds } = await import('../services/squareRefundService');
+    const summary = await reconcileStuckSquareRefunds({ olderThanMinutes: 10, limit: 50 });
+    if (summary.checked > 0 || summary.errors > 0) {
+      console.log(`[pos-reconcile] stuck Square refund sweep: ${JSON.stringify(summary)}`);
+    }
+  } catch (err: any) {
+    console.error('[pos-reconcile] stuck Square refund sweep failed:', err?.message ?? err);
+    try { Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { tags: { area: 'pos-reconcile', sweep: 'stuck-square-refunds' } } as any); } catch { /* Sentry may not be initialized */ }
+  }
+
+  try {
+    const { reconcilePosFulfillmentFailures } = await import('../services/squareRefundService');
+    const summary = await reconcilePosFulfillmentFailures({ olderThanMinutes: 10, limit: 50 });
+    if (summary.checked > 0) {
+      console.log(`[pos-reconcile] POS fulfillment-failure refund sweep: ${JSON.stringify(summary)}`);
+    }
+  } catch (err: any) {
+    console.error('[pos-reconcile] POS fulfillment-failure refund sweep failed:', err?.message ?? err);
+    try { Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { tags: { area: 'pos-reconcile', sweep: 'pos-fulfillment-failures' } } as any); } catch { /* Sentry may not be initialized */ }
+  }
+};
+
 // Every 10 minutes.
 cron.schedule('6,16,26,36,46,56 * * * *', cronGuard({ jobName: 'posStrandedSaleReconcile' }, async () => { // staggered off reservationExpiryJob's */10 2026-08-04 cost-optimization batch
-  await reconcileStrandedPosSales();
+  // The refund sweeps run even if the stranded-sale pass throws; its error is rethrown afterwards so cronGuard still reports it.
+  let strandedErr: unknown;
+  let strandedFailed = false;
+  try {
+    await reconcileStrandedPosSales();
+  } catch (err) {
+    strandedFailed = true;
+    strandedErr = err;
+  }
+  await runPosRefundSweeps();
+  if (strandedFailed) throw strandedErr;
 }));

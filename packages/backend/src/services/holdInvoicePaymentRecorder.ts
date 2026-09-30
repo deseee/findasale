@@ -11,7 +11,9 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row backfill (2026-08-09): recompute chargeType at payment-confirmation time, mirrors posPaymentLinkRecorder.ts
-import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from './cashFeeService'; // ADR-114 (2026-08-31) Security-QA fix: cash-leg commission accrual, same mechanism posPaymentController/terminalController/reservationController already use
+import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // 2026-09-29: cash-leg commission now accrues through the exactly-once CashFeeAccrual ledger (sourceType 'HOLD_INVOICE'), and per-row amounts/fees/cash legs are allocated in exact cents; mirrors posPaymentLinkRecorder.ts
+// 2026-09-29 money review P0-2: a captured Square payment on a dead invoice is recorded (items still available) or refunded, never left unresolved. The refund service is imported LAZILY (see refundOrEscalateDeadSquarePayment): it pulls in the Square token/crypto chain, which must not load for every caller of this recorder (Stripe webhook, tests) that never refunds.
+import { fireSquarePurchaseEngagement } from './squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: purchase XP, milestones, referral, badge, achievement and passport stamp for a Square-paid invoice (idempotent per payment, never throws)
 
 /**
  * holdInvoicePaymentRecorder.ts — payments fix (2026-08-03)
@@ -81,6 +83,52 @@ import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } fro
  * checkout-time decision if Stripe eligibility or the allowlist changed in between) still
  * accepted for the POS Payment Link path (posPaymentLinkRecorder.ts), which has no invoice-like
  * row to pin a snapshot onto.
+ *
+ * DEAD-INVOICE RESOLUTION (2026-09-29, money review P0-2): the "NO automatic refund" rule above
+ * is superseded for SQUARE. A Square Payment Link can still be paid after its invoice was
+ * released/expired (the release paths now cancel the link first, but a payment can land inside the
+ * race window or on an invoice released before that fix). When a completed Square payment arrives
+ * for a CANCELLED/EXPIRED invoice this file now:
+ *   1. raises the Sentry error (reportDeadInvoicePayment) AND files an organizer notification
+ *      (type 'payment_reconciliation', deduped per invoice + outcome): that pair is the
+ *      unresolved-reconciliation record (there is deliberately no new table);
+ *   2. if every bundled item is still AVAILABLE (or the invoice has no inventory lines), REVIVES the
+ *      invoice: the same guarded flip, item sale, Purchase rows and cash accrual as a normal
+ *      payment, with the flip guarded on the invoice's dead status instead of PENDING. An item that
+ *      is sold under us mid-transaction aborts and rolls back the whole revive;
+ *   3. otherwise refunds the captured payment in full through squareDeadInvoiceRefundService
+ *      (kill switch SQUARE_DEAD_INVOICE_AUTO_REFUND_DISABLED=1) and notifies the organizer and, for
+ *      a real account, the shopper. A refund that is not issued leaves the Sentry error and the
+ *      organizer notification as the manual-review record.
+ * Stripe invoices keep the old behavior (alert, record nothing, no refund here: the hourly
+ * deadInvoicePaidSweepJob owns Stripe) plus the organizer notification. A REFUNDED invoice
+ * receiving a duplicate delivery is a silent no-op.
+ *
+ * DISCOUNTED / SPLIT-TENDER INVOICES (2026-09-29):
+ *   - Crew Invasion discount: HoldInvoice.totalAmount can be BELOW the sum of the bundled items'
+ *     list prices. The Purchase rows must add up to what was actually paid (refunds, earnings and
+ *     disputes key off them), so when totalAmount < sum(item price cents) each row's amount is
+ *     scaled by totalAmount / sum(item price cents) with allocateCentsProportionally (rows sum to
+ *     the cent; the last row absorbs rounding). An invoice at or above the item sum keeps each
+ *     row at the item's list price exactly as before. Rows are allocated over ALL bundled items
+ *     and only sellable ones are written, so an oversold item's share is never re-attributed to
+ *     the others (it stays a manual-refund case).
+ *   - The platform fee (HoldInvoice.platformFeeAmount, computed on the CARD leg only) is
+ *     allocated across rows in exact cents by list-price share, so per-row commissionAmount sums
+ *     to the invoice fee.
+ *   - Cash leg (HoldInvoice.cashAmountCents, 'pos-cash' or cash+card): each row gets
+ *     Purchase.cashLegAmount (dollars, proportional to the row amount, whole cents, capped at the
+ *     row) so a refund knows how much of the row the card processor never collected
+ *     (cashFeeService.resolveSplitRefund). The cash-leg commission accrues through
+ *     accrueSplitCashLegOnce (CashFeeAccrual, unique per ('HOLD_INVOICE', invoice id)) INSIDE this
+ *     transaction, so it commits or rolls back with the PAID flip and can never double-accrue on a
+ *     webhook redelivery or reconcile pass. A failure THROWS and rolls the recording back (the
+ *     caller's retry re-attempts it), same as posPaymentLinkRecorder: swallowing it here would not
+ *     even work, because a failed statement aborts the surrounding Postgres transaction.
+ *     Refund reversal finds the accrual through cashFeeRefundReversalService (HOLD_INVOICE).
+ *     REQUIRES the CashFeeAccrual table (migration 20260929120000_pos_split_tender_ledger).
+ *   - Engagement: for a Square-paid invoice with a real shopper, the shared engagement service is
+ *     fired after commit for the created Purchase rows (see the call site for the dedupe notes).
  */
 
 export interface MarkHoldInvoicePaidOpts {
@@ -142,9 +190,11 @@ function reportDeadInvoicePayment(params: {
   const msg =
     `[hold-invoice/${params.source}] DEAD-INVOICE-PAYMENT invoice=${params.invoiceId} ` +
     `status=${params.invoiceStatus} pi=${params.paymentIntentId} amount=$${amountDollars} ` +
-    `detectedAt=${params.detectedAt} -- Stripe captured a payment for an invoice that is not ` +
-    `PENDING. NO sale was recorded (no items marked SOLD, no Purchase rows) and NO refund was ` +
-    `issued automatically. This charge must be reviewed and refunded manually in Stripe.`;
+    `detectedAt=${params.detectedAt} -- a payment was captured for an invoice that is not ` +
+    `PENDING. Stripe: NO sale was recorded and NO refund was issued here, refund it manually in ` +
+    `Stripe (deadInvoicePaidSweepJob also watches these). Square: the recorder records the sale ` +
+    `if the items are still available, otherwise refunds it; see the following ` +
+    `"DEAD-INVOICE resolution" log line for what was done.`;
   console.error(msg);
   try {
     Sentry.captureException(new Error(msg), {
@@ -171,6 +221,208 @@ function reportDeadInvoicePayment(params: {
     // handler (a throw there marks the idempotency row FAILED and returns 500, which makes
     // Stripe retry forever). The console.error above is the fallback record.
   }
+}
+
+/** Thrown inside the revive transaction when an item cannot be sold, to roll the whole revive back. */
+class DeadInvoiceReviveAbort extends Error {
+  itemId: string;
+  constructor(itemId: string) {
+    super(`dead-invoice revive aborted: item ${itemId} is no longer sellable`);
+    this.name = 'DeadInvoiceReviveAbort';
+    this.itemId = itemId;
+  }
+}
+
+/** Dead states a completed Square payment can be safely revived from. */
+const REVIVABLE_DEAD_STATUSES = new Set(['CANCELLED', 'EXPIRED']);
+
+type DeadInvoiceNotifyOutcome = 'RECORDED' | 'REFUNDED' | 'MANUAL';
+
+const centsToDollarString = (cents: number): string => (Math.max(0, Number(cents) || 0) / 100).toFixed(2);
+
+/**
+ * The organizer-facing half of the unresolved-reconciliation record (the Sentry error is the other).
+ * Best-effort and never throws. Deduped per (organizer, title, invoice id): the invoice id is in the
+ * body, and a redelivered webhook or a second reconcile pass finds the row and adds nothing.
+ */
+async function notifyDeadInvoicePayment(params: {
+  holdInvoice: any;
+  outcome: DeadInvoiceNotifyOutcome;
+  amountCents: number;
+  detail?: string;
+}): Promise<void> {
+  const { holdInvoice, outcome, amountCents, detail } = params;
+  const amount = centsToDollarString(amountCents);
+  const ref = `Ref ${holdInvoice.id}`;
+  const copy: Record<DeadInvoiceNotifyOutcome, { title: string; organizerBody: string; shopperBody: string | null }> = {
+    RECORDED: {
+      title: 'Late payment recorded',
+      organizerBody: `A payment of $${amount} arrived after an invoice was closed. The items were still available, so the sale has been recorded. ${ref}`,
+      shopperBody: null,
+    },
+    REFUNDED: {
+      title: 'Late payment refunded',
+      organizerBody: `A payment of $${amount} arrived after an invoice was closed and the items were no longer available. It has been refunded in full to the buyer. ${ref}`,
+      shopperBody: `A payment of $${amount} you made after your invoice closed could not be applied because the items are no longer available. It has been refunded in full.`,
+    },
+    MANUAL: {
+      title: 'Late payment needs review',
+      organizerBody: `A payment of $${amount} arrived after an invoice was closed and could not be settled automatically${detail ? ` (${detail})` : ''}. Please review it in your Square dashboard. ${ref}`,
+      shopperBody: null,
+    },
+  };
+  const c = copy[outcome];
+  const link = `/organizer/sales/${holdInvoice.saleId}`;
+  try {
+    const existing = await prisma.notification.findFirst({
+      where: { userId: holdInvoice.organizerUserId, type: 'payment_reconciliation', title: c.title, body: { contains: holdInvoice.id } },
+      select: { id: true },
+    });
+    if (!existing) {
+      await prisma.notification.create({
+        data: { userId: holdInvoice.organizerUserId, type: 'payment_reconciliation', title: c.title, body: c.organizerBody, link, channel: 'OPERATIONAL' },
+      });
+    }
+    if (c.shopperBody && holdInvoice.shopperUserId) {
+      const shopperExisting = await prisma.notification.findFirst({
+        where: { userId: holdInvoice.shopperUserId, type: 'payment_refunded', body: { contains: amount }, link: `/invoices/${holdInvoice.id}` },
+        select: { id: true },
+      });
+      if (!shopperExisting) {
+        await prisma.notification.create({
+          data: { userId: holdInvoice.shopperUserId, type: 'payment_refunded', title: 'Payment refunded', body: c.shopperBody, link: `/invoices/${holdInvoice.id}`, channel: 'OPERATIONAL' },
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(`[hold-invoice] Failed to file the late-payment notification for invoice ${holdInvoice.id}:`, err);
+  }
+}
+
+/** The card-leg total a Square payment on this invoice should have captured, in cents. */
+function invoiceCardLegCents(holdInvoice: any): number {
+  if (typeof holdInvoice.cardAmountCents === 'number' && holdInvoice.cardAmountCents > 0) return holdInvoice.cardAmountCents;
+  const cash = holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0 ? holdInvoice.cashAmountCents : 0;
+  const remainder = (holdInvoice.totalAmount ?? 0) - cash;
+  return remainder > 0 ? remainder : holdInvoice.totalAmount ?? 0;
+}
+
+/**
+ * Refund a captured Square payment that cannot be applied to its dead invoice, or escalate to a
+ * manual-review record when the refund is not issued. Never throws.
+ */
+async function refundOrEscalateDeadSquarePayment(params: {
+  holdInvoice: any;
+  paymentId: string;
+  reason: string;
+}): Promise<'REFUNDED' | 'MANUAL'> {
+  const { holdInvoice, paymentId, reason } = params;
+  const amountCents = invoiceCardLegCents(holdInvoice);
+  const organizerProfileId = holdInvoice.sale?.organizerId ?? null;
+  let outcome: { refunded: boolean; reason: string; refundId?: string } = { refunded: false, reason: 'NO_ORGANIZER' };
+  let autoRefundDisabled = process.env.SQUARE_DEAD_INVOICE_AUTO_REFUND_DISABLED === '1';
+  if (organizerProfileId) {
+    try {
+      const refundService = await import('./squareDeadInvoiceRefundService');
+      autoRefundDisabled = refundService.squareDeadInvoiceAutoRefundDisabled();
+      outcome = await refundService.refundSquarePaymentForDeadInvoice({
+        invoiceId: holdInvoice.id,
+        organizerId: organizerProfileId,
+        paymentId,
+        expectedAmountCents: amountCents,
+      });
+    } catch (err: any) {
+      outcome = { refunded: false, reason: `THREW: ${String(err?.message ?? err)}` };
+    }
+  }
+  if (outcome.refunded) {
+    console.error(
+      `[hold-invoice] DEAD-INVOICE resolution invoice=${holdInvoice.id} payment=${paymentId} REFUNDED refund=${outcome.refundId ?? 'n/a'} (${reason})`
+    );
+    await notifyDeadInvoicePayment({ holdInvoice, outcome: 'REFUNDED', amountCents });
+    return 'REFUNDED';
+  }
+  const disabled = autoRefundDisabled;
+  console.error(
+    `[hold-invoice] DEAD-INVOICE resolution invoice=${holdInvoice.id} payment=${paymentId} NOT REFUNDED (${outcome.reason}); manual review needed (${reason})`
+  );
+  try {
+    Sentry.captureMessage(`[hold-invoice] dead-invoice Square payment could not be refunded automatically`, {
+      level: 'error',
+      tags: { area: 'hold-invoice-dead-payment', resolution: 'manual-refund-needed' },
+      extra: { invoiceId: holdInvoice.id, paymentId, amountCents, reason, refundOutcome: outcome.reason, autoRefundDisabled: disabled },
+    });
+  } catch {
+    // Sentry may not be initialized -- the console.error above is the fallback record.
+  }
+  await notifyDeadInvoicePayment({ holdInvoice, outcome: 'MANUAL', amountCents, detail: disabled ? 'automatic refunds are off' : undefined });
+  return 'MANUAL';
+}
+
+/**
+ * A payment arrived for an invoice that is not PENDING. Always raises the Sentry error. For
+ * Stripe (or anything not a revivable Square case) it stops there plus a manual-review
+ * notification. For a completed Square payment it decides REVIVE (caller records the sale) or
+ * refunds and returns DONE.
+ */
+async function resolveDeadInvoicePayment(params: {
+  holdInvoice: any;
+  processor: 'STRIPE' | 'SQUARE';
+  externalPaymentId: string | null;
+  source: string;
+  chargeId?: string;
+  detectedAt: 'pre-transaction' | 'flip-race';
+}): Promise<{ kind: 'REVIVE' } | { kind: 'DONE' }> {
+  const { holdInvoice, processor, externalPaymentId, source, chargeId, detectedAt } = params;
+  reportDeadInvoicePayment({
+    invoiceId: holdInvoice.id,
+    paymentIntentId: externalPaymentId,
+    invoiceStatus: holdInvoice.status,
+    amountCents: holdInvoice.totalAmount,
+    source,
+    chargeId,
+    saleId: holdInvoice.saleId,
+    shopperUserId: holdInvoice.shopperUserId,
+    detectedAt,
+  });
+
+  if (processor !== 'SQUARE' || !externalPaymentId || !REVIVABLE_DEAD_STATUSES.has(holdInvoice.status)) {
+    await notifyDeadInvoicePayment({
+      holdInvoice,
+      outcome: 'MANUAL',
+      amountCents: holdInvoice.totalAmount,
+      detail: processor === 'SQUARE' ? undefined : 'card payment via Stripe',
+    });
+    return { kind: 'DONE' };
+  }
+
+  let allAvailable = false;
+  try {
+    const itemIds: string[] = holdInvoice.itemIds ?? [];
+    if (itemIds.length === 0) {
+      allAvailable = true; // a misc-only invoice has no inventory that can conflict
+    } else {
+      const items = await prisma.item.findMany({
+        where: { id: { in: itemIds }, saleId: holdInvoice.saleId, sale: { organizerId: holdInvoice.sale?.organizerId ?? undefined } },
+        select: { id: true, status: true },
+      });
+      allAvailable = items.length === itemIds.length && items.every((it: any) => it.status === 'AVAILABLE');
+    }
+  } catch (err) {
+    // Cannot tell whether the items are free. Do NOT refund on a guess: leave the manual record.
+    console.error(`[hold-invoice] DEAD-INVOICE resolution invoice=${holdInvoice.id}: availability check failed:`, err);
+    await notifyDeadInvoicePayment({ holdInvoice, outcome: 'MANUAL', amountCents: invoiceCardLegCents(holdInvoice), detail: 'availability check failed' });
+    return { kind: 'DONE' };
+  }
+
+  if (allAvailable) {
+    console.error(
+      `[hold-invoice] DEAD-INVOICE resolution invoice=${holdInvoice.id} payment=${externalPaymentId} REVIVING (items still available, recording the sale)`
+    );
+    return { kind: 'REVIVE' };
+  }
+  await refundOrEscalateDeadSquarePayment({ holdInvoice, paymentId: externalPaymentId, reason: 'items no longer available' });
+  return { kind: 'DONE' };
 }
 
 export interface ExternalPaymentRef {
@@ -201,7 +453,9 @@ export interface ExternalPaymentRef {
 export async function markHoldInvoicePaid(
   invoiceId: string,
   paymentRef: ExternalPaymentRef,
-  opts: MarkHoldInvoicePaidOpts
+  opts: MarkHoldInvoicePaidOpts,
+  /** Internal: recursion guard for the flip-race revive. Callers never pass this. */
+  _depth: number = 0
 ): Promise<MarkHoldInvoicePaidResult> {
   const { processor, externalPaymentId } = paymentRef;
   const { source, chargeId, stripeFeeAmountCents = 0 } = opts;
@@ -227,6 +481,8 @@ export async function markHoldInvoicePaid(
   // get a Purchase row -- mirrors posPaymentLinkRecorder.ts's sellableItemIds/
   // oversoldItemIds split so a real oversold race never gets a fabricated PAID Purchase.
   const sellableItemIds: string[] = [];
+  // 2026-09-29: ids of the Purchase rows THIS call created, for the post-commit engagement award.
+  const recordedPurchaseIds: string[] = [];
 
   // Idempotency check (fast path, outside the tx): if already paid, skip.
   // NOTE this stays FIRST and returns before the dead-invoice guard below, so a legitimate
@@ -261,28 +517,58 @@ export async function markHoldInvoicePaid(
   // fails CLOSED (alert, record nothing) instead of silently becoming payable.
   //
   // NO automatic refund is issued -- see reportDeadInvoicePayment's note.
+  // 2026-09-29: REFUNDED only ever follows PAID. A duplicate delivery of the payment that was later
+  // refunded is a benign replay, not a dead-invoice payment: no alert, no work.
+  if (holdInvoice.status === 'REFUNDED') {
+    console.warn(`[hold-invoice/${source}] Invoice ${invoiceId} already refunded, skipping duplicate.`);
+    return { recorded: false, alreadyPaid: true };
+  }
+
+  // Set when a completed Square payment revives a CANCELLED/EXPIRED invoice (see the
+  // DEAD-INVOICE RESOLUTION note in the header). The flip below is then guarded on THAT status.
+  let reviveFromStatus: string | null = null;
+
   if (holdInvoice.status !== 'PENDING') {
-    reportDeadInvoicePayment({
-      invoiceId,
-      paymentIntentId: externalPaymentId,
-      invoiceStatus: holdInvoice.status,
-      amountCents: holdInvoice.totalAmount,
+    const resolution = await resolveDeadInvoicePayment({
+      holdInvoice,
+      processor,
+      externalPaymentId,
       source,
       chargeId,
-      saleId: holdInvoice.saleId,
-      shopperUserId: holdInvoice.shopperUserId,
       detectedAt: 'pre-transaction',
     });
-    return { recorded: false, alreadyPaid: false, deadInvoice: true };
+    if (resolution.kind === 'DONE') {
+      return { recorded: false, alreadyPaid: false, deadInvoice: true };
+    }
+    reviveFromStatus = holdInvoice.status;
   }
 
   // Fetch all items and reservations bundled in this invoice
+  // Money review P1-4/5 (2026-09-29): every lookup below is pinned to THIS invoice's sale and
+  // organizer, so an itemId that somehow landed on the invoice from another tenant can never be
+  // sold, get a Purchase row, or have its reservation completed by this payment.
+  const itemScope = { saleId: holdInvoice.saleId, sale: { organizerId: holdInvoice.sale?.organizerId ?? undefined } };
   const bundledItems = await prisma.item.findMany({
-    where: { id: { in: holdInvoice.itemIds } },
+    where: { id: { in: holdInvoice.itemIds }, ...itemScope },
   });
+  const bundledItemIdSet = new Set(bundledItems.map((it: { id: string }) => it.id));
+  const scopedItemIds: string[] = holdInvoice.itemIds.filter((id: string) => bundledItemIdSet.has(id));
+  if (scopedItemIds.length !== holdInvoice.itemIds.length) {
+    const foreign = holdInvoice.itemIds.filter((id: string) => !bundledItemIdSet.has(id));
+    console.error(`[hold-invoice/${source}] Invoice ${invoiceId} lists item id(s) outside its sale/organizer scope, EXCLUDED from the sale: ${foreign.join(',')}`);
+    try {
+      Sentry.captureMessage('[hold-invoice] invoice lists items outside its sale scope', {
+        level: 'error',
+        tags: { area: 'hold-invoice-item-scope', source },
+        extra: { invoiceId, saleId: holdInvoice.saleId, foreignItemIds: foreign },
+      });
+    } catch {
+      // Sentry may not be initialized.
+    }
+  }
 
   const bundledReservations = await prisma.itemReservation.findMany({
-    where: { itemId: { in: holdInvoice.itemIds } },
+    where: { itemId: { in: scopedItemIds }, item: { saleId: holdInvoice.saleId } },
   });
   void bundledReservations; // preserved verbatim from the original charge.succeeded handler (unused there too)
 
@@ -298,6 +584,7 @@ export async function markHoldInvoicePaid(
   let postFlipStatus: string | null = null;
 
   // Update invoice status to PAID
+  try {
   await prisma.$transaction(async (tx) => {
     // Guarded conditional update (not read-then-write): WHERE id = X AND status != 'PAID'
     // is a single UPDATE statement, so Postgres's row lock on the matched row is what
@@ -318,10 +605,11 @@ export async function markHoldInvoicePaid(
     // this single conditional UPDATE takes the row lock, so an invoice released a
     // millisecond ago still matches zero rows here.
     const flip = await tx.holdInvoice.updateMany({
-      where: { id: invoiceId, status: 'PENDING' },
+      where: { id: invoiceId, status: (reviveFromStatus ?? 'PENDING') as any },
       data: {
         status: 'PAID',
         paidAt: new Date(),
+        ...(reviveFromStatus ? { releasedAt: null } : {}),
         processor,
         // Square changeover Wave S1 (2026-09-09): processor-branched write -- a STRIPE call
         // writes stripePaymentIntentId exactly as before (zero behavior change); a SQUARE call
@@ -359,20 +647,25 @@ export async function markHoldInvoicePaid(
     // 'COMPLETED' is the pre-existing terminal value (reservationController.ts markSold,
     // ~line 1133) that IS cleared by that same deleteMany.
     await tx.itemReservation.updateMany({
-      where: { itemId: { in: holdInvoice.itemIds } },
+      where: { itemId: { in: scopedItemIds }, item: { saleId: holdInvoice.saleId } },
       data: { status: 'COMPLETED' },
     });
 
     // Update ALL bundled items to SOLD (LOCKED DECISION #6) -- ADR-085 Track B
     // Phase 1 Step 4: atomic, race-safe stock decrement replaces the old unconditional
     // updateMany. The bundling business decision (#6) is unchanged, only the mechanism.
-    for (const bundledItemId of holdInvoice.itemIds) {
+    for (const bundledItemId of scopedItemIds) {
       try {
         const { fullySoldOut, remainingStock } = await sellItemUnits(bundledItemId, 1, tx);
         if (fullySoldOut) fullySoldOutIds.push(bundledItemId);
         else partialSaleUpdates.push({ itemId: bundledItemId, remainingStock });
         sellableItemIds.push(bundledItemId);
       } catch (stockErr: any) {
+        if (stockErr instanceof InsufficientStockError && reviveFromStatus) {
+          // Reviving a dead invoice: never leave a half-recorded sale. Roll the whole revive back;
+          // the caller refunds the payment instead.
+          throw new DeadInvoiceReviveAbort(bundledItemId);
+        }
         if (stockErr instanceof InsufficientStockError) {
           // P0 (2026-08-17): this was console.error ONLY -- one line in Railway, no alert.
           // The consequence is money-shaped: this item is excluded from Purchase creation
@@ -433,8 +726,38 @@ export async function markHoldInvoicePaid(
     // DIRECT-vs-DESTINATION via the sale's organizer, mirroring posPaymentLinkRecorder.ts's
     // still-live gap for POSPaymentLink.
     const sellableItemIdSet = new Set(sellableItemIds);
-    const bundledItemPriceSum = bundledItems.reduce((sum, it) => sum + (it.price || 0), 0);
     const invoicePlatformFeeDollars = holdInvoice.platformFeeAmount / 100;
+
+    // Exact-cent allocation across ALL bundled items (2026-09-29; see the DISCOUNTED / SPLIT-TENDER
+    // block in the file header). Only sellable items get a row below, so an oversold item's share
+    // is dropped rather than pushed onto the rows that did sell.
+    const itemPriceCentsList = bundledItems.map((it) => Math.round((it.price || 0) * 100));
+    const itemPriceCentsSum = itemPriceCentsList.reduce((a, b) => a + b, 0);
+    const invoiceIsDiscounted =
+      holdInvoice.itemIds.length > 0 &&
+      itemPriceCentsSum > 0 &&
+      holdInvoice.totalAmount > 0 &&
+      holdInvoice.totalAmount < itemPriceCentsSum;
+    // Discounted: scale each row so the rows add up to what was paid. Otherwise: list price, as before.
+    const rowAmountCentsList = invoiceIsDiscounted
+      ? allocateCentsProportionally(holdInvoice.totalAmount, itemPriceCentsList)
+      : itemPriceCentsList;
+    const rowFeeCentsList = allocateCentsProportionally(holdInvoice.platformFeeAmount, itemPriceCentsList);
+    const invoiceCashCents = holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0 ? holdInvoice.cashAmountCents : 0;
+    // Cash-leg allocation (money review P2, 2026-09-29). The Purchase rows only cover the bundled
+    // items; the invoice total can also carry lines that have no row (shipping, misc lines, which
+    // are not persisted). Allocating the WHOLE cash leg over the rows and then capping each row
+    // silently dropped the excess, so a refund believed the card had collected more than it did.
+    // The rows now carry their share of the cash leg: cash * (rows total / invoice total), in exact
+    // cents. When the rows ARE the whole invoice (the discounted case) that is the full cash leg.
+    const rowsTotalCents = rowAmountCentsList.reduce((a, b) => a + b, 0);
+    const cashOnRowsCents =
+      invoiceCashCents > 0 && rowsTotalCents > 0
+        ? holdInvoice.totalAmount > 0
+          ? Math.min(invoiceCashCents, Math.round((invoiceCashCents * Math.min(rowsTotalCents, holdInvoice.totalAmount)) / holdInvoice.totalAmount))
+          : Math.min(invoiceCashCents, rowsTotalCents)
+        : 0;
+    const rowCashCentsList = allocateCentsProportionally(cashOnRowsCents, rowAmountCentsList);
 
     // Stripe account + charge-shape snapshot (2026-08-18 migration): prefer the value
     // pinned on the invoice itself at checkout-session-creation time. Only a pre-migration
@@ -481,14 +804,16 @@ export async function markHoldInvoicePaid(
         }
       : {};
 
-    for (const bundledItem of bundledItems) {
+    for (let bundledIdx = 0; bundledIdx < bundledItems.length; bundledIdx++) {
+      const bundledItem = bundledItems[bundledIdx];
       if (!sellableItemIdSet.has(bundledItem.id)) continue; // oversold race -- no Purchase row, matches posPaymentLinkRecorder.ts
-      const itemAmount = bundledItem.price || 0;
-      const itemPlatformFeeAmount = bundledItemPriceSum > 0
-        ? parseFloat(((itemAmount / bundledItemPriceSum) * invoicePlatformFeeDollars).toFixed(2))
-        : 0;
+      // Discounted invoice: the scaled share of what was paid; otherwise the list price untouched.
+      const itemAmount = invoiceIsDiscounted ? rowAmountCentsList[bundledIdx] / 100 : (bundledItem.price || 0);
+      const itemPlatformFeeAmount = rowFeeCentsList[bundledIdx] / 100;
+      // Never let a row's cash leg exceed the row itself.
+      const rowCashCents = Math.min(rowCashCentsList[bundledIdx] ?? 0, rowAmountCentsList[bundledIdx] ?? 0);
       try {
-        await tx.purchase.create({
+        const createdPurchase = await tx.purchase.create({
           data: {
             userId: holdInvoice.shopperUserId,
             // Guest invoice (2026-09-16, nullable shopperUserId): no real User row to read
@@ -503,6 +828,7 @@ export async function markHoldInvoicePaid(
             saleId: holdInvoice.saleId,
             amount: itemAmount,
             platformFeeAmount: itemPlatformFeeAmount,
+            ...(rowCashCents > 0 ? { cashLegAmount: rowCashCents / 100 } : {}),
             // FEE SNAPSHOT (2026-08-17): commission-only — a hold invoice is never an auction
             // lot. commissionRate is null by design: the invoice's fee is prorated across its
             // bundled items by price share, so a per-row rate would be a back-derived guess
@@ -529,6 +855,7 @@ export async function markHoldInvoicePaid(
             ...(useDirect && chargeAccountId ? { stripeAccountId: chargeAccountId } : {}),
           },
         });
+        recordedPurchaseIds.push(createdPurchase.id);
       } catch (purchaseErr: any) {
         // Compound partial unique (stripePaymentIntentId, itemId) backstop -- mirrors
         // posPaymentLinkRecorder.ts: a concurrent webhook/reconcile race that both reach
@@ -560,7 +887,7 @@ export async function markHoldInvoicePaid(
     // totalAmount/platformFeeAmount covers it.
     if (holdInvoice.itemIds.length === 0) {
       try {
-        await tx.purchase.create({
+        const aggregatePurchase = await tx.purchase.create({
           data: {
             userId: holdInvoice.shopperUserId,
             // Guest invoice: see the identical comment on the bundled-item Purchase.create above.
@@ -570,6 +897,7 @@ export async function markHoldInvoicePaid(
             saleId: holdInvoice.saleId,
             amount: holdInvoice.totalAmount / 100,
             platformFeeAmount: invoicePlatformFeeDollars,
+            ...(invoiceCashCents > 0 ? { cashLegAmount: Math.min(invoiceCashCents, holdInvoice.totalAmount) / 100 } : {}),
             // FEE SNAPSHOT (2026-08-17): commission-only. This is the whole-invoice aggregate
             // row, so the fee is the invoice's own figure with no proration — but still no
             // single rate behind it (miscItems are priced ad hoc), hence null.
@@ -594,6 +922,7 @@ export async function markHoldInvoicePaid(
             ...(useDirect && chargeAccountId ? { stripeAccountId: chargeAccountId } : {}),
           },
         });
+        recordedPurchaseIds.push(aggregatePurchase.id);
       } catch (purchaseErr: any) {
         if (purchaseErr.code === 'P2002') {
           console.warn(`[hold-invoice/${source}] Purchase already exists for invoice ${invoiceId} (no bundled items) — treating as already recorded.`);
@@ -621,36 +950,41 @@ export async function markHoldInvoicePaid(
     // Purchase-row creation -- NOT at invoice-creation time) so a rolled-back settlement can
     // never leave an accrued debt behind for a sale that was not actually recorded, matching
     // cashFeeService.ts's own documented guidance for transactional callers.
-    if (holdInvoice.cashAmountCents && holdInvoice.cashAmountCents > 0 && saleOrganizerId) {
-      try {
-        // holdInvoice.organizer is the organizer's USER row (organizerUserId relation) -- it
-        // has no subscriptionTier/referralDiscountExpiry (those live on Organizer). Fetch the
-        // real Organizer profile via saleOrganizerId (holdInvoice.sale.organizerId, already
-        // resolved above for the useDirect/chargeAccountId snapshot logic).
-        const cashFeeOrganizer = await tx.organizer.findUnique({
-          where: { id: saleOrganizerId },
-          select: { subscriptionTier: true, referralDiscountExpiry: true },
-        });
-        if (cashFeeOrganizer) {
-          const cashFeeRate = await resolveCashCommissionRate({
+    //
+    // 2026-09-29: now goes through accrueSplitCashLegOnce (CashFeeAccrual ledger, unique per
+    // ('HOLD_INVOICE', invoice id)) instead of the plain accrueCashFeeBalance, which was NOT
+    // idempotent (a replay of this recorder would have accrued twice). The commission is on the
+    // CASH amount at the organizer's tier/referral cash rate; the card leg's platform fee is the
+    // invoice's own platformFeeAmount (card amount basis) and is already on the Purchase rows.
+    // A failure throws and rolls back the whole recording (see the file header): the caller's
+    // retry re-attempts it, and an invoice is never left PAID with an unaccrued cash commission.
+    if (invoiceCashCents > 0 && saleOrganizerId) {
+      // holdInvoice.organizer is the organizer's USER row (organizerUserId relation) -- it has no
+      // subscriptionTier/referralDiscountExpiry (those live on Organizer). Fetch the real
+      // Organizer profile via saleOrganizerId (holdInvoice.sale.organizerId).
+      const cashFeeOrganizer = await tx.organizer.findUnique({
+        where: { id: saleOrganizerId },
+        select: { id: true, subscriptionTier: true, referralDiscountExpiry: true },
+      });
+      if (cashFeeOrganizer) {
+        await accrueSplitCashLegOnce({
+          organizer: {
+            id: cashFeeOrganizer.id,
             subscriptionTier: cashFeeOrganizer.subscriptionTier,
-            referralDiscountExpiry: cashFeeOrganizer.referralDiscountExpiry,
-          });
-          const cashCommission = cashCommissionOn(holdInvoice.cashAmountCents / 100, cashFeeRate);
-          await accrueCashFeeBalance({ organizerId: saleOrganizerId, commission: cashCommission, tx });
-        }
-      } catch (cashFeeErr: any) {
-        // Never let a commission-accrual failure block the actual sale recording -- log +
-        // Sentry, same non-fatal pattern posPaymentController.ts's split-cash accrual uses.
-        console.error(`[hold-invoice/${source}] Failed to accrue cash-leg commission for invoice ${invoiceId}:`, cashFeeErr);
+            referralDiscountExpiry: cashFeeOrganizer.referralDiscountExpiry ?? null,
+          },
+          sourceType: 'HOLD_INVOICE',
+          sourceId: invoiceId,
+          cashAmountCents: invoiceCashCents,
+          tx,
+        });
+      } else {
+        console.error(`[hold-invoice/${source}] Cash-leg commission NOT accrued for invoice ${invoiceId}: organizer ${saleOrganizerId} not found.`);
         try {
-          Sentry.captureException(cashFeeErr instanceof Error ? cashFeeErr : new Error(String(cashFeeErr)), {
+          Sentry.captureMessage(`[hold-invoice/${source}] cash-leg commission not accrued: organizer missing`, {
+            level: 'error',
             tags: { area: 'hold-invoice-cash-commission-accrual', source },
-            extra: {
-              invoiceId,
-              organizerId: saleOrganizerId,
-              cashAmountCents: holdInvoice.cashAmountCents,
-            },
+            extra: { invoiceId, organizerId: saleOrganizerId, cashAmountCents: invoiceCashCents },
           });
         } catch {
           // Sentry may not be initialized -- silently continue
@@ -690,28 +1024,58 @@ export async function markHoldInvoicePaid(
       ],
     });
   });
+  } catch (txErr) {
+    if (txErr instanceof DeadInvoiceReviveAbort && externalPaymentId) {
+      // An item was sold under the revive: the whole revive rolled back. Refund what was captured.
+      await refundOrEscalateDeadSquarePayment({
+        holdInvoice,
+        paymentId: externalPaymentId,
+        reason: `revive aborted, item ${txErr.itemId} no longer sellable`,
+      });
+      return { recorded: false, alreadyPaid: false, deadInvoice: true };
+    }
+    throw txErr;
+  }
 
   if (!didRecord) {
     // P0 (2026-08-17): a zero-count flip is only benign if the invoice is now PAID. If it
     // went CANCELLED/EXPIRED between the read and the flip, a real payment just landed on a
     // dead invoice and nothing was recorded -- same alert as the pre-transaction guard.
     if (postFlipStatus && postFlipStatus !== 'PAID') {
-      reportDeadInvoicePayment({
-        invoiceId,
-        paymentIntentId: externalPaymentId,
-        invoiceStatus: postFlipStatus,
-        amountCents: holdInvoice.totalAmount,
+      if (postFlipStatus === 'REFUNDED') {
+        return { recorded: false, alreadyPaid: true };
+      }
+      const resolution = await resolveDeadInvoicePayment({
+        holdInvoice: { ...holdInvoice, status: postFlipStatus },
+        processor,
+        externalPaymentId,
         source,
         chargeId,
-        saleId: holdInvoice.saleId,
-        shopperUserId: holdInvoice.shopperUserId,
         detectedAt: 'flip-race',
       });
+      if (resolution.kind === 'REVIVE' && _depth < 1) {
+        // The invoice died between the read and the flip and the payment is revivable: run the
+        // whole recording again, this time from the now-visible dead status.
+        return markHoldInvoicePaid(invoiceId, paymentRef, opts, _depth + 1);
+      }
       return { recorded: false, alreadyPaid: false, deadInvoice: true };
     }
     // Another path (concurrent webhook/reconcile) already recorded this payment.
     console.warn(`[hold-invoice/${source}] Invoice ${invoiceId} was recorded by a concurrent call, skipping duplicate.`);
     return { recorded: false, alreadyPaid: true };
+  }
+
+  if (reviveFromStatus) {
+    try {
+      Sentry.captureMessage('[hold-invoice] late Square payment recorded on a dead invoice', {
+        level: 'warning',
+        tags: { area: 'hold-invoice-dead-payment', resolution: 'revived' },
+        extra: { invoiceId, paymentId: externalPaymentId, previousStatus: reviveFromStatus, amountCents: holdInvoice.totalAmount },
+      });
+    } catch {
+      // Sentry may not be initialized.
+    }
+    await notifyDeadInvoicePayment({ holdInvoice, outcome: 'RECORDED', amountCents: holdInvoice.totalAmount });
   }
 
   // Fire-and-forget: end eBay listings for items now fully sold out (not every
@@ -759,6 +1123,28 @@ export async function markHoldInvoicePaid(
     } catch (err) {
       console.warn(`[hold-invoice/${source}] Failed to award XP:`, err);
     }
+  }
+
+  // Sale Passport / engagement awards (2026-09-29): a Square-paid invoice with a real shopper gets the
+  // same purchase XP, milestones, referral reward, OG Buyer badge, achievement and passport stamp as
+  // any other purchase. Fire-and-forget AFTER commit, never throws. NOT fired for a fully-cash
+  // 'pos-cash' sale (POS rows are skipped by the service anyway) or a guest. Stripe-processor
+  // invoices are deliberately excluded: the engagement service keys the "one award per payment"
+  // rule on Purchase.squarePaymentId, so on Stripe it would award once per row of a multi-item
+  // invoice, and stripeController's payment_intent.succeeded path already owns Stripe awards.
+  // DOUBLE-AWARD CHECK: squareWebhookController also fires engagement after markHoldInvoicePaid.
+  // That is safe. Both resolve the SAME canonical purchase (earliest PAID row sharing the
+  // squarePaymentId), an in-process in-flight map makes a concurrent second call wait for the
+  // first, and the service's DB dedupe (PURCHASE_COMPLETED keyed on purchaseId, passport ledger key
+  // ACT:MAKE_PURCHASE:<purchaseId>) makes a later call a no-op.
+  if (
+    processor === 'SQUARE' &&
+    externalPaymentId &&
+    source !== 'pos-cash' &&
+    holdInvoice.shopperUserId &&
+    recordedPurchaseIds.length > 0
+  ) {
+    fireSquarePurchaseEngagement(recordedPurchaseIds[0]);
   }
 
   // Emit socket event for live dashboard updates

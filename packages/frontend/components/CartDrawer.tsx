@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
@@ -16,6 +17,7 @@ import { useShopperCart } from '../hooks/useShopperCart';
 import HoldTimer from './HoldTimer';
 import { getThumbnailUrl } from '../lib/imageUtils';
 import { SquarePaymentRequestForm } from './SquarePaymentRequestForm';
+import { getAffiliateLinkIdForCheckout } from '../lib/affiliateAttribution';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -47,6 +49,7 @@ interface Hold {
 
 const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
+  const router = useRouter();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const cart = useShopperCart(user?.id);
@@ -72,7 +75,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       const response = await api.get('/reservations/my-holds-full');
       return response.data as Hold[];
     },
-    enabled: isOpen,
+    // Signed-in shoppers only: an anonymous visitor opening the drawer would just 401 every 30 seconds.
+    enabled: isOpen && !!user,
     refetchInterval: 30000,
   });
 
@@ -210,7 +214,13 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     setSquareCartError(null);
     try {
       const itemIds = cart.items.map((item) => item.id);
-      const res = await api.post('/square-payment/create-cart-payment', { itemIds, sourceId });
+      // Creator Program attribution (validated server-side against the cart's sale).
+      const affiliateLinkId = getAffiliateLinkIdForCheckout(cart.saleId);
+      const res = await api.post('/square-payment/create-cart-payment', {
+        itemIds,
+        sourceId,
+        ...(affiliateLinkId ? { affiliateLinkId } : {}),
+      });
       if (res.data?.purchaseIds) {
         setSquareCartPurchaseIds(res.data.purchaseIds);
         setSquareCartSuccess(true);
@@ -273,6 +283,55 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
   const cartTotalCents = cart.getTotal(); // cents
   const grandTotal = holdsTotal + (cartTotalCents / 100); // unified dollars
   const hasContent = holds.length > 0 || cart.cartCount > 0;
+
+  // Login gate (2026-09-29, ported from the old ShopperCartDrawer): anonymous arrivals, e.g. from
+  // Facebook/Instagram Shop via pages/checkout.tsx -> sales/[id]?fbCheckout=...&cart=open, must log in
+  // before checkout. Uses the same ?redirect=<encoded path> convention pages/login.tsx honours (it only
+  // accepts values starting with '/'). router.asPath (not window.location) keeps SSR and client markup
+  // identical. cart=open is appended so the drawer re-opens after login on pages that support it.
+  const loginHref = (() => {
+    let path = (router.asPath || '/').split('#')[0];
+    if (!path.startsWith('/') || path.startsWith('//')) path = '/';
+    if (!/[?&]cart=open(&|$)/.test(path)) {
+      path += (path.includes('?') ? '&' : '?') + 'cart=open';
+    }
+    return '/login?redirect=' + encodeURIComponent(path);
+  })();
+
+  // Keep the anonymous cart through login. useShopperCart scopes its localStorage key per user
+  // (fas_shopper_cart_<userId>) while an anonymous browser uses the bare fas_shopper_cart key, so
+  // without this step the items added before logging in would be orphaned the moment the user id
+  // appears. Adopt them once into the user's own cart, then drop the anonymous key (AuthContext.logout
+  // also removes it). If the user's cart already holds a different sale we leave the anonymous cart
+  // untouched rather than silently discarding either side. Writing localStorage + firing fas_cart_sync
+  // is the same channel useShopperCart's own instances use to stay in step.
+  useEffect(() => {
+    if (!user?.id || !cart.isHydrated || typeof window === 'undefined') return;
+    try {
+      const anonRaw = localStorage.getItem('fas_shopper_cart');
+      if (!anonRaw) return;
+      const anon = JSON.parse(anonRaw) as { items?: typeof cart.items; saleId?: string | null };
+      const anonItems = Array.isArray(anon?.items) ? anon.items : [];
+      if (anonItems.length === 0) {
+        localStorage.removeItem('fas_shopper_cart');
+        return;
+      }
+      const ownKey = `fas_shopper_cart_${user.id}`;
+      const ownRaw = localStorage.getItem(ownKey);
+      const own = ownRaw ? (JSON.parse(ownRaw) as { items?: typeof cart.items; saleId?: string | null }) : null;
+      const ownItems = Array.isArray(own?.items) ? own!.items! : [];
+      const anonSale = anon.saleId ?? anonItems[0]?.saleId ?? null;
+      const ownSale = own?.saleId ?? ownItems[0]?.saleId ?? null;
+      if (ownItems.length > 0 && anonSale && ownSale && anonSale !== ownSale) return;
+      const known = new Set(ownItems.map((i) => i.id));
+      const merged = [...ownItems, ...anonItems.filter((i) => !known.has(i.id))];
+      localStorage.setItem(ownKey, JSON.stringify({ items: merged, saleId: ownSale || anonSale }));
+      localStorage.removeItem('fas_shopper_cart');
+      window.dispatchEvent(new Event('fas_cart_sync'));
+    } catch (err) {
+      console.error('[drawer] Failed to adopt anonymous cart after login:', err);
+    }
+  }, [user?.id, cart.isHydrated]);
 
   const handleBackdropClick = () => {
     onClose();
@@ -576,13 +635,36 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                 </p>
               )}
 
-              {/* Go to Checkout */}
+              {/* Go to Checkout: login gate for anonymous shoppers (e.g. arriving from Facebook/Instagram Shop) */}
+              {user ? (
+                <button
+                  onClick={handleGoToCheckout}
+                  disabled={checkoutLoading || cart.cartCount === 0}
+                  className="w-full bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {checkoutLoading ? 'Processing…' : 'Go to Checkout'}
+                </button>
+              ) : (
+                <>
+                  <Link
+                    href={loginHref}
+                    onClick={onClose}
+                    className="block w-full text-center bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Log in or register to check out
+                  </Link>
+                  <p className="text-xs text-warm-500 dark:text-gray-400 text-center">
+                    Your cart is saved and will be waiting for you after you log in.
+                  </p>
+                </>
+              )}
+
+              {/* Continue Shopping (footer; the empty state has its own) */}
               <button
-                onClick={handleGoToCheckout}
-                disabled={checkoutLoading || cart.cartCount === 0}
-                className="w-full bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={onClose}
+                className="w-full bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-50 font-semibold py-2 px-4 rounded-lg transition-colors"
               >
-                {checkoutLoading ? 'Processing…' : 'Go to Checkout'}
+                Continue Shopping
               </button>
 
               {/* Share with cashier */}

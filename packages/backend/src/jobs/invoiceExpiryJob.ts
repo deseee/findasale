@@ -3,6 +3,8 @@ import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): STRANDED-PAID reconcile backstop
+import { releaseCrewInvasionRedemptionsForInvoice } from '../services/crewInvasionRedemptionService'; // Crew Invasion per-member redemption (2026-09-29): an expired UNPAID discounted invoice gives the member's discount back
+import { prepareSquareInvoiceForRelease, recordSquarePaidInvoiceFromGate } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square invoice is checked for payment and its payment link cancelled BEFORE it is expired
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): invoice_expired notification-gap fix
 import { expireCheckoutSessionSafely, retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): expired invoices must not leave a PAYABLE Stripe session behind; P0 (2026-08-17): Direct-charge sessions live on the connected account
 
@@ -84,6 +86,12 @@ import { expireCheckoutSessionSafely, retrieveCheckoutSessionAcrossAccounts } fr
  * narrower gap (cash invoices appear to have no completion path in the
  * codebase at all today) and is called out in the handoff, not silently
  * "fixed" here.
+ *
+ * Square invoices (money review P0-2, 2026-09-29): a Square hold invoice (processor SQUARE) is a
+ * hosted Payment Link the shopper can pay at any time, so it is NOT one of the "no payment
+ * mechanism" invoices above. Each one goes through services/holdInvoiceSquareRelease.ts's gate
+ * BEFORE the expiry flip: Square says paid -> record the sale via markHoldInvoicePaid (never expire),
+ * anything ambiguous -> leave the invoice PENDING and retry on the next run, link cancelled -> expire.
  *
  * Kill-switch: set INVOICE_EXPIRY_RECLAIM_DISABLED=1 to make the job
  * early-return (rollback lever, matching posStrandedSaleReconcileCron.ts's
@@ -177,7 +185,13 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
         // Direct-charge Checkout Session: it lives on the connected account, and a
         // platform-scoped expire() returns "No such checkout session" (P1, 2026-08-17).
         stripeAccountId: true,
-        sale: { select: { organizer: { select: { stripeConnectId: true } } } },
+        // Square hold invoices (2026-09-29, money review P0-2): what the release gate needs to ask
+        // Square whether the link was paid and to cancel it.
+        processor: true,
+        squareOrderId: true,
+        squarePaymentLinkId: true,
+        squarePaymentId: true,
+        sale: { select: { organizerId: true, organizer: { select: { stripeConnectId: true } } } },
       },
     });
 
@@ -188,10 +202,46 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
     let reclaimed = 0;
     let strandedPaidCount = 0;
     let skippedNoSession = 0;
+    let squareRetryLater = 0;
 
     for (const invoice of candidates) {
       try {
-        if (invoice.stripeSessionId) {
+        if (invoice.processor === 'SQUARE') {
+          // Money review P0-2 (2026-09-29). A Square hold invoice is a hosted Payment Link the
+          // shopper can pay at any time, and this branch used to be missing entirely: a Square
+          // invoice has no stripeSessionId and no cartSessionId, so it fell into the
+          // NO-SESSION-RECLAIM else-branch below, whose comment claimed it "can never have been
+          // paid". That was true of the old no-checkout MVP invoice and false for a Square one:
+          // the link stayed live after the invoice was expired and the items went back on sale.
+          //
+          // Order matters: ask Square whether it was paid, then CANCEL the link, and only then let
+          // the transaction below flip the status. PAID means record the sale, never expire it.
+          // RETRY (Square unreachable, cancel refused, order still open) means leave the invoice
+          // PENDING: this job runs every 10 minutes and simply tries again.
+          const gate = await prepareSquareInvoiceForRelease({
+            invoice,
+            organizerId: invoice.sale?.organizerId ?? null,
+            context: `invoiceExpiryJob invoice=${invoice.id}`,
+          });
+          if (gate.outcome === 'PAID') {
+            strandedPaidCount++;
+            const recorded = await recordSquarePaidInvoiceFromGate(invoice.id, gate, `invoiceExpiryJob invoice=${invoice.id}`);
+            const paidMsg = `[invoiceExpiryJob] SQUARE-PAID invoice=${invoice.id} order=${invoice.squareOrderId ?? 'n/a'} -- Square shows this invoice paid but our DB still had it PENDING past its expiresAt (webhook missed). ${gate.detail}. Recorded: ${recorded}.`;
+            console.error(paidMsg);
+            try {
+              Sentry.captureMessage(paidMsg, 'error');
+            } catch {
+              // Sentry may not be initialized -- silently continue
+            }
+            continue;
+          }
+          if (gate.outcome === 'RETRY') {
+            squareRetryLater++;
+            console.warn(`[invoiceExpiryJob] SQUARE-RETRY invoice=${invoice.id} -- NOT expiring yet: ${gate.detail}. Will retry next run.`);
+            continue;
+          }
+          console.log(`[invoiceExpiryJob] SQUARE-CLEAR invoice=${invoice.id} -- ${gate.detail}. Expiring.`);
+        } else if (invoice.stripeSessionId) {
           // Evidence-first: ask Stripe directly rather than trusting our own
           // PENDING status (see the two confirmed gaps in the header comment).
           // P0 fix (2026-08-17): account-aware retrieve. This was
@@ -277,14 +327,16 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
           skippedNoSession++;
           continue;
         } else {
-          // sendHoldInvoice's "simplified for MVP -- no actual Stripe Checkout" invoice:
-          // there is NO payment mechanism attached to it at all, on any account. It can
-          // never have been paid, so unlike the cash case above there is no ambiguity
-          // and nothing to guess at -- reverting is unambiguously correct, and NOT
-          // reverting is what leaves the item unsellable forever. Falls through to the
-          // normal revert transaction below (which is already guarded on
-          // Item.status = INVOICE_ISSUED, so an item settled through another channel in
-          // the meantime is never dragged backwards).
+          // A legacy sendHoldInvoice "simplified for MVP -- no actual Stripe Checkout" invoice
+          // (processor STRIPE, no session, no cart): there is NO payment mechanism attached to
+          // it at all, on any account, so it can never have been paid. That is true ONLY for
+          // that legacy shape. It is NOT true of a Square invoice (processor SQUARE), which has
+          // a live Payment Link and is handled by its own branch at the top of this chain
+          // (paid-check, then link cancel) before it can ever reach this point. Reverting here is
+          // correct for the legacy shape, and NOT reverting is what leaves the item unsellable
+          // forever. Falls through to the normal revert transaction below (which is already
+          // guarded on Item.status = INVOICE_ISSUED, so an item settled through another channel
+          // in the meantime is never dragged backwards).
           console.log(`[invoiceExpiryJob] NO-SESSION-RECLAIM invoice=${invoice.id} mode=${invoice.invoiceMode} itemIds=${invoice.itemIds.join(',') || '(none)'} -- no Stripe Checkout was ever created for this invoice (sendHoldInvoice MVP path), so it cannot have been paid. Reverting.`);
         }
 
@@ -333,6 +385,12 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
         if (!result.reverted) {
           continue;
         }
+
+        // Crew Invasion per-member redemption (2026-09-29): this UNPAID invoice just flipped to
+        // EXPIRED, so give the shopper's crew discount back (it applies again on the next invoice
+        // only while the code itself is still unexpired). After the transaction commit on purpose,
+        // never throws: it cannot undo or block the reclaim.
+        await releaseCrewInvasionRedemptionsForInvoice(invoice.id);
 
         // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this previously
         // wrote a raw tx.notification.create() inside the transaction above, which made
@@ -390,7 +448,7 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
       }
     }
 
-    console.log(`[invoiceExpiryJob] Reclaimed ${reclaimed} expired invoice(s); ${strandedPaidCount} STRANDED-PAID (auto-reconciled where possible, see per-invoice logs + Sentry); skipped ${skippedNoSession} NO-SESSION (needs manual review).`);
+    console.log(`[invoiceExpiryJob] Reclaimed ${reclaimed} expired invoice(s); ${strandedPaidCount} STRANDED-PAID (auto-reconciled where possible, see per-invoice logs + Sentry); skipped ${skippedNoSession} NO-SESSION (needs manual review); ${squareRetryLater} Square invoice(s) held back until Square can confirm the link is cancelled.`);
   } catch (error) {
     console.error('[invoiceExpiryJob] Error:', error);
   }

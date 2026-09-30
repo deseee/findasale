@@ -31,7 +31,11 @@ export default function HoldInvoiceStatusCard({
   organizerName,
 }: HoldInvoiceStatusCardProps) {
   const isBundled = bundledItemCount > 1 && bundledTotal != null;
-  const amountDue = isBundled ? bundledTotal! : itemPrice;
+  // Crew Invasion (2026-09-29): a single-item invoice can now be charged less than the item's list
+  // price (10% crew discount). Whenever the API supplies the invoice's real total, show that, so the
+  // card never advertises more than checkout will actually charge.
+  const amountDue = bundledTotal != null ? bundledTotal : itemPrice;
+  const hasInvoiceDiscount = !isBundled && bundledTotal != null && bundledTotal < itemPrice - 0.005;
 
   const handleCheckout = () => {
     if (checkoutUrl) {
@@ -62,6 +66,11 @@ export default function HoldInvoiceStatusCard({
         {isBundled && (
           <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
             This item is ${itemPrice.toFixed(2)} of a combined invoice for {bundledItemCount} items from {organizerName}.
+          </p>
+        )}
+        {hasInvoiceDiscount && (
+          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+            Includes a discount, so this is less than the item&apos;s listed price of ${itemPrice.toFixed(2)}.
           </p>
         )}
       </div>

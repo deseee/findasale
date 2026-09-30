@@ -19,6 +19,8 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
+import { applyCrewInvasionDiscount, releaseCrewInvasionRedemption, linkCrewInvasionRedemptionToInvoice, releaseCrewInvasionRedemptionsForInvoice, countCrewDiscountEligibleShoppers } from '../services/crewInvasionRedemptionService'; // Feature #397 (2026-09-29): real redemption of the Crew Invasion code on Hold-to-Pay invoices
+import { awardStamp } from '../services/loyaltyService'; // Feature #29: Sale Passport (ATTEND_SALE stamp on the second check-in path)
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): CHECKOUT_LINK mode's Hold-to-Pay invoice is a hosted Square checkout completed by the buyer remotely -- ONLINE channel. RECORD-mode's cash commission already migrated separately, through cashFeeService.ts's resolveCashCommissionRate/cashCommissionOn (imported below).
@@ -32,6 +34,9 @@ import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; //
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // P1 fix (2026-09-04, S-CARDING-INCIDENT-2026-09-03 follow-up): Hold-to-Pay invoicing never ran the shared Stripe-onboarding/sale-state gate
 import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../services/holdInvoiceSquareCheckoutHelper'; // Square changeover Wave S2 #3 (2026-09-09): Hold-to-Pay invoice creation, Square branch
 import { deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // orphaned-payable-link cleanup, Square counterpart of expireCheckoutSessionSafely below
+import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // 2026-09-29 money review P1-13: CHECKOUT_LINK claims each item atomically BEFORE the payable link exists
+import { prepareSquareInvoiceForRelease, recordSquarePaidInvoiceFromGate } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square invoice is paid-checked and its payment link cancelled BEFORE it is released
+import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // 2026-09-29 money review P0-2: a Square payment link found paid at release time is recorded, never released
 import { SquareOnboardingIncompleteError } from '../services/squarePaymentService'; // thrown by createHoldInvoiceSquareCheckout when the organizer's Square onboarding is incomplete
 
 // markSold settlement router (Decision A): settlement modes
@@ -977,6 +982,26 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         }
 
         const itemIds = validRouted.map((h) => h.item.id);
+        // DECISION (2026-09-29, Crew Invasion): the crew discount does NOT apply to CHECKOUT_LINK
+        // payment links. A link is one charge that can span several shoppers' holds (this batch
+        // routes any set of holds at the sale), while the crew discount is per member and only
+        // covers that member's own held items, so applying it here would either discount other
+        // shoppers' items or need a per-shopper split of a single charge. The discount is applied
+        // ONLY where one invoice belongs to one shopper (markSoldAndCreateInvoice and
+        // posController.sendHoldInvoice). So this path deliberately never calls
+        // applyCrewInvasionDiscount: `amount` below is always the full list price, no redemption
+        // row is written, and nothing here can leave a half-applied discount behind (there is
+        // nothing to release on failure). A shopper who wants the crew discount is invoiced
+        // through the per-shopper hold invoice instead.
+        //
+        // WHY NOT "discount when the batch is a single shopper" (evaluated 2026-09-29, declined):
+        // even for one shopper the payment link is recorded by posPaymentLinkRecorder, which writes
+        // each Purchase at the item's list price (so a discounted link would over-record every
+        // Purchase, breaking refund/dispute ceilings exactly like the hold-invoice bug fixed in
+        // holdInvoicePaymentRecorder), and an abandoned discounted link is reclaimed by
+        // posStrandedSaleReconcileCron, which would need to hand the redemption back. Neither file
+        // is part of the hold-invoice path, so the link stays at full price and the response says so
+        // (crewDiscountApplied: false plus crewDiscountNote when a shopper in the batch had one).
         const amount = validRouted.reduce((sum, h) => sum + (h.item.price || 0), 0);
         if (amount <= 0) {
           return res.status(400).json({ message: 'Cannot create a checkout link for $0' });
@@ -994,6 +1019,35 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         // ACTIVE POSPaymentLink rows past their own expiresAt, verifies via Stripe that
         // the link genuinely was never paid, and reverts the item(s) if so.
         const linkExpiresAt = new Date(Math.min(...validRouted.map((h) => h.expiresAt.getTime())));
+
+        // Money review P1-13 (2026-09-29): claim every item atomically BEFORE the payable link
+        // exists. This used to create the link first and then flip the items with an unguarded
+        // updateMany, so an item sold or invoiced elsewhere in between was dragged back to
+        // INVOICE_ISSUED under a live link. commitItemSale is the conditional flip (plus a
+        // paid-Purchase check) the hold-invoice path already uses. Only the items THIS request
+        // committed are ever reverted, to the status each had when it was read.
+        const committedLinkItems: Array<{ id: string; priorStatus: string }> = [];
+        const revertCommittedLinkItems = async () => {
+          for (const c of committedLinkItems) {
+            await prisma.item
+              .updateMany({ where: { id: c.id, status: 'INVOICE_ISSUED' }, data: { status: c.priorStatus as any } })
+              .catch((e: unknown) => console.error(`[settlement] Failed to revert item ${c.id} after a failed checkout link:`, e));
+          }
+        };
+        for (const h of validRouted) {
+          try {
+            await commitItemSale(h.item.id, 'INVOICE_ISSUED', ['AVAILABLE', 'RESERVED']);
+            committedLinkItems.push({ id: h.item.id, priorStatus: h.item.status });
+          } catch (guardError) {
+            await revertCommittedLinkItems();
+            if (guardError instanceof ItemAlreadyCommittedError) {
+              return res.status(409).json({
+                message: 'One or more of these items is no longer available. It may have been sold or already sent out for payment.',
+              });
+            }
+            throw guardError;
+          }
+        }
 
         let linkResult;
         try {
@@ -1016,6 +1070,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             squareMerchantId: (organizer as any).squareMerchantId ?? null,
           });
         } catch (stripeErr: any) {
+          await revertCommittedLinkItems();
           if (stripeErr instanceof SquareOnboardingIncompleteError) {
             return res.status(409).json({
               message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
@@ -1029,11 +1084,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           });
         }
 
-        // Set items to INVOICE_ISSUED (intermediate). Webhook flips to SOLD on payment.
-        await prisma.item.updateMany({
-          where: { id: { in: itemIds } },
-          data: { status: 'INVOICE_ISSUED' },
-        });
+        // Items were set to INVOICE_ISSUED (intermediate) above, before the link was created.
+        // The Square webhook flips them to SOLD on payment.
 
         // Notify the shopper an invoice/checkout link is ready.
         // Notification-gap fix (S1195 sweep continuation, 2026-08-08): "payment
@@ -1056,6 +1108,21 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           console.warn('[settlement] Failed to create checkout notification:', notifErr);
         }
 
+        // Crew Invasion (2026-09-29): state plainly that this link is at full price. Only computed
+        // when the sale has Crew Invasion on; a lookup failure just omits the note.
+        let crewDiscountNote: string | undefined;
+        if (validRouted[0].item.sale?.crewInvasionEnabled) {
+          const eligibleShoppers = await countCrewDiscountEligibleShoppers(
+            saleId,
+            validRouted.map((h) => h.userId as string)
+          );
+          if (eligibleShoppers > 0) {
+            crewDiscountNote =
+              `${eligibleShoppers === 1 ? 'A shopper in this batch has' : `${eligibleShoppers} shoppers in this batch have`} a Crew Invasion discount available, ` +
+              'but payment links are always charged at full price. Send each shopper their own payment request from Hold to Pay to apply the discount.';
+          }
+        }
+
         return res.json({
           settlementMode,
           linkId: linkResult.linkId,
@@ -1065,6 +1132,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           itemCount: itemIds.length,
           updated: validRouted.length,
           failed: ids.length - validRouted.length,
+          crewDiscountApplied: false,
+          ...(crewDiscountNote ? { crewDiscountNote } : {}),
         });
       }
 
@@ -1104,6 +1173,16 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       const validHolds = holds.filter((h) => h.item.sale?.organizerId === organizer.id && h.item.status !== 'SOLD');
       if (validHolds.length === 0) {
         throw new Error('No valid holds found');
+      }
+
+      // Money review P1-13 (2026-09-29): releasing a hold that still has a live payment request
+      // cancels the reservation and (via the RESERVED-only guard below) leaves the item at
+      // INVOICE_ISSUED with a payable link and no reservation to find it from. The markSold
+      // router above already refuses this; release did not. Abort the whole batch: the organizer
+      // cancels the payment request first (releaseInvoice), which is the only path that also
+      // closes the payment link.
+      if (action === 'release' && validHolds.some(isInvoicedOrClaimed)) {
+        throw new BatchReleaseInvoicedHoldError();
       }
 
       const validIds = validHolds.map((h) => h.id);
@@ -1500,6 +1579,11 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       isTestTransaction: isTestTransaction === true,
     });
   } catch (error) {
+    if (error instanceof BatchReleaseInvoicedHoldError) {
+      return res.status(409).json({
+        message: 'One or more of these holds already has a payment request out. Release that invoice first.',
+      });
+    }
     console.error('[reservations] batchUpdateHolds error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -1725,6 +1809,17 @@ export const checkinAtSale = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Sale Passport (2026-09-29): this is the second check-in path (saleController.checkInToSale is
+    // the first) and a check-in is real attendance either way. Same call shape and idempotency as
+    // that path: refId = saleId makes the legacy ATTEND_SALE tally once-per-sale, so a repeat
+    // check-in here or a check-in through the other path can never double count. awardStamp never
+    // throws; the try/catch is belt and braces so it can never change this response.
+    try {
+      await awardStamp(req.user.id, 'ATTEND_SALE', saleId, saleId);
+    } catch (stampErr) {
+      console.error('[loyalty] Sale Passport check-in stamp failed (reservations check-in):', stampErr);
+    }
+
     res.status(201).json(checkin);
   } catch (error) {
     console.error('[reservations] checkinAtSale error:', error);
@@ -1752,6 +1847,30 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 // POST /api/reservations/:id/mark-sold — organizer marks held item sold and creates invoice
 // Hold-to-Pay Phase 2: Create Stripe Checkout session for payment collection
+/** Thrown inside batchUpdateHolds' release transaction when a selected hold still has a live payment request. */
+class BatchReleaseInvoicedHoldError extends Error {
+  constructor() {
+    super('a selected hold already has a payment request out');
+    this.name = 'BatchReleaseInvoicedHoldError';
+  }
+}
+
+/** Thrown inside a release transaction when the invoice is no longer PENDING (paid, expired or cancelled under us). */
+class InvoiceNoLongerPendingError extends Error {
+  constructor() {
+    super('invoice is no longer PENDING');
+    this.name = 'InvoiceNoLongerPendingError';
+  }
+}
+
+/** Thrown inside the markSold invoice transaction when a bundled item is no longer AVAILABLE/RESERVED. */
+class InvoiceItemsUnavailableError extends Error {
+  constructor() {
+    super('one or more bundled items are no longer available to invoice');
+    this.name = 'InvoiceItemsUnavailableError';
+  }
+}
+
 export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) => {
   // Hold-to-Pay P0 fix (2026-08-16): the in-flight claim below now lives in the
   // dedicated NON-FK columns invoiceClaimToken / invoiceClaimedAt (see
@@ -1794,7 +1913,21 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
   // legitimately stolen a stale claim on the same rows, and an id-only release would
   // clobber that live claim. Matching on invoiceClaimToken makes the release a no-op
   // unless the claim still belongs to THIS attempt.
+  // Feature #397 (2026-09-29): Crew Invasion redemption taken for THIS attempt. Declared at
+  // function scope (same reason as claimToken above: the outer catch must see it). Set only
+  // after the code is atomically redeemed and cleared the moment the HoldInvoice transaction
+  // commits; releaseClaim() (called on every failure path) gives the code back if the invoice
+  // never came to exist. The release is fenced on the exact usedAt this attempt wrote.
+  let crewRedemption: { codeId: string; usedAt: Date; userId: string } | null = null;
+  const releaseCrewRedemption = async () => {
+    if (!crewRedemption) return;
+    const taken = crewRedemption;
+    crewRedemption = null;
+    await releaseCrewInvasionRedemption(taken.codeId, taken.usedAt, taken.userId);
+  };
+
   const releaseClaim = async () => {
+    await releaseCrewRedemption();
     if (!claimToken) return;
     await prisma.itemReservation
       .updateMany({
@@ -1859,6 +1992,13 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       },
       organizerStripeConnectId: organizer.stripeConnectId,
       organizerStripeOnboarded: organizer.stripeOnboarded,
+      // Money review P1-13 (2026-09-29): the Stripe onboarding check in the shared gate is a
+      // leftover from the Stripe era and blocked every Square-only organizer, whose invoices are
+      // Square Payment Links. A Square-ready organizer (same signal as the branch below:
+      // squareOnboarded && squareMerchantId) is exempt from the Stripe check; a Stripe-connected
+      // organizer behaves exactly as before.
+      organizerSquareOnboarded: (organizer as any).squareOnboarded === true,
+      organizerSquareMerchantId: (organizer as any).squareMerchantId ?? null,
     });
     if (invoiceEligibility.blocked) {
       return res.status(invoiceEligibility.status).json(invoiceEligibility.body);
@@ -1940,6 +2080,37 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       bundledItemIds.push(hold.item.id);
     }
 
+    // Feature #397 (2026-09-29): Crew Invasion redemption. Every line above is a HELD ITEM at
+    // this sale, priced server-side from Item.price, so the whole subtotal is discount-eligible.
+    // The discount is applied HERE, before the platform fee below is computed, so the fee is
+    // charged on the discounted price. Redemption is an atomic use-once update; it is released
+    // by releaseClaim() if the payment link / invoice below fails. An explicit
+    // `crewInvasionCode` body field (organizer typing the shopper's code at the desk) is
+    // validated with a clear 400; without it the shopper's active crew code auto-applies.
+    const subtotalBeforeCrewDiscount = totalAmount;
+    let crewDiscountCents = 0;
+    let crewDiscountInfo: { code: string; discountPct: number } | null = null;
+    {
+      const subtotalCents = Math.round(totalAmount * 100);
+      const providedCrewCode = typeof req.body?.crewInvasionCode === 'string' ? req.body.crewInvasionCode : null;
+      const crewResult = await applyCrewInvasionDiscount({
+        saleId: reservation.item.saleId!,
+        shopperUserId: reservation.user.id,
+        eligibleBaseCents: subtotalCents,
+        chargeableTotalCents: subtotalCents,
+        providedCode: providedCrewCode,
+      });
+      if (crewResult.applied) {
+        crewRedemption = { codeId: crewResult.codeId, usedAt: crewResult.usedAt, userId: crewResult.userId };
+        crewDiscountCents = crewResult.discountCents;
+        crewDiscountInfo = { code: crewResult.code, discountPct: crewResult.discountPct };
+        totalAmount = (subtotalCents - crewDiscountCents) / 100;
+      } else if (crewResult.rejection) {
+        await releaseClaim();
+        return res.status(crewResult.rejection.status).json({ message: crewResult.rejection.message, code: crewResult.rejection.code });
+      }
+    }
+
     // Inclusive-fee migration (2026-09-24): the floor must apply ONCE to the whole bundled
     // invoice's single Square charge, not per item inside the loop above -- summing a
     // per-item floor would overcharge a multi-item hold invoice made of several small-ticket
@@ -1973,9 +2144,10 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       // metadata.update below) -- see holdInvoiceSquareCheckoutHelper.ts's header comment
       // for the full rationale and the known paymentLinkId/orderId-persistence gap.
       const holdInvoiceId = generateHoldInvoiceId();
-      const squareDescription = allShopperHolds.length > 1
+      const squareDescription = (allShopperHolds.length > 1
         ? `${allShopperHolds.length} items from ${reservation.item.sale!.title}`
-        : (allShopperHolds[0]?.item.title || 'FindA.Sale payment');
+        : (allShopperHolds[0]?.item.title || 'FindA.Sale payment'))
+        + (crewDiscountInfo ? ` (Crew Invasion ${crewDiscountInfo.discountPct}% off applied)` : '');
 
       let squareResult;
       try {
@@ -2051,10 +2223,17 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         });
         if (finalize.count !== holdIds.length) throw new InvoiceClaimLostError();
 
-        await tx.item.updateMany({
-          where: { id: { in: bundledItemIds } },
+        // Money review P1-13 (2026-09-29): this flip was unconditional, so an item sold or
+        // invoiced through another channel between the hold read and here was dragged back to
+        // INVOICE_ISSUED and a second live payment link was issued against it. Conditional
+        // updateMany + count check, same pattern as itemSaleGuard.commitItemSale: on a mismatch
+        // the WHOLE transaction (invoice row, claim finalize) rolls back and the catch below
+        // deletes the just-created Square link and releases the claim.
+        const itemFlip = await tx.item.updateMany({
+          where: { id: { in: bundledItemIds }, status: { in: ['AVAILABLE', 'RESERVED'] } },
           data: { status: 'INVOICE_ISSUED' },
         });
+        if (itemFlip.count !== bundledItemIds.length) throw new InvoiceItemsUnavailableError();
 
         return holdInvoice;
       });
@@ -2063,6 +2242,18 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       createdStripeSessionAccount = null;
       createdSquarePaymentLinkId = null;
       createdSquareOrganizerId = null;
+      // The invoice now exists and carries the discounted total: the member's redemption stays
+      // consumed, and is linked to this invoice so releaseInvoice / invoiceExpiryJob can restore
+      // it if the invoice dies unpaid (per-member redemption, 2026-09-29).
+      if (crewRedemption) {
+        await linkCrewInvasionRedemptionToInvoice({
+          codeId: crewRedemption.codeId,
+          userId: crewRedemption.userId,
+          usedAt: crewRedemption.usedAt,
+          holdInvoiceId: squareTransaction.id,
+        });
+      }
+      crewRedemption = null;
 
       const squareItemList = bundledItemIds.length > 1
         ? `${bundledItemIds.length} items`
@@ -2072,11 +2263,15 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         userId: reservation.user.id,
         type: 'invoice_sent',
         title: 'Payment requested',
-        body: `Payment requested for ${squareItemList}. Complete payment before your hold expires.`,
+        body: `Payment requested for ${squareItemList}.${crewDiscountInfo ? ` Crew Invasion ${crewDiscountInfo.discountPct}% discount applied.` : ''} Complete payment before your hold expires.`,
         link: `/items/${bundledItemIds[0]}`,
         channel: 'OPERATIONAL',
         sendEmail: true,
       }).catch((err: unknown) => console.error(`[hold-invoice] Failed to create invoice_sent notification for user ${reservation.user.id}:`, err));
+
+      const crewEmailLine = crewDiscountInfo
+        ? `<p>Crew Invasion discount (${crewDiscountInfo.discountPct}% off your held items): -$${(crewDiscountCents / 100).toFixed(2)}. Your total is $${totalAmount.toFixed(2)}.</p>`
+        : '';
 
       // Send checkout email to shopper (fire-and-forget) -- mirrors the Stripe branch's
       // own email below, just pointed at the Square payment link URL.
@@ -2099,6 +2294,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
               <h2>Complete Your Purchase</h2>
               <p>Hi ${reservation.user.name},</p>
               <p>The organizer is ready for payment on <strong>${itemListEmail}</strong>.</p>
+              ${crewEmailLine}
               <p><a href="${squareResult.url}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Review and Pay</a></p>
               <p style="color: #6b7280; font-size: 14px;">This link expires at ${expiryTime} (in approximately ${Math.round((expiresAt.getTime() - Date.now()) / 3600000)} hours).</p>
             `,
@@ -2113,6 +2309,11 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         checkoutUrl: squareResult.url,
         expiresAt,
         totalAmount,
+        subtotalAmount: subtotalBeforeCrewDiscount,
+        // Feature #397: the discount line for the invoice (null when no crew code applied).
+        crewInvasionDiscount: crewDiscountInfo
+          ? { code: crewDiscountInfo.code, discountPct: crewDiscountInfo.discountPct, amountOff: crewDiscountCents / 100 }
+          : null,
         totalPlatformFeeAmount,
         estimatedOrganizerPayout: totalAmount - totalPlatformFeeAmount,
         itemCount: bundledItemIds.length,
@@ -2159,6 +2360,12 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
 
     if (error instanceof InvoiceClaimLostError) {
       return res.status(409).json({ message: 'Another payment request for these holds completed first.' });
+    }
+
+    if (error instanceof InvoiceItemsUnavailableError) {
+      // The Square link was closed above and the claim (and any crew redemption) released by
+      // releaseClaim(); nothing was left half-done.
+      return res.status(409).json({ message: 'One or more of these items is no longer available to invoice. It may have been sold or invoiced elsewhere.' });
     }
 
     if (error instanceof SquareOnboardingIncompleteError) {
@@ -2667,6 +2874,33 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Money review P0-2 (2026-09-29): Square counterpart of the Stripe block above. A Square
+    // invoice is a hosted Payment Link, and this endpoint used to flip it CANCELLED and return
+    // the items to inventory without ever asking Square whether it was paid or cancelling the
+    // link, so the shopper could still pay it afterwards. Paid: record the sale, refuse the
+    // release. Ambiguous (Square unreachable, cancel refused): 502, invoice left PENDING.
+    if (invoice.processor === 'SQUARE') {
+      const squareContext = `releaseInvoice invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`;
+      const gate = await prepareSquareInvoiceForRelease({
+        invoice,
+        organizerId: saleOrganizer?.id ?? null,
+        context: squareContext,
+      });
+      if (gate.outcome === 'PAID') {
+        await recordSquarePaidInvoiceFromGate(invoice.id, gate, squareContext);
+        console.warn(`[hold-invoice] releaseInvoice refused: invoice ${invoice.id} is already PAID at Square (${gate.detail}).`);
+        return res.status(409).json({
+          message: 'This payment has already gone through. Refund it from the sale\'s payments instead of cancelling the request.',
+        });
+      }
+      if (gate.outcome === 'RETRY') {
+        console.warn(`[hold-invoice] releaseInvoice left invoice ${invoice.id} PENDING: ${gate.detail}`);
+        return res.status(502).json({
+          message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.',
+        });
+      }
+    }
+
     // P1 fix (2026-08-16): this used to reset ONLY `reservation.item` and never cleared
     // ItemReservation.invoiceId. Two consequences, both confirmed by code read:
     //   1. BUNDLED invoices (markSoldAndCreateInvoice bundles every hold this shopper has
@@ -2682,8 +2916,11 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     // the claim columns too so a fresh invoice attempt isn't blocked by a stale claim.
     const releasedItemIds = invoice.itemIds.length > 0 ? invoice.itemIds : [reservation.item.id];
     await prisma.$transaction(async (tx) => {
-      await tx.holdInvoice.update({
-        where: { id: invoice.id },
+      // Guarded flip (2026-09-29): WHERE status = 'PENDING' so a payment recorded (or an expiry
+      // run) in the window since the read above can never be overwritten back to CANCELLED with
+      // the items returned to inventory. Zero rows aborts and rolls the whole release back.
+      const cancelFlip = await tx.holdInvoice.updateMany({
+        where: { id: invoice.id, status: 'PENDING' },
         data: {
           status: 'CANCELLED',
           releasedAt: new Date(),
@@ -2696,6 +2933,7 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
           reservationId: null,
         },
       });
+      if (cancelFlip.count === 0) throw new InvoiceNoLongerPendingError();
 
       // Return EVERY item on this invoice to RESERVED. Guarded on INVOICE_ISSUED, same as
       // invoiceExpiryJob's revert, so an item already moved on by another path (SOLD via a
@@ -2764,8 +3002,17 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // Per-member Crew Invasion redemption (2026-09-29): this UNPAID invoice is now CANCELLED, so
+    // give the shopper's crew discount back (only while the code itself is still unexpired does it
+    // apply again). Runs AFTER the transaction commits and never throws, so it cannot undo or
+    // block the release.
+    await releaseCrewInvasionRedemptionsForInvoice(invoice.id);
+
     res.json({ message: 'Invoice released and hold reactivated', itemsReleased: releasedItemIds.length });
   } catch (error: any) {
+    if (error instanceof InvoiceNoLongerPendingError) {
+      return res.status(409).json({ message: 'This payment request is no longer open, so there is nothing to cancel.' });
+    }
     console.error('[hold-invoice] releaseInvoice error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -2822,6 +3069,47 @@ export const releasePaymentLink = async (req: AuthRequest, res: Response) => {
 
     if (!link) {
       return res.status(404).json({ message: 'No active payment link found for this hold.' });
+    }
+
+    // Money review P0-2 (2026-09-29): a Square payment link stays payable until it is deleted, and
+    // the manual reclaim below only deletes it AFTER flipping the row (and treats a failed delete
+    // as non-fatal). Run the shared release gate first: paid means record the sale and refuse the
+    // release, ambiguous (Square unreachable, cancel refused) means leave the link ACTIVE and 502,
+    // and only a confirmed cancel lets the reclaim proceed.
+    if (link.processor === 'SQUARE') {
+      const squareContext = `releasePaymentLink link=${link.id}`;
+      const gate = await prepareSquareInvoiceForRelease({
+        invoice: {
+          id: link.id,
+          processor: 'SQUARE',
+          squareOrderId: link.squareOrderId ?? null,
+          squarePaymentLinkId: link.squarePaymentLinkId ?? null,
+          squarePaymentId: null,
+        },
+        organizerId: userOrganizer!.id,
+        context: squareContext,
+      });
+      if (gate.outcome === 'PAID') {
+        try {
+          await recordPosPaymentLinkSale(link, {
+            source: 'reconcile',
+            processor: 'SQUARE',
+            externalPaymentId: gate.paymentId ?? undefined,
+          });
+        } catch (recErr) {
+          console.error(`[pos-payment-link] ${squareContext}: Square shows the link paid but recording failed (the reconcile cron retries):`, recErr);
+        }
+        console.warn(`[pos-payment-link] releasePaymentLink refused: link ${link.id} is already PAID at Square (${gate.detail}).`);
+        return res.status(409).json({
+          message: 'This payment has already gone through. Refund it from the sale\'s payments instead of cancelling the request.',
+        });
+      }
+      if (gate.outcome === 'RETRY') {
+        console.warn(`[pos-payment-link] releasePaymentLink left link ${link.id} ACTIVE: ${gate.detail}`);
+        return res.status(502).json({
+          message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.',
+        });
+      }
     }
 
     const result = await manuallyReclaimPosPaymentLink(link);
@@ -2978,16 +3266,42 @@ export const releaseInvoiceById = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Money review P0-2 (2026-09-29): Square counterpart of the Stripe block above, same contract
+    // as releaseInvoice (paid: record + 409; ambiguous: 502; only CLEAR proceeds to the flip).
+    if (invoice.processor === 'SQUARE') {
+      const squareContext = `releaseInvoiceById invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`;
+      const gate = await prepareSquareInvoiceForRelease({
+        invoice,
+        organizerId: saleOrganizer?.id ?? null,
+        context: squareContext,
+      });
+      if (gate.outcome === 'PAID') {
+        await recordSquarePaidInvoiceFromGate(invoice.id, gate, squareContext);
+        console.warn(`[hold-invoice] releaseInvoiceById refused: invoice ${invoice.id} is already PAID at Square (${gate.detail}).`);
+        return res.status(409).json({
+          message: "This payment has already gone through. Refund it from the sale's payments instead of cancelling the request.",
+        });
+      }
+      if (gate.outcome === 'RETRY') {
+        console.warn(`[hold-invoice] releaseInvoiceById left invoice ${invoice.id} PENDING: ${gate.detail}`);
+        return res.status(502).json({
+          message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.',
+        });
+      }
+    }
+
     // No Item/ItemReservation to revert -- the reservation-less guard above already
     // confirmed this invoice has neither. invoice.itemIds is likewise always empty for
     // this case (posController.createCombinedInvoice only ever populates itemIds from
     // heldReservations), but the updateMany below stays scoped correctly if that ever
     // changes.
     await prisma.$transaction(async (tx) => {
-      await tx.holdInvoice.update({
-        where: { id: invoice.id },
+      // Guarded flip (2026-09-29): see releaseInvoice. Zero rows aborts the whole release.
+      const cancelFlip = await tx.holdInvoice.updateMany({
+        where: { id: invoice.id, status: 'PENDING' },
         data: { status: 'CANCELLED', releasedAt: new Date() },
       });
+      if (cancelFlip.count === 0) throw new InvoiceNoLongerPendingError();
 
       if (invoice.itemIds.length > 0) {
         await tx.item.updateMany({
@@ -3030,8 +3344,14 @@ export const releaseInvoiceById = async (req: AuthRequest, res: Response) => {
       }
     });
 
+    // Per-member Crew Invasion redemption (2026-09-29): same restore as releaseInvoice, after commit.
+    await releaseCrewInvasionRedemptionsForInvoice(invoice.id);
+
     res.json({ message: 'Invoice released', invoiceId: invoice.id });
   } catch (error: any) {
+    if (error instanceof InvoiceNoLongerPendingError) {
+      return res.status(409).json({ message: 'This payment request is no longer open, so there is nothing to cancel.' });
+    }
     console.error('[hold-invoice] releaseInvoiceById error:', error);
     res.status(500).json({ message: 'Server error' });
   }
