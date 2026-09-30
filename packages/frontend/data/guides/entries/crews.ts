@@ -8,113 +8,121 @@ const entry: GuideEntry = {
   priority: 2,
   relatedGuides: ['post-a-haul', 'treasure-trails-shopper', 'leaderboard-and-league'],
   videoUrl: undefined,
-  body: `A Crew is a private group of shoppers (up to 10 people) who go to sales together. Members share a feed of each other's saves, holds, and haul posts, and can coordinate in a group chat without posting anything publicly. If you shop with the same two or three people regularly, a Crew keeps everyone on the same page without a group text thread falling apart.
+  body: `A Crew is a public group of up to 50 shoppers. Every Crew has its own leaderboard, a feed of its members' photos, and a crew bonus on sale check-ins. Joining is free and instant, and you can be in up to three Crews at once. If you shop with the same people regularly, or you just want to see what other collectors in your area are finding, a Crew gives you a home for that.
 
 ---
 
-## What a Crew is for
+## What a Crew is
 
-Sales move fast. If your friend spotted a piece of furniture and you're across town, knowing about it in time matters. A Crew gives you a private space to:
+- **Public.** Any signed-in shopper can find a Crew and join it. There are no invite-only Crews, invite codes or approval requests.
+- **Up to 50 members.** When a Crew is full, the Join button says so until someone leaves.
+- **Free to join.** Only creating a Crew costs XP.
+- **Up to three Crews per person.** Crews you create count toward the limit, the same as Crews you join.
 
-- See what sales your group members are watching.
-- Share a find before you post it publicly.
-- Coordinate who's going where on a busy sale weekend.
-- Keep your deal-scouting between people you trust, not the whole community feed.
+---
 
-Crews are not public. Nothing in the Crew feed is visible to people outside the group. Members control what they post to the Crew versus to the public feed.
+## What you get from a Crew
+
+**A leaderboard.** Each Crew page ranks its members by guild XP, with their rank and role. It is a friendly scoreboard for the group. Crews are not ranked against each other.
+
+**A photo feed.** The Crew page shows recent photos and hauls posted by members. Only photos that have been approved appear, and only photos, so it is not a feed of saves, holds or messages. Whatever a member posts publicly is what shows up there.
+
+**A check-in bonus.** When you check in to a sale, your visit XP is multiplied by 1.25 if your Crew has at least three members and at least two other Crew members have already checked in to the same sale that day. To keep the bonus fair, it only counts accounts that are at least 7 days old and have already made a purchase or checked in at a different sale, and that includes you. Brand new accounts do not earn it and do not count toward it. See [/shopper/guild-primer](/shopper/guild-primer) for the base check-in XP.
+
+**Crew Invasion.** Organizers can switch on Crew Invasion for a sale. When four or more members of the same Crew are holding items at that sale at the same time, the Crew earns a group discount. It happens once per Crew per sale. To count toward the four, a member's account must be at least 7 days old and must have a purchase or a check-in at a different sale.
+
+- **The discount.** Every member of that Crew gets 10% off their own held items at that sale for 45 minutes after it starts. You do not type a code. It is applied automatically when the organizer sends you your payment request for those items, and it comes off before fees are added. Each member can use it once per sale, and your total never drops below $1.00. If the register already took a discount off the same items, you get whichever is bigger, not both. A payment link that covers several shoppers at once does not include the Crew discount, so ask the organizer to send you your own payment request.
+- **If a request does not go through.** If a payment request with your discount is cancelled or expires unpaid, your discount comes back, and you can use it on the next request while the 45 minutes last. Once a request is paid, the discount is used.
+- **The XP.** Members who count toward the four also earn 75 XP, once per sale and at most one Crew Invasion payout per day. That XP is held for 72 hours before you can spend it, like purchase XP.
+
+Everyone in the Crew who is holding at that sale gets a notification when it starts.
 
 ---
 
 ## How to create a Crew
 
-1. Go to [/shopper/crews](/shopper/crews).
-2. Tap **New Crew**.
-3. Enter a name for the Crew. Keep it something your group will recognize: it doesn't have to be clever.
-4. Tap **Create**.
-5. From the Crew page, tap **Invite** to add members.
+1. Go to [/shopper/crews](/shopper/crews) and open the **Create** tab.
+2. Enter a name. It must be 3 to 30 characters, using letters, numbers, spaces and these characters: - ' & . Each name is unique, so a name that matches an existing Crew, or is very close to one, is not allowed. Names that impersonate FindA.Sale staff or use offensive words are rejected.
+3. Add an optional description of up to 500 characters.
+4. Check the cost. Creating a Crew costs **500 XP**, and the form shows how much spendable XP you have. Newly earned XP is held for 72 hours before you can spend it. If you are short, the button stays disabled and tells you how much more you need.
+5. Tap **Create crew** and confirm.
 
-You can invite people two ways: by their FindA.Sale username, or by sharing an invite link. The invite link works once: the first person who opens it gets added, and the link expires. Generate a new link for each additional member.
+The spend is one-time and is not refunded if you later disband the Crew. If anything goes wrong while the Crew is being created, for example someone takes the same name a moment before you, nothing is charged.
 
-You're the Crew owner. You can rename the Crew, remove members, and disband it from the Crew settings page.
+You become the Crew's founder.
 
 ---
 
 ## How to join a Crew
 
-**Via invite link:** Someone in the Crew sends you a link. Tap it while signed in to FindA.Sale and you're added automatically.
+1. Go to [/shopper/crews](/shopper/crews) and open **Browse Crews**.
+2. Search by name if you know what you want, or scroll the list. Crews with the most members show first.
+3. Tap **Join**. You are in right away.
 
-**Via search:** Go to [/shopper/crews](/shopper/crews) and tap **Find a Crew**. Search by the exact Crew name. If it comes up, tap **Request to Join**. The Crew owner approves or declines.
-
-You can be in up to three Crews at once. If you're already in three and want to join a new one, you'll need to leave one first.
-
----
-
-## What the Crew feed shows
-
-The Crew feed is a shared activity stream. When a Crew member does any of the following, it shows up in the feed:
-
-- Saves a sale to their watchlist.
-- Places a hold on an item.
-- Posts a haul (public haul posts from members show up in the Crew feed automatically).
-- Manually shares a sale or item directly to the Crew.
-
-The feed is read-only: you can react to entries with a quick emoji, or tap into the group chat to discuss. The group chat is a simple text thread, no media attachments.
-
-Nothing in the Crew feed posts to the public. If a member saves a sale, that save is private to them: it only surfaces in the Crew feed so the group can see it.
+You can also open a Crew directly from a link a friend sends you and tap **Join crew** there. If you are already in three Crews, leave one first.
 
 ---
 
-## Crews and XP
+## Share your Crew
 
-Crews have one XP mechanic: the referral bonus.
+On any Crew page, tap **Share crew link**. It shares or copies the link to that Crew page. Anyone who opens it can see the Crew, and if they are signed in they can join. There is no built-in chat, so send the link through a message app or group text you already use.
 
-If a Crew member shares a sale directly to the Crew chat, and another member visits that sale and makes a purchase, both the member who shared and the member who purchased earn a small XP bonus. This fires once per sale per pair of members, not once per item.
+---
 
-Check [/shopper/guild-primer](/shopper/guild-primer) for the current bonus amount. It's a small reward, not a farming mechanic: you won't accelerate your rank significantly through referrals alone.
+## Founder tools
+
+If you founded the Crew, its page also lets you:
+
+- **Remove a member.** They can join again later if there is room, because Crews are public.
+- **Make another member the founder.** You become a regular member.
+- **Disband the Crew.** You type the Crew name to confirm. Everyone is removed and the Crew is deleted. It cannot be undone.
+
+A founder cannot simply leave. To step away, make another member the founder or disband the Crew.
 
 ---
 
 ## How to leave a Crew
 
-1. Go to [/shopper/crews](/shopper/crews).
-2. Tap the Crew you want to leave.
-3. Tap **Settings** (gear icon, top right).
-4. Tap **Leave Crew**.
-5. Confirm.
+1. Open the Crew from [/shopper/crews](/shopper/crews).
+2. Tap **Leave crew** and confirm.
 
-You leave immediately. The Crew owner is not notified by default, but your activity will stop showing in the Crew feed.
-
-If you are the Crew owner and you leave, ownership transfers to the longest-standing member. If you want to disband the Crew entirely instead of transferring it, tap **Disband Crew** from the same Settings screen.
+You leave immediately, your photos stop appearing in that Crew's feed, and it frees up one of your three Crew spots.
 
 ---
 
 ## Common questions
 
-**Is my Crew activity visible to people outside the Crew?**
-No. Saves, holds, and messages you post inside the Crew are private to members. Your public haul posts do appear in the Crew feed, but that's a copy of something already public: it doesn't expose anything additional.
+**Are Crews private?**
+No. Crews are public. Anyone signed in can view a Crew's members, leaderboard and photo feed and can join. Only post to FindA.Sale what you are comfortable sharing publicly.
 
 **Can I have more than one Crew?**
-You can be a member of up to three Crews simultaneously. You can also create a Crew and be a member of two others: the create-versus-join distinction doesn't matter for the cap.
+Yes, up to three at the same time, whether you created them or joined them.
 
-**What if someone in my Crew is sharing information I don't want shared?**
-The Crew owner can remove any member at any time from the Crew settings page. If you're not the owner, you can report a member through their profile page.
+**How many people can be in a Crew?**
+Up to 50.
+
+**Is there a Crew chat, invite link or request-to-join step?**
+Not at this time. Joining is instant, and the share link is a plain link to the Crew page.
+
+**Do Crews earn extra XP when members refer each other, or have group bounties?**
+No. The Crew bonuses are the 1.25x check-in bonus and Crew Invasion, both described above.
 
 **Do organizers know I'm in a Crew?**
-No. Organizers can see your public haul posts and reviews, but Crew membership is private.
+Crew membership is visible on the public Crew page. Organizers only interact with Crews if they turn on Crew Invasion for a sale.
 
-**Can a Crew have more than 10 members?**
-Not at this time. Ten is the current cap. If your group is larger, you'd need to split into multiple Crews.
+**I created a Crew and the name was taken. Did I lose XP?**
+No. XP is only spent when the Crew is actually created.
 
-**Can I use a Crew to coordinate group buying or splitting lots?**
-You can discuss it in the group chat: that's up to you and your group. FindA.Sale doesn't have a built-in group-purchase feature at this time. Coordinating through the chat and then each person placing their own hold is the current pattern.
+**What if someone in a Crew is posting something they should not?**
+The founder can remove any member. You can also flag a photo or haul post the same way you would anywhere else on FindA.Sale.
 
 ---
 
 ## Related guides
 
-- [Post a haul](post-a-haul): haul posts from Crew members appear in the Crew feed automatically.
-- [Walk a Treasure Trail](treasure-trails-shopper): plan a multi-sale day your whole Crew can follow.
-- [The leaderboard and monthly league](leaderboard-and-league): see how the Crew referral bonus contributes to your XP.`,
+- [Post a haul](post-a-haul): approved haul posts from Crew members show up in that Crew's photo feed.
+- [Walk a Treasure Trail](treasure-trails-shopper): plan a multi-sale day and send the Trail link to your Crew.
+- [The leaderboard and monthly league](leaderboard-and-league): every Crew has its own leaderboard, separate from the monthly league.`,
 };
 
 export default entry;
