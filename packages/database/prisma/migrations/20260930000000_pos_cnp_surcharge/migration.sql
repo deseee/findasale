@@ -1,0 +1,25 @@
+-- POS card-not-present (CNP) surcharge persisted per Purchase row (2026-09-30)
+--
+-- WHY: the manual card entry flow (posPaymentController.manualCardPayment) charges the buyer a
+-- surcharge (3.5% + $0.15) ON TOP of the sale. Purchase.amount excludes it, so until now the
+-- surcharge was charged but never recorded on any row, refunds were capped at Purchase.amount, and
+-- the buyer's surcharge was never returned. Card-network surcharge rules require a refund to return
+-- the surcharge in proportion to the amount refunded.
+--
+--   * Purchase.cnpSurchargeCents -- this row's share, in whole cents, of the surcharge charged with
+--     the sale (allocated across the sale's rows with largest-remainder allocation, so the rows sum
+--     exactly to the surcharge charged). Refunds (squareRefundService) add
+--     cnpSurchargeCents * principalRefunded / cardPrincipal to the Square refund amount, cumulatively
+--     across partial refunds. The surcharge is never sale revenue and never platform-fee base.
+--
+-- SAFETY: additive only. One INTEGER column with a constant default of 0. No DROP, no data rewrite.
+-- NO BACKFILL NEEDED: 0 means "no surcharge on this row", which is true of every existing row
+-- (before this migration the surcharge was not recorded, and old rows keep the old behavior of
+-- refunding principal only). Fully idempotent: guarded with IF NOT EXISTS, so re-running is a no-op.
+-- Apply manually.
+--
+-- Down migration (safe at any time; the app only reads this column with a 0 fallback):
+--   ALTER TABLE "Purchase" DROP COLUMN IF EXISTS "cnpSurchargeCents";
+
+-- AlterTable: Purchase
+ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "cnpSurchargeCents" INTEGER NOT NULL DEFAULT 0;

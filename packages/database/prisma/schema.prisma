@@ -143,6 +143,8 @@ model User {
   streak                       VisitStreak?           @relation("UserStreak")
   // Feature #19: Passkey/WebAuthn Support
   passkeys                     PasskeyCredential[]    @relation("UserPasskeys")
+  // Auth hardening (2026-09-30): refresh-token rotation with reuse detection (see RefreshToken)
+  refreshTokens                RefreshToken[]
   // Feature #17: Bid Bot Detector — fraud signals and reviews given
   fraudSignals                 FraudSignal[]          @relation("UserFraudSignals")
   fraudReviewsGiven            FraudSignal[]          @relation("FraudReviewsBy")
@@ -2054,6 +2056,16 @@ model Purchase {
   // processor-side. Doubles as the organizer-facing "cash portion to refund by hand" ledger note.
   refundCashPortion Float?
 
+  // ── CARD-NOT-PRESENT SURCHARGE (2026-09-30) ────────────────────────────────────────────
+  // Cents of the manual-card-entry surcharge (3.5% + $0.15, posPaymentController.manualCardPayment)
+  // charged to the buyer ON TOP of this row's `amount`, this row's share of the sale's surcharge
+  // (allocated with allocateCentsProportionally over the rows' card legs, so rows sum exactly to
+  // what was charged). `amount` EXCLUDES it: it is never sale revenue and never platform-fee base.
+  // Card-network surcharge rule (decided 2026-09-30): a refund returns the surcharge in proportion
+  // to the principal refunded (full refund = full surcharge); see services/cnpSurcharge.ts.
+  // 0 on every existing row and every non-manual-card sale. NO BACKFILL, DELIBERATE.
+  cnpSurchargeCents Int @default(0)
+
   // POS Cashier Discount Permission (2026-08-28): this row's share of a cart-level
   // discount applied at Terminal checkout (terminalController.ts createTerminalPaymentIntent).
   // `amount` above is already net of the discount; these columns record what/why/who for
@@ -2227,6 +2239,12 @@ model SaleSubscriber {
   // Set when the shopper used the "stop sale reminders" email link; the reminder job skips email
   // (push and text are governed by their own settings) for rows with this set.
   emailOptOutAt DateTime?
+  // Guest email double opt-in (2026-09-30): an anonymous email subscription is stored as a PENDING row
+  // (userId null, email set, emailConfirmedAt null) with the SHA-256 of a single-use random token and a 48h expiry.
+  // The token is cleared when it is used. Reminder emails go to a guest row only when emailConfirmedAt is set.
+  emailConfirmTokenHash String?   @unique
+  emailConfirmExpiresAt DateTime?
+  emailConfirmedAt      DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   reminderMarkers SaleReminderSent[]
@@ -3382,6 +3400,10 @@ model FeeStructure {
 model ProcessedWebhookEvent {
   eventId     String   @id
   status      String   @default("PENDING") // PENDING | COMPLETED | FAILED (ADR pos-webhook-idempotency 2026-07-23)
+  // 2026-09-30: the signature-verified Square event body, stored when the event is claimed so the stale-PENDING
+  // sweep (jobs/posStrandedSaleReconcileCron.ts) can RE-DRIVE it through the same handler. Null for Stripe/billing
+  // rows, dispute step markers and rows written before this column existed. Pruned with the row (30 days).
+  payload     Json?
   processedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -3968,6 +3990,30 @@ model PasskeyCredential {
   user User @relation("UserPasskeys", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([userId])
+}
+
+// Auth hardening (2026-09-30): one row per issued refresh token. Rotation: every /auth/refresh marks the presented
+// row used (revokedAt, revokedReason 'rotated') and issues the next row in the same familyId. Presenting a row that
+// is already used outside the short reuse leeway revokes the WHOLE family (stolen-token replay). tokenHash is the
+// SHA-256 of the token's random jti (never the token itself), or 'legacy:' + SHA-256 of a pre-rotation JWT that was
+// upgraded once during the legacy grace window.
+model RefreshToken {
+  id            String    @id @default(cuid())
+  userId        String
+  familyId      String
+  tokenHash     String    @unique
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String? // rotated | logout | password_change | reuse_detected | legacy_upgraded
+  replacedById  String?
+  userAgent     String?
+  ip            String?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
 }
 
 // Feature #17: Bid Bot Detector — fraud signal tracking and organizer review
