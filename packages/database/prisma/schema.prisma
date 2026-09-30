@@ -50,6 +50,9 @@ model User {
   lineEntries                  LineEntry[]
   reviews                      Review[]
   affiliateLinks               AffiliateLink[]
+  // Creator program (2026-09-29): self-serve creator profile + earned per-sale commissions
+  creatorProfile               CreatorProfile?
+  affiliateConversionsEarned   AffiliateConversion[]  @relation("AffiliateConversionCreator")
   pushSubscriptions            PushSubscription[]
   following                    Follow[]
   pointsTransactions           PointsTransaction[]
@@ -124,6 +127,8 @@ model User {
   // Feature #29: Loyalty Passport
   stamps                       ShopperStamp[]
   stampMilestones              StampMilestone[]
+  // Sale Passport (2026-09-29): dated, place-aware collectible stamp rows (12-stamp design)
+  passportStamps               ShopperPassportStamp[]
   // Feature #55: Seasonal Discovery Challenges
   challengeProgress            ChallengeProgress[]
   challengeBadges              ChallengeBadge[]
@@ -970,6 +975,9 @@ model CrewInvasionCode {
   usedAt      DateTime?
   createdAt   DateTime  @default(now())
   sale        Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  // Per-member redemptions (2026-09-29): usedAt above is kept for compatibility but no longer
+  // gates other crew members; each qualifying member redeems once via CrewInvasionRedemption.
+  redemptions CrewInvasionRedemption[]
 
   @@unique([saleId, crewId])
   @@index([saleId])
@@ -1985,6 +1993,7 @@ model Purchase {
   squareOrderId           String? // Square's underlying Order.id -- nullable, Square's own response can omit it
   affiliateLinkId        String?
   affiliateLink          AffiliateLink?        @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  affiliateConversion    AffiliateConversion?  // Creator program: commission ledger row for this purchase (at most one)
   // Vendor Booth Payments (2026-07-07): roaming multi-booth cart attribution.
   boothCartTransactionId String?
   boothCartTransaction   BoothCartTransaction? @relation(fields: [boothCartTransactionId], references: [id], onDelete: SetNull)
@@ -2032,6 +2041,18 @@ model Purchase {
   // block on this model: NULL/0 means "no debt recoupment happened on this purchase", true for
   // every existing row and every purchase from an organizer with no cashFeeBalance owed.
   cashDebtCollectedAmount Float?
+
+  // ── CASH+CARD SPLIT TENDER (2026-09-29) ────────────────────────────────────────────────
+  // Dollars of THIS row's `amount` that the shopper paid in cash at the register (the row's
+  // proportional share of the sale's cash leg). The processor (Square) only ever captured
+  // `amount - cashLegAmount` for this row, so a processor refund is capped there (see
+  // cashFeeService.resolveSplitRefund); the cash portion is refunded by the organizer by hand.
+  // NULL (or 0) on every existing row and on every non-split sale. NO BACKFILL, DELIBERATE.
+  cashLegAmount Float?
+  // Dollars of a refund on this row that the organizer must hand back in cash (the part the
+  // processor could not refund). Written at refund time; NULL when the refund was fully
+  // processor-side. Doubles as the organizer-facing "cash portion to refund by hand" ledger note.
+  refundCashPortion Float?
 
   // POS Cashier Discount Permission (2026-08-28): this row's share of a cart-level
   // discount applied at Terminal checkout (terminalController.ts createTerminalPaymentIntent).
@@ -2187,11 +2208,70 @@ model SaleSubscriber {
   sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   phone     String?
   email     String?
+  // TCPA/CTIA consent record (2026-09-29): smsConsentAt is set ONLY when the shopper explicitly
+  // agreed to receive text messages for this sale (POST /notifications/subscribe with
+  // smsConsent=true). A phone number with smsConsentAt = null is NEVER texted by
+  // POST /notifications/send-sms. smsConsentSource records where consent was captured
+  // (e.g. 'sale_page_opt_in_v1' = the consent copy version shown at the time).
+  smsConsentAt     DateTime?
+  smsConsentSource String?
+  // Double opt-in (2026-09-29): subscribing with a phone number only sets smsConsentPendingAt and
+  // texts ONE confirmation ("Reply YES ..."). smsConsentAt is set only when that number itself
+  // replies YES/START (inbound webhook). Pending rows expire after 48h and are never texted.
+  // The consent evidence columns record where/what the shopper agreed to; smsConsentAt is nulled
+  // for every row of a phone that replies STOP.
+  smsConsentPendingAt DateTime?
+  smsConsentIp        String?
+  smsConsentUserAgent String?
+  smsConsentVersion   String?
+  // Set when the shopper used the "stop sale reminders" email link; the reminder job skips email
+  // (push and text are governed by their own settings) for rows with this set.
+  emailOptOutAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  reminderMarkers SaleReminderSent[]
 
   @@unique([saleId, userId])
   @@unique([saleId, phone])
+  @@index([phone])
+}
+
+// SMS suppression list (2026-09-29, CTIA/TCPA): one row per E.164 phone number that replied STOP
+// (or a synonym) to our Twilio number, or that Twilio reported as carrier-blocked (error 21610).
+// Sends check this table BEFORE texting. Cleared only when the number itself replies START/UNSTOP/YES.
+model SmsOptOut {
+  id          String   @id @default(cuid())
+  phone       String   @unique // E.164, e.g. +12695551234
+  source      String   @default("STOP_REPLY") // STOP_REPLY | TWILIO_21610
+  lastKeyword String?
+  optedOutAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Audit + cost-control log for organizer SMS sends (2026-09-29). The per-organizer rolling
+// 24h daily cap is computed from sentCount here. Deliberately no FK relations: this is an
+// append-only compliance/cost record that must survive sale/organizer deletion.
+model SmsSendLog {
+  id                 String   @id @default(cuid())
+  organizerId        String
+  saleId             String
+  message            String // the organizer-written text (without the sender prefix / STOP footer)
+  segments           Int      @default(1) // estimated SMS segments per recipient
+  recipientCount     Int      @default(0) // eligible recipients attempted
+  sentCount          Int      @default(0)
+  failedCount        Int      @default(0)
+  skippedOptOutCount Int      @default(0)
+  // Reservation accounting (2026-09-29): a bulk send first inserts a row with status RESERVED and
+  // sentCount = the number of texts it is ALLOWED to send (counts against the rolling 24h cap
+  // immediately, so a crash mid-send over-counts instead of under-counting), then updates it to
+  // COMPLETE with the real numbers. Single texts write COMPLETE directly.
+  status             String   @default("COMPLETE") // RESERVED | COMPLETE
+  completedAt        DateTime?
+  createdAt          DateTime @default(now())
+
+  @@index([organizerId, createdAt])
+  @@index([saleId])
+  @@index([organizerId, status])
 }
 
 model Badge {
@@ -2277,8 +2357,74 @@ model AffiliateLink {
   user        User       @relation(fields: [userId], references: [id], onDelete: Restrict)
   sale        Sale       @relation(fields: [saleId], references: [id], onDelete: Restrict)
   purchases   Purchase[]
+  clickLog    AffiliateClick[]      // Creator program: de-duplicated click ledger (one row per IP hash per day)
+  conversionRecords AffiliateConversion[]
 
   @@unique([userId, saleId])
+}
+
+// Creator program (2026-09-29): self-serve opt-in profile. Gate for per-sale affiliate links is
+// the existence of an ACTIVE row here (the legacy User.role === 'CREATOR' string check is kept as an
+// OR, never assigned by anything). Additive: new table, no change to existing columns.
+model CreatorProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code                String   @unique // Public creator code, e.g. "CRT_K9X2L4"
+  displayName         String?
+  status              String   @default("ACTIVE") // ACTIVE | SUSPENDED (admin/fraud); suspended creators earn nothing new
+  termsVersion        String // Version of the program terms accepted (config CREATOR_PROGRAM.TERMS_VERSION)
+  termsAcceptedAt     DateTime
+  notifyOnCommission  Boolean  @default(true) // In-app notification when a purchase is attributed to one of the creator's links
+  notifyWeeklySummary Boolean  @default(false) // Weekly in-app summary of clicks/conversions/commission
+  lastSummarySentAt   DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([status])
+}
+
+// Creator program: one row per (link, hashed IP, UTC day). The unique key IS the fraud dedupe:
+// a repeat click from the same IP on the same link the same day cannot insert a second row, so it
+// cannot inflate AffiliateLink.clicks. Only a salted hash of the IP is stored, never the raw address.
+model AffiliateClick {
+  id              String        @id @default(cuid())
+  affiliateLinkId String
+  affiliateLink   AffiliateLink @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+  ipHash          String
+  day             String // UTC date, YYYY-MM-DD
+  createdAt       DateTime      @default(now())
+
+  @@unique([affiliateLinkId, ipHash, day])
+  @@index([affiliateLinkId, createdAt])
+}
+
+// Creator program: commission ledger. One row per attributed, paid purchase (purchaseId is unique,
+// which makes webhook retries and idempotent Square retries harmless). Nothing here is paid out
+// automatically: payoutStatus stays UNPAID until an admin marks it. Reversals (refund, dispute,
+// chargeback) are derived at read time from Purchase.status, so this row never needs a second write.
+model AffiliateConversion {
+  id                  String         @id @default(cuid())
+  purchaseId          String         @unique
+  purchase            Purchase       @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  affiliateLinkId     String?
+  affiliateLink       AffiliateLink? @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  creatorUserId       String
+  creator             User           @relation("AffiliateConversionCreator", fields: [creatorUserId], references: [id], onDelete: Restrict)
+  saleId              String?
+  purchaseAmountCents Int
+  platformFeeCents    Int // FindA.Sale's fee on the purchase (net of any cash-debt recoupment) the commission is a share of
+  commissionRateBps   Int // Basis points of platformFeeCents, snapshotted so a later rate change never restates history
+  commissionCents     Int
+  eligibleAt          DateTime // createdAt + hold days; commission counts as approved only after this and only while the purchase is still PAID
+  payoutStatus        String         @default("UNPAID") // UNPAID | PAID | VOIDED (manual admin action only; no automated payout)
+  paidAt              DateTime? // set by the admin mark-paid action, never by a job
+  payoutNote          String? // admin free text: how it was paid (method, reference) or why it was voided
+  createdAt           DateTime       @default(now())
+
+  @@index([creatorUserId, createdAt])
+  @@index([affiliateLinkId])
+  @@index([saleId])
 }
 
 // Feature #84: Affiliate Code — Referral code generation for organizers
@@ -3459,12 +3605,42 @@ model StampMilestone {
   id        String   @id @default(cuid())
   userId    String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  milestone Int // 5, 20, 50
-  badgeType String // BRONZE | SILVER | GOLD
+  milestone Int // Legacy activity tiers: 5, 20, 50. Sale Passport collection tiers (2026-09-29): 3, 6, 9, 12
+  badgeType String // Legacy: BRONZE | SILVER | GOLD. Sale Passport: BRONZE | SILVER | GOLD | PLATINUM
   earnedAt  DateTime @default(now())
+  seenAt    DateTime? // Sale Passport (2026-09-29): null = milestone toast not yet shown to the shopper
 
   @@unique([userId, milestone])
   @@index([userId])
+}
+
+// Sale Passport (2026-09-29, feature #29 rebuild): one row per dated, place-aware stamp earned.
+// Additive to ShopperStamp/StampMilestone (which stay as the legacy lifetime-activity tally).
+// stampKey is one of the 12 collectible stamp keys (FIRST_STEPS, WEEKEND_WARRIOR, ROAD_TRIPPER,
+// FIRST_FIND, TREASURE_HUNTER, LAKEFRONT_HAUL, STORYTELLER, ITEM_KEEPER, HAUL_CURATOR,
+// FRIEND_FINDER, COMMUNITY_GUIDE, CROWD_FAVORITE) OR the literal 'ACTIVITY', which is an
+// idempotency ledger row for the legacy ShopperStamp counter (ignored by the collectible grid).
+// dedupeKey makes every award idempotent: e.g. 'FIRST_STEPS', 'WEEKEND_WARRIOR:2026-09',
+// 'ROAD_TRIPPER:2026-FALL', 'LAKEFRONT_HAUL:<saleId>', 'FRIEND_FINDER:<referredUserId>',
+// 'ACT:MAKE_PURCHASE:<purchaseId>'. saleId is a plain string (no FK) so a deleted sale never
+// blocks or cascades a shopper's collection.
+model ShopperPassportStamp {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  stampKey   String
+  dedupeKey  String
+  saleId     String?
+  cityKey    String? // normalized "city|ST", e.g. "paw paw|MI"
+  regionKey  String? // "ST-zip3", e.g. "MI-490"
+  placeLabel String? // display label, e.g. "Paw Paw, MI"
+  earnedAt   DateTime  @default(now())
+  seenAt     DateTime? // null = unlock toast not yet shown
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, stampKey])
+  @@index([userId, earnedAt])
 }
 
 /// Feature #13: TEAMS Multi-User Workspace
@@ -5036,6 +5212,16 @@ model POSPaymentLink {
   /// 'DIRECT' | 'DESTINATION' -- same vocabulary as Purchase.chargeType /
   /// HoldInvoice.chargeType. NULL = pre-migration row (account/shape unknown, callers recompute).
   chargeType           String?
+  // Cash+card split tender (2026-09-29): `amount` above remains the CARD amount actually
+  // charged through the hosted checkout link (so the link's app fee is computed on the card
+  // leg only, per ADR-split-payment-S422). These fields record the cash leg the cashier
+  // already collected at the register, so the cash-leg commission can accrue when the link
+  // is paid (cashFeeService.accrueSplitCashLegOnce, idempotent via CashFeeAccrual) and so
+  // refunds know how much of the sale never touched the processor. All additive:
+  // isSplitPayment defaults false, the two amounts are NULL on every pre-existing row.
+  isSplitPayment       Boolean   @default(false)
+  cashAmountCents      Int?
+  cardAmountCents      Int?
 
   @@index([organizerId, status])
   @@index([saleId])
@@ -5624,6 +5810,12 @@ model Consignor {
   agreementAcceptedVersion Int?
   items             Item[]             @relation("ConsignorItems")
   payouts           ConsignorPayout[]
+  // Organizer-settles ledger (2026-09-29): per-item snapshot lines across all of this consignor's payouts.
+  payoutItems       ConsignorPayoutItem[]
+  // Organizer-settles ledger (2026-09-29): the consignor's preferred way to be paid, purely a
+  // suggestion shown when the organizer records a payment. Vocabulary: CASH | CHECK | SQUARE |
+  // BANK_TRANSFER | OTHER. FindA.Sale never initiates or routes this money.
+  preferredPayoutMethod String?
   // Consignor Self-Serve Intake (2026-09-25): set once the approving organizer creates this
   // Consignor from a ConsignorIntakeRequest -- see that model's resultingConsignorId.
   intakeRequest      ConsignorIntakeRequest?
@@ -5727,25 +5919,39 @@ model ConsignorPayout {
   totalSales        Decimal                   @db.Decimal(10, 2) // sum of sold item prices for this consignor
   commissionAmount  Decimal                   @db.Decimal(10, 2) // totalSales * commissionRate / 100
   netPayout         Decimal                   @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
-  method            String? // "CASH" | "CHECK" | "VENMO" | "ACH" | "OTHER"
-  paidAt            DateTime?
+  method            String? // "CASH" | "CHECK" | "SQUARE" | "BANK_TRANSFER" | "OTHER" (legacy rows may hold "VENMO" | "ACH", still readable)
+  paidAt            DateTime? // the date the organizer says the money changed hands (not when it was recorded: see paidRecordedAt)
   notes             String?
   createdAt         DateTime                  @default(now())
   // Stripe Connect ACH: transfer object ID (DB column already exists via add_stripe_connect_ach migration — schema drift reconciled S-NEW)
   stripeTransferId  String?
   // Square migration (2026-09-07, Wave 0): mirrors stripeTransferId.
-  processor         String                    @default("STRIPE") // 'STRIPE' | 'SQUARE'
+  processor         String                    @default("STRIPE") // 'STRIPE' | 'SQUARE' | 'MANUAL' -- rows written by the organizer-settles ledger (2026-09-29) always write 'MANUAL' explicitly; the column default is left alone so legacy readers are unaffected
   squareTransferId  String?
   // #239 Multi-Consignor Settlement: batch membership + per-payout status
   settlementBatchId String?
   settlementBatch   ConsignorSettlementBatch? @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
-  status            String                    @default("PENDING") // PENDING | PROCESSING | SIMULATED | COMPLETED | FAILED | MANUAL_CASH_CHECK -- PROCESSING is a transitional in-flight claim status set by approveConsignorSettlementBatch's atomic claim-before-Stripe-call (consignorSettlementController.ts), never a resting state
+  status            String                    @default("PENDING") // Organizer-settles ledger vocabulary: PENDING | ON_HOLD | PAID | VOID. Legacy values still readable (mapped on read by consignorLedgerService.normalizePayoutStatus): PROCESSING | SIMULATED | COMPLETED | FAILED | MANUAL_CASH_CHECK
   failureReason     String?
   tierBreakdown     Json? // ADR-096: display-only per-tier split detail for CSV export when consignor.useTieredCommission is true
+  // ── Organizer-settles ledger (2026-09-29). FindA.Sale records; it never initiates, holds or routes consignor money.
+  paidAmount           Decimal?                  @db.Decimal(10, 2) // = netPayout when marked paid (no partial payments in v1)
+  paidReference        String? // organizer-entered check number / confirmation text, max 120 chars, never an account number
+  paidRecordedByUserId String?
+  paidRecordedAt       DateTime? // when the organizer recorded the payment in FindA.Sale
+  voidedAt             DateTime?
+  voidReason           String?
+  voidedByUserId       String?
+  holdReason           String?
+  statementSentAt      DateTime? // set only when the statement email was actually sent
+  statementSentTo      String?
+  items                ConsignorPayoutItem[]
+  events               ConsignorPayoutEvent[]
 
   @@index([consignorId])
   @@index([saleId])
   @@index([settlementBatchId])
+  @@index([status])
 }
 
 // #239 Multi-Consignor Estate Settlement — Phase 1
@@ -5754,20 +5960,95 @@ model ConsignorPayout {
 // STRIPE_CONNECT_LIVE_TRANSFERS env flag (defaults OFF — test/simulation mode).
 model ConsignorSettlementBatch {
   id                    String             @id @default(cuid())
-  saleId                String
-  sale                  Sale               @relation("SaleSettlementBatches", fields: [saleId], references: [id], onDelete: Cascade)
+  // Organizer-settles ledger (2026-09-29): saleId is now optional so a run can settle consignment
+  // inventory (Item.saleId null) or several sales at once. onDelete changed Cascade -> SetNull so
+  // deleting a sale can never erase a financial batch header (payouts and their lines are kept).
+  saleId                String?
+  sale                  Sale?              @relation("SaleSettlementBatches", fields: [saleId], references: [id], onDelete: SetNull)
   workspaceId           String
   workspace             OrganizerWorkspace @relation("WorkspaceSettlementBatches", fields: [workspaceId], references: [id], onDelete: Cascade)
-  status                String             @default("DRAFT") // DRAFT | APPROVED | PROCESSING | PARTIAL | COMPLETED | FAILED
-  totalGross            Decimal            @default(0) @db.Decimal(10, 2) // sum of SOLD item prices across all consignors
-  totalConsignorPayouts Decimal            @default(0) @db.Decimal(10, 2) // sum of net amounts owed to consignors
+  status                String             @default("DRAFT") // DRAFT | APPROVED | PARTIALLY_PAID | PAID | CANCELLED. Legacy values still readable: PROCESSING | PARTIAL | COMPLETED | FAILED
+  totalGross            Decimal            @default(0) @db.Decimal(10, 2) // sum of item prices across all consignors in this run
+  totalConsignorPayouts Decimal            @default(0) @db.Decimal(10, 2) // sum of consignor shares owed in this run
   payouts               ConsignorPayout[]
   createdAt             DateTime           @default(now())
   approvedAt            DateTime?
+  // ── Organizer-settles ledger (2026-09-29)
+  runNumber             Int                @default(1) // nth run for the same sale (or nth cross-sale run) in this workspace
+  payoutMode            String             @default("ORGANIZER_SETTLES") // FindA.Sale records only; the organizer pays consignors outside FindA.Sale
+  snapshotAt            DateTime? // when the line items were last snapshotted (create or refresh)
+  asOf                  DateTime? // optional cutoff: only items sold on or before this instant were included
+  scopeConsignorIds     String[]           @default([]) // empty = every consignor in the workspace; otherwise the explicit subset chosen at creation
+  approvedByUserId      String?
+  cancelledAt           DateTime?
+  cancelledReason       String?
+  cancelledByUserId     String?
 
   @@index([saleId])
   @@index([status])
   @@index([workspaceId])
+}
+
+// Organizer-settles ledger (2026-09-29): one immutable-ish snapshot line per sold item inside a
+// payout. activeItemKey is the DOUBLE-PAY GUARD: it equals itemId while the line is live and is set
+// to NULL when the payout is voided or the line is removed, so the database itself rejects (P2002)
+// a second live line for the same item. itemId / workspaceId / purchaseId are deliberately plain
+// indexed columns, not Prisma relations: Item, Purchase and OrganizerWorkspace are outside the
+// Consignor* models, and a plain column keeps the snapshot intact when an item is deleted (the
+// same outcome as onDelete: SetNull without touching those models).
+model ConsignorPayoutItem {
+  id                  String          @id @default(cuid())
+  payoutId            String
+  payout              ConsignorPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  consignorId         String
+  consignor           Consignor       @relation(fields: [consignorId], references: [id], onDelete: Cascade)
+  workspaceId         String
+  saleId              String? // Item.saleId at snapshot time (null for consignment inventory)
+  itemId              String?
+  titleSnapshot       String
+  listPrice           Decimal         @db.Decimal(10, 2) // Item.price at snapshot time (the v1 payout basis)
+  priceBeforeMarkdown Decimal?        @db.Decimal(10, 2)
+  collectedAmount     Decimal?        @db.Decimal(10, 2) // sum of paid purchases net of refunds when known; null when unknown (cash / manual sale)
+  purchaseId          String? // most recent paid purchase, if any
+  basisSource         String          @default("ITEM_PRICE") // ITEM_PRICE | PURCHASE (PURCHASE reserved for a later version)
+  varianceFlag        Boolean         @default(false) // true when collectedAmount is known and differs from listPrice
+  soldAt              DateTime? // best-effort: latest paid purchase time, else Item.updatedAt
+  ratePct             Decimal         @db.Decimal(5, 2)
+  consignorShare      Decimal         @db.Decimal(10, 2)
+  organizerShare      Decimal         @db.Decimal(10, 2)
+  activeItemKey       String?         @unique
+  createdAt           DateTime        @default(now())
+
+  @@index([payoutId])
+  @@index([consignorId])
+  @@index([workspaceId])
+  @@index([itemId])
+  @@index([saleId])
+}
+
+// Organizer-settles ledger (2026-09-29): append-only audit trail. Rows are only ever inserted.
+// type: BATCH_CREATED | REFRESHED | APPROVED | STATEMENT_SENT | MARKED_PAID | UNMARKED_PAID | HELD | RELEASED | VOIDED | CANCELLED
+model ConsignorPayoutEvent {
+  id           String          @id @default(cuid())
+  payoutId     String
+  payout       ConsignorPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  batchId      String?
+  consignorId  String
+  workspaceId  String
+  type         String
+  actorUserId  String?
+  fromStatus   String?
+  toStatus     String?
+  method       String?
+  amount       Decimal?        @db.Decimal(10, 2)
+  reference    String?
+  note         String?         @db.Text
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+
+  @@index([payoutId])
+  @@index([batchId])
+  @@index([workspaceId, createdAt])
 }
 
 // ADR-096: Value-tiered consignor commission ladder -- one ladder per workspace.
@@ -6253,12 +6534,20 @@ model ShopperWaitlistEntry {
   notifiedAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  // 2026-09-29 notify-me hardening: armedAt is set ONLY at create / re-arm (never by the sender's claim
+  // or release), so a retry after a failed send still sees everything listed since the shopper armed the
+  // alert (updatedAt is bumped by claim/release and used to lose matches). Read as armedAt ?? createdAt.
+  armedAt       DateTime?
+  // Last time the sender examined this entry; the sender rotates oldest-checked first so entries that
+  // never match cannot starve newer ones.
+  lastCheckedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([itemType])
   @@index([city, isActive])
+  @@index([isActive, notifiedAt, lastCheckedAt], map: "ShopperWaitlistEntry_active_notified_checked_idx")
 }
 
 // Feature #455: Anonymous search-query email alerts — "Notify Me when this appears"
@@ -6270,9 +6559,20 @@ model SearchNotification {
   isActive    Boolean   @default(true)
   notifiedAt  DateTime?
   createdAt   DateTime  @default(now())
+  // 2026-09-29 notify-me hardening (see ShopperWaitlistEntry.armedAt for armedAt/lastCheckedAt).
+  armedAt       DateTime?
+  lastCheckedAt DateTime?
+  // Double opt-in: an anonymous capture is UNCONFIRMED (null) until the address owner clicks the HMAC
+  // link in the confirmation email. The sender only emails confirmed entries. Rows created before this
+  // column existed stay unconfirmed on purpose (they were never verified and were never sent).
+  confirmedAt   DateTime?
+  // Set when an alert is deactivated because it aged out (90 days). Distinguishes "expired, may re-add"
+  // from an opt-out (isActive=false with expiredAt null), which stays out.
+  expiredAt     DateTime?
 
   @@unique([email, searchQuery])
   @@index([searchQuery, isActive])
+  @@index([isActive, confirmedAt, notifiedAt, lastCheckedAt], map: "SearchNotification_active_confirmed_notified_checked_idx")
 }
 
 // Daily Gmail quota tracker — persists across Railway restarts.
@@ -7627,4 +7927,101 @@ model IsrRegenerationLog {
   @@unique([route, outcome, deploymentId, hourBucket])
   @@index([hourBucket])
   @@index([deploymentId])
+}
+
+// Cash-leg commission accrual ledger (2026-09-29). One row per (sourceType, sourceId) pair, the
+// unique key that makes accruing a split sale's cash-leg commission onto Organizer.cashFeeBalance
+// idempotent: a replayed confirm, a webhook redelivery, or a heal-on-read path can all call the
+// accrual again and the second call is a no-op (INSERT ... ON CONFLICT DO NOTHING, and the
+// balance increment only runs when the ledger insert actually created a row). Written in the SAME
+// transaction as the balance increment, so a ledger row exists if and only if the fee was accrued.
+// sourceType: 'POS_PAYMENT_REQUEST' (sourceId = POSPaymentRequest.id) | 'POS_PAYMENT_LINK'
+// (POSPaymentLink.id) | 'MANUAL_CARD' (Square payment id of the manual card charge).
+// organizerId is a plain string (no FK / relation) so this stays a purely additive table with no
+// change to the Organizer model.
+model CashFeeAccrual {
+  id              String   @id @default(cuid())
+  organizerId     String
+  sourceType      String
+  sourceId        String
+  cashAmountCents Int
+  commissionCents Int
+  createdAt       DateTime @default(now())
+
+  @@unique([sourceType, sourceId])
+  @@index([organizerId, createdAt])
+}
+
+// Crew Invasion per-member redemption (2026-09-29). Every qualifying crew member gets the
+// discount ONCE per sale (matches the toast: "one use each"), so the code-level
+// CrewInvasionCode.usedAt (crew-wide single use) no longer gates redemption. One row per
+// (code, user) redemption attempt that reached an invoice. activeKey is the DOUBLE-REDEEM GUARD,
+// same pattern as ConsignorPayoutItem.activeItemKey: it equals "<codeId>:<userId>" while the
+// redemption is live and is set to NULL when the redemption is released (unpaid invoice
+// cancelled/expired, or invoice creation failed), which frees that member to redeem again while
+// the released row stays behind for audit. Postgres treats NULLs as distinct, so any number of
+// released rows can coexist. holdInvoiceId is a plain string (no FK): it links the redemption to
+// the discounted HoldInvoice so releaseInvoice / invoiceExpiryJob can restore it. userId is a
+// plain string as well, so this stays purely additive (no change to the User model).
+model CrewInvasionRedemption {
+  id            String           @id @default(cuid())
+  codeId        String
+  code          CrewInvasionCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  userId        String
+  holdInvoiceId String?
+  activeKey     String?          @unique
+  redeemedAt    DateTime         @default(now())
+  releasedAt    DateTime?
+
+  @@index([codeId])
+  @@index([userId])
+  @@index([holdInvoiceId])
+}
+
+// Sale reminder sent marker (2026-09-29). emailReminderJob runs hourly, so a sale start time falls
+// inside a reminder window on more than one run; without a marker every run re-sent the email/push/text.
+// One row per (subscriber, sale, kind) is the CLAIM taken (createMany skipDuplicates) BEFORE sending and
+// released if the send fails. kind: 'DAY_BEFORE' | 'TWO_HOURS' claim the email + push for that reminder;
+// 'DAY_BEFORE_SMS' | 'TWO_HOURS_SMS' claim the text separately so a text skipped for quiet hours (no
+// marker written) can be retried by a later run without re-sending the email. saleId is a plain string
+// (no FK): rows go away with the subscriber, which cascades from the sale.
+model SaleReminderSent {
+  id           String         @id @default(cuid())
+  subscriberId String
+  subscriber   SaleSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  saleId       String
+  kind         String
+  sentAt       DateTime       @default(now())
+
+  @@unique([subscriberId, saleId, kind])
+  @@index([saleId])
+}
+
+// Organizer subscription charge ledger (2026-09-29). One row per organizer per billed period. The
+// UNIQUE (organizerId, periodKey) is the "never charge the same period twice" guard for both the
+// 01:00 UTC squareBillingChargeJob (periodKey 'renewal:<period start ISO>') and the synchronous
+// POST /api/billing/square/subscribe charge (periodKey 'subscribe:...' / 'upgrade:...'). A row is
+// claimed PENDING before Square is called, then set COMPLETED (with the Square payment id) or FAILED.
+// COMPLETED is terminal: a later FAILED write never overwrites it, and a retry that finds a
+// COMPLETED row re-applies the tier/period grant WITHOUT charging again. organizerId is a plain
+// string (no FK) so this stays purely additive (no change to the Organizer model).
+// kind: 'RENEWAL' | 'SUBSCRIBE' | 'UPGRADE'. status: 'PENDING' | 'COMPLETED' | 'FAILED'.
+model OrganizerBillingCharge {
+  id              String    @id @default(cuid())
+  organizerId     String
+  periodKey       String
+  kind            String
+  tier            String
+  amountCents     Int
+  status          String    @default("PENDING")
+  squarePaymentId String?
+  failureReason   String?
+  attempts        Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?
+
+  @@unique([organizerId, periodKey])
+  @@index([organizerId, createdAt])
+  @@index([status])
 }
