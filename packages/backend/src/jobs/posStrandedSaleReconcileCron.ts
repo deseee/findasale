@@ -633,6 +633,158 @@ export const runPosRefundSweeps = async (): Promise<void> => {
   }
 };
 
+/**
+ * Stale Square webhook event sweep (2026-09-30, payment review finding 3; replay added the same day).
+ * Rides on this cron's 10-minute tick.
+ *
+ * squareWebhookController re-claims a PENDING event older than 5 minutes when Square redelivers it, so a crash
+ * mid-handler is recovered by Square's own retry. This sweep covers the case where NO redelivery is coming (retries
+ * exhausted, or the event was never redelivered): it finds `square:` events still PENDING after 10 minutes.
+ *
+ * REPLAY: the controller now stores the signature-verified event body on the row (ProcessedWebhookEvent.payload).
+ * For a row with a payload the sweep claims it atomically (conditional updateMany on status PENDING AND updatedAt <
+ * cutoff, moving updatedAt to now, so a concurrent redelivery or another instance cannot also process it), RE-DRIVES
+ * it through processSquareWebhookEvent (the same, idempotent handler the webhook route uses), and marks the row
+ * COMPLETED. A throw is retried once; a second throw marks the row FAILED and raises Sentry, so a later redelivery
+ * can still re-claim it through the FAILED path. At most SQUARE_WEBHOOK_REDRIVE_CAP events are re-driven per run;
+ * the rest stay PENDING for the next tick (oldest first).
+ *
+ * A row with NO payload (written before the column existed, or a dispute step marker) cannot be replayed: it is
+ * alerted on and flipped to FAILED with a conditional update, exactly as before. The money itself is also caught by
+ * the state-based reconcilers: reconcileStrandedPosSales above (Square POS links, via the order status) and
+ * invoiceExpiryJob's Square paid-check (hold invoices).
+ *
+ * Same POS_RECONCILE_DISABLED kill-switch as the rest of this job. Never throws.
+ */
+export const SQUARE_WEBHOOK_SWEEP_STALE_MS = 10 * 60 * 1000;
+export const SQUARE_WEBHOOK_REDRIVE_CAP = 10;
+
+export interface StaleSquareWebhookSweepSummary {
+  checked: number;
+  markedFailed: number;
+  redriven: number;
+  redriveFailed: number;
+  deferred: number;
+}
+
+const isReplayableSquarePayload = (payload: unknown): payload is { event_id: string; type: string } =>
+  !!payload && typeof payload === 'object' && typeof (payload as any).event_id === 'string' && typeof (payload as any).type === 'string';
+
+export const sweepStaleSquareWebhookEvents = async (): Promise<StaleSquareWebhookSweepSummary> => {
+  const summary: StaleSquareWebhookSweepSummary = { checked: 0, markedFailed: 0, redriven: 0, redriveFailed: 0, deferred: 0 };
+  if (process.env.POS_RECONCILE_DISABLED === '1') return summary;
+  try {
+    const cutoff = new Date(Date.now() - SQUARE_WEBHOOK_SWEEP_STALE_MS);
+    const stale = await prisma.processedWebhookEvent.findMany({
+      where: { status: 'PENDING', eventId: { startsWith: 'square:' }, updatedAt: { lt: cutoff } },
+      select: { eventId: true, updatedAt: true, payload: true },
+      orderBy: { updatedAt: 'asc' },
+      take: 100,
+    });
+    summary.checked = stale.length;
+    if (stale.length === 0) return summary;
+
+    const noPayload: typeof stale = [];
+    const redriveFailedIds: string[] = [];
+    let redriveAttempts = 0;
+    for (const row of stale) {
+      if (!isReplayableSquarePayload(row.payload)) {
+        noPayload.push(row);
+        continue;
+      }
+      if (redriveAttempts >= SQUARE_WEBHOOK_REDRIVE_CAP) {
+        summary.deferred += 1; // stays PENDING; the next tick picks it up
+        continue;
+      }
+      try {
+        // Atomic claim: a redelivery (or another instance's sweep) that moved updatedAt first wins, and we skip.
+        const claim = await prisma.processedWebhookEvent.updateMany({
+          where: { eventId: row.eventId, status: 'PENDING', updatedAt: { lt: cutoff } },
+          data: { updatedAt: new Date() },
+        });
+        if (claim.count === 0) continue;
+        redriveAttempts += 1;
+        const { processSquareWebhookEvent } = await import('../controllers/squareWebhookController');
+        let lastErr: unknown;
+        let ok = false;
+        for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
+          try {
+            await processSquareWebhookEvent(row.payload as any);
+            ok = true;
+          } catch (driveErr) {
+            lastErr = driveErr;
+            console.error(`[pos-reconcile] re-drive attempt ${attempt}/2 of Square webhook event ${row.eventId} threw:`, (driveErr as any)?.message ?? driveErr);
+          }
+        }
+        if (ok) {
+          summary.redriven += 1;
+          await prisma.processedWebhookEvent.updateMany({
+            where: { eventId: row.eventId, status: 'PENDING' },
+            data: { status: 'COMPLETED' },
+          });
+          console.log(`[pos-reconcile] re-drove stale Square webhook event ${row.eventId} to completion.`);
+        } else {
+          summary.redriveFailed += 1;
+          redriveFailedIds.push(row.eventId);
+          await prisma.processedWebhookEvent.updateMany({
+            where: { eventId: row.eventId, status: 'PENDING' },
+            data: { status: 'FAILED' },
+          });
+          try {
+            Sentry.captureException(lastErr instanceof Error ? lastErr : new Error(String(lastErr)), {
+              tags: { area: 'pos-reconcile', sweep: 'stale-square-webhook-redrive' },
+              extra: { eventId: row.eventId },
+            } as any);
+          } catch { /* Sentry may not be initialized */ }
+        }
+      } catch (rowErr: any) {
+        console.error(`[pos-reconcile] stale Square webhook event ${row.eventId}: re-drive bookkeeping failed:`, rowErr?.message ?? rowErr);
+      }
+    }
+
+    for (const row of noPayload) {
+      try {
+        // Conditional: a redelivery that re-claimed the row (moving updatedAt) in the meantime wins.
+        const res = await prisma.processedWebhookEvent.updateMany({
+          where: { eventId: row.eventId, status: 'PENDING', updatedAt: { lt: cutoff } },
+          data: { status: 'FAILED' },
+        });
+        summary.markedFailed += res.count;
+      } catch (rowErr: any) {
+        console.error(`[pos-reconcile] stale Square webhook event ${row.eventId}: could not mark FAILED:`, rowErr?.message ?? rowErr);
+      }
+    }
+    summary.markedFailed += redriveFailedIds.length;
+
+    if (noPayload.length > 0 || redriveFailedIds.length > 0) {
+      console.error(`[pos-reconcile] STALE-SQUARE-WEBHOOK-EVENTS ${stale.length} event(s) left PENDING over ${SQUARE_WEBHOOK_SWEEP_STALE_MS / 60000} minutes (re-driven: ${summary.redriven}, re-drive failed: ${summary.redriveFailed}, no stored payload marked FAILED: ${noPayload.length}, deferred: ${summary.deferred}).`);
+      try {
+        Sentry.captureMessage('[pos-reconcile] stale PENDING Square webhook events', {
+          level: 'warning',
+          tags: { area: 'pos-reconcile', sweep: 'stale-square-webhook-events' },
+          extra: {
+            count: stale.length,
+            markedFailed: summary.markedFailed,
+            redriven: summary.redriven,
+            redriveFailed: summary.redriveFailed,
+            deferred: summary.deferred,
+            oldest: stale[0]?.eventId,
+            oldestUpdatedAt: stale[0]?.updatedAt,
+          },
+        } as any);
+      } catch {
+        // Sentry may not be initialized.
+      }
+    } else if (summary.redriven > 0) {
+      console.log(`[pos-reconcile] stale Square webhook sweep re-drove ${summary.redriven} event(s) (deferred: ${summary.deferred}).`);
+    }
+  } catch (err: any) {
+    console.error('[pos-reconcile] stale Square webhook event sweep failed:', err?.message ?? err);
+    try { Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { tags: { area: 'pos-reconcile', sweep: 'stale-square-webhook-events' } } as any); } catch { /* Sentry may not be initialized */ }
+  }
+  return summary;
+};
+
 // Every 10 minutes.
 cron.schedule('6,16,26,36,46,56 * * * *', cronGuard({ jobName: 'posStrandedSaleReconcile' }, async () => { // staggered off reservationExpiryJob's */10 2026-08-04 cost-optimization batch
   // The refund sweeps run even if the stranded-sale pass throws; its error is rethrown afterwards so cronGuard still reports it.
@@ -645,5 +797,6 @@ cron.schedule('6,16,26,36,46,56 * * * *', cronGuard({ jobName: 'posStrandedSaleR
     strandedErr = err;
   }
   await runPosRefundSweeps();
+  await sweepStaleSquareWebhookEvents();
   if (strandedFailed) throw strandedErr;
 }));

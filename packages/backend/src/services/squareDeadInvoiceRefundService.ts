@@ -24,9 +24,15 @@ import { buildSquareIdempotencyKey, resolveOrganizerSquareAccessToken } from './
  *   - Square itself reports the payment COMPLETED, in USD, with nothing refunded yet
  *   - the captured amount is at least the invoice's card-leg total (never refund a smaller,
  *     unexplained payment automatically)
- *   - the refund is a FULL refund of the captured amount
- *   - deterministic idempotency key per invoice, so a retried webhook or a second pass returns the
- *     same refund from Square instead of creating another
+ *   - the refund is a FULL refund of the captured amount, UNLESS the caller passes refundAmountCents
+ *     (2026-09-30, oversold items): then it is exactly that partial amount, never more than captured
+ *   - deterministic idempotency key per invoice (per payment id + kind when the caller passes `kind`),
+ *     so a retried webhook or a second pass returns the same refund from Square instead of creating
+ *     another
+ *
+ * 2026-09-30 (payment review finding 2): also used by services/oversoldPaymentRefundService.ts for a
+ * captured payment where some or all items could not be fulfilled. Those callers pass `kind` and, for
+ * a partial refund, `refundAmountCents` (the oversold items' card share).
  */
 
 export const squareDeadInvoiceAutoRefundDisabled = (): boolean =>
@@ -39,6 +45,18 @@ export interface SquareDeadInvoiceRefundInput {
   paymentId: string;
   /** The invoice's card-leg total in cents (cardAmountCents, falling back to totalAmount). */
   expectedAmountCents: number;
+  /**
+   * Partial refund amount in cents (oversold items' card share). Omit for a full refund of the
+   * captured amount. Must be a positive integer no larger than the captured amount.
+   */
+  refundAmountCents?: number;
+  /**
+   * Idempotency kind. When set, the Square idempotency key is derived from (payment id, kind) so the
+   * same payment can only ever produce one refund for that kind. Omitted: the legacy per-invoice key.
+   */
+  kind?: string;
+  /** Reason text shown to the buyer on the refund (Square caps it at 192 characters). */
+  reasonText?: string;
 }
 
 export interface SquareDeadInvoiceRefundOutcome {
@@ -48,6 +66,8 @@ export interface SquareDeadInvoiceRefundOutcome {
   reason: string;
   refundId?: string;
   refundedCents?: number;
+  /** True when a partial amount was refunded rather than the whole captured payment. */
+  partial?: boolean;
 }
 
 const toCents = (v: unknown): number => {
@@ -106,29 +126,43 @@ export async function refundSquarePaymentForDeadInvoice(
     return fail(`AMOUNT_BELOW_INVOICE (captured ${capturedCents} < invoice card leg ${input.expectedAmountCents}); needs a human`);
   }
 
+  let refundCents = capturedCents;
+  if (input.refundAmountCents !== undefined) {
+    const wanted = input.refundAmountCents;
+    if (!Number.isInteger(wanted) || wanted <= 0) return fail(`INVALID_REFUND_AMOUNT (${wanted})`);
+    if (wanted > capturedCents) return fail(`REFUND_EXCEEDS_CAPTURED (${wanted} > ${capturedCents})`);
+    refundCents = wanted;
+  }
+  const isPartial = refundCents < capturedCents;
+
   try {
     const refundResponse = await client.refunds.refundPayment({
-      idempotencyKey: buildSquareIdempotencyKey(['dead-inv-refund', input.invoiceId]),
+      idempotencyKey: input.kind
+        ? buildSquareIdempotencyKey(['sq-refund', input.paymentId, input.kind])
+        : buildSquareIdempotencyKey(['dead-inv-refund', input.invoiceId]),
       paymentId: input.paymentId,
-      amountMoney: { amount: BigInt(capturedCents), currency: 'USD' },
-      reason: 'Payment received after the payment window closed',
+      amountMoney: { amount: BigInt(refundCents), currency: 'USD' },
+      reason: (input.reasonText || 'Payment received after the payment window closed').slice(0, 190),
     } as any);
     const refund = (refundResponse as any)?.refund;
     const outcome: SquareDeadInvoiceRefundOutcome = {
       attempted: true,
       refunded: true,
-      reason: 'REFUNDED (invoice dead and an item on it is no longer available)',
+      reason: isPartial
+        ? 'REFUNDED_PARTIAL (an item on the payment is no longer available)'
+        : 'REFUNDED (invoice dead and an item on it is no longer available)',
       refundId: refund?.id,
-      refundedCents: capturedCents,
+      refundedCents: refundCents,
+      partial: isPartial,
     };
-    console.error(`[squareDeadInvoiceRefund] REFUND-ISSUED invoice=${input.invoiceId} payment=${input.paymentId} cents=${capturedCents} refund=${refund?.id ?? '(unknown)'}`);
+    console.error(`[squareDeadInvoiceRefund] REFUND-ISSUED invoice=${input.invoiceId} payment=${input.paymentId} cents=${refundCents}${isPartial ? ` (partial of ${capturedCents})` : ''} refund=${refund?.id ?? '(unknown)'}`);
     return outcome;
   } catch (err: any) {
     const code = err instanceof SquareError ? (err.errors?.[0]?.code ?? 'SQUARE_ERROR') : 'ERROR';
     try {
       Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
         tags: { area: 'square-dead-invoice-refund' },
-        extra: { invoiceId: input.invoiceId, paymentId: input.paymentId, capturedCents, code },
+        extra: { invoiceId: input.invoiceId, paymentId: input.paymentId, capturedCents, refundCents, code },
       } as any);
     } catch {
       // Sentry may not be initialized

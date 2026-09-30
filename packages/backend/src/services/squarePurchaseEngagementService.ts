@@ -19,7 +19,8 @@
  * - One award per Square payment, not per cart line. A cart pays once (one squarePaymentId, N Purchase
  *   rows). Stripe's cart path awards once per PaymentIntent, so this does too: the canonical purchase
  *   is the earliest PAID row sharing the squarePaymentId.
- * - Skips guests (no userId), POS / test-transaction rows, and anything not PAID at award time
+ * - Skips guests (no userId), test-transaction rows, POS rows that are not a verified shopper card payment
+ *   (walk-up, cash, synthetic ids; see isVerifiedShopperCardPosRow), and anything not PAID at award time
  *   (a stock-race REFUNDING row earns nothing).
  */
 import { prisma } from '../lib/prisma';
@@ -37,6 +38,18 @@ const HOLD_24H_MS = 24 * 60 * 60 * 1000;
 const MIN_ENGAGEMENT_PURCHASE_DOLLARS = 1;
 
 const inFlight = new Map<string, Promise<void>>();
+
+/**
+ * POS rows are normally skipped: a walk-up sale has no shopper account, and an organizer-recorded cash
+ * settlement (reservationController RECORD mode, cash_ ids) is not a verified payment, so rewarding it would
+ * let an organizer farm engagement for a friend. The ONE POS shape that is a verified, shopper-linked card
+ * payment is the QR / phone POS request the shopper confirms while logged in (posPaymentController): a real
+ * Square payment id on a row that carries the shopper's userId. Synthetic ids (cash_, sq_test_, pos_) never count.
+ */
+const SYNTHETIC_PAYMENT_REF = /^(cash_|sq_test_|pos_)/;
+function isVerifiedShopperCardPosRow(seed: { userId?: string | null; squarePaymentId?: string | null }): boolean {
+  return !!seed.userId && typeof seed.squarePaymentId === 'string' && seed.squarePaymentId.length > 0 && !SYNTHETIC_PAYMENT_REF.test(seed.squarePaymentId);
+}
 
 /**
  * Cross-INSTANCE serialization for the award block (money review 2026-09-29). The in-process
@@ -113,7 +126,8 @@ export async function awardSquarePurchaseEngagement(purchaseId: string): Promise
       },
     });
     if (!seed || !seed.userId) return; // guest checkout or unknown purchase
-    if (seed.isTestTransaction || seed.source === 'POS') return;
+    if (seed.isTestTransaction) return;
+    if (seed.source === 'POS' && !isVerifiedShopperCardPosRow(seed)) return;
 
     // Resolve the canonical PAID purchase (and its siblings) for this Square payment.
     let siblingIds: string[] = [seed.id];

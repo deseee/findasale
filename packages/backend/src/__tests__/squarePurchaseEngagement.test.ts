@@ -232,12 +232,28 @@ describe('awardSquarePurchaseEngagement: skip rules', () => {
     noAwards();
   });
 
-  it('skips POS rows and test-transaction rows', async () => {
-    setupDb([purchaseRow({ source: 'POS' })]);
+  it('skips POS rows without a verified shopper card payment, and test-transaction rows', async () => {
+    // cash settlement recorded by an organizer for a linked shopper (synthetic cash_ id)
+    setupDb([purchaseRow({ source: 'POS', squarePaymentId: null, stripePaymentIntentId: 'cash_abc' })]);
+    await awardSquarePurchaseEngagement('p1');
+    setupDb([purchaseRow({ source: 'POS', squarePaymentId: 'cash_abc' })]);
+    await awardSquarePurchaseEngagement('p1');
+    setupDb([purchaseRow({ source: 'POS', squarePaymentId: 'sq_test_1' })]);
+    await awardSquarePurchaseEngagement('p1');
+    // walk-up card sale has no shopper account
+    setupDb([purchaseRow({ source: 'POS', userId: null })]);
     await awardSquarePurchaseEngagement('p1');
     setupDb([purchaseRow({ isTestTransaction: true })]);
     await awardSquarePurchaseEngagement('p1');
     noAwards();
+  });
+
+  it('awards a POS row paid by a real Square card for a logged-in shopper (QR / phone POS request)', async () => {
+    setupDb([purchaseRow({ source: 'POS', squarePaymentId: 'sqpos1' })]);
+    await awardSquarePurchaseEngagement('p1');
+    expect(mAwardXp).toHaveBeenCalled();
+    expect(mStamp).toHaveBeenCalledTimes(1);
+    expect(mStamp.mock.calls[0][3]).toBe('p1');
   });
 
   it('skips a purchase that is not PAID at award time (stock-race REFUNDING, refunded, pending)', async () => {

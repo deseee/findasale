@@ -13,6 +13,7 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row backfill (2026-08-09): recompute chargeType at payment-confirmation time, mirrors posPaymentLinkRecorder.ts
 import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // 2026-09-29: cash-leg commission now accrues through the exactly-once CashFeeAccrual ledger (sourceType 'HOLD_INVOICE'), and per-row amounts/fees/cash legs are allocated in exact cents; mirrors posPaymentLinkRecorder.ts
 // 2026-09-29 money review P0-2: a captured Square payment on a dead invoice is recorded (items still available) or refunded, never left unresolved. The refund service is imported LAZILY (see refundOrEscalateDeadSquarePayment): it pulls in the Square token/crypto chain, which must not load for every caller of this recorder (Stripe webhook, tests) that never refunds.
+import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement, type OversoldSettlement } from './oversoldPaymentRefundService'; // 2026-09-30 payment review finding 2: a paid item that could not be fulfilled (oversold) is refunded by its card share instead of only raising an alert
 import { fireSquarePurchaseEngagement } from './squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: purchase XP, milestones, referral, badge, achievement and passport stamp for a Square-paid invoice (idempotent per payment, never throws)
 
 /**
@@ -157,6 +158,18 @@ export interface MarkHoldInvoicePaidResult {
    * reconcile branch) keep compiling unchanged.
    */
   deadInvoice?: boolean;
+  /**
+   * 2026-09-30 (payment review finding 2): set when this call recorded the invoice but at least one paid
+   * item could not be fulfilled (oversold). The card share of those items is refunded automatically
+   * (Square, kill switch SQUARE_DEAD_INVOICE_AUTO_REFUND_DISABLED); status says what happened.
+   */
+  oversoldSettlement?: {
+    status: 'REFUNDED' | 'MANUAL' | 'NOTHING_TO_REFUND';
+    refundCents: number;
+    fullRefund: boolean;
+    /** Cash the organizer must hand back for the oversold items (split tender / cash sale), in cents. */
+    cashToReturnCents: number;
+  };
 }
 
 /**
@@ -577,6 +590,9 @@ export async function markHoldInvoicePaid(
   const organizerPayout = (holdInvoice.totalAmount / 100) - (holdInvoice.platformFeeAmount / 100) - stripeFeeAmount;
 
   let didRecord = false;
+  // 2026-09-30 oversold settlement: computed inside the tx (needs the row amounts), acted on after it
+  // commits (the refund is an external call). Held in an object so TS does not narrow it to null.
+  const oversoldCtx: { settlement: OversoldSettlement | null; titles: string[] } = { settlement: null, titles: [] };
   // P0 (2026-08-17): when the guarded flip below matches zero rows, that no longer means
   // only "a concurrent call already recorded it" -- it can also mean the invoice went
   // CANCELLED/EXPIRED between the read above and the flip. The two outcomes need opposite
@@ -686,9 +702,10 @@ export async function markHoldInvoicePaid(
           const oversoldMsg =
             `[hold-invoice/${source}] OVERSOLD-RACE invoice=${invoiceId} item=${bundledItemId} ` +
             `pi=${externalPaymentId} -- payment captured but this item could not be sold ` +
-            `(${stockErr.message}). No Purchase row will be created for it, so there is no ` +
-            `record for executeVerifiedRefund to key off: this charge needs manual review ` +
-            `and likely a partial refund in Stripe.`;
+            `(${stockErr.message}). No Purchase row will be created for it. The card share of ` +
+            `this item is refunded automatically after the transaction commits (Square; kill ` +
+            `switch SQUARE_DEAD_INVOICE_AUTO_REFUND_DISABLED); if that refund is not issued the ` +
+            `organizer is told to refund it by hand.`;
           console.error(oversoldMsg);
           try {
             Sentry.captureException(stockErr, {
@@ -758,6 +775,22 @@ export async function markHoldInvoicePaid(
           : Math.min(invoiceCashCents, rowsTotalCents)
         : 0;
     const rowCashCentsList = allocateCentsProportionally(cashOnRowsCents, rowAmountCentsList);
+
+    // 2026-09-30 (payment review finding 2): every paid row that could not be sold is refunded, not just
+    // alerted. The card leg is allocated across ALL rows (exact cents, largest remainder) and the oversold
+    // rows' share goes back; when every row is oversold the whole card leg goes back. A sale with no
+    // processor payment (fully cash at the register, or no payment id) has no card leg: only cash is owed.
+    const oversoldRowIdx = bundledItems.map((it, idx) => (sellableItemIdSet.has(it.id) ? -1 : idx)).filter((idx) => idx >= 0);
+    if (oversoldRowIdx.length > 0 && !reviveFromStatus) {
+      const noCardLeg = source === 'pos-cash' || !externalPaymentId;
+      oversoldCtx.settlement = computeOversoldSettlement({
+        cardCents: noCardLeg ? 0 : invoiceCardLegCents(holdInvoice),
+        cashCents: noCardLeg ? holdInvoice.totalAmount : invoiceCashCents,
+        weightsCents: rowAmountCentsList,
+        oversoldIdx: oversoldRowIdx,
+      });
+      oversoldCtx.titles = oversoldRowIdx.map((idx) => bundledItems[idx].title);
+    }
 
     // Stripe account + charge-shape snapshot (2026-08-18 migration): prefer the value
     // pinned on the invoice itself at checkout-session-creation time. Only a pre-migration
@@ -993,15 +1026,20 @@ export async function markHoldInvoicePaid(
     }
 
     // LOCKED DECISION #5: Create notifications for shopper and organizer
-    const itemListNotif = bundledItems.length > 1
-      ? `${bundledItems.length} items`
-      : `"${bundledItems[0]?.title}"`;
+    // 2026-09-30: when items were oversold, only the items that actually sold are named, and when NOTHING
+    // sold there is no "Payment confirmed / Payment received" message at all (the settlement notice below
+    // is the accurate one).
+    const keptItemsNotif = oversoldCtx.settlement ? bundledItems.filter((it) => sellableItemIdSet.has(it.id)) : bundledItems;
+    const itemListNotif = keptItemsNotif.length > 1
+      ? `${keptItemsNotif.length} items`
+      : `"${keptItemsNotif[0]?.title}"`;
+    const nothingFulfilledNotif = !!oversoldCtx.settlement && keptItemsNotif.length === 0;
 
     // Guest invoice (2026-09-16): Notification.userId is required and a guest has no
     // account/inbox to see an in-app notification in anyway -- only queue the shopper
     // notification when shopperUserId is a real account. The organizer notification below is
     // unconditional either way -- unaffected by who the buyer is.
-    await tx.notification.createMany({
+    if (!nothingFulfilledNotif) await tx.notification.createMany({
       data: [
         ...(holdInvoice.shopperUserId
           ? [{
@@ -1076,6 +1114,50 @@ export async function markHoldInvoicePaid(
       // Sentry may not be initialized.
     }
     await notifyDeadInvoicePayment({ holdInvoice, outcome: 'RECORDED', amountCents: holdInvoice.totalAmount });
+  }
+
+  // 2026-09-30 (payment review finding 2): settle the captured money for any oversold item. Awaited so the
+  // outcome is in the result and a crash cannot silently skip it; the helpers never throw, so a refund or
+  // notification problem can never fail an invoice that already recorded.
+  let oversoldOutcome: MarkHoldInvoicePaidResult['oversoldSettlement'];
+  if (oversoldCtx.settlement) {
+    const settlement = oversoldCtx.settlement;
+    const settled = await settleOversoldPayment({
+      kind: 'hold-invoice',
+      refId: invoiceId,
+      organizerProfileId: holdInvoice.sale?.organizerId ?? null,
+      processor,
+      paymentId: externalPaymentId,
+      cardPaidCents: invoiceCardLegCents(holdInvoice),
+      settlement,
+    });
+    oversoldOutcome = {
+      status: settled.status,
+      refundCents: settled.refundCents,
+      fullRefund: settlement.fullRefund,
+      cashToReturnCents: settlement.cashToReturnCents,
+    };
+    await notifyOversoldSettlement({
+      result: settled,
+      settlement,
+      titles: oversoldCtx.titles,
+      processor,
+      ref: invoiceId,
+      partiallyFulfilled: sellableItemIds.length > 0,
+      organizerUserId: holdInvoice.organizerUserId,
+      organizerLink: `/organizer/sales/${holdInvoice.saleId}`,
+      shopper: {
+        userId: holdInvoice.shopperUserId,
+        email: holdInvoice.shopper?.email ?? holdInvoice.guestEmail ?? null,
+        name: holdInvoice.shopper?.name ?? holdInvoice.guestName ?? null,
+        link: `/invoices/${holdInvoice.id}`,
+      },
+    });
+    if (sellableItemIds.length === 0 && holdInvoice.itemIds.length > 0) {
+      // Nothing on this invoice could be fulfilled: no confirmation email, XP, or live-feed event.
+      console.error(`[hold-invoice/${source}] Invoice ${invoiceId}: every item was oversold; payment settled as ${settled.status}, sale not confirmed.`);
+      return { recorded: true, alreadyPaid: false, oversoldSettlement: oversoldOutcome };
+    }
   }
 
   // Fire-and-forget: end eBay listings for items now fully sold out (not every
@@ -1168,10 +1250,15 @@ export async function markHoldInvoicePaid(
   // Send confirmation emails (fire-and-forget)
   setImmediate(() => {
     const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
-    const itemList = bundledItems.length > 1
-      ? `${bundledItems.length} items from ${holdInvoice.sale!.title}`
-      : bundledItems[0]?.title;
-    const totalPaid = (holdInvoice.totalAmount / 100).toFixed(2);
+    // 2026-09-30: after an oversold partial settlement, name only the kept items and the amount kept.
+    const keptItems = oversoldCtx.settlement ? bundledItems.filter((it) => sellableItemIds.includes(it.id)) : bundledItems;
+    const itemList = keptItems.length > 1
+      ? `${keptItems.length} items from ${holdInvoice.sale!.title}`
+      : keptItems[0]?.title;
+    const keptTotalCents = oversoldCtx.settlement
+      ? Math.max(0, holdInvoice.totalAmount - oversoldCtx.settlement.refundCardCents - oversoldCtx.settlement.cashToReturnCents)
+      : holdInvoice.totalAmount;
+    const totalPaid = (keptTotalCents / 100).toFixed(2);
     const platformFee = (holdInvoice.platformFeeAmount / 100).toFixed(2);
 
     // Email to shopper (or guest -- this IS their only durable payment record on our side
@@ -1219,5 +1306,5 @@ export async function markHoldInvoicePaid(
 
   console.log(`[hold-invoice/${source}] Payment completed for invoice ${invoiceId} (${bundledItems.length} items): organizer payout $${organizerPayout.toFixed(2)}${chargeId ? ` (charge ${chargeId})` : ''}`);
 
-  return { recorded: true, alreadyPaid: false };
+  return { recorded: true, alreadyPaid: false, ...(oversoldOutcome ? { oversoldSettlement: oversoldOutcome } : {}) };
 }

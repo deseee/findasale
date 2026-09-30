@@ -15,7 +15,7 @@ import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; /
  * handoff for citations). EVERY Square webhook event (unlike Stripe) carries
  * merchant_id/event_id/type at the TOP level of the envelope, not nested inside data.object.
  */
-interface SquareWebhookEnvelope {
+export interface SquareWebhookEnvelope {
   merchant_id?: string;
   location_id?: string;
   type: string;
@@ -372,6 +372,31 @@ export async function syncSquarePaymentStatus(
   });
 
   if (!purchase) {
+    // 2026-09-30: a crash-retry lands here when the previous delivery flipped the row to PAID and died before
+    // the engagement award. The award is idempotent per purchase, so fire it again for that exact payment.
+    if (typeof payment?.id === 'string' && payment.id) {
+      try {
+        const alreadyPaid = await prisma.purchase.findFirst({
+          where: {
+            status: 'PAID',
+            squarePaymentId: payment.id,
+            userId: { not: null },
+            OR: [
+              ...(orderId ? [{ squareOrderId: orderId }] : []),
+              ...(paymentLinkId ? [{ squarePaymentLinkId: paymentLinkId }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+        if (alreadyPaid) {
+          console.log(`[square-webhook] Purchase ${alreadyPaid.id} already PAID for Square payment ${payment.id}; re-firing the (idempotent) engagement award.`);
+          fireSquarePurchaseEngagement(alreadyPaid.id);
+          return;
+        }
+      } catch (lookupErr) {
+        console.warn(`[square-webhook] already-PAID lookup for Square payment ${payment.id} failed (non-fatal):`, lookupErr);
+      }
+    }
     console.log(
       `[square-webhook] payment.updated COMPLETED for Square payment ${payment?.id} matched no ` +
       `HoldInvoice note and no PENDING Purchase (order_id=${orderId ?? 'none'}, ` +
@@ -386,10 +411,17 @@ export async function syncSquarePaymentStatus(
   // happened at auction-CLOSE time (both jobs/auctionJob.ts's cron and
   // services/auctionService.ts's closeAuction), well before the winner pays. So marking this
   // row PAID is the complete parity -- no additional item/notification side effects belong here.
-  await prisma.purchase.update({
-    where: { id: purchase.id },
+  // 2026-09-30: conditional flip (status PENDING -> PAID), not a blind update. A redelivered or re-driven event
+  // (stale-PENDING reprocess, Square retry after a crash) that races another delivery gets count 0 here and
+  // stops, so the PAID write and the engagement award happen once.
+  const paidFlip = await prisma.purchase.updateMany({
+    where: { id: purchase.id, status: 'PENDING' },
     data: { status: 'PAID', squarePaymentId: payment?.id ?? null },
   });
+  if (paidFlip.count === 0) {
+    console.log(`[square-webhook] Purchase ${purchase.id} was already flipped by another delivery of Square payment ${payment?.id} -- nothing more to do.`);
+    return;
+  }
   console.log(
     `[square-webhook] Purchase ${purchase.id} (item ${purchase.itemId ?? 'unknown'}) marked PAID ` +
     `from Square payment ${payment?.id}.`
@@ -453,6 +485,215 @@ async function recordAndCheckSquareBankFingerprint(
     `${bankAccount?.id ?? 'unknown'} (fingerprint present in payload: ${hasFingerprint}) -- ` +
     `bank-fingerprint fraud-guard integration point (see TODO above), not yet wired to ConnectBankFingerprint.`
   );
+}
+
+/**
+ * A PENDING idempotency row older than this is treated as a crashed handler, not an in-flight one
+ * (2026-09-30, payment review finding 3). Before, PENDING was skipped forever, so a process that died
+ * mid-handler (deploy, OOM, timeout) after inserting the row lost that payment event permanently: Square
+ * retried, got "in-flight (PENDING) -- skipping", and answered 200. Handlers are idempotent (guarded flips
+ * and unique Purchase keys), so re-driving after this window is safe.
+ */
+export const SQUARE_WEBHOOK_PENDING_STALE_MS = 5 * 60 * 1000;
+
+export type SquareWebhookClaim =
+  | { proceed: true; via: 'NEW' | 'FAILED_RETRY' | 'STALE_PENDING_RETRY' | 'CHECK_ERROR' }
+  | { proceed: false; reason: 'COMPLETED' | 'IN_FLIGHT' | 'LOST_CLAIM' };
+
+/**
+ * INSERT-FIRST claim of a Square webhook event, with atomic re-claim of FAILED and stale-PENDING rows.
+ *   - new event: the insert wins, process it
+ *   - COMPLETED: duplicate, skip
+ *   - FAILED: re-claim with a conditional updateMany (status FAILED -> PENDING); exactly one concurrent
+ *     retry gets count 1 and processes, the others skip
+ *   - PENDING younger than SQUARE_WEBHOOK_PENDING_STALE_MS: a live handler owns it, skip
+ *   - PENDING older than that: re-claim with a conditional updateMany on `status PENDING AND updatedAt < cutoff`
+ *     that also moves updatedAt to now. Postgres serializes the UPDATE, so two simultaneous retries cannot
+ *     both see count 1: the loser's WHERE no longer matches once the winner's new updatedAt is committed.
+ */
+export async function claimSquareWebhookEvent(
+  idempotencyKey: string,
+  label: string,
+  // 2026-09-30: the signature-verified event body, stored on the row so the stale-PENDING sweep can re-drive it
+  // (jobs/posStrandedSaleReconcileCron.sweepStaleSquareWebhookEvents). Optional so older callers and tests still work.
+  payload?: unknown
+): Promise<SquareWebhookClaim> {
+  try {
+    await prisma.processedWebhookEvent.create({
+      data: payload === undefined
+        ? { eventId: idempotencyKey, status: 'PENDING' }
+        : { eventId: idempotencyKey, status: 'PENDING', payload: payload as any },
+    });
+    return { proceed: true, via: 'NEW' };
+  } catch (err: any) {
+    if (err?.code !== 'P2002') {
+      console.warn(`[square-webhook] Failed to check idempotency for event ${label}:`, err);
+      return { proceed: true, via: 'CHECK_ERROR' };
+    }
+    const existing = await prisma.processedWebhookEvent
+      .findUnique({ where: { eventId: idempotencyKey } })
+      .catch(() => null);
+    if (existing?.status === 'COMPLETED') {
+      console.warn(`[square-webhook] Duplicate event ${label} already COMPLETED -- skipping.`);
+      return { proceed: false, reason: 'COMPLETED' };
+    }
+    if (existing?.status === 'FAILED') {
+      const claim = await prisma.processedWebhookEvent.updateMany({
+        where: { eventId: idempotencyKey, status: 'FAILED' },
+        data: { status: 'PENDING', updatedAt: new Date() },
+      });
+      if (claim.count === 0) {
+        console.warn(`[square-webhook] Event ${label} previously FAILED but another retry claimed it first -- skipping.`);
+        return { proceed: false, reason: 'LOST_CLAIM' };
+      }
+      console.warn(`[square-webhook] Event ${label} previously FAILED -- reprocessing.`);
+      return { proceed: true, via: 'FAILED_RETRY' };
+    }
+    const updatedAtMs = existing?.updatedAt instanceof Date ? existing.updatedAt.getTime() : NaN;
+    const ageMs = Date.now() - updatedAtMs;
+    if (existing?.status === 'PENDING' && Number.isFinite(ageMs) && ageMs >= SQUARE_WEBHOOK_PENDING_STALE_MS) {
+      const claim = await prisma.processedWebhookEvent.updateMany({
+        where: { eventId: idempotencyKey, status: 'PENDING', updatedAt: { lt: new Date(Date.now() - SQUARE_WEBHOOK_PENDING_STALE_MS) } },
+        data: { updatedAt: new Date() },
+      });
+      if (claim.count === 0) {
+        console.warn(`[square-webhook] Event ${label} stale PENDING but another retry claimed it first -- skipping.`);
+        return { proceed: false, reason: 'LOST_CLAIM' };
+      }
+      console.error(`[square-webhook] Event ${label} was left PENDING for ${Math.round(ageMs / 1000)}s (handler likely crashed) -- reprocessing.`);
+      try {
+        Sentry.captureMessage('[square-webhook] re-driving a stale PENDING webhook event', {
+          level: 'warning',
+          tags: { area: 'square-webhook-stale-pending' },
+          extra: { eventKey: idempotencyKey, ageSeconds: Math.round(ageMs / 1000) },
+        } as any);
+      } catch {
+        // Sentry may not be initialized.
+      }
+      return { proceed: true, via: 'STALE_PENDING_RETRY' };
+    }
+    console.warn(`[square-webhook] Event ${label} in-flight (PENDING) -- skipping concurrent reprocess.`);
+    return { proceed: false, reason: 'IN_FLIGHT' };
+  }
+}
+
+/**
+ * The per-event dispatch (2026-09-30: extracted from handleSquareWebhook unchanged). Takes an already
+ * signature-verified, already-claimed event and runs its handler; a handler throw propagates to the caller. Every
+ * handler here is idempotent (guarded flips, unique Purchase keys, dispute step markers), which is what makes it safe
+ * for the stale-PENDING sweep to re-drive a stored payload. Exported for that sweep and for tests.
+ */
+export async function processSquareWebhookEvent(event: SquareWebhookEnvelope): Promise<void> {
+  const dataObject = event.data?.object ?? {};
+
+  // Wrap the entire switch so any handler throw marks the idempotency row FAILED (not
+  // permanently COMPLETED) and returns 500 -> Square retries with backoff, instead of
+  // silently stranding an event (same posture as stripeController.ts's webhookHandler).
+  switch (event.type) {
+    case 'payment.created':
+    case 'payment.updated': {
+      const payment = dataObject.payment ?? {};
+      await syncSquarePaymentStatus(event.type as 'payment.created' | 'payment.updated', payment, event.merchant_id);
+      break;
+    }
+
+    case 'refund.updated': {
+      const refund = dataObject.refund ?? {};
+      await syncSquareRefundStatus(refund);
+      break;
+    }
+
+    case 'dispute.created':
+    case 'dispute.state.updated': {
+      // findasale-hacker fix (2026-09-08): call the REAL handler (see import comment above).
+      // event's own envelope shape (merchant_id/type/event_id/created_at/data.object.dispute)
+      // is field-for-field identical to SquareDisputeWebhookEvent -- no remapping needed.
+      await handleSquareDisputeWebhook(event as unknown as SquareDisputeWebhookEvent);
+      break;
+    }
+
+    case 'bank_account.created':
+    case 'bank_account.verified': {
+      const bankAccount = dataObject.bank_account ?? {};
+      await recordAndCheckSquareBankFingerprint(
+        event.type as 'bank_account.created' | 'bank_account.verified',
+        bankAccount,
+        event.merchant_id
+      );
+      break;
+    }
+
+    case 'payout.paid':
+    case 'payout.failed': {
+      // Self-contained -- mirrors stripeController.ts's payout.paid/payout.failed handlers
+      // (:3916-4010), but simpler: EVERY Square webhook envelope carries merchant_id at the
+      // top level (confirmed live via Square's own docs, 2026-09-07), unlike Stripe where
+      // payout.paid/failed needed event.account (a Connect-specific quirk) instead of the
+      // usual event.data.object shape. Resolve Organizer directly off event.merchant_id ->
+      // Organizer.squareMerchantId (Wave 0 schema field).
+      const payout = dataObject.payout ?? {};
+      const merchantId = event.merchant_id;
+
+      if (!merchantId) {
+        console.warn(`[square-webhook] ${event.type} event ${event.event_id} has no merchant_id -- cannot resolve organizer, skipping.`);
+        break;
+      }
+
+      try {
+        const organizer = await prisma.organizer.findFirst({
+          where: { squareMerchantId: merchantId },
+          select: { id: true, userId: true },
+        });
+
+        if (organizer) {
+          const currency = payout?.amount_money?.currency_code || payout?.amount_money?.currency || 'USD';
+          const amountFormatted = `$${((payout?.amount_money?.amount ?? 0) / 100).toFixed(2)} ${String(currency).toUpperCase()}`;
+          const arrival = payout?.arrival_date
+            ? new Date(payout.arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : null;
+
+          if (event.type === 'payout.paid') {
+            await createNotification({
+              userId: organizer.userId,
+              type: 'payout_paid',
+              title: 'Your payout has landed',
+              body: `Your payout of ${amountFormatted} has been sent to your bank account${arrival ? ` (estimated arrival ${arrival})` : ''}.`,
+              link: '/organizer/payouts',
+              channel: 'OPERATIONAL',
+              sendEmail: true,
+            }).catch((err) => console.error(`[square-webhook] Failed to create payout_paid notification for organizer ${organizer.id}:`, err));
+          } else {
+            // payout.failed -- Square's Payout object (per live docs, 2026-09-07) does not
+            // document a failure_message/failure_code field the way Stripe's Payout does;
+            // only `status` is confirmed present. Generic message until/unless a real
+            // failure-reason field is confirmed against a live payload -- flagged in the
+            // handoff, not guessed at.
+            await createNotification({
+              userId: organizer.userId,
+              type: 'payout_failed',
+              title: 'Your payout failed',
+              body: `Your payout of ${amountFormatted} could not be completed. Check your Square Dashboard for details, or contact support.`,
+              link: '/organizer/payouts',
+              channel: 'OPERATIONAL',
+              sendEmail: true,
+            }).catch((err) => console.error(`[square-webhook] Failed to create payout_failed notification for organizer ${organizer.id}:`, err));
+          }
+        } else {
+          console.warn(`[square-webhook] ${event.type}: no Organizer found for Square merchant ${merchantId}`);
+        }
+      } catch (err) {
+        console.error(`[square-webhook] Failed to process ${event.type} for merchant ${merchantId}:`, err);
+      }
+      break;
+    }
+
+    default:
+      // Billing-only (subscription lifecycle) and every other Square event type are
+      // correctly out of scope -- billing stays on Stripe permanently (see the Square
+      // scoping doc's Wave 1 #5 section).
+      console.log(`[square-webhook] Unhandled event type ${event.type} -- ignoring.`);
+      break;
+  }
 }
 
 /**
@@ -528,147 +769,21 @@ export const handleSquareWebhook = async (req: Request, res: Response) => {
     idempotencyKey = `square:${event.event_id}`;
 
     // INSERT-FIRST preserves the P0 concurrent-duplicate race guard (first inserter wins) --
-    // same two-phase status idiom as billingController.ts / stripeController.ts.
-    try {
-      await prisma.processedWebhookEvent.create({
-        data: { eventId: idempotencyKey, status: 'PENDING' },
-      });
-    } catch (err: any) {
-      if (err.code === 'P2002') {
-        const existing = await prisma.processedWebhookEvent
-          .findUnique({ where: { eventId: idempotencyKey } })
-          .catch(() => null);
-        if (existing?.status === 'COMPLETED') {
-          console.warn(`[square-webhook] Duplicate event ${event.event_id} (type: ${event.type}) already COMPLETED -- skipping.`);
-          return res.json({ received: true, duplicate: true });
-        }
-        if (existing?.status === 'FAILED') {
-          console.warn(`[square-webhook] Event ${event.event_id} (type: ${event.type}) previously FAILED -- reprocessing.`);
-          await prisma.processedWebhookEvent
-            .update({ where: { eventId: idempotencyKey }, data: { status: 'PENDING' } })
-            .catch(() => {});
-          // fall through to reprocess below
-        } else {
-          console.warn(`[square-webhook] Event ${event.event_id} (type: ${event.type}) in-flight (PENDING) -- skipping concurrent reprocess.`);
-          return res.json({ received: true, duplicate: true });
-        }
-      } else {
-        console.warn(`[square-webhook] Failed to check idempotency for event ${event.event_id}:`, err);
-      }
+    // same two-phase status idiom as billingController.ts / stripeController.ts. A FAILED row and a
+    // PENDING row older than SQUARE_WEBHOOK_PENDING_STALE_MS are re-claimed atomically (see
+    // claimSquareWebhookEvent), so a crash mid-handler no longer loses the event.
+    const claim = await claimSquareWebhookEvent(idempotencyKey, `${event.event_id} (type: ${event.type})`, event);
+    if (!claim.proceed) {
+      return res.json({ received: true, duplicate: true });
     }
 
     console.log(`[square-webhook] Received event ${event.event_id} type=${event.type} merchant=${event.merchant_id ?? 'unknown'}`);
 
-    const dataObject = event.data?.object ?? {};
-
-    // Wrap the entire switch so any handler throw marks the idempotency row FAILED (not
-    // permanently COMPLETED) and returns 500 -> Square retries with backoff, instead of
-    // silently stranding an event (same posture as stripeController.ts's webhookHandler).
-    switch (event.type) {
-      case 'payment.created':
-      case 'payment.updated': {
-        const payment = dataObject.payment ?? {};
-        await syncSquarePaymentStatus(event.type as 'payment.created' | 'payment.updated', payment, event.merchant_id);
-        break;
-      }
-
-      case 'refund.updated': {
-        const refund = dataObject.refund ?? {};
-        await syncSquareRefundStatus(refund);
-        break;
-      }
-
-      case 'dispute.created':
-      case 'dispute.state.updated': {
-        // findasale-hacker fix (2026-09-08): call the REAL handler (see import comment above).
-        // event's own envelope shape (merchant_id/type/event_id/created_at/data.object.dispute)
-        // is field-for-field identical to SquareDisputeWebhookEvent -- no remapping needed.
-        await handleSquareDisputeWebhook(event as unknown as SquareDisputeWebhookEvent);
-        break;
-      }
-
-      case 'bank_account.created':
-      case 'bank_account.verified': {
-        const bankAccount = dataObject.bank_account ?? {};
-        await recordAndCheckSquareBankFingerprint(
-          event.type as 'bank_account.created' | 'bank_account.verified',
-          bankAccount,
-          event.merchant_id
-        );
-        break;
-      }
-
-      case 'payout.paid':
-      case 'payout.failed': {
-        // Self-contained -- mirrors stripeController.ts's payout.paid/payout.failed handlers
-        // (:3916-4010), but simpler: EVERY Square webhook envelope carries merchant_id at the
-        // top level (confirmed live via Square's own docs, 2026-09-07), unlike Stripe where
-        // payout.paid/failed needed event.account (a Connect-specific quirk) instead of the
-        // usual event.data.object shape. Resolve Organizer directly off event.merchant_id ->
-        // Organizer.squareMerchantId (Wave 0 schema field).
-        const payout = dataObject.payout ?? {};
-        const merchantId = event.merchant_id;
-
-        if (!merchantId) {
-          console.warn(`[square-webhook] ${event.type} event ${event.event_id} has no merchant_id -- cannot resolve organizer, skipping.`);
-          break;
-        }
-
-        try {
-          const organizer = await prisma.organizer.findFirst({
-            where: { squareMerchantId: merchantId },
-            select: { id: true, userId: true },
-          });
-
-          if (organizer) {
-            const currency = payout?.amount_money?.currency_code || payout?.amount_money?.currency || 'USD';
-            const amountFormatted = `$${((payout?.amount_money?.amount ?? 0) / 100).toFixed(2)} ${String(currency).toUpperCase()}`;
-            const arrival = payout?.arrival_date
-              ? new Date(payout.arrival_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-              : null;
-
-            if (event.type === 'payout.paid') {
-              await createNotification({
-                userId: organizer.userId,
-                type: 'payout_paid',
-                title: 'Your payout has landed',
-                body: `Your payout of ${amountFormatted} has been sent to your bank account${arrival ? ` (estimated arrival ${arrival})` : ''}.`,
-                link: '/organizer/payouts',
-                channel: 'OPERATIONAL',
-                sendEmail: true,
-              }).catch((err) => console.error(`[square-webhook] Failed to create payout_paid notification for organizer ${organizer.id}:`, err));
-            } else {
-              // payout.failed -- Square's Payout object (per live docs, 2026-09-07) does not
-              // document a failure_message/failure_code field the way Stripe's Payout does;
-              // only `status` is confirmed present. Generic message until/unless a real
-              // failure-reason field is confirmed against a live payload -- flagged in the
-              // handoff, not guessed at.
-              await createNotification({
-                userId: organizer.userId,
-                type: 'payout_failed',
-                title: 'Your payout failed',
-                body: `Your payout of ${amountFormatted} could not be completed. Check your Square Dashboard for details, or contact support.`,
-                link: '/organizer/payouts',
-                channel: 'OPERATIONAL',
-                sendEmail: true,
-              }).catch((err) => console.error(`[square-webhook] Failed to create payout_failed notification for organizer ${organizer.id}:`, err));
-            }
-          } else {
-            console.warn(`[square-webhook] ${event.type}: no Organizer found for Square merchant ${merchantId}`);
-          }
-        } catch (err) {
-          console.error(`[square-webhook] Failed to process ${event.type} for merchant ${merchantId}:`, err);
-        }
-        break;
-      }
-
-      default:
-        // Billing-only (subscription lifecycle) and every other Square event type are
-        // correctly out of scope -- billing stays on Stripe permanently (see the Square
-        // scoping doc's Wave 1 #5 section).
-        console.log(`[square-webhook] Unhandled event type ${event.type} -- ignoring.`);
-        break;
-    }
+    // Wrap the whole dispatch so any handler throw marks the idempotency row FAILED (not permanently COMPLETED) and
+    // returns 500 -> Square retries with backoff, instead of silently stranding an event (same posture as
+    // stripeController.ts's webhookHandler). The dispatch itself lives in processSquareWebhookEvent so the stale-PENDING
+    // sweep can re-drive a stored payload through exactly the same code.
+    await processSquareWebhookEvent(event);
 
     // Terminal state written only AFTER the switch completed successfully (mirrors
     // billingController.ts:382-385 / stripeController.ts:2686-2689).

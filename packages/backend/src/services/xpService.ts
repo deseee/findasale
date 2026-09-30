@@ -958,3 +958,39 @@ export async function clawBackChargebackXp(
     return 0;
   }
 }
+
+/**
+ * Reverse a chargeback XP claw-back after the dispute is WON (2026-09-30). Adds back exactly what
+ * clawBackChargebackXp removed for this purchase (the sum of its CHARGEBACK_XP_CLAWBACK ledger rows, minus anything
+ * already restored), writes a CHARGEBACK_XP_RESTORE ledger row tagged with the dispute id, and never touches
+ * lifetimeXpEarned or rank (the claw-back did not either). Idempotent: a second call finds nothing left to restore.
+ * The caller (squareRefundService) also guards it with a run-once dispute step key. Throws on database errors so the
+ * webhook retries; returns the XP restored.
+ */
+export async function restoreChargebackXp(
+  purchaseId: string,
+  userId: string,
+  disputeId: string
+): Promise<number> {
+  const rows = await prisma.pointsTransaction.findMany({
+    where: { purchaseId, userId, type: { in: ['CHARGEBACK_XP_CLAWBACK', 'CHARGEBACK_XP_RESTORE'] } },
+    select: { type: true, points: true },
+  });
+  const clawed = rows.filter((r) => r.type === 'CHARGEBACK_XP_CLAWBACK').reduce((sum, r) => sum + Math.abs(r.points), 0);
+  const restoredAlready = rows.filter((r) => r.type === 'CHARGEBACK_XP_RESTORE').reduce((sum, r) => sum + r.points, 0);
+  const toRestore = clawed - restoredAlready;
+  if (toRestore <= 0) return 0;
+
+  await prisma.user.update({ where: { id: userId }, data: { guildXp: { increment: toRestore } } });
+  await prisma.pointsTransaction.create({
+    data: {
+      userId,
+      type: 'CHARGEBACK_XP_RESTORE',
+      points: toRestore,
+      purchaseId,
+      description: `Chargeback dispute ${disputeId} won: XP restored for purchase ${purchaseId}`,
+    },
+  });
+  console.log(`[xpService] Restored ${toRestore} XP to user ${userId} for purchase ${purchaseId} (dispute ${disputeId} won)`);
+  return toRestore;
+}

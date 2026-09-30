@@ -14,6 +14,7 @@ import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charge
 import { getStripe } from '../utils/stripe'; // S-POS-QR-DOUBLE-CHARGE (2026-09-02): deactivate the Payment Link post-completion
 import { deleteSquareCheckoutLink } from './squareCheckoutLinkService'; // Square changeover Wave S2 #4 follow-up (2026-09-09): processor-aware post-record deactivation
 import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // Split tender on the QR payment link (2026-09-29): idempotent cash-leg commission accrual + per-row cash-leg allocation, both inside this recorder's own transaction
+import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement, type OversoldSettlement } from './oversoldPaymentRefundService'; // 2026-09-30 payment review finding 2: refund the card share of any paid item that could not be fulfilled (oversold), instead of leaving captured money behind an alert
 
 const stripe = () => getStripe();
 
@@ -96,8 +97,19 @@ export interface RecordPosPaymentLinkSaleResult {
    * on a link with no deliverable item left). Real money was captured; no Purchase row
    * was created for it (see fix below) to avoid a false/duplicate fulfillment record.
    * Needs organizer/admin manual refund review.
+   *
+   * 2026-09-30: the card share of these items is now refunded automatically (Square, kill switch
+   * SQUARE_DEAD_INVOICE_AUTO_REFUND_DISABLED); see oversoldSettlement for what happened.
    */
   oversoldItemIds: string[];
+  /** Set only when at least one paid item was oversold and this call did the recording. */
+  oversoldSettlement?: {
+    status: 'REFUNDED' | 'MANUAL' | 'NOTHING_TO_REFUND';
+    refundCents: number;
+    fullRefund: boolean;
+    /** Cash the organizer must hand back for the oversold items (split tender), in cents. */
+    cashToReturnCents: number;
+  };
 }
 
 export async function recordPosPaymentLinkSale(
@@ -128,6 +140,12 @@ export async function recordPosPaymentLinkSale(
   let recordedSaleId: string | null = null;
   let recordedAmountCents = 0;
   let recordedItemTitles: string[] = [];
+  // 2026-09-30 oversold settlement: computed inside the tx (needs the paid rows' prices), acted on after
+  // it commits (the refund is an external call). Held in an object so TS does not narrow it to null.
+  const oversoldState: { settlement: OversoldSettlement | null; titles: string[] } = { settlement: null, titles: [] };
+  // Card share per scoped item id, only filled when something was oversold: the split-tender cash leg
+  // is spread over ALL paid rows (not just the sellable ones) so the returned cash matches the rows kept.
+  let oversoldCashById: Map<string, number> | null = null;
 
   await prisma.$transaction(async (tx) => {
     // Guarded atomic flip: the WHERE clause + UPDATE row lock is what actually
@@ -287,6 +305,39 @@ export async function recordPosPaymentLinkSale(
         ? await tx.item.findMany({ where: { id: { in: sellableItemIds }, saleId: fresh.saleId, sale: { organizerId: fresh.organizerId } } })
         : [];
 
+      // 2026-09-30 (payment review finding 2): a paid item that could not be fulfilled must be refunded,
+      // not left as captured money. The card share is allocated across ALL of the link's in-scope rows
+      // (allocateCentsProportionally, exact cents) and the oversold rows' share goes back; when every
+      // row is oversold the whole card amount goes back. The refund itself happens after this tx commits.
+      if (oversoldItemIds.length) {
+        const scopedForAlloc = await tx.item.findMany({
+          where: { id: { in: scopedItemIds }, saleId: fresh.saleId, sale: { organizerId: fresh.organizerId } },
+          select: { id: true, price: true, title: true },
+        });
+        const byId = new Map<string, { id: string; price: number | null; title: string }>(
+          scopedForAlloc.map((r: { id: string; price: number | null; title: string }) => [r.id, r])
+        );
+        const ordered = scopedItemIds
+          .map((id: string) => byId.get(id))
+          .filter((r): r is { id: string; price: number | null; title: string } => !!r);
+        const weights = ordered.map((r) => Math.round((r.price || 0) * 100));
+        const oversoldSet = new Set(oversoldItemIds);
+        const oversoldIdx = ordered.map((r, i) => (oversoldSet.has(r.id) ? i : -1)).filter((i) => i >= 0);
+        oversoldState.settlement = computeOversoldSettlement({
+          cardCents: fresh.amount,
+          cashCents: splitCashCents,
+          weightsCents: weights,
+          oversoldIdx,
+        });
+        oversoldState.titles = oversoldIdx.map((i) => ordered[i].title);
+        if (splitCashCents > 0) {
+          const cashAll = allocateCentsProportionally(splitCashCents, weights);
+          oversoldCashById = new Map(ordered.map((r, i) => [r.id, cashAll[i] ?? 0] as [string, number]));
+        }
+        // The organizer notice below reports what the shopper actually keeps paying for.
+        recordedAmountCents = Math.max(0, fresh.amount - oversoldState.settlement.refundCardCents);
+      }
+
       // Inclusive-fee migration (2026-09-24): the floor must apply ONCE to the whole
       // payment link's recorded item subtotal, not per item below -- summing a per-item
       // floor would overcharge a multi-item link where each item is individually tiny but
@@ -300,7 +351,11 @@ export async function recordPosPaymentLinkSale(
       // application fee that was actually charged on the hosted checkout; using the full item
       // subtotal would inflate the reported platform fee on every split link. Non-split links keep
       // the item-subtotal basis exactly as before.
-      const feeBaseCents = splitCashCents > 0 ? (fresh.cardAmountCents ?? fresh.amount) : itemsSubtotalCents;
+      // Oversold split link (2026-09-30): the refunded card share carries its application fee back with it
+      // (Square refunds the fee proportionally), so the recorded fee base is the card amount that stays.
+      const feeBaseCents = splitCashCents > 0
+        ? Math.max(0, (fresh.cardAmountCents ?? fresh.amount) - (oversoldState.settlement?.refundCardCents ?? 0))
+        : itemsSubtotalCents;
       const totalItemsFeeCents = calculateInclusiveCommissionCents(
         feeBaseCents,
         posOrganizerTier as SubscriptionTier,
@@ -308,10 +363,12 @@ export async function recordPosPaymentLinkSale(
       );
       // Each recorded row's share of the cash leg (whole cents, sums exactly to the cash leg), so a
       // later refund knows how much of the row the card processor never collected.
-      const cashShares = allocateCentsProportionally(
-        splitCashCents,
-        items.map((it) => Math.round((it.price || 0) * 100))
-      );
+      const cashShares = oversoldCashById
+        ? items.map((it) => (oversoldCashById as Map<string, number>).get(it.id) ?? 0)
+        : allocateCentsProportionally(
+            splitCashCents,
+            items.map((it) => Math.round((it.price || 0) * 100))
+          );
       let remainingItemsFeeCentsToAllocate = totalItemsFeeCents;
 
       const createdPurchaseIds: string[] = [];
@@ -533,42 +590,51 @@ export async function recordPosPaymentLinkSale(
     });
   }
 
-  // findasale-hacker fix (2026-08-06): surface oversold/already-sold-elsewhere captures to
-  // the organizer so a real Stripe payment with no matching Purchase record never goes
-  // unnoticed. Fire-and-forget, non-fatal -- mirrors the pattern used for the cross-channel
-  // removal hooks above and the STRANDED-UNRECOVERED / AUTO-RECORDED notifications in
-  // posStrandedSaleReconcileCron.ts.
-  if (oversoldItemIds.length) {
-    setImmediate(async () => {
-      try {
-        const [organizer, oversoldItems] = await Promise.all([
-          prisma.organizer.findUnique({
-            where: { id: posPaymentLink.organizerId },
-            select: { userId: true },
-          }),
-          prisma.item.findMany({
-            where: { id: { in: oversoldItemIds } },
-            select: { id: true, title: true },
-          }),
-        ]);
-        if (!organizer?.userId) {
-          console.error(`[pos-record/${source}] Could not resolve organizer for oversold-payment notification, link=${posPaymentLink.id}, items=${oversoldItemIds.join(',')}`);
-          return;
-        }
-        const titles = oversoldItems.map((i) => `"${i.title}"`).join(', ') || oversoldItemIds.join(', ');
-        await createNotification({
-          userId: organizer.userId,
-          type: 'POS_PAYMENT_NEEDS_REFUND_REVIEW',
-          title: 'Payment captured for an already-sold item: refund review needed',
-          body: `A shopper's payment link for ${titles} was completed at Stripe, but the item had already been sold through another channel by the time FindA.Sale tried to record it. FindA.Sale did NOT record a duplicate sale. Please check your Stripe dashboard for the payment on link ${posPaymentLink.stripePaymentLinkId}${opts.sessionId ? ` (session ${opts.sessionId})` : ''} and issue a refund if appropriate.`,
-          link: '/organizer/pos',
-          channel: 'OPERATIONAL',
-        });
-      } catch (notifErr) {
-        console.error(`[pos-record/${source}] Failed to send oversold-payment notification for link=${posPaymentLink.id}:`, notifErr);
-      }
+  // 2026-09-30 (payment review finding 2): settle the captured money for any oversold item. Awaited (not
+  // fire-and-forget) so the outcome is in the result and a crash cannot silently skip it; the helpers never
+  // throw, so a refund or notification problem can never fail a sale that already recorded.
+  let oversoldOutcome: RecordPosPaymentLinkSaleResult['oversoldSettlement'];
+  if (didRecord && oversoldItemIds.length && oversoldState.settlement) {
+    const settlement = oversoldState.settlement;
+    const settled = await settleOversoldPayment({
+      kind: 'pos-link',
+      refId: posPaymentLink.id,
+      organizerProfileId: posPaymentLink.organizerId,
+      processor,
+      paymentId: externalPaymentId ?? null,
+      cardPaidCents: posPaymentLink.amount,
+      settlement,
+    });
+    oversoldOutcome = {
+      status: settled.status,
+      refundCents: settled.refundCents,
+      fullRefund: settlement.fullRefund,
+      cashToReturnCents: settlement.cashToReturnCents,
+    };
+    let organizerUserId: string | null = null;
+    try {
+      const org = await prisma.organizer.findUnique({ where: { id: posPaymentLink.organizerId }, select: { userId: true } });
+      organizerUserId = org?.userId ?? null;
+    } catch (lookupErr) {
+      console.error(`[pos-record/${source}] Could not resolve organizer for oversold-payment notification, link=${posPaymentLink.id}:`, lookupErr);
+    }
+    await notifyOversoldSettlement({
+      result: settled,
+      settlement,
+      titles: oversoldState.titles.length ? oversoldState.titles : oversoldItemIds,
+      processor,
+      ref: posPaymentLink.id,
+      partiallyFulfilled: purchaseIds.length > 0,
+      organizerUserId,
+      organizerLink: posPaymentLink.saleId ? `/organizer/sales/${posPaymentLink.saleId}` : '/organizer/pos',
+      shopper: null, // a POS payment link stores no buyer contact; Square emails the buyer its own refund notice
+      manualType: 'POS_PAYMENT_NEEDS_REFUND_REVIEW',
     });
   }
 
-  return { recorded: didRecord, alreadyCompleted: false, purchaseIds, oversoldItemIds };
+  // History: findasale-hacker fix (2026-08-06) first surfaced oversold captures to the organizer with a
+  // notice that named a Stripe dashboard. That notice is replaced (2026-09-30) by the settlement above:
+  // it refunds the card share and tells the organizer and shopper exactly what happened.
+
+  return { recorded: didRecord, alreadyCompleted: false, purchaseIds, oversoldItemIds, ...(oversoldOutcome ? { oversoldSettlement: oversoldOutcome } : {}) };
 }
