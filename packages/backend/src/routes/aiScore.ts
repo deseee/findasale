@@ -58,11 +58,11 @@ function getSummary(checks: AiScoreChecks, score: number): string {
     missing.push('an Event schema type');
   }
 
-  if (score >= 90) return 'Excellent GEO readiness. This page is well-optimized for AI search assistants.';
+  if (score >= 90) return 'Excellent GEO readiness. This page is well-optimized for search assistants.';
   if (score >= 80) return `Strong structured data foundation. Minor improvements available: ${missing.slice(0, 2).join(', ')}.`;
-  if (score >= 70) return `Good foundation. Adding ${missing.slice(0, 2).join(' and ')} would improve AI visibility.`;
-  if (score >= 60) return `Moderate AI visibility. Missing: ${missing.join(', ')}.`;
-  return `Low AI visibility. This page is missing critical signals: ${missing.join(', ')}.`;
+  if (score >= 70) return `Good foundation. Adding ${missing.slice(0, 2).join(' and ')} would improve search visibility.`;
+  if (score >= 60) return `Moderate search visibility. Missing: ${missing.join(', ')}.`;
+  return `Low search visibility. This page is missing critical signals: ${missing.join(', ')}.`;
 }
 
 function extractJsonLdInfo(html: string): { present: boolean; count: number; types: string[] } {

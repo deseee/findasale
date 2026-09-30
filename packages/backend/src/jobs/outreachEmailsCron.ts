@@ -15,7 +15,7 @@ const TEMPLATES: Record<string, Record<string, { subject: string; html: string }
   COLD: {
     touch1: {
       subject: 'Shoppers in [state] are already looking for what you sell',
-      html: '<p>Hi [Business Name],</p><p>Right now, people in [state] are searching for estate sales, yard sales, auctions, and consignment finds. They\'re typing the search. They\'re scrolling ebay and Facebook groups. They\'re refreshing.</p><p>They just can\'t find your inventory in one place.</p><p>We\'ve built [Business Name] a storefront on FindA.Sale. One page where your inventory can live, discoverable by the shoppers already looking.</p><p>See your storefront:<br><a href="[preview href]">[preview link]</a></p><p>Or watch the 45-second walkthrough: <a href="[video href]?src=outreach-cold-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+      html: '<p>Hi [Business Name],</p><p>Right now, people in [state] are searching for sales, auctions, flea markets, and consignment finds. They\'re typing the search. They\'re scrolling ebay and Facebook groups. They\'re refreshing.</p><p>They just can\'t find your inventory in one place.</p><p>We\'ve built [Business Name] a storefront on FindA.Sale. One page where your inventory can live, discoverable by the shoppers already looking.</p><p>See your storefront:<br><a href="[preview href]">[preview link]</a></p><p>Or watch the 45-second walkthrough: <a href="[video href]?src=outreach-cold-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
     },
     touch2: {
       subject: 'Five places to find one dresser',
@@ -33,7 +33,7 @@ const TEMPLATES: Record<string, Record<string, { subject: string; html: string }
   WARM: {
     touch1: {
       subject: 'We built [Business Name] a storefront',
-      html: '<p>Hi [Business Name],</p><p>We\'ve been mapping [state]\'s active estate sale, yard sale, auction, and consignment organizers. Your name kept coming up.</p><p>So we built [Business Name] a storefront on FindA.Sale. One place where your inventory can live, so shoppers can browse everything you\'re selling without hunting across five platforms.</p><p>It\'s already set up. You just need to claim it.</p><p>See your storefront:<br><a href="[preview href]">[preview link]</a></p><p>45-second walkthrough: <a href="[video href]?src=outreach-warm-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+      html: '<p>Hi [Business Name],</p><p>We\'ve been mapping [state]\'s active sale, auction, flea market, and consignment organizers. Your name kept coming up.</p><p>So we built [Business Name] a storefront on FindA.Sale. One place where your inventory can live, so shoppers can browse everything you\'re selling without hunting across five platforms.</p><p>It\'s already set up. You just need to claim it.</p><p>See your storefront:<br><a href="[preview href]">[preview link]</a></p><p>45-second walkthrough: <a href="[video href]?src=outreach-warm-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
     },
     touch2: {
       subject: 'What shoppers search for, what they find',

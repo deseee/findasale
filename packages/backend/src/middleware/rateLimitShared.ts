@@ -94,6 +94,39 @@ if (process.env.REDIS_URL) {
 // Passing a distinct prefix per limiter isolates each one's keyspace so its own windowMs/max
 // actually governs its own counter, with no behavior change to any limiter's own configured
 // window or threshold.
+/**
+ * FAILURE POLICY (explicit, 2026-09-29 review). Every limiter built with createRateLimitStore() FAILS TO A
+ * PER-INSTANCE IN-MEMORY COUNTER when Redis is unconfigured, not ready, slow or erroring. It never fails
+ * OPEN (unlimited): auth (login/register), SMS, payment and upload limiters all keep enforcing their limit,
+ * just per process (N instances = up to N x the limit until Redis is back). Redis calls are bounded by
+ * RATE_LIMIT_REDIS_TIMEOUT_MS (default 500 ms) so a hung connection cannot stall requests, and a failed or
+ * timed-out call opens a short circuit (RATE_LIMIT_REDIS_COOLDOWN_MS, default 5000 ms) during which requests
+ * go straight to memory instead of each waiting out the timeout. The only fail-OPEN helpers in this file are
+ * redisIncrWithWindow / redisSetBlock / redisIsBlocked, used by app-level velocity guards (guest checkout
+ * carding detection) where blocking a real buyer because Redis blipped is the worse outcome.
+ * Redis keys are `<prefix><key>` and every prefix passed to createRateLimitStore starts with `rl:`.
+ */
+const redisCallTimeoutMs = (): number => {
+  const n = parseInt(process.env.RATE_LIMIT_REDIS_TIMEOUT_MS || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 500;
+};
+const redisCooldownMs = (): number => {
+  const n = parseInt(process.env.RATE_LIMIT_REDIS_COOLDOWN_MS || '', 10);
+  return Number.isFinite(n) && n >= 0 ? n : 5000;
+};
+
+/** Rejects with 'redis-timeout' if `p` has not settled within `ms`. The timer never keeps the process alive. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('redis-timeout')), ms);
+    (timer as any)?.unref?.();
+  });
+  return Promise.race([p, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 /** The slice of a node-redis client the store needs (lets tests inject a fake). */
 export interface RateLimitRedisClientLike {
   isReady: boolean;
@@ -117,6 +150,8 @@ export class LazyRateLimitStore implements Store {
   private memoryStore?: MemoryStore;
   private loggedMemory = false;
   private loggedRedisError = false;
+  /** Epoch ms until which Redis is skipped after a failed or timed-out call (circuit breaker). */
+  private redisSkipUntil = 0;
 
   constructor(prefix: string, private readonly getClient: () => RateLimitRedisClientLike | null = () => redisRateLimitClient as unknown as RateLimitRedisClientLike | null) {
     this.prefix = prefix;
@@ -130,6 +165,7 @@ export class LazyRateLimitStore implements Store {
 
   /** Redis-backed store when the client is ready right now, else undefined (never throws). */
   private tryRedis(): RedisStore | undefined {
+    if (Date.now() < this.redisSkipUntil) return undefined;
     const client = this.getClient();
     if (!client || !client.isReady) return undefined;
     if (!this.redisStore) {
@@ -170,6 +206,7 @@ export class LazyRateLimitStore implements Store {
   }
 
   private noteRedisError(err: unknown): void {
+    this.redisSkipUntil = Date.now() + redisCooldownMs();
     if (!this.loggedRedisError) {
       this.loggedRedisError = true;
       console.error(`[rateLimit] Redis store error for prefix ${this.prefix}; falling back to in-memory:`, err instanceof Error ? err.message : err);
@@ -180,7 +217,7 @@ export class LazyRateLimitStore implements Store {
     const redis = this.tryRedis();
     if (redis) {
       try {
-        const res = await redis.increment(key);
+        const res = await withTimeout(redis.increment(key), redisCallTimeoutMs());
         this.loggedRedisError = false; // re-arm the one-time error log after a healthy call
         return res;
       } catch (err) {
@@ -194,7 +231,7 @@ export class LazyRateLimitStore implements Store {
     const redis = this.tryRedis();
     if (redis) {
       try {
-        await redis.decrement(key);
+        await withTimeout(redis.decrement(key), redisCallTimeoutMs());
         return;
       } catch (err) {
         this.noteRedisError(err);
@@ -207,7 +244,7 @@ export class LazyRateLimitStore implements Store {
     const redis = this.tryRedis();
     if (redis) {
       try {
-        await redis.resetKey(key);
+        await withTimeout(redis.resetKey(key), redisCallTimeoutMs());
       } catch (err) {
         this.noteRedisError(err);
       }
@@ -219,7 +256,7 @@ export class LazyRateLimitStore implements Store {
     const redis = this.tryRedis();
     if (redis) {
       try {
-        return await redis.get(key);
+        return await withTimeout(redis.get(key), redisCallTimeoutMs());
       } catch (err) {
         this.noteRedisError(err);
       }
@@ -458,5 +495,33 @@ export const redisIsBlocked = async (key: string): Promise<boolean> => {
   } catch (err) {
     console.error('[rateLimit] redisIsBlocked failed — failing open:', err instanceof Error ? err.message : err);
     return false;
+  }
+};
+
+/**
+ * Reads a small string value (e.g. a JSON blob) stored with redisSetValue. Returns null when the key is
+ * absent OR Redis is unavailable / slow (bounded by RATE_LIMIT_REDIS_TIMEOUT_MS); callers keep their own
+ * in-memory copy as the fallback, so a Redis blip never turns into a hard failure.
+ */
+export const redisGetValue = async (key: string): Promise<string | null> => {
+  const c = redisRateLimitClient;
+  if (!c || !c.isReady) return null;
+  try {
+    const v = await withTimeout(Promise.resolve(c.get(key)), redisCallTimeoutMs());
+    return typeof v === 'string' ? v : null;
+  } catch (err) {
+    console.error('[rateLimit] redisGetValue failed (non-fatal):', err instanceof Error ? err.message : err);
+    return null;
+  }
+};
+
+/** Stores a small string value that expires after `ttlSeconds`. No-op (never throws) if Redis is down or slow. */
+export const redisSetValue = async (key: string, value: string, ttlSeconds: number): Promise<void> => {
+  const c = redisRateLimitClient;
+  if (!c || !c.isReady) return;
+  try {
+    await withTimeout(Promise.resolve(c.set(key, value, { EX: ttlSeconds })), redisCallTimeoutMs());
+  } catch (err) {
+    console.error('[rateLimit] redisSetValue failed (non-fatal):', err instanceof Error ? err.message : err);
   }
 };

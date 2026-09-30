@@ -34,3 +34,18 @@ describe('buildQrUrl', () => {
     expect(buildQrUrl('finda.sale', '/items/i1?x=1', 'qr_kit')).toBe('finda.sale/items/i1?x=1&utm_source=qr_kit');
   });
 });
+
+describe('printed item label URL length', () => {
+  // A longer URL means a denser QR code. Keep the printed item URL short enough that a small label
+  // still scans: under 100 characters for the production origin with a cuid or uuid item id.
+  const origin = 'https://finda.sale';
+  const cuid = 'cmabcdefghijklmnopqrstuvw'; // 25 chars
+  const uuid = '123e4567-e89b-12d3-a456-426614174000'; // 36 chars
+  it.each([
+    ['qr_item_label', QR_SOURCE_ITEM_LABEL],
+    ['qr_kit', QR_SOURCE_KIT],
+  ])('stays under 100 characters with %s', (_name, source) => {
+    expect(buildItemQrUrl(origin, cuid, source).length).toBeLessThan(100);
+    expect(buildItemQrUrl(origin, uuid, source).length).toBeLessThan(100);
+  });
+});

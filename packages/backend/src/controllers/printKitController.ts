@@ -76,7 +76,8 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       const qrDataUrl = await QRCode.toDataURL(itemUrl, {
         type: 'image/png',
         width: QR_SIZE_STANDARD,
-        margin: 1,
+        margin: 4, // QR-spec minimum quiet zone (was 1)
+        errorCorrectionLevel: 'M', // explicit; the stamped utm_source makes the URL longer than a bare /items/:id
         color: { dark: '#000000', light: '#ffffff' },
       });
       itemQrDataUrls.push(qrDataUrl);
@@ -910,7 +911,8 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
       itemQrBuffers[item.id] = await QRCode.toBuffer(itemUrl, {
         type: 'png',
         width: QR_SIZE_STANDARD,
-        margin: 2,
+        margin: 4, // QR-spec minimum quiet zone (was 2)
+        errorCorrectionLevel: 'M', // explicit; the stamped utm_source makes the URL longer than a bare /items/:id
         color: { dark: '#000000', light: '#ffffff' },
       });
     }

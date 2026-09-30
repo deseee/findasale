@@ -1,4 +1,22 @@
-import { parseStrictNumber, parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey } from '../utils/qrScanGuards';
+import { parseStrictNumber, parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey, parseBodyLatitude, parseBodyLongitude, parseBodyAccuracyMeters } from '../utils/qrScanGuards';
+
+describe('JSON body coordinate helpers', () => {
+  it('accept finite numbers and strict numeric strings in range', () => {
+    expect(parseBodyLatitude(42.2)).toBe(42.2);
+    expect(parseBodyLatitude('42.2')).toBe(42.2);
+    expect(parseBodyLongitude(-85.9e0)).toBe(-85.9);
+    expect(parseBodyLatitude(0)).toBe(0);
+  });
+  it('reject NaN, Infinity, out of range, null, arrays, objects, booleans and junk strings', () => {
+    for (const bad of [NaN, Infinity, -Infinity, 91, null, undefined, [42], { a: 1 }, true, '12abc', '']) {
+      expect(parseBodyLatitude(bad as any)).toBeUndefined();
+    }
+    expect(parseBodyLongitude(181)).toBeUndefined();
+    expect(parseBodyAccuracyMeters('abc')).toBe(0);
+    expect(parseBodyAccuracyMeters(5000)).toBe(100);
+    expect(parseBodyAccuracyMeters(-4)).toBe(0);
+  });
+});
 
 describe('parseStrictNumber', () => {
   it('accepts plain decimals inside the range', () => {

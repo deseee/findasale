@@ -70,6 +70,7 @@ const CluePage = () => {
       // Attempt to get geolocation (best-effort, non-blocking)
       let latitude: number | undefined;
       let longitude: number | undefined;
+      let accuracy: number | undefined;
 
       if (navigator.geolocation) {
         try {
@@ -78,6 +79,7 @@ const CluePage = () => {
           });
           latitude = position.coords.latitude;
           longitude = position.coords.longitude;
+          accuracy = Math.round(position.coords.accuracy || 0);
         } catch (err) {
           // Geolocation denied or unavailable — proceed without coordinates
           console.info('Geolocation unavailable, proceeding without coordinates');
@@ -86,7 +88,7 @@ const CluePage = () => {
 
       const response = await api.post(
         `/sales/${id}/treasure-hunt-qr/${clueId}/found`,
-        { latitude, longitude }
+        { latitude, longitude, accuracy }
       );
       return response.data as FoundResponse;
     },

@@ -34,6 +34,8 @@ import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurre
 import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
 import { geocodeAddress } from '../services/geocodingService'; // Map pin fix: geocode platform sales on publish
 import { redis } from '../lib/redis'; // Perf: short-TTL cache for getCities GROUP BY
+import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // anti-spoof guard for check-in (2026-09-29)
+import { parseBodyLatitude, parseBodyLongitude, parseBodyAccuracyMeters } from '../utils/qrScanGuards';
 import { publicShopperLabel } from '../utils/publicDisplayName'; // Privacy: public activity names are opt-in, first name + last initial
 
 // Feature #5: Sale type categories (inlined from shared package)
@@ -2371,7 +2373,10 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
     // Verify sale exists and is published
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true, title: true, status: true },
+      select: {
+        id: true, title: true, status: true, lat: true, lng: true, startDate: true, endDate: true,
+        organizer: { select: { timezone: true } },
+      },
     });
 
     if (!sale) {
@@ -2381,6 +2386,32 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
     if (sale.status !== 'PUBLISHED') {
       return res.status(403).json({ message: 'Sale is not published' });
     }
+
+    // Anti-spoof guard (2026-09-29): sale active window in the sale timezone, per user+sale and per IP+sale rate
+    // limits, and (when the client sends coordinates) radius + impossible-speed checks. The client does not send
+    // coordinates yet, so location is optional here until QR_CHECKIN_REQUIRE_LOCATION=true is set after the
+    // check-in page ships geolocation. A rejection is logged and awards nothing.
+    const checkinGuard = await checkQrScan({
+      kind: 'checkin',
+      userId,
+      ip: req.ip,
+      lat: parseBodyLatitude(req.body?.latitude),
+      lng: parseBodyLongitude(req.body?.longitude),
+      accuracyMeters: parseBodyAccuracyMeters(req.body?.accuracy),
+      sale: {
+        id: sale.id,
+        lat: sale.lat,
+        lng: sale.lng,
+        startDate: sale.startDate,
+        endDate: sale.endDate,
+        timeZone: sale.organizer?.timezone ?? null,
+      },
+    });
+    if (!checkinGuard.ok) {
+      return res.status(checkinGuard.status).json(qrScanRejectionBody(checkinGuard));
+    }
+    const checkinLat = checkinGuard.located ? parseBodyLatitude(req.body?.latitude) : undefined;
+    const checkinLng = checkinGuard.located ? parseBodyLongitude(req.body?.longitude) : undefined;
 
     // Check if user already checked in today
     const today = new Date();
@@ -2466,12 +2497,15 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       // Upsert SaleCheckin record so Local Legend badge can count visits per ZIP
       await prisma.saleCheckin.upsert({
         where: { saleId_userId: { saleId, userId } },
-        update: { checkinAt: new Date() },
+        update: {
+          checkinAt: new Date(),
+          ...(checkinLat !== undefined && checkinLng !== undefined ? { latitude: checkinLat, longitude: checkinLng } : {}),
+        },
         create: {
           saleId,
           userId,
-          latitude: 0,
-          longitude: 0,
+          latitude: checkinLat ?? 0,
+          longitude: checkinLng ?? 0,
           checkinAt: new Date(),
         },
       });

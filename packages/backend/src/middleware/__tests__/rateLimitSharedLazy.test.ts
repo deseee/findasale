@@ -11,7 +11,7 @@ import { LazyRateLimitStore, createRateLimitStore } from '../rateLimitShared';
 const opts = { windowMs: 60_000 } as any;
 
 function fakeRedis() {
-  const state = { ready: true, hits: 0, evals: 0, fail: false, scriptLoads: 0 };
+  const state = { ready: true, hits: 0, evals: 0, fail: false, hang: false, scriptLoads: 0 };
   const client = {
     get isReady() {
       return state.ready;
@@ -24,6 +24,7 @@ function fakeRedis() {
       }
       if (args[0] === 'EVALSHA') {
         state.evals += 1;
+        if (state.hang) return new Promise(() => undefined); // a connection that accepts writes but never answers
         state.hits += 1;
         return [state.hits, 60_000];
       }
@@ -106,5 +107,96 @@ describe('LazyRateLimitStore', () => {
     expect(store.prefix).toBe('rl:f:');
     expect(() => store.init(opts)).not.toThrow();
     expect(() => store.init(opts)).not.toThrow();
+  });
+});
+
+describe('LazyRateLimitStore failure policy (never unlimited, bounded latency)', () => {
+  const realNow = Date.now;
+  afterEach(() => {
+    Date.now = realNow;
+    delete process.env.RATE_LIMIT_REDIS_TIMEOUT_MS;
+    delete process.env.RATE_LIMIT_REDIS_COOLDOWN_MS;
+  });
+
+  it('keeps COUNTING in memory for the whole outage (an auth limiter never becomes unlimited)', async () => {
+    const { state, client } = fakeRedis();
+    state.ready = false;
+    const store = new LazyRateLimitStore('rl:login:', () => client as any);
+    store.init(opts);
+    const seen: number[] = [];
+    for (let i = 0; i < 5; i++) seen.push((await store.increment('1.2.3.4')).totalHits);
+    expect(seen).toEqual([1, 2, 3, 4, 5]);
+    expect(client.sendCommand).not.toHaveBeenCalled();
+  });
+
+  it('a hung Redis command times out and falls back to memory instead of stalling the request', async () => {
+    process.env.RATE_LIMIT_REDIS_TIMEOUT_MS = '30';
+    const { state, client } = fakeRedis();
+    const store = new LazyRateLimitStore('rl:sms-burst:', () => client as any);
+    store.init(opts);
+    await store.increment('k'); // healthy: script SHAs loaded
+    state.hang = true;
+    const started = Date.now();
+    const res = await store.increment('k2');
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(res.totalHits).toBe(1); // counted in memory
+  });
+
+  it('opens a short circuit after a failure: requests inside the cooldown do not touch Redis, then Redis is retried', async () => {
+    process.env.RATE_LIMIT_REDIS_COOLDOWN_MS = '5000';
+    let clock = 1_000_000;
+    Date.now = () => clock;
+    const { state, client } = fakeRedis();
+    const store = new LazyRateLimitStore('rl:register:', () => client as any);
+    store.init(opts);
+    await store.increment('k');
+    expect(state.evals).toBe(1);
+    state.fail = true;
+    await store.increment('k'); // fails, breaker opens
+    const callsAfterFailure = client.sendCommand.mock.calls.length;
+    clock += 1000;
+    state.fail = false;
+    const inCooldown = await store.increment('k');
+    expect(client.sendCommand.mock.calls.length).toBe(callsAfterFailure); // Redis untouched during the cooldown
+    expect(inCooldown.totalHits).toBeGreaterThanOrEqual(1);
+    clock += 5000; // cooldown over
+    await store.increment('k');
+    expect(client.sendCommand.mock.calls.length).toBeGreaterThan(callsAfterFailure);
+  });
+});
+
+describe('module import safety', () => {
+  const realUrl = process.env.REDIS_URL;
+  afterEach(() => {
+    if (realUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = realUrl;
+    jest.resetModules();
+  });
+
+  it('importing the module does not throw when REDIS_URL is absent', () => {
+    delete process.env.REDIS_URL;
+    jest.isolateModules(() => {
+      expect(() => require('../rateLimitShared')).not.toThrow();
+    });
+  });
+
+  it('importing the module does not throw when createClient throws or connect rejects (bad REDIS_URL)', () => {
+    process.env.REDIS_URL = 'not a url';
+    jest.isolateModules(() => {
+      jest.doMock('redis', () => ({
+        createClient: () => {
+          throw new Error('Invalid URL');
+        },
+      }));
+      expect(() => require('../rateLimitShared')).not.toThrow();
+    });
+    jest.isolateModules(() => {
+      const on = jest.fn();
+      jest.doMock('redis', () => ({
+        createClient: () => ({ on, connect: () => Promise.reject(new Error('ECONNREFUSED')), isReady: false }),
+      }));
+      const mod = require('../rateLimitShared');
+      expect(mod.createRateLimitStore('rl:x:')).toBeTruthy();
+    });
   });
 });

@@ -32,6 +32,25 @@ export function parseAccuracyMeters(raw: unknown): number {
   return Math.min(Math.max(n, 0), 100);
 }
 
+/**
+ * Coordinate parsing for JSON bodies (POST endpoints): accepts a finite JS number or a strict decimal string,
+ * within range. Everything else (null, arrays, objects, booleans, NaN, strings like '12abc') is undefined.
+ */
+function parseBodyNumber(raw: unknown, maxAbs: number): number | undefined {
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) && Math.abs(raw) <= maxAbs ? raw : undefined;
+  }
+  return parseStrictNumber(raw, maxAbs);
+}
+export const parseBodyLatitude = (raw: unknown): number | undefined => parseBodyNumber(raw, 90);
+export const parseBodyLongitude = (raw: unknown): number | undefined => parseBodyNumber(raw, 180);
+/** Accuracy from a JSON body, clamped to [0, 100] like parseAccuracyMeters. */
+export function parseBodyAccuracyMeters(raw: unknown): number {
+  const n = parseBodyNumber(raw, 1e9);
+  if (n === undefined) return 0;
+  return Math.min(Math.max(n, 0), 100);
+}
+
 /** Stable per-(user, item, UTC day) key used for the Postgres advisory lock that serializes dedupe-then-award. */
 export function buildQrScanLockKey(userId: string, itemId: string, day: Date): string {
   return `qrscan:${userId}:${itemId}:${day.toISOString().slice(0, 10)}`;

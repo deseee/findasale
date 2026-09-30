@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { awardXp, XP_AWARDS, checkDailyXpCap, computeTreasureHuntScanXp } from '../services/xpService';
-import { haversineDistance } from '../lib/placesService'; // Geofencing for QR scans
+import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // sale window, rate limits, radius and impossible-speed guard (2026-09-29)
+import { parseBodyLatitude, parseBodyLongitude, parseBodyAccuracyMeters } from '../utils/qrScanGuards';
 
 /**
  * Feature #85: Treasure Hunt QR Controller
@@ -227,16 +228,22 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     }
 
     const { saleId, clueId } = req.params;
-    const latitude = req.body.latitude;
-    const longitude = req.body.longitude;
+    // Strict parsing (2026-09-29): raw req.body values used to reach the distance math unvalidated.
+    const latitude = parseBodyLatitude(req.body?.latitude);
+    const longitude = parseBodyLongitude(req.body?.longitude);
+    const accuracyMeters = parseBodyAccuracyMeters(req.body?.accuracy);
 
-    // Verify sale exists and fetch location for geofencing
+    // Verify sale exists and fetch location + schedule for the anti-spoof guard
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true, lat: true, lng: true },
+      select: {
+        id: true, lat: true, lng: true, status: true, deletedAt: true, startDate: true, endDate: true,
+        organizer: { select: { timezone: true } },
+      },
     });
 
-    if (!sale) {
+    // A draft / ended / deleted sale answers like a missing one so hunts cannot probe unpublished sales.
+    if (!sale || sale.status !== 'PUBLISHED' || sale.deletedAt) {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
@@ -253,13 +260,28 @@ export async function markClueFound(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: 'Clue not found in this sale' });
     }
 
-    // Geofence check: if client provided lat/lng, enforce 100m radius from sale location
-    if (latitude !== undefined && longitude !== undefined && sale.lat !== null && sale.lng !== null) {
-      const distance = haversineDistance(latitude, longitude, sale.lat, sale.lng);
-      const MAX_DISTANCE = 100; // 100 meters
-      if (distance > MAX_DISTANCE) {
-        return res.status(403).json({ error: 'You must be at the sale location to scan this QR code.' });
-      }
+    // Anti-spoof guard (2026-09-29). Previously the geofence ran only when the client chose to send coordinates,
+    // so omitting them skipped it. Now coordinates are required (403 LOCATION_REQUIRED, which the clue page already
+    // treats as "location required"), and the sale window, rate limits, radius (QR_SCAN_MAX_RADIUS_M, default 500m)
+    // and impossible-speed checks apply. Rejections are logged and award nothing.
+    const guard = await checkQrScan({
+      kind: 'clue',
+      userId: req.user.id,
+      ip: req.ip,
+      lat: latitude,
+      lng: longitude,
+      accuracyMeters,
+      sale: {
+        id: sale.id,
+        lat: sale.lat,
+        lng: sale.lng,
+        startDate: sale.startDate,
+        endDate: sale.endDate,
+        timeZone: sale.organizer?.timezone ?? null,
+      },
+    });
+    if (!guard.ok) {
+      return res.status(guard.status).json(qrScanRejectionBody(guard));
     }
 
     // Check if user already scanned this clue

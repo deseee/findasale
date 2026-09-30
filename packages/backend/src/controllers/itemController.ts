@@ -52,6 +52,7 @@ import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 
 import { computeChannelStatusForItems, ChannelStatusItemInput, ExtensionPlatformsUsed, PublishedExtensionPlatformsByItemId } from '../services/itemChannelStatusService'; // Add Items collapsed-row multi-channel status (2026-09-14), see ADR-2026-09-14-add-items-multichannel-status-aggregation.md
 import type { ActingOrganizerRequest } from '../utils/actingOrganizer'; // 2026-09-29: Markdown Re-tag handlers read req.actingOrganizer (owner or TEAMS staff)
 import { decodeHtmlEntities } from '../utils/htmlEntities'; // 2026-09-29: single-pass decode + tag strip for imported category text
+import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // 2026-09-29: sale window, rate limits, radius, impossible-speed guard shared by every location-gated XP path
 import { parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey } from '../utils/qrScanGuards'; // 2026-09-29: strict scan coordinates + advisory-lock key for the QR-scan dedupe
 import { IMPORT_FIELD_KEYS, IMPORT_MAX_ROWS, buildImportItem, detectImportColumnMapping, importPhotoCapForTier, RawImportRow, ImportRowContext } from '../services/itemCsvImport'; // 2026-09-29: one shared, hardened row validator for bulk-import + legacy import-items
 
@@ -4504,7 +4505,10 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       where: { id: itemId },
       include: {
         sale: {
-          select: { id: true, lat: true, lng: true, status: true, deletedAt: true },
+          select: {
+            id: true, lat: true, lng: true, status: true, deletedAt: true, startDate: true, endDate: true,
+            organizer: { select: { timezone: true } },
+          },
         },
       },
     });
@@ -4529,24 +4533,29 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       });
       return;
     }
-    if (item.sale.lat !== null && item.sale.lng !== null) {
-      if (latitude === undefined || longitude === undefined) {
-        res.status(400).json({
-          error: 'Location is required to scan this QR code.',
-          message: 'Location is required to scan this QR code.',
-          code: 'LOCATION_REQUIRED',
-        });
-        return;
-      }
-      const distance = haversineDistance(latitude, longitude, item.sale.lat, item.sale.lng);
-      const MAX_DISTANCE = 100 + accuracyMeters; // meters
-      if (distance > MAX_DISTANCE) {
-        res.status(403).json({
-          error: 'You must be at the sale location to scan this QR code.',
-          message: 'You must be at the sale location to scan this QR code.',
-        });
-        return;
-      }
+    // Anti-spoof guard (2026-09-29): sale active window in the sale timezone, per user+sale and per IP+sale rate
+    // limits, haversine radius (QR_SCAN_MAX_RADIUS_M, default 500m, plus GPS accuracy capped at 100m) and an
+    // impossible-speed check against the user's previous accepted scan. A rejection is logged with its reason
+    // ([qrScan] rejected ...) and awards nothing. The response keeps the { error, message, code } shape.
+    const guard = await checkQrScan({
+      kind: 'item',
+      userId,
+      ip: req.ip,
+      lat: latitude,
+      lng: longitude,
+      accuracyMeters,
+      sale: {
+        id: item.sale.id,
+        lat: item.sale.lat,
+        lng: item.sale.lng,
+        startDate: item.sale.startDate,
+        endDate: item.sale.endDate,
+        timeZone: item.sale.organizer?.timezone ?? null,
+      },
+    });
+    if (!guard.ok) {
+      res.status(guard.status).json(qrScanRejectionBody(guard));
+      return;
     }
 
     // Import awardXp and cap check here to avoid circular dependency

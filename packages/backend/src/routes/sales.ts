@@ -812,7 +812,8 @@ router.post('/:saleId/approach-notes', authenticate, requireOrganizer, updateApp
 router.post('/:saleId/send-approach-notification', authenticate, requireOrganizer, sendApproachNotification); // Organizer triggers notification
 
 // Feature #244: eBay CSV export
-router.get('/:saleId/ebay-export', authenticate, requireOrganizer, exportSaleToEbay);
+// PRO: every other marketplace export (QuickBooks, Amazon, Commerce Manager feed owner tools) is PRO; this one was the gap.
+router.get('/:saleId/ebay-export', authenticate, requireOrganizer, requireTier('PRO'), exportSaleToEbay);
 
 // Facebook Commerce Manager data feed — public, no auth (FB crawler has no session token)
 router.get('/:saleId/export/commerce-feed', exportCommerceManagerFeed);

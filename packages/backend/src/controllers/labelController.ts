@@ -32,8 +32,9 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
     const itemUrl = buildItemQrUrl(frontendUrl, id, QR_SOURCE_ITEM_LABEL); // utm_source=qr_item_label so the item page shows the QR scan prompt
     const qrDataUrl = await QRCode.toDataURL(itemUrl, {
       type: 'image/png',
-      width: 200,
-      margin: 1,
+      width: 300, // source PNG resolution; printed size is set by the .label-qr img CSS rule
+      margin: 4, // QR-spec minimum quiet zone (was 1)
+      errorCorrectionLevel: 'M', // explicit; the stamped utm_source makes the URL longer than a bare /items/:id
       color: { dark: '#000000', light: '#ffffff' },
     });
 
@@ -170,8 +171,9 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
     for (const item of sale.items) {
       const qrDataUrl = await QRCode.toDataURL(buildItemQrUrl(frontendUrl, item.id, QR_SOURCE_ITEM_LABEL), {
         type: 'image/png',
-        width: 200,
-        margin: 1,
+        width: 300, // source PNG resolution; printed size is set by the .label-qr img CSS rule
+        margin: 4, // QR-spec minimum quiet zone (was 1)
+        errorCorrectionLevel: 'M', // explicit; the stamped utm_source makes the URL longer than a bare /items/:id
         color: { dark: '#000000', light: '#ffffff' },
       });
       qrDataUrls.push(qrDataUrl);

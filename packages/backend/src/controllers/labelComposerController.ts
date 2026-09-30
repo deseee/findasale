@@ -354,6 +354,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         type: 'image/png',
         width: QR_SIZE_LABEL,
+        errorCorrectionLevel: 'M', // explicit; the stamped utm_source makes the URL longer than a bare /items/:id
         margin: 4, // QR-spec minimum quiet zone (was 1 -- well below spec, a documented cause of scan failures once printed next to other label content)
         color: { dark: '#000000', light: '#ffffff' },
       });
