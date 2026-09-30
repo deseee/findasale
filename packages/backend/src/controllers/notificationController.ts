@@ -13,9 +13,12 @@ import {
   composeSmsBody,
   describeAllowedWindow,
   estimateSmsSegments,
+  SMS_CONFIRMATION_MAX_PER_PHONE_PER_DAY,
+  SMS_CONFIRMATION_MAX_PER_PHONE_PER_HOUR,
   getSentInLast24h,
   getSmsDailyCap,
   getSmsFraming,
+  isConfirmationThrottled,
   isPhoneOptedOut,
   loadSmsAudience,
   normalizePhoneE164,
@@ -25,7 +28,7 @@ import {
 import { sendCompliantSmsBatch, sendConsentConfirmationSms } from '../services/compliantSms';
 import { getClientIp } from '../utils/getClientIp';
 import { escapeHtml, safeHttpsUrl } from '../utils/htmlEscape';
-import { maskEmail } from '../utils/logMask';
+import { maskEmail, safeErrorForLog } from '../utils/logMask';
 
 // Lazy-loaded Twilio client
 let _twilioClient: any = null;
@@ -49,8 +52,15 @@ const getTwilioClient = () => {
 };
 
 const EMAIL_FORMAT = /^[^\s@<>",;:()\[\]\\]+@[^\s@<>",;:()\[\]\\]+\.[^\s@<>",;:()\[\]\\]{2,}$/;
-/** Confirmation texts to one number per day across all sales/accounts (stops one number being texted repeatedly). */
-const MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_DAY = 3;
+/**
+ * Confirmation texts to one number across ALL sales, organizers and accounts (stops one number being texted repeatedly
+ * by someone typing a victim's number on many sale pages): at most 3 per rolling day and 2 per rolling hour. Counted
+ * from the SmsSendLog confirmation ledger keyed by a hashed phone (services/smsComplianceService) with NO exclusion of
+ * the caller's own rows, plus the pending SaleSubscriber rows for the number (covers a request whose text has not been
+ * logged yet). Over the cap the answer is identical to any other request (no oracle).
+ */
+const MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_DAY = SMS_CONFIRMATION_MAX_PER_PHONE_PER_DAY;
+const MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_HOUR = SMS_CONFIRMATION_MAX_PER_PHONE_PER_HOUR;
 /** A pending opt-in for the same sale and number is not re-texted for this long. */
 const CONFIRMATION_RESEND_COOLDOWN_MS = 10 * 60 * 1000;
 
@@ -70,7 +80,12 @@ const SMS_PENDING_NOTICE =
 //    list, or throttled (no phone-number oracle), and never echoes the number or the stored row.
 //  - phone null or '': clears the number and every consent field ("turn off texts").
 //  - a field that is omitted is left unchanged (it used to be wiped to null on every call).
-//  - email-only subscribing works exactly as before (format validated).
+//  - email (2026-09-30): the typed address is validated but NEVER stored. Reminders and every other email go to the
+//    signed-in account's own address (User.email); a body email that differs from it is ignored, so an account holder
+//    cannot point reminders at a third party. Sending email:null (or '') still turns email reminders off. There is no
+//    guest/anonymous email subscription on this route (it requires a session). Signed-out visitors use POST
+//    /notifications/subscribe-guest (controllers/guestSubscriptionController.ts): a PENDING row plus a confirmation
+//    email (single-use token, 48 hours), and emailReminderService emails a guest row only after it is confirmed.
 export const subscribeToSale = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId, phone, email, smsConsent } = (req.body ?? {}) as {
@@ -110,7 +125,10 @@ export const subscribeToSale = async (req: AuthRequest, res: Response) => {
       } else if (typeof email !== 'string' || email.trim().length > 254 || !EMAIL_FORMAT.test(email.trim())) {
         return res.status(400).json({ message: 'Enter a valid email address.', code: 'INVALID_EMAIL' });
       } else {
-        data.email = email.trim().toLowerCase();
+        // Ignore the typed address: only the account's own verified-at-signup email is ever used.
+        const account = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+        const accountEmail = typeof account?.email === 'string' ? account.email.trim().toLowerCase() : '';
+        data.email = accountEmail && EMAIL_FORMAT.test(accountEmail) ? accountEmail : null;
       }
     }
 
@@ -150,18 +168,24 @@ export const subscribeToSale = async (req: AuthRequest, res: Response) => {
           let blocked = false;
           try {
             blocked = await isPhoneOptedOut(e164);
+            // Per-number caps over ALL sales (no exclusion of the caller's own rows): the confirmation ledger first...
+            if (!blocked) blocked = await isConfirmationThrottled(e164, now);
+            // ...then the pending opt-in rows for the number, which exist before the text is logged.
             if (!blocked) {
-              const recent = await prisma.saleSubscriber.count({
-                where: {
-                  phone: { in: phoneStorageVariants(e164) },
-                  smsConsentPendingAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-                  ...(sameNumber ? { NOT: { id: existing!.id } } : {}),
-                },
-              });
-              blocked = recent >= MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_DAY;
+              const phones = phoneStorageVariants(e164);
+              const [pendingDay, pendingHour] = await Promise.all([
+                prisma.saleSubscriber.count({
+                  where: { phone: { in: phones }, smsConsentPendingAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
+                }),
+                prisma.saleSubscriber.count({
+                  where: { phone: { in: phones }, smsConsentPendingAt: { gte: new Date(now.getTime() - 60 * 60 * 1000) } },
+                }),
+              ]);
+              blocked =
+                pendingDay >= MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_DAY || pendingHour >= MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_HOUR;
             }
           } catch (lookupErr) {
-            console.error('[subscribe] phone pre-check failed, treating as blocked:', (lookupErr as Error)?.message);
+            console.error(`[subscribe] phone pre-check failed, treating as blocked: ${safeErrorForLog(lookupErr)}`);
             blocked = true;
           }
           smsStatus = 'PENDING';
@@ -243,7 +267,7 @@ export const subscribeToSale = async (req: AuthRequest, res: Response) => {
         });
         if (outcome !== 'sent') console.warn(`[subscribe] confirmation text not sent for sale ${saleId}: ${outcome}`);
       } catch (confirmErr) {
-        console.error('[subscribe] confirmation text failed:', (confirmErr as Error)?.message);
+        console.error(`[subscribe] confirmation text failed: ${safeErrorForLog(confirmErr)}`);
       }
     }
 
@@ -258,7 +282,7 @@ export const subscribeToSale = async (req: AuthRequest, res: Response) => {
       // hits the unique index gets the same neutral answer.
       return res.json({ message: SMS_PENDING_NOTICE, smsStatus: 'PENDING', subscription: null });
     }
-    console.error('Error subscribing to sale:', (error as Error)?.message);
+    console.error(`Error subscribing to sale: ${safeErrorForLog(error)}`);
     res.status(500).json({ message: 'Failed to subscribe to sale' });
   }
 };

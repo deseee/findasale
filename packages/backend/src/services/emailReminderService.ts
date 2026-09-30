@@ -100,7 +100,7 @@ const formatSaleDateTime = (date: Date, timeZone?: string): string => {
   });
 };
 
-const getEmailTemplate = (reminder: ReminderEmail, unsubToken: string): { subject: string; html: string } => {
+const getEmailTemplate = (reminder: ReminderEmail, unsubToken: string, unsubUrlOverride?: string): { subject: string; html: string } => {
   // Everything is formatted in the ORGANIZER's timezone (2026-09-29): the server runs in UTC, so a 10:00 AM
   // sale used to be described as "3:00 PM" (or the wrong day) in every reminder email.
   const timeZone = resolveSendTimeZone(reminder.orgTimeZone);
@@ -122,7 +122,7 @@ const getEmailTemplate = (reminder: ReminderEmail, unsubToken: string): { subjec
     ctaUrl:       reminder.saleUrl,
     reminderType: reminder.reminderType,
     dayWord,
-    unsubUrl:     `${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}`,
+    unsubUrl:     unsubUrlOverride ?? `${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/unsubscribe?token=${unsubToken}`,
   });
 
   return { subject, html };
@@ -230,6 +230,56 @@ export const sendReminderEmail = async (reminder: ReminderEmail): Promise<boolea
     }
   } catch (error) {
     console.error(`✗ Failed to generate unsubscribe token for reminder email:`, error);
+    return false;
+  }
+};
+
+/**
+ * Reminder email for a CONFIRMED guest subscriber (2026-09-30, guest double opt-in): a row with no account whose
+ * address confirmed through the single-use link (SaleSubscriber.emailConfirmedAt). Sent on the transactional rail to
+ * the confirmed address, with the stateless opt-out link in the body and the RFC 8058 List-Unsubscribe headers. Same
+ * contract as sendReminderEmail: true = handled (sent, or deliberately skipped because the address is suppressed),
+ * false = failed after retries so the caller releases its claim. Never throws. The caller has already checked
+ * emailConfirmedAt and emailOptOutAt; nothing is sent when no opt-out link can be built.
+ */
+export const sendGuestReminderEmail = async (reminder: Omit<ReminderEmail, 'userId'>): Promise<boolean> => {
+  try {
+    if (await suppressionService.isSuppressed(reminder.to)) {
+      console.log(`[emailReminder] Skipping suppressed guest recipient: ${maskEmail(reminder.to)}`);
+      return true;
+    }
+    const { guestUnsubscribeUrls } = await import('./guestSaleSubscriptionService');
+    const urls = guestUnsubscribeUrls(reminder.to);
+    if (!urls) {
+      console.error('[emailReminder] No HMAC secret configured; refusing to send a guest reminder without an opt-out link.');
+      return false;
+    }
+    const { transactionalEmailService } = await import('../lib/transactionalEmailService');
+    const { subject, html } = getEmailTemplate({ ...reminder, userId: '' }, '', urls.page);
+    try {
+      const outcome = await withRetry(() =>
+        transactionalEmailService.emails.send({
+          to: reminder.to,
+          subject,
+          html,
+          headers: {
+            'List-Unsubscribe': `<${urls.oneClick}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        })
+      );
+      if (!outcome.sent && outcome.reason !== 'suppressed') {
+        console.error(`✗ Guest reminder email to ${maskEmail(reminder.to)} not sent (${outcome.reason ?? 'unknown'})`);
+        return false;
+      }
+      console.log(`✓ Guest reminder email ${outcome.sent ? 'sent' : 'skipped (suppressed)'} to ${maskEmail(reminder.to)} for ${sanitizeHeaderText(reminder.saleName, 80)}`);
+      return true;
+    } catch (error) {
+      console.error(`✗ Failed to send guest reminder email to ${maskEmail(reminder.to)} after retries:`, error);
+      return false;
+    }
+  } catch (error) {
+    console.error('✗ Guest reminder email failed before sending:', error);
     return false;
   }
 };
@@ -457,6 +507,12 @@ const PASS_CONFIG: Record<ReminderKind, ReminderPassConfig> = {
   },
 };
 
+/** The signed-in account's own email for a subscriber row (User.email), lower-cased; null when there is none. */
+const accountEmailOf = (subscriber: { user?: { email?: string | null } | null }): string | null => {
+  const e = subscriber.user?.email;
+  return typeof e === 'string' && e.trim() ? e.trim().toLowerCase() : null;
+};
+
 /**
  * One reminder pass (email + push + SMS) for a kind: every subscriber of every published sale that is due
  * for `kind` at `now` and has not yet been sent it. Returns how many sales were due. Counters go into
@@ -488,7 +544,8 @@ export const processReminderPass = async (
     },
     include: {
       subscribers: {
-        select: { id: true, email: true, phone: true, userId: true, smsConsentAt: true, emailOptOutAt: true },
+        // user.email: reminder emails go to the ACCOUNT's own address, never to SaleSubscriber.email (see below).
+        select: { id: true, email: true, phone: true, userId: true, smsConsentAt: true, emailOptOutAt: true, emailConfirmedAt: true, user: { select: { email: true } } },
       },
       organizer: { select: { id: true, businessName: true, timezone: true, subscriptionTier: true } },
     },
@@ -528,12 +585,35 @@ export const processReminderPass = async (
             if (subscriber.email && subscriber.emailOptOutAt) {
               // The subscriber used the "stop sale reminders" email link: no reminder EMAIL (push still goes).
               bump('skipped_email_opt_out');
+            } else if (subscriber.email && !subscriber.userId && !subscriber.emailConfirmedAt) {
+              // Guest / orphaned row that never completed the double opt-in (no confirmed address): never emailed.
+              // A guest address must never receive a reminder until it has been confirmed through the confirm link.
+              bump('skipped_email_no_account');
             } else if (subscriber.email && !subscriber.userId) {
-              bump('skipped_email_no_account'); // nothing to hang an unsubscribe link on
+              // CONFIRMED guest row (double opt-in, 2026-09-30): the address the owner confirmed, with an opt-out link.
+              try {
+                emailOk = await sendGuestReminderEmail({
+                  to: String(subscriber.email).trim().toLowerCase(),
+                  saleName: sale.title,
+                  saleAddress,
+                  startDate: sale.startDate,
+                  saleUrl,
+                  reminderType: cfg.reminderType,
+                  orgTimeZone,
+                  now: clock(),
+                });
+              } catch (emailErr) {
+                console.error('[emailReminder] sendGuestReminderEmail threw:', emailErr);
+                emailOk = false;
+              }
+            } else if (subscriber.email && !accountEmailOf(subscriber)) {
+              bump('skipped_email_no_account'); // account has no email on file: nothing to send to
             } else if (subscriber.email) {
               try {
                 emailOk = await sendReminderEmail({
-                  to: subscriber.email,
+                  // The account's own address, NOT subscriber.email: that column is only an "email me" flag, so a
+                  // stored third-party address (older rows, or any future writer) can never receive a reminder.
+                  to: accountEmailOf(subscriber) as string,
                   userId: subscriber.userId ?? '',
                   saleName: sale.title,
                   saleAddress,
@@ -556,7 +636,7 @@ export const processReminderPass = async (
               await recordFailedAttempt(subscriber.id, sale.id, kind, failures + 1);
             } else {
               // A suppressed address is "handled" (never retried) and counted here too.
-              if (subscriber.email && !subscriber.emailOptOutAt && subscriber.userId) bump('email_handled');
+              if (subscriber.email && !subscriber.emailOptOutAt && (subscriber.userId || subscriber.emailConfirmedAt)) bump('email_handled');
               if (subscriber.userId) {
                 // Push errors never release the claim (the email may already be out).
                 try {
