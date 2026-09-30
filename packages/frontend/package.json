@@ -8,6 +8,7 @@
     "postbuild": "next-sitemap && node scripts/include-500-in-server-trace.js",
     "start": "next start",
     "lint": "next lint",
+    "test": "tsx --test lib/__tests__/*.test.ts",
     "data:cities": "tsx scripts/generate-us-cities.ts",
     "data:seo": "tsx scripts/generate-seo-index.ts"
   },

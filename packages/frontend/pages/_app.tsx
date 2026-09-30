@@ -396,6 +396,31 @@ function RateLimitListener() {
 }
 
 /**
+ * Auth notices raised by the api.ts interceptor (2026-09-30): a temporary session-refresh problem (the user is NOT
+ * logged out) and a suspended account.
+ */
+function AuthNoticeListener() {
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    const onTemporary = (event: Event) => {
+      showToast((event as CustomEvent).detail?.message || 'We could not refresh your session just now. Please try again in a moment.', 'warning');
+    };
+    const onSuspended = (event: Event) => {
+      showToast((event as CustomEvent).detail?.message || 'Your account is suspended. Contact support@finda.sale.', 'error');
+    };
+    window.addEventListener('authTemporaryError', onTemporary);
+    window.addEventListener('accountSuspended', onSuspended);
+    return () => {
+      window.removeEventListener('authTemporaryError', onTemporary);
+      window.removeEventListener('accountSuspended', onSuspended);
+    };
+  }, [showToast]);
+
+  return null;
+}
+
+/**
  * #18: Capture and record UTM parameters on page load
  * Fires a silent pixel call to record social link clicks
  *
@@ -575,6 +600,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <NudgeBar />
               {/* Bug #6: Rate limit toast listener */}
               <RateLimitListener />
+              <AuthNoticeListener />
               {/* Feature #20: Proactive Degradation Mode */}
               <DegradationMonitor />
               <DegradationBanner />

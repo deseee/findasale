@@ -270,7 +270,20 @@ const RegisterPage = () => {
       if (formData.role === 'USER') {
         payload.consentShopper = shopperEmailConsent;
       }
-      const response = await api.post('/auth/register', payload);
+      await api.post('/auth/register', payload);
+
+      // 2026-09-30 (enumeration): POST /auth/register now answers every valid sign-up, new address or already
+      // registered, with the same 201 { message } and NO session, so it no longer says whether an account existed.
+      // Sign the new user in with the credentials they just submitted, exactly as the register response used to
+      // (same { user, token } shape). If that fails (the address already belongs to someone else, or sign-in is
+      // otherwise unavailable) show the generic "check your email" message and send them to the login page.
+      let response: { data: { token: string; user: any } };
+      try {
+        response = await api.post('/auth/login', { email: formData.email, password: formData.password });
+      } catch (_signInErr) {
+        router.push('/login?message=' + encodeURIComponent('Check your email to finish signing up, then sign in.'));
+        return;
+      }
 
       // Store token in context and localStorage
       login(response.data.token);

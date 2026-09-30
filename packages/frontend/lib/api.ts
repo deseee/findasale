@@ -1,4 +1,12 @@
 import axios from 'axios';
+import {
+  AUTH_COPY,
+  TransientRefreshError,
+  classifyApiError,
+  classifyRefreshError,
+  createSingleFlight,
+  refreshWithTransientRetry,
+} from './authRefresh';
 
 // EPN review fix: lightweight client-side marker indicating a user has logged in
 // on this browser. Used by the 401 interceptor to distinguish "expired session"
@@ -56,6 +64,63 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// ---- Session refresh plumbing (2026-09-30) ---------------------------------------------------------------------
+// The backend rotates the refresh token on every POST /auth/refresh and treats a replayed token as theft, so the
+// refresh call must be SINGLE-FLIGHT: when several requests 401 at once (a page load fires many), they all wait on
+// ONE refresh and then each retries with the new cookie. A transient refresh failure (503 or no response) is retried
+// once after 1 second and, if it still fails, the user keeps their session and sees a temporary-error toast instead
+// of being logged out.
+const refreshSessionOnce = createSingleFlight(() =>
+  refreshWithTransientRetry(() => api.post('/auth/refresh'))
+);
+
+let lastTemporaryErrorAt = 0;
+const notifyTemporaryAuthError = (): void => {
+  if (typeof window === 'undefined') return;
+  const now = Date.now();
+  if (now - lastTemporaryErrorAt < 10000) return; // one toast per burst
+  lastTemporaryErrorAt = now;
+  window.dispatchEvent(new CustomEvent('authTemporaryError', { detail: { message: AUTH_COPY.temporaryError } }));
+};
+
+let suspendedToastShown = false;
+let suspendedRedirecting = false;
+// A suspended account gets a clear message. A background read (GET) only raises the toast once, so a suspended user can
+// still look at public pages; a user ACTION (POST, PUT, PATCH, DELETE) also sends them to the suspended-account page.
+// Nothing here can loop: the page itself is never redirected away from, and each step happens at most once per load.
+const handleAccountSuspended = (data: any, method: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem('fas_account_suspended', JSON.stringify({ reason: data?.reason ?? null, at: Date.now() }));
+  } catch { /* storage blocked */ }
+  const onSuspendedPage = window.location.pathname.startsWith('/account-suspended');
+  if (!suspendedToastShown && !onSuspendedPage) {
+    suspendedToastShown = true;
+    window.dispatchEvent(new CustomEvent('accountSuspended', { detail: { message: AUTH_COPY.suspendedTitle + '. Contact support@finda.sale.' } }));
+  }
+  const isUserAction = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase());
+  if (isUserAction && !onSuspendedPage && !suspendedRedirecting) {
+    suspendedRedirecting = true;
+    window.location.assign('/account-suspended');
+  }
+};
+
+let deletedHandled = false;
+// A removed account: end the session cleanly (server cookies, browser marker, cart) and explain on the login page.
+const handleAccountDeleted = async (): Promise<void> => {
+  if (typeof window === 'undefined' || deletedHandled) return;
+  deletedHandled = true;
+  clearSessionMarker();
+  try { localStorage.removeItem('fas_shopper_cart'); } catch { /* storage blocked */ }
+  try {
+    // Plain axios (not `api`) so this cannot re-enter the interceptor below.
+    await axios.post('/api/auth/logout', undefined, { withCredentials: true });
+  } catch { /* best effort: the server already refuses this account */ }
+  if (!window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login?' + new URLSearchParams({ message: AUTH_COPY.deletedMessage }).toString();
+  }
+};
+
 // Add a response interceptor to handle auth errors and surface Zod validation messages
 api.interceptors.response.use(
   (response) => response,
@@ -65,6 +130,18 @@ api.interceptors.response.use(
     // P0 Security Fix: Auto-refresh expired access token using refresh token
     // Guard: never retry the refresh endpoint itself — prevents infinite 401 loops
     if (originalRequest.url?.includes('/auth/refresh')) {
+      return Promise.reject(error);
+    }
+
+    // Account state codes from the backend (2026-09-30): a suspended account and a removed account are not an expired
+    // session, so neither is sent through the refresh-and-redirect path below.
+    const apiKind = classifyApiError(error);
+    if (apiKind === 'ACCOUNT_SUSPENDED') {
+      handleAccountSuspended(error.response?.data, String(originalRequest.method || 'get'));
+      return Promise.reject(error);
+    }
+    if (apiKind === 'ACCOUNT_DELETED') {
+      await handleAccountDeleted();
       return Promise.reject(error);
     }
 
@@ -86,11 +163,28 @@ api.interceptors.response.use(
 
       originalRequest._retry = true;
       try {
-        // Call the refresh endpoint to get a new access token
-        await api.post('/auth/refresh');
+        // Call the refresh endpoint to get a new access token (single-flight: concurrent 401s share ONE call)
+        await refreshSessionOnce();
         // Retry the original request with the new cookie
         return api(originalRequest);
       } catch (refreshError) {
+        const refreshKind = refreshError instanceof TransientRefreshError ? 'TRANSIENT' : classifyRefreshError(refreshError as any);
+        if (refreshKind === 'TRANSIENT') {
+          // The server had a hiccup (refresh answered 503 twice, or the network dropped). The session is NOT proven
+          // dead and the server kept the cookies, so keep the marker, do not redirect, and tell the user.
+          notifyTemporaryAuthError();
+          return Promise.reject(error);
+        }
+        if (refreshKind === 'ACCOUNT_DELETED') {
+          await handleAccountDeleted();
+          return Promise.reject(refreshError);
+        }
+        if (refreshKind === 'ACCOUNT_SUSPENDED') {
+          // The server ended this session (cookies cleared). Explain instead of a silent redirect to login.
+          clearSessionMarker();
+          handleAccountSuspended((refreshError as any)?.response?.data, 'POST');
+          return Promise.reject(refreshError);
+        }
         // Refresh failed — session is genuinely dead. Clear the marker so subsequent
         // 401s on public pages don't re-trigger refresh/redirect, then send to login
         // (skip if already on login to prevent reload loop).
@@ -104,7 +198,7 @@ api.interceptors.response.use(
           // login.tsx already renders (Roadmap #422) rather than inventing a new mechanism. Kept
           // generic since this interceptor has no way to know WHY tokenVersion changed.
           const params = new URLSearchParams({
-            message: 'Your session ended. Please log back in to continue. (This can happen right after your account is upgraded.)',
+            message: AUTH_COPY.sessionEnded,
           });
           window.location.href = '/login?' + params.toString();
         }

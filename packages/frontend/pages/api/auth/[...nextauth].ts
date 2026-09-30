@@ -25,11 +25,16 @@
  *   NEXTAUTH_SECRET, NEXTAUTH_URL=https://finda.sale
  *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
  *   FACEBOOK_CLIENT_ID, FACEBOOK_CLIENT_SECRET
+ *
+ * Optional (recommended): OAUTH_BRIDGE_SECRET. When set, the session callback below signs the provider profile
+ * (HMAC) on the server and the browser forwards the signature as `oauthAssertion` to /auth/oauth. The secret never
+ * leaves the server. Set it on Vercel FIRST, then on Railway to enforce (see lib/oauthAssertion.ts).
  */
 
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import FacebookProvider from 'next-auth/providers/facebook';
+import { maybeSignOAuthAssertion } from '../../../lib/oauthAssertion';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -60,12 +65,21 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (token.oauthPending) {
-        (session as any).oauthProfile = {
+        const profile: Record<string, unknown> = {
           provider:   token.oauthProvider,
           providerId: token.oauthProviderId,
           email:      token.oauthEmail,
           name:       token.oauthName,
         };
+        // Server-side HMAC over provider + providerId + email (see lib/oauthAssertion.ts). Signed here, not in
+        // the browser, so OAUTH_BRIDGE_SECRET never reaches the client. Omitted while the secret is unset.
+        const oauthAssertion = maybeSignOAuthAssertion({
+          provider:   String(token.oauthProvider ?? ''),
+          providerId: String(token.oauthProviderId ?? ''),
+          email:      (token.oauthEmail as string | null | undefined) ?? null,
+        });
+        if (oauthAssertion) profile.oauthAssertion = oauthAssertion;
+        (session as any).oauthProfile = profile;
       }
       return session;
     },
