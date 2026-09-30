@@ -25,8 +25,9 @@ describe('getCollectorLeague', () => {
     process.env.JWT_SECRET = 'test-secret';
     mockUserFindMany.mockReset();
     mockUserFindMany.mockResolvedValue([
-      { id: 'u-alice-real-id', name: 'Alice Anderson', explorerRank: 'SAGE', guildXp: 6000, huntPassActive: true },
-      { id: 'u-bob-real-id', name: 'Bob Brown', explorerRank: 'SCOUT', guildXp: 700, huntPassActive: true },
+      { id: 'u-alice-real-id', name: 'Alice Anderson', explorerRank: 'SAGE', guildXp: 6000, huntPassActive: true, notificationPrefs: { showNameInGoingList: true } },
+      { id: 'u-bob-real-id', name: 'Bob Brown', explorerRank: 'SCOUT', guildXp: 700, huntPassActive: true }, // did not opt in to a public name
+      { id: 'u-eve-real-id', name: 'eve@example.com', explorerRank: 'SCOUT', guildXp: 600, huntPassActive: true, notificationPrefs: { showNameInGoingList: true } }, // account name is an email address
     ]);
   });
 
@@ -49,7 +50,9 @@ describe('getCollectorLeague', () => {
       isCurrentUser: false,
     });
     expect(rows[1].isCurrentUser).toBe(true);
-    expect(rows[1].name).toBe('Bob B.');
+    expect(rows[1].name).toBe('Explorer'); // not opted in: no name at all
+    expect(text).not.toContain('eve@example.com'); // an email-address name never surfaces, opted in or not
+    expect(rows[2].name).toBe('Explorer');
   });
 
   it('flags nobody when the request has no user', async () => {

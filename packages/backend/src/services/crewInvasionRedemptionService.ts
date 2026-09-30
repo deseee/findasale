@@ -11,7 +11,12 @@ import { prisma } from '../lib/prisma';
  * RULES (locked with the spec, see crewInvasionService.ts header):
  *   - 10% (CrewInvasionCode.discountPct) off the shopper's HELD ITEMS at that sale only.
  *   - The code belongs to a crew + sale pair; the shopper must currently be a member of that
- *     crew. The code must be unexpired, unused, and the sale must still have Crew Invasion on.
+ *     crew AND must have joined it BEFORE the invasion qualified (CrewMember.joinedAt earlier than
+ *     CrewInvasionCode.createdAt, which is the qualification moment). Joining after the discount
+ *     unlocked, or being added by a founder to pick it up, earns nothing; the same rule is enforced on
+ *     the "is there a code waiting" lookup and on an explicit code (both go through
+ *     joinedBeforeInvasion). The code must be unexpired, unused, and the sale must still have Crew
+ *     Invasion on.
  *   - Prices are computed server-side from Item.price. Nothing here trusts a client amount.
  *   - The discount is applied BEFORE the platform fee is computed by the caller, so the fee
  *     is charged on the discounted price (the caller passes the discounted total into
@@ -49,6 +54,7 @@ export type CrewCodeRejection =
   | 'CREW_CODE_INVALID'
   | 'CREW_CODE_WRONG_SALE'
   | 'CREW_CODE_NOT_YOURS'
+  | 'CREW_CODE_LATE_JOINER'
   | 'CREW_CODE_EXPIRED'
   | 'CREW_CODE_USED'
   | 'CREW_CODE_DISABLED';
@@ -57,6 +63,7 @@ const REJECTION_MESSAGES: Record<CrewCodeRejection, string> = {
   CREW_CODE_INVALID: 'That crew discount code was not found.',
   CREW_CODE_WRONG_SALE: 'That crew discount code is for a different sale.',
   CREW_CODE_NOT_YOURS: 'That crew discount code belongs to a different crew.',
+  CREW_CODE_LATE_JOINER: 'That crew discount was unlocked before you joined the crew, so it does not apply to you.',
   CREW_CODE_EXPIRED: 'That crew discount code has expired.',
   CREW_CODE_USED: 'You have already used that crew discount code.',
   CREW_CODE_DISABLED: 'Crew Invasion is no longer active for this sale.',
@@ -118,7 +125,18 @@ export function computeCrewInvasionDiscountCents(params: {
   return Math.min(topUp, roomAboveFloor);
 }
 
-/** The shopper's currently redeemable code for a sale (unexpired, not yet used BY THIS SHOPPER), or null. */
+/**
+ * True only when the member joined the crew strictly BEFORE the invasion qualified (code created). A missing or
+ * unreadable timestamp on either side fails closed (no discount).
+ */
+export function joinedBeforeInvasion(joinedAt: Date | string | null | undefined, invasionQualifiedAt: Date | string | null | undefined): boolean {
+  if (!joinedAt || !invasionQualifiedAt) return false;
+  const j = new Date(joinedAt).getTime();
+  const q = new Date(invasionQualifiedAt).getTime();
+  return Number.isFinite(j) && Number.isFinite(q) && j < q;
+}
+
+/** The shopper's currently redeemable code for a sale (unexpired, not yet used BY THIS SHOPPER, joined before it unlocked), or null. */
 export async function findRedeemableCrewInvasionCode(params: {
   saleId: string;
   shopperUserId: string;
@@ -128,10 +146,11 @@ export async function findRedeemableCrewInvasionCode(params: {
   const now = params.now ?? new Date();
   const memberships = await prisma.crewMember.findMany({
     where: { userId: shopperUserId },
-    select: { crewId: true },
+    select: { crewId: true, joinedAt: true },
   });
   if (memberships.length === 0) return null;
-  const row = await prisma.crewInvasionCode.findFirst({
+  const joinedAtByCrew = new Map<string, Date>(memberships.map((m: { crewId: string; joinedAt: Date }) => [m.crewId, m.joinedAt] as [string, Date]));
+  const candidates = await prisma.crewInvasionCode.findMany({
     where: {
       saleId,
       crewId: { in: memberships.map((m: { crewId: string }) => m.crewId) },
@@ -142,9 +161,11 @@ export async function findRedeemableCrewInvasionCode(params: {
       redemptions: { none: { userId: shopperUserId, activeKey: { not: null } } },
     },
     orderBy: { expiresAt: 'asc' },
-    select: { id: true, code: true, discountPct: true },
+    select: { id: true, code: true, discountPct: true, crewId: true, createdAt: true },
   });
-  return row ?? null;
+  // Late-joiner rule: the discount belongs to members who were in the crew when the invasion qualified.
+  const row = candidates.find((c: { crewId: string; createdAt: Date }) => joinedBeforeInvasion(joinedAtByCrew.get(c.crewId), c.createdAt));
+  return row ? { id: row.id, code: row.code, discountPct: row.discountPct } : null;
 }
 
 /**
@@ -174,6 +195,7 @@ export async function validateCrewInvasionCode(params: {
       discountPct: true,
       saleId: true,
       crewId: true,
+      createdAt: true,
       expiresAt: true,
       sale: { select: { crewInvasionEnabled: true } },
     },
@@ -183,9 +205,11 @@ export async function validateCrewInvasionCode(params: {
 
   const membership = await prisma.crewMember.findFirst({
     where: { crewId: row.crewId, userId: params.shopperUserId },
-    select: { id: true },
+    select: { id: true, joinedAt: true },
   });
   if (!membership) return reject('CREW_CODE_NOT_YOURS');
+  // Same late-joiner rule as findRedeemableCrewInvasionCode: joined after the invasion qualified => no discount.
+  if (!joinedBeforeInvasion(membership.joinedAt, row.createdAt)) return reject('CREW_CODE_LATE_JOINER');
   // Per member: only THIS shopper's own live/paid redemption blocks the code.
   const alreadyRedeemed = await prisma.crewInvasionRedemption.findFirst({
     where: { codeId: row.id, userId: params.shopperUserId, activeKey: { not: null } },

@@ -16,7 +16,7 @@ import {
   buildSquareIdempotencyKey,
   createSquareCharge,
 } from '../services/squarePaymentService'; // Square migration Wave S2 #1 (2026-09-09): additive Square branch, see completeBountyPurchase
-import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
+import { applyCashDebtToAppFee, settleCashDebtCollection, releaseCashDebtClaim } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
 import { assertSaleCanAcceptPayment } from '../services/paymentEligibilityService'; // BUG FIX (2026-09-09, findasale-dev BUG MODE): completeBountyPurchase's Stripe branch was skipping this shared sale-status / Stripe-Connect-onboarding gate that createPaymentIntent/createCartCheckoutSession (stripeController.ts) already enforce (2026-08-27 carding incident). Stripe-specific fields -- used ONLY in the Stripe branch below. Square eligibility is governed separately (organizerHasSquare + resolveOrganizerSquareAccessToken), so this must not run for Square-onboarded organizers who have no live Stripe Connect account at all.
 import { assertSaleCanAcceptSquarePayment } from '../services/squarePaymentEligibilityService'; // BUG FIX (2026-09-13, findasale-dev + findasale-hacker re-investigation of the Blocked Queue's two 'Bounty purchase (Stripe path)' rows, Session Added 2026-09-09): those rows described completeBountyPurchase skipping the sale-status/payments-held eligibility gate the generic checkout endpoints enforce. By the time of this re-investigation the Stripe branch itself was already dead (see the 2026-09-12 Stripe-removal comment further down, which replaced it with an unconditional throw) -- but the SAME gap was found live in the Square branch below, the only processor path real shoppers can actually reach today. This is the Square-flavored sibling of assertSaleCanAcceptPayment above (squarePaymentEligibilityService.ts's own header explains why it's a separate function, not a shared/parameterized one) -- same call shape squarePaymentController.ts's createSquarePayment already uses.
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 collusion/wash-trade guard -- BUG FIX (2026-09-09): was missing from BOTH processor branches here. Identity-based (buyer vs. organizer fingerprints), not Stripe-specific, so added once, shared, before the Square/Stripe branch split.
@@ -998,19 +998,27 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
         saleAmountCents: priceCents,
       });
 
-      const chargeResult = await createSquareCharge({
-        organizerAccessToken,
-        idempotencyKey,
-        sourceId,
-        amountCents: priceCents,
-        appFeeCents: squareAppFeeCents,
-        locationId: squareLocationId,
-        referenceId: submission.itemId,
-        note: submission.item.title ? submission.item.title.slice(0, 80) : undefined,
-        verificationToken: typeof verificationToken === 'string' ? verificationToken : undefined,
-      });
+      // applyCashDebtToAppFee CLAIMED squareDebtAppliedCents above (2026-09-30): give it back if the charge never happens.
+      let chargeResult: Awaited<ReturnType<typeof createSquareCharge>>;
+      try {
+        chargeResult = await createSquareCharge({
+          organizerAccessToken,
+          idempotencyKey,
+          sourceId,
+          amountCents: priceCents,
+          appFeeCents: squareAppFeeCents,
+          locationId: squareLocationId,
+          referenceId: submission.itemId,
+          note: submission.item.title ? submission.item.title.slice(0, 80) : undefined,
+          verificationToken: typeof verificationToken === 'string' ? verificationToken : undefined,
+        });
+      } catch (chargeErr) {
+        await releaseCashDebtClaim({ organizerId: submission.item.sale!.organizerId, debtAppliedCents: squareDebtAppliedCents });
+        throw chargeErr;
+      }
 
       if (!chargeResult.ok) {
+        await releaseCashDebtClaim({ organizerId: submission.item.sale!.organizerId, debtAppliedCents: squareDebtAppliedCents });
         return res.status(402).json({ message: chargeResult.message, code: 'SQUARE_PAYMENT_DECLINED' });
       }
 

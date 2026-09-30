@@ -41,19 +41,31 @@ const makeRes = () => {
   return res;
 };
 
-describe('toPublicName', () => {
-  it('returns first name plus last initial', () => {
-    expect(toPublicName('Jane Doe')).toBe('Jane D.');
-    expect(toPublicName('  jane   van der berg ')).toBe('jane B.');
-    expect(toPublicName('Ana maria lopez')).toBe('Ana L.');
+describe('toPublicName (opted-in members only; one shared policy with crews and the Collector\'s League)', () => {
+  const OPTED_IN = { showNameInGoingList: true };
+  it('returns first name plus last initial for an opted-in member', () => {
+    expect(toPublicName('Jane Doe', OPTED_IN)).toBe('Jane D.');
+    expect(toPublicName('  jane   van der berg ', OPTED_IN)).toBe('jane B.');
+    expect(toPublicName('Ana maria lopez', OPTED_IN)).toBe('Ana L.');
   });
   it('keeps single names and handles missing names', () => {
-    expect(toPublicName('Prince')).toBe('Prince');
-    expect(toPublicName(null)).toBe('Explorer');
-    expect(toPublicName('   ')).toBe('Explorer');
+    expect(toPublicName('Prince', OPTED_IN)).toBe('Prince');
+    expect(toPublicName(null, OPTED_IN)).toBe('Explorer');
+    expect(toPublicName('   ', OPTED_IN)).toBe('Explorer');
   });
   it('is idempotent', () => {
-    expect(toPublicName('Jane D.')).toBe('Jane D.');
+    expect(toPublicName('Jane D.', OPTED_IN)).toBe('Jane D.');
+  });
+  it('never shows a name for a member who did not opt in (missing, false or non-boolean prefs)', () => {
+    expect(toPublicName('Jane Doe')).toBe('Explorer');
+    expect(toPublicName('Jane Doe', null)).toBe('Explorer');
+    expect(toPublicName('Jane Doe', {})).toBe('Explorer');
+    expect(toPublicName('Jane Doe', { showNameInGoingList: false })).toBe('Explorer');
+    expect(toPublicName('Jane Doe', { showNameInGoingList: 'true' })).toBe('Explorer');
+  });
+  it('never shows an email address, even for an opted-in member whose account name is their email', () => {
+    expect(toPublicName('jane.doe@example.com', OPTED_IN)).toBe('Explorer');
+    expect(toPublicName('Jane jane@example.com', OPTED_IN)).toBe('Explorer');
   });
 });
 
@@ -98,7 +110,7 @@ describe('getHallOfFame', () => {
     mockUserFindMany
       .mockResolvedValueOnce([
         {
-          id: 'u_public', name: 'Jane Doe', profileSlug: 'jane', guildXp: 15000, explorerRank: 'GRANDMASTER',
+          id: 'u_public', name: 'Jane Doe', profileSlug: 'jane', guildXp: 15000, explorerRank: 'GRANDMASTER', notificationPrefs: { showNameInGoingList: true },
           rankUpHistory: [{ rank: 'GRANDMASTER', timestamp: '2026-05-01T00:00:00.000Z', xpAtTime: 12000 }],
           createdAt: new Date('2024-01-01T00:00:00Z'),
         },
@@ -118,7 +130,7 @@ describe('getHallOfFame', () => {
     expect(res.statusCode).toBe(200);
     const [gm1, gm2] = res.body.allTimeGrandmasters;
     expect(gm1).toMatchObject({ rank: 1, userId: 'u_public', name: 'Jane D.', profileSlug: 'jane', profilePublic: true, explorerRank: 'GRANDMASTER', achievedAt: '2026-05-01T00:00:00.000Z' });
-    expect(gm2).toMatchObject({ rank: 2, name: 'Sam R.', profileSlug: null, profilePublic: false, explorerRank: 'GRANDMASTER', achievedAt: null });
+    expect(gm2).toMatchObject({ rank: 2, name: 'Explorer', profileSlug: null, profilePublic: false, explorerRank: 'GRANDMASTER', achievedAt: null });
     expect(gm2.userId).not.toBe('u_private');
     expect(gm2.userId.startsWith('hof_')).toBe(true);
 
@@ -176,8 +188,8 @@ describe('getHallOfFame seasonal board (season XP earned)', () => {
       .mockResolvedValueOnce([]) // grandmasters
       .mockResolvedValueOnce([
         // returned in a different order than the ledger on purpose
-        { id: 'u_high_lifetime', name: 'Big Lifetime', profileSlug: null, guildXp: 50000, explorerRank: 'GRANDMASTER' },
-        { id: 'u_low_lifetime', name: 'Fresh Sage', profileSlug: null, guildXp: 5200, explorerRank: 'SAGE' },
+        { id: 'u_high_lifetime', name: 'Big Lifetime', profileSlug: null, guildXp: 50000, explorerRank: 'GRANDMASTER', notificationPrefs: { showNameInGoingList: true } },
+        { id: 'u_low_lifetime', name: 'Fresh Sage', profileSlug: null, guildXp: 5200, explorerRank: 'SAGE', notificationPrefs: { showNameInGoingList: true } },
       ]);
     const res = makeRes();
     await getHallOfFame({} as any, res);

@@ -16,6 +16,7 @@
 
 import { Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { issueRefreshToken } from '../services/refreshTokenService';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import {
@@ -580,7 +581,8 @@ export const convertScanToListing = async (req: AuthRequest, res: Response): Pro
         { expiresIn: '1h' }
       );
 
-      const refreshToken = jwt.sign(
+      // 2026-09-30: rotation family row + jti (services/refreshTokenService.ts)
+      const refreshToken = await issueRefreshToken(
         {
           id: updatedUser.id,
           email: updatedUser.email,
@@ -590,8 +592,7 @@ export const convertScanToListing = async (req: AuthRequest, res: Response): Pro
           tokenVersion: updatedUser.tokenVersion,
           organizerTokenVersion: organizer?.tokenVersion ?? 0,
         },
-        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-        { expiresIn: '30d' }
+        { req }
       );
 
       res.cookie('accessToken', accessToken, {

@@ -19,6 +19,7 @@ var mockPrisma: any = {
   crewMember: { findMany: jest.fn(), findFirst: jest.fn() },
   crewInvasionCode: {
     findFirst: jest.fn(),
+    findMany: jest.fn(),
     findUnique: jest.fn(),
   },
   crewInvasionRedemption: {
@@ -41,10 +42,16 @@ import {
   countCrewDiscountEligibleShoppers,
   applyCrewInvasionDiscount,
   crewRedemptionActiveKey,
+  joinedBeforeInvasion,
 } from '../services/crewInvasionRedemptionService';
 
 const FUTURE = () => new Date(Date.now() + 30 * 60 * 1000);
 const PAST = () => new Date(Date.now() - 60 * 1000);
+// Late-joiner rule fixtures: the code (invasion qualification) was created at QUALIFIED; members who joined
+// EARLY are in, members who joined LATE are not.
+const QUALIFIED = new Date('2026-09-29T10:00:00Z');
+const JOINED_EARLY = new Date('2026-09-29T09:00:00Z');
+const JOINED_LATE = new Date('2026-09-29T11:00:00Z');
 
 function matches(row: any, where: any): boolean {
   return Object.keys(where).every((k) => {
@@ -61,6 +68,7 @@ beforeEach(() => {
   mockPrisma.crewMember.findMany.mockReset();
   mockPrisma.crewMember.findFirst.mockReset();
   mockPrisma.crewInvasionCode.findFirst.mockReset();
+  mockPrisma.crewInvasionCode.findMany.mockReset();
   mockPrisma.crewInvasionCode.findUnique.mockReset();
   mockPrisma.crewInvasionRedemption.findFirst.mockReset();
   mockPrisma.crewInvasionRedemption.createMany.mockReset();
@@ -126,16 +134,16 @@ describe('findRedeemableCrewInvasionCode', () => {
     mockPrisma.crewMember.findMany.mockResolvedValue([]);
     const res = await findRedeemableCrewInvasionCode({ saleId: 'sale-1', shopperUserId: 'u1' });
     expect(res).toBeNull();
-    expect(mockPrisma.crewInvasionCode.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.crewInvasionCode.findMany).not.toHaveBeenCalled();
   });
 
   it('looks for an unexpired code for this sale in the shopper\'s crews that THIS shopper has not redeemed, sale still opted in', async () => {
-    mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1' }, { crewId: 'c2' }]);
-    mockPrisma.crewInvasionCode.findFirst.mockResolvedValue({ id: 'code-1', code: 'CREW10-AAAA', discountPct: 10 });
+    mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1', joinedAt: JOINED_EARLY }, { crewId: 'c2', joinedAt: JOINED_EARLY }]);
+    mockPrisma.crewInvasionCode.findMany.mockResolvedValue([{ id: 'code-1', code: 'CREW10-AAAA', discountPct: 10, crewId: 'c1', createdAt: QUALIFIED }]);
     const now = new Date('2026-09-29T12:00:00Z');
     const res = await findRedeemableCrewInvasionCode({ saleId: 'sale-1', shopperUserId: 'u1', now });
     expect(res).toEqual({ id: 'code-1', code: 'CREW10-AAAA', discountPct: 10 });
-    const where = mockPrisma.crewInvasionCode.findFirst.mock.calls[0][0].where;
+    const where = mockPrisma.crewInvasionCode.findMany.mock.calls[0][0].where;
     expect(where.saleId).toBe('sale-1');
     expect(where.crewId).toEqual({ in: ['c1', 'c2'] });
     expect(where.expiresAt).toEqual({ gt: now });
@@ -146,22 +154,54 @@ describe('findRedeemableCrewInvasionCode', () => {
   });
 
   it('returns null when nothing matches', async () => {
-    mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1' }]);
-    mockPrisma.crewInvasionCode.findFirst.mockResolvedValue(null);
+    mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1', joinedAt: JOINED_EARLY }]);
+    mockPrisma.crewInvasionCode.findMany.mockResolvedValue([]);
     expect(await findRedeemableCrewInvasionCode({ saleId: 'sale-1', shopperUserId: 'u1' })).toBeNull();
+  });
+
+  it('LATE JOINER: a member who joined the crew after the invasion qualified gets no code', async () => {
+    mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1', joinedAt: JOINED_LATE }]);
+    mockPrisma.crewInvasionCode.findMany.mockResolvedValue([{ id: 'code-1', code: 'CREW10-AAAA', discountPct: 10, crewId: 'c1', createdAt: QUALIFIED }]);
+    expect(await findRedeemableCrewInvasionCode({ saleId: 'sale-1', shopperUserId: 'late' })).toBeNull();
+  });
+
+  it('a member of two crews gets the code of the crew they joined BEFORE it qualified, not the one they joined late', async () => {
+    mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1', joinedAt: JOINED_LATE }, { crewId: 'c2', joinedAt: JOINED_EARLY }]);
+    mockPrisma.crewInvasionCode.findMany.mockResolvedValue([
+      { id: 'code-1', code: 'CREW10-AAAA', discountPct: 10, crewId: 'c1', createdAt: QUALIFIED },
+      { id: 'code-2', code: 'CREW10-BBBB', discountPct: 10, crewId: 'c2', createdAt: QUALIFIED },
+    ]);
+    const res = await findRedeemableCrewInvasionCode({ saleId: 'sale-1', shopperUserId: 'u1' });
+    expect(res?.id).toBe('code-2');
+  });
+});
+
+describe('joinedBeforeInvasion (late-joiner rule)', () => {
+  it('is true only when joinedAt is strictly earlier than the qualification moment', () => {
+    expect(joinedBeforeInvasion(JOINED_EARLY, QUALIFIED)).toBe(true);
+    expect(joinedBeforeInvasion(JOINED_LATE, QUALIFIED)).toBe(false);
+    expect(joinedBeforeInvasion(QUALIFIED, QUALIFIED)).toBe(false);
+  });
+
+  it('accepts ISO strings and fails closed on missing or unreadable timestamps', () => {
+    expect(joinedBeforeInvasion(JOINED_EARLY.toISOString(), QUALIFIED.toISOString())).toBe(true);
+    expect(joinedBeforeInvasion(null, QUALIFIED)).toBe(false);
+    expect(joinedBeforeInvasion(JOINED_EARLY, undefined)).toBe(false);
+    expect(joinedBeforeInvasion('not a date', QUALIFIED)).toBe(false);
   });
 });
 
 describe('validateCrewInvasionCode (explicit code -> clear 400 reasons)', () => {
   const baseRow = () => ({
     id: 'code-1', code: 'CREW10-AAAA', discountPct: 10, saleId: 'sale-1', crewId: 'c1',
-    usedAt: null, expiresAt: FUTURE(), sale: { crewInvasionEnabled: true },
+    usedAt: null, expiresAt: FUTURE(), sale: { crewInvasionEnabled: true }, createdAt: QUALIFIED,
   });
+  const early = { id: 'm1', joinedAt: JOINED_EARLY };
   const run = (userId = 'u1') => validateCrewInvasionCode({ codeText: ' crew10-aaaa ', saleId: 'sale-1', shopperUserId: userId });
 
   it('accepts a valid code (trimmed, case-insensitive)', async () => {
     mockPrisma.crewInvasionCode.findUnique.mockResolvedValue(baseRow());
-    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm1' });
+    mockPrisma.crewMember.findFirst.mockResolvedValue(early);
     const res: any = await run();
     expect(res.ok).toBe(true);
     expect(mockPrisma.crewInvasionCode.findUnique.mock.calls[0][0].where).toEqual({ code: 'CREW10-AAAA' });
@@ -197,9 +237,19 @@ describe('validateCrewInvasionCode (explicit code -> clear 400 reasons)', () => 
     expect(res.rejection.code).toBe('CREW_CODE_NOT_YOURS');
   });
 
+  it('rejects a LATE JOINER (joined the crew after the invasion qualified) with CREW_CODE_LATE_JOINER', async () => {
+    mockPrisma.crewInvasionCode.findUnique.mockResolvedValue(baseRow());
+    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm9', joinedAt: JOINED_LATE });
+    const res: any = await run('late');
+    expect(res.ok).toBe(false);
+    expect(res.rejection.status).toBe(400);
+    expect(res.rejection.code).toBe('CREW_CODE_LATE_JOINER');
+    expect(res.rejection.message).toMatch(/before you joined/i);
+  });
+
   it('rejects when THIS member already has a live redemption of the code', async () => {
     mockPrisma.crewInvasionCode.findUnique.mockResolvedValue(baseRow());
-    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm1' });
+    mockPrisma.crewMember.findFirst.mockResolvedValue(early);
     mockRows.push({ id: 'r1', codeId: 'code-1', userId: 'u1', activeKey: 'code-1:u1', releasedAt: null });
     const res: any = await run('u1');
     expect(res.rejection.code).toBe('CREW_CODE_USED');
@@ -207,7 +257,7 @@ describe('validateCrewInvasionCode (explicit code -> clear 400 reasons)', () => 
 
   it('a crew mate\'s redemption does NOT use the code up for this member (per-member model)', async () => {
     mockPrisma.crewInvasionCode.findUnique.mockResolvedValue({ ...baseRow(), usedAt: new Date() }); // legacy column set: ignored
-    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm2' });
+    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm2', joinedAt: JOINED_EARLY });
     mockRows.push({ id: 'r1', codeId: 'code-1', userId: 'someone-else', activeKey: 'code-1:someone-else', releasedAt: null });
     const res: any = await run('u2');
     expect(res.ok).toBe(true);
@@ -215,7 +265,7 @@ describe('validateCrewInvasionCode (explicit code -> clear 400 reasons)', () => 
 
   it('a RELEASED redemption (unpaid invoice died) no longer blocks the member', async () => {
     mockPrisma.crewInvasionCode.findUnique.mockResolvedValue(baseRow());
-    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm1' });
+    mockPrisma.crewMember.findFirst.mockResolvedValue(early);
     mockRows.push({ id: 'r1', codeId: 'code-1', userId: 'u1', activeKey: null, releasedAt: new Date() });
     const res: any = await run('u1');
     expect(res.ok).toBe(true);
@@ -223,7 +273,7 @@ describe('validateCrewInvasionCode (explicit code -> clear 400 reasons)', () => 
 
   it('rejects an expired code', async () => {
     mockPrisma.crewInvasionCode.findUnique.mockResolvedValue({ ...baseRow(), expiresAt: PAST() });
-    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm1' });
+    mockPrisma.crewMember.findFirst.mockResolvedValue(early);
     const res: any = await run();
     expect(res.rejection.code).toBe('CREW_CODE_EXPIRED');
     expect(res.rejection.message).toMatch(/expired/i);
@@ -231,7 +281,7 @@ describe('validateCrewInvasionCode (explicit code -> clear 400 reasons)', () => 
 
   it('rejects when the organizer has since switched Crew Invasion off', async () => {
     mockPrisma.crewInvasionCode.findUnique.mockResolvedValue({ ...baseRow(), sale: { crewInvasionEnabled: false } });
-    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm1' });
+    mockPrisma.crewMember.findFirst.mockResolvedValue(early);
     const res: any = await run();
     expect(res.rejection.code).toBe('CREW_CODE_DISABLED');
   });
@@ -381,8 +431,12 @@ describe('linkCrewInvasionRedemptionToInvoice / releaseCrewInvasionRedemptionsFo
 });
 
 describe('applyCrewInvasionDiscount', () => {
-  const memberOfC1 = () => mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1' }]);
-  const codeRow = () => mockPrisma.crewInvasionCode.findFirst.mockResolvedValue({ id: 'code-1', code: 'CREW10-AAAA', discountPct: 10 });
+  const memberOfC1 = () => mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1', joinedAt: JOINED_EARLY }]);
+  const codeRow = () => {
+    mockPrisma.crewInvasionCode.findMany.mockResolvedValue([{ id: 'code-1', code: 'CREW10-AAAA', discountPct: 10, crewId: 'c1', createdAt: QUALIFIED }]);
+    // redeemCrewInvasionCode re-checks the code is still live with a findFirst
+    mockPrisma.crewInvasionCode.findFirst.mockResolvedValue({ id: 'code-1' });
+  };
 
   it('auto-applies the shopper\'s active code and records THEIR redemption', async () => {
     memberOfC1();
@@ -410,6 +464,31 @@ describe('applyCrewInvasionDiscount', () => {
     const again: any = await applyCrewInvasionDiscount({ ...base, shopperUserId: 'u1' });
     expect(again.applied).toBe(false);
     expect(mockRows).toHaveLength(2);
+  });
+
+  it('a LATE JOINER is not discounted and nothing is consumed', async () => {
+    mockPrisma.crewMember.findMany.mockResolvedValue([{ crewId: 'c1', joinedAt: JOINED_LATE }]);
+    codeRow();
+    const res: any = await applyCrewInvasionDiscount({
+      saleId: 'sale-1', shopperUserId: 'late', eligibleBaseCents: 10000, chargeableTotalCents: 10000,
+    });
+    expect(res.applied).toBe(false);
+    expect(mockPrisma.crewInvasionRedemption.createMany).not.toHaveBeenCalled();
+    expect(mockRows).toHaveLength(0);
+  });
+
+  it('an explicit code from a LATE JOINER is rejected with CREW_CODE_LATE_JOINER and consumes nothing', async () => {
+    mockPrisma.crewInvasionCode.findUnique.mockResolvedValue({
+      id: 'code-1', code: 'CREW10-AAAA', discountPct: 10, saleId: 'sale-1', crewId: 'c1',
+      usedAt: null, expiresAt: FUTURE(), sale: { crewInvasionEnabled: true }, createdAt: QUALIFIED,
+    });
+    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm9', joinedAt: JOINED_LATE });
+    const res: any = await applyCrewInvasionDiscount({
+      saleId: 'sale-1', shopperUserId: 'late', eligibleBaseCents: 10000, chargeableTotalCents: 10000, providedCode: 'CREW10-AAAA',
+    });
+    expect(res.applied).toBe(false);
+    expect(res.rejection.code).toBe('CREW_CODE_LATE_JOINER');
+    expect(mockPrisma.crewInvasionRedemption.createMany).not.toHaveBeenCalled();
   });
 
   it('applies nothing and consumes nothing when the shopper has no code', async () => {
@@ -472,9 +551,9 @@ describe('applyCrewInvasionDiscount', () => {
   it('reports CREW_CODE_USED when an explicit valid code loses the redemption race', async () => {
     mockPrisma.crewInvasionCode.findUnique.mockResolvedValue({
       id: 'code-1', code: 'CREW10-AAAA', discountPct: 10, saleId: 'sale-1', crewId: 'c1',
-      usedAt: null, expiresAt: FUTURE(), sale: { crewInvasionEnabled: true },
+      usedAt: null, expiresAt: FUTURE(), sale: { crewInvasionEnabled: true }, createdAt: QUALIFIED,
     });
-    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm1' });
+    mockPrisma.crewMember.findFirst.mockResolvedValue({ id: 'm1', joinedAt: JOINED_EARLY });
     mockPrisma.crewInvasionCode.findFirst.mockResolvedValue({ id: 'code-1' });
     // the validate step sees no live redemption, then the insert loses the race
     mockPrisma.crewInvasionRedemption.findFirst.mockResolvedValue(null);
@@ -499,9 +578,15 @@ describe('applyCrewInvasionDiscount', () => {
 
 describe('countCrewDiscountEligibleShoppers (CHECKOUT_LINK response note)', () => {
   it('counts distinct shoppers who currently have a redeemable code', async () => {
-    mockPrisma.crewMember.findMany.mockImplementation(async ({ where }: any) => (where.userId === 'u3' ? [] : [{ crewId: 'c1' }]));
-    mockPrisma.crewInvasionCode.findFirst.mockResolvedValue({ id: 'code-1', code: 'X', discountPct: 10 });
+    mockPrisma.crewMember.findMany.mockImplementation(async ({ where }: any) => (where.userId === 'u3' ? [] : [{ crewId: 'c1', joinedAt: JOINED_EARLY }]));
+    mockPrisma.crewInvasionCode.findMany.mockResolvedValue([{ id: 'code-1', code: 'X', discountPct: 10, crewId: 'c1', createdAt: QUALIFIED }]);
     expect(await countCrewDiscountEligibleShoppers('sale-1', ['u1', 'u2', 'u2', 'u3'])).toBe(2);
+  });
+
+  it('does not count late joiners', async () => {
+    mockPrisma.crewMember.findMany.mockImplementation(async ({ where }: any) => [{ crewId: 'c1', joinedAt: where.userId === 'late' ? JOINED_LATE : JOINED_EARLY }]);
+    mockPrisma.crewInvasionCode.findMany.mockResolvedValue([{ id: 'code-1', code: 'X', discountPct: 10, crewId: 'c1', createdAt: QUALIFIED }]);
+    expect(await countCrewDiscountEligibleShoppers('sale-1', ['u1', 'late'])).toBe(1);
   });
 
   it('returns 0 for no shoppers and on a lookup failure', async () => {

@@ -16,8 +16,25 @@ import crypto from 'crypto';
 
 export const OPAQUE_USER_ID_PREFIX = 'hof_';
 
+/** Dev/test-only key used when JWT_SECRET is unset. Production never uses it (see resolveOpaqueSecret). */
+const DEV_FALLBACK_SECRET = 'hall-of-fame';
+
+/**
+ * The HMAC key. In production a missing JWT_SECRET is a hard failure at first use: a well-known fallback key would
+ * make every opaque id computable by anyone, which defeats the point (they are meant to be non-reversible stand-ins
+ * for real user ids). Outside production the old dev fallback is kept so local runs and tests need no setup.
+ */
+function resolveOpaqueSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET is not set: refusing to derive opaque user ids with a public fallback key');
+  }
+  return DEV_FALLBACK_SECRET;
+}
+
 export function opaqueUserId(userId: string): string {
-  const secret = process.env.JWT_SECRET || 'hall-of-fame';
+  const secret = resolveOpaqueSecret();
   return OPAQUE_USER_ID_PREFIX + crypto.createHmac('sha256', secret).update(userId).digest('hex').slice(0, 20);
 }
 

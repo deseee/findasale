@@ -8,18 +8,16 @@ import { prisma } from '../lib/prisma';
 import { RANK_THRESHOLDS } from '../services/xpService';
 import { getSeasonXpLeaders, seasonStartFor } from '../services/seasonStandingsService';
 import { opaqueUserId } from '../utils/opaqueUserId';
+import { publicMemberLabel } from '../utils/publicDisplayName';
 
 /**
- * Public-safe display name: first name plus last initial ("Jane Doe" becomes "Jane D.").
- * A single name is kept as is; a missing or blank name becomes "Explorer".
- * Idempotent: "Jane D." stays "Jane D.".
+ * Public-safe display name: first name plus last initial ("Jane Doe" becomes "Jane D."), and only for members who opted
+ * in to a public name (notificationPrefs.showNameInGoingList). Everyone else, a missing/blank name and a name that is
+ * an email address become "Explorer". One shared policy (utils/publicDisplayName.publicMemberLabel), the same one the
+ * crews, the Collector's League and the streak board use. Idempotent: "Jane D." stays "Jane D." for an opted-in member.
  */
-export function toPublicName(name: string | null | undefined): string {
-  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'Explorer';
-  if (parts.length === 1) return parts[0];
-  const lastInitial = Array.from(parts[parts.length - 1])[0]?.toUpperCase() ?? '';
-  return lastInitial ? `${parts[0]} ${lastInitial}.` : parts[0];
+export function toPublicName(name: string | null | undefined, prefs?: unknown): string {
+  return publicMemberLabel(name, prefs);
 }
 
 /**
@@ -92,6 +90,7 @@ export const getHallOfFame = async (req: Request, res: Response) => {
         explorerRank: true,
         rankUpHistory: true,
         createdAt: true,
+        notificationPrefs: true,
       },
       orderBy: [
         { guildXp: 'desc' },
@@ -113,6 +112,7 @@ export const getHallOfFame = async (req: Request, res: Response) => {
             profileSlug: true,
             guildXp: true,
             explorerRank: true,
+            notificationPrefs: true,
           },
         })
       : [];
@@ -133,11 +133,11 @@ export const getHallOfFame = async (req: Request, res: Response) => {
       : [];
     const publicIds = new Set(publicPassports.map((p) => p.userId));
 
-    const publicIdentity = (u: { id: string; name: string | null; profileSlug: string | null }) => {
+    const publicIdentity = (u: { id: string; name: string | null; profileSlug: string | null; notificationPrefs?: unknown }) => {
       const isPublic = publicIds.has(u.id);
       return {
         userId: isPublic ? u.id : opaqueHallOfFameId(u.id),
-        name: toPublicName(u.name),
+        name: toPublicName(u.name, u.notificationPrefs),
         profileSlug: isPublic ? u.profileSlug : null,
         profilePublic: isPublic,
       };

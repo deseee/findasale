@@ -10,7 +10,7 @@ import {
 } from '../services/crewService';
 import { findRedeemableCrewInvasionCode } from '../services/crewInvasionRedemptionService';
 import { opaqueUserId, resolveUserRef } from '../utils/opaqueUserId';
-import { firstNameLastInitial } from '../utils/publicDisplayName';
+import { publicMemberLabel } from '../utils/publicDisplayName';
 
 /**
  * Shopper Crews: controller.
@@ -50,6 +50,7 @@ const USER_PUBLIC_SELECT = {
   profileSlug: true,
   guildXp: true,
   explorerRank: true,
+  notificationPrefs: true, // only read to apply the public-name opt-in gate; never returned
 } as const;
 
 type CrewDb = Pick<typeof prisma, 'crew'>;
@@ -74,6 +75,7 @@ interface PublicIdentity {
 interface IdentitySource {
   id: string;
   name?: string | null;
+  notificationPrefs?: unknown;
   profileSlug?: string | null;
 }
 
@@ -94,7 +96,7 @@ function toPublicIdentity(u: IdentitySource, publicIds: Set<string>): PublicIden
   return {
     id: isPublic ? u.id : ref,
     ref,
-    name: firstNameLastInitial(u.name) ?? 'Explorer',
+    name: publicMemberLabel(u.name, u.notificationPrefs),
     profileSlug: isPublic ? u.profileSlug ?? null : null,
     profilePublic: isPublic,
   };
@@ -290,7 +292,7 @@ export async function listCrews(req: AuthRequest, res: Response) {
           description: true,
           memberCount: true,
           createdAt: true,
-          founder: { select: { id: true, name: true } },
+          founder: { select: { id: true, name: true, notificationPrefs: true } },
         },
       }),
     ]);
@@ -783,7 +785,7 @@ export async function getCrewFeed(req: any, res: Response) {
       },
       include: {
         user: {
-          select: { id: true, name: true, profileSlug: true, explorerRank: true },
+          select: { id: true, name: true, profileSlug: true, explorerRank: true, notificationPrefs: true },
         },
       },
       orderBy: { createdAt: 'desc' },

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { getPassport, getUnseenUnlocks, markPassportSeen } from '../services/loyaltyService';
 import { prisma } from '../index';
 import { opaqueUserId } from '../utils/opaqueUserId';
-import { firstNameLastInitial } from '../utils/publicDisplayName';
+import { publicMemberLabel } from '../utils/publicDisplayName';
 
 /**
  * GET /api/loyalty/passport
@@ -139,7 +139,8 @@ export async function getCollectorLeague(req: Request, res: Response) {
         name: true,
         explorerRank: true,
         guildXp: true,
-        huntPassActive: true
+        huntPassActive: true,
+        notificationPrefs: true
       },
       orderBy: {
         guildXp: 'desc'
@@ -154,7 +155,7 @@ export async function getCollectorLeague(req: Request, res: Response) {
     const leaderboard = topUsers.map((user, index) => ({
       position: index + 1,
       id: opaqueUserId(user.id),
-      name: firstNameLastInitial(user.name) ?? 'Explorer',
+      name: publicMemberLabel(user.name, user.notificationPrefs),
       explorerRank: user.explorerRank,
       guildXp: user.guildXp,
       huntPassActive: user.huntPassActive,

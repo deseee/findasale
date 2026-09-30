@@ -22,9 +22,34 @@ export function maskPhoneDisplay(phone: unknown): string | null {
   return digits.length >= 4 ? `***-${digits.slice(-4)}` : null;
 }
 
+/** Replace anything that looks like an email address inside free text. */
+export function redactEmailsInText(text: unknown, maxLen = 300): string {
+  return String(text ?? '')
+    .replace(/[^\s@<>",;:()[\]\\]+@[^\s@<>",;:()[\]\\]+\.[^\s@<>",;:()[\]\\]+/g, (m) => maskEmail(m))
+    .slice(0, maxLen);
+}
+
 /** Replace anything that looks like a phone number inside free text (e.g. a Twilio error message). */
 export function redactPhonesInText(text: unknown, maxLen = 300): string {
   return String(text ?? '')
     .replace(/\+?\d[\d\s().-]{7,}\d/g, (m) => `***${m.replace(/\D/g, '').slice(-4)}`)
     .slice(0, maxLen);
+}
+
+/**
+ * Log-safe description of a caught error (2026-09-30). Never pass a raw error object or err.message to a log
+ * call on a path that handles phone numbers or emails: Prisma and Twilio messages can embed the query arguments
+ * or the recipient ("Invalid `prisma.saleSubscriber.updateMany()` invocation ... phone: "+1269..."").
+ * Returns `code=<err.code or name> <message with phones and emails masked, one line, capped>`. Never throws.
+ */
+export function safeErrorForLog(err: unknown, maxLen = 200): string {
+  try {
+    const e = err as { code?: unknown; status?: unknown; name?: unknown; message?: unknown } | null | undefined;
+    const code = e?.code ?? e?.status ?? e?.name ?? 'unknown';
+    const raw = typeof err === 'string' ? err : e?.message ?? '';
+    const oneLine = String(raw).replace(/\s+/g, ' ').trim();
+    return `code=${String(code).slice(0, 40)} ${redactEmailsInText(redactPhonesInText(oneLine, 2000), 2000).slice(0, maxLen)}`.trim();
+  } catch {
+    return 'code=unknown';
+  }
 }

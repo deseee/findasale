@@ -3,6 +3,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { paymentLimiter } from '../middleware/rateLimiter';
 import { recordVisit, getStreak } from '../services/streakService';
 import { prisma } from '../lib/prisma';
+import { publicMemberLabel } from '../utils/publicDisplayName';
 import { createNotification } from '../lib/notificationService';
 import {
   HUNT_PASS_PRICE_CENTS,
@@ -234,20 +235,16 @@ router.get('/leaderboard', async (_req, res: Response) => {
       select: {
         currentStreak: true,
         longestStreak: true,
-        user: { select: { name: true, explorerRank: true, huntPassActive: true } },
+        user: { select: { name: true, explorerRank: true, huntPassActive: true, notificationPrefs: true } },
       },
     });
 
-    const shortName = (full: string | null | undefined): string => {
-      const parts = (full || '').trim().split(/\s+/).filter(Boolean);
-      if (parts.length === 0) return 'Explorer';
-      if (parts.length === 1) return parts[0];
-      return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
-    };
+    // One shared public-name policy (opt-in gate + no email addresses): utils/publicDisplayName.publicMemberLabel.
+    const shortName = (full: string | null | undefined, prefs: unknown): string => publicMemberLabel(full, prefs);
 
     const leaderboard = rows.map((r, index) => ({
       position: index + 1,
-      displayName: shortName(r.user?.name),
+      displayName: shortName(r.user?.name, (r.user as any)?.notificationPrefs),
       currentStreak: r.currentStreak,
       longestStreak: r.longestStreak,
       explorerRank: r.user?.explorerRank ?? null,

@@ -36,8 +36,9 @@ function makeRes() {
 }
 
 const USERS: Record<string, any> = {
-  u1: { id: 'u1', name: 'Frank Founder', profileSlug: 'frank', guildXp: 900, explorerRank: 'SCOUT', email: 'frank@example.com' },
-  u2: { id: 'u2', name: 'Jane Doe', profileSlug: 'jane-d', guildXp: 500, explorerRank: 'SCOUT' },
+  // u1 and u2 opted in to a public name (notificationPrefs.showNameInGoingList); u3 did not.
+  u1: { id: 'u1', name: 'Frank Founder', profileSlug: 'frank', guildXp: 900, explorerRank: 'SCOUT', email: 'frank@example.com', notificationPrefs: { showNameInGoingList: true } },
+  u2: { id: 'u2', name: 'Jane Doe', profileSlug: 'jane-d', guildXp: 500, explorerRank: 'SCOUT', notificationPrefs: { showNameInGoingList: true } },
   u3: { id: 'u3', name: 'Bob Smith', profileSlug: 'bobby', guildXp: 100, explorerRank: 'INITIATE' },
 };
 const memberRow = (uid: string, role = 'MEMBER') => ({ userId: uid, role, joinedAt: new Date('2026-09-01'), user: USERS[uid] });
@@ -95,9 +96,26 @@ describe('getCrew (public)', () => {
     expect(jane.user.profilePublic).toBe(true);
     expect(jane.memberRef).toBe(opaqueUserId('u2')); // founder tools always use the opaque ref
 
-    const bob = body.members.find((m: any) => m.user.name === 'Bob S.');
-    expect(bob.userId).toBe(opaqueUserId('u3'));
+    const bob = body.members.find((m: any) => m.userId === opaqueUserId('u3'));
+    expect(bob.user.name).toBe('Explorer'); // did not opt in to a public name
     expect(bob.user.profileSlug).toBeNull();
+    expect(text).not.toContain('notificationPrefs'); // the gate input is never returned
+  });
+
+  it('a member whose account name is an email address shows as Explorer, even when opted in', async () => {
+    const row = crewRow();
+    row.members[1] = memberRow('u2');
+    USERS.u2 = { ...USERS.u2, name: 'jane.doe@example.com' };
+    try {
+      mockPrisma.crew.findUnique.mockResolvedValue({ ...row, members: [memberRow('u1', 'FOUNDER'), memberRow('u2'), memberRow('u3')] });
+      const res = makeRes();
+      await getCrew({ params: { crewId: 'c1' } } as any, res);
+      const text = dump(res.json.mock.calls[0][0]);
+      expect(text).not.toContain('jane.doe@example.com');
+      expect(text).not.toContain('@');
+    } finally {
+      USERS.u2 = { ...USERS.u2, name: 'Jane Doe' };
+    }
   });
 
   it('anonymous viewer is not a member; a signed-in member gets viewer role and isSelf', async () => {
@@ -112,7 +130,7 @@ describe('getCrew (public)', () => {
     const body = me.json.mock.calls[0][0];
     expect(body.viewer).toEqual({ isMember: true, role: 'MEMBER' });
     expect(body.members.filter((m: any) => m.isSelf)).toHaveLength(1);
-    expect(body.members.find((m: any) => m.isSelf).user.name).toBe('Bob S.'); // even the viewer's own row is First L.
+    expect(body.members.find((m: any) => m.isSelf).user.name).toBe('Explorer'); // the viewer did not opt in: even their own public row hides the name
     expect(dump(body)).not.toContain('Bob Smith');
   });
 
@@ -149,7 +167,7 @@ describe('getCrewFeed (public)', () => {
     mockPrisma.crew.findUnique.mockResolvedValue({ id: 'c1', name: 'Crew One' });
     mockPrisma.crewMember.findMany.mockResolvedValue([{ userId: 'u2' }, { userId: 'u3' }]);
     mockPrisma.uGCPhoto.findMany.mockResolvedValue([
-      { id: 1, photoUrl: 'p1', caption: null, likesCount: 2, createdAt: new Date(), user: { id: 'u2', name: 'Jane Doe', profileSlug: 'jane-d', explorerRank: 'SCOUT' } },
+      { id: 1, photoUrl: 'p1', caption: null, likesCount: 2, createdAt: new Date(), user: { id: 'u2', name: 'Jane Doe', profileSlug: 'jane-d', explorerRank: 'SCOUT', notificationPrefs: { showNameInGoingList: true } } },
       { id: 2, photoUrl: 'p2', caption: 'hi', likesCount: 0, createdAt: new Date(), user: { id: 'u3', name: 'Bob Smith', profileSlug: 'bobby', explorerRank: 'INITIATE' } },
     ]);
     const res = makeRes();
@@ -161,7 +179,7 @@ describe('getCrewFeed (public)', () => {
     expect(text).not.toContain('"u3"');
     expect(text).not.toContain('bobby');
     expect(body.photos[0].user).toMatchObject({ id: 'u2', name: 'Jane D.', profileSlug: 'jane-d', profilePublic: true });
-    expect(body.photos[1].user).toMatchObject({ id: opaqueUserId('u3'), name: 'Bob S.', profileSlug: null, profilePublic: false });
+    expect(body.photos[1].user).toMatchObject({ id: opaqueUserId('u3'), name: 'Explorer', profileSlug: null, profilePublic: false });
   });
 });
 
@@ -169,7 +187,7 @@ describe('listCrews (public)', () => {
   it('founder is First L. with an opaque id unless public', async () => {
     mockPrisma.crew.count.mockResolvedValue(1);
     mockPrisma.crew.findMany.mockResolvedValue([
-      { id: 'c1', name: 'Crew One', slug: 's', description: null, memberCount: 3, createdAt: new Date(), founder: { id: 'u1', name: 'Frank Founder' } },
+      { id: 'c1', name: 'Crew One', slug: 's', description: null, memberCount: 3, createdAt: new Date(), founder: { id: 'u1', name: 'Frank Founder', notificationPrefs: { showNameInGoingList: true } } },
     ]);
     const res = makeRes();
     await listCrews({ query: {} } as any, res);

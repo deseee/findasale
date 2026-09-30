@@ -26,6 +26,17 @@ export function hasOptedIntoPublicName(prefs: unknown): boolean {
   return !!prefs && typeof prefs === 'object' && (prefs as Record<string, unknown>)[SHOW_NAME_PREF_KEY] === true;
 }
 
+/**
+ * The ONE label for a member shown on a public leaderboard, roster or feed (Hall of Fame, Collector's League, crews,
+ * streak board): "Jane D." only when the member opted in (notificationPrefs.showNameInGoingList) AND the stored name
+ * is a real name (an email address, which some accounts carry as their name, is never shown). Everyone else gets the
+ * neutral `fallback` ("Explorer" by default). Never returns more than first name + last initial.
+ */
+export function publicMemberLabel(name: string | null | undefined, prefs: unknown, fallback = 'Explorer'): string {
+  if (!hasOptedIntoPublicName(prefs)) return fallback;
+  return firstNameLastInitial(name) ?? fallback;
+}
+
 /** The label to show publicly for a shopper: "Jane D." if opted in, otherwise "Someone". */
 export function publicShopperLabel(name: string | null | undefined, prefs: unknown): string {
   if (!hasOptedIntoPublicName(prefs)) return 'Someone';
