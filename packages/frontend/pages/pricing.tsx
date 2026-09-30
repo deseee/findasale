@@ -66,6 +66,7 @@ const TIERS: PricingTier[] = [
       'Smart Pricing: market value estimates',
       'Virtual Queue: manage sale entry',
       'Flip Report: post-sale earnings breakdown',
+      'Persistent Inventory: return unsold items and pull them into your next sale',
       'Insights - Advanced sale analytics',
       'Brand Kit: custom logo, colors, storefront',
       'Data exports (Accounting, Mailings, + more)',

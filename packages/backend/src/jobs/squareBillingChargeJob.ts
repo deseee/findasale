@@ -40,6 +40,7 @@ import {
   chargeStoredCard,
   BillableOrganizerTier,
 } from '../services/squareBillingService';
+import { claimBillingCharge, completeBillingCharge, failBillingCharge } from '../services/organizerBillingLedger';
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date.getTime());
@@ -154,6 +155,21 @@ async function sendOrganizerBillingNotification(
 }
 
 async function handleOrganizerChargeFailure(org: DueOrganizer, reason: string): Promise<void> {
+  // 2026-09-29: never let a failure overwrite a period that got paid in the meantime (for example
+  // the organizer re-subscribed, which moves billingCurrentPeriodEnd forward, while this run was
+  // charging). Re-read the period end: if it is no longer the one this run tried to bill, the
+  // failure is stale and past_due / dunning / downgrade must not be applied.
+  const fresh = await prisma.organizer.findUnique({
+    where: { id: org.id },
+    select: { billingCurrentPeriodEnd: true },
+  });
+  const freshEnd = fresh?.billingCurrentPeriodEnd ? new Date(fresh.billingCurrentPeriodEnd).getTime() : null;
+  const triedEnd = org.billingCurrentPeriodEnd ? new Date(org.billingCurrentPeriodEnd).getTime() : null;
+  if (!fresh || freshEnd !== triedEnd) {
+    console.log(`[squareBillingChargeJob] Organizer ${org.id} billing period changed while the failed charge was processed -- ignoring the stale failure`);
+    return;
+  }
+
   const now = new Date();
   const graceEndsAt = org.billingGraceEndsAt ?? computeGraceEndsAt(now);
 
@@ -186,7 +202,7 @@ async function handleOrganizerChargeFailure(org: DueOrganizer, reason: string): 
   console.warn(`[squareBillingChargeJob] Organizer ${org.id} charge failed (attempt ${newFailCount}, reason: ${reason}) -- access retained, next retry ${computeNextRetryAt(now).toISOString()}`);
 }
 
-async function processOrganizerBilling(): Promise<void> {
+export async function processOrganizerBilling(): Promise<void> {
   const now = new Date();
 
   const dueOrganizers = await prisma.organizer.findMany({
@@ -250,19 +266,74 @@ async function processOrganizerBilling(): Promise<void> {
         continue;
       }
 
-      const result = await chargeStoredCard({
-        customerId: org.squareCustomerId!,
-        cardId: org.squareCardId!,
+      // 2026-09-29 (P2 review): every billed period is identified by the period start, which is
+      // the billingCurrentPeriodEnd this run is billing. The OrganizerBillingCharge ledger has a
+      // UNIQUE (organizerId, periodKey), so one period can be charged only once no matter how many
+      // times this job runs or how far behind it is; COMPLETED is terminal and is never rewritten
+      // as FAILED.
+      const periodStart = org.billingCurrentPeriodEnd!;
+      const periodKey = `renewal:${periodStart.toISOString()}`;
+      const claim = await claimBillingCharge({
+        organizerId: org.id,
+        periodKey,
+        kind: 'RENEWAL',
+        tier,
         amountCents,
-        idempotencyParts: ['org-billing', org.id, org.billingCurrentPeriodEnd!.toISOString()],
-        note: `FindA.Sale ${tier} subscription renewal`,
-        referenceId: org.id,
       });
+      if (claim.state === 'in_progress') {
+        console.log(`[squareBillingChargeJob] Organizer ${org.id} period ${periodKey} is already being charged by another attempt -- skipping this run`);
+        continue;
+      }
 
-      if (result.ok) {
-        const nextPeriodEnd = addDays(org.billingCurrentPeriodEnd ?? now, BILLING_INTERVAL_DAYS);
-        await prisma.organizer.update({
-          where: { id: org.id },
+      let paymentId: string | null = null;
+      let paid = false;
+      if (claim.state === 'already_completed') {
+        // Paid earlier (for example the charge went through but the period update failed): heal the
+        // organizer row below WITHOUT charging again.
+        paid = true;
+        paymentId = claim.paymentId;
+        console.warn(`[squareBillingChargeJob] Organizer ${org.id} period ${periodKey} already COMPLETED -- advancing the period without a new charge`);
+      } else {
+        const result = await chargeStoredCard({
+          customerId: org.squareCustomerId!,
+          cardId: org.squareCardId!,
+          amountCents,
+          // period id + tier + card + dunning attempt number: a retry after a decline gets a fresh
+          // key (Square never has to replay a cached decline), a crash-retry of the SAME attempt
+          // reuses the key so Square dedupes it.
+          idempotencyParts: ['org-billing', org.id, tier, periodStart.toISOString(), org.squareCardId!, `try${org.billingDunningFailCount}`],
+          note: `FindA.Sale ${tier} subscription renewal`,
+          referenceId: org.id,
+          requireCompleted: true,
+        });
+        if (result.ok) {
+          paid = true;
+          paymentId = result.paymentId;
+          try {
+            await completeBillingCharge(claim.id, result.paymentId);
+          } catch (ledgerErr) {
+            console.error(`[squareBillingChargeJob] CRITICAL: payment ${result.paymentId} COMPLETED for organizer ${org.id} but the ledger write failed:`, ledgerErr);
+          }
+        } else {
+          const markedFailed = await failBillingCharge(claim.id, result.message);
+          if (markedFailed) {
+            await handleOrganizerChargeFailure(org, result.message);
+            continue;
+          }
+          // The ledger row is already COMPLETED (a racing attempt paid this period): this failure is
+          // stale. Treat the period as paid.
+          paid = true;
+          console.warn(`[squareBillingChargeJob] Organizer ${org.id} period ${periodKey} was already COMPLETED by another attempt -- ignoring the failed result`);
+        }
+      }
+
+      if (paid) {
+        // Advance from the ORIGINAL period end by exactly one period (never from now), and only if
+        // the organizer row still shows that same period end, so nothing can advance it twice. If the
+        // job was down for N periods, each run bills one period and moves the end forward one period.
+        const nextPeriodEnd = addDays(periodStart, BILLING_INTERVAL_DAYS);
+        const advanced = await prisma.organizer.updateMany({
+          where: { id: org.id, billingCurrentPeriodEnd: periodStart },
           data: {
             billingCurrentPeriodEnd: nextPeriodEnd,
             subscriptionStatus: 'active',
@@ -272,15 +343,17 @@ async function processOrganizerBilling(): Promise<void> {
             billingLastFailureReason: null,
           },
         });
+        if (advanced.count !== 1) {
+          console.warn(`[squareBillingChargeJob] Organizer ${org.id} period end changed while renewal ${periodKey} was processed -- not advancing again (payment ${paymentId})`);
+          continue;
+        }
         if (org.userId) {
           await prisma.userRoleSubscription.updateMany({
             where: { userId: org.userId, role: 'ORGANIZER' },
             data: { subscriptionStatus: 'active', tierLapsedAt: null, tierResumedAt: new Date() },
           });
         }
-        console.log(`[squareBillingChargeJob] Charged organizer ${org.id} $${(amountCents / 100).toFixed(2)} for ${tier} renewal (payment ${result.paymentId})`);
-      } else {
-        await handleOrganizerChargeFailure(org, result.message);
+        console.log(`[squareBillingChargeJob] Charged organizer ${org.id} $${(amountCents / 100).toFixed(2)} for ${tier} renewal (payment ${paymentId})`);
       }
     } catch (err) {
       console.error(`[squareBillingChargeJob] Unexpected error processing organizer ${org.id}:`, err);
@@ -292,7 +365,18 @@ async function processOrganizerBilling(): Promise<void> {
 // 2. Frozen-tier migration deadline enforcement
 // ---------------------------------------------------------------------------
 
-async function processFrozenMigrationDeadlines(): Promise<void> {
+/**
+ * Organizers who already scheduled a cancellation (subscriptionStatus = 'scheduled_for_cancellation')
+ * are handled by tierGraceService.downgradeScheduledCancelFrozenOrganizers at 02:00 UTC, which sends
+ * them the "your plan has ended" notice. This 01:00 frozen pass runs BEFORE that one, so it must skip
+ * them or they would get the "no Square card was added" text instead. subscriptionStatus is nullable and
+ * Prisma's `not` drops NULL rows, so NULL is matched explicitly.
+ */
+export const NOT_SCHEDULED_FOR_CANCELLATION = {
+  OR: [{ subscriptionStatus: null }, { subscriptionStatus: { not: 'scheduled_for_cancellation' } }],
+};
+
+export async function processFrozenMigrationDeadlines(): Promise<void> {
   const now = new Date();
 
   const overdue = await prisma.organizer.findMany({
@@ -300,6 +384,7 @@ async function processFrozenMigrationDeadlines(): Promise<void> {
       subscriptionTier: { in: ['PRO', 'TEAMS'] },
       billingProcessor: null, // never migrated to Square -- still on the dead Stripe path
       billingGraceEndsAt: { lte: now }, // migration script started this organizer's clock
+      ...NOT_SCHEDULED_FOR_CANCELLATION,
     },
     select: { id: true, userId: true, businessName: true, user: { select: { email: true, name: true } } },
   });
@@ -317,7 +402,7 @@ async function processFrozenMigrationDeadlines(): Promise<void> {
       // race rather than close it): only proceed if billingProcessor is STILL null at the
       // exact moment of the write.
       const stillUnmigrated = await prisma.organizer.updateMany({
-        where: { id: org.id, billingProcessor: null, subscriptionTier: { in: ['PRO', 'TEAMS'] } },
+        where: { id: org.id, billingProcessor: null, subscriptionTier: { in: ['PRO', 'TEAMS'] }, ...NOT_SCHEDULED_FOR_CANCELLATION },
         data: { billingGraceEndsAt: null }, // placeholder write -- real downgrade fields set by downgradeOrganizerToSimple below, which only runs if this guard matched
       });
       if (stillUnmigrated.count !== 1) {

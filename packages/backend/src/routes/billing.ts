@@ -4,6 +4,7 @@ import { paymentLimiter } from '../middleware/rateLimiter';
 import {
   getSubscription,
   cancelSubscription,
+  undoCancelSubscription,
   createBillingPortal,
   handleStripeWebhook,
   getDowngradePreview,
@@ -22,6 +23,8 @@ const router = Router();
 // live path.
 router.get('/subscription', authenticate, getSubscription);
 router.post('/cancel', authenticate, cancelSubscription);
+// Undo a scheduled cancellation while the paid period is still running (DB-only, 2026-09-29).
+router.post('/cancel/undo', authenticate, undoCancelSubscription);
 router.post('/portal', authenticate, paymentLimiter, createBillingPortal);
 router.get('/downgrade-preview', authenticate, getDowngradePreview);
 router.post('/downgrade-confirm', authenticate, confirmDowngrade);

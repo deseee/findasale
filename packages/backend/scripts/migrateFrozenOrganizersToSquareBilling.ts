@@ -15,7 +15,9 @@
 // (never migrated to Square) AND billingGraceEndsAt IS NULL (migration clock not already
 // started -- makes this script idempotent/safe to re-run: a second run only catches
 // organizers who became frozen-PRO/TEAMS *after* the first run, never re-notifies or
-// re-starts the clock for someone already in their grace window).
+// re-starts the clock for someone already in their grace window) AND subscriptionStatus is
+// not 'scheduled_for_cancellation' (those organizers already chose to leave; they are
+// downgraded at period end by tierGraceService and must not get a "add a card" notice).
 //
 // Read-only until --apply is passed -- prints exactly who would be notified first.
 // Not wired into any cron -- run manually, once, when Patrick is ready to start enforcing
@@ -41,6 +43,10 @@ async function main() {
       subscriptionTier: { in: ['PRO', 'TEAMS'] },
       billingProcessor: null,
       billingGraceEndsAt: null,
+      // Organizers who already scheduled a cancellation get the "plan has ended" notice from
+      // tierGraceService.downgradeScheduledCancelFrozenOrganizers, never a migration deadline.
+      // subscriptionStatus is nullable and Prisma's `not` drops NULLs, so match NULL explicitly.
+      OR: [{ subscriptionStatus: null }, { subscriptionStatus: { not: 'scheduled_for_cancellation' } }],
     },
     select: {
       id: true,

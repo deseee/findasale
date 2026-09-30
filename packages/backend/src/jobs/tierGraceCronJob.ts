@@ -1,12 +1,13 @@
 /**
  * Tier Grace Period Cron Job
- * Runs daily to check for expired grace periods and finalize downgrades
+ * Runs daily to check for expired grace periods and finalize downgrades, and to finish
+ * scheduled cancellations for organizers without a Square billing schedule.
  */
 
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
-import { finalizeGracePeriod } from '../services/tierGraceService';
+import { finalizeGracePeriod, downgradeScheduledCancelFrozenOrganizers } from '../services/tierGraceService';
 
 /**
  * Start the tier grace cron job
@@ -36,6 +37,18 @@ export function startTierGraceCron() {
       }
     } catch (err) {
       console.error('[tierGraceCron] Fatal error:', err);
+    }
+
+    // 2026-09-29: end-of-period downgrade for organizers who scheduled a cancellation without a
+    // Square billing schedule (frozen Stripe subscribers, DB-only cancel). Runs after the grace
+    // pass and never blocks it: its own try/catch, and the grace pass above has already finished.
+    try {
+      const cancelled = await downgradeScheduledCancelFrozenOrganizers();
+      if (cancelled.checked > 0) {
+        console.log(`[tierGraceCron] Scheduled cancellations due: ${cancelled.checked}, downgraded: ${cancelled.downgraded}`);
+      }
+    } catch (err) {
+      console.error('[tierGraceCron] Scheduled-cancellation pass failed:', err);
     }
   }));
 

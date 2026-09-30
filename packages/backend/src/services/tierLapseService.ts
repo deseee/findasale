@@ -61,6 +61,15 @@ export async function getLapsedSubscriptions() {
         },
       ],
       tierLapsedAt: null, // Only those not yet marked as lapsed
+      // 2026-09-29 (Patrick D2): a Square-billed organizer's lifecycle belongs to
+      // jobs/squareBillingChargeJob.ts, which reads the Organizer row (billingCurrentPeriodEnd,
+      // dunning fail count, billingGraceEndsAt) and only downgrades when paid time is really
+      // over. This scan reads the UserRoleSubscription mirror, so it used to lapse an organizer
+      // whose card had just failed (status 'past_due', still inside the 7-day dunning window) or
+      // whose trial ended a few hours before the next 01:00 UTC charge run, flagging them as
+      // lapsed while they still had paid access. Square-billed organizers are excluded here;
+      // organizers with no Square billing keep the existing behavior.
+      NOT: { user: { organizer: { billingProcessor: 'square' } } },
     },
     include: {
       user: true,
@@ -68,6 +77,63 @@ export async function getLapsedSubscriptions() {
   });
 
   return subscriptions;
+}
+
+/**
+ * Real entitlement of an organizer, computed from the Organizer row (the same row the backend
+ * tier gate requireTier and the billing scheduler read), NOT from the UserRoleSubscription
+ * lapse mirror. Patrick D2: PRO/TEAMS features stay available until the subscription actually
+ * runs out.
+ *
+ * Returns `entitlementEndsAt`, the moment paid access ends, or null when the organizer has no
+ * paid time left (SIMPLE tier, finished trial, dunning window over, no known end date):
+ *   - past_due (dunning, payment failed): billingGraceEndsAt, while it is in the future.
+ *   - active / trialing / scheduled_for_cancellation: the later of billingCurrentPeriodEnd and
+ *     (for trialing) trialEndsAt, while in the future.
+ * `inDunning` is true for a paid organizer whose last payment failed and who is still inside
+ * the retry window. Exposed through GET /billing/subscription for the frontend tier hook.
+ */
+export function computeOrganizerEntitlement(
+  organizer: {
+    subscriptionTier?: string | null;
+    subscriptionStatus?: string | null;
+    billingCurrentPeriodEnd?: Date | string | null;
+    billingGraceEndsAt?: Date | string | null;
+    trialEndsAt?: Date | string | null;
+  },
+  now: Date = new Date()
+): { entitlementEndsAt: Date | null; inDunning: boolean } {
+  const tier = organizer.subscriptionTier;
+  if (tier !== 'PRO' && tier !== 'TEAMS') {
+    return { entitlementEndsAt: null, inDunning: false };
+  }
+  const toDate = (v: Date | string | null | undefined): Date | null => {
+    if (!v) return null;
+    const d = v instanceof Date ? v : new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const future = (d: Date | null): Date | null => (d && d.getTime() > now.getTime() ? d : null);
+  const status = organizer.subscriptionStatus ?? null;
+
+  if (status === 'past_due') {
+    const graceEnd = future(toDate(organizer.billingGraceEndsAt));
+    return { entitlementEndsAt: graceEnd, inDunning: graceEnd !== null };
+  }
+
+  if (status === 'active' || status === 'trialing' || status === 'scheduled_for_cancellation') {
+    const candidates: Date[] = [];
+    const periodEnd = future(toDate(organizer.billingCurrentPeriodEnd));
+    if (periodEnd) candidates.push(periodEnd);
+    if (status === 'trialing') {
+      const trialEnd = future(toDate(organizer.trialEndsAt));
+      if (trialEnd) candidates.push(trialEnd);
+    }
+    if (candidates.length === 0) return { entitlementEndsAt: null, inDunning: false };
+    const latest = candidates.reduce((a, b) => (a.getTime() >= b.getTime() ? a : b));
+    return { entitlementEndsAt: latest, inDunning: false };
+  }
+
+  return { entitlementEndsAt: null, inDunning: false };
 }
 
 /**

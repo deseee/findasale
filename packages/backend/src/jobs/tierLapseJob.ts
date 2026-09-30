@@ -23,7 +23,7 @@ const sendTierLapseWarningEmail = async (
   tierName: string,
   daysUntilLapse: number
 ): Promise<void> => {
-  const billingUrl = `${FRONTEND_URL}/organizer/billing`;
+  const billingUrl = `${FRONTEND_URL}/organizer/subscription`; // 2026-09-29: was /organizer/billing, a page that does not exist
 
   const html = buildEmail({
     preheader: `Your ${tierName} subscription expires in ${daysUntilLapse} days`,
@@ -66,12 +66,12 @@ const sendTierLapsedEmail = async (
   name: string,
   previousTier: string
 ): Promise<void> => {
-  const billingUrl = `${FRONTEND_URL}/organizer/billing`;
+  const billingUrl = `${FRONTEND_URL}/organizer/subscription`; // 2026-09-29: was /organizer/billing, a page that does not exist
 
   const html = buildEmail({
     preheader: `Your ${previousTier} subscription has ended`,
     headline: 'Your subscription has lapsed',
-    body: `<p>Hi ${name},</p><p>Your FindA.Sale <strong>${previousTier}</strong> subscription has ended, and your account has been downgraded to <strong>SIMPLE</strong> tier.</p><p>You've lost access to ${previousTier}-only features (lower platform fees, higher item limits, and team member seats). Your existing sales and items are unaffected.</p><p>You can reactivate ${previousTier} at any time to restore full access.</p>`,
+    body: `<p>Hi ${name},</p><p>Your FindA.Sale <strong>${previousTier}</strong> subscription has ended, and your account has been downgraded to <strong>SIMPLE</strong> tier.</p><p>You've lost access to ${previousTier}-only features (lower platform fees, higher photo and auto tag limits, automatic markdown cycles, and team member seats). Your existing sales and items are unaffected, and your markdown cycle settings are kept.</p><p>You can reactivate ${previousTier} at any time to restore full access.</p>`,
     ctaText: 'Reactivate Subscription',
     ctaUrl: billingUrl,
     footerNote: `Or visit: ${billingUrl}`,

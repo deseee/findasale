@@ -20,7 +20,18 @@ interface Subscription {
   billingProcessor?: 'square' | null;
   hasSquareCardOnFile?: boolean;
   billingLastFailureReason?: string | null;
+  // 2026-09-29 (Patrick D2): real paid-time state from the server. inDunning = last payment
+  // failed but the plan stays active until entitlementEndsAt.
+  entitlementEndsAt?: string | null;
+  inDunning?: boolean;
 }
+
+const formatLongDate = (iso?: string | null): string | null => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+};
 
 export default function SubscriptionPage() {
   const { user } = useAuth();
@@ -29,6 +40,7 @@ export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [undoingCancel, setUndoingCancel] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [managingPlan, setManagingPlan] = useState(false);
   const [showDowngradePreview, setShowDowngradePreview] = useState(false);
@@ -95,6 +107,22 @@ export default function SubscriptionPage() {
       showToast('Failed to cancel subscription', 'error');
     } finally {
       setCanceling(false);
+    }
+  };
+
+  // 2026-09-29: undo a scheduled cancellation while the paid period is still running.
+  const handleUndoCancel = async () => {
+    setUndoingCancel(true);
+    try {
+      const updated = await api.post('/billing/cancel/undo');
+      setSubscription(prev => (prev ? { ...prev, ...updated.data } : updated.data));
+      showToast('Cancellation undone. Your plan will keep renewing as normal.', 'success');
+      setTimeout(fetchSubscription, 500);
+    } catch (error: any) {
+      console.error('Error undoing cancellation:', error);
+      showToast(error?.response?.data?.message || 'Failed to undo the cancellation', 'error');
+    } finally {
+      setUndoingCancel(false);
     }
   };
 
@@ -635,7 +663,7 @@ export default function SubscriptionPage() {
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Renews On</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{subscription.cancelAtPeriodEnd ? 'Ends On' : 'Renews On'}</p>
                     <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                       {subscription.currentPeriodEnd
                         ? new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {
@@ -664,7 +692,20 @@ export default function SubscriptionPage() {
                             })
                           : 'the end of your current period'}
                       </strong>
-                      . You can reactivate anytime.
+                      . Everything in your plan keeps working until then. You can undo this below at any time before that date.
+                    </p>
+                  </div>
+                )}
+
+                {/* Payment failed but the plan is still inside its retry window (2026-09-29, D2) */}
+                {subscription.inDunning && !subscription.cancelAtPeriodEnd && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-8">
+                    <p className="text-amber-900 dark:text-amber-200 text-sm">
+                      Your last payment did not go through. Your {tier} plan stays active
+                      {formatLongDate(subscription.entitlementEndsAt) ? <> until <strong>{formatLongDate(subscription.entitlementEndsAt)}</strong></> : null}
+                      {' '}while we retry your card. Contact{' '}
+                      <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>{' '}
+                      to update your card before then to keep it.
                     </p>
                   </div>
                 )}
@@ -805,10 +846,11 @@ export default function SubscriptionPage() {
 
                   {subscription.cancelAtPeriodEnd && (
                     <button
-                      disabled
-                      className="block w-full bg-gray-100 text-gray-700 dark:text-gray-300 py-3 px-4 rounded-lg font-semibold cursor-not-allowed"
+                      onClick={handleUndoCancel}
+                      disabled={undoingCancel}
+                      className="block w-full bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-sage-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Subscription Ending
+                      {undoingCancel ? 'Undoing...' : 'Undo cancellation'}
                     </button>
                   )}
                 </div>
@@ -862,9 +904,12 @@ export default function SubscriptionPage() {
               currentTier: downgradePreview?.currentTier || tier || 'PRO',
               itemsHidden: downgradePreview?.itemsHidden ?? 0,
               photosAffected: downgradePreview?.photosAffected ?? 0,
-              graceEndDate: downgradePreview?.graceEndDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
               teamMembersLosing: downgradePreview?.teamMembersLosing ?? 0,
               totalItems: downgradePreview?.totalItems ?? 0,
+              planEndsAt: downgradePreview?.planEndsAt ?? subscription.currentPeriodEnd ?? null,
+              planEndsAtIsEstimate: downgradePreview?.planEndsAtIsEstimate ?? false,
+              alreadyScheduled: downgradePreview?.alreadyScheduled ?? subscription.cancelAtPeriodEnd,
+              activeMarkdownCycles: downgradePreview?.activeMarkdownCycles ?? 0,
             }}
             onConfirm={async () => {
               await handleCancel();

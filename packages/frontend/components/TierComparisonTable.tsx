@@ -105,7 +105,7 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Persistent Inventory',
-    simple: true,
+    simple: false,
     pro: true,
     teams: true,
   },

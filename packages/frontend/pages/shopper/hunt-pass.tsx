@@ -13,6 +13,7 @@ import Link from 'next/link';
 import Head from 'next/head';
 import { useAuth } from '../../components/AuthContext';
 import HuntPassModal from '../../components/HuntPassModal';
+import HuntPassManage from '../../components/HuntPassManage'; // Self-serve cancel / undo (FTC click-to-cancel)
 
 const HuntPassPage = () => {
   const router = useRouter();
@@ -57,6 +58,9 @@ const HuntPassPage = () => {
                 <div className="text-5xl mb-4">✓</div>
                 <h2 className="text-3xl font-bold text-green-700 dark:text-green-300 mb-2">Hunt Pass Active</h2>
                 <p className="text-green-600 dark:text-green-400">You're earning 1.5x XP on every action</p>
+              </div>
+              <div className="mb-6">
+                <HuntPassManage variant="page" />
               </div>
               <Link
                 href="/shopper/dashboard"

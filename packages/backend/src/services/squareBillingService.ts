@@ -47,6 +47,29 @@ export const SQUARE_TIER_PRICE_CENTS: Record<BillableOrganizerTier, number> = {
   TEAMS: 7900,
 };
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * 2026-09-29 upgrade proration (PRO -> TEAMS while a paid PRO period is still running).
+ * Decision: the organizer gets TEAMS immediately and pays the PRICE DIFFERENCE prorated by the
+ * days left in the current period (remaining days rounded UP, capped at one interval); the period
+ * end does NOT move, and the next renewal bills the full TEAMS price. Returns 0 for a
+ * non-upgrade, an unknown tier, or a period that has already ended.
+ */
+export function computeUpgradeProrationCents(
+  fromTier: BillableOrganizerTier,
+  toTier: BillableOrganizerTier,
+  periodEnd: Date,
+  now: Date = new Date()
+): number {
+  const diff = (SQUARE_TIER_PRICE_CENTS[toTier] ?? 0) - (SQUARE_TIER_PRICE_CENTS[fromTier] ?? 0);
+  if (!(diff > 0)) return 0;
+  const remainingMs = periodEnd.getTime() - now.getTime();
+  if (!(remainingMs > 0)) return 0;
+  const remainingDays = Math.min(BILLING_INTERVAL_DAYS, Math.max(1, Math.ceil(remainingMs / MS_PER_DAY)));
+  return Math.round((diff * remainingDays) / BILLING_INTERVAL_DAYS);
+}
+
 // Hunt Pass: $4.99/mo, confirmed via schema.prisma comment + claude_docs/STATE.md/decisions-log.md.
 export const HUNT_PASS_PRICE_CENTS = 499;
 
@@ -156,10 +179,19 @@ export interface ChargeStoredCardParams {
   idempotencyParts: Array<string | number>;
   note: string;
   referenceId: string;
+  /**
+   * 2026-09-29: when true, ONLY a payment whose status is exactly COMPLETED counts as success
+   * (APPROVED, which Square can return for a not-yet-captured payment, is treated as a failure).
+   * Organizer subscription charges (subscribe endpoint + renewal job) set this: a tier or period
+   * is only ever granted against a COMPLETED payment id. Default false keeps the older
+   * COMPLETED-or-APPROVED behavior for the Hunt Pass callers.
+   */
+  requireCompleted?: boolean;
 }
 export interface ChargeStoredCardSuccess {
   ok: true;
   paymentId: string;
+  status: string;
 }
 export interface ChargeStoredCardFailure {
   ok: false;
@@ -189,10 +221,11 @@ export async function chargeStoredCard(params: ChargeStoredCardParams): Promise<
       note: params.note,
     } as any);
     const payment = (response as any)?.payment;
-    if (!payment?.id || (payment.status !== 'COMPLETED' && payment.status !== 'APPROVED')) {
+    const statusOk = payment?.status === 'COMPLETED' || (!params.requireCompleted && payment?.status === 'APPROVED');
+    if (!payment?.id || !statusOk) {
       return { ok: false, message: 'Card declined' };
     }
-    return { ok: true, paymentId: payment.id };
+    return { ok: true, paymentId: payment.id, status: payment.status };
   } catch (err) {
     const message = extractDeclineMessage(err);
     // Log the RAW error server-side (full detail, e.g. a missing-env-var config error)
