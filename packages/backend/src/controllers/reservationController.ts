@@ -1319,6 +1319,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
               amount,
               platformFeeAmount: commission,
               ...snapshotForCommissionOnly(commission, recordCommissionRate),
+              processor: 'CASH', // cash tender: no card processor (never let the schema default label this STRIPE)
               stripePaymentIntentId: cashPIId,
               status: 'PAID',
               source: 'POS',
@@ -1416,6 +1417,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
               amount,
               platformFeeAmount: commission,
               ...snapshotForCommissionOnly(commission, recordCommissionRate),
+              processor: 'CASH', // cash tender: no card processor (never let the schema default label this STRIPE)
               stripePaymentIntentId: cashPIId,
               status: 'PAID',
               source: 'POS',

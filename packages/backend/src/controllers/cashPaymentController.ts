@@ -281,6 +281,7 @@ export async function processCashSaleCore(params: {
         discountAmountCents: item.rowDiscountCents > 0 ? item.rowDiscountCents : null,
         discountReasonNote: item.rowDiscountCents > 0 ? discountResolution.discountReasonNote : null,
         discountAppliedByUserId: item.rowDiscountCents > 0 ? organizer.actingUserId : null,
+        processor: 'CASH', // cash tender: no card processor (never let the schema default label this STRIPE)
         stripePaymentIntentId: cashPIId,
         status: 'PAID',
         source: 'POS',
