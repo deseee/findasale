@@ -4,6 +4,7 @@
 
 import { Response } from 'express';
 import QRCode from 'qrcode';
+import { buildItemQrUrl, QR_SOURCE_KIT } from '../utils/qrUrl';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { CHEATSHEET_PRICES } from '../constants/cheatsheet';
@@ -71,7 +72,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
     // Pre-generate all item QR codes as data URLs
     const itemQrDataUrls: string[] = [];
     for (const item of items) {
-      const itemUrl = `${frontendUrl}/items/${item.id}`;
+      const itemUrl = buildItemQrUrl(frontendUrl, item.id, QR_SOURCE_KIT);
       const qrDataUrl = await QRCode.toDataURL(itemUrl, {
         type: 'image/png',
         width: QR_SIZE_STANDARD,
@@ -905,7 +906,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
     // Generate QR code for each item
     const itemQrBuffers: { [key: string]: Buffer } = {};
     for (const item of sale.items) {
-      const itemUrl = `${frontendUrl}/items/${item.id}`;
+      const itemUrl = buildItemQrUrl(frontendUrl, item.id, QR_SOURCE_KIT);
       itemQrBuffers[item.id] = await QRCode.toBuffer(itemUrl, {
         type: 'png',
         width: QR_SIZE_STANDARD,

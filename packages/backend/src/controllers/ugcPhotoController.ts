@@ -354,3 +354,45 @@ export const getPendingPhotosForOrganizer = async (req: AuthRequest, res: Respon
     res.status(500).json({ message: 'Failed to fetch pending photos' });
   }
 };
+
+/**
+ * GET /users/me/ugc-photos: the signed-in shopper's own APPROVED photos, for the profile showcase picker.
+ * Only APPROVED photos are offered because the public showcase (GET /users/:userId/showcase) does not
+ * re-check moderation status. Scoped to the requesting user; never accepts a userId from the client.
+ * Response: a plain array (what pages/profile.tsx reads), newest first.
+ * Query: limit (1-100, default 50), offset (>= 0, default 0).
+ */
+export const getMyShowcasePhotos = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const rawLimit = parseInt(String(req.query?.limit ?? ''), 10);
+    const rawOffset = parseInt(String(req.query?.offset ?? ''), 10);
+    const take = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, rawLimit)) : 50;
+    const skip = Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0;
+
+    const photos = await prisma.uGCPhoto.findMany({
+      where: { userId, status: 'APPROVED' },
+      select: {
+        id: true,
+        photoUrl: true,
+        caption: true,
+        linkedItemIds: true,
+        isHaulPost: true,
+        likesCount: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+      skip,
+    });
+
+    res.json(photos);
+  } catch (error) {
+    console.error('Error fetching showcase photos:', error);
+    res.status(500).json({ message: 'Failed to fetch photos' });
+  }
+};

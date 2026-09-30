@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { handOffCrewsBeforeUserDeletion } from '../services/crewService'; // crew founder/memberCount handoff before user.delete
 
 // Helper function to convert Decimal values to numbers recursively
 const convertDecimalsToNumbers = (obj: any) => {
@@ -892,6 +893,7 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       appraisalAIRequestCount,
       affiliateReferralCount,
       referralRewardCount,
+      creatorConversionCount,
     ] = await Promise.all([
       req.user.organizer
         ? prisma.sale.count({ where: { organizerId: req.user.organizer.id } })
@@ -916,6 +918,9 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       prisma.referralReward.count({
         where: { OR: [{ referrerId: req.user.id }, { referredUserId: req.user.id }] },
       }),
+      // Creator program: AffiliateConversion.creatorUserId is ON DELETE RESTRICT so the
+      // commission ledger (a financial record) is never cascaded away with the account.
+      prisma.affiliateConversion.count({ where: { creatorUserId: req.user.id } }),
     ]);
 
     const blockers: string[] = [];
@@ -927,6 +932,7 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
     if (appraisalAIRequestCount > 0) blockers.push(`${appraisalAIRequestCount} appraisal request${appraisalAIRequestCount === 1 ? '' : 's'}`);
     if (affiliateReferralCount > 0) blockers.push(`${affiliateReferralCount} affiliate referral${affiliateReferralCount === 1 ? '' : 's'}`);
     if (referralRewardCount > 0) blockers.push(`${referralRewardCount} referral reward${referralRewardCount === 1 ? '' : 's'}`);
+    if (creatorConversionCount > 0) blockers.push(`${creatorConversionCount} creator commission record${creatorConversionCount === 1 ? '' : 's'}`);
 
     if (blockers.length > 0) {
       const blockerList =
@@ -940,9 +946,15 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Delete user — Prisma cascade rules will handle related records
-    await prisma.user.delete({
-      where: { id: req.user.id }
+    // Delete user — Prisma cascade rules will handle related records. Crew.founderUserId and
+    // CrewMember.userId cascade, so hand off founded crews and fix memberCount in the SAME
+    // transaction immediately before the delete (all-or-nothing).
+    const deletingUserId = req.user.id;
+    await prisma.$transaction(async (tx) => {
+      await handOffCrewsBeforeUserDeletion(deletingUserId, tx);
+      await tx.user.delete({
+        where: { id: deletingUserId }
+      });
     });
 
     console.info(`[Account Deletion] Successfully deleted account for user ${req.user.id} (${req.user.email})`);

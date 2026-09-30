@@ -6,6 +6,8 @@ import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import archiver from 'archiver';
 import ExcelJS from 'exceljs';
 import { checkExportRateLimit, formatNextExportDate } from '../services/exportRateLimitService';
+import { organizerHasTier } from '../utils/tierAccess';
+import { csvCell } from '../utils/csvSafe'; // formula-injection-safe cell writer (leading = + - @, tab, CR, LF)
 
 /**
  * Category mapping from FindA.Sale to EstateSales.NET format
@@ -40,14 +42,10 @@ function mapCategory(category: string | null | undefined): string {
  */
 function escapeCSV(value: string | null | undefined): string {
   if (!value) return '';
-  const str = String(value);
-  // Neutralize CSV formula injection: prefix =,+,-,@ with a single quote so
-  // Excel/Sheets treats the cell as text, not an executable formula.
-  const safe = /^[=+\-@]/.test(str) ? `'${str}` : str;
-  if (safe.includes(',') || safe.includes('"') || safe.includes('\n')) {
-    return `"${safe.replace(/"/g, '""')}"`;
-  }
-  return safe;
+  // Neutralize CSV formula injection (leading = + - @, and also tab / CR / whitespace-then-formula
+  // starts) with a leading apostrophe so Excel/Sheets treat the cell as text, then RFC 4180 quote.
+  // Shared implementation: utils/csvSafe.ts. Callers pass strings only; numbers are written raw.
+  return csvCell(String(value));
 }
 
 /**
@@ -88,7 +86,7 @@ export const exportEstatesalesCSV = async (
     }
 
     // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
-    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    const isProOrTeamsExport = organizerHasTier(req.user?.organizerProfile?.subscriptionTier, 'PRO'); // Organizer.subscriptionTier is truth; no lapse-flag downgrade (Patrick D1/D2)
     if (!isProOrTeamsExport) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -184,8 +182,8 @@ export const exportEstatesalesCSV = async (
         mapCategory(item.category),
         item.price ? item.price.toFixed(2) : '',
         escapeCSV(truncate(item.description, 500)),
-        item.condition || '',
-        photoUrl,
+        escapeCSV(item.condition || ''),
+        escapeCSV(photoUrl),
         item.shippingAvailable ? 'Yes' : 'No',
         item.shippingPrice ? item.shippingPrice.toFixed(2) : '',
       ];
@@ -232,7 +230,7 @@ export const exportFacebookJSON = async (
     }
 
     // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
-    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    const isProOrTeamsExport = organizerHasTier(req.user?.organizerProfile?.subscriptionTier, 'PRO'); // Organizer.subscriptionTier is truth; no lapse-flag downgrade (Patrick D1/D2)
     if (!isProOrTeamsExport) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -372,7 +370,7 @@ export const exportCraigslistText = async (
     }
 
     // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
-    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    const isProOrTeamsExport = organizerHasTier(req.user?.organizerProfile?.subscriptionTier, 'PRO'); // Organizer.subscriptionTier is truth; no lapse-flag downgrade (Patrick D1/D2)
     if (!isProOrTeamsExport) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -526,7 +524,7 @@ export const exportOrganizer = async (
     }
 
     // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
-    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    const isProOrTeamsExport = organizerHasTier(req.user?.organizerProfile?.subscriptionTier, 'PRO'); // Organizer.subscriptionTier is truth; no lapse-flag downgrade (Patrick D1/D2)
     if (!isProOrTeamsExport) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -795,7 +793,7 @@ export const exportFacebookXLSX = async (
     }
 
     // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
-    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    const isProOrTeamsExport = organizerHasTier(req.user?.organizerProfile?.subscriptionTier, 'PRO'); // Organizer.subscriptionTier is truth; no lapse-flag downgrade (Patrick D1/D2)
     if (!isProOrTeamsExport) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -1054,8 +1052,11 @@ export const exportCommerceManagerFeed = async (
       // Follow-up: build a real category→taxonomy-ID mapping table (out of scope here).
       const googleProductCategory = '';
 
-      const title = escapeCommerceFeedCSV(stripHtml(item.title));
-      const description = escapeCommerceFeedCSV(
+      // Free-text fields (organizer typed or imported) go through csvCell so a title like "=HYPERLINK(...)"
+      // cannot execute if someone opens the downloaded feed in a spreadsheet. Ids, prices, links and
+      // photo URLs are system generated and stay untouched.
+      const title = csvCell(stripHtml(item.title));
+      const description = csvCell(
         truncate(stripHtml(item.description), 9999)
       );
 
@@ -1072,7 +1073,7 @@ export const exportCommerceManagerFeed = async (
         escapeCommerceFeedCSV(link),
         escapeCommerceFeedCSV(primaryPhoto),
         escapeCommerceFeedCSV(additionalPhotos),
-        escapeCommerceFeedCSV(brand),
+        csvCell(brand),
         escapeCommerceFeedCSV(quantity),
         escapeCommerceFeedCSV(googleProductCategory),
       ].join(',');
@@ -1176,8 +1177,11 @@ export const exportOrganizerCommerceManagerFeed = async (
       const remainingStock = Math.max((item.stockTotal ?? 1) - item.stockSold, 0);
       const quantity = item.status === 'SOLD' ? '0' : String(remainingStock);
 
-      const title = escapeCommerceFeedCSV(stripHtml(item.title));
-      const description = escapeCommerceFeedCSV(
+      // Free-text fields (organizer typed or imported) go through csvCell so a title like "=HYPERLINK(...)"
+      // cannot execute if someone opens the downloaded feed in a spreadsheet. Ids, prices, links and
+      // photo URLs are system generated and stay untouched.
+      const title = csvCell(stripHtml(item.title));
+      const description = csvCell(
         truncate(stripHtml(item.description), 9999)
       );
 
@@ -1191,7 +1195,7 @@ export const exportOrganizerCommerceManagerFeed = async (
         escapeCommerceFeedCSV(link),
         escapeCommerceFeedCSV(primaryPhoto),
         escapeCommerceFeedCSV(additionalPhotos),
-        escapeCommerceFeedCSV(brand),
+        csvCell(brand),
         escapeCommerceFeedCSV(quantity),
         escapeCommerceFeedCSV(googleProductCategory),
       ].join(',');

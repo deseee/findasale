@@ -103,57 +103,95 @@ export const csrfTokenCookie = (req: Request, res: Response, next: NextFunction)
 };
 
 /**
- * Middleware to validate CSRF token on state-mutating requests (POST/PUT/PATCH/DELETE)
- * Skip CSRF validation for:
- * - Webhook routes (Stripe, external services use different auth)
- * - Public endpoints that don't require authentication
+ * Exact-path allowlist (2026-09-29). This used to be `req.path.includes('/webhook')` plus a pile of other
+ * substring matches, which (a) exempted /api/webhooks (the TEAMS webhook CRUD, cookie-authenticated) and any
+ * path that merely contained the text "/auth/oauth" or "/webhook", and (b) let a crafted path such as
+ * /api/items/x/webhook-anything skip the check. Only the real machine-to-machine / mail-client endpoints
+ * below are exempt, each authenticated by something other than a browser session (signature, shared secret,
+ * or an HMAC/one-time token in the URL).
+ */
+
+/** Signature- or shared-secret-authenticated server-to-server endpoints (no cookies, no CSRF context). */
+const CSRF_EXEMPT_EXACT_PATHS: ReadonlySet<string> = new Set([
+  // Payment / provider webhooks (signature verified in the handler)
+  '/api/stripe/webhook',
+  '/api/billing/webhook',
+  '/api/square/webhook',
+  '/api/snooze/webhook', // MailerLite HMAC
+  '/api/outreach/resend-webhook', // svix signature
+  '/api/notifications/sms-webhook', // inbound SMS (Twilio signature)
+  '/api/ebay/account-deletion',
+  '/api/ebay/notifications',
+  // Machine-to-machine triggers with their own shared secret
+  '/api/crawler-log',
+  '/api/video/footage-ingest', // x-ingest-secret
+  // Anonymous callers with no browser session
+  '/api/outreach/page-view',
+  '/api/outreach/unsubscribe', // RFC 8058 one-click from mail servers
+  '/api/shopper/waitlist/unsubscribe', // RFC 8058 one-click for Notify Me emails (HMAC token in the URL)
+]);
+
+/** Prefixes whose every route is server-to-server (each route verifies its own secret/signature). */
+const CSRF_EXEMPT_PREFIXES: readonly string[] = [
+  '/api/internal/', // x-scraper-key / REVALIDATE_SECRET gated
+  '/api/twilio/', // X-Twilio-Signature HMAC (isValidTwilioRequest in routes/twilioVoice.ts)
+];
+
+/**
+ * Unauthenticated login-flow endpoints (exact paths). They read/write httpOnly cookies but authenticate by
+ * credential or by a secret cookie an attacker cannot read cross-origin, so the double-submit token adds
+ * nothing (and the cookie path/domain can mismatch behind the Next.js proxy). /api/auth/oauth is the
+ * OAuth login POST only: /api/auth/oauth/link and /api/auth/oauth-verify-age are authenticated mutations
+ * and DO need CSRF.
+ */
+const CSRF_EXEMPT_AUTH_PATHS: ReadonlySet<string> = new Set([
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/oauth',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/api/auth/refresh', // reads a secret httpOnly cookie an attacker cannot read or forge cross-origin
+  '/api/auth/logout',
+]);
+
+const normalizePath = (path: string): string => (path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path);
+
+/** True when this exact request path is on the CSRF allowlist. Exported for tests. */
+export const isCsrfExemptPath = (rawPath: string): boolean => {
+  const path = normalizePath(rawPath);
+  if (CSRF_EXEMPT_EXACT_PATHS.has(path) || CSRF_EXEMPT_AUTH_PATHS.has(path)) return true;
+  return CSRF_EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix));
+};
+
+/** Cookie names that carry a browser session (a request with one of these is cookie-authenticated). */
+const AUTH_COOKIE_NAMES = ['accessToken', 'refreshToken'];
+
+/**
+ * Middleware to validate CSRF token on state-mutating requests (POST/PUT/PATCH/DELETE).
+ * Skips only the exact-path allowlists above (signature/secret-authenticated endpoints), and skips the
+ * double-submit check for Bearer-authenticated requests that carry no session cookie.
  */
 export const validateCsrfToken = (req: Request, res: Response, next: NextFunction) => {
-  // Skip CSRF for webhooks and external server-to-server callbacks (they use signature verification instead)
-  // /api/internal/* routes are server-to-server (e.g. scraper ingest from GitHub Actions) and authenticate
-  // via x-scraper-key shared secret — same model as Stripe webhook signatures.
-  // /api/video/footage-ingest is a machine-to-machine trigger from the native PC
-  // uploader (rclone + curl), authenticated via its own x-ingest-secret shared-secret
-  // middleware (requireIngestSecret in routes/video.ts) -- same pattern as /api/internal/*
-  // below. It has no browser session/cookie, so the CSRF double-submit check can never
-  // pass for it; without this bypass every real ping was silently rejected 403 before
-  // ever reaching requireIngestSecret (found 2026-07-12, confirmed via Railway http logs:
-  // real curl pings from the PC uploader, 403, never once reaching the route handler).
-  if (req.path.includes('/webhook') || req.path.includes('/resend-webhook') || req.path.includes('/stripe/webhook') || req.path.includes('/billing/webhook') || req.path.includes('/ebay/account-deletion') || req.path.includes('/api/internal/') || req.path.includes('/api/crawler-log') || req.path.includes('/video/footage-ingest')) {
+  // Signature-authenticated webhooks, machine-to-machine triggers, mail-client one-click endpoints and the
+  // unauthenticated login flow are matched by EXACT path (or a server-to-server prefix); see the allowlists
+  // above for why each is safe and why nothing is matched by substring any more.
+  if (isCsrfExemptPath(req.path)) {
     return next();
   }
 
-  // Skip CSRF for unauthenticated auth endpoints
-  // These endpoints are stateless and don't use cookies for authentication (JWT is in localStorage)
-  // CSRF protection only meaningful for authenticated state-mutating requests
-  // Cross-origin architecture makes double-submit pattern impossible for unauthenticated requests
-  // P0 FIX: /auth/refresh also bypassed — it uses httpOnly cookie (not bearer token) so the
-  // Bearer-token bypass below doesn't fire, and the CSRF cookie path/domain may not match
-  // when going through the Next.js proxy. Refresh is CSRF-safe: it reads a secret httpOnly cookie
-  // that attackers cannot read or forge from a different origin.
-  if (req.path.includes('/auth/login') || req.path.includes('/auth/register') ||
-      req.path.includes('/auth/oauth') || req.path.includes('/auth/forgot-password') ||
-      req.path.includes('/auth/reset-password') || req.path.includes('/auth/refresh') ||
-      req.path.includes('/auth/logout')) {
-    return next();
-  }
-
-  // Public outreach tracking + RFC 8058 unsubscribe — anonymous callers with no browser session.
-  // page-view: fire-and-forget tracker from organizer profile page (outreach prospects not logged in).
-  // unsubscribe POST: RFC 8058 one-click from Gmail/Yahoo mail servers (no cookies, no CSRF context).
-  if (req.path.includes('/outreach/page-view') || req.path.includes('/outreach/unsubscribe')) {
-    return next();
-  }
-
-  // JWT Bearer auth is inherently CSRF-safe (attackers cannot set custom headers cross-origin)
-  // Skip double-submit cookie check when a valid Bearer token is present
-  const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return next();
-  }
-
-  // Parse cookies manually
+  // Parse cookies once: needed for the Bearer rule below and for the double-submit check.
   const cookies = parseCookies(req.headers.cookie);
+
+  // JWT Bearer auth is inherently CSRF-safe (attackers cannot set custom headers cross-origin) ONLY when the
+  // browser is not also carrying a session cookie: a cookie-authenticated request can be forged cross-site,
+  // and an attacker-controlled page could try to add a junk Authorization header alongside the victim's
+  // cookie. So the Bearer skip applies only when no auth cookie is present.
+  const authHeader = req.headers['authorization'];
+  const hasAuthCookie = AUTH_COOKIE_NAMES.some((name) => !!cookies[name]);
+  if (authHeader && authHeader.startsWith('Bearer ') && !hasAuthCookie) {
+    return next();
+  }
+
   const cookieToken = cookies[CSRF_COOKIE_NAME];
 
   // Get token from header (client must send it)

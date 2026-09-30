@@ -33,6 +33,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { csvCell } from '../utils/csvSafe'; // CSV formula-injection-safe cell writer
 
 // Shape of the fields this service actually reads off Item — kept narrow and explicit so a
 // future schema rename breaks this file loudly (TS error) rather than silently mismapping.
@@ -75,12 +76,9 @@ const MAX_IMAGE_COLUMNS = 10;
  * ebayController.ts's generateEbayCsv / exportController.ts's escapeCSV.
  */
 function escapeCsvValue(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
+  // RFC 4180 quoting plus spreadsheet formula neutralisation (titles/descriptions are free text and can
+  // be imported); numbers such as LotNum stay numeric. Shared implementation: utils/csvSafe.ts.
+  return csvCell(value);
 }
 
 function money(value: number): string {

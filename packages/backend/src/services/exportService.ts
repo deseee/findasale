@@ -4,19 +4,33 @@ import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermark
 
 type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
+// CSV/formula injection (OWASP "CSV Injection"): a cell that starts with = + - @ (or a tab / carriage
+// return) is executed as a formula when the export is opened in Excel, Sheets or QuickBooks. Item titles
+// and descriptions are user-controlled (scraped, imported, typed), so every text cell is neutralised with
+// a leading single quote, which spreadsheets render as plain text.
+const CSV_FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+// Plain signed numbers ("-5.00", "+12", ".5") cannot execute anything and must stay numeric, or an Amount
+// column would import as text.
+const CSV_PLAIN_NUMBER = /^[+-]?(\d+(\.\d*)?|\.\d+)$/;
+
+export function neutralizeCsvFormula(str: string): string {
+  if (!CSV_FORMULA_TRIGGER.test(str) || CSV_PLAIN_NUMBER.test(str)) return str;
+  return `'${str}`;
+}
+
 /**
- * CSV Escape Helper — standard CSV escaping
+ * CSV Escape Helper — standard CSV escaping + formula-injection neutralisation
  * Wraps fields with commas/quotes/newlines, escapes internal quotes
  */
-function escapeCsvField(value: any): string {
+export function escapeCsvField(value: any): string {
   if (value === null || value === undefined) {
     return '';
   }
 
-  const str = String(value);
+  const str = neutralizeCsvFormula(String(value));
 
   // If field contains comma, quote, or newline, wrap in quotes and escape internal quotes
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
 

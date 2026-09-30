@@ -4,6 +4,8 @@ import { AuthRequest } from '../middleware/auth';
 import { awardXp, applyHuntPassMultiplier, checkMonthlyXpCap, XP_AWARDS } from '../services/xpService';
 import { createNotification } from '../services/notificationService';
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
+import { resolveAudienceAccess } from '../utils/audienceAccess';
+import { SHOW_NAME_PREF_KEY, firstNameLastInitial, hasOptedIntoPublicName } from '../utils/publicDisplayName';
 
 // POST /sales/:id/rsvp — add/toggle RSVP for current user
 export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
@@ -152,37 +154,101 @@ export const getMyRSVPStatus = async (req: AuthRequest, res: Response) => {
       where: { saleId },
     });
 
-    res.json({ isGoing: !!myRSVP, count });
+    // showName: whether this shopper opted in to being named (first name + last initial) in the
+    // public going list. Lets the RSVP modal render the toggle in its true state.
+    res.json({ isGoing: !!myRSVP, count, showName: hasOptedIntoPublicName(req.user.notificationPrefs) });
   } catch (error) {
     console.error('RSVP status error:', error);
     res.status(500).json({ message: 'Server error while fetching RSVP status' });
   }
 };
 
-// GET /sales/:id/rsvp/attendees — get list of attendees (names only, for organizer/public modal)
-export const getRSVPAttendees = async (req: any, res: Response) => {
+// GET /sales/:id/rsvp/attendees — who is going.
+// 2026-09-29 (data minimization, GDPR/CCPA): this used to be public and returned every attendee's
+// userId and full name. Now (route uses optionalAuthenticate):
+//  - the sale's organizer, their workspace staff (broadcast_alerts permission) and admins get the
+//    names (audience: 'organizer'), each row keyed by the RSVP id, never a userId;
+//  - everyone else gets the count, plus "First name + last initial" ONLY for shoppers who opted in
+//    with the showNameInGoingList preference (audience: 'public'); the rest are counted in
+//    anonymousCount and never named.
+export const getRSVPAttendees = async (req: AuthRequest, res: Response) => {
   try {
     const { id: saleId } = req.params;
 
-    const attendees = await prisma.saleRSVP.findMany({
-      where: { saleId },
-      include: {
-        user: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true, organizerId: true },
     });
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    const access = await resolveAudienceAccess(req, sale.organizerId);
+
+    const [count, rows] = await Promise.all([
+      prisma.saleRSVP.count({ where: { saleId } }),
+      prisma.saleRSVP.findMany({
+        where: { saleId },
+        include: {
+          user: {
+            select: { name: true, notificationPrefs: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+    ]);
+
+    const attendees = access.allowed
+      ? rows.map((rsvp: any) => ({ id: rsvp.id, name: rsvp.user?.name || 'Shopper' }))
+      : rows.flatMap((rsvp: any) => {
+          if (!hasOptedIntoPublicName(rsvp.user?.notificationPrefs)) return [];
+          const label = firstNameLastInitial(rsvp.user?.name);
+          return label ? [{ id: rsvp.id, name: label }] : [];
+        });
 
     res.json({
-      count: attendees.length,
-      attendees: attendees.map(rsvp => ({
-        id: rsvp.user.id,
-        name: rsvp.user.name,
-      })),
+      count,
+      audience: access.allowed ? 'organizer' : 'public',
+      attendees,
+      anonymousCount: Math.max(0, count - attendees.length),
     });
   } catch (error) {
     console.error('RSVP attendees error:', error);
     res.status(500).json({ message: 'Server error while fetching attendees' });
+  }
+};
+
+// PUT /sales/:id/rsvp/name-visibility — body { show: boolean }
+// The shopper's own opt-in (default OFF) to be named in public going lists. It is an account-level
+// preference (notificationPrefs.showNameInGoingList), merged so no other preference is touched.
+export const setRSVPNameVisibility = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    const show = req.body?.show;
+    if (typeof show !== 'boolean') {
+      return res.status(400).json({ message: 'show must be true or false' });
+    }
+
+    const current = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { notificationPrefs: true },
+    });
+    const currentPrefs =
+      current?.notificationPrefs && typeof current.notificationPrefs === 'object' && !Array.isArray(current.notificationPrefs)
+        ? (current.notificationPrefs as Record<string, unknown>)
+        : {};
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { notificationPrefs: { ...currentPrefs, [SHOW_NAME_PREF_KEY]: show } as any },
+    });
+
+    res.json({ showName: show });
+  } catch (error) {
+    console.error('RSVP name visibility error:', error);
+    res.status(500).json({ message: 'Server error while saving your preference' });
   }
 };

@@ -13,7 +13,14 @@
  * in favour of the design-system accent — callers may still pass it without error.
  */
 
+import { escapeHtml, safeHttpsUrl } from '../utils/htmlEscape';
+
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
+
+// 2026-09-29 (HTML injection fix): every builder below treats its text arguments (sale titles, addresses,
+// organizer names, notes, dates) as PLAIN TEXT and escapes them with escapeHtml() before interpolating;
+// photo URLs must be plain https URLs (safeHttpsUrl) or the placeholder is shown; link URLs are escaped for
+// their attribute. Callers must therefore pass raw text, never pre-escaped HTML.
 
 // ─────────────────────────────────────────────────────────────────
 // Design tokens
@@ -163,7 +170,7 @@ function baseWrapper(opts: {
                 </tr>
                 <tr>
                   <td align="center" style="padding-bottom:10px;">
-                    <a href="${unsubUrl}" style="font-size:12px; color:${T.inkDim}; text-decoration:underline;" class="em-ink-dim">${unsubLabel}</a>
+                    <a href="${escapeHtml(unsubUrl)}" style="font-size:12px; color:${T.inkDim}; text-decoration:underline;" class="em-ink-dim">${unsubLabel}</a>
                     <span style="color:${T.inkFaint};"> &middot; </span>
                     <a href="${FRONTEND_URL}/settings/notifications" style="font-size:12px; color:${T.inkDim}; text-decoration:underline;" class="em-ink-dim">Manage preferences</a>
                   </td>
@@ -249,6 +256,7 @@ function buildStepIndicator(step: number, total = 3): string {
 // ─────────────────────────────────────────────────────────────────
 
 export function buildCTAButton(text: string, url: string, _accent = T.accent): string {
+  url = escapeHtml(url);
   return `
 <!--[if mso]>
 <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
@@ -283,18 +291,19 @@ export function buildSaleCardModule(sale: {
   hours?: string;
   statusLabel?: string;
 }): string {
-  const photoBlock = sale.photoUrl
-    ? `<img src="${sale.photoUrl}" alt="${sale.title}" width="536" style="width:100%; max-height:200px; object-fit:cover; display:block;" />`
+  const salePhoto = safeHttpsUrl(sale.photoUrl);
+  const photoBlock = salePhoto
+    ? `<img src="${escapeHtml(salePhoto)}" alt="${escapeHtml(sale.title)}" width="536" style="width:100%; max-height:200px; object-fit:cover; display:block;" />`
     : `<div style="width:100%; height:140px; background:${T.accentSoft}; text-align:center; line-height:140px; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:${T.accent}; font-family:${T.font};">FindA.Sale</div>`;
 
   const statusBadge = sale.statusLabel
-    ? `<span style="display:inline-block; padding:3px 8px; font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase; background:${T.successSoft}; color:${T.success}; border-radius:999px; margin-right:6px; font-family:${T.font};">${sale.statusLabel}</span>`
+    ? `<span style="display:inline-block; padding:3px 8px; font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase; background:${T.successSoft}; color:${T.success}; border-radius:999px; margin-right:6px; font-family:${T.font};">${escapeHtml(sale.statusLabel)}</span>`
     : '';
   const typeBadge = sale.saleType
-    ? `<span style="display:inline-block; padding:3px 8px; font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase; background:rgba(20,18,14,0.05); color:${T.inkDim}; border-radius:999px; font-family:${T.font};">${sale.saleType}</span>`
+    ? `<span style="display:inline-block; padding:3px 8px; font-size:10.5px; letter-spacing:0.05em; text-transform:uppercase; background:rgba(20,18,14,0.05); color:${T.inkDim}; border-radius:999px; font-family:${T.font};">${escapeHtml(sale.saleType)}</span>`
     : '';
   const hoursLine = sale.hours
-    ? `<div style="font-size:13px; color:${T.inkDim}; padding:2px 0;">&#128336; ${sale.hours}</div>`
+    ? `<div style="font-size:13px; color:${T.inkDim}; padding:2px 0;">&#128336; ${escapeHtml(sale.hours)}</div>`
     : '';
 
   return `
@@ -304,14 +313,14 @@ export function buildSaleCardModule(sale: {
     <tr><td style="padding:0;">${photoBlock}</td></tr>
     <tr><td style="padding:14px 16px 16px;">
       <div style="margin-bottom:8px;">${statusBadge}${typeBadge}</div>
-      <div style="font-size:17px; font-weight:600; letter-spacing:-0.01em; line-height:1.25; color:${T.ink}; margin-bottom:10px;">${sale.title}</div>
+      <div style="font-size:17px; font-weight:600; letter-spacing:-0.01em; line-height:1.25; color:${T.ink}; margin-bottom:10px;">${escapeHtml(sale.title)}</div>
       <div style="font-size:13px; color:${T.inkDim}; line-height:1.7;">
-        <div>&#128197; ${sale.dateRange}</div>
+        <div>&#128197; ${escapeHtml(sale.dateRange)}</div>
         ${hoursLine}
-        <div>&#128205; ${sale.address}</div>
+        <div>&#128205; ${escapeHtml(sale.address)}</div>
       </div>
       <div style="margin-top:14px;">
-        <a href="${sale.ctaUrl}" style="color:${T.accent}; font-weight:600; font-size:14px; text-decoration:none;">${sale.ctaLabel || 'View the sale'} &rarr;</a>
+        <a href="${escapeHtml(sale.ctaUrl)}" style="color:${T.accent}; font-weight:600; font-size:14px; text-decoration:none;">${escapeHtml(sale.ctaLabel || 'View the sale')} &rarr;</a>
       </div>
     </td></tr>
   </table>
@@ -336,13 +345,14 @@ export function buildItemCardModule(item: {
     ? `<span style="display:inline-block; padding:2px 7px; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; background:${rarity.bg}; color:${rarity.fg}; border-radius:999px; margin-bottom:6px; font-family:${T.font};">${rarity.label}</span><br>`
     : '';
 
-  const photo = item.photoUrl
-    ? `<img src="${item.photoUrl}" alt="${item.title}" width="110" style="width:110px; height:110px; object-fit:cover; display:block;" />`
+  const itemPhoto = safeHttpsUrl(item.photoUrl);
+  const photo = itemPhoto
+    ? `<img src="${escapeHtml(itemPhoto)}" alt="${escapeHtml(item.title)}" width="110" style="width:110px; height:110px; object-fit:cover; display:block;" />`
     : `<div style="width:110px; height:110px; background:${T.accentSoft}; text-align:center; line-height:110px; font-size:9px; letter-spacing:0.08em; text-transform:uppercase; color:${T.accent}; font-family:${T.font};">FindA.Sale</div>`;
 
   const priceStr = `$${item.price.toFixed(2)}`;
   const categoryLine = item.category
-    ? `<div style="font-size:12px; color:${T.inkFaint}; margin-bottom:8px;">${item.category}</div>`
+    ? `<div style="font-size:12px; color:${T.inkFaint}; margin-bottom:8px;">${escapeHtml(item.category)}</div>`
     : '';
 
   return `
@@ -353,10 +363,10 @@ export function buildItemCardModule(item: {
       <td width="110" valign="top" style="width:110px; padding:0;">${photo}</td>
       <td valign="top" style="padding:12px 14px 12px 12px;">
         ${rarityBadge}
-        <div style="font-size:15px; font-weight:600; line-height:1.3; color:${T.ink}; margin-bottom:4px; letter-spacing:-0.005em;">${item.title}</div>
+        <div style="font-size:15px; font-weight:600; line-height:1.3; color:${T.ink}; margin-bottom:4px; letter-spacing:-0.005em;">${escapeHtml(item.title)}</div>
         ${categoryLine}
         <div style="font-size:16px; font-weight:700; color:${T.ink}; margin-bottom:10px;">${priceStr}</div>
-        <a href="${item.ctaUrl}" style="color:${T.accent}; font-weight:600; font-size:13px; text-decoration:none;">View item &rarr;</a>
+        <a href="${escapeHtml(item.ctaUrl)}" style="color:${T.accent}; font-weight:600; font-size:13px; text-decoration:none;">View item &rarr;</a>
       </td>
     </tr>
   </table>
@@ -494,17 +504,18 @@ export function buildEmail(options: EmailOptions): string {
 
 export function buildItemCard(item: ItemCardData): string {
   const price = (item.price / 100).toFixed(2);
-  const photoHtml = item.photoUrl
-    ? `<img src="${item.photoUrl}" alt="${item.title}" width="536" style="width:100%; max-height:160px; object-fit:cover; border-radius:6px; margin-bottom:10px; display:block;" />`
+  const legacyPhoto = safeHttpsUrl(item.photoUrl);
+  const photoHtml = legacyPhoto
+    ? `<img src="${escapeHtml(legacyPhoto)}" alt="${escapeHtml(item.title)}" width="536" style="width:100%; max-height:160px; object-fit:cover; border-radius:6px; margin-bottom:10px; display:block;" />`
     : `<div style="width:100%; height:80px; background:${T.accentSoft}; border-radius:6px; margin-bottom:10px; text-align:center; line-height:80px; font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:${T.accent};">FindA.Sale</div>`;
 
   return `
 <div style="border:1px solid ${T.borderSolid}; border-radius:8px; padding:14px; margin-bottom:12px; background-color:${T.surface}; overflow:hidden;">
   ${photoHtml}
-  <div style="font-weight:600; font-size:15px; color:${T.ink}; margin-bottom:4px;">${item.title}</div>
+  <div style="font-weight:600; font-size:15px; color:${T.ink}; margin-bottom:4px;">${escapeHtml(item.title)}</div>
   <div style="color:${T.accent}; font-weight:700; font-size:16px; margin-bottom:4px;">$${price}</div>
-  ${item.category ? `<div style="color:${T.inkDim}; font-size:13px; margin-bottom:10px;">${item.category}</div>` : ''}
-  <a href="${item.url}" style="display:inline-block; padding:6px 14px; background-color:${T.accent}; color:#ffffff; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">View Item</a>
+  ${item.category ? `<div style="color:${T.inkDim}; font-size:13px; margin-bottom:10px;">${escapeHtml(item.category)}</div>` : ''}
+  <a href="${escapeHtml(item.url)}" style="display:inline-block; padding:6px 14px; background-color:${T.accent}; color:#ffffff; border-radius:6px; text-decoration:none; font-size:13px; font-weight:600;">View Item</a>
 </div>`;
 }
 
@@ -543,17 +554,17 @@ export function buildNewSaleAlertEmail(opts: {
     : '';
 
   const referralLine = referralUrl
-    ? `Know someone who&rsquo;d love this? <a href="${referralUrl}" style="color:${T.accent}; font-weight:600; text-decoration:none;">Share the sale &rarr;</a>`
+    ? `Know someone who&rsquo;d love this? <a href="${escapeHtml(referralUrl)}" style="color:${T.accent}; font-weight:600; text-decoration:none;">Share the sale &rarr;</a>`
     : '';
 
   const content = `
-    ${buildHero({ eyebrow: 'From an organizer you follow', title: `${organizerName} just posted something near you.`, sub: `Here are the details, plus a few items worth a look.` })}
+    ${buildHero({ eyebrow: 'From an organizer you follow', title: `${escapeHtml(organizerName)} just posted something near you.`, sub: `Here are the details, plus a few items worth a look.` })}
     ${buildSaleCardModule({ title: sale.title, dateRange: sale.dateRange, address: sale.address, photoUrl: sale.photoUrl, ctaUrl: sale.saleUrl, ctaLabel: 'View the sale', saleType: sale.saleType, hours: sale.hours })}
     ${itemsSection}
     ${buildCTARow('View the sale →', sale.saleUrl, referralLine)}
   `;
 
-  return baseWrapper({ preheader: `${organizerName} just posted a new sale: ${sale.title}`, content, unsubLabel: 'Stop alerts from organizers I follow', unsubUrl: opts.unsubUrl });
+  return baseWrapper({ preheader: escapeHtml(`${organizerName} just posted a new sale: ${sale.title}`), content, unsubLabel: 'Stop alerts from organizers I follow', unsubUrl: opts.unsubUrl });
 }
 
 /** Email 2 — Shopper: Sale day reminder */
@@ -567,25 +578,28 @@ export function buildSaleDayReminderEmail(opts: {
   savedItems?: Array<{ title: string; price: number; photoUrl?: string; category?: string; itemUrl: string }>;
   ctaUrl: string;
   reminderType: 'one-day' | 'two-hours';
+  /** For one-day reminders: whether the sale opens later today or tomorrow in the organizer's timezone (default tomorrow). */
+  dayWord?: 'today' | 'tomorrow';
   unsubUrl?: string;
 }): string {
-  const { saleName, saleDate, saleTime, saleAddress, mapUrl, organizerNotes, savedItems = [], ctaUrl, reminderType } = opts;
-  const eyebrow = reminderType === 'two-hours' ? 'Starting in 2 hours' : 'Tomorrow morning';
-  const mapLink = mapUrl ? ` <a href="${mapUrl}" style="color:${T.accent}; font-weight:600; font-size:13px; text-decoration:none;">Map &rarr;</a>` : '';
+  const { saleName, saleDate, saleTime, saleAddress, mapUrl, organizerNotes, savedItems = [], ctaUrl, reminderType, dayWord } = opts;
+  const eyebrow = reminderType === 'two-hours' ? 'Starting in 2 hours' : dayWord === 'today' ? 'Today' : 'Tomorrow';
+  const safeMapUrl = safeHttpsUrl(mapUrl);
+  const mapLink = safeMapUrl ? ` <a href="${escapeHtml(safeMapUrl)}" style="color:${T.accent}; font-weight:600; font-size:13px; text-decoration:none;">Map &rarr;</a>` : '';
 
   const infoBlock = `
 <tr><td style="padding:16px 28px 0;">
   <div style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:${T.accent}; margin-bottom:10px; font-family:${T.font};">${eyebrow}</div>
-  <h1 style="margin:0; font-size:28px; font-weight:700; letter-spacing:-0.025em; line-height:1.15; color:${T.ink}; font-family:${T.font};">${saleName}</h1>
+  <h1 style="margin:0; font-size:28px; font-weight:700; letter-spacing:-0.025em; line-height:1.15; color:${T.ink}; font-family:${T.font};">${escapeHtml(saleName)}</h1>
   <div style="margin-top:16px; padding:14px 16px; background:${T.outer}; border-radius:8px;">
     <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-      <tr><td style="font-size:15px; color:${T.ink}; padding:4px 0;">&#128197; <strong>${saleDate}</strong> <span style="color:${T.inkDim};">&middot; ${saleTime}</span></td></tr>
-      <tr><td style="font-size:15px; color:${T.ink}; padding:4px 0;">&#128205; ${saleAddress}${mapLink}</td></tr>
+      <tr><td style="font-size:15px; color:${T.ink}; padding:4px 0;">&#128197; <strong>${escapeHtml(saleDate)}</strong> <span style="color:${T.inkDim};">&middot; ${escapeHtml(saleTime)}</span></td></tr>
+      <tr><td style="font-size:15px; color:${T.ink}; padding:4px 0;">&#128205; ${escapeHtml(saleAddress)}${mapLink}</td></tr>
     </table>
   </div>
 </td></tr>`;
 
-  const notesBlock = organizerNotes ? buildTextBlockModule({ headline: 'A note from the organizer', body: `&ldquo;${organizerNotes}&rdquo;` }) : '';
+  const notesBlock = organizerNotes ? buildTextBlockModule({ headline: 'A note from the organizer', body: `&ldquo;${escapeHtml(organizerNotes)}&rdquo;` }) : '';
 
   const savedSection = savedItems.length > 0
     ? `${buildDivider()}<tr><td style="padding:20px 28px 4px;"><div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:${T.inkDim}; font-family:${T.font};">Your saved items at this sale</div></td></tr>
@@ -594,7 +608,7 @@ export function buildSaleDayReminderEmail(opts: {
 
   const content = `${infoBlock}${notesBlock}${savedSection}${buildSpacer(8)}${buildCTARow(reminderType === 'two-hours' ? 'Get directions →' : 'View sale →', ctaUrl)}`;
 
-  return baseWrapper({ preheader: `${eyebrow}: ${saleName} · ${saleAddress}`, content, unsubLabel: 'Stop sale-day reminders', unsubUrl: opts.unsubUrl });
+  return baseWrapper({ preheader: escapeHtml(`${eyebrow}: ${saleName} · ${saleAddress}`), content, unsubLabel: 'Stop sale-day reminders', unsubUrl: opts.unsubUrl });
 }
 
 /** Email 4 — Organizer: Weekly digest */
@@ -615,7 +629,7 @@ export function buildOrganizerWeeklyDigestEmail(opts: {
     : '';
 
   const content = `
-    ${buildHero({ eyebrow: weekLabel, title: `Here&rsquo;s how <span style="color:${T.accent};">${businessName}</span> did this week.` })}
+    ${buildHero({ eyebrow: weekLabel, title: `Here&rsquo;s how <span style="color:${T.accent};">${escapeHtml(businessName)}</span> did this week.` })}
     ${buildSpacer(8)}
     ${buildMetricRowModule(metrics)}
     ${buildSpacer(12)}
@@ -624,7 +638,7 @@ export function buildOrganizerWeeklyDigestEmail(opts: {
     ${buildCTARow('View your dashboard →', dashboardUrl)}
   `;
 
-  return baseWrapper({ preheader: `Your week at FindA.Sale: ${metrics[0]?.stat || ''} ${metrics[0]?.label || 'views'}`, content, unsubLabel: 'Manage email preferences', unsubUrl: opts.unsubUrl });
+  return baseWrapper({ preheader: escapeHtml(`Your week at FindA.Sale: ${metrics[0]?.stat || ''} ${metrics[0]?.label || 'views'}`), content, unsubLabel: 'Manage email preferences', unsubUrl: opts.unsubUrl });
 }
 
 /** Email 6 — Shopper: Smart match alert */
@@ -637,17 +651,17 @@ export function buildSmartMatchEmail(opts: {
 }): string {
   const { matchCategory, item, sale } = opts;
   const updateUrl = opts.updateInterestsUrl || `${FRONTEND_URL}/settings/interests`;
-  const secondaryLink = `Not interested? <a href="${updateUrl}" style="color:${T.accent}; font-weight:600; text-decoration:none;">Update your interests &rarr;</a>`;
+  const secondaryLink = `Not interested? <a href="${escapeHtml(updateUrl)}" style="color:${T.accent}; font-weight:600; text-decoration:none;">Update your interests &rarr;</a>`;
 
   const content = `
-    ${buildHero({ eyebrow: matchCategory ? `Smart match · ${matchCategory}` : 'Smart match', title: 'Thought you&rsquo;d want to know.', sub: 'A new item just posted matches what you&rsquo;re watching for.' })}
+    ${buildHero({ eyebrow: matchCategory ? `Smart match · ${escapeHtml(matchCategory)}` : 'Smart match', title: 'Thought you&rsquo;d want to know.', sub: 'A new item just posted matches what you&rsquo;re watching for.' })}
     ${buildItemCardModule({ title: item.title, price: item.price, photoUrl: item.photoUrl, category: item.category, rarity: item.rarity, ctaUrl: item.itemUrl })}
     <tr><td style="padding:4px 28px 4px;"><div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:${T.inkDim}; font-family:${T.font};">At this sale</div></td></tr>
     ${buildSaleCardModule({ title: sale.title, dateRange: sale.dateRange, address: sale.address, photoUrl: sale.photoUrl, ctaUrl: sale.saleUrl, saleType: sale.saleType })}
     ${buildCTARow('View this item →', item.itemUrl, secondaryLink)}
   `;
 
-  return baseWrapper({ preheader: `Found something that might be yours: ${item.title}`, content, unsubLabel: 'Stop smart match alerts', unsubUrl: opts.unsubUrl });
+  return baseWrapper({ preheader: escapeHtml(`Found something that might be yours: ${item.title}`), content, unsubLabel: 'Stop smart match alerts', unsubUrl: opts.unsubUrl });
 }
 
 // Re-export buildStepIndicator for use in onboarding service

@@ -1,4 +1,6 @@
 import { prisma } from '../lib/prisma';
+import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
+import { isSaleLocked } from './rankService';
 
 // ─── Input Types ─────────────────────────────────────────────────────────────
 
@@ -388,7 +390,8 @@ export function formatSaleForDataCommons(sale: SaleWithItems): DataCommonsEntry 
     sourceUrl: `${BASE_URL}/sales/${sale.id}`,
   };
 
-  if (sale.lat && sale.lng) {
+  // Online-only sales have no physical location: never emit coordinates for them.
+  if (!sale.isOnlineOnly && sale.lat && sale.lng) {
     entry.location.geo = {
       '@type': 'GeoCoordinates',
       latitude: sale.lat,
@@ -462,23 +465,76 @@ function formatItemForSchemaOrg(item: ItemForSyndication, saleId: string): Schem
   return product;
 }
 
+/** Thrown when a sale does not exist or is not publicly syndicable. Route maps it to a 404. */
+export class SyndicationNotAvailableError extends Error {
+  constructor(message = 'Sale not available for syndication') {
+    super(message);
+    this.name = 'SyndicationNotAvailableError';
+  }
+}
+
+/** Cap on Product entries per bundle so one huge sale cannot produce a multi-megabyte response. */
+export const SYNDICATION_MAX_ITEMS = 500;
+
 /**
- * Generate a syndication-ready JSON export for a sale.
- * Only works for PUBLISHED sales. Throws if not found or not published.
+ * Generate a syndication-ready JSON export for a sale (GET /api/syndication/sale/:saleId).
+ *
+ * Visibility mirrors what the public sale page (GET /api/sales/:id, anonymous viewer) already exposes:
+ *  - Sale must be PUBLISHED, not soft-deleted, and not an inventory container. ENDED sales are NOT
+ *    syndicated (they are noindex on the site and useless as a live Event feed).
+ *  - Anonymous viewers are rank INITIATE, so a sale still inside its early-access window is unavailable.
+ *  - Items use PUBLIC_ITEM_FILTER (isActive, not GRACE_LOCKED, draftStatus PUBLISHED), the same filter
+ *    the sale page uses, so DRAFT and PENDING_REVIEW items never leave the building.
+ *  - The sale street address IS public (the sale page prints it), so it is included; for online-only
+ *    sales it is omitted. Organizer phone and organizer street address are NOT shown on the sale page
+ *    (the API only returns phone to the owner or an admin), so they are never selected here.
+ *
+ * Throws SyndicationNotAvailableError when the sale is missing or not syndicable.
  */
-export async function generateSyndicationBundle(saleId: string): Promise<SyndicationBundle> {
-  const sale = await prisma.sale.findUnique({
-    where: { id: saleId },
-    include: {
+export async function generateSyndicationBundle(saleId: string, now: Date = new Date()): Promise<SyndicationBundle> {
+  const sale = await prisma.sale.findFirst({
+    where: { id: saleId, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      startDate: true,
+      endDate: true,
+      isOngoing: true,
+      address: true,
+      city: true,
+      state: true,
+      zip: true,
+      lat: true,
+      lng: true,
+      photoUrls: true,
+      tags: true,
+      status: true,
+      saleType: true,
+      isOnlineOnly: true,
+      notes: true,
+      publishedAt: true,
       organizer: {
-        include: {
-          user: {
-            select: { id: true },
-          },
+        select: {
+          id: true,
+          businessName: true,
+          bio: true,
+          tagline: true,
+          yearFounded: true,
+          website: true,
+          profilePhoto: true,
+          facebook: true,
+          instagram: true,
+          avgRating: true,
+          totalReviews: true,
+          totalSales: true,
+          verificationStatus: true,
         },
       },
       items: {
-        where: { isActive: true },
+        where: { ...PUBLIC_ITEM_FILTER },
+        orderBy: [{ status: 'asc' }, { id: 'asc' }],
+        take: SYNDICATION_MAX_ITEMS,
         select: {
           id: true,
           title: true,
@@ -497,11 +553,12 @@ export async function generateSyndicationBundle(saleId: string): Promise<Syndica
   });
 
   if (!sale) {
-    throw new Error(`Sale not found: ${saleId}`);
+    throw new SyndicationNotAvailableError('Sale not found or not published');
   }
 
-  if (sale.status !== 'PUBLISHED') {
-    throw new Error(`Sale ${saleId} is not published (status: ${sale.status})`);
+  // Same gate as getSale for an anonymous viewer: PUBLISHED with a publishedAt still in early access is locked.
+  if (sale.publishedAt && isSaleLocked(sale.publishedAt, 'INITIATE', now)) {
+    throw new SyndicationNotAvailableError('Sale not yet public');
   }
 
   const saleForSyndication: SaleWithItems = {
@@ -511,12 +568,13 @@ export async function generateSyndicationBundle(saleId: string): Promise<Syndica
     startDate: sale.startDate,
     endDate: sale.endDate,
     isOngoing: sale.isOngoing,
-    address: sale.address,
+    address: sale.isOnlineOnly ? '' : sale.address,
     city: sale.city,
     state: sale.state,
     zip: sale.zip,
-    lat: sale.lat,
-    lng: sale.lng,
+    // Online-only sales have no physical location, so coordinates are withheld (address is blanked above).
+    lat: sale.isOnlineOnly ? null : sale.lat,
+    lng: sale.isOnlineOnly ? null : sale.lng,
     photoUrls: sale.photoUrls,
     tags: sale.tags,
     status: sale.status,
@@ -526,8 +584,9 @@ export async function generateSyndicationBundle(saleId: string): Promise<Syndica
     organizer: {
       id: sale.organizer.id,
       businessName: sale.organizer.businessName,
-      phone: sale.organizer.phone,
-      address: sale.organizer.address,
+      // Deliberately not selected and never emitted: organizer phone and organizer street address.
+      phone: null,
+      address: '',
       bio: sale.organizer.bio,
       tagline: sale.organizer.tagline,
       yearFounded: sale.organizer.yearFounded,
@@ -558,6 +617,6 @@ export async function generateSyndicationBundle(saleId: string): Promise<Syndica
     org,
     items,
     dataCommons,
-    generatedAt: new Date(),
+    generatedAt: now,
   };
 }

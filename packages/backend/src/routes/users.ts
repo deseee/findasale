@@ -12,6 +12,7 @@ import {
   exportMyData
 } from '../controllers/userController';
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
+import { getMyShowcasePhotos } from '../controllers/ugcPhotoController';
 import {
   listMyAddresses,
   createMyAddress,
@@ -23,8 +24,101 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { spendXp, getSpendableXp } from '../services/xpService';
 import { getRankProgressInfo, getRankBenefits, RANK_NAMES } from '../utils/rankUtils';
+import { mergeNotificationPrefs, validateIncomingNotificationPrefs, validateMergedNotificationPrefs } from '../utils/notificationPrefsMerge';
+import { organizerHasTier } from '../utils/tierAccess';
 
 const router = Router();
+
+/**
+ * Profile slugs that must never be claimable: they collide with top-level app routes, system paths
+ * and impersonation-friendly words. Compared case-insensitively.
+ */
+export const RESERVED_PROFILE_SLUGS: ReadonlySet<string> = new Set([
+  'admin', 'administrator', 'api', 'app', 'auth', 'login', 'logout', 'signin', 'signup', 'register',
+  'settings', 'account', 'profile', 'profiles', 'user', 'users', 'me', 'organizer', 'organizers',
+  'shopper', 'shoppers', 'sale', 'sales', 'item', 'items', 'crew', 'crews', 'guild', 'support', 'help',
+  'about', 'contact', 'pricing', 'billing', 'checkout', 'cart', 'search', 'map', 'cities', 'city',
+  'blog', 'guides', 'terms', 'privacy', 'legal', 'security', 'staff', 'team', 'teams', 'workspace',
+  'finda', 'findasale', 'finda-sale', 'null', 'undefined', 'root', 'system', 'moderator', 'mod', 'official',
+  'static', 'public', 'assets', 'www', 'mail', 'email', 'status', 'health', 'webhook', 'webhooks',
+]);
+
+const MAX_PROFILE_SLUG_LENGTH = 50;
+
+/** Thrown inside the slug transaction when the XP spend is refused, so the whole transaction rolls back. */
+class SlugXpError extends Error {}
+
+/**
+ * Create the TEAMS workspace for an organizer (if missing) together with its OWNER member row, so the
+ * workspace middleware grants the owner access (same shape as workspaceController.createWorkspace).
+ * Repairs a workspace that exists without an owner row. Never throws: onboarding must not fail on it.
+ */
+async function ensureTeamsWorkspace(organizer: { id: string; businessName: string }): Promise<void> {
+  try {
+    const existing = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizer.id },
+      select: { id: true },
+    });
+    let workspaceId: string | undefined = existing?.id;
+
+    if (!workspaceId) {
+      let slug = (organizer.businessName || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .substring(0, 50);
+      if (!slug) slug = `workspace-${organizer.id.substring(0, 8)}`;
+
+      for (let attempt = 0; attempt < 2 && !workspaceId; attempt++) {
+        try {
+          const created = await prisma.$transaction(async (tx: any) => {
+            const ws = await tx.organizerWorkspace.create({
+              data: { name: organizer.businessName, slug, ownerId: organizer.id },
+            });
+            await tx.workspaceMember.create({
+              data: { workspaceId: ws.id, organizerId: organizer.id, role: 'OWNER', acceptedAt: new Date() },
+            });
+            return ws;
+          });
+          workspaceId = created.id;
+        } catch (err: any) {
+          if (err?.code === 'P2002' && attempt === 0) {
+            const again = await prisma.organizerWorkspace.findUnique({
+              where: { ownerId: organizer.id },
+              select: { id: true },
+            });
+            if (again) {
+              workspaceId = again.id; // lost a race with another request: use theirs
+            } else {
+              slug = `${slug}-${Math.random().toString(36).substring(2, 8)}`; // slug taken: retry once
+            }
+          } else {
+            console.error('Error creating OrganizerWorkspace during TEAMS onboarding:', err);
+            return;
+          }
+        }
+      }
+    }
+
+    if (workspaceId) {
+      const ownerRow = await prisma.workspaceMember.findFirst({
+        where: { workspaceId, organizerId: organizer.id },
+        select: { id: true },
+      });
+      if (!ownerRow) {
+        try {
+          await prisma.workspaceMember.create({
+            data: { workspaceId, organizerId: organizer.id, role: 'OWNER', acceptedAt: new Date() },
+          });
+        } catch (err: any) {
+          if (err?.code !== 'P2002') console.error('Error creating workspace owner member during TEAMS onboarding:', err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error ensuring TEAMS workspace during onboarding:', err);
+  }
+}
 
 // Authenticated endpoints
 router.get('/purchases', authenticate, getPurchases);
@@ -205,6 +299,9 @@ router.get('/me/referrals', authenticate, async (req: AuthRequest, res: Response
 });
 
 router.get('/me/points', authenticate, getBadges);
+
+// Profile showcase picker: the signed-in shopper's own approved UGC photos (pages/profile.tsx)
+router.get('/me/ugc-photos', authenticate, getMyShowcasePhotos);
 
 // Create or update organizer profile
 // Allow any authenticated user (including SHOPPER) to register as organizer
@@ -397,8 +494,12 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     const { notificationPrefs, profileSlug, purchasesVisible, teamsOnboardingComplete, name, phone } = req.body;
 
     // Validate notification preferences if provided
-    if (notificationPrefs && typeof notificationPrefs !== 'object') {
-      return res.status(400).json({ message: 'notificationPrefs must be an object' });
+    // (arrays, strings and oversized documents are rejected; null/undefined mean "not sent")
+    if (notificationPrefs) {
+      const prefsError = validateIncomingNotificationPrefs(notificationPrefs);
+      if (prefsError) {
+        return res.status(400).json({ message: prefsError });
+      }
     }
 
     // ADR-126 §9.2 (2026-09-16): phone is now genuinely shopper-settable from Account
@@ -417,11 +518,27 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Validate profile slug if provided (alphanumeric, dash, underscore)
+    // Validate profile slug if provided (alphanumeric, dash, underscore). null or '' clears it.
+    if (profileSlug !== undefined && profileSlug !== null && typeof profileSlug !== 'string') {
+      return res.status(400).json({ message: 'Profile slug must be a string' });
+    }
     if (profileSlug && !/^[a-zA-Z0-9_-]+$/.test(profileSlug)) {
       return res.status(400).json({
         message: 'Profile slug can only contain letters, numbers, dashes, and underscores'
       });
+    }
+    if (profileSlug && profileSlug.length > MAX_PROFILE_SLUG_LENGTH) {
+      return res.status(400).json({ message: `Profile slug must be ${MAX_PROFILE_SLUG_LENGTH} characters or fewer` });
+    }
+    if (profileSlug && RESERVED_PROFILE_SLUGS.has(profileSlug.toLowerCase())) {
+      return res.status(400).json({ message: 'That profile slug is reserved. Please choose a different one.' });
+    }
+
+    if (purchasesVisible !== undefined && typeof purchasesVisible !== 'boolean') {
+      return res.status(400).json({ message: 'purchasesVisible must be true or false' });
+    }
+    if (teamsOnboardingComplete !== undefined && typeof teamsOnboardingComplete !== 'boolean') {
+      return res.status(400).json({ message: 'teamsOnboardingComplete must be true or false' });
     }
 
     // Validate display name if provided
@@ -437,7 +554,11 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // XP-gate for profileSlug: check if user is setting a slug for the first time
+    // XP-gate for profileSlug: only a FIRST-time slug costs XP. This is a pre-check for a friendly
+    // message; the actual spend happens inside the SAME transaction as the slug write below, so a
+    // slug that turns out to be taken (P2002) rolls the XP back and never costs the user anything.
+    const SLUG_XP_COST = 1500;
+    let chargeForSlug = false;
     if (profileSlug !== undefined && profileSlug) {
       const currentUser = await prisma.user.findUnique({
         where: { id: req.user.id },
@@ -445,37 +566,35 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       });
 
       if (currentUser && !currentUser.profileSlug) {
-        // User does not have a slug yet — this is the first time
-        // Check spendable XP
         const spendable = await getSpendableXp(req.user.id);
-        const XP_COST = 1500;
-
-        if (spendable < XP_COST) {
-          const shortfall = XP_COST - spendable;
+        if (spendable < SLUG_XP_COST) {
+          const shortfall = SLUG_XP_COST - spendable;
           return res.status(400).json({
-            message: `Setting a custom profile slug requires ${XP_COST} XP. You need ${shortfall} more XP.`,
+            message: `Setting a custom profile slug requires ${SLUG_XP_COST} XP. You need ${shortfall} more XP.`,
             xpNeeded: shortfall,
             spendableXp: spendable,
           });
         }
-
-        // Spend the XP
-        const spendSuccess = await spendXp(req.user.id, XP_COST, 'PROFILE_SLUG_UNLOCK', {
-          description: `Set custom profile slug: ${profileSlug}`,
-        });
-
-        if (!spendSuccess) {
-          return res.status(400).json({
-            message: 'Failed to spend XP. Please try again.',
-          });
-        }
+        chargeForSlug = true;
       }
       // If user already has a slug, allow free update (no XP cost)
     }
 
     const updateData: any = {};
     if (notificationPrefs) {
-      updateData.notificationPrefs = notificationPrefs;
+      // Shallow merge, never a wholesale replace: a stale client that only knows some keys must not
+      // wipe the others. An explicit null value deletes that key. See utils/notificationPrefsMerge.ts.
+      const current = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { notificationPrefs: true },
+      });
+      const merged = mergeNotificationPrefs(current?.notificationPrefs, notificationPrefs);
+      // The cap applies to the MERGED document too: many small PATCHes must not grow it without bound.
+      const mergedError = validateMergedNotificationPrefs(merged);
+      if (mergedError) {
+        return res.status(400).json({ message: mergedError });
+      }
+      updateData.notificationPrefs = merged;
     }
     if (profileSlug !== undefined) {
       updateData.profileSlug = profileSlug || null;
@@ -490,65 +609,28 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       updateData.phone = phone === null ? null : (phone.trim() || null);
     }
     if (teamsOnboardingComplete !== undefined) {
-      updateData.teamsOnboardingComplete = teamsOnboardingComplete;
-
-      // If completing TEAMS onboarding, ensure OrganizerWorkspace exists
       if (teamsOnboardingComplete === true) {
+        // Completing TEAMS onboarding is only meaningful (and only allowed) for an organizer whose
+        // paid plan is TEAMS. Organizer.subscriptionTier is the truth (see utils/tierAccess.ts).
         const organizer = await prisma.organizer.findUnique({
           where: { userId: req.user.id },
-          select: { id: true, businessName: true }
+          select: { id: true, businessName: true, subscriptionTier: true },
         });
-
-        if (organizer) {
-          // Check if workspace already exists for this organizer
-          const existingWorkspace = await prisma.organizerWorkspace.findUnique({
-            where: { ownerId: organizer.id }
+        if (!organizer || !organizerHasTier(organizer.subscriptionTier, 'TEAMS')) {
+          return res.status(403).json({
+            message: 'TEAMS subscription required to complete TEAMS onboarding.',
+            code: 'TIER_REQUIRED',
           });
-
-          // If no workspace exists, create one
-          if (!existingWorkspace) {
-            // Generate a slug from businessName or use a fallback
-            let slug = organizer.businessName
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, '-')
-              .replace(/^-+|-+$/g, '');
-
-            // Ensure slug is not empty (fallback to organizer ID prefix)
-            if (!slug) {
-              slug = `workspace-${organizer.id.substring(0, 8)}`;
-            }
-
-            try {
-              await prisma.organizerWorkspace.create({
-                data: {
-                  name: organizer.businessName,
-                  slug: slug,
-                  ownerId: organizer.id
-                }
-              });
-            } catch (err: any) {
-              // If slug already exists, append a random suffix
-              if (err.code === 'P2002' && err.meta?.target?.includes('slug')) {
-                const uniqueSuffix = Math.random().toString(36).substring(2, 8);
-                slug = `${slug}-${uniqueSuffix}`;
-                await prisma.organizerWorkspace.create({
-                  data: {
-                    name: organizer.businessName,
-                    slug: slug,
-                    ownerId: organizer.id
-                  }
-                });
-              } else {
-                // Log but don't fail the request — workspace creation is not critical
-                console.error('Error creating OrganizerWorkspace during TEAMS onboarding:', err);
-              }
-            }
-          }
         }
+        updateData.teamsOnboardingComplete = true;
+        // Ensure the OrganizerWorkspace exists WITH its owner member row.
+        await ensureTeamsWorkspace({ id: organizer.id, businessName: organizer.businessName });
+      } else {
+        updateData.teamsOnboardingComplete = false;
       }
     }
 
-    const updated = await prisma.user.update({
+    const updateArgs = {
       where: { id: req.user.id },
       data: updateData,
       select: {
@@ -563,12 +645,40 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         teamsOnboardingComplete: true,
         guildXp: true,
         roles: true,
-      }
-    });
+      },
+    };
+
+    let updated;
+    if (chargeForSlug) {
+      // XP spend and slug write in ONE transaction: a P2002 (slug taken) or any other failure rolls
+      // the spend back. The slug is re-read inside the transaction so two racing requests cannot both
+      // be charged for the same first-time unlock.
+      updated = await prisma.$transaction(async (tx) => {
+        const fresh = await tx.user.findUnique({ where: { id: req.user!.id }, select: { profileSlug: true } });
+        if (fresh && !fresh.profileSlug) {
+          const spendSuccess = await spendXp(
+            req.user!.id,
+            SLUG_XP_COST,
+            'PROFILE_SLUG_UNLOCK',
+            { description: `Set custom profile slug: ${profileSlug}` },
+            tx as any,
+          );
+          if (!spendSuccess) {
+            throw new SlugXpError();
+          }
+        }
+        return tx.user.update(updateArgs);
+      });
+    } else {
+      updated = await prisma.user.update(updateArgs);
+    }
 
     res.json(updated);
   } catch (error: any) {
     console.error('Error updating user preferences:', error);
+    if (error instanceof SlugXpError) {
+      return res.status(400).json({ message: 'Failed to spend XP. Please try again. You were not charged.' });
+    }
     // Handle unique constraint violation for profileSlug
     if (error.code === 'P2002' && error.meta?.target?.includes('profileSlug')) {
       return res.status(409).json({ message: 'This profile slug is already taken' });

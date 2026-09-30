@@ -3,6 +3,7 @@ import { Response } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { isSafeWebhookUrl, WEBHOOK_URL_ERROR } from '../utils/webhookUrl';
 
 const VALID_EVENTS = [
   'bid.placed',
@@ -10,6 +11,7 @@ const VALID_EVENTS = [
   'sale.published',
   'sale.ended',
   'item.sold',
+  'item.published',
   'bounty.created',
 ];
 
@@ -41,8 +43,8 @@ export const createWebhook = async (req: AuthRequest, res: Response) => {
   try {
     const { url, events } = req.body;
 
-    if (!url || !/^https?:\/\/.+/.test(url)) {
-      return res.status(400).json({ message: 'A valid URL is required.' });
+    if (!url || typeof url !== 'string' || !isSafeWebhookUrl(url)) {
+      return res.status(400).json({ message: url ? WEBHOOK_URL_ERROR : 'A valid URL is required.' });
     }
     if (!Array.isArray(events) || events.length === 0) {
       return res.status(400).json({ message: 'At least one event is required.' });
@@ -61,7 +63,7 @@ export const createWebhook = async (req: AuthRequest, res: Response) => {
     const secret = crypto.randomBytes(24).toString('hex'); // 48-char hex
 
     const hook = await prisma.webhook.create({
-      data: { userId: req.user.id, url, events, secret },
+      data: { userId: req.user.id, url: url.trim(), events, secret },
     });
 
     // Return the full secret once — it cannot be retrieved again
@@ -87,8 +89,11 @@ export const updateWebhook = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Webhook not found.' });
     }
 
-    if (url && !/^https?:\/\/.+/.test(url)) {
-      return res.status(400).json({ message: 'Invalid URL.' });
+    if (url !== undefined && (typeof url !== 'string' || !isSafeWebhookUrl(url))) {
+      return res.status(400).json({ message: WEBHOOK_URL_ERROR });
+    }
+    if (events !== undefined && !Array.isArray(events)) {
+      return res.status(400).json({ message: 'events must be a list.' });
     }
     if (events) {
       const invalid = events.filter((e: string) => !VALID_EVENTS.includes(e));
@@ -100,7 +105,7 @@ export const updateWebhook = async (req: AuthRequest, res: Response) => {
     const updated = await prisma.webhook.update({
       where: { id },
       data: {
-        ...(url !== undefined && { url }),
+        ...(url !== undefined && { url: url.trim() }),
         ...(events !== undefined && { events }),
         ...(isActive !== undefined && { isActive }),
       },

@@ -18,6 +18,8 @@ import crypto from 'crypto';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { RedisStore } from 'rate-limit-redis';
+import { MemoryStore } from 'express-rate-limit';
+import type { Store, Options as RateLimitOptions, IncrementResponse, ClientRateLimitInfo } from 'express-rate-limit';
 import { createClient, RedisClientType } from 'redis';
 
 // Feature #106: Initialize Redis client for distributed rate limiting.
@@ -92,24 +94,147 @@ if (process.env.REDIS_URL) {
 // Passing a distinct prefix per limiter isolates each one's keyspace so its own windowMs/max
 // actually governs its own counter, with no behavior change to any limiter's own configured
 // window or threshold.
-export const createRateLimitStore = (prefix: string) => {
-  // Guard on isReady (not isOpen): rate-limit-redis runs a SCRIPT LOAD inside the
-  // RedisStore constructor; when the client is isOpen-but-not-isReady at boot, the
-  // guarded sendCommand closure's Promise.reject becomes an unhandled rejection
-  // (Sentry FINDASALE-NODEJS-4G). isReady means the store is only built when Redis can
-  // actually serve — otherwise this returns undefined → in-memory fallback (documented).
-  if (redisRateLimitClient && redisRateLimitClient.isReady) {
-    return new RedisStore({
-      prefix,
-      sendCommand: (...args: string[]) => {
-        const c = redisRateLimitClient;
-        if (!c || !c.isReady) return Promise.reject(new Error('redis-unavailable'));
-        return c.sendCommand(args);
-      },
-    });
+/** The slice of a node-redis client the store needs (lets tests inject a fake). */
+export interface RateLimitRedisClientLike {
+  isReady: boolean;
+  sendCommand: (args: string[]) => Promise<unknown>;
+}
+
+/**
+ * Lazy store (2026-09-29 fix): createRateLimitStore() runs at module import, long before the Redis
+ * client's async connect() finishes, so `client.isReady` was ALWAYS false at that moment and every
+ * "Redis-backed" limiter silently became a per-process in-memory limiter (N instances = N x the
+ * limit, reset on every deploy). This wrapper implements the express-rate-limit Store interface and
+ * decides per call: once the client is ready it builds (once) and uses the Redis-backed store; while
+ * Redis is unconfigured, not ready, or a call fails it uses an in-memory store instead (logged once
+ * per reason, not per request). Counting resumes in Redis automatically when the client reconnects.
+ * Callers are unchanged: they still pass `store: createRateLimitStore('rl:x:')`.
+ */
+export class LazyRateLimitStore implements Store {
+  prefix: string;
+  private options?: RateLimitOptions;
+  private redisStore?: RedisStore;
+  private memoryStore?: MemoryStore;
+  private loggedMemory = false;
+  private loggedRedisError = false;
+
+  constructor(prefix: string, private readonly getClient: () => RateLimitRedisClientLike | null = () => redisRateLimitClient as unknown as RateLimitRedisClientLike | null) {
+    this.prefix = prefix;
   }
-  return undefined; // Falls back to default in-memory store
-};
+
+  init(options: RateLimitOptions): void {
+    this.options = options;
+    this.redisStore?.init(options as never);
+    this.memoryStore?.init(options);
+  }
+
+  /** Redis-backed store when the client is ready right now, else undefined (never throws). */
+  private tryRedis(): RedisStore | undefined {
+    const client = this.getClient();
+    if (!client || !client.isReady) return undefined;
+    if (!this.redisStore) {
+      try {
+        const store = new RedisStore({
+          prefix: this.prefix,
+          sendCommand: (...args: string[]) => {
+            const c = this.getClient();
+            if (!c || !c.isReady) return Promise.reject(new Error('redis-unavailable'));
+            return c.sendCommand(args) as Promise<never>;
+          },
+        });
+        // The constructor fires two SCRIPT LOADs; mark them handled so a load failure is not an
+        // unhandled rejection (it is still surfaced on the awaited path and triggers the fallback).
+        store.incrementScriptSha.catch(() => undefined);
+        store.getScriptSha.catch(() => undefined);
+        if (this.options) store.init(this.options as never);
+        this.redisStore = store;
+        console.log(`[rateLimit] Redis-backed limiter store active for prefix ${this.prefix}`);
+      } catch (err) {
+        this.noteRedisError(err);
+        return undefined;
+      }
+    }
+    return this.redisStore;
+  }
+
+  private memory(): MemoryStore {
+    if (!this.memoryStore) {
+      this.memoryStore = new MemoryStore();
+      if (this.options) this.memoryStore.init(this.options);
+    }
+    if (!this.loggedMemory) {
+      this.loggedMemory = true;
+      console.warn(`[rateLimit] using in-memory limiter store for prefix ${this.prefix} (Redis not configured, not ready, or failed); limits are per-instance until Redis is available`);
+    }
+    return this.memoryStore;
+  }
+
+  private noteRedisError(err: unknown): void {
+    if (!this.loggedRedisError) {
+      this.loggedRedisError = true;
+      console.error(`[rateLimit] Redis store error for prefix ${this.prefix}; falling back to in-memory:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  async increment(key: string): Promise<IncrementResponse> {
+    const redis = this.tryRedis();
+    if (redis) {
+      try {
+        const res = await redis.increment(key);
+        this.loggedRedisError = false; // re-arm the one-time error log after a healthy call
+        return res;
+      } catch (err) {
+        this.noteRedisError(err);
+      }
+    }
+    return this.memory().increment(key);
+  }
+
+  async decrement(key: string): Promise<void> {
+    const redis = this.tryRedis();
+    if (redis) {
+      try {
+        await redis.decrement(key);
+        return;
+      } catch (err) {
+        this.noteRedisError(err);
+      }
+    }
+    this.memory().decrement(key);
+  }
+
+  async resetKey(key: string): Promise<void> {
+    const redis = this.tryRedis();
+    if (redis) {
+      try {
+        await redis.resetKey(key);
+      } catch (err) {
+        this.noteRedisError(err);
+      }
+    }
+    this.memoryStore?.resetKey(key);
+  }
+
+  async get(key: string): Promise<ClientRateLimitInfo | undefined> {
+    const redis = this.tryRedis();
+    if (redis) {
+      try {
+        return await redis.get(key);
+      } catch (err) {
+        this.noteRedisError(err);
+      }
+    }
+    return this.memory().get(key);
+  }
+
+  shutdown(): void {
+    this.memoryStore?.shutdown();
+  }
+}
+
+// Returns a lazy store (never undefined any more): Redis-backed once the client is ready, in-memory
+// before that / when Redis is unavailable. See LazyRateLimitStore.
+export const createRateLimitStore = (prefix: string): Store => new LazyRateLimitStore(prefix);
 
 // Fail-open wrapper: if the rate-limit store errors (e.g. Redis drop mid-life),
 // proceed instead of 500ing. Over-limit still returns 429 (express-rate-limit

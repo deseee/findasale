@@ -8,6 +8,7 @@ import { useAuth } from '../components/AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import useXpProfile from '../hooks/useXpProfile';
 import ReferralWidget from '../components/ReferralWidget';
+import HuntPassManage from '../components/HuntPassManage'; // Self-serve cancel / undo (FTC click-to-cancel)
 import { getItemImageUrl } from '../lib/imageUtils';
 
 interface Bid {
@@ -419,6 +420,7 @@ const ProfilePage = () => {
                 )}
               </div>
             </div>
+            <HuntPassManage variant="card" />
           </div>
         )}
 

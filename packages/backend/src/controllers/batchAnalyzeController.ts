@@ -14,6 +14,7 @@
 
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
+import { getAiGate, AiGateContext } from '../middleware/aiUploadGate'; // Smart-tag metering: atomic reservation from the gate, one tag kept per analyzed photo
 import {
   analyzeItemImages,
   isCloudAIAvailable,
@@ -22,6 +23,7 @@ import {
 } from '../services/cloudAIService';
 import { prisma } from '../lib/prisma';
 import axios from 'axios';
+import { isSafeFetchUrl, SAFE_FETCH_AXIOS_OPTIONS } from '../utils/safeFetchUrl'; // SSRF guard: imageUrls is caller-supplied
 import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { getEbayAccessToken, suggestEbayCategoryForTitle, computeEffectivePackageWeight } from './ebayController';
@@ -70,13 +72,51 @@ interface BatchAnalysisResponse {
  *
  * If clustering fails, fall back to one-item-per-photo (old behavior).
  */
+/** Image MIME types we will pass on to the vision providers. */
+const ANALYZABLE_IMAGE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif']);
+const EXT_TO_MIME: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic', heif: 'image/heif',
+};
+
+/**
+ * Real MIME type for a downloaded image: the upstream Content-Type when it is an image type we
+ * support, else the URL path extension, else image/jpeg. (Was hardcoded image/jpeg for everything,
+ * which mislabels PNG/WebP uploads for the vision providers.)
+ */
+export function detectImageMime(url: string, contentTypeHeader?: unknown): string {
+  const header = typeof contentTypeHeader === 'string' ? contentTypeHeader.split(';')[0].trim().toLowerCase() : '';
+  if (header === 'image/jpg') return 'image/jpeg';
+  if (ANALYZABLE_IMAGE_MIME.has(header)) return header;
+  try {
+    const ext = new URL(url).pathname.split('.').pop()?.toLowerCase() ?? '';
+    if (EXT_TO_MIME[ext]) return EXT_TO_MIME[ext];
+  } catch {
+    // unparseable URL: default below
+  }
+  return 'image/jpeg';
+}
+
 export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promise<void> => {
+  // Smart tags actually spent (one per analyzed photo). The gate reserved imageUrls.length up front
+  // (atomically); gate.settle(spentTags) keeps what was spent and refunds the rest.
+  let spentTags = 0;
+  let gateCtx: AiGateContext | undefined;
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (!req.user || !hasOrganizerRole) {
       res.status(403).json({ message: 'Access denied. Organizer access required.' });
       return;
     }
+
+    // Fail closed: this handler spends Vision + Haiku (+ eBay image search) money and creates Items, so
+    // it must only run behind organizerAiGate (organizer role, saleId ownership, atomic quota
+    // reservation). The organizer id used for every write comes from the gate, never from a fallback.
+    gateCtx = getAiGate(res);
+    if (!gateCtx) {
+      res.status(403).json({ message: 'Smart tagging access could not be verified.' });
+      return;
+    }
+    const gate = gateCtx;
 
     const { imageUrls, saleId } = req.body;
 
@@ -104,21 +144,32 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       res.status(404).json({ message: 'Sale not found' });
       return;
     }
+    if (sale.organizerId !== gate.organizerId || (gate.saleId && gate.saleId !== saleId)) {
+      res.status(403).json({ message: 'Access denied. Not your sale.' });
+      return;
+    }
 
     // Step 1: Download all images from Cloudinary
     const downloadedImages: { buffer: Buffer; mimeType: string; url: string }[] = [];
 
     for (const photoUrl of imageUrls) {
+      // SSRF guard: imageUrls come from the request body, so only https Cloudinary (or
+      // SAFE_FETCH_ALLOWED_HOSTS) URLs are fetched, and redirects are never followed.
+      if (!isSafeFetchUrl(photoUrl)) {
+        console.warn('[batch-analyze] Skipping image URL that is not an allowed https image host');
+        continue;
+      }
       trackCloudinaryServe();
 
       try {
         const response = await axios.get(photoUrl, {
+          ...SAFE_FETCH_AXIOS_OPTIONS,
           responseType: 'arraybuffer',
           timeout: 15000,
         });
         downloadedImages.push({
           buffer: Buffer.from(response.data),
-          mimeType: 'image/jpeg',
+          mimeType: detectImageMime(photoUrl, response.headers?.['content-type']),
           url: photoUrl,
         });
       } catch (err: any) {
@@ -159,9 +210,12 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
     }
 
     // Step 3: Create Item records for clusters + ungrouped photos
-    const itemIds: string[] = [];
+    // Map<clusterIndex, itemId>: a failed create must NOT shift later clusters onto the wrong item
+    // (the old push-only array was indexed by cluster position).
+    const itemIdByClusterIdx = new Map<number, string>();
 
-    for (const cluster of clusterGroups) {
+    for (let clusterIdx = 0; clusterIdx < clusterGroups.length; clusterIdx++) {
+      const cluster = clusterGroups[clusterIdx];
       try {
         const item = await prisma.item.create({
           data: {
@@ -175,7 +229,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             embedding: [],
           },
         });
-        itemIds.push(item.id);
+        itemIdByClusterIdx.set(clusterIdx, item.id);
       } catch (err) {
         console.error('Failed to create Item for cluster:', err);
       }
@@ -190,7 +244,9 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       }
     }
 
+    let ungroupedIdx = 0;
     for (const [_, photoData] of ungroupedPhotoMap) {
+      const clusterIdxForUngrouped = clusterGroups.length + ungroupedIdx++;
       try {
         const item = await prisma.item.create({
           data: {
@@ -203,7 +259,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             embedding: [],
           },
         });
-        itemIds.push(item.id);
+        itemIdByClusterIdx.set(clusterIdxForUngrouped, item.id);
       } catch (err) {
         console.error('Failed to create Item for ungrouped photo:', err);
       }
@@ -214,17 +270,26 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
     const results: ClusterSummary[] = [];
 
     const CONCURRENCY_LIMIT = 5;
-    const allClusters = [
-      ...clusterGroups.map((c, idx) => ({ ...c, itemId: itemIds[idx], type: 'cluster' as const })),
+    const allClustersMaybe = [
+      ...clusterGroups.map((c, idx) => ({ ...c, itemId: itemIdByClusterIdx.get(idx), type: 'cluster' as const })),
       ...Array.from(ungroupedPhotoMap.entries()).map(([origIdx, photoData], cidx) => ({
         photoIndices: [origIdx],
         detectedType: 'Single Item',
         confidence: 0.5,
         photos: [photoData],
-        itemId: itemIds[clusterGroups.length + cidx],
+        itemId: itemIdByClusterIdx.get(clusterGroups.length + cidx),
         type: 'ungrouped' as const
       })),
     ];
+    // A cluster whose Item could not be created is skipped (no paid analysis for a row we cannot save).
+    const allClusters: Array<(typeof allClustersMaybe)[number] & { itemId: string }> = [];
+    for (const c of allClustersMaybe) {
+      if (!c.itemId) {
+        console.error('[batch-analyze] Skipping cluster with no created Item (create failed)');
+        continue;
+      }
+      allClusters.push({ ...c, itemId: c.itemId });
+    }
 
     for (let i = 0; i < allClusters.length; i += CONCURRENCY_LIMIT) {
       const batch = allClusters.slice(i, i + CONCURRENCY_LIMIT);
@@ -374,6 +439,12 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             } catch (err) {
               console.error(`Ollama error for item ${itemId}:`, err);
             }
+          }
+
+          // Smart-tag metering (2026-09-29): count one tag per photo that was actually analyzed, after a
+          // successful analysis only (organizer-intent skips above return before reaching here).
+          if (analysis) {
+            spentTags += clusterImages.length;
           }
 
           // #319/#325/#328: Backfill Photo.orderIndex from Vision quality scores (fire-and-forget)
@@ -649,9 +720,11 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       successCount: results.filter(r => r.suggestedTitle !== 'Error').length,
     };
 
+    await gate.settle(spentTags);
     res.json(response); return;
   } catch (error) {
     console.error('batchAnalyzeImages error:', error);
+    if (gateCtx) await gateCtx.settle(spentTags);
     if (!res.headersSent) {
       res.status(500).json({ message: 'Batch analysis failed' });
     }

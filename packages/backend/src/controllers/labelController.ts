@@ -4,6 +4,7 @@
 
 import { Response } from 'express';
 import QRCode from 'qrcode';
+import { buildItemQrUrl, QR_SOURCE_ITEM_LABEL } from '../utils/qrUrl';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 
@@ -28,7 +29,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
 
     // Generate QR code for item URL
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const itemUrl = `${frontendUrl}/items/${id}`;
+    const itemUrl = buildItemQrUrl(frontendUrl, id, QR_SOURCE_ITEM_LABEL); // utm_source=qr_item_label so the item page shows the QR scan prompt
     const qrDataUrl = await QRCode.toDataURL(itemUrl, {
       type: 'image/png',
       width: 200,
@@ -167,7 +168,7 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const qrDataUrls: string[] = [];
     for (const item of sale.items) {
-      const qrDataUrl = await QRCode.toDataURL(`${frontendUrl}/items/${item.id}`, {
+      const qrDataUrl = await QRCode.toDataURL(buildItemQrUrl(frontendUrl, item.id, QR_SOURCE_ITEM_LABEL), {
         type: 'image/png',
         width: 200,
         margin: 1,

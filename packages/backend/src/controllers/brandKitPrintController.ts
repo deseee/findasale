@@ -12,18 +12,28 @@
 
 import { Response } from 'express';
 import axios from 'axios';
+import { isSafePublicUrlSyntax, SAFE_PUBLIC_AXIOS_OPTIONS } from '../utils/safeFetchPublicUrl'; // SSRF guard (public-host mode): brandLogoUrl is organizer-typed and may live on any public host
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 
 /**
  * Helper: Fetch image buffer from URL (Cloudinary or similar)
  */
-const fetchImageBuffer = async (url: string): Promise<Buffer | null> => {
+export const fetchImageBuffer = async (url: string): Promise<Buffer | null> => {
   try {
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    // SSRF guard: brandLogoUrl is free text from the organizer and can legitimately be hosted on the
+    // organizer's own site, so this uses the public-host mode (utils/safeFetchPublicUrl.ts) instead of
+    // the strict allowlist: https only, real DNS name, port 443, no credentials, and the socket's own
+    // DNS lookup refuses loopback / private / link-local / metadata addresses. Redirects are disabled.
+    // A refused or failed logo just means the collateral renders without one.
+    if (!isSafePublicUrlSyntax(url)) {
+      console.warn('[brandKitPrint] Skipping logo URL that is not a public https host');
+      return null;
+    }
+    const response = await axios.get(url, { ...SAFE_PUBLIC_AXIOS_OPTIONS, responseType: 'arraybuffer' });
     return Buffer.from(response.data);
-  } catch (error) {
-    console.error(`Failed to fetch image from ${url}:`, error);
+  } catch (error: any) {
+    console.error(`Failed to fetch brand logo image: ${error?.message || error}`);
     return null;
   }
 };

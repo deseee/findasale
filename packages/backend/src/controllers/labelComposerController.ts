@@ -11,6 +11,7 @@
 import { Response } from 'express';
 import crypto from 'crypto';
 import QRCode from 'qrcode';
+import { buildItemQrUrl, QR_SOURCE_ITEM_LABEL } from '../utils/qrUrl';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { CHEATSHEET_PRICES } from '../constants/cheatsheet';
@@ -348,7 +349,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       // DB persistence (batchStore is in-memory, wiped on every restart/deploy) --
       // removed in favor of these permanent, always-resolvable URLs.
       const qrUrl = tag.itemId
-        ? `${FRONTEND_URL}/items/${tag.itemId}`
+        ? buildItemQrUrl(FRONTEND_URL, tag.itemId, QR_SOURCE_ITEM_LABEL)
         : `${FRONTEND_URL}/pos/${batch.saleId}?action=add-misc&price=${tag.price.toFixed(2)}`;
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         type: 'image/png',
