@@ -329,7 +329,7 @@ export async function createAndCapturePayment(
 ): Promise<CreateAndCapturePaymentResult> {
   const client = getSquareClientForMerchant(params.accessToken);
 
-  let paymentId: string;
+  let paymentId: string | undefined;
   let status: string | undefined;
 
   if (params.existingSquarePaymentId) {
@@ -345,10 +345,26 @@ export async function createAndCapturePayment(
       console.error('[squarePosPaymentAdapter] payments.get (retry path) failed:', err);
       return { ok: false, status: 502, message: 'Could not verify payment with Square' };
     }
-  } else {
+  }
+
+  // Money review P1-11 (2026-09-29): a previously persisted payment that Square already resolved as
+  // unusable (CANCELED / FAILED) can never be completed, and "resuming" it used to answer every
+  // retry with a decline forever, so a shopper whose first attempt died could not pay with a new
+  // card. When the retry carries a card token, fall through and start a fresh attempt instead (the
+  // caller persists the new payment id over the dead one). Without a token there is nothing to
+  // charge, so the old decline behavior below is kept.
+  const existingPaymentUnusable =
+    !!params.existingSquarePaymentId && (status === 'CANCELED' || status === 'FAILED') && !!params.sourceId;
+
+  if (!params.existingSquarePaymentId || existingPaymentUnusable) {
     try {
       const response = await client.payments.create({
-        idempotencyKey: buildSquareIdempotencyKey(['pos', params.posRequestId]),
+        // Per-ATTEMPT key (money review P1-11, 2026-09-29): seeded with the card token as well as the
+        // request id. A retry of the SAME tokenization after a network timeout hashes to the same key
+        // (Square dedupes, no double charge); a declined attempt followed by a NEW card is a new
+        // tokenization, so it gets a new key instead of IDEMPOTENCY_KEY_REUSED. See
+        // squarePaymentService.buildSquareAttemptIdempotencyKey.
+        idempotencyKey: buildSquareIdempotencyKey(['pos', params.posRequestId, params.sourceId]),
         sourceId: params.sourceId,
         amountMoney: toSquareMoney(params.amountCents),
         ...(params.appFeeCents > 0 ? { appFeeMoney: toSquareMoney(params.appFeeCents) } : {}),
@@ -375,6 +391,10 @@ export async function createAndCapturePayment(
       console.error('[squarePosPaymentAdapter] Square CreatePayment failed:', err);
       return { ok: false, status: 500, message: 'Failed to create Square payment' };
     }
+  }
+
+  if (!paymentId) {
+    return { ok: false, status: 502, message: 'Could not verify payment with Square' };
   }
 
   if (status === 'COMPLETED') {
@@ -464,7 +484,7 @@ export async function createAndCaptureSandboxPayment(
   } else {
     try {
       const response = await client.payments.create({
-        idempotencyKey: buildSquareIdempotencyKey(['pos-sandbox', params.posRequestId]),
+        idempotencyKey: buildSquareIdempotencyKey(['pos-sandbox', params.posRequestId, sourceId]), // per-attempt (P1-11, 2026-09-29): card token included so a new card is a new attempt
         sourceId,
         amountMoney: toSquareMoney(params.amountCents),
         // appFeeMoney deliberately omitted -- see file header (3).

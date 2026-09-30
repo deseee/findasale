@@ -91,11 +91,14 @@ const OrganizerOrdersPage = () => {
 
   const refundMutation = useMutation({
     mutationFn: (purchaseId: string) => api.post(`/stripe/refund/${purchaseId}`),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
       queryClient.invalidateQueries({ queryKey: ['stripe-balance'] });
       queryClient.invalidateQueries({ queryKey: ['refund-history'] });
-      showToast('Refund issued', 'success');
+      // Cash + card split sale: the card part was refunded automatically, the cash part is handed
+      // back by the organizer. The server sends the exact amounts in cashRefundMessage.
+      const cashRefundMessage: string | undefined = res?.data?.cashRefundMessage;
+      showToast(cashRefundMessage ? `Refund issued. ${cashRefundMessage}` : 'Refund issued', 'success');
       setRefundModalItem(null);
       setRefundError('');
     },

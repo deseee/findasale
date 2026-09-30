@@ -160,6 +160,23 @@ export const buildSquareIdempotencyKey = (parts: Array<string | null | undefined
   return crypto.createHash('sha256').update(raw).digest('base64url').slice(0, 45);
 };
 
+/**
+ * Per-ATTEMPT idempotency key (2026-09-29, money review P1-11). The checkout callers seed their key
+ * from the item/cart/user (or the POS request id) only, so after a declined first attempt a retry
+ * with a DIFFERENT card sent the same key with a different source_id and Square answered
+ * IDEMPOTENCY_KEY_REUSED: the buyer could never pay. Folding a hash of the card token (sourceId)
+ * into the key fixes that without giving up dedupe:
+ *   - the SAME attempt retried after a network timeout carries the SAME sourceId (a Web Payments
+ *     SDK token is one tokenization), so it maps to the SAME key and Square returns the original
+ *     result instead of charging twice;
+ *   - a NEW card (new tokenization, new sourceId) maps to a NEW key, so it is a fresh attempt.
+ * A reusable stored-card id ("ccof:...") deliberately dedupes to the prior result for the same
+ * seed, which is the safe direction. Falls back to the base key when there is no sourceId.
+ * Stays within Square's 45 character cap because it goes through buildSquareIdempotencyKey.
+ */
+export const buildSquareAttemptIdempotencyKey = (baseKey: string, sourceId: string | null | undefined): string =>
+  sourceId ? buildSquareIdempotencyKey([baseKey, 'src', sourceId]) : baseKey;
+
 export interface SquareChargeParams {
   organizerAccessToken: string;
   idempotencyKey: string;
@@ -207,7 +224,9 @@ export async function createSquareCharge(params: SquareChargeParams): Promise<Sq
 
   try {
     const response = await client.payments.create({
-      idempotencyKey: params.idempotencyKey,
+      // Per-attempt key: see buildSquareAttemptIdempotencyKey. Applied HERE, at the one choke point
+      // every checkout surface routes through, so no caller can forget the card discriminator.
+      idempotencyKey: buildSquareAttemptIdempotencyKey(params.idempotencyKey, params.sourceId),
       sourceId: params.sourceId,
       amountMoney: toSquareMoney(params.amountCents),
       ...(params.appFeeCents > 0 ? { appFeeMoney: toSquareMoney(params.appFeeCents) } : {}),

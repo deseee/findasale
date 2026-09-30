@@ -18,7 +18,7 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError, recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard; recordSuspectedSignal: manual card entry has no verifiable buyer account either (2026-09-12)
 import { snapshotForCommissionOnly, getInclusivePlatformFeeRate, calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); inclusive-fee migration (2026-09-24, Patrick ruling): replaces getPlatformFeeRate (flat tier rate) at both card-fee sites in this file -- both are IN_PERSON channel (POS register, not buyer self-serve)
-import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection, wouldExceedCashFeeExposureCap } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12); wouldExceedCashFeeExposureCap: cash-fee exposure cap pre-check (2026-09-24, Patrick ruling)
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection, wouldExceedCashFeeExposureCap, accrueSplitCashLegOnce, allocateCentsProportionally, validateSplitTender, cardLegProblem, isValidCents, MAX_POS_AMOUNT_CENTS } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12); wouldExceedCashFeeExposureCap: cash-fee exposure cap pre-check (2026-09-24, Patrick ruling)
 import { resolvePosDiscount } from '../services/posDiscountService';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
@@ -43,6 +43,142 @@ const isQABypassRequest = (req: AuthRequest): boolean => {
   return req.headers['x-qa-bypass'] === secret;
 };
 
+// Cash-fee exposure cap (2026-09-29): thrown INSIDE createPaymentRequest's SERIALIZABLE
+// transaction so the authoritative cap re-check (which now also counts pending split cash) runs
+// atomically with the insert -- see the call site for why the early pre-check alone was racy.
+class CashFeeCapExceededError extends Error {}
+const CASH_FEE_CAP_MESSAGE =
+  'This cash amount would exceed the outstanding cash-commission limit on your account. Settle your balance with a card sale first, or contact support.';
+
+
+// POS fulfillment failure (2026-09-29, money review P1-10): thrown INSIDE confirmPaymentRequest's
+// fulfillment transaction when an item is sold out or gone AFTER the card was captured, so the whole
+// transaction (PAID flip, cash-leg accrual, earlier stock decrements, Purchase rows) rolls back together.
+class PosFulfillmentUnavailableError extends Error {
+  itemId: string;
+  detail: string;
+  constructor(itemId: string, detail: string) {
+    super(`Item ${itemId} unavailable after the card was captured: ${detail}`);
+    this.name = 'PosFulfillmentUnavailableError';
+    this.itemId = itemId;
+    this.detail = detail;
+  }
+}
+
+/**
+ * Handle a POS request whose card was captured but whose items can no longer be fulfilled. Parks the
+ * request in FULFILLMENT_FAILED (compare-and-swap, only from the pre-PAID states), auto-refunds the
+ * captured card amount through the Square refund service, notifies the organizer and the shopper, and
+ * answers the confirm call. Safe to call again for the same request (replay): it only resumes the
+ * refund, which is idempotent, and re-notifies only when a previously pending refund newly completes.
+ */
+async function respondToPosFulfillmentFailure(
+  res: Response,
+  args: {
+    posRequest: any;
+    requestId: string;
+    externalPaymentId: string | null;
+    unavailableItemId: string | null;
+    detail: string;
+    firstFailure: boolean;
+  }
+) {
+  const { posRequest, requestId, externalPaymentId, unavailableItemId, detail, firstFailure } = args;
+  const wasAlreadyRefunded = posRequest.status === 'REFUNDED';
+  try {
+    if (firstFailure) {
+      await prisma.pOSPaymentRequest.updateMany({
+        where: { id: requestId, status: { in: ['ACCEPTED', 'EXPIRED', 'CANCELLED', 'DECLINED'] } },
+        data: { status: 'FULFILLMENT_FAILED' },
+      });
+      try {
+        Sentry.captureMessage(
+          `[pos-payment] Item unavailable after capture on request ${requestId} (item ${unavailableItemId}); refunding the card amount.`,
+          'error'
+        );
+      } catch {
+        // Sentry may not be initialized -- silently continue
+      }
+    }
+  } catch (err: any) {
+    console.error('[pos-payment] could not mark request FULFILLMENT_FAILED:', err);
+  }
+
+  let refundStatus: 'REFUNDED' | 'REFUND_PENDING' | 'NOT_APPLICABLE' = 'REFUND_PENDING';
+  try {
+    const refundService = await import('../services/squareRefundService');
+    const result = await refundService.refundFailedPosFulfillment(requestId);
+    refundStatus = result.status;
+  } catch (err: any) {
+    console.error('[pos-payment] auto-refund after failed fulfillment threw:', err);
+    try {
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        tags: { area: 'pos-fulfillment-failed-refund' },
+        extra: { requestId, externalPaymentId },
+      });
+    } catch {
+      // Sentry may not be initialized -- silently continue
+    }
+  }
+
+  const refunded = refundStatus === 'REFUNDED';
+  const cashCents = posRequest.isSplitPayment && posRequest.cashAmountCents ? Number(posRequest.cashAmountCents) : 0;
+  const cardCents = posRequest.cardAmountCents ?? posRequest.totalAmountCents;
+  const cardDollars = (Number(cardCents) / 100).toFixed(2);
+  const cashNote = cashCents > 0 ? ` The $${(cashCents / 100).toFixed(2)} you paid in cash is returned by the organizer.` : '';
+
+  const shouldNotify = firstFailure || (refunded && !wasAlreadyRefunded);
+  if (shouldNotify) {
+    try {
+      const io = getIO();
+      const payload = { type: 'POS_PAYMENT_STATUS', requestId, status: refunded ? 'REFUNDED' : 'FULFILLMENT_FAILED', totalAmountCents: posRequest.totalAmountCents };
+      io.to(`user:${posRequest.organizerUserId}`).emit('POS_PAYMENT_STATUS', payload);
+      io.to(`user:${posRequest.shopperUserId}`).emit('POS_PAYMENT_STATUS', payload);
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to emit socket event:', err.message);
+    }
+    try {
+      await createNotification({
+        userId: posRequest.organizerUserId,
+        type: 'pos_payment_fulfillment_failed',
+        title: 'Payment refunded: item unavailable',
+        body: refunded
+          ? `An item was no longer available when ${posRequest.shopper?.name || 'the shopper'} paid, so the $${cardDollars} card payment was refunded automatically.${cashNote}`
+          : `An item was no longer available when ${posRequest.shopper?.name || 'the shopper'} paid. The $${cardDollars} card payment is being refunded; check the register if it does not complete shortly.${cashNote}`,
+        link: `/organizer/pos`,
+        channel: 'OPERATIONAL',
+      });
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to notify organizer of fulfillment failure:', err.message);
+    }
+    try {
+      await createNotification({
+        userId: posRequest.shopperUserId,
+        type: 'pos_payment_fulfillment_failed_shopper',
+        title: refunded ? 'Your payment was refunded' : 'Your payment is being refunded',
+        body: refunded
+          ? `An item in your purchase was no longer available, so your $${cardDollars} card payment has been refunded. It can take a few days to show on your statement.${cashNote}`
+          : `An item in your purchase was no longer available. Your $${cardDollars} card payment is being refunded and will show on your statement shortly.${cashNote}`,
+        link: `/shopper/history?view=receipts`,
+        channel: 'OPERATIONAL',
+        sendEmail: true,
+        emailSubject: refunded ? 'Your FindA.Sale payment was refunded' : 'Your FindA.Sale payment is being refunded',
+      });
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to notify shopper of fulfillment failure:', err.message);
+    }
+  }
+
+  return res.status(409).json({
+    success: false,
+    code: 'ITEM_UNAVAILABLE',
+    refunded,
+    refundPending: !refunded,
+    message: refunded
+      ? `An item in your purchase was no longer available, so your card payment was refunded.${cashNote}`
+      : `An item in your purchase was no longer available. Your card payment is being refunded, so do not pay again.${cashNote}`,
+  });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -147,8 +283,13 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     if (!itemIds || !Array.isArray(itemIds)) {
       return res.status(400).json({ message: 'itemIds must be an array' });
     }
-    if (typeof totalAmountCents !== 'number' || totalAmountCents <= 0) {
-      return res.status(400).json({ message: 'totalAmountCents must be > 0' });
+    // Whole cents only, with a sane upper bound (2026-09-29): a fractional or absurd amount used to
+    // sail through this `> 0` check and surface later as a 500 from Square or the database.
+    if (!isValidCents(totalAmountCents)) {
+      return res.status(400).json({
+        message: `totalAmountCents must be a whole number of cents greater than 0 and at most ${MAX_POS_AMOUNT_CENTS}`,
+        code: 'INVALID_AMOUNT',
+      });
     }
 
     // Validate split payment amounts if split is enabled
@@ -156,24 +297,32 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     let splitCardAmountCents = cardAmountCents;
 
     if (isSplitPayment) {
-      if (!splitCashAmountCents || !splitCardAmountCents) {
+      if (splitCashAmountCents == null || splitCardAmountCents == null) {
         return res.status(400).json({
           message: 'When isSplitPayment is true, both cashAmountCents and cardAmountCents are required',
+          code: 'INVALID_SPLIT_AMOUNT',
         });
       }
 
-      if (splitCashAmountCents <= 0 || splitCardAmountCents <= 0) {
+      // Cash that covers the whole sale is a cash sale, not a split (2026-09-29): say so plainly
+      // instead of the generic "card amount must be greater than 0".
+      if (isValidCents(splitCashAmountCents) && splitCashAmountCents >= totalAmountCents) {
         return res.status(400).json({
-          message: 'Both cash and card amounts must be greater than 0',
+          message: 'The cash received covers the whole sale, so this is a cash sale, not a split. Record it as a cash sale.',
+          code: 'CASH_COVERS_TOTAL',
         });
       }
 
-      // Verify sum equals total (within 1 cent rounding tolerance)
-      const sum = splitCashAmountCents + splitCardAmountCents;
-      if (Math.abs(sum - totalAmountCents) > 1) {
-        return res.status(400).json({
-          message: `Split amounts must sum to total. Got ${splitCashAmountCents} + ${splitCardAmountCents} = ${sum}, expected ${totalAmountCents}`,
-        });
+      // cash + card must equal the total EXACTLY, every field a whole number of cents (2026-09-29:
+      // the old +-1 cent tolerance is gone -- the register computes card = total - cash in integer
+      // cents, so there is no rounding source left for it to absorb). See validateSplitTender.
+      const splitCheck = validateSplitTender({
+        totalCents: totalAmountCents,
+        cashCents: splitCashAmountCents,
+        cardCents: splitCardAmountCents,
+      });
+      if (!splitCheck.ok) {
+        return res.status(splitCheck.status).json({ message: splitCheck.message, code: splitCheck.code });
       }
     } else {
       // Non-split: card amount is total
@@ -193,8 +342,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       const estimatedCashCommission = cashCommissionOn(splitCashAmountCents / 100, cashFeeRate);
       if (await wouldExceedCashFeeExposureCap({ organizerId: organizer.id, commission: estimatedCashCommission })) {
         return res.status(400).json({
-          message:
-            'This cash amount would exceed the outstanding cash-commission limit on your account. Settle your balance with a card sale first, or contact support.',
+          message: CASH_FEE_CAP_MESSAGE,
           code: 'CASH_FEE_EXPOSURE_CAP_EXCEEDED',
         });
       }
@@ -318,6 +466,17 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     const platformFeeCents = hasReferralDiscount
       ? 0
       : calculateInclusiveCommissionCents(splitCardAmountCents!, organizer.subscriptionTier as any, 'IN_PERSON');
+    // Card-leg floor (2026-09-29): a card charge below Square's minimum, or one the platform's
+    // per-transaction minimum fee would swallow, can never succeed -- reject it here with a message
+    // the cashier can act on, before any request row exists or the shopper is prompted.
+    const legProblem = cardLegProblem({
+      cardCents: splitCardAmountCents!,
+      appFeeCents: platformFeeCents,
+      isSplit: isSplitPayment,
+    });
+    if (legProblem) {
+      return res.status(400).json({ message: legProblem, code: 'CARD_AMOUNT_TOO_SMALL' });
+    }
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
     // P2 idempotency fix (fix-and-reverify batch, same bug class fixed at P1 elsewhere this
@@ -359,6 +518,21 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
           });
           if (recentRequest) return null; // duplicate -- handled below
 
+          // Authoritative cash-fee exposure cap re-check (2026-09-29). The early pre-check above
+          // is a cheap fast-fail, but it reads outside any lock, so two split requests created back
+          // to back could each see the same balance and both pass. Re-run it HERE, inside the
+          // SERIALIZABLE transaction and against the same rows the insert below touches, so
+          // Postgres aborts one side of any genuinely concurrent pair (P2034, handled below). It
+          // also counts pending, not-yet-accrued split cash (see getPendingSplitCashCommission),
+          // not just the accrued balance.
+          if (isSplitPayment && splitCashAmountCents && splitCashAmountCents > 0) {
+            const txCashRate = await resolveCashCommissionRate(organizer);
+            const txCashCommission = cashCommissionOn(splitCashAmountCents / 100, txCashRate);
+            if (await wouldExceedCashFeeExposureCap({ organizerId: organizer.id, commission: txCashCommission, tx })) {
+              throw new CashFeeCapExceededError();
+            }
+          }
+
           return tx.pOSPaymentRequest.create({
             data: {
               organizerId: organizer.id,
@@ -386,10 +560,19 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
     } catch (err: any) {
+      if (err instanceof CashFeeCapExceededError) {
+        return res.status(400).json({ message: CASH_FEE_CAP_MESSAGE, code: 'CASH_FEE_EXPOSURE_CAP_EXCEEDED' });
+      }
       if (err?.code === 'P2034') {
-        // Genuine concurrent duplicate: Postgres aborted one side of the race.
-        return res.status(429).json({
-          message: 'A payment request was already sent to this shopper in the last 60 seconds',
+        // Serializable transaction conflict: Postgres aborted one side of a race. This is NOT proof of a
+        // duplicate (the other transaction may have been for a different shopper or even rolled back), so
+        // tell the client it is safe to retry instead of claiming a request was already sent. The genuine
+        // duplicate-within-60s case is the 429 below, decided by the guard inside the transaction.
+        res.set('Retry-After', '1');
+        return res.status(409).json({
+          message: 'Another payment request was being created at the same time. Please try again.',
+          code: 'SERIALIZATION_RETRY',
+          retryAfterSeconds: 1,
         });
       }
       console.error('[pos-payment] Failed to create POSPaymentRequest placeholder:', err);
@@ -1056,6 +1239,21 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       });
     }
 
+    // Fulfillment-failed replay (2026-09-29, money review P1-10): the card was captured but an item was
+    // gone, so the request was parked in FULFILLMENT_FAILED and the captured amount is being refunded.
+    // A repeated confirm (the shopper taps Pay again) resumes that refund instead of dead-ending on a
+    // 400; the Square idempotency key is derived from the request id, so it can never refund twice.
+    if (posRequest.status === 'FULFILLMENT_FAILED' || posRequest.status === 'REFUNDED') {
+      return respondToPosFulfillmentFailure(res, {
+        posRequest,
+        requestId,
+        externalPaymentId: posRequest.squarePaymentId ?? null,
+        unavailableItemId: null,
+        detail: '',
+        firstFailure: false,
+      });
+    }
+
     // Verify status is ACCEPTED
     if (posRequest.status !== 'ACCEPTED') {
       return res.status(400).json({
@@ -1258,11 +1456,10 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         externalPaymentId = result.paymentId;
       }
 
-      // Mark POS request as PAID
-      await prisma.pOSPaymentRequest.update({
-        where: { id: requestId },
-        data: { status: 'PAID', paidAt: new Date() },
-      });
+      // The PAID transition itself moved (2026-09-29) to the single guarded, transactional block
+      // below (search "EXACTLY-ONCE PAID TRANSITION"): it used to be an unconditional update here
+      // and a second copy in the Stripe branch, which let a replayed or concurrent confirm re-run
+      // the whole fulfillment and double-accrue the cash-leg commission.
     } else {
       const result = await stripePos.retrieveAndVerifyPayment({
         paymentIntentId: paymentIntentId!,
@@ -1276,11 +1473,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
 
       externalPaymentId = result.externalPaymentId;
 
-      // Mark POS request as PAID
-      await prisma.pOSPaymentRequest.update({
-        where: { id: requestId },
-        data: { status: 'PAID', paidAt: new Date() },
-      });
+      // PAID transition: see the guarded block below (2026-09-29), shared by both processors.
     }
 
     // Square migration Wave 1 #3 (2026-09-07): per-item and misc Purchase rows below need
@@ -1315,205 +1508,320 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     // mutates the organizer's real cashFeeBalance -- a fake test sale must never touch
     // it, same posture cashPaymentController.ts already takes for its own
     // isTestTransaction rows (see that file's own "deliberately NEVER accrued" comment).
-    if (posRequest.isSplitPayment && posRequest.cashAmountCents && !isTestBypassActive) {
-      try {
-        const cashFeeRate = await resolveCashCommissionRate({
-          subscriptionTier: organizerProfile.subscriptionTier,
-          referralDiscountExpiry: organizerProfile.referralDiscountExpiry,
-        });
-        const cashCommission = cashCommissionOn(posRequest.cashAmountCents / 100, cashFeeRate);
-        await accrueCashFeeBalance({ organizerId: organizerProfile.id, commission: cashCommission });
-      } catch (err: any) {
-        console.error('[pos-payment] Failed to accrue cash-half commission for split payment:', err);
-        try {
-          Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
-            tags: { area: 'pos-payment-request-confirm-split-cash-commission' },
-            extra: {
-              requestId,
-              organizerUserId: posRequest.organizerUserId,
-              cashAmountCents: posRequest.cashAmountCents,
-            },
+    // ── EXACTLY-ONCE PAID TRANSITION + CASH-LEG ACCRUAL (2026-09-29) ─────────────────────────
+    // Before this fix the request was set PAID unconditionally and the cash-leg commission was
+    // then incremented in a separate, try/catch-swallowed step, so (a) two concurrent or replayed
+    // confirms both ran the whole fulfillment below and both accrued, and (b) an accrual failure
+    // was logged and forgotten, permanently losing the fee.
+    //
+    // Now one transaction does both: a compare-and-swap ACCEPTED -> PAID (only the caller whose
+    // updateMany reports count === 1 proceeds; the loser returns the already-paid success), and,
+    // for a split sale, the idempotent CashFeeAccrual ledger insert + cashFeeBalance increment
+    // (accrueSplitCashLegOnce, unique per POSPaymentRequest.id). If the accrual throws, the whole
+    // transaction rolls back, the request STAYS ACCEPTED, and Sentry is alerted -- so the failure
+    // is loud, not silent, and a retried confirm is safe: the Square payment id is already
+    // persisted, so createAndCapturePayment re-fetches that same payment instead of charging the
+    // card again, then re-runs this block.
+    //
+    // A captured payment must never be dropped: if the request was expired or cancelled while the
+    // charge was in flight, it is still recorded as PAID (with a Sentry warning), exactly as the
+    // old unconditional update did.
+    // FULFILLMENT IN THE SAME TRANSACTION (2026-09-29, money review P1-9 / P1-10 / P1-12). The PAID flip,
+    // the split cash-leg accrual, the stock decrement and the Purchase rows now commit or roll back
+    // TOGETHER:
+    //   - P1-12: fulfillment runs only inside the transaction whose compare-and-swap won the
+    //     ACCEPTED -> PAID flip, so a replayed or concurrent confirm (which reads PAID and returns early,
+    //     or loses the swap) can never run it a second time: no double stock decrement.
+    //   - P1-10: because the Purchase rows and the stock decrement are part of the flip, a crash or a DB
+    //     error leaves the request ACCEPTED with nothing half-recorded, and the retried confirm (the
+    //     Square payment id is persisted, so the card is not charged again) redoes the whole thing.
+    //     The old order (flip PAID, then create rows, then decrement) could strand a PAID request with a
+    //     captured card and missing rows that no replay would ever repair.
+    //   - An item that is sold out or gone AFTER the card was captured aborts the whole transaction
+    //     (PosFulfillmentUnavailableError), the request is moved to FULFILLMENT_FAILED and the captured
+    //     card amount is refunded through squareRefundService.refundFailedPosFulfillment. That step is
+    //     retryable: a replayed confirm resumes the refund (deterministic Square idempotency key), and
+    //     reconcilePosFulfillmentFailures sweeps any that were left pending.
+    //   - P1-9: each Purchase row records its share of what was ACTUALLY charged (discounts and misc
+    //     lines allocated with allocateCentsProportionally, largest remainder), of the platform fee and
+    //     of the cash leg, so per-row revenue, fee and refunds add back up to the sale.
+    let lateCaptureFromStatus: string | null = null;
+    let wonPaidTransition = false;
+    // Post-commit work collected inside the transaction (only used once it has committed).
+    const fullySoldOutItemIds: string[] = [];
+    const partialSaleUpdates: Array<{ itemId: string; remainingStock: number }> = [];
+    try {
+      wonPaidTransition = await prisma.$transaction(
+        async (tx) => {
+          const paidAt = new Date();
+          let flip = await tx.pOSPaymentRequest.updateMany({
+            where: { id: requestId, status: 'ACCEPTED' },
+            data: { status: 'PAID', paidAt },
           });
-        } catch {
-          // Sentry may not be initialized -- silently continue
-        }
-      }
-    }
-
-    // Create Purchase records for each item
-    const items = await prisma.item.findMany({
-      where: { id: { in: posRequest.itemIds }, saleId: posRequest.saleId },
-      select: { id: true, price: true },
-    });
-
-    for (const item of items) {
-      try {
-        await prisma.purchase.create({
-          data: {
-            userId: posRequest.shopperUserId,
-            itemId: item.id,
-            saleId: posRequest.saleId,
-            amount: item.price || 0,
-            platformFeeAmount: posRequest.platformFeeCents / 100,
-            // FEE SNAPSHOT (2026-08-17): commission-only, and commissionRate is null by design —
-            // this flow charges ONE cart-level fee and stamps the whole figure onto every row (a
-            // pre-existing shape, not changed here), so there is no honest per-row rate to
-            // record. Inventing one to fill the column would be a guess. Must match the
-            // idempotent webhook backstop in stripeController.ts exactly.
-            ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
-            // findasale-hacker fix (2026-08-09, Direct-charges adversarial pass), STRIPE
-            // rows only: this PaymentIntent was created above via paymentIntents.create(...,
-            // { stripeAccount: organizerProfile.stripeConnectId }) -- it is UNCONDITIONALLY
-            // a genuine Direct charge on the organizer's own connected account (this flow
-            // predates the Direct-charges migration/allowlist and was never gated by
-            // shouldUseDirectCharge). Leaving chargeType at its schema default ('DESTINATION')
-            // would mislabel every POS Payment Request Purchase row, which breaks
-            // refundService.ts's refund-call routing (it would omit { stripeAccount },
-            // calling refunds.create against a PaymentIntent that only exists on the
-            // connected account -- refund fails outright). See buildProcessorPurchaseFields
-            // above for the SQUARE-row shape (2026-09-07, Square migration Wave 1 #3).
-            ...buildProcessorPurchaseFields(item.id),
-            source: 'POS',
-            status: 'PAID',
-            isTestTransaction: isTestBypassActive,
-          },
-        });
-
-        // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
-        // old unconditional status update. Downstream cross-channel-removal hooks only fire
-        // once the item is actually fully sold out (stockSold reached stockTotal) -- they
-        // previously fired unconditionally on every sale regardless of remaining stock.
-        // QA Test-Transaction Harness (2026-09-17): the irreversible stock decrement /
-        // SOLD flip / cross-channel (eBay/Shopify/Discogs) withdraw-on-sale below is
-        // skipped for a test transaction -- same "Test Transaction safety net" precedent
-        // cashPaymentController.ts already established (2026-08-29 incident: a real QA
-        // pass permanently marked a real production item SOLD with no clean undo). The
-        // Purchase row above was still created for real (tagged isTestTransaction) so the
-        // pricing/fee math and the receipt/notification below are genuinely exercised.
-        if (!isTestBypassActive) {
-          let fullySoldOut: boolean;
-          let remainingStock: number;
-          try {
-            ({ fullySoldOut, remainingStock } = await sellItemUnits(item.id, 1));
-          } catch (stockErr: any) {
-            if (stockErr instanceof InsufficientStockError) {
-              console.error(`[pos-payment] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
+          if (flip.count !== 1) {
+            const current = await tx.pOSPaymentRequest.findUnique({ where: { id: requestId }, select: { status: true } });
+            if (!current || current.status === 'PAID') return false; // a concurrent confirm already won
+            if (['EXPIRED', 'CANCELLED', 'DECLINED'].includes(current.status)) {
+              flip = await tx.pOSPaymentRequest.updateMany({
+                where: { id: requestId, status: current.status },
+                data: { status: 'PAID', paidAt },
+              });
+              if (flip.count !== 1) return false;
+              lateCaptureFromStatus = current.status;
+            } else {
+              throw new Error(`POSPaymentRequest ${requestId} is in unexpected status ${current.status} after the payment was captured`);
             }
-            throw stockErr;
+          }
+          // QA Test-Transaction Harness (2026-09-17): a fake test sale must never touch the
+          // organizer's real cashFeeBalance (see cashPaymentController.ts's own posture).
+          if (posRequest.isSplitPayment && posRequest.cashAmountCents && !isTestBypassActive) {
+            await accrueSplitCashLegOnce({
+              organizer: {
+                id: organizerProfile.id,
+                subscriptionTier: organizerProfile.subscriptionTier,
+                referralDiscountExpiry: organizerProfile.referralDiscountExpiry,
+              },
+              sourceType: 'POS_PAYMENT_REQUEST',
+              sourceId: requestId,
+              cashAmountCents: posRequest.cashAmountCents,
+              tx,
+            });
           }
 
-          if (fullySoldOut) {
-            // Fire-and-forget: end eBay listing if item was pushed there
-            endEbayListingIfExists(item.id).catch(err =>
-              console.error('[eBay] Failed to withdraw offer:', err)
-            );
-            markShopifyItemSold(item.id).catch(err =>
-              console.error('[Shopify] Failed to mark item sold:', err)
-            );
-            withdrawDiscogsListingIfExists(item.id).catch(err =>
-              console.error('[Discogs] Failed to withdraw listing:', err)
-            );
-            withdrawReverbListingIfExists(item.id).catch(err =>
-              console.error('[Reverb] Failed to withdraw listing:', err)
-            );
-            notifyFacebookExportedItemSold(item.id).catch(err =>
-              console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
-            );
-          } else {
-            // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
-            syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock }).catch(err =>
-              console.error('[eBay ReviseQty] sync failed for item', item.id, err)
-            );
-          }
-        }
+          // ── Fulfillment: allocate, decrement stock, record the rows ──────────────────────────
+          const fulfillItems = await tx.item.findMany({
+            where: { id: { in: posRequest.itemIds }, saleId: posRequest.saleId },
+            select: { id: true, price: true },
+          });
+          const totalCents = posRequest.totalAmountCents;
+          const itemCentsList = fulfillItems.map((it) => Math.round((it.price || 0) * 100));
+          const itemsListTotalCents = itemCentsList.reduce((sum, c) => sum + c, 0);
+          const miscRemainderCents = totalCents - itemsListTotalCents;
+          // A misc row carries whatever the catalog items do not explain (custom-amount lines). Also
+          // used when no item carries any price, so the whole charge is still recorded exactly once.
+          const noPricedItems = fulfillItems.length === 0 || itemsListTotalCents <= 0;
+          const needsMiscRow = noPricedItems || miscRemainderCents > 1;
+          const rowWeights = [...itemCentsList];
+          if (needsMiscRow) rowWeights.push(noPricedItems ? totalCents : miscRemainderCents);
 
-        // Update ItemReservation if exists
-        await prisma.itemReservation.updateMany({
-          where: { itemId: item.id, userId: posRequest.shopperUserId },
-          data: { status: 'COMPLETED' },
-        });
-      } catch (err: any) {
-        // Sentry FINDASALE-NODEJS-7M fix (2026-09-03, S-BQ-QA-ROADMAP): a P2002 here means
-        // the client retried/double-submitted this exact confirm request (same paymentIntent
-        // + same item) -- the Purchase row for this item was already created successfully by
-        // the FIRST attempt, and this second attempt's create() is correctly rejected by the
-        // compound partial unique index on (stripePaymentIntentId, itemId) (see schema.prisma
-        // comment on the Purchase model). Nothing is broken: the item is already sold, stock
-        // already decremented, notifications already sent -- this branch is a benign no-op,
-        // not a fulfillment failure. Downgraded to a quiet warn (no Sentry alert) so real
-        // failures below aren't drowned out by expected-duplicate noise. Every OTHER error in
-        // this catch (stock-decrement failure, DB blip, etc.) still gets the full P0
-        // console.error + Sentry treatment from the 2026-08-08 fix this replaces in part.
-        if (err?.code === 'P2002') {
-          console.warn(`[pos-payment] Duplicate confirm for item ${item.id} (externalPaymentId ${externalPaymentId}) -- Purchase already exists from an earlier attempt, skipping.`);
-        } else {
-          // P0 fix (2026-08-08, Terminal readiness audit): this is the same failure class
-          // already fixed with a Sentry alert in stripeController.ts's POS-payment-request
-          // webhook fulfillment (search "P0 fix (2026-08-07)" in that file) -- by this point
-          // Stripe has confirmed the PaymentIntent succeeded (verified via
-          // paymentIntents.retrieve above) and posRequest.status is already PAID, so a
-          // failure creating this item's Purchase row or decrementing its stock means money
-          // was captured but the item was never recorded as sold. The catch here already
-          // correctly avoided aborting the rest of the cart (unlike terminalController.ts's
-          // sibling bug, also fixed this pass) -- but it only logged to console, so the
-          // failure had zero record anywhere once server logs rotated. Sentry closes that gap.
-          console.error(`[pos-payment] Failed to mark item ${item.id} as sold (payment already captured, request already PAID):`, err);
-          try {
-            Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
-              tags: { area: 'pos-payment-request-confirm-post-payment-item-fulfillment' },
-              extra: {
-                requestId,
+          // What was ACTUALLY charged (cash + card, net of any discount) split across the rows. The old
+          // code wrote the LIST price on every row and stamped the whole cart fee on EVERY row, so a
+          // discounted or multi-item sale overstated revenue and fees per row and any later refund of one
+          // row was computed against the wrong numbers.
+          const rowAmountCents = allocateCentsProportionally(totalCents, rowWeights);
+          const rowFeeCents = allocateCentsProportionally(posRequest.platformFeeCents, rowAmountCents);
+          const confirmCashCents = posRequest.isSplitPayment && posRequest.cashAmountCents ? posRequest.cashAmountCents : 0;
+          const rowCashCents =
+            confirmCashCents > 0
+              ? allocateCentsProportionally(confirmCashCents, rowAmountCents).map((c, i) => Math.min(c, rowAmountCents[i]))
+              : rowWeights.map(() => 0);
+          const discountTotalCents = Number(posRequest.discountAmountCents) > 0 ? Number(posRequest.discountAmountCents) : 0;
+          const rowDiscountCents =
+            discountTotalCents > 0
+              ? allocateCentsProportionally(discountTotalCents, itemCentsList).map((c, i) => Math.min(c, itemCentsList[i]))
+              : itemCentsList.map(() => 0);
+
+          // Belt and suspenders for a state the old non-atomic order could leave behind (rows written but
+          // the request never finalized): never write a second row for a payment/item already recorded,
+          // and never decrement that item's stock twice.
+          const recordedRows =
+            (await tx.purchase.findMany({
+              where:
+                posRequest.processor === 'SQUARE'
+                  ? { squarePaymentId: externalPaymentId }
+                  : { stripePaymentIntentId: { startsWith: externalPaymentId } },
+              select: { itemId: true },
+            })) ?? [];
+          const recordedItemIds = new Set(recordedRows.map((r: { itemId: string | null }) => r.itemId).filter(Boolean) as string[]);
+          const miscAlreadyRecorded = recordedRows.some((r: { itemId: string | null }) => r.itemId === null);
+
+          for (let idx = 0; idx < fulfillItems.length; idx++) {
+            const item = fulfillItems[idx];
+            if (recordedItemIds.has(item.id)) continue;
+
+            // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the old
+            // unconditional status update. QA Test-Transaction Harness (2026-09-17): the irreversible
+            // decrement / SOLD flip is skipped for a test transaction (2026-08-29 incident: a real QA pass
+            // permanently marked a real production item SOLD with no clean undo). The Purchase row below is
+            // still created for real (tagged isTestTransaction) so pricing/fee math is genuinely exercised.
+            if (!isTestBypassActive) {
+              try {
+                const sold = await sellItemUnits(item.id, 1, tx);
+                if (sold.fullySoldOut) fullySoldOutItemIds.push(item.id);
+                else partialSaleUpdates.push({ itemId: item.id, remainingStock: sold.remainingStock });
+              } catch (stockErr: any) {
+                const gone = stockErr instanceof InsufficientStockError || /not found/i.test(String(stockErr?.message ?? ''));
+                if (gone) {
+                  console.error(`[pos-payment] Item ${item.id} unavailable after the card was captured:`, stockErr?.message);
+                  throw new PosFulfillmentUnavailableError(item.id, String(stockErr?.message ?? 'unavailable'));
+                }
+                throw stockErr;
+              }
+            }
+
+            const rowFeeDollars = rowFeeCents[idx] / 100;
+            const discountForRow = rowDiscountCents[idx] ?? 0;
+            await tx.purchase.create({
+              data: {
+                userId: posRequest.shopperUserId,
                 itemId: item.id,
-                organizerUserId: posRequest.organizerUserId,
-                shopperUserId: posRequest.shopperUserId,
-                processor: posRequest.processor,
-                externalPaymentId,
+                saleId: posRequest.saleId,
+                amount: rowAmountCents[idx] / 100,
+                platformFeeAmount: rowFeeDollars,
+                // FEE SNAPSHOT (2026-08-17): commission-only, and commissionRate is null by design: this
+                // flow charges ONE cart-level fee, now allocated across the rows (see above), so there is no
+                // honest per-row rate to record. Must match the idempotent webhook backstop in
+                // stripeController.ts exactly.
+                ...snapshotForCommissionOnly(rowFeeDollars, null),
+                // Direct-charge / Square processor fields: see buildProcessorPurchaseFields above.
+                ...buildProcessorPurchaseFields(item.id),
+                source: 'POS',
+                status: 'PAID',
+                isTestTransaction: isTestBypassActive,
+                // Split tender (2026-09-29): this row's share of the cash leg, so refunds cap the card
+                // processor at what it actually collected. Left unset (column stays NULL) when not split.
+                ...(rowCashCents[idx] > 0 ? { cashLegAmount: rowCashCents[idx] / 100 } : {}),
+                // Cashier discount (2026-08-28): this row's share, so the audit columns reconcile.
+                ...(discountForRow > 0
+                  ? {
+                      discountType: posRequest.discountType,
+                      discountValueRaw: posRequest.discountValueRaw,
+                      discountAmountCents: discountForRow,
+                      discountReasonNote: posRequest.discountReasonNote,
+                      discountAppliedByUserId: posRequest.discountAppliedByUserId,
+                    }
+                  : {}),
               },
             });
-          } catch {
-            // Sentry may not be initialized -- silently continue
+
+            // Update ItemReservation if exists
+            await tx.itemReservation.updateMany({
+              where: { itemId: item.id, userId: posRequest.shopperUserId },
+              data: { status: 'COMPLETED' },
+            });
           }
-        }
+
+          // Misc-only carts: no DB item IDs, one Purchase for the full amount. Mixed carts: a misc Purchase
+          // for any remainder beyond catalog item prices.
+          if (needsMiscRow && !miscAlreadyRecorded) {
+            const miscIdx = rowWeights.length - 1;
+            const miscFeeDollars = rowFeeCents[miscIdx] / 100;
+            await tx.purchase.create({
+              data: {
+                userId: posRequest.shopperUserId,
+                itemId: null,
+                saleId: posRequest.saleId,
+                amount: rowAmountCents[miscIdx] / 100,
+                platformFeeAmount: miscFeeDollars,
+                // FEE SNAPSHOT (2026-08-17): see the item rows above for why the rate is null.
+                ...snapshotForCommissionOnly(miscFeeDollars, null),
+                // findasale-hacker fix (2026-08-09), STRIPE rows only: genuine Direct charge, see
+                // buildProcessorPurchaseFields. SQUARE rows use the raw squarePaymentId (itemId is null here,
+                // so no per-item suffix/uniqueness concern applies).
+                ...(posRequest.processor === 'SQUARE'
+                  ? { processor: 'SQUARE' as const, squarePaymentId: externalPaymentId }
+                  : {
+                      stripePaymentIntentId: fulfillItems.length === 0 ? externalPaymentId : `${externalPaymentId}_misc`,
+                      chargeType: 'DIRECT' as const,
+                      stripeAccountId: organizerProfile.stripeConnectId,
+                    }),
+                source: 'POS',
+                status: 'PAID',
+                isTestTransaction: isTestBypassActive,
+                ...(rowCashCents[miscIdx] > 0 ? { cashLegAmount: rowCashCents[miscIdx] / 100 } : {}),
+              },
+            });
+          }
+          return true;
+        },
+        // Interactive transaction: a cart of many items does several statements per item.
+        { timeout: 30000, maxWait: 10000 }
+      );
+    } catch (finalizeErr: any) {
+      if (finalizeErr instanceof PosFulfillmentUnavailableError) {
+        // Card captured, but an item is sold out or gone. The transaction rolled back (request still
+        // ACCEPTED, nothing recorded, cash-leg accrual undone). Refund and tell everyone.
+        return respondToPosFulfillmentFailure(res, {
+          posRequest,
+          requestId,
+          externalPaymentId,
+          unavailableItemId: finalizeErr.itemId,
+          detail: finalizeErr.detail,
+          firstFailure: true,
+        });
+      }
+      console.error('[pos-payment] confirmPaymentRequest: payment captured but PAID transition / fulfillment failed:', finalizeErr);
+      try {
+        Sentry.captureException(finalizeErr instanceof Error ? finalizeErr : new Error(String(finalizeErr)), {
+          tags: { area: 'pos-payment-request-confirm-finalize', processor: posRequest.processor },
+          level: 'error',
+          extra: {
+            requestId,
+            externalPaymentId,
+            organizerUserId: posRequest.organizerUserId,
+            shopperUserId: posRequest.shopperUserId,
+            isSplitPayment: posRequest.isSplitPayment,
+            cashAmountCents: posRequest.cashAmountCents,
+            note: 'Card captured; request left ACCEPTED (transaction rolled back, nothing recorded). Retrying confirm is safe: squarePaymentId is persisted so the card is not charged again.',
+          },
+        });
+      } catch {
+        // Sentry may not be initialized -- silently continue
+      }
+      return res.status(500).json({
+        message:
+          'Your card was charged, but we could not finish recording the sale. Do not pay again. Wait a moment and tap Pay once more, or ask the organizer to check the register.',
+        charged: true,
+      });
+    }
+    if (!wonPaidTransition) {
+      // Another confirm already finalized this request (and ran its fulfillment). Nothing more to do.
+      return res.json({
+        success: true,
+        receiptUrl: '/shopper/history?view=receipts',
+        message: 'Payment already completed',
+      });
+    }
+    // (closure-assigned above, so TypeScript's flow analysis still sees the initial `null`)
+    const lateCaptureStatus = lateCaptureFromStatus as string | null;
+    if (lateCaptureStatus) {
+      try {
+        Sentry.captureMessage(
+          `[pos-payment] Payment captured after request ${requestId} had already moved to ${lateCaptureStatus}; recorded as PAID anyway (externalPaymentId ${externalPaymentId}).`,
+          'warning'
+        );
+      } catch {
+        // Sentry may not be initialized -- silently continue
       }
     }
 
-    // Misc-only carts: no DB item IDs — create one Purchase for the full amount
-    // Mixed carts: create a misc Purchase for any remainder beyond catalog item prices
-    const realItemsTotal = items.reduce((sum, item) => sum + (item.price || 0), 0);
-    const miscRemainder = Math.round((posRequest.totalAmountCents / 100 - realItemsTotal) * 100) / 100;
-    const shouldCreateMisc = items.length === 0 || miscRemainder > 0.01;
-    if (shouldCreateMisc) {
-      const miscAmount = items.length === 0 ? posRequest.totalAmountCents / 100 : miscRemainder;
-      try {
-        await prisma.purchase.create({
-          data: {
-            userId: posRequest.shopperUserId,
-            itemId: null,
-            saleId: posRequest.saleId,
-            amount: miscAmount,
-            platformFeeAmount: posRequest.platformFeeCents / 100,
-            // FEE SNAPSHOT (2026-08-17): see the item loop above for why the rate is null.
-            ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
-            // findasale-hacker fix (2026-08-09), STRIPE rows only: same genuine-Direct-charge
-            // mislabeling gap as the item-Purchase loop above -- see that comment for the
-            // full rationale. SQUARE rows use the raw squarePaymentId (itemId is null here,
-            // so no per-item suffix/uniqueness concern applies).
-            ...(posRequest.processor === 'SQUARE'
-              ? { processor: 'SQUARE' as const, squarePaymentId: externalPaymentId }
-              : {
-                  stripePaymentIntentId: items.length === 0 ? externalPaymentId : `${externalPaymentId}_misc`,
-                  chargeType: 'DIRECT' as const,
-                  stripeAccountId: organizerProfile.stripeConnectId,
-                }),
-            source: 'POS',
-            status: 'PAID',
-            isTestTransaction: isTestBypassActive,
-          },
-        });
-      } catch (err: any) {
-        console.error('[pos-payment] Failed to create misc purchase record:', err);
-      }
+    // Cross-channel hooks, fired only now that the transaction has COMMITTED (they used to fire inside the
+    // per-item loop, before anything was durable). Downstream removal hooks only fire once the item is
+    // actually fully sold out (stockSold reached stockTotal). Fire-and-forget.
+    for (const soldOutItemId of fullySoldOutItemIds) {
+      endEbayListingIfExists(soldOutItemId).catch(err =>
+        console.error('[eBay] Failed to withdraw offer:', err)
+      );
+      markShopifyItemSold(soldOutItemId).catch(err =>
+        console.error('[Shopify] Failed to mark item sold:', err)
+      );
+      withdrawDiscogsListingIfExists(soldOutItemId).catch(err =>
+        console.error('[Discogs] Failed to withdraw listing:', err)
+      );
+      withdrawReverbListingIfExists(soldOutItemId).catch(err =>
+        console.error('[Reverb] Failed to withdraw listing:', err)
+      );
+      notifyFacebookExportedItemSold(soldOutItemId).catch(err =>
+        console.warn(`[FB Nudge] failed for item ${soldOutItemId}:`, err.message)
+      );
     }
+    for (const partial of partialSaleUpdates) {
+      // ADR-087 Phase 4: partial sale, revise eBay listing quantity if linked.
+      syncMarketplaceStock(partial.itemId, { fullySoldOut: false, remainingStock: partial.remainingStock }).catch(err =>
+        console.error('[eBay ReviseQty] sync failed for item', partial.itemId, err)
+      );
+    }
+
 
     // Feature #58: Award PURCHASE_MADE achievement for linked shopper (fire-and-forget)
     if (posRequest.shopperUserId) {
@@ -1705,7 +2013,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // available here), but it has NO effect on anything until AFTER the sale-ownership
     // check below passes: a client cannot use isTestTransaction to reach a sale this
     // organizer doesn't already have full charge rights to.
-    const { sourceId, saleId, items, buyerEmail, discountType, discountValue, discountReasonNote, isTestTransaction } = req.body as {
+    const { sourceId, saleId, items, buyerEmail, discountType, discountValue, discountReasonNote, isTestTransaction, cashAmountCents, expectedTotalCents } = req.body as {
       sourceId?: string;
       saleId?: string;
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
@@ -1714,6 +2022,12 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       discountValue?: number;
       discountReasonNote?: string;
       isTestTransaction?: boolean;
+      // Split tender (2026-09-29): cash the cashier already collected at the register, in whole
+      // cents. The card is charged the REMAINDER (server-computed subtotal minus this), never the
+      // full cart. Omitted / 0 = a normal all-card sale. expectedTotalCents is the register's own
+      // cart total, used only to refuse a split when the server's total disagrees (see below).
+      cashAmountCents?: number;
+      expectedTotalCents?: number;
     };
     const isTestBypassActive = isTestTransaction === true && isQABypassRequest(req);
 
@@ -1882,8 +2196,50 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Total must be greater than $0' });
     }
 
-    const cnpFeeCents = Math.round(subtotalCents * CNP_FEE_RATE_PLACEHOLDER) + CNP_FEE_FIXED_CENTS_PLACEHOLDER;
-    const totalChargeCents = subtotalCents + cnpFeeCents;
+    if (subtotalCents > MAX_POS_AMOUNT_CENTS) {
+      return res.status(400).json({
+        message: `Total must be at most $${(MAX_POS_AMOUNT_CENTS / 100).toFixed(2)}`,
+        code: 'INVALID_AMOUNT',
+      });
+    }
+
+    // ── SPLIT TENDER (2026-09-29, P1 double-collect fix) ─────────────────────────────────────
+    // Before this, the register passed only the cart items, so a cashier who had already taken
+    // partial cash and then tapped "Enter card manually" charged the card the FULL cart total:
+    // the shopper paid the cash portion twice. The card leg is now subtotal - cash, exactly as in
+    // the Send-to-Phone split, and the cash leg is recorded (Purchase.cashLegAmount + a
+    // CashFeeAccrual ledger row, commission accrued to cashFeeBalance).
+    const hasCashLeg = cashAmountCents !== undefined && cashAmountCents !== null && cashAmountCents !== 0;
+    const manualCashCents = hasCashLeg ? (cashAmountCents as number) : 0;
+    if (hasCashLeg) {
+      if (!isValidCents(manualCashCents)) {
+        return res.status(400).json({
+          message: `cashAmountCents must be a whole number of cents greater than 0 and at most ${MAX_POS_AMOUNT_CENTS}`,
+          code: 'INVALID_SPLIT_AMOUNT',
+        });
+      }
+      if (manualCashCents >= subtotalCents) {
+        return res.status(400).json({
+          message: 'The cash received covers the whole sale, so this is a cash sale, not a card sale. Record it as a cash sale instead of charging a card.',
+          code: 'CASH_COVERS_TOTAL',
+        });
+      }
+      // The cash figure was typed against the register's total. If the server's own total (which
+      // applies a discount to catalog lines only) disagrees by more than a cent of rounding, the
+      // card charge would not match what the cashier was shown, so refuse rather than charge it.
+      if (expectedTotalCents !== undefined && (!isValidCents(expectedTotalCents) || Math.abs(expectedTotalCents - subtotalCents) > 1)) {
+        return res.status(409).json({
+          message: `The register total ($${isValidCents(expectedTotalCents) ? (expectedTotalCents / 100).toFixed(2) : '?'}) does not match the sale total ($${(subtotalCents / 100).toFixed(2)}). Re-enter the cash amount against the sale total, or remove the discount and try again.`,
+          code: 'TOTAL_MISMATCH',
+          serverTotalCents: subtotalCents,
+        });
+      }
+    }
+    const isManualSplit = manualCashCents > 0;
+    const cardSubtotalCents = subtotalCents - manualCashCents;
+
+    const cnpFeeCents = Math.round(cardSubtotalCents * CNP_FEE_RATE_PLACEHOLDER) + CNP_FEE_FIXED_CENTS_PLACEHOLDER;
+    const totalChargeCents = cardSubtotalCents + cnpFeeCents;
 
     // Platform commission on the sale's own subtotal (never the CNP surcharge) -- same
     // resolution createPaymentRequest above uses for the card portion of its own charges.
@@ -1892,7 +2248,31 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     const cardFeeRate = hasReferralDiscount ? 0 : getInclusivePlatformFeeRate(organizer.subscriptionTier as any, 'IN_PERSON');
     const baseAppFeeCents = hasReferralDiscount
       ? 0
-      : calculateInclusiveCommissionCents(subtotalCents, organizer.subscriptionTier as any, 'IN_PERSON');
+      : calculateInclusiveCommissionCents(cardSubtotalCents, organizer.subscriptionTier as any, 'IN_PERSON');
+
+    // Card-leg floor (2026-09-29): the actual charge (card subtotal + CNP surcharge) must be a
+    // charge Square will accept with this fee on it. Checked before anything is sent to Square.
+    const manualLegProblem = cardLegProblem({
+      cardCents: totalChargeCents,
+      appFeeCents: baseAppFeeCents,
+      isSplit: isManualSplit,
+    });
+    if (manualLegProblem) {
+      return res.status(400).json({ message: manualLegProblem, code: 'CARD_AMOUNT_TOO_SMALL' });
+    }
+
+    // Cash-fee exposure cap (2026-09-24 ruling, now also applied to this split path 2026-09-29):
+    // best-effort pre-charge check (this endpoint has no request row to lock against, so two
+    // simultaneous manual splits are not serialized the way createPaymentRequest's are; the
+    // overshoot is bounded by the number of concurrent registers and the cap is a tail-risk
+    // limit, not an exact ledger).
+    if (isManualSplit && !isTestBypassActive) {
+      const manualCashRate = await resolveCashCommissionRate(organizer);
+      const manualCashCommission = cashCommissionOn(manualCashCents / 100, manualCashRate);
+      if (await wouldExceedCashFeeExposureCap({ organizerId: organizer.id, commission: manualCashCommission })) {
+        return res.status(400).json({ message: CASH_FEE_CAP_MESSAGE, code: 'CASH_FEE_EXPOSURE_CAP_EXCEEDED' });
+      }
+    }
 
     // QA Test-Transaction Harness (2026-09-17): mirrors squarePaymentController.ts's
     // createSquareTestTransaction -- see that function's header comment for the full "why
@@ -2016,6 +2396,44 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       squarePaymentId = result.paymentId;
     }
 
+    // Cash-leg commission accrual (2026-09-29). Keyed by the Square payment id in the
+    // CashFeeAccrual ledger, so it is idempotent across a retried submit (same sourceId ->
+    // same Square payment id) and safe to run BEFORE the purchase-row idempotency check below.
+    // Failure never fails the sale: the card is already charged and a client "Try Again"
+    // re-tokenizes a NEW sourceId (a new Square idempotency key), so surfacing an error here
+    // could double-charge. Instead it is alerted loudly to Sentry and flagged in the response;
+    // the Purchase rows below carry cashLegAmount, so a missing ledger row is findable with:
+    //   SELECT p.* FROM "Purchase" p LEFT JOIN "CashFeeAccrual" c ON c."sourceId" = p."squarePaymentId"
+    //   WHERE p."cashLegAmount" > 0 AND p."source" = 'POS' AND c.id IS NULL;
+    // and re-running accrueSplitCashLegOnce (idempotent) heals it.
+    let cashFeeAccrualPending = false;
+    if (isManualSplit && !isTestBypassActive) {
+      try {
+        await accrueSplitCashLegOnce({
+          organizer: {
+            id: organizer.id,
+            subscriptionTier: organizer.subscriptionTier,
+            referralDiscountExpiry: organizer.referralDiscountExpiry,
+          },
+          sourceType: 'MANUAL_CARD',
+          sourceId: squarePaymentId,
+          cashAmountCents: manualCashCents,
+        });
+      } catch (accrualErr: any) {
+        cashFeeAccrualPending = true;
+        console.error('[pos-payment] manualCardPayment: cash-leg commission accrual FAILED (card already charged):', accrualErr);
+        try {
+          Sentry.captureException(accrualErr instanceof Error ? accrualErr : new Error(String(accrualErr)), {
+            tags: { area: 'pos-manual-card-split-cash-commission' },
+            level: 'error',
+            extra: { organizerId: organizer.id, squarePaymentId, cashAmountCents: manualCashCents, saleId },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+      }
+    }
+
     // Whole-charge idempotent-retry-safe lookup -- see this function's header comment for why
     // this is checked once per charge rather than per item.
     const existingPurchases = await prisma.purchase.findMany({ where: { squarePaymentId } });
@@ -2027,12 +2445,21 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         subtotalCents,
         cnpFeeCents,
         totalChargedCents: totalChargeCents,
+        isSplitPayment: isManualSplit,
+        cashAmountCents: isManualSplit ? manualCashCents : undefined,
+        cardSubtotalCents,
+        cashFeeAccrualPending,
         isTestTransaction: isTestBypassActive,
       });
     }
 
     const purchaseIds: string[] = [];
     let remainingDebtCentsToAllocate = debtAppliedCents;
+    // Split tender (2026-09-29): each row's proportional share of the cash leg, in whole cents,
+    // summing exactly to the cash the cashier collected.
+    const manualCashShares = isManualSplit
+      ? allocateCentsProportionally(manualCashCents, chargedItems.map((ci) => Math.round(ci.amount * 100)))
+      : chargedItems.map(() => 0);
     // Inclusive-fee migration (2026-09-24): baseAppFeeCents may include the per-transaction
     // minimum-fee floor (calculateInclusiveCommissionCents), which a flat itemAmountCents *
     // cardFeeRate multiplication would not reflect on a small-ticket sale where the floor is
@@ -2069,6 +2496,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             amount: item.amount,
             platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
             cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
+            cashLegAmount: manualCashShares[idx] > 0 ? manualCashShares[idx] / 100 : undefined,
             ...snapshotForCommissionOnly(itemFeeCents / 100, cardFeeRate),
             discountType: item.rowDiscountCents > 0 ? discountResolution.discountType : null,
             discountValueRaw: item.rowDiscountCents > 0 ? discountResolution.discountValueRaw : null,
@@ -2161,7 +2589,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         const html = buildEmail({
           preheader: `Receipt for your purchase`,
           headline: 'Your receipt from FindA.Sale 🎉',
-          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul><p><strong>Total: $${(totalChargeCents / 100).toFixed(2)}</strong></p>`,
+          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul>${isManualSplit ? `<p>Paid in cash: $${(manualCashCents / 100).toFixed(2)}</p>` : ''}<p><strong>Total${isManualSplit ? ' charged to card' : ''}: $${(totalChargeCents / 100).toFixed(2)}</strong></p>`,
           ctaText: 'Visit FindA.Sale',
           ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
           accentColor: '#10b981',
@@ -2203,6 +2631,10 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       subtotalCents,
       cnpFeeCents,
       totalChargedCents: totalChargeCents,
+      isSplitPayment: isManualSplit,
+      cashAmountCents: isManualSplit ? manualCashCents : undefined,
+      cardSubtotalCents,
+      cashFeeAccrualPending,
       isTestTransaction: isTestBypassActive,
     });
   } catch (err: any) {

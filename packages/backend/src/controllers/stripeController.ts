@@ -15,9 +15,10 @@ import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
 import { sendItemSoldAlert } from '../services/saleAlertEmailService';
-import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
+import { awardStamp, awardReferralStampForReferee } from '../services/loyaltyService'; // Feature #29: Loyalty Passport / Sale Passport
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 import { awardXp, spendXp, applyHuntPassMultiplier, XP_AWARDS, markHuntPassCancellation } from '../services/xpService'; // Explorer's Guild XP awards -- spendXp added 2026-09-09 (findasale-dev BUG MODE) for the new payment_intent.succeeded BOUNTY_SUBMISSION branch below
+import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-29: the Stripe bounty branch breaks out before the Standard Purchase award block, so it fires the shared (processor-agnostic, idempotent, never-throws) engagement awards itself
 import { checkAndAwardOgBuyer } from '../services/badgeService'; // Feature #404: OG Buyer badge
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature: Referral tranche system
 import { awardOrganizerClaimedXp, awardProUpgradeXp } from '../services/referralService'; // Organizer referral XP
@@ -38,12 +39,14 @@ import {
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { fanOutItemSoldWithdrawals } from '../services/soldFanOutService'; // 2026-09-23
+import { recordAffiliateConversion, resolveAffiliateAttribution } from '../services/creatorAffiliateService'; // 2026-09-29: creator program attribution + commission ledger
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
+import { getConsignorItemSoldPayout } from '../services/consignorItemSoldPayout'; // Feature #309 fix (2026-09-29): consignor + net for the item-sold email come from the sold item's own consignorId and calculateConsignorPayout (ADR-096), not the inverse `100 - commissionRate` math
 import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail, disputeClawbackEnabled } from '../services/refundService'; // P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment at this file's createRefund call site.
 import { executeVerifiedSquareRefund } from '../services/squareRefundService'; // Square migration Wave 1 #4 (2026-09-07): one added branch at this file's createRefund call site below routes SQUARE-processor purchases through the Square-side choke point instead of Stripe's.
 import { transactionalEmailService } from '../lib/transactionalEmailService';
@@ -328,6 +331,15 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
           }
         : {};
 
+      // Creator program (2026-09-29): a PaymentIntent that carried an affiliateLinkId in its metadata
+      // keeps its attribution when the Purchase is recovered. Validated, never trusted: a bad or
+      // self-referral id resolves to null and the purchase is simply unattributed.
+      const recoveredAffiliateLinkId = await resolveAffiliateAttribution({
+        affiliateLinkId: md.affiliateLinkId,
+        saleId,
+        buyerUserId: userId,
+      });
+
       const purchase = await prisma.purchase.create({
         data: {
           userId,
@@ -338,8 +350,13 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
           ...recoveredSnapshot,
           stripePaymentIntentId: paymentIntent.id,
           status: 'PAID',
+          ...(recoveredAffiliateLinkId ? { affiliateLinkId: recoveredAffiliateLinkId } : {}),
         },
       });
+
+      if (recoveredAffiliateLinkId) {
+        await recordAffiliateConversion(purchase.id);
+      }
 
       // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the old
       // unconditional status update. The live-feed socket push below only makes sense once
@@ -869,6 +886,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
             where: { stripePaymentIntentId: paymentIntent.id },
             data: { status: 'PAID' },
           });
+
+          // 2026-09-29 Sale Passport parity: a bounty fulfillment is a real settled Purchase (bounty-redesign-spec
+          // s3b: integrated checkout, submission -> PURCHASED), so it earns purchase XP / milestones / the
+          // MAKE_PURCHASE stamp like every other paid purchase. This branch `break`s before the Standard
+          // Purchase award block below, so without this call a Stripe bounty purchase earned none of it.
+          // Idempotent per purchase (a webhook redelivery is also stopped by the PURCHASED guard above),
+          // deferred off the response path, never throws.
+          try {
+            const bountyPurchaseRow = await prisma.purchase.findFirst({
+              where: { stripePaymentIntentId: paymentIntent.id },
+              select: { id: true },
+            });
+            if (bountyPurchaseRow) fireSquarePurchaseEngagement(bountyPurchaseRow.id);
+          } catch (engagementErr) {
+            console.warn('[bounty-webhook] purchase engagement lookup failed (non-fatal):', engagementErr);
+          }
 
           // BUG FIX (2026-09-09, findasale-dev BUG MODE, Item.status SOLD gap): this Stripe
           // branch (like the Square branch in bountyController.ts) never marked the purchased
@@ -1547,7 +1580,6 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 where: { id: soldItem.saleId! },
                 include: {
                   organizer: { include: { user: { select: { email: true, name: true } } } },
-                  items: { where: { id: paymentIntent.metadata.itemId }, select: { consignorId: true } }
                 },
               });
               if (saleData?.organizer?.user) {
@@ -1564,14 +1596,20 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }
 
               // Feature #309: Send email to consignor if item has consignor
-              const soldItemWithConsignor = saleData?.items?.[0];
-              if (soldItemWithConsignor?.consignorId) {
+              // 2026-09-29 fix: the consignor is the SOLD ITEM's own (soldItem.consignorId), not the
+              // first item row of the sale, and the net comes from the shared ADR-096
+              // calculateConsignorPayout (Consignor.commissionRate is the CONSIGNOR's share, so the
+              // old `100 - commissionRate` math told a 70% consignor they'd get 30%).
+              if (soldItem.consignorId) {
                 try {
-                  const consignor = await prisma.consignor.findUnique({
-                    where: { id: soldItemWithConsignor.consignorId },
+                  const consignorSale = await getConsignorItemSoldPayout({
+                    id: soldItem.id,
+                    price: soldItem.price,
+                    consignorId: soldItem.consignorId,
                   });
+                  const consignor = consignorSale?.consignor;
+                  const consignorPayout = consignorSale?.consignorPayout ?? 0;
                   if (consignor?.email) {
-                    const consignorPayout = soldItem.price ? (soldItem.price * (100 - Number(consignor.commissionRate))) / 100 : 0;
                     setImmediate(() => {
                       sendConsignorItemSold({
                         consignorName: consignor.name,
@@ -1595,10 +1633,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
         }
 
         if (purchase.affiliateLinkId) {
-          await prisma.affiliateLink.update({
-            where: { id: purchase.affiliateLinkId },
-            data: { conversions: { increment: 1 } }
-          }).catch(err => console.warn('Failed to increment affiliate conversion:', err));
+          // Creator program (2026-09-29): was a bare `conversions + 1` that double-counted on every
+          // Stripe webhook retry and never recorded commission. recordAffiliateConversion is
+          // idempotent per Purchase (unique ledger row), blocks self-referral and never throws.
+          await recordAffiliateConversion(purchase.id);
         }
 
         const isPOS = paymentIntent.metadata?.source === 'POS';
@@ -1607,8 +1645,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           checkAndAward(purchase.userId, 'PURCHASE_MADE')
             .catch(err => console.warn('[achievement] Failed to award purchase achievement:', err));
 
-          awardStamp(purchase.userId, 'MAKE_PURCHASE', purchase.saleId ?? undefined)
+          // Sale Passport (2026-09-29): purchase.id makes the legacy counter idempotent across webhook
+          // retries; awardStamp also derives First Find / Treasure Hunter / Lakefront Haul stamps.
+          awardStamp(purchase.userId, 'MAKE_PURCHASE', purchase.saleId ?? undefined, purchase.id)
             .catch(err => console.warn('[loyalty] Failed to award purchase stamp:', err));
+
+          // Friend Finder: if this buyer was referred, credit the referrer's stamp (fraud-gated, idempotent).
+          awardReferralStampForReferee(purchase.userId)
+            .catch(err => console.warn('[loyalty] Failed to award referral stamp:', err));
 
           // issueLoyaltyCoupon disabled S404 — not in Explorer's Guild spec
           // issueLoyaltyCoupon(purchase.userId, purchase.id)
@@ -2651,6 +2695,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // commits to send the organizer notification that this branch previously lacked.
           let cartSaleOrganizerUserId: string | null = null;
           let cartSaleTitle: string | null = null;
+          // Creator program (2026-09-29): validated attribution from the Session metadata, resolved
+          // before the transaction (read-only) so a bad id can never abort the cart's Purchase writes.
+          const cartAffiliateLinkId = await resolveAffiliateAttribution({
+            affiliateLinkId: session.metadata.affiliateLinkId,
+            saleId: cartSaleId,
+            buyerUserId: cartBuyerUserId,
+          });
+          const cartCreatedPurchaseIds: string[] = [];
           try {
             await prisma.$transaction(async (tx) => {
               // Fetch items to get current price and confirm they're still AVAILABLE
@@ -2698,7 +2750,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
               // Create a Purchase record per item
               for (const cartItem of cartItems) {
-                await tx.purchase.create({
+                const createdCartPurchase = await tx.purchase.create({
                   data: {
                     itemId: cartItem.id,
                     saleId: cartSaleId ?? cartItem.saleId,
@@ -2721,10 +2773,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     // shape, carried through from the Session metadata set at creation time.
                     chargeType: cartChargeType,
                     ...(cartChargeType === 'DIRECT' && cartStripeAccountId ? { stripeAccountId: cartStripeAccountId } : {}),
+                    ...(cartAffiliateLinkId ? { affiliateLinkId: cartAffiliateLinkId } : {}),
                   },
                 });
+                cartCreatedPurchaseIds.push(createdCartPurchase.id);
               }
             });
+
+            // Creator program (2026-09-29): commission ledger rows, only after the transaction committed.
+            if (cartAffiliateLinkId) {
+              for (const cartPurchaseId of cartCreatedPurchaseIds) {
+                await recordAffiliateConversion(cartPurchaseId);
+              }
+            }
 
             // Fire-and-forget: end eBay listings for items now fully sold out (not every
             // item in the cart unconditionally -- ADR-085 Track B Phase 1 Step 4)
@@ -3599,14 +3660,55 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     // was caught and fixed with a manual top-up. applyFirstMonthRefundCap is kept in
     // refundService.ts for a possible future BUYER-initiated self-service refund flow, but is
     // no longer called from this seller/admin-initiated endpoint.
-    const refundAmount = purchase.amount;
+    // PARTIAL REFUNDS (2026-09-29, money review P1-14): the body may carry an optional `amount` (dollars)
+    // for a partial refund; without it this refunds the whole REMAINING balance, which for a purchase
+    // that was never refunded is exactly purchase.amount, as before. A partial refund leaves the purchase
+    // PAID with refundedAmount tracked (see squareRefundService.executeVerifiedSquareRefund), so a second
+    // partial refund is allowed up to what is left and the item goes back on sale only once the whole
+    // amount has been refunded.
+    const alreadyRefundedCents = Math.round((Number(purchase.refundedAmount) || 0) * 100);
+    const remainingRefundableCents = Math.max(0, Math.round(purchase.amount * 100) - alreadyRefundedCents);
+    if (remainingRefundableCents <= 0) {
+      return res.status(400).json({ message: 'This purchase has already been fully refunded' });
+    }
+    const rawRequestedAmount = (req.body as { amount?: unknown } | undefined)?.amount;
+    let requestedRefundCents = remainingRefundableCents;
+    if (rawRequestedAmount !== undefined && rawRequestedAmount !== null && rawRequestedAmount !== '') {
+      const parsedAmount = Number(rawRequestedAmount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ message: 'Refund amount must be a number greater than zero' });
+      }
+      requestedRefundCents = Math.round(parsedAmount * 100);
+      if (requestedRefundCents > remainingRefundableCents) {
+        return res.status(400).json({
+          message: 'Refund amount cannot exceed the remaining refundable amount on this purchase',
+          remainingRefundable: remainingRefundableCents / 100,
+        });
+      }
+    }
+    // Only the Square refund path tracks a running refundedAmount and keeps a partially refunded purchase
+    // PAID. The legacy Stripe path (executeVerifiedRefund) marks the whole purchase REFUNDED whatever amount
+    // it is given, so a partial amount there would strand the purchase in a state that hides the balance
+    // still with the buyer. Refuse it rather than record something untrue.
+    if (purchase.processor !== 'SQUARE' && requestedRefundCents !== remainingRefundableCents) {
+      return res.status(400).json({ message: 'Partial refunds are only available for Square purchases. Refund the full amount instead.' });
+    }
+    const refundAmount = requestedRefundCents / 100;
     const wasCapped = false;
+    // True once this refund brings the cumulative refunded total up to the purchase amount.
+    let isFullRefund = alreadyRefundedCents + requestedRefundCents >= Math.round(purchase.amount * 100);
 
     // Refund History (2026-07-29): 'organizer' vs 'admin' mirrors the SAME role check this
     // endpoint already ran above (hasOrganizerRole gates the own-sale ownership check just
     // above; a pure admin with no organizer role skips it). A user with both roles is
     // recorded as 'organizer' since that's the branch whose ownership check actually ran.
     const initiatedBy: 'organizer' | 'admin' = hasOrganizerRole ? 'organizer' : 'admin';
+
+    // Split tender (2026-09-29): a cash + card split sale can only be refunded through Square up to
+    // the card leg; the cash leg is handed back by the organizer. Filled from the Square refund
+    // result below and relayed in the response (0 / null for every non-split refund).
+    let cashPortionToRefundByHand = 0;
+    let cashRefundMessage: string | null = null;
 
     // Money movement — the PAID-status check, payment-intent-exists check, 30-day window,
     // the PAID->REFUNDING TOCTOU compare-and-swap claim + idempotency key, the booth-cart-vs
@@ -3623,7 +3725,10 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       // squareRefundService.ts's file comment for why), so the catch block below needs no
       // change to handle either processor.
       if (purchase.processor === 'SQUARE') {
-        await executeVerifiedSquareRefund(purchaseId, refundAmount, initiatedBy);
+        const squareRefund = await executeVerifiedSquareRefund(purchaseId, refundAmount, initiatedBy);
+        cashPortionToRefundByHand = squareRefund.cashPortionToRefundByHand;
+        cashRefundMessage = squareRefund.message;
+        isFullRefund = squareRefund.isFullRefund;
       } else {
         await executeVerifiedRefund(purchaseId, refundAmount, initiatedBy);
       }
@@ -3634,8 +3739,10 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       throw refundErr;
     }
 
-    // Restore item to AVAILABLE if it exists
-    if (purchase.itemId) {
+    // Restore item to AVAILABLE if it exists -- FULL refunds only (money review P1-14). A partial refund
+    // leaves the purchase PAID and the buyer still holds the item, so putting it back on sale would let
+    // it be sold twice.
+    if (purchase.itemId && isFullRefund) {
       await prisma.item.update({
         where: { id: purchase.itemId },
         data: { status: 'AVAILABLE' }
@@ -3679,7 +3786,13 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       message: 'Refund issued successfully',
       refundAmount,
       wasCapped,
-      originalAmount: purchase.amount
+      originalAmount: purchase.amount,
+      // Partial refunds (2026-09-29): tells the caller whether the purchase is now fully refunded or still
+      // PAID with a balance that can be refunded later.
+      isFullRefund,
+      remainingRefundable: Math.max(0, (Math.round(purchase.amount * 100) - alreadyRefundedCents - requestedRefundCents) / 100),
+      // Split tender (2026-09-29): only present when part of the sale was paid in cash.
+      ...(cashPortionToRefundByHand > 0 ? { cashPortionToRefundByHand, cashRefundMessage } : {}),
     });
   } catch (error) {
     console.error('createRefund error:', error);

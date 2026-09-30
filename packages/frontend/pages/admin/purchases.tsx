@@ -26,6 +26,9 @@ interface RefundResult {
   success: boolean;
   refundedAmount?: number;
   error?: string;
+  /** Cash + card split sale: dollars the organizer must hand back in cash (Square refunds the card leg only). */
+  cashPortionToRefundByHand?: number;
+  cashRefundMessage?: string | null;
 }
 
 const STATUS_OPTIONS = ['PAID', 'PENDING', 'REFUNDED', 'REFUNDING', 'FAILED', 'DISPUTED', 'DISPUTE_LOST'];
@@ -163,6 +166,8 @@ const AdminPurchases = () => {
       const results: RefundResult[] = res.data.results;
       const result = results[0];
       if (result?.success) {
+        // Split sale with cash to hand back: keep the message visible in the results summary.
+        if (result.cashRefundMessage) setRefundResults([result]);
         setPurchases(prev => prev.map(p => p.id === target.id ? { ...p, status: 'REFUNDED' } : p));
         setSingleRefundTarget(null);
         setSingleRefundMarkFraud(false);
@@ -305,7 +310,9 @@ const AdminPurchases = () => {
                 </span>
                 <span className="font-mono text-warm-500 dark:text-warm-400">{r.purchaseId}</span>
                 <span className="text-warm-700 dark:text-warm-300">
-                  {r.success ? `Refunded $${(r.refundedAmount ?? 0).toFixed(2)}` : (r.error || 'Failed')}
+                  {r.success
+                    ? `Refunded $${(r.refundedAmount ?? 0).toFixed(2)}${r.cashRefundMessage ? `. ${r.cashRefundMessage}` : ''}`
+                    : (r.error || 'Failed')}
                 </span>
               </li>
             ))}

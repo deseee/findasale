@@ -435,6 +435,12 @@ export default function POSPage() {
   // location, needed by SquarePaymentRequestForm (via PosManualCard) to init the Web
   // Payments SDK for a register-entered card. Populated from /pos/context below.
   const [organizerSquareLocationId, setOrganizerSquareLocationId] = useState<string | null>(null);
+  // Register fee + split-tender limits from /pos/context (2026-09-29): served by the backend from
+  // the same helpers the charge paths use (getInclusivePlatformFeeRate / minimum-fee floor), so the
+  // fee text and card-amount floor shown here cannot drift from what is actually charged. Null
+  // until /pos/context has loaded.
+  const [posFee, setPosFee] = useState<{ tier: string | null; inPersonRate: number; minimumFeeCents: number; referralDiscountActive: boolean } | null>(null);
+  const [minCardChargeCents, setMinCardChargeCents] = useState(50);
 
   // ─── Venue mode (S1178, Priority 1) ────────────────────────────────────────────────
   // Entered via ?venue=<hubId>. STAFF/OWNER only in this pass -- both auth branches ride
@@ -536,7 +542,7 @@ export default function POSPage() {
   // with register access reaches this too and is cleanly rejected downstream if not.
   useEffect(() => {
     if (!user) return;
-    api.get<{ actorKind?: string; organizerId?: string; sales?: Sale[]; venmoHandle?: string | null; zelleHandle?: string | null; squareOnboarded?: boolean; squareLocationId?: string | null; canApplyDiscount?: boolean; discountCap?: { type: 'PERCENT' | 'FIXED'; value: number } | null }>('/pos/context')
+    api.get<{ actorKind?: string; organizerId?: string; sales?: Sale[]; venmoHandle?: string | null; zelleHandle?: string | null; squareOnboarded?: boolean; squareLocationId?: string | null; canApplyDiscount?: boolean; discountCap?: { type: 'PERCENT' | 'FIXED'; value: number } | null; posFee?: { tier: string | null; inPersonRate: number; minimumFeeCents: number; referralDiscountActive: boolean }; splitTender?: { minCardChargeCents: number; maxAmountCents: number } }>('/pos/context')
       .then(r => {
         setOrganizerVenmo(r.data.venmoHandle || null);
         setOrganizerZelle(r.data.zelleHandle || null);
@@ -549,6 +555,9 @@ export default function POSPage() {
         // POS Cashier Discount Permission (2026-08-28)
         setCanApplyDiscount(!!r.data.canApplyDiscount);
         setDiscountCap(r.data.discountCap ?? null);
+        // Register fee + split-tender limits (2026-09-29)
+        setPosFee(r.data.posFee ?? null);
+        if (r.data.splitTender?.minCardChargeCents) setMinCardChargeCents(r.data.splitTender.minCardChargeCents);
       })
       .catch(err => console.error('[pos] Failed to load POS context:', err));
   }, [user, venueHubId]);
@@ -935,6 +944,19 @@ export default function POSPage() {
     const cents = parseInt(cashNumpadValue || '0', 10);
     setCashReceived(cents / 100);
   }, [cashNumpadValue]);
+
+  // Hidden cash state (2026-09-29): cashNumpadValue/cashReceived used to survive a switch of
+  // payment mode, so a cashier who typed partial cash and then chose Venmo or Zelle had a cash
+  // amount silently sitting in state that those modes ignore (they record the FULL total). Modes
+  // that honor cash and show it -- QR, Enter card manually, Send to Phone, Invoice -- keep it;
+  // Venmo and Zelle clear it and say so, so nothing invisible can leak into the next action.
+  useEffect(() => {
+    if ((paymentMode === 'venmo' || paymentMode === 'zelle') && cashNumpadValue.length > 0) {
+      setCashNumpadValue('');
+      showToast('Cash amount cleared. Venmo and Zelle sales are recorded for the full total.', 'info');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMode]);
 
   // ─── Refresh holds (manual or periodic) ────────────────────────────────────────────────
 
@@ -1403,6 +1425,12 @@ export default function POSPage() {
   // no per-vendor fee-attribution path exists yet for those rails (BoothCartLeg.rail is
   // 'TERMINAL' | 'QR' only). ────────────────────────────────────────────────────────────
   const connectReaderForVenueBooth = useCallback(async (vendorBoothId: string) => {
+    // Card-reader hardware is Stripe Terminal based and is switched off (Square is the only live
+    // processor). Guard so this can never load the SDK or reach the terminal endpoints while the
+    // flag is false. runVenueBoothLeg catches this and reports the booth leg as failed.
+    if (!ENABLE_STRIPE_TERMINAL_CARD_READER) {
+      throw new Error('Card-reader hardware support is being updated. Cash and Square QR are available now.');
+    }
     const { loadStripeTerminal } = await import('@stripe/terminal-js');
     const StripeTerminal = await loadStripeTerminal();
 
@@ -1909,6 +1937,25 @@ export default function POSPage() {
   // Amount to charge on card: cartTotal minus cash if a partial cash payment is entered
   const cardAmount = cashReceived > 0 && cashReceived < cartTotal ? cartTotal - cashReceived : cartTotal;
 
+  // Integer-cent split-tender view (2026-09-29). Every card action below (Send to Phone, QR, manual
+  // card) derives what it charges from THESE, so the button label and the request body can never
+  // disagree: card = total - cash, in whole cents. cashCoversTotal (cash >= total) is a cash sale,
+  // not a split: card actions refuse it instead of quietly charging the full cart on top of the
+  // cash already taken (the P1 double-collect).
+  const cartTotalCents = Math.round(cartTotal * 100);
+  const cashCents = Math.round(cashReceived * 100);
+  const cashCoversTotal = cashCents > 0 && cashCents >= cartTotalCents;
+  const hasPartialCash = cashCents > 0 && cashCents < cartTotalCents;
+  const cardChargeCents = hasPartialCash ? cartTotalCents - cashCents : cartTotalCents;
+  // Estimated platform fee on the CARD leg only (ADR-split-payment-S422). Mirrors
+  // calculateInclusiveCommissionCents: rate x amount, floored at the per-transaction minimum,
+  // 0 under an active referral discount. Display only -- the server computes the real fee.
+  const cardLegFeeCents = posFee
+    ? posFee.referralDiscountActive || cardChargeCents <= 0
+      ? 0
+      : Math.max(Math.round(cardChargeCents * posFee.inPersonRate), posFee.minimumFeeCents)
+    : null;
+
   // ─── Numpad operations (price entry only) ───────────────────────────────────────────
 
   const handleNumpadKey = (key: string) => {
@@ -1944,6 +1991,9 @@ export default function POSPage() {
       await startVenueCheckout();
       return;
     }
+    // Terminal card flow (payment-intent / capture endpoints, incl. the split cashAmountCents
+    // param) is only reachable while the reader flag is on. terminalRef is also null otherwise.
+    if (!ENABLE_STRIPE_TERMINAL_CARD_READER) return;
     if (!cart.length || !terminalRef.current) return;
     setPaymentStatus('creating');
     setErrorMessage('');
@@ -2188,7 +2238,7 @@ export default function POSPage() {
     setPaymentStatus('cancelled');
     setErrorMessage('Payment cancelled.');
 
-    if (paymentIntentId) {
+    if (paymentIntentId && ENABLE_STRIPE_TERMINAL_CARD_READER) {
       try {
         await api.post('/stripe/terminal/cancel', { paymentIntentId });
       } catch (err) {
@@ -2447,6 +2497,12 @@ export default function POSPage() {
 
   const handleGeneratePaymentQr = async () => {
     if (!selectedSaleId || cart.length === 0) return;
+    // Cash that covers the whole sale is a cash sale (2026-09-29): a link charging the full total
+    // on top of it would collect the cash portion twice.
+    if (cashCoversTotal) {
+      setErrorMessage('Cash received covers the whole sale. Record it as a cash sale, or clear the cash amount to make a QR for the full total.');
+      return;
+    }
     setPaymentLinkStatus('generating');
     try {
       const itemIds = cart.filter(c => c.itemId).map(c => c.itemId!);
@@ -2463,6 +2519,9 @@ export default function POSPage() {
       const res = await api.post<{ linkId: string; paymentLinkUrl: string; qrCodeDataUrl: string }>('/pos/payment-links', {
         saleId: selectedSaleId,
         amount: amountForQr,
+        // Split tender (2026-09-29): tell the server about the cash leg so it is recorded on the
+        // link and its commission accrues when the link is paid. `amount` is the card remainder.
+        ...(remainingCents > 0 ? { cashAmountCents: cashReceivedCents } : {}),
         itemIds,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
@@ -2731,6 +2790,12 @@ export default function POSPage() {
   const handleSendToPhone = async () => {
     const shopperId = linkedShopperId || linkedShopperData?.id;
     if (!shopperId || !selectedSaleId || cart.length === 0) return;
+    // Cash that covers the whole sale is a cash sale, not a split (2026-09-29): without this the
+    // request silently ignored the cash and charged the shopper's phone the FULL total.
+    if (cashCoversTotal) {
+      setErrorMessage('Cash received covers the whole sale. Record it as a cash sale, or clear the cash amount to send the full total to the phone.');
+      return;
+    }
 
     setPaymentStatus('creating');
     setErrorMessage('');
@@ -4026,10 +4091,10 @@ export default function POSPage() {
             {(linkedShopperId || linkedShopperData?.id) && (
               <button
                 onClick={handleSendToPhone}
-                disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold}
-                title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : cart.length === 0 ? 'Add items to cart first' : `Send $${cartTotal.toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
+                disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold || cashCoversTotal}
+                title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : cart.length === 0 ? 'Add items to cart first' : cashCoversTotal ? 'Cash received covers the whole sale. Record it as a cash sale or clear the cash amount' : `Send $${(cardChargeCents / 100).toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
                 className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 col-span-2 ${
-                  cart.length === 0 || paymentStatus === 'creating' || loadedHold
+                  cart.length === 0 || paymentStatus === 'creating' || loadedHold || cashCoversTotal
                     ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                     : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                 }`}
@@ -4038,16 +4103,9 @@ export default function POSPage() {
                 <span className="text-xs">
                   {paymentStatus === 'creating'
                     ? 'Sending…'
-                    : (() => {
-                        const cashReceivedCents = Math.round(cashReceived * 100);
-                        const totalCents = Math.round(cartTotal * 100);
-                        const remainingCents = cashReceivedCents > 0 && cashReceivedCents < totalCents
-                          ? totalCents - cashReceivedCents
-                          : 0;
-                        return remainingCents > 0
-                          ? `Send $${(remainingCents / 100).toFixed(2)} to Phone`
-                          : `Send $${cartTotal.toFixed(2)} to Phone`;
-                      })()}
+                    : cashCoversTotal
+                    ? 'Cash covers the total. Clear cash to send'
+                    : `Send $${(cardChargeCents / 100).toFixed(2)} to Phone`}
                 </span>
               </button>
             )}
@@ -4089,6 +4147,14 @@ export default function POSPage() {
             discountType={discountType}
             discountValue={discountValueToSubmit}
             discountReasonNote={discountReasonNote}
+            // Split tender (2026-09-29, P1 double-collect fix): the cash already taken is passed
+            // through so the card is charged the REMAINDER, never the full cart on top of it.
+            cashAmountCents={hasPartialCash ? cashCents : 0}
+            cashCoversTotal={cashCoversTotal}
+            platformFee={posFee}
+            minCardChargeCents={minCardChargeCents}
+            onUseCash={() => setPaymentMode('cash')}
+            onClearCash={() => setCashNumpadValue('')}
             onSuccess={(message) => {
               showToast(message, 'success');
               handleNewTransaction();
@@ -4466,6 +4532,11 @@ export default function POSPage() {
                         Tap "Send to Phone" to charge ${(cartTotal - cashReceived).toFixed(2)} to their card
                       </p>
                     )}
+                    {cashReceived > 0 && cashReceived < cartTotal && !(linkedShopperId || linkedShopperData?.id) && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        To charge the remaining ${(cartTotal - cashReceived).toFixed(2)} to a card, use QR or "Enter card manually"
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -4595,10 +4666,16 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Platform fee note */}
-      {!venueHubId && cart.length > 0 && paymentMode === 'card' && paymentStatus === 'idle' && (
+      {/* Platform fee note. 2026-09-29: this used to hardcode "10%" and x0.9 x0.971 for every
+          tier; it now shows the organizer's real tier-based inclusive rate (served by
+          /pos/context from getInclusivePlatformFeeRate), computed on the CARD amount only. */}
+      {!venueHubId && cart.length > 0 && (paymentMode === 'card' || paymentMode === 'manual_card') && paymentStatus === 'idle' && (
         <p className="mt-4 text-xs text-warm-400 dark:text-warm-500 text-center">
-          Platform fee (10%) applied. Net payout: ~${(cartTotal * 0.9 * 0.971).toFixed(2)} after Square fees.
+          {posFee
+            ? posFee.referralDiscountActive
+              ? 'Referral discount active: no platform fee on this sale.'
+              : `Platform fee: ${parseFloat((posFee.inPersonRate * 100).toFixed(2))}% (minimum $${(posFee.minimumFeeCents / 100).toFixed(2)}), charged on the card amount only. Estimated fee on $${(cardChargeCents / 100).toFixed(2)}: $${((cardLegFeeCents ?? 0) / 100).toFixed(2)}.`
+            : 'Your platform fee shows here once the register finishes loading.'}
         </p>
       )}
 

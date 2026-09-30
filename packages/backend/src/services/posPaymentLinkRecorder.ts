@@ -1,4 +1,5 @@
 import { POSPaymentLink } from '@prisma/client';
+import * as Sentry from '@sentry/node'; // 2026-09-29 money review P1-4/5: alert on foreign item ids
 import { prisma } from '../lib/prisma';
 import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, snapshotForCommissionOnly, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): this recorder completes the SAME payment-link flow posController.createPaymentLinkInternal creates (buyer pays remotely via hosted checkout) -- ONLINE channel
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
@@ -12,6 +13,7 @@ import { createNotification } from '../lib/notificationService';
 import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charges migration (2026-08-08)
 import { getStripe } from '../utils/stripe'; // S-POS-QR-DOUBLE-CHARGE (2026-09-02): deactivate the Payment Link post-completion
 import { deleteSquareCheckoutLink } from './squareCheckoutLinkService'; // Square changeover Wave S2 #4 follow-up (2026-09-09): processor-aware post-record deactivation
+import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // Split tender on the QR payment link (2026-09-29): idempotent cash-leg commission accrual + per-row cash-leg allocation, both inside this recorder's own transaction
 
 const stripe = () => getStripe();
 
@@ -163,7 +165,7 @@ export async function recordPosPaymentLinkSale(
     const posOrganizerLookup = fresh.saleId
       ? await tx.sale.findUnique({
           where: { id: fresh.saleId },
-          select: { organizerId: true, organizer: { select: { subscriptionTier: true, stripeConnectId: true } } },
+          select: { organizerId: true, organizer: { select: { subscriptionTier: true, stripeConnectId: true, referralDiscountExpiry: true } } },
         })
       : null;
     const posOrganizerTier = posOrganizerLookup?.organizer?.subscriptionTier ?? null;
@@ -189,6 +191,32 @@ export async function recordPosPaymentLinkSale(
     }
     recordedStripeAccountId = posStripeConnectId;
     recordedUseDirect = posUseDirect;
+
+    // SPLIT TENDER (2026-09-29): for a cash + card split link, `fresh.amount` is the CARD amount
+    // actually charged through the hosted checkout; `fresh.cashAmountCents` is the cash the
+    // cashier already took at the register. The cash-leg commission accrues to
+    // Organizer.cashFeeBalance HERE, inside this same transaction, so it commits or rolls back
+    // atomically with the COMPLETED flip and the Purchase rows. accrueSplitCashLegOnce is
+    // idempotent (CashFeeAccrual is unique per (POS_PAYMENT_LINK, link id)), so a re-delivered
+    // webhook, the stranded-sale reconcile cron, and posController.getPaymentLink's heal-on-poll
+    // can all reach this without ever double-accruing. A failure here throws and rolls back the
+    // whole recording (the flip included), so the caller's retry re-attempts it; a link is never
+    // left COMPLETED with an unrecorded cash commission.
+    const splitCashCents =
+      fresh.isSplitPayment && (fresh.cashAmountCents ?? 0) > 0 ? (fresh.cashAmountCents as number) : 0;
+    if (splitCashCents > 0) {
+      await accrueSplitCashLegOnce({
+        organizer: {
+          id: fresh.organizerId,
+          subscriptionTier: posOrganizerTier,
+          referralDiscountExpiry: posOrganizerLookup?.organizer?.referralDiscountExpiry ?? null,
+        },
+        sourceType: 'POS_PAYMENT_LINK',
+        sourceId: fresh.id,
+        cashAmountCents: splitCashCents,
+        tx,
+      });
+    }
 
     // Defensive fallback: real PaymentIntent id should always be present from both current
     // callers (see docblock above). If it's ever missing, fall back to the synthetic
@@ -217,7 +245,29 @@ export async function recordPosPaymentLinkSale(
       // revenue for one physical unit. Only sellableItemIds get a Purchase row now;
       // oversoldItemIds are surfaced via organizer notification below instead.
       const sellableItemIds: string[] = [];
-      for (const posItemId of fresh.itemIds) {
+      // Money review P1-4/5 (2026-09-29): only items that belong to THIS link's sale AND organizer
+      // can be sold by this payment. An itemId from another tenant (a link created with a foreign
+      // id before the create-side check existed) is excluded and flagged, never sold.
+      const scopedRows = await tx.item.findMany({
+        where: { id: { in: fresh.itemIds }, saleId: fresh.saleId, sale: { organizerId: fresh.organizerId } },
+        select: { id: true },
+      });
+      const scopedIdSet = new Set(scopedRows.map((r: { id: string }) => r.id));
+      const scopedItemIds = fresh.itemIds.filter((id: string) => scopedIdSet.has(id));
+      if (scopedItemIds.length !== fresh.itemIds.length) {
+        const foreign = fresh.itemIds.filter((id: string) => !scopedIdSet.has(id));
+        console.error(`[pos-record/${source}] Link ${fresh.id} lists item id(s) outside its sale/organizer scope, EXCLUDED from the sale: ${foreign.join(',')}`);
+        try {
+          Sentry.captureMessage('[pos-record] payment link lists items outside its sale scope', {
+            level: 'error',
+            tags: { area: 'pos-link-item-scope', source },
+            extra: { linkId: fresh.id, saleId: fresh.saleId, organizerId: fresh.organizerId, foreignItemIds: foreign },
+          });
+        } catch {
+          // Sentry may not be initialized.
+        }
+      }
+      for (const posItemId of scopedItemIds) {
         try {
           const { fullySoldOut, remainingStock } = await sellItemUnits(posItemId, 1, tx);
           if (fullySoldOut) fullySoldOutIds.push(posItemId);
@@ -234,7 +284,7 @@ export async function recordPosPaymentLinkSale(
       }
 
       const items = sellableItemIds.length
-        ? await tx.item.findMany({ where: { id: { in: sellableItemIds } } })
+        ? await tx.item.findMany({ where: { id: { in: sellableItemIds }, saleId: fresh.saleId, sale: { organizerId: fresh.organizerId } } })
         : [];
 
       // Inclusive-fee migration (2026-09-24): the floor must apply ONCE to the whole
@@ -244,10 +294,23 @@ export async function recordPosPaymentLinkSale(
       // last item absorbing the rounding remainder, same exact-sum pattern used everywhere
       // else in this migration (posPaymentController.ts, reservationController.ts).
       const itemsSubtotalCents = Math.round(items.reduce((sum, it) => sum + (it.price || 0), 0) * 100);
+      // Split tender (2026-09-29): the platform fee rides on the CARD leg only (ADR-split-payment-
+      // S422), so a split link's recorded fee is computed on `fresh.cardAmountCents` (falling back
+      // to `fresh.amount`, which IS the card amount for a split link). This equals the
+      // application fee that was actually charged on the hosted checkout; using the full item
+      // subtotal would inflate the reported platform fee on every split link. Non-split links keep
+      // the item-subtotal basis exactly as before.
+      const feeBaseCents = splitCashCents > 0 ? (fresh.cardAmountCents ?? fresh.amount) : itemsSubtotalCents;
       const totalItemsFeeCents = calculateInclusiveCommissionCents(
-        itemsSubtotalCents,
+        feeBaseCents,
         posOrganizerTier as SubscriptionTier,
         'ONLINE'
+      );
+      // Each recorded row's share of the cash leg (whole cents, sums exactly to the cash leg), so a
+      // later refund knows how much of the row the card processor never collected.
+      const cashShares = allocateCentsProportionally(
+        splitCashCents,
+        items.map((it) => Math.round((it.price || 0) * 100))
       );
       let remainingItemsFeeCentsToAllocate = totalItemsFeeCents;
 
@@ -264,6 +327,9 @@ export async function recordPosPaymentLinkSale(
             );
         remainingItemsFeeCentsToAllocate -= itemFeeCents;
         const itemFeeAmount = itemFeeCents / 100;
+        // Never let a row's cash leg exceed the row itself (only possible when an oversold item
+        // was excluded above and the cash leg was allocated across fewer rows).
+        const rowCashCents = Math.min(cashShares[itemIdx] ?? 0, itemPriceCents);
         try {
           const purchase = await tx.purchase.create({
             data: {
@@ -277,6 +343,7 @@ export async function recordPosPaymentLinkSale(
               ...snapshotForCommissionOnly(itemFeeAmount, posFeeRate),
               status: 'PAID',
               source: 'POS',
+              ...(rowCashCents > 0 ? { cashLegAmount: rowCashCents / 100 } : {}),
               processor,
               ...(processor === 'SQUARE'
                 ? { squarePaymentId: resolvedPaymentIntentId }
@@ -313,7 +380,9 @@ export async function recordPosPaymentLinkSale(
       // but FindA.Sale's own Purchase table, revenue analytics, and dispute/refund handling
       // had no record the sale ever happened. Purchase.itemId is nullable specifically to
       // support this case (confirmed via architect schema review — no migration needed).
-      const miscAmount = fresh.amount / 100;
+      // Split tender (2026-09-29): `fresh.amount` is the CARD amount only, so the sale's real value
+      // is card + cash. The fee below is deliberately still computed on `fresh.amount` (card leg).
+      const miscAmount = (fresh.amount + splitCashCents) / 100;
       const miscFeeAmount = calculateInclusiveCommissionCents(fresh.amount, posOrganizerTier as SubscriptionTier, 'ONLINE') / 100;
       try {
         const purchase = await tx.purchase.create({
@@ -325,6 +394,7 @@ export async function recordPosPaymentLinkSale(
             ...snapshotForCommissionOnly(miscFeeAmount, posFeeRate),
             status: 'PAID',
             source: 'POS',
+            ...(splitCashCents > 0 ? { cashLegAmount: splitCashCents / 100 } : {}),
             processor,
             ...(processor === 'SQUARE'
               ? { squarePaymentId: resolvedPaymentIntentId }

@@ -31,7 +31,9 @@ import {
 } from '../services/squarePaymentService';
 import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
 import { saveOrUpdateDefaultAddress } from '../services/addressService'; // ADR-126 (2026-09-16): opt-in address save
+import { recordAffiliateConversion, resolveAffiliateAttribution } from '../services/creatorAffiliateService'; // 2026-09-29: creator program attribution + commission ledger
 import { getSquarePlatformClient, getPlatformSquareLocationId } from '../utils/square'; // #132 (2026-09-18): À La Carte Square rail, mirrors boostService.ts's platform-level flat-fee pattern
+import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: purchase XP, milestones, referral, OG Buyer badge, achievement and passport stamp (idempotent, never throws)
 import { SquareError } from 'square';
 
 /**
@@ -49,7 +51,7 @@ import { SquareError } from 'square';
  * money-correct + fraud-hardened path -- guards, fee math (incl. auction buyer premium,
  * organizer discount, coupon, shipping repricing), the Square charge itself, Purchase
  * creation with the fee snapshot, stock decrement, item status, a receipt row, and
- * buyer+organizer notifications. NOT ported (see handoff): loyalty stamps/badges/XP,
+ * buyer+organizer notifications. Loyalty stamps/badges/XP were ported 2026-09-29 (see services/squarePurchaseEngagementService.ts). NOT ported (see handoff): loyalty stamps/badges/XP (superseded),
  * live-feed socket pushes, Zapier webhooks, consignor-sold email, eBay/Shopify/FB
  * cross-listing sold-sync. None of those affect payment correctness or fraud posture --
  * they're engagement/distribution side effects Stripe's webhook handler also performs,
@@ -374,6 +376,17 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       return res.status(402).json({ message: chargeResult.message, code: 'SQUARE_PAYMENT_DECLINED' });
     }
 
+    // Creator program (2026-09-29): the client-supplied affiliateLinkId used to be written to the
+    // Purchase raw, unvalidated, so a stale or bogus id failed on the foreign key AFTER the charge was
+    // captured. resolveAffiliateAttribution validates it (link exists, is for THIS sale, creator active,
+    // no self-referral) and returns null otherwise, so checkout can never fail on attribution.
+    const attributedAffiliateLinkId = await resolveAffiliateAttribution({
+      affiliateLinkId,
+      saleId: item.sale!.id,
+      buyerUserId: req.user?.id ?? null,
+      buyerEmail: normalizedGuestEmail ?? req.user?.email ?? null,
+    });
+
     // Idempotent-retry-safe lookup, same shape as the Stripe path's findFirst-before-create.
     let purchase = await prisma.purchase.findFirst({
       where: { squarePaymentId: chargeResult.paymentId, itemId: item.id },
@@ -400,7 +413,7 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
           // fingerprint. Not renamed here (schema is locked for this dispatch).
           buyerCardFingerprint: chargeResult.cardFingerprint ?? undefined,
           deliveryMethod: shippingApplicable ? 'SHIP' : 'LOCAL_PICKUP',
-          affiliateLinkId: affiliateLinkId ?? undefined,
+          affiliateLinkId: attributedAffiliateLinkId ?? undefined,
           ...(shippingApplicable
             ? {
                 shippingZip: typeof shippingZip === 'string' ? shippingZip.trim() : '',
@@ -427,6 +440,12 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       // (idempotent retry) branch above must never decrement cashFeeBalance a second time for
       // the same real charge.
       await settleCashDebtCollection({ organizerId: item.sale!.organizerId, debtAppliedCents });
+
+      // Creator program (2026-09-29): commission ledger row + conversion counter. Idempotent per
+      // Purchase, never throws, only on the branch that just created the row.
+      if (attributedAffiliateLinkId) {
+        await recordAffiliateConversion(purchase.id);
+      }
 
       // ADR-126 (2026-09-16): opt-in "save this address" checkbox. Only for a logged-in
       // shopper (Address.userId is required -- a guest checkout has none to attach this
@@ -519,6 +538,11 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     // eBay/Shopify/Discogs -- the only sale rail that skipped the fan-out (see header SCOPE NOTE).
     if (soldOut) fanOutItemSoldWithdrawals(item.id, 'square_payment');
 
+    // Sale Passport wiring (2026-09-29): engagement awards for a logged-in buyer. Fired after the
+    // Purchase row and stock decrement are committed (a stock-race REFUNDING row earns nothing), off the
+    // response path, idempotent per purchase (the Square webhook may also fire), never throws.
+    if (req.user) fireSquarePurchaseEngagement(purchase.id);
+
     setImmediate(() => {
       generateReceipt(purchase!.id).catch((err) => console.error('[squarePayment] Failed to generate receipt:', err));
     });
@@ -562,7 +586,7 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { itemIds, sourceId, verificationToken } = req.body as { itemIds?: string[]; sourceId?: string; verificationToken?: string };
+    const { itemIds, sourceId, verificationToken, affiliateLinkId } = req.body as { itemIds?: string[]; sourceId?: string; verificationToken?: string; affiliateLinkId?: string };
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
       return res.status(400).json({ error: 'itemIds must be a non-empty array' });
     }
@@ -735,6 +759,14 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
     // Stripe cart path's hosted-Checkout-Session clone (per dispatch scope: do not port
     // that shape). Purchase.squarePaymentId is unique only in combination with itemId
     // (Wave 0 migration), same multi-item-cart reasoning as stripePaymentIntentId.
+    // Creator program (2026-09-29): validated attribution for the whole cart (all items share one sale).
+    const cartAffiliateLinkId = await resolveAffiliateAttribution({
+      affiliateLinkId,
+      saleId,
+      buyerUserId: req.user.id,
+      buyerEmail: req.user.email ?? null,
+    });
+
     const createdPurchaseIds: string[] = [];
     let anyStockRace = false;
     let anyNewPurchaseCreated = false;
@@ -772,9 +804,13 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
             source: 'ONLINE',
             deliveryMethod: 'LOCAL_PICKUP',
             buyerCardFingerprint: chargeResult.cardFingerprint ?? undefined,
+            affiliateLinkId: cartAffiliateLinkId ?? undefined,
           },
         });
         anyNewPurchaseCreated = true;
+        if (cartAffiliateLinkId) {
+          await recordAffiliateConversion(purchase.id);
+        }
       }
       createdPurchaseIds.push(purchase.id);
 
@@ -822,6 +858,11 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
         console.warn('[squareCartPayment] dedup/fingerprint-store failed (non-fatal):', err);
       }
     }
+
+    // Sale Passport wiring (2026-09-29): one award per Square payment (the cart pays once for N rows;
+    // the service canonicalises to the earliest PAID row), after all rows and stock decrements are
+    // committed, off the response path, idempotent, never throws.
+    if (createdPurchaseIds.length > 0) fireSquarePurchaseEngagement(createdPurchaseIds[0]);
 
     const organizerUserId = organizer?.userId;
     if (organizerUserId) {

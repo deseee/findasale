@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { organizerHasTier } from '../utils/tierAccess';
 
 /**
  * Feature #310: Color-tagged Discount Rules (TEAMS tier only)
@@ -53,12 +54,12 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
       }
 
       // Non-TEAMS organizers have no discount rules → return empty array
-      // Check Organizer.tier (OrganizerWorkspace has no subscriptionTier column)
+      // Check Organizer.subscriptionTier (the paid plan; Organizer.tier is the reward tier BRONZE/SILVER/GOLD)
       const organizer = await prisma.organizer.findUnique({
         where: { id: organizerId },
-        select: { tier: true },
+        select: { subscriptionTier: true },
       });
-      if (organizer?.tier !== 'TEAMS') {
+      if (!organizerHasTier(organizer?.subscriptionTier, 'TEAMS')) {
         return res.json([]);
       }
 
@@ -116,12 +117,12 @@ export const createDiscountRule = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer profile not found' });
     }
 
-    // Tier check: TEAMS only — use Organizer.tier (OrganizerWorkspace has no subscriptionTier)
+    // Tier check: TEAMS only. Organizer.subscriptionTier is the paid plan (Organizer.tier is the reward tier BRONZE/SILVER/GOLD)
     const organizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
-      select: { tier: true },
+      select: { subscriptionTier: true },
     });
-    if (organizer?.tier !== 'TEAMS') {
+    if (!organizerHasTier(organizer?.subscriptionTier, 'TEAMS')) {
       return res.status(403).json({ message: 'TEAMS subscription required' });
     }
 
@@ -169,12 +170,12 @@ export const updateDiscountRule = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer profile not found' });
     }
 
-    // Tier check: TEAMS only — use Organizer.tier (OrganizerWorkspace has no subscriptionTier)
+    // Tier check: TEAMS only. Organizer.subscriptionTier is the paid plan (Organizer.tier is the reward tier BRONZE/SILVER/GOLD)
     const organizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
-      select: { tier: true },
+      select: { subscriptionTier: true },
     });
-    if (organizer?.tier !== 'TEAMS') {
+    if (!organizerHasTier(organizer?.subscriptionTier, 'TEAMS')) {
       return res.status(403).json({ message: 'TEAMS subscription required' });
     }
 
@@ -236,12 +237,12 @@ export const deleteDiscountRule = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer profile not found' });
     }
 
-    // Tier check: TEAMS only — use Organizer.tier (OrganizerWorkspace has no subscriptionTier)
+    // Tier check: TEAMS only. Organizer.subscriptionTier is the paid plan (Organizer.tier is the reward tier BRONZE/SILVER/GOLD)
     const organizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
-      select: { tier: true },
+      select: { subscriptionTier: true },
     });
-    if (organizer?.tier !== 'TEAMS') {
+    if (!organizerHasTier(organizer?.subscriptionTier, 'TEAMS')) {
       return res.status(403).json({ message: 'TEAMS subscription required' });
     }
 

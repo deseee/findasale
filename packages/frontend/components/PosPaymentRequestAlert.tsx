@@ -166,7 +166,7 @@ export function PosPaymentRequestAlert() {
           onClick={handlePayNow}
           className="w-full py-4 rounded-2xl bg-sage-700 text-white font-bold text-lg mb-3 hover:bg-sage-800 dark:bg-sage-600 dark:hover:bg-sage-500 transition active:scale-95"
         >
-          Pay Now
+          {pending.isSplitPayment && pending.cardDisplayAmount ? `Pay ${pending.cardDisplayAmount} by card` : 'Pay Now'}
         </button>
         <button
           onClick={handleDismiss}

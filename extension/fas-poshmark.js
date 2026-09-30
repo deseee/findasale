@@ -2594,12 +2594,19 @@
   // Returns { id, href } for exactly one distinct listing id whose card title matches (rules above),
   // else null (zero or ambiguous -- logged). Navigates straight to the edit page by id afterwards;
   // Poshmark resolves /edit-listing/<id> by id and ignores the slug (live-confirmed 2026-09-04).
+  // S-EXT-LISTING-GONE (2026-09-29): how many closet cards matched the last lookup (-1 = not
+  // evaluated). Lets the skip report below distinguish ZERO matches (listing not in the closet at
+  // all -- the backend auto-resolves it as gone after 3 consecutive confirmations) from an
+  // ambiguous multi-match (must stay a manual/skip case, never treated as gone).
+  let poshRemLastMatchCount = -1;
   function findPoshmarkClosetMatchByTitle(title) {
+    poshRemLastMatchCount = -1;
     if (!poshRemNorm(title)) return null;
     const matches = [];
     poshRemCollectClosetCards().forEach((entry) => {
       if (entry.texts.some((t) => poshRemTitleMatches(t, title))) matches.push(entry);
     });
+    poshRemLastMatchCount = matches.length;
     if (matches.length !== 1) {
       console.log('[FAS Poshmark] removal: ' + matches.length + ' closet listing(s) matched "' + title + '"' + (matches.length > 1 ? ' -- ambiguous, refusing.' : '.'));
       return null;
@@ -3013,7 +3020,7 @@
       // IS a plausibly transient failure for the exact item currently mid-flow.
       try {
         chrome.runtime.sendMessage({
-          type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: 'no_confident_closet_match', continueUrl: closetUrl || null
+          type: 'crossPlatformRemovalSkipped', platform: 'POSHMARK', itemId: item.id, reason: poshRemLastMatchCount === 0 ? 'listing_not_found' : 'no_confident_closet_match', continueUrl: closetUrl || null
         });
       } catch (e) {}
       return;

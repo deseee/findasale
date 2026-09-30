@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { WebhooksHelper } from 'square';
+import * as Sentry from '@sentry/node'; // 2026-09-29 money review P1-3: alert on a Square payment that does not match the record it claims to pay
 import { prisma } from '../lib/prisma';
 import { createNotification } from '../lib/notificationService';
 import { handleSquareDisputeWebhook, type SquareDisputeWebhookEvent } from '../services/squareRefundService'; // findasale-hacker fix-and-reverify (2026-09-08): wire the REAL dispute handler -- squareRefundService.ts's handleSquareDisputeWebhook was fully built for exactly this call site (see its own doc comment) but was never actually invoked here; the dispute.created/dispute.state.updated cases below were silently calling a local log-only stub instead, meaning real Square chargebacks were never processed (no DISPUTED/DISPUTE_LOST status, no serial-chargeback buyer suspension, no organizer notification, no chargeback-rate metric). See VALID-STATE-ONLY-EXPOSURE finding in the 2026-09-08 security-QA pass.
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // Square changeover Wave S2 #3 (2026-09-09): wires the payment.updated stub below to actually record a Hold-to-Pay invoice as PAID -- see HOLD_INVOICE_NOTE_KEY import below for how the invoice is found.
 import { HOLD_INVOICE_NOTE_KEY } from '../services/holdInvoiceSquareCheckoutHelper'; // the paymentNote key holdInvoiceSquareCheckoutHelper.ts encodes a HoldInvoice.id into at link-creation time
+import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: XP, milestones, referral, badge, achievement and passport stamp for a paid Square link purchase (idempotent, never throws)
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // Square changeover Wave S3 follow-up (2026-09-09): direct squareOrderId match for POSPaymentLink, see the new branch in syncSquarePaymentStatus below
 
 /**
@@ -24,6 +26,27 @@ interface SquareWebhookEnvelope {
     id?: string;
     object?: Record<string, any>;
   };
+}
+
+/**
+ * Sale Passport wiring (2026-09-29): a Hold-to-Pay invoice paid online creates ONLINE Purchase rows
+ * keyed by the Square payment id. Give a logged-in payer the same engagement awards as any other
+ * purchase (purchase XP, milestones, referral, OG Buyer badge, achievement, passport stamp). Safe on
+ * webhook retries: the award is idempotent and skips guest, POS-cash, test and non-PAID rows. Never
+ * throws, so it can never turn this webhook into a 500 retry.
+ */
+async function fireEngagementForSquareHoldInvoicePayment(invoiceId: string, squarePaymentId: unknown): Promise<void> {
+  if (typeof squarePaymentId !== 'string' || !squarePaymentId) return;
+  try {
+    const invoicePurchase = await prisma.purchase.findFirst({
+      where: { squarePaymentId, userId: { not: null }, isTestTransaction: false },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    if (invoicePurchase) fireSquarePurchaseEngagement(invoicePurchase.id);
+  } catch (engagementErr) {
+    console.warn(`[square-webhook] engagement lookup for hold invoice ${invoiceId} failed (non-fatal):`, engagementErr);
+  }
 }
 
 /**
@@ -57,9 +80,167 @@ interface SquareWebhookEnvelope {
  * Wave S2 bounty/POS-QR Square payment link not yet wired the same way, or Wave 1 #1's
  * direct-charge Purchase, which never reaches this function) is a deliberate no-op here.
  */
-async function syncSquarePaymentStatus(
+/**
+ * Money review P1-3 (2026-09-29): a COMPLETED Square payment used to be trusted on the strength of
+ * ONE field (an order id or a paymentNote) with nothing checked about the payment itself. A
+ * payment that named an invoice but was for a different order, a smaller amount, another currency,
+ * or another merchant/location was still recorded as paying it in full. Before a payment flips a
+ * HoldInvoice or POSPaymentLink to PAID it must now match the stored record:
+ *   - order_id equals the order id stored when the link was created (when one is stored)
+ *   - amount_money is at least the expected CARD-leg amount (a tip or fee only adds)
+ *   - currency is USD
+ *   - the event's merchant id equals the organizer's stored squareMerchantId, and the payment's
+ *     location_id equals the stored squareLocationId (each check is skipped only when the value on
+ *     either side is genuinely absent, and that is logged)
+ * Any mismatch logs a Sentry warning and returns without recording. It is NOT thrown: the webhook
+ * answers 200, so Square does not retry an event that can never verify. The invoice stays PENDING,
+ * and the expiry job's own Square paid-check settles it against the real order.
+ */
+export type SquarePaymentVerification = { ok: true } | { ok: false; reason: string };
+
+const paymentAmountToCents = (v: unknown): number | null => {
+  if (typeof v === 'bigint') return Number(v);
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && /^\d+$/.test(v.trim())) return Number(v.trim());
+  return null;
+};
+
+export async function verifySquarePaymentAgainstRecord(params: {
+  kind: 'HOLD_INVOICE' | 'POS_PAYMENT_LINK';
+  recordId: string;
+  payment: any;
+  storedOrderId: string | null | undefined;
+  expectedCardCents: number;
+  organizerProfileId: string | null | undefined;
+  envelopeMerchantId?: string;
+}): Promise<SquarePaymentVerification> {
+  const { kind, recordId, payment, storedOrderId, expectedCardCents, organizerProfileId, envelopeMerchantId } = params;
+
+  const reject = (reason: string): SquarePaymentVerification => {
+    const msg = `[square-webhook] PAYMENT-MISMATCH ${kind} ${recordId} payment=${payment?.id ?? 'unknown'}: ${reason}. NOT recorded as paid.`;
+    console.error(msg);
+    try {
+      Sentry.captureMessage(msg, {
+        level: 'warning',
+        tags: { area: 'square-webhook-payment-mismatch', kind },
+        extra: {
+          recordId,
+          paymentId: payment?.id ?? null,
+          paymentOrderId: payment?.order_id ?? null,
+          storedOrderId: storedOrderId ?? null,
+          expectedCardCents,
+          amountMoney: payment?.amount_money ?? null,
+          paymentLocationId: payment?.location_id ?? null,
+          envelopeMerchantId: envelopeMerchantId ?? null,
+          reason,
+        },
+      } as any);
+    } catch {
+      // Sentry may not be initialized -- the console.error above is the fallback record.
+    }
+    return { ok: false, reason };
+  };
+
+  if (storedOrderId) {
+    if (payment?.order_id !== storedOrderId) {
+      return reject(`payment order_id ${payment?.order_id ?? 'none'} does not match the stored order ${storedOrderId}`);
+    }
+  } else {
+    console.warn(`[square-webhook] ${kind} ${recordId} has no stored Square order id; order_id cannot be verified for payment ${payment?.id ?? 'unknown'}.`);
+  }
+
+  const paidCents = paymentAmountToCents(payment?.amount_money?.amount);
+  if (paidCents === null) return reject('payment has no readable amount_money');
+  if (paidCents < expectedCardCents) {
+    return reject(`paid ${paidCents} cents is less than the expected ${expectedCardCents} cents`);
+  }
+  const currency = payment?.amount_money?.currency;
+  if (currency !== 'USD') return reject(`currency ${currency ?? 'none'} is not USD`);
+
+  if (organizerProfileId) {
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerProfileId },
+      select: { squareMerchantId: true, squareLocationId: true },
+    });
+    if (organizer?.squareMerchantId && envelopeMerchantId) {
+      if (organizer.squareMerchantId !== envelopeMerchantId) {
+        return reject(`event merchant ${envelopeMerchantId} is not the organizer's merchant`);
+      }
+    } else {
+      console.warn(`[square-webhook] ${kind} ${recordId}: merchant id not verifiable (stored=${organizer?.squareMerchantId ? 'yes' : 'no'}, event=${envelopeMerchantId ? 'yes' : 'no'}).`);
+    }
+    if (organizer?.squareLocationId && typeof payment?.location_id === 'string') {
+      if (organizer.squareLocationId !== payment.location_id) {
+        return reject(`payment location ${payment.location_id} is not the organizer's location`);
+      }
+    }
+  }
+  return { ok: true };
+}
+
+/** The card-leg total, in cents, a Square payment on this invoice must cover. */
+const holdInvoiceExpectedCardCents = (inv: { totalAmount: number; cashAmountCents?: number | null; cardAmountCents?: number | null }): number => {
+  if (typeof inv.cardAmountCents === 'number' && inv.cardAmountCents > 0) return inv.cardAmountCents;
+  const cash = inv.cashAmountCents && inv.cashAmountCents > 0 ? inv.cashAmountCents : 0;
+  const remainder = inv.totalAmount - cash;
+  return remainder > 0 ? remainder : inv.totalAmount;
+};
+
+/**
+ * Verify a completed Square payment against its HoldInvoice, then record it. Shared by the
+ * direct order-id match and the paymentNote-decode path so both apply the same checks. A throw
+ * from markHoldInvoicePaid deliberately propagates (webhook 500, Square retries with backoff).
+ */
+async function verifyAndRecordHoldInvoicePayment(
+  invoiceId: string,
+  payment: any,
+  envelopeMerchantId: string | undefined
+): Promise<void> {
+  const invoice = await prisma.holdInvoice.findUnique({
+    where: { id: invoiceId },
+    select: {
+      id: true,
+      squareOrderId: true,
+      totalAmount: true,
+      cashAmountCents: true,
+      cardAmountCents: true,
+      sale: { select: { organizerId: true } },
+    },
+  });
+  if (invoice) {
+    const check = await verifySquarePaymentAgainstRecord({
+      kind: 'HOLD_INVOICE',
+      recordId: invoice.id,
+      payment,
+      storedOrderId: invoice.squareOrderId,
+      expectedCardCents: holdInvoiceExpectedCardCents(invoice),
+      organizerProfileId: invoice.sale?.organizerId ?? null,
+      envelopeMerchantId,
+    });
+    if (!check.ok) return;
+  }
+  // No row found: markHoldInvoicePaid logs "Invoice not found" and returns unrecorded, as before.
+
+  const result = await markHoldInvoicePaid(
+    invoiceId,
+    { processor: 'SQUARE', externalPaymentId: payment?.id ?? null },
+    { source: 'webhook' }
+  );
+  if (result.deadInvoice) {
+    console.error(`[square-webhook] payment.updated for Square payment ${payment?.id} landed on dead HoldInvoice ${invoiceId} -- see reportDeadInvoicePayment alert.`);
+  } else if (!result.recorded && !result.alreadyPaid) {
+    console.error(`[square-webhook] markHoldInvoicePaid returned neither recorded nor alreadyPaid for invoice ${invoiceId}, payment ${payment?.id}.`);
+  }
+  // Sale Passport wiring (2026-09-29): see fireEngagementForSquareHoldInvoicePayment.
+  if (result.recorded || result.alreadyPaid) await fireEngagementForSquareHoldInvoicePayment(invoiceId, payment?.id);
+}
+
+export async function syncSquarePaymentStatus(
   eventType: 'payment.created' | 'payment.updated',
-  payment: any
+  payment: any,
+  // Envelope merchant_id of the event (2026-09-29, money review P1-3): checked against the
+  // organizer's stored merchant before a payment is allowed to mark anything PAID.
+  merchantId?: string
 ): Promise<void> {
   console.log(
     `[square-webhook] ${eventType} received for Square payment ${payment?.id ?? 'unknown'} ` +
@@ -93,6 +274,16 @@ async function syncSquarePaymentStatus(
   if (orderId) {
     const posLink = await prisma.pOSPaymentLink.findFirst({ where: { squareOrderId: orderId } });
     if (posLink) {
+      const posCheck = await verifySquarePaymentAgainstRecord({
+        kind: 'POS_PAYMENT_LINK',
+        recordId: posLink.id,
+        payment,
+        storedOrderId: posLink.squareOrderId,
+        expectedCardCents: posLink.isSplitPayment && posLink.cardAmountCents ? posLink.cardAmountCents : posLink.amount,
+        organizerProfileId: posLink.organizerId,
+        envelopeMerchantId: merchantId,
+      });
+      if (!posCheck.ok) return;
       const result = await recordPosPaymentLinkSale(posLink, {
         source: 'webhook',
         processor: 'SQUARE',
@@ -106,16 +297,7 @@ async function syncSquarePaymentStatus(
 
     const holdInvoiceByOrder = await prisma.holdInvoice.findFirst({ where: { squareOrderId: orderId } });
     if (holdInvoiceByOrder) {
-      const result = await markHoldInvoicePaid(
-        holdInvoiceByOrder.id,
-        { processor: 'SQUARE', externalPaymentId: payment?.id ?? null },
-        { source: 'webhook' }
-      );
-      if (result.deadInvoice) {
-        console.error(`[square-webhook] payment.updated for Square payment ${payment?.id} landed on dead HoldInvoice ${holdInvoiceByOrder.id} -- see reportDeadInvoicePayment alert.`);
-      } else if (!result.recorded && !result.alreadyPaid) {
-        console.error(`[square-webhook] markHoldInvoicePaid returned neither recorded nor alreadyPaid for invoice ${holdInvoiceByOrder.id}, payment ${payment?.id}.`);
-      }
+      await verifyAndRecordHoldInvoicePayment(holdInvoiceByOrder.id, payment, merchantId);
       return;
     }
     // order_id present but matched neither table directly -- fall through to the
@@ -152,17 +334,10 @@ async function syncSquarePaymentStatus(
     // Deliberately NOT wrapped in a try/catch here -- a throw from markHoldInvoicePaid
     // propagates up through handleSquareWebhook's own try/catch (below), which marks the
     // idempotency row FAILED and returns 500 so Square retries with backoff. Same posture
-    // as every other case in that switch (dispute/payout handling, etc.).
-    const result = await markHoldInvoicePaid(
-      invoiceId,
-      { processor: 'SQUARE', externalPaymentId: payment?.id ?? null },
-      { source: 'webhook' }
-    );
-    if (result.deadInvoice) {
-      console.error(`[square-webhook] payment.updated for Square payment ${payment?.id} landed on dead HoldInvoice ${invoiceId} -- see reportDeadInvoicePayment alert.`);
-    } else if (!result.recorded && !result.alreadyPaid) {
-      console.error(`[square-webhook] markHoldInvoicePaid returned neither recorded nor alreadyPaid for invoice ${invoiceId}, payment ${payment?.id}.`);
-    }
+    // as every other case in that switch (dispute/payout handling, etc.). The payment is
+    // verified against the invoice's own record first (money review P1-3, 2026-09-29): a note
+    // is text anyone can put on a payment, so it never counts as proof on its own.
+    await verifyAndRecordHoldInvoicePayment(invoiceId, payment, merchantId);
     return;
   }
 
@@ -219,6 +394,13 @@ async function syncSquarePaymentStatus(
     `[square-webhook] Purchase ${purchase.id} (item ${purchase.itemId ?? 'unknown'}) marked PAID ` +
     `from Square payment ${payment?.id}.`
   );
+
+  // Sale Passport wiring (2026-09-29): the PAID row is committed, so award the engagement side
+  // effects a Stripe purchase gets (purchase XP, first-purchase milestones, referral, OG Buyer badge,
+  // achievement, passport + legacy stamp). Off the response path, idempotent per purchase (the
+  // synchronous checkout path can also fire for the same payment), and it never throws, so it can
+  // never turn this webhook into a 500 retry.
+  fireSquarePurchaseEngagement(purchase.id);
 }
 
 /**
@@ -386,7 +568,7 @@ export const handleSquareWebhook = async (req: Request, res: Response) => {
       case 'payment.created':
       case 'payment.updated': {
         const payment = dataObject.payment ?? {};
-        await syncSquarePaymentStatus(event.type as 'payment.created' | 'payment.updated', payment);
+        await syncSquarePaymentStatus(event.type as 'payment.created' | 'payment.updated', payment, event.merchant_id);
         break;
       }
 

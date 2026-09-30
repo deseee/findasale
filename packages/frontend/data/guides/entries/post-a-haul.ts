@@ -115,7 +115,7 @@ Only if the item is still listed in the sale. Once a sale closes and items are m
 
 ## Related guides
 
-- [Create or join a Crew](crews): share haul posts with your shopping group before posting to the community.
+- [Create or join a Crew](crews): approved haul posts from crew members show up in that crew's photo feed.
 - [The leaderboard and monthly league](leaderboard-and-league): see how haul posts contribute to your monthly XP total.
 - [Walk a Treasure Trail](treasure-trails-shopper): plan a multi-sale route and document your finds from each stop.
 

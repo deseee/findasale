@@ -8,9 +8,22 @@
  *   1. Buyer premium — 5% of the hammer price, charged ON TOP of the winning bid to the
  *      WINNING BIDDER. Auctions only. Comes out of the BUYER's pocket. The rate is a PLATFORM
  *      constant (`AUCTION_BUYER_PREMIUM_RATE` below) and is not configurable per sale.
- *   2. Organizer commission — the tier rate (10% SIMPLE / 8% PRO + TEAMS) of the hammer or
- *      list price, charged to the ORGANIZER out of their payout. Charged on EVERY sale,
+ *   2. Organizer commission — the INCLUSIVE tier rate of the hammer or list price (card processing
+ *      is included), charged to the ORGANIZER out of their payout. Charged on EVERY sale,
  *      including auctions. An auction is NOT exempt from commission.
+ *
+ *      CURRENT RATES (inclusive model, Patrick ruling 2026-09-24; the retired 10% SIMPLE / 8% PRO
+ *      commission no longer applies). The source of truth is INCLUSIVE_FEE_RATES further down this
+ *      file, with the $0.75 MINIMUM_TRANSACTION_FEE_CENTS floor:
+ *
+ *        | Tier          | In person | Online |
+ *        |---------------|-----------|--------|
+ *        | SIMPLE        | 8%        | 9.5%   |
+ *        | PRO and TEAMS | 6%        | 7.5%   |
+ *
+ *      NOTE: the dollar figures in the scenario table below still use the retired 10% / 8% rates.
+ *      They illustrate the STRUCTURE (buyer premium stacked on commission, what the organizer's
+ *      fee line shows), not current amounts. Recompute with the rates above.
  *
  * Stripe's `application_fee_amount` is the SUM of whichever apply:
  *

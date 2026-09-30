@@ -186,20 +186,23 @@ router.get('/xp-velocity', authenticate, requireAdmin, async (req: any, res: any
     // Find users with XP gains > 500 in any 1-hour window in the last 7 days
     const sevenDaysAgo = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Use raw SQL to aggregate XP events by user+hour
+    // Use raw SQL to aggregate XP events by user+hour.
+    // Identifiers are quoted: Postgres folds unquoted camelCase to lowercase ("createdat"), and the
+    // PointsTransaction points column is "points" (there is no "amount" column). Only positive point
+    // gains count, matching the per-hour re-check below (points > 0).
     const results = await (prisma as any).$queryRaw`
       SELECT
-        u.id as userId,
-        u.name as userName,
-        u.email,
-        MAX(EXTRACT(EPOCH FROM (pt.createdAt - interval '1 hour' * FLOOR(EXTRACT(EPOCH FROM pt.createdAt) / 3600))) / 3600)::int as hour_bucket,
-        SUM(pt.amount) FILTER (WHERE pt.createdAt >= NOW() - interval '7 days' AND pt.type = 'AWARD') as hourly_xp,
-        SUM(pt.amount) FILTER (WHERE pt.createdAt >= NOW() - interval '7 days' AND pt.type = 'AWARD') as total_xp_7d
+        u."id" as "userId",
+        u."name" as "userName",
+        u."email",
+        MAX(EXTRACT(EPOCH FROM (pt."createdAt" - interval '1 hour' * FLOOR(EXTRACT(EPOCH FROM pt."createdAt") / 3600))) / 3600)::int as hour_bucket,
+        SUM(pt."points") FILTER (WHERE pt."createdAt" >= NOW() - interval '7 days' AND pt."points" > 0) as hourly_xp,
+        SUM(pt."points") FILTER (WHERE pt."createdAt" >= NOW() - interval '7 days' AND pt."points" > 0) as total_xp_7d
       FROM "PointsTransaction" pt
-      JOIN "User" u ON u.id = pt.userId
-      WHERE pt.type = 'AWARD' AND pt.createdAt >= ${sevenDaysAgo}
-      GROUP BY u.id, u.name, u.email, FLOOR(EXTRACT(EPOCH FROM pt.createdAt) / 3600)
-      HAVING SUM(pt.amount) > 500
+      JOIN "User" u ON u."id" = pt."userId"
+      WHERE pt."points" > 0 AND pt."createdAt" >= ${sevenDaysAgo}
+      GROUP BY u."id", u."name", u."email", FLOOR(EXTRACT(EPOCH FROM pt."createdAt") / 3600)
+      HAVING SUM(pt."points") > 500
       ORDER BY hourly_xp DESC
       LIMIT 100
     `;
@@ -325,6 +328,9 @@ router.get('/demand-signals', async (req: any, res: any) => {
 });
 
 // Feature #455: Shopper Notify Me Waitlist
+// Reads BOTH capture tables: ShopperWaitlistEntry (logged-in shoppers, `entries`) and
+// SearchNotification (anonymous /search "notify me" emails, `searchNotifications`).
+// Also returns sender status so the admin can see whether alerts are actually going out.
 router.get('/waitlist', async (req: any, res: any) => {
   try {
     const page = Math.max(1, parseInt((req.query.page as string) || '1', 10));
@@ -334,22 +340,46 @@ router.get('/waitlist', async (req: any, res: any) => {
     const where: any = {};
     if (activeOnly) where.isActive = true;
 
-    const [entries, total] = await Promise.all([
-      (prisma as any).shopperWaitlistEntry.findMany({
-        where,
-        include: { user: { select: { email: true, name: true } } },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      (prisma as any).shopperWaitlistEntry.count({ where }),
-    ]);
+    const [entries, total, searchNotifications, searchTotal, waitlistPending, waitlistNotified, searchPending, searchNotified] =
+      await Promise.all([
+        (prisma as any).shopperWaitlistEntry.findMany({
+          where,
+          include: { user: { select: { email: true, name: true } } },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        (prisma as any).shopperWaitlistEntry.count({ where }),
+        (prisma as any).searchNotification.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        (prisma as any).searchNotification.count({ where }),
+        (prisma as any).shopperWaitlistEntry.count({ where: { isActive: true, notifiedAt: null } }),
+        (prisma as any).shopperWaitlistEntry.count({ where: { notifiedAt: { not: null } } }),
+        (prisma as any).searchNotification.count({ where: { isActive: true, notifiedAt: null } }),
+        (prisma as any).searchNotification.count({ where: { notifiedAt: { not: null } } }),
+      ]);
 
     res.json({
       entries,
       total,
       page,
       pages: Math.ceil(total / limit),
+      searchNotifications,
+      searchTotal,
+      searchPages: Math.ceil(searchTotal / limit),
+      stats: {
+        waitlist: { pending: waitlistPending, notified: waitlistNotified },
+        search: { pending: searchPending, notified: searchNotified },
+      },
+      sender: {
+        enabled: process.env.NOTIFY_ME_SENDER_ENABLED === 'true',
+        dryRun: process.env.NOTIFY_ME_DRY_RUN === 'true',
+        maxEmailsPerRun: parseInt(process.env.NOTIFY_ME_MAX_EMAILS_PER_RUN || '50', 10) || 50,
+      },
     });
   } catch (error) {
     console.error('Error fetching waitlist:', error);

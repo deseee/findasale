@@ -12,11 +12,13 @@
  */
 
 import { Response } from 'express';
+import type { HoldInvoice, POSPaymentLink } from '@prisma/client';
 import crypto from 'crypto';
 import * as Sentry from '@sentry/node';
 import { resolveAndBackfillSquareLocationId } from '../services/squarePosPaymentAdapter';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { applyCrewInvasionDiscount, releaseCrewInvasionRedemption, validateCrewInvasionCode, linkCrewInvasionRedemptionToInvoice } from '../services/crewInvasionRedemptionService'; // Feature #397 (2026-09-29): real redemption of the Crew Invasion code on hold invoices
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): both sites in this file are hosted-checkout-link charges completed by the buyer on their own device (Square Quick Pay Checkout / hold-invoice email link) -- ONLINE channel, never IN_PERSON, even though the link itself is created at the register
@@ -36,8 +38,22 @@ import { invoiceableWhere, isInvoicedOrClaimed, releaseDeadInvoiceAnchors } from
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // ADR-114 (2026-08-31): fully-cash sendHoldInvoice path reuses the single source of truth for recording a paid invoice
 import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../services/holdInvoiceSquareCheckoutHelper'; // Square changeover Wave S2 #3 (2026-09-09): Hold-to-Pay invoice creation, Square branch
 import { SquareOnboardingIncompleteError, buildSquareIdempotencyKey } from '../services/squarePaymentService'; // thrown by createHoldInvoiceSquareCheckout when the organizer's Square onboarding is incomplete; buildSquareIdempotencyKey added Wave S2 #4 (2026-09-09) for the POS QR payment-link Square branch below
-import { createSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square changeover Wave S2 #4 (2026-09-09): POS QR payment link, Square branch
+import { createSquareCheckoutLink, deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square changeover Wave S2 #4 (2026-09-09): POS QR payment link, Square branch
+import { isValidCents, cardLegProblem, wouldExceedCashFeeExposureCap, resolveCashCommissionRate, cashCommissionOn, accrueSplitCashLegOnce, MAX_POS_AMOUNT_CENTS, MIN_SPLIT_CARD_LEG_CENTS } from '../services/cashFeeService'; // Split tender on the QR payment link (2026-09-29): validation, cash-fee exposure cap, and idempotent cash-leg commission accrual
+import { escapeHtml } from '../utils/htmlEscape'; // 2026-09-29: shopper/organizer-controlled text interpolated into the invoice email
+import { normalizeMiscLines, evaluateInvoicePricing, authorizeDiscountAndCheckFloor } from '../services/posInvoiceLinePricing'; // 2026-09-29 money review P1-6/8: integer-cent lines, discount permission + catalog floor on the hold invoice and the QR link
 
+/** Payment-link expiry bounds for the optional expiresInSeconds on POST /api/pos/payment-links. */
+const PAYMENT_LINK_MIN_EXPIRY_SECONDS = 60;
+const PAYMENT_LINK_MAX_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
+
+/** Thrown by createPaymentLinkInternal when an itemId is not an item of the given sale and organizer. */
+export class PaymentLinkItemScopeError extends Error {
+  constructor() {
+    super('One or more items were not found in this sale');
+    this.name = 'PaymentLinkItemScopeError';
+  }
+}
 
 // ─── Reusable internals ─────────────────────────────────────────────────────────
 
@@ -79,15 +95,28 @@ export async function createPaymentLinkInternal(opts: {
   // `organizer` object -- no extra query needed here.
   squareOnboarded?: boolean;
   squareMerchantId?: string | null;
+  // Split tender (2026-09-29): whole cents the cashier already collected in cash at the register.
+  // `amount` above stays the CARD amount actually charged through the link (so the link's app fee
+  // is computed on the card leg only, per ADR-split-payment-S422); this is recorded on the
+  // POSPaymentLink row so the cash-leg commission can accrue when the link is paid. Optional and
+  // ignored when absent/0 -- reservationController's CHECKOUT_LINK caller never sets it.
+  cashAmountCents?: number;
 }): Promise<{ linkId: string; paymentLinkUrl: string; qrCodeDataUrl?: string; amount: number }> {
   const { organizerId, stripeConnectId, subscriptionTier, saleId, itemIds, amount, buyerEmail, expiresAt, squareOnboarded, squareMerchantId } = opts;
 
+  // Money review P1-4/5 (2026-09-29): every item must belong to THIS sale AND this organizer, and
+  // every requested id must resolve. This used to filter by saleId only and silently ignore ids
+  // that did not match, so a link could carry another tenant's item id (which the payment
+  // recorder then sold when the link was paid).
   const items = itemIds.length > 0
     ? await prisma.item.findMany({
-        where: { id: { in: itemIds }, saleId },
+        where: { id: { in: itemIds }, saleId, sale: { organizerId } },
         select: { id: true, title: true, price: true },
       })
     : [];
+  if (itemIds.length > 0 && items.length !== new Set(itemIds).size) {
+    throw new PaymentLinkItemScopeError();
+  }
 
   const amountCents = Math.round(amount * 100);
 
@@ -150,7 +179,9 @@ export async function createPaymentLinkInternal(opts: {
     console.warn('[pos] QR code generation failed:', qrErr);
   }
 
-  const posPaymentLink = await prisma.pOSPaymentLink.create({
+  let posPaymentLink: POSPaymentLink;
+  try {
+  posPaymentLink = await prisma.pOSPaymentLink.create({
     data: {
       organizerId,
       saleId,
@@ -158,6 +189,9 @@ export async function createPaymentLinkInternal(opts: {
       amount: amountCents,
       itemIds,
       status: 'ACTIVE',
+      ...(opts.cashAmountCents && opts.cashAmountCents > 0
+        ? { isSplitPayment: true, cashAmountCents: opts.cashAmountCents, cardAmountCents: amountCents }
+        : {}),
       // Reclaim-gap fix (2026-08-04): use the caller-supplied hold expiresAt when present
       // (CHECKOUT_LINK settlement router) so posStrandedSaleReconcileCron.ts's expiry-based
       // reclaim branch has a real deadline to act on; ad-hoc/no-hold callers keep the flat 24h.
@@ -165,6 +199,28 @@ export async function createPaymentLinkInternal(opts: {
       ...processorFields,
     },
   });
+  } catch (rowErr) {
+    // The Square link above is live and payable but nothing in the database points at it. Cancel
+    // it (best effort) so a shopper cannot pay a link no record will ever reconcile, then rethrow.
+    const orphanLinkId = processorFields.squarePaymentLinkId as string | undefined;
+    if (orphanLinkId) {
+      try {
+        const del = await deleteSquareCheckoutLink({ organizerId, paymentLinkId: orphanLinkId });
+        if (!del.ok) throw new Error(`Square refused to cancel the orphaned link: ${del.code}`);
+      } catch (delErr) {
+        console.error(`[pos] ORPHANED-SQUARE-LINK ${orphanLinkId} could not be cancelled after the POSPaymentLink row failed to save:`, delErr);
+        try {
+          Sentry.captureException(delErr instanceof Error ? delErr : new Error(String(delErr)), {
+            tags: { area: 'pos-payment-link-orphan' },
+            extra: { organizerId, saleId, squarePaymentLinkId: orphanLinkId },
+          });
+        } catch {
+          // Sentry may not be initialized
+        }
+      }
+    }
+    throw rowErr;
+  }
 
   if (buyerEmail) {
     try {
@@ -299,6 +355,23 @@ export const getPosContext = async (req: AuthRequest, res: Response) => {
       squareLocationId: resolvedSquareLocationId,
       canApplyDiscount,
       discountCap,
+      // Register fee + split-tender limits (2026-09-29): served from the SAME helpers the charge
+      // paths use (getInclusivePlatformFeeRate / calculateInclusiveCommissionCents), so the fee
+      // text and the card-amount floor on the register can never drift from what is charged. A
+      // register cash+card split is IN_PERSON on both legs. referralDiscountActive zeroes the fee.
+      posFee: {
+        tier: actor.subscriptionTier ?? null,
+        inPersonRate:
+          actor.referralDiscountExpiry != null && actor.referralDiscountExpiry > new Date()
+            ? 0
+            : getInclusivePlatformFeeRate(actor.subscriptionTier as SubscriptionTier, 'IN_PERSON'),
+        minimumFeeCents: calculateInclusiveCommissionCents(1, actor.subscriptionTier as SubscriptionTier, 'IN_PERSON'),
+        referralDiscountActive: actor.referralDiscountExpiry != null && actor.referralDiscountExpiry > new Date(),
+      },
+      splitTender: {
+        minCardChargeCents: MIN_SPLIT_CARD_LEG_CENTS,
+        maxAmountCents: MAX_POS_AMOUNT_CENTS,
+      },
     });
   } catch (error) {
     console.error('[pos] getPosContext error:', error);
@@ -475,23 +548,102 @@ export const pullCart = async (req: AuthRequest, res: Response) => {
 export const createPaymentLink = async (req: AuthRequest, res: Response) => {
   try {
     // Payment Links are independent of the Terminal/card-reader simulation flag.
-    // Always require a real Stripe connected account — never generate a fake URL.
-    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: true });
+    //
+    // Square-era gate (2026-09-29). This used to pass `{ requireStripe: true }`, a leftover from
+    // the Stripe era. Since the Square migration posAuth.resolveOrganizerOrTeamMember reads that
+    // flag as "at least one connected processor" (stripeConnectId OR squareOnboarded), so it
+    // still let a Square organizer through -- but it ALSO let a legacy Stripe-only organizer
+    // through (Stripe's platform account is closed), who then failed later inside
+    // createPaymentLinkInternal with a 409, and it never checked squareMerchantId at all. The
+    // only processor that can create a payment link now is Square, so check exactly that, here,
+    // with a message the cashier can act on. requireStripe:false because the processor check
+    // below replaces it (the flag would only re-admit a Stripe-only account).
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
+    if (!organizer.squareOnboarded || !organizer.squareMerchantId) {
+      return res.status(400).json({
+        message: 'Payment links need a connected Square account. Finish Square setup in Settings, then try again.',
+        code: 'SQUARE_NOT_CONNECTED',
+      });
+    }
 
-    const { saleId, itemIds, amount, buyerEmail } = req.body as {
+    const { saleId, itemIds, amount, buyerEmail, cashAmountCents, discountType, discountValue, discountReasonNote, expiresInSeconds } = req.body as {
       saleId?: string;
       itemIds?: string[];
       amount?: number;
       buyerEmail?: string;
+      // Discount on catalog items (2026-09-29, money review P1-6/8): same fields and same
+      // permission/cap/floor as POST /api/pos/payment-requests. discountValue is percent for
+      // PERCENT and DOLLARS for FIXED. Omitted = no discount, and the link must then cover the
+      // catalog price of its items.
+      discountType?: string;
+      discountValue?: number;
+      discountReasonNote?: string;
+      // Optional link lifetime. 60 seconds to 7 days; omitted keeps the 24 hour default.
+      expiresInSeconds?: number;
+      // Split tender (2026-09-29): whole cents already collected in cash. `amount` (dollars) is
+      // then the CARD remainder the link charges; omitted / 0 = an ordinary all-card link.
+      cashAmountCents?: number;
     };
 
     if (!saleId) return res.status(400).json({ message: 'saleId is required' });
     if (!itemIds || !Array.isArray(itemIds)) {
       return res.status(400).json({ message: 'itemIds must be non-empty array' });
     }
+    if (itemIds.length > 200 || itemIds.some((id) => typeof id !== 'string' || id.trim() === '') || new Set(itemIds).size !== itemIds.length) {
+      return res.status(400).json({ message: 'itemIds must be a list of unique item ids (at most 200)', code: 'INVALID_ITEM_IDS' });
+    }
+    let linkExpiresAt: Date | undefined;
+    if (expiresInSeconds !== undefined && expiresInSeconds !== null) {
+      if (
+        typeof expiresInSeconds !== 'number' ||
+        !Number.isInteger(expiresInSeconds) ||
+        expiresInSeconds < PAYMENT_LINK_MIN_EXPIRY_SECONDS ||
+        expiresInSeconds > PAYMENT_LINK_MAX_EXPIRY_SECONDS
+      ) {
+        return res.status(400).json({
+          message: `expiresInSeconds must be a whole number between ${PAYMENT_LINK_MIN_EXPIRY_SECONDS} and ${PAYMENT_LINK_MAX_EXPIRY_SECONDS} (7 days)`,
+          code: 'INVALID_EXPIRY',
+        });
+      }
+      linkExpiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+    }
     if (typeof amount !== 'number' || amount <= 0) {
       return res.status(400).json({ message: 'amount must be positive number (in dollars)' });
+    }
+    // Whole cents with a sane bound (2026-09-29): a fractional-cent or absurd amount used to reach
+    // Square and come back as a 500.
+    const linkAmountCents = Math.round(amount * 100);
+    if (Math.abs(amount * 100 - linkAmountCents) > 1e-6 || !isValidCents(linkAmountCents)) {
+      return res.status(400).json({
+        message: `amount must be a whole number of cents, at most $${(MAX_POS_AMOUNT_CENTS / 100).toFixed(2)}`,
+        code: 'INVALID_AMOUNT',
+      });
+    }
+    const hasLinkCashLeg = cashAmountCents !== undefined && cashAmountCents !== null && cashAmountCents !== 0;
+    if (hasLinkCashLeg && !isValidCents(cashAmountCents)) {
+      return res.status(400).json({
+        message: `cashAmountCents must be a whole number of cents greater than 0 and at most ${MAX_POS_AMOUNT_CENTS}`,
+        code: 'INVALID_SPLIT_AMOUNT',
+      });
+    }
+    const linkCashCents = hasLinkCashLeg ? (cashAmountCents as number) : 0;
+
+    // Card-leg floor: same rule and same wording as the phone and manual-card paths. The link
+    // charge is ONLINE-channel (the buyer completes it on their own device), so the fee floor is
+    // computed the way createPaymentLinkInternal computes it.
+    const linkFeeCents = calculateInclusiveCommissionCents(
+      linkAmountCents,
+      organizer.subscriptionTier as SubscriptionTier,
+      'ONLINE'
+    );
+    const linkLegProblem = cardLegProblem({
+      cardCents: linkAmountCents,
+      appFeeCents: linkFeeCents,
+      isSplit: linkCashCents > 0,
+    });
+    if (linkLegProblem) {
+      return res.status(400).json({ message: linkLegProblem, code: 'CARD_AMOUNT_TOO_SMALL' });
     }
 
     // Verify sale belongs to organizer
@@ -502,6 +654,49 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
 
     if (!sale || sale.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Sale does not belong to your account' });
+    }
+
+    // Money review P1-4/5 + P1-6/8 (2026-09-29): every item must be an item of THIS sale and
+    // organizer (404 otherwise, so a probe learns nothing about another tenant's ids), and the
+    // link may not charge less than the catalog price of its items unless the discount is
+    // authorized (APPLY_POS_DISCOUNT for team members, the workspace cap) and the catalog floor
+    // `catalogSubtotal - discount - 1` holds. Same rule as createPaymentRequest, via the shared
+    // helper. The total compared is everything the buyer pays across tenders (card + cash).
+    let linkCatalogSubtotalCents = 0;
+    if (itemIds.length > 0) {
+      const scopedItems = await prisma.item.findMany({
+        where: { id: { in: itemIds }, saleId, sale: { organizerId: organizer.id } },
+        select: { id: true, price: true },
+      });
+      if (scopedItems.length !== itemIds.length) {
+        return res.status(404).json({ message: 'One or more items were not found in this sale', code: 'ITEM_NOT_FOUND' });
+      }
+      linkCatalogSubtotalCents = Math.round(scopedItems.reduce((sum, it) => sum + (it.price ?? 0), 0) * 100);
+    }
+    const linkFloor = await authorizeDiscountAndCheckFloor({
+      actor: organizer,
+      catalogSubtotalCents: linkCatalogSubtotalCents,
+      totalCents: linkAmountCents + linkCashCents,
+      discount: { discountType, discountValue, discountReasonNote },
+    });
+    if (!linkFloor.ok) {
+      return res.status(linkFloor.status).json({ message: linkFloor.message, code: linkFloor.code });
+    }
+
+    // Cash-fee exposure cap (2026-09-24 ruling) now applies to a split link's cash leg too
+    // (2026-09-29), counting pending split cash as well as the accrued balance. Best-effort
+    // check-then-create: the link row is created after an external Square call, so it cannot sit
+    // inside a serializable transaction the way createPaymentRequest's insert does.
+    if (linkCashCents > 0) {
+      const linkCashRate = await resolveCashCommissionRate(organizer);
+      const linkCashCommission = cashCommissionOn(linkCashCents / 100, linkCashRate);
+      if (await wouldExceedCashFeeExposureCap({ organizerId: organizer.id, commission: linkCashCommission })) {
+        return res.status(400).json({
+          message:
+            'This cash amount would exceed the outstanding cash-commission limit on your account. Settle your balance with a card sale first, or contact support.',
+          code: 'CASH_FEE_EXPOSURE_CAP_EXCEEDED',
+        });
+      }
     }
 
     // Delegate to the shared internal — same Stripe Payment Link + QR logic the
@@ -520,8 +715,13 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
         // (utils/posAuth.ts) which already resolves these two fields -- no extra query needed.
         squareOnboarded: organizer.squareOnboarded,
         squareMerchantId: organizer.squareMerchantId,
+        ...(linkCashCents > 0 ? { cashAmountCents: linkCashCents } : {}),
+        ...(linkExpiresAt ? { expiresAt: linkExpiresAt } : {}),
       });
     } catch (stripeErr) {
+      if (stripeErr instanceof PaymentLinkItemScopeError) {
+        return res.status(404).json({ message: stripeErr.message, code: 'ITEM_NOT_FOUND' });
+      }
       if (stripeErr instanceof SquareOnboardingIncompleteError) {
         return res.status(409).json({
           message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
@@ -537,6 +737,10 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       paymentLinkUrl: result.paymentLinkUrl,
       qrCodeDataUrl: result.qrCodeDataUrl,
       amount: result.amount,
+      // Split tender (2026-09-29): echo what was recorded so the register can show it.
+      isSplitPayment: linkCashCents > 0,
+      cashAmountCents: linkCashCents > 0 ? linkCashCents : undefined,
+      cardAmountCents: linkCashCents > 0 ? linkAmountCents : undefined,
     });
   } catch (error) {
     console.error('[pos] createPaymentLink error:', error);
@@ -567,6 +771,9 @@ export const getPaymentLink = async (req: AuthRequest, res: Response) => {
         amount: true,
         qrCodeDataUrl: true,
         completedAt: true,
+        isSplitPayment: true,
+        cashAmountCents: true,
+        cardAmountCents: true,
       },
     });
 
@@ -575,12 +782,48 @@ export const getPaymentLink = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Payment link does not belong to your account' });
     }
 
+    // Cash-leg commission accrual for a PAID split link (2026-09-29). The recorder that flips a
+    // link to COMPLETED (services/posPaymentLinkRecorder.ts, shared by the Square webhook and the
+    // stranded-sale cron) lives outside this file's ownership and does not yet call the accrual,
+    // so the register's own status poll heals it: the first poll that sees COMPLETED accrues the
+    // cash leg, idempotently (CashFeeAccrual is unique per link id, so every later poll -- and the
+    // recorder itself once it is wired -- is a no-op). A failure never fails the poll; it is
+    // alerted to Sentry and the next poll retries.
+    if (link.status === 'COMPLETED' && link.isSplitPayment && link.cashAmountCents && link.cashAmountCents > 0) {
+      try {
+        await accrueSplitCashLegOnce({
+          organizer: {
+            id: organizer.id,
+            subscriptionTier: organizer.subscriptionTier,
+            referralDiscountExpiry: organizer.referralDiscountExpiry,
+          },
+          sourceType: 'POS_PAYMENT_LINK',
+          sourceId: link.id,
+          cashAmountCents: link.cashAmountCents,
+        });
+      } catch (accrualErr: any) {
+        console.error(`[pos] getPaymentLink: cash-leg commission accrual failed for link ${link.id}:`, accrualErr);
+        try {
+          Sentry.captureException(accrualErr instanceof Error ? accrualErr : new Error(String(accrualErr)), {
+            tags: { area: 'pos-payment-link-split-cash-commission' },
+            level: 'error',
+            extra: { linkId: link.id, organizerId: organizer.id, cashAmountCents: link.cashAmountCents },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+      }
+    }
+
     res.json({
       linkId: link.id,
       status: link.status,
       amount: link.amount / 100, // Convert back to dollars
       qrCodeDataUrl: link.qrCodeDataUrl,
       completedAt: link.completedAt,
+      isSplitPayment: link.isSplitPayment,
+      cashAmountCents: link.cashAmountCents ?? undefined,
+      cardAmountCents: link.cardAmountCents ?? undefined,
     });
   } catch (error) {
     console.error('[pos] getPaymentLink error:', error);
@@ -662,13 +905,70 @@ export const getActiveHolds = async (req: AuthRequest, res: Response) => {
  * Response: { invoiceId: string, status: 'SENT' }
  */
 export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
+  // Feature #397 (2026-09-29): Crew Invasion redemption taken for THIS attempt. Function scope
+  // so the failure paths (and the outer catch) can give the code back; cleared as soon as the
+  // HoldInvoice row exists. The release is fenced on the exact usedAt this attempt wrote.
+  let crewRedemption: { codeId: string; usedAt: Date; userId: string } | null = null;
+  const releaseCrewRedemption = async () => {
+    if (!crewRedemption) return;
+    const taken = crewRedemption;
+    crewRedemption = null;
+    await releaseCrewInvasionRedemption(taken.codeId, taken.usedAt, taken.userId);
+  };
+
+  // Money review P1-7 (2026-09-29): compensation for everything this request claims BEFORE a
+  // HoldInvoice row exists. commitItemSale moves each item to INVOICE_ISSUED and takes the crew
+  // code; when the Square link or the invoice row then fails, nothing used to put the items back,
+  // so the held item (and every merged item) sat at INVOICE_ISSUED with no invoice, blocked from
+  // sale until someone noticed. rollbackClaims gives the crew code back and reverts ONLY the items
+  // this request committed, each to the status it had when read, guarded on INVOICE_ISSUED so an
+  // item another path has since moved on is never dragged backwards. Idempotent: the list is
+  // emptied as it goes and every write is conditional, so it is safe to call from a failure path
+  // and again from the outer catch. `invoiceRowCreated` flips true the moment the HoldInvoice row
+  // exists: from then on the invoice (and the expiry job) owns the items and this is a no-op.
+  const committedItems: Array<{ id: string; priorStatus: string }> = [];
+  let invoiceRowCreated = false;
+  const rollbackClaims = async () => {
+    await releaseCrewRedemption();
+    if (invoiceRowCreated) return;
+    while (committedItems.length > 0) {
+      const c = committedItems.pop()!;
+      try {
+        await prisma.item.updateMany({
+          where: { id: c.id, status: 'INVOICE_ISSUED' },
+          data: { status: c.priorStatus as any },
+        });
+      } catch (revertErr) {
+        console.error(`[pos] sendHoldInvoice: failed to revert item ${c.id} to ${c.priorStatus} after a failed invoice:`, revertErr);
+        try {
+          Sentry.captureException(revertErr instanceof Error ? revertErr : new Error(String(revertErr)), {
+            tags: { area: 'pos-send-hold-invoice-rollback' },
+            extra: { itemId: c.id, priorStatus: c.priorStatus },
+          });
+        } catch {
+          // Sentry may not be initialized
+        }
+      }
+    }
+  };
+
   try {
-    // requireStripe here now really means "require SOME connected processor"
-    // (posAuth.ts's resolveOrganizerOrTeamMember accepts stripeConnectId OR
-    // squareOnboarded) -- kept true rather than renamed to avoid touching every
-    // other call site's argument for a cosmetic rename.
-    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: true });
+    // Square-era gate (2026-09-29): this used to call resolveOrganizerOrTeamMember with
+    // requireStripe:true, which admits ANY connected processor (stripeConnectId OR
+    // squareOnboarded) and never checked squareMerchantId. Stripe's platform account is
+    // permanently closed, so a Stripe-only organizer passed the gate, had the held item
+    // atomically moved to INVOICE_ISSUED by commitItemSale below, and only THEN hit the
+    // SquareOnboardingIncompleteError 409 at the bottom -- stranding the item. Same gate and
+    // error code createPaymentLink uses: check exactly what can create the payment link,
+    // before anything is claimed. requireStripe:false because this check replaces it.
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
+    if (!organizer.squareOnboarded || !organizer.squareMerchantId) {
+      return res.status(400).json({
+        message: 'Invoices need a connected Square account. Finish Square setup in Settings, then try again.',
+        code: 'SQUARE_NOT_CONNECTED',
+      });
+    }
 
     const { reservationId } = req.params as { reservationId?: string };
     const { deliverVia, expiryHours, miscItems, cashAmountCents } = req.body as {
@@ -689,6 +989,28 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     if (typeof cashAmountCents === 'number' && cashAmountCents < 0) {
       return res.status(400).json({ message: 'cashAmountCents cannot be negative' });
     }
+    if (
+      cashAmountCents !== undefined &&
+      cashAmountCents !== null &&
+      (typeof cashAmountCents !== 'number' || !Number.isFinite(cashAmountCents) || cashAmountCents > MAX_POS_AMOUNT_CENTS)
+    ) {
+      return res.status(400).json({ message: 'cashAmountCents must be a number of cents within the allowed range', code: 'INVALID_SPLIT_AMOUNT' });
+    }
+    // expiryHours feeds `new Date(...)`: NaN or Infinity made an Invalid Date and a negative value an
+    // already-expired invoice. Bounded to one week, like the QR link.
+    if (
+      expiryHours !== undefined &&
+      expiryHours !== null &&
+      (typeof expiryHours !== 'number' || !Number.isFinite(expiryHours) || expiryHours <= 0 || expiryHours > 168)
+    ) {
+      return res.status(400).json({ message: 'expiryHours must be between 0 and 168', code: 'INVALID_EXPIRY' });
+    }
+    // Money review P1-6/8 (2026-09-29): whole-cent amounts, bounded, titled, no duplicate items.
+    const miscNormalized = normalizeMiscLines(miscItems);
+    if (!miscNormalized.ok) {
+      return res.status(miscNormalized.status).json({ message: miscNormalized.message, code: miscNormalized.code });
+    }
+    const miscLines = miscNormalized.lines;
 
     // Fetch reservation
     const reservation = await prisma.itemReservation.findUnique({
@@ -710,6 +1032,26 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invoice already exists for this reservation' });
     }
 
+    // Feature #397 (2026-09-29): an explicitly supplied Crew Invasion code (organizer typing the
+    // shopper's code at the register) is validated BEFORE any item is claimed, so a bad code is
+    // a clean 400 (invalid / wrong sale / not this shopper's crew / used / expired) rather than
+    // an error after the held item has already moved to INVOICE_ISSUED. Without a code, the
+    // shopper's active crew code auto-applies further below.
+    const providedCrewCode: string | null =
+      typeof (req.body as any)?.crewInvasionCode === 'string' && (req.body as any).crewInvasionCode.trim()
+        ? (req.body as any).crewInvasionCode
+        : null;
+    if (providedCrewCode) {
+      const codeCheck = await validateCrewInvasionCode({
+        codeText: providedCrewCode,
+        saleId: reservation.item.sale!.id,
+        shopperUserId: reservation.userId,
+      });
+      if (!codeCheck.ok) {
+        return res.status(codeCheck.rejection.status).json({ message: codeCheck.rejection.message, code: codeCheck.rejection.code });
+      }
+    }
+
     // ADR-098 (2026-07-29): re-verify + atomically claim the held item before invoicing it.
     // This endpoint previously never read Item.status or Purchase at all -- it relied
     // entirely on ItemReservation.status (already checked above via reservation lookup),
@@ -721,8 +1063,77 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // INVOICE_ISSUED, matching the same value reservationController.ts's own hold-to-pay
     // path already writes at invoice time (see markSoldAndCreateInvoice). The Stripe
     // webhook remains the sole SOLD-setter once payment is actually captured.
+    // Money review P1-4/5 + P1-6/8 (2026-09-29): validate EVERYTHING the request names, and price it,
+    // BEFORE any item is claimed, so a bad request is a clean 4xx with nothing to undo.
+    //  - The held item and every merged item (a misc line carrying an itemId) must be an item of
+    //    THIS sale and THIS organizer. commitItemSale below flips whatever id it is given, so an
+    //    unscoped merged itemId used to let a cashier invoice (and then sell) another tenant's
+    //    item. 404 rather than 403: a probe learns nothing about ids it does not own.
+    //  - Prior item statuses are read here so a failed invoice can put each item back exactly.
+    //  - Lines and discounts are priced by evaluateInvoicePricing: whole cents, no negative total,
+    //    and any discount needs the discount permission, the workspace cap and the catalog floor.
+    const invoiceSaleId = reservation.item.sale!.id;
+    const mergedItemIdsRequested = miscLines.filter((l) => l.itemId).map((l) => l.itemId as string);
+    if (mergedItemIdsRequested.includes(reservation.itemId)) {
+      return res.status(400).json({ message: 'The held item cannot also be added as an extra line', code: 'INVALID_MISC_ITEMS' });
+    }
+    const scopedInvoiceItems = await prisma.item.findMany({
+      where: { id: { in: [reservation.itemId, ...mergedItemIdsRequested] }, saleId: invoiceSaleId, sale: { organizerId: organizer.id } },
+      select: { id: true, price: true, status: true },
+    });
+    if (scopedInvoiceItems.length !== 1 + mergedItemIdsRequested.length) {
+      return res.status(404).json({ message: 'One or more items were not found in this sale', code: 'ITEM_NOT_FOUND' });
+    }
+    const priorStatusByItemId = new Map<string, string>(scopedInvoiceItems.map((it): [string, string] => [it.id, it.status as string]));
+    const mergedListCents = new Map<string, number>(
+      scopedInvoiceItems.filter((it) => it.id !== reservation.itemId).map((it): [string, number] => [it.id, Math.round((it.price ?? 0) * 100)])
+    );
+    const heldItemTotal = Math.round((reservation.item.price ?? 0) * 100); // in cents
+    const invoicePricing = await evaluateInvoicePricing({
+      actor: organizer,
+      heldItemCents: heldItemTotal,
+      lines: miscLines,
+      mergedListCents,
+    });
+    if (!invoicePricing.ok) {
+      return res.status(invoicePricing.status).json({ message: invoicePricing.message, code: invoicePricing.code });
+    }
+    const miscTotal = invoicePricing.miscTotalCents;
+
+    // Cash-fee exposure cap (2026-09-24 ruling, money review P2 2026-09-29). The cash leg of a
+    // hold invoice accrues commission to the organizer's cash-fee balance when it is recorded, but
+    // this path never asked the cap whether that was allowed: an organizer at the $100 cap could
+    // keep taking cash through hold invoices. The cash actually taken is bounded by the total, so
+    // the check uses the same clamp as below (the crew discount can only lower it, so this is
+    // conservative). Outstanding cash legs on OTHER still-pending hold invoices are added on top:
+    // they will accrue when paid and cashFeeService.wouldExceedCashFeeExposureCap does not see
+    // them yet (it counts split payment requests and links only).
+    const requestedCashCents = Number.isFinite(cashAmountCents) ? Math.max(0, Math.round(cashAmountCents as number)) : 0;
+    const cashLegForCap = Math.min(requestedCashCents, invoicePricing.grandTotalCents);
+    if (cashLegForCap > 0) {
+      const holdCashRate = await resolveCashCommissionRate(organizer);
+      let commissionOnThisCash = cashCommissionOn(cashLegForCap / 100, holdCashRate);
+      try {
+        const pendingHoldCash = await prisma.holdInvoice.aggregate({
+          where: { status: 'PENDING', cashAmountCents: { gt: 0 }, sale: { organizerId: organizer.id } },
+          _sum: { cashAmountCents: true },
+        });
+        commissionOnThisCash += cashCommissionOn((pendingHoldCash._sum.cashAmountCents ?? 0) / 100, holdCashRate);
+      } catch (pendingErr) {
+        console.warn('[pos] sendHoldInvoice: could not total pending hold-invoice cash for the exposure cap (continuing with this invoice only):', pendingErr);
+      }
+      if (await wouldExceedCashFeeExposureCap({ organizerId: organizer.id, commission: commissionOnThisCash })) {
+        return res.status(400).json({
+          message:
+            'This cash amount would exceed the outstanding cash-commission limit on your account. Settle your balance with a card sale first, or contact support.',
+          code: 'CASH_FEE_EXPOSURE_CAP_EXCEEDED',
+        });
+      }
+    }
+
     try {
       await commitItemSale(reservation.itemId, 'INVOICE_ISSUED', ['AVAILABLE', 'RESERVED']);
+      committedItems.push({ id: reservation.itemId, priorStatus: priorStatusByItemId.get(reservation.itemId) ?? 'RESERVED' });
     } catch (guardError) {
       if (guardError instanceof ItemAlreadyCommittedError) {
         return res.status(409).json({ message: 'This item is no longer available to invoice -- it may have already been sold or invoiced elsewhere.' });
@@ -730,10 +1141,8 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       throw guardError;
     }
 
-    // Calculate total: held item + misc items
-    const heldItemTotal = Math.round(reservation.item.price! * 100); // in cents
-    const miscTotal = miscItems ? miscItems.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) : 0;
-    const grandTotal = heldItemTotal + miscTotal;
+    // Calculate total: held item + misc items (priced and validated above)
+    let grandTotal = invoicePricing.grandTotalCents;
     const holdFeeRate = getInclusivePlatformFeeRate(organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
 
     // ADR-114 (2026-08-31): cash/card split, ported from createCombinedInvoice's
@@ -749,9 +1158,9 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // used to reduce the platform fee below its correct value -- Math.min still bounds it to
     // grandTotal either way, so the fee floor stays exactly proportional to the real card leg.
     const safeCashAmountCents = Number.isFinite(cashAmountCents) ? Math.max(0, Math.round(cashAmountCents as number)) : 0;
-    const finalCashAmountCents = Math.min(safeCashAmountCents, grandTotal);
-    const cardAmountCents = grandTotal - finalCashAmountCents;
-    const platformFeeAmount = calculateInclusiveCommissionCents(cardAmountCents, organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
+    let finalCashAmountCents = Math.min(safeCashAmountCents, grandTotal);
+    let cardAmountCents = grandTotal - finalCashAmountCents;
+    let platformFeeAmount = calculateInclusiveCommissionCents(cardAmountCents, organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
 
     // P0 fix (2026-08-17): HoldInvoice.reservationId is @unique
     // (HoldInvoice_reservationId_key, confirmed live in Postgres) and, before this,
@@ -800,14 +1209,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // silently discarded, so it never got bundled into HoldInvoice.itemIds and its payment was
     // unrecoverable after the fact. See ADR:
     // claude_docs/feature-notes/hold-invoice-merged-item-bundling-adr-2026-08-25.md
-    const mergedRealItemIds: string[] = [];
-    if (miscItems && miscItems.length > 0) {
-      for (const miscItem of miscItems) {
-        if (miscItem.itemId) {
-          mergedRealItemIds.push(miscItem.itemId);
-        }
-      }
-    }
+    const mergedRealItemIds: string[] = mergedItemIdsRequested;
 
     // ADR-113 (2026-08-28): the anchor item gets commitItemSale + a reservation.invoiceId
     // stamp (below), but until this fix a merged real item got NEITHER -- its Item.status
@@ -823,11 +1225,67 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     for (const mergedItemId of mergedRealItemIds) {
       try {
         await commitItemSale(mergedItemId, 'INVOICE_ISSUED', ['AVAILABLE', 'RESERVED']);
+        committedItems.push({ id: mergedItemId, priorStatus: priorStatusByItemId.get(mergedItemId) ?? 'RESERVED' });
       } catch (guardError) {
+        // Undo the anchor (and any merged item already claimed): the invoice is not going out.
+        await rollbackClaims();
         if (guardError instanceof ItemAlreadyCommittedError) {
           return res.status(409).json({ message: 'One of the additional items is no longer available to invoice -- it may have already been sold or invoiced elsewhere.' });
         }
         throw guardError;
+      }
+    }
+
+    // Feature #397 (2026-09-29): Crew Invasion redemption -- hold-pricing code.
+    // Discount base = the anchor held item plus any merged REAL held items (miscItems that carry
+    // an itemId), each priced from the database and only if the row is a hold of THIS shopper at
+    // THIS sale; a merged item billed below list price contributes the lower of the two. Ad hoc
+    // misc lines never count. If the register already applied its own discount (a negative misc
+    // line), the shopper gets the LARGER of the two, never the sum: only the excess is added.
+    // Applied BEFORE the fee is recomputed, so the platform fee is charged on the discounted
+    // price; the floor keeps the charge at or above CREW_INVASION_MIN_CHARGE_CENTS. The code is
+    // atomically consumed here and given back by releaseCrewRedemption() if no HoldInvoice row
+    // gets created below.
+    let crewDiscountCents = 0;
+    let crewDiscountInfo: { code: string; discountPct: number } | null = null;
+    {
+      let eligibleBaseCents = heldItemTotal;
+      if (mergedRealItemIds.length > 0) {
+        const mergedHolds = await prisma.itemReservation.findMany({
+          where: {
+            itemId: { in: mergedRealItemIds },
+            userId: reservation.userId,
+            item: { saleId: reservation.item.sale!.id },
+          },
+          select: { itemId: true, item: { select: { price: true } } },
+        });
+        const billedByItemId = new Map<string, number>();
+        for (const m of miscLines) {
+          if (m.itemId) billedByItemId.set(m.itemId, m.amountCents);
+        }
+        for (const h of mergedHolds) {
+          const listCents = Math.round((h.item.price ?? 0) * 100);
+          const billedCents = billedByItemId.get(h.itemId) ?? listCents;
+          eligibleBaseCents += Math.max(0, Math.min(listCents, billedCents));
+        }
+      }
+      const otherDiscountCents = miscLines.reduce((sum, m) => (m.amountCents < 0 ? sum - m.amountCents : sum), 0);
+      const crewResult = await applyCrewInvasionDiscount({
+        saleId: reservation.item.sale!.id,
+        shopperUserId: reservation.userId,
+        eligibleBaseCents,
+        chargeableTotalCents: grandTotal,
+        otherDiscountCents,
+        providedCode: providedCrewCode,
+      });
+      if (crewResult.applied) {
+        crewRedemption = { codeId: crewResult.codeId, usedAt: crewResult.usedAt, userId: crewResult.userId };
+        crewDiscountCents = crewResult.discountCents;
+        crewDiscountInfo = { code: crewResult.code, discountPct: crewResult.discountPct };
+        grandTotal -= crewDiscountCents;
+        finalCashAmountCents = Math.min(safeCashAmountCents, grandTotal);
+        cardAmountCents = grandTotal - finalCashAmountCents;
+        platformFeeAmount = calculateInclusiveCommissionCents(cardAmountCents, organizer.subscriptionTier as SubscriptionTier, 'ONLINE');
       }
     }
 
@@ -865,6 +1323,20 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           stripeAccountId: null,
         },
       });
+      invoiceRowCreated = true; // the invoice owns the items from here (see rollbackClaims)
+
+      // The invoice now exists and carries the discounted total: the code stays consumed.
+      // Per-member redemption (2026-09-29): link it to this invoice so releaseInvoice /
+      // invoiceExpiryJob can restore it if the invoice dies unpaid.
+      if (crewRedemption) {
+        await linkCrewInvasionRedemptionToInvoice({
+          codeId: crewRedemption.codeId,
+          userId: crewRedemption.userId,
+          usedAt: crewRedemption.usedAt,
+          holdInvoiceId: cashOnlyInvoice.id,
+        });
+      }
+      crewRedemption = null;
 
       await prisma.itemReservation.update({
         where: { id: reservationId },
@@ -872,7 +1344,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       });
       if (mergedRealItemIds.length > 0) {
         await prisma.itemReservation.updateMany({
-          where: { itemId: { in: mergedRealItemIds } },
+          where: { itemId: { in: mergedRealItemIds }, item: { saleId: invoiceSaleId } },
           data: { invoiceId: cashOnlyInvoice.id },
         });
       }
@@ -896,6 +1368,10 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         cashAmountCents: finalCashAmountCents,
         cardAmountCents: 0,
         platformFeeAmount,
+        totalAmountCents: grandTotal,
+        crewInvasionDiscount: crewDiscountInfo
+          ? { code: crewDiscountInfo.code, discountPct: crewDiscountInfo.discountPct, amountOffCents: crewDiscountCents }
+          : null,
       });
     }
 
@@ -915,9 +1391,10 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       // paymentNote (Square has no way to backfill it after creation) -- see
       // holdInvoiceSquareCheckoutHelper.ts's header comment for the full rationale.
       const holdInvoiceId = generateHoldInvoiceId();
-      const squareDescription = finalCashAmountCents > 0
+      const squareDescription = (finalCashAmountCents > 0
         ? `Balance due -- remaining balance after $${(finalCashAmountCents / 100).toFixed(2)} cash collected at checkout`
-        : (reservation.item.title || 'FindA.Sale payment');
+        : (reservation.item.title || 'FindA.Sale payment'))
+        + (crewDiscountInfo ? ` (Crew Invasion ${crewDiscountInfo.discountPct}% off applied)` : '');
 
       let squareResult;
       try {
@@ -929,6 +1406,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           appFeeCents: platformFeeAmount,
         });
       } catch (squareError: any) {
+        await rollbackClaims();
         if (squareError instanceof SquareOnboardingIncompleteError) {
           return res.status(409).json({
             message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
@@ -940,10 +1418,17 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       }
 
       if (!squareResult.ok) {
+        await rollbackClaims();
         return res.status(402).json({ message: squareResult.message, code: 'SQUARE_PAYMENT_LINK_FAILED' });
       }
 
-      const squareHoldInvoice = await prisma.holdInvoice.create({
+      // Money review P1-7 (2026-09-29): from here the Square link is live and payable. If the
+      // invoice row cannot be saved, cancel the link (a shopper must not be able to pay a link no
+      // record will ever reconcile) and put the claimed items back, then let the outer catch
+      // answer 500. A link that also fails to cancel is reported loudly: it needs a human.
+      let squareHoldInvoice: HoldInvoice;
+      try {
+      squareHoldInvoice = await prisma.holdInvoice.create({
         data: {
           id: holdInvoiceId,
           reservationId,
@@ -972,6 +1457,38 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           stripeAccountId: null,
         },
       });
+      } catch (createErr) {
+        try {
+          const del = await deleteSquareCheckoutLink({ organizerId: organizer.id, paymentLinkId: squareResult.paymentLinkId });
+          if (!del.ok) throw new Error(`Square refused to cancel the link: ${del.code}`);
+        } catch (delErr) {
+          console.error(`[pos] sendHoldInvoice: ORPHANED-SQUARE-LINK ${squareResult.paymentLinkId} could not be cancelled after the invoice row failed to save:`, delErr);
+          try {
+            Sentry.captureException(delErr instanceof Error ? delErr : new Error(String(delErr)), {
+              tags: { area: 'pos-send-hold-invoice-orphan-link' },
+              extra: { holdInvoiceId, squarePaymentLinkId: squareResult.paymentLinkId, squareOrderId: squareResult.orderId },
+            });
+          } catch {
+            // Sentry may not be initialized
+          }
+        }
+        await rollbackClaims();
+        throw createErr;
+      }
+      invoiceRowCreated = true; // the invoice owns the items from here (see rollbackClaims)
+
+      // The invoice now exists and carries the discounted total: the code stays consumed.
+      // Per-member redemption (2026-09-29): link it to this invoice so releaseInvoice /
+      // invoiceExpiryJob can restore it if the invoice dies unpaid.
+      if (crewRedemption) {
+        await linkCrewInvasionRedemptionToInvoice({
+          codeId: crewRedemption.codeId,
+          userId: crewRedemption.userId,
+          usedAt: crewRedemption.usedAt,
+          holdInvoiceId: squareHoldInvoice.id,
+        });
+      }
+      crewRedemption = null;
 
       await prisma.itemReservation.update({
         where: { id: reservationId },
@@ -979,7 +1496,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       });
       if (mergedRealItemIds.length > 0) {
         await prisma.itemReservation.updateMany({
-          where: { itemId: { in: mergedRealItemIds } },
+          where: { itemId: { in: mergedRealItemIds }, item: { saleId: invoiceSaleId } },
           data: { invoiceId: squareHoldInvoice.id },
         });
       }
@@ -991,18 +1508,21 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         const { buildEmail } = await import('../services/emailTemplateService');
         const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
-        let itemsList = `<strong>${reservation.item.title}</strong> - $${reservation.item.price?.toFixed(2)}`;
-        if (miscItems && miscItems.length > 0) {
-          const miscItemsHtml = miscItems
-            .map(item => `<strong>${item.title}</strong> - $${item.amount.toFixed(2)}`)
+        // 2026-09-29: item and line titles and the shopper name are free text (organizer- and
+        // shopper-controlled) going into the HTML body, which buildEmail does NOT escape (it escapes
+        // only headline/preheader). Escaped here; amounts come from validated whole-cent lines.
+        let itemsList = `<strong>${escapeHtml(reservation.item.title)}</strong> - $${(heldItemTotal / 100).toFixed(2)}`;
+        if (miscLines.length > 0) {
+          const miscItemsHtml = miscLines
+            .map(line => `<strong>${escapeHtml(line.title)}</strong> - $${(line.amountCents / 100).toFixed(2)}`)
             .join('<br/>');
           itemsList += '<br/>' + miscItemsHtml;
         }
 
         const html = buildEmail({
           preheader: `Invoice for your hold`,
-          headline: `Invoice: ${reservation.item.title}${miscItems && miscItems.length > 0 ? ' + more' : ''}`,
-          body: `<p>Hi ${reservation.user.name},</p><p>Your hold is ready for payment:</p><p>${itemsList}</p><p><strong>Total: $${(grandTotal / 100).toFixed(2)}</strong></p>`,
+          headline: `Invoice: ${reservation.item.title}${miscLines.length > 0 ? ' + more' : ''}`,
+          body: `<p>Hi ${escapeHtml(reservation.user.name)},</p><p>Your hold is ready for payment:</p><p>${itemsList}</p>${crewDiscountInfo ? `<p>Crew Invasion discount (${crewDiscountInfo.discountPct}% off your held items): -$${(crewDiscountCents / 100).toFixed(2)}</p>` : ''}<p><strong>Total: $${(grandTotal / 100).toFixed(2)}</strong></p>`,
           ctaText: 'Complete Payment',
           ctaUrl: squareResult.url,
           accentColor: '#10b981',
@@ -1057,6 +1577,11 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         cashAmountCents: finalCashAmountCents > 0 ? finalCashAmountCents : null,
         cardAmountCents,
         platformFeeAmount,
+        totalAmountCents: grandTotal,
+        // Feature #397: the discount line for the invoice (null when no crew code applied).
+        crewInvasionDiscount: crewDiscountInfo
+          ? { code: crewDiscountInfo.code, discountPct: crewDiscountInfo.discountPct, amountOffCents: crewDiscountCents }
+          : null,
         ...(squareEmailWarning ? { emailWarning: squareEmailWarning } : {}),
       });
     }
@@ -1070,6 +1595,10 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     // Square-gated endpoint in this codebase already uses.
     throw new SquareOnboardingIncompleteError(organizer.id);
   } catch (error) {
+    // Feature #397: no HoldInvoice row was committed on this path (crewRedemption is cleared
+    // the moment one is), so give the crew's one-use code back. Money review P1-7 (2026-09-29):
+    // and put back every item this request claimed (a no-op once the invoice row exists).
+    await rollbackClaims();
     if (error instanceof SquareOnboardingIncompleteError) {
       return res.status(409).json({
         message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",

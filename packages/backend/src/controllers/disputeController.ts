@@ -253,6 +253,14 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     // the dispute is only ever marked 'resolved' after Stripe actually confirms it.
     let actualRefundedAmount: number | undefined;
     let refundedItemId: string | null | undefined;
+    // Split tender (2026-09-29): cash the organizer must hand back when the disputed purchase was a
+    // cash + card split (Square can only refund the card leg). Relayed in the response below.
+    let cashPortionToRefundByHand = 0;
+    let cashRefundMessage: string | null = null;
+    // Partial refunds (2026-09-29, money review P1-14): the item goes back on sale ONLY when this refund
+    // brings the purchase to fully refunded. A partial refund leaves the purchase PAID and the buyer keeps
+    // the item, so restoring it would let it be sold twice.
+    let refundIsFull = false;
     let refundConfirmationParams:
       | { toEmail?: string | null; buyerName?: string | null; itemTitle?: string | null; organizerBusinessName?: string | null; purchaseId?: string }
       | undefined;
@@ -304,11 +312,24 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
         // Square migration Wave 1 #4 (2026-09-07): one added branch -- purchase.processor
         // decides which choke point this refund routes through. Both throw the same
         // RefundError class (see squareRefundService.ts), so the catch block below is unchanged.
-        const { refundedAmount, purchase: refundedPurchase } = purchase.processor === 'SQUARE'
+        // Explicit union (type-only): without it TS collapses the two branches to the narrower Stripe result and the
+        // 'in' checks below narrow to unknown.
+        const refundResult = (purchase.processor === 'SQUARE'
           ? await executeVerifiedSquareRefund(purchase.id, finalRefundAmount, 'dispute')
-          : await executeVerifiedRefund(purchase.id, finalRefundAmount, 'dispute');
+          : await executeVerifiedRefund(purchase.id, finalRefundAmount, 'dispute')) as
+          Awaited<ReturnType<typeof executeVerifiedRefund>> | Awaited<ReturnType<typeof executeVerifiedSquareRefund>>;
+        const { refundedAmount, purchase: refundedPurchase } = refundResult;
+        if ('cashPortionToRefundByHand' in refundResult) {
+          cashPortionToRefundByHand = refundResult.cashPortionToRefundByHand;
+          cashRefundMessage = refundResult.message;
+        }
         actualRefundedAmount = refundedAmount;
         refundedItemId = refundedPurchase.itemId;
+        // Square results say so directly (cumulative across earlier partial refunds); the Stripe path has no
+        // partial tracking, so a refund of the whole purchase amount is the only "full" it can report.
+        refundIsFull = 'isFullRefund' in refundResult
+          ? refundResult.isFullRefund
+          : Math.round(refundedAmount * 100) >= Math.round(refundedPurchase.amount * 100);
         refundConfirmationParams = {
           toEmail: refundedPurchase.user?.email,
           buyerName: refundedPurchase.user?.name,
@@ -356,7 +377,7 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     // matching what the organizer/admin refund endpoint (POST /api/stripe/refund/:purchaseId)
     // already does — so a dispute-triggered refund is not a silent, second-class one.
     if (actualRefundedAmount !== undefined) {
-      if (refundedItemId) {
+      if (refundedItemId && refundIsFull) {
         await prisma.item.update({
           where: { id: refundedItemId },
           data: { status: 'AVAILABLE' }
@@ -399,6 +420,7 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       dispute,
       ...(refundCapApplied ? { refundCapApplied: true, originalAmount: refundAmount, cappedAmount: finalRefundAmount } : {}),
       ...(actualRefundedAmount !== undefined ? { refundedAmount: actualRefundedAmount } : {}),
+      ...(cashPortionToRefundByHand > 0 ? { cashPortionToRefundByHand, cashRefundMessage } : {}),
     });
   } catch (error) {
     console.error('Error updating dispute status:', error);

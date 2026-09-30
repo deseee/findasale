@@ -4,6 +4,7 @@ import { notifyVendorBoothSaleRefunded } from './vendorBoothSaleNotificationServ
 import { settleHubOwnerReversalForLeg } from '../controllers/vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { createNotification } from '../lib/notificationService'; // organizer clawback notification (see below)
+import { resolveSplitRefund } from './cashFeeService'; // Split tender (2026-09-29): defensive guard only, see the split-tender block in executeVerifiedRefund
 
 // Lazy — avoids crash when module loads before dotenv runs (same pattern as stripeController.ts)
 const stripe = () => getStripe();
@@ -279,6 +280,31 @@ export async function executeVerifiedRefund(
       400,
       { requestedAmount: refundAmount, purchaseAmount: purchase.amount }
     );
+  }
+
+  // SPLIT TENDER guard (2026-09-29, defensive). A cash + card split Purchase (cashLegAmount > 0) only
+  // ever has `amount - cashLegAmount` captured by the card processor. Split tender is created only by the
+  // POS paths, which force processor = SQUARE (Stripe removal 2026-09-12), so no split row should reach
+  // this Stripe path; squareRefundService.executeVerifiedSquareRefund owns them (card-first refund, cash
+  // portion handed back by hand). If one ever does arrive here (legacy or hand-edited data), asking
+  // Stripe for more than the card leg would over-refund or fail after the claim, so reject that request
+  // with a clear message BEFORE any claim or Stripe call. A refund that fits inside the card leg is
+  // exactly what card-first means and is allowed through unchanged. Cash-recorded rows have no card
+  // charge at all, so there is nothing to over-refund and the guard does not apply to them.
+  if (!isCashPurchase) {
+    const split = resolveSplitRefund(purchase as { amount: number; cashLegAmount?: number | null }, refundAmount);
+    if (split.isSplit && split.cashPortionToRefundByHand > 0) {
+      throw new RefundError(
+        `This sale was paid partly in cash ($${(purchase.amount - split.cardCollectedAmount).toFixed(2)}). The card processor can refund at most $${split.cardCollectedAmount.toFixed(2)} of it. Refund up to that amount to the card, and hand the rest back to the shopper in cash.`,
+        400,
+        {
+          code: 'SPLIT_TENDER_CARD_LIMIT',
+          requestedAmount: refundAmount,
+          cardCollectedAmount: split.cardCollectedAmount,
+          cashPortionToRefundByHand: split.cashPortionToRefundByHand,
+        }
+      );
+    }
   }
 
   // Booth-cart purchases have no purchase.saleId (a BoothCartTransaction spans a

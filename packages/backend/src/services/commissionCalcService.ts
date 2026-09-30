@@ -8,7 +8,8 @@ import { DEFAULT_LADDER } from './commissionTierService';
  * ADR-090 already documented the cost of two independently-written payout
  * functions drifting out of sync (VendorBooth settlement code went stale and
  * ended up inverted). This file exists so consignorController.runPayout() and
- * consignorSettlementController.buildSettlementLines() can never diverge --
+ * the settlement ledger (consignorLedgerService.loadUnsettled, which the settlement
+ * controller uses; it replaced buildSettlementLines on 2026-09-29) can never diverge --
  * both MUST call calculateConsignorPayout() rather than compute their own
  * gross * rate math.
  */
@@ -26,10 +27,37 @@ export interface TierBreakdownLine {
   net: string;
 }
 
+/**
+ * Organizer-settles ledger (2026-09-29): one line per sold item, so a payout can be stored and
+ * shown to the consignor item by item. `share` is already rounded half-up to cents, and `net`
+ * on the result is exactly the sum of these rounded shares, so the total a consignor is told
+ * always equals the sum of the lines they can see (no penny drift between statement and total).
+ */
+export interface PayoutLine {
+  itemId: string;
+  price: Decimal; // rounded to cents
+  ratePct: Decimal; // percent of price that goes to the consignor for this item
+  share: Decimal; // consignor share for this item, rounded half-up to cents
+  tierLabel: string | null; // set only when tiered commission resolved this item's rate
+}
+
 export interface ConsignorPayoutResult {
   gross: Decimal;
   net: Decimal;
   tierBreakdown: TierBreakdownLine[] | null;
+  lines: PayoutLine[];
+}
+
+/** Round half-up to whole cents. The single rounding rule used by every ledger money figure. */
+export function roundToCents(value: number | string | Decimal): Decimal {
+  return new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}
+
+function safePrice(raw: number | Decimal | null | undefined): Decimal {
+  if (raw === null || raw === undefined) return new Decimal(0);
+  const d = new Decimal(raw);
+  if (!d.isFinite() || d.isNegative()) return new Decimal(0);
+  return roundToCents(d);
 }
 
 function tierLabel(minPrice: Decimal, maxPrice: Decimal | null): string {
@@ -61,26 +89,41 @@ function resolveTierForPrice(
 /**
  * Compute a consignor's payout for a set of SOLD items.
  *
- * If consignor.useTieredCommission is false: exact same math as before this
- * ADR (gross * commissionRate / 100) -- zero behavior change for every
- * existing consignor, since this is strictly opt-in.
+ * If consignor.useTieredCommission is false: every item's share is price * commissionRate / 100
+ * (same rate as before this ADR -- zero behavior change for every existing consignor, since
+ * tiered is strictly opt-in).
  *
- * If true: resolves each item's rate individually from the workspace's
- * CommissionTier ladder and sums the per-item nets, plus returns a
- * tierBreakdown for the organizer's CSV export.
+ * If true: resolves each item's rate individually from the workspace's CommissionTier ladder
+ * and returns a tierBreakdown for the organizer's CSV export.
+ *
+ * 2026-09-29 (organizer-settles ledger): each item's share is rounded half-up to cents and
+ * `net` is the SUM of those rounded shares, so the per-item lines always add up to the total.
+ * `lines` carries the per-item detail. Both consignorController.runPayout and the settlement
+ * ledger (consignorLedgerService) call this one function (ADR-096 rule: no second copy of
+ * the commission math anywhere).
  */
 export async function calculateConsignorPayout(
   consignor: { id: string; workspaceId: string; commissionRate: Decimal; useTieredCommission: boolean },
   soldItems: SoldItemForPayout[]
 ): Promise<ConsignorPayoutResult> {
-  const gross = soldItems.reduce(
-    (sum, item) => sum.plus(new Decimal(item.price ?? 0)),
-    new Decimal(0)
-  );
+  const priced = soldItems.map((item) => ({ id: item.id, price: safePrice(item.price) }));
+  const gross = priced.reduce((sum, item) => sum.plus(item.price), new Decimal(0));
+
+  const flatResult = (): ConsignorPayoutResult => {
+    const flatRate = new Decimal(consignor.commissionRate);
+    const lines: PayoutLine[] = priced.map((item) => ({
+      itemId: item.id,
+      price: item.price,
+      ratePct: flatRate,
+      share: roundToCents(item.price.times(flatRate).dividedBy(100)),
+      tierLabel: null,
+    }));
+    const net = lines.reduce((sum, l) => sum.plus(l.share), new Decimal(0));
+    return { gross, net, tierBreakdown: null, lines };
+  };
 
   if (!consignor.useTieredCommission) {
-    const net = gross.times(consignor.commissionRate).dividedBy(100);
-    return { gross, net, tierBreakdown: null };
+    return flatResult();
   }
 
   const tiers = await prisma.commissionTier.findMany({
@@ -90,19 +133,26 @@ export async function calculateConsignorPayout(
 
   if (tiers.length === 0) {
     // No ladder configured yet -- fall back to flat rate rather than paying 0%.
-    const net = gross.times(consignor.commissionRate).dividedBy(100);
-    return { gross, net, tierBreakdown: null };
+    return flatResult();
   }
 
   const buckets = new Map<string, { minPrice: Decimal; maxPrice: Decimal | null; rate: Decimal; itemCount: number; gross: Decimal; net: Decimal }>();
+  const lines: PayoutLine[] = [];
 
   let net = new Decimal(0);
-  for (const item of soldItems) {
-    const price = new Decimal(item.price ?? 0);
+  for (const item of priced) {
+    const price = item.price;
     const tier = resolveTierForPrice(price, tiers);
     if (!tier) continue;
-    const itemNet = price.times(tier.consignorRate).dividedBy(100);
+    const itemNet = roundToCents(price.times(tier.consignorRate).dividedBy(100));
     net = net.plus(itemNet);
+    lines.push({
+      itemId: item.id,
+      price,
+      ratePct: new Decimal(tier.consignorRate),
+      share: itemNet,
+      tierLabel: tierLabel(tier.minPrice, tier.maxPrice),
+    });
 
     const key = tier.id;
     const existing = buckets.get(key);
@@ -132,7 +182,7 @@ export async function calculateConsignorPayout(
       net: b.net.toFixed(2),
     }));
 
-  return { gross, net, tierBreakdown };
+  return { gross, net, tierBreakdown, lines };
 }
 
 /**

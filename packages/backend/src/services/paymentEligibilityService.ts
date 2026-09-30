@@ -81,8 +81,21 @@ export async function assertSaleCanAcceptPayment(params: {
   // true when account.updated webhook confirms charges_enabled && payouts_enabled"). Required
   // alongside organizerStripeConnectId, not instead of it.
   organizerStripeOnboarded: boolean | null | undefined;
+  // Square-aware gate (2026-09-29, money review P1-13): Stripe was removed 2026-09-12, so a
+  // Square-only organizer has no stripeConnectId at all and the Stripe-only Fix 1 below blocked
+  // every Hold-to-Pay invoice for them (markSoldAndCreateInvoice). Callers that create a SQUARE
+  // payment pass the organizer's Square onboarding fields; an organizer with completed Square
+  // onboarding (squareOnboarded === true AND a squareMerchantId, the same
+  // `organizerHasSquare` signal every Square branch uses) satisfies Fix 1 without a Stripe
+  // account. OPTIONAL and default-absent on purpose: the Stripe-only callers (createPaymentIntent,
+  // createCartCheckoutSession, the bounty Stripe branch) never pass them, so their behavior is
+  // exactly what it was, and a Stripe-connected organizer keeps passing Fix 1 as before.
+  // Fix 2 (sale PUBLISHED) and Fix 3 (payments-held / velocity breaker) still apply to both.
+  organizerSquareOnboarded?: boolean | null | undefined;
+  organizerSquareMerchantId?: string | null | undefined;
 }): Promise<PaymentEligibilityResult> {
   const { prisma, sale, organizerStripeConnectId, organizerStripeOnboarded } = params;
+  const squareReady = params.organizerSquareOnboarded === true && !!params.organizerSquareMerchantId;
 
   // Fix 1 — require live Stripe Connect onboarding. Reuses the exact response shape already
   // used elsewhere in stripeController.ts (createPaymentIntent's sellerAccountUnusable branch /
@@ -95,9 +108,10 @@ export async function assertSaleCanAcceptPayment(params: {
   // charges while stripeOnboarded/stripeConnectEnabled were both still false. Added the
   // stripeOnboarded check below to close that gap — see findasale-hacker re-audit this session.
   if (
-    !organizerStripeConnectId ||
-    organizerStripeConnectId.startsWith('acct_test_') ||
-    organizerStripeOnboarded !== true
+    !squareReady &&
+    (!organizerStripeConnectId ||
+      organizerStripeConnectId.startsWith('acct_test_') ||
+      organizerStripeOnboarded !== true)
   ) {
     return {
       blocked: true,

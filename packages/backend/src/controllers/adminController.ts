@@ -12,6 +12,7 @@ import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
 import { executeVerifiedRefund, RefundError } from '../services/refundService';
 import { executeVerifiedSquareRefund } from '../services/squareRefundService'; // Square migration Wave 1 #4 (2026-09-07): one added branch in bulkRefundPurchases below routes SQUARE-processor purchases through the Square-side choke point.
 import { suppressionService } from '../services/suppressionService';
+import { handOffCrewsBeforeUserDeletion } from '../services/crewService'; // crew founder/memberCount handoff before user.delete (purgeUser)
 
 // BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
 // sync with the canonical `user.roles[]` array. Compute the highest-precedence role
@@ -724,7 +725,12 @@ export const purgeUser = async (req: AuthRequest, res: Response) => {
       at: new Date().toISOString(),
     });
 
-    await prisma.user.delete({ where: { id: user.id } });
+    // Crew.founderUserId / CrewMember.userId cascade on user delete: hand off founded crews and fix
+    // memberCount in the same transaction, immediately before the delete.
+    await prisma.$transaction(async (tx) => {
+      await handOffCrewsBeforeUserDeletion(user.id, tx);
+      await tx.user.delete({ where: { id: user.id } });
+    });
 
     res.json({
       success: true,
@@ -2577,28 +2583,45 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
       ? (rawReason as 'duplicate' | 'fraudulent' | 'requested_by_customer')
       : 'requested_by_customer';
 
-    const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string }> = [];
+    const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string; cashPortionToRefundByHand?: number; cashRefundMessage?: string | null }> = [];
 
     // Sequential loop, intentionally not parallelized -- see file comment above.
     for (const purchaseId of purchaseIds) {
       try {
         const purchase = await prisma.purchase.findUnique({
           where: { id: purchaseId },
-          select: { amount: true, itemId: true, processor: true },
+          select: { amount: true, itemId: true, processor: true, refundedAmount: true },
         });
         if (!purchase) {
           results.push({ purchaseId, success: false, error: 'Purchase not found' });
           continue;
         }
+        // Partial refunds (2026-09-29, money review P1-14): "full refund" now means the whole REMAINING
+        // balance. A purchase that already had a partial refund would otherwise be asked to refund its full
+        // amount again and be rejected (or, on the Stripe path, over-refunded).
+        const bulkRemainingCents = Math.max(0, Math.round(purchase.amount * 100) - Math.round((Number(purchase.refundedAmount) || 0) * 100));
+        if (bulkRemainingCents <= 0) {
+          results.push({ purchaseId, success: false, error: 'This purchase has already been fully refunded' });
+          continue;
+        }
+        const bulkRefundAmount = bulkRemainingCents / 100;
 
         // 'reason' now comes from the caller (validated above) instead of being hardcoded --
         // see the fix note above the reason resolution block.
         // Square migration Wave 1 #4 (2026-09-07): one added branch -- purchase.processor
         // decides which choke point this refund routes through. Both throw the same
         // RefundError class (see squareRefundService.ts), so the catch block below is unchanged.
-        const result = purchase.processor === 'SQUARE'
-          ? await executeVerifiedSquareRefund(purchaseId, purchase.amount, 'admin', reason)
-          : await executeVerifiedRefund(purchaseId, purchase.amount, 'admin', reason);
+        // Explicit union (type-only): without it TS collapses the two branches to the narrower Stripe result and the
+        // 'cashPortionToRefundByHand' in result checks below narrow to unknown.
+        const result = (purchase.processor === 'SQUARE'
+          ? await executeVerifiedSquareRefund(purchaseId, bulkRefundAmount, 'admin', reason)
+          : await executeVerifiedRefund(purchaseId, bulkRefundAmount, 'admin', reason)) as
+          Awaited<ReturnType<typeof executeVerifiedRefund>> | Awaited<ReturnType<typeof executeVerifiedSquareRefund>>;
+        // Split tender (2026-09-29): a cash + card split can only be refunded through Square up to the
+        // card leg; relay the cash-to-hand-back message so the admin (and the organizer they act for)
+        // knows the rest is owed in cash. Absent on every non-split refund.
+        const cashByHand = 'cashPortionToRefundByHand' in result ? result.cashPortionToRefundByHand : 0;
+        const cashMessage = 'message' in result ? result.message : null;
         // BUG FIX 2026-08-28 (P0, live-DB-confirmed): executeVerifiedRefund deliberately does NOT
         // reset Item.status itself -- refundService.ts's own comment says that happens in "each
         // caller...right after this function returns", matching stripeController.ts's createRefund
@@ -2608,13 +2631,23 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         // direct prod DB query: 9 REFUNDED purchase rows across 4 real items left stuck at
         // Item.status=SOLD. Mirrors the exact same unconditional restore those two siblings already
         // use (no "was this the item's last outstanding sale" guard in either of them either).
-        if (purchase.itemId) {
+        // Money review P1-14 (2026-09-29): still restored for every refund this tool issues, because it always
+        // refunds the whole remaining balance, so the purchase is fully refunded when it returns. Guarded on
+        // that anyway (a Square result reports it directly) so a future partial mode can not put a
+        // still-owned item back on sale.
+        const bulkIsFull = 'isFullRefund' in result ? result.isFullRefund : true;
+        if (purchase.itemId && bulkIsFull) {
           await prisma.item.update({
             where: { id: purchase.itemId },
             data: { status: 'AVAILABLE' },
           });
         }
-        results.push({ purchaseId, success: true, refundedAmount: result.refundedAmount });
+        results.push({
+          purchaseId,
+          success: true,
+          refundedAmount: result.refundedAmount,
+          ...(cashByHand > 0 ? { cashPortionToRefundByHand: cashByHand, cashRefundMessage: cashMessage } : {}),
+        });
       } catch (err) {
         if (err instanceof RefundError) {
           // Expected, per-item failure (already REFUNDED/FAILED, no payment intent, 30-day

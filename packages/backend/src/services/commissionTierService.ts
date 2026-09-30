@@ -188,7 +188,7 @@ export function validateLadder(tiers: TierInput[]): TierInput[] {
   const openEnded = sorted.filter((t) => t.maxPrice === null);
   if (openEnded.length === 0) {
     throw new LadderValidationError(
-      'The highest band must be open-ended — leave its ending price blank so items priced above it are still covered.'
+      'The highest band must be open-ended: leave its ending price blank so items priced above it are still covered.'
     );
   }
   if (openEnded.length > 1) {
