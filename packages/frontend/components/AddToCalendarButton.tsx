@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { useToast } from './ToastContext';
+import api from '../lib/api';
 
 interface AddToCalendarButtonProps {
   saleId: string;
@@ -24,7 +25,13 @@ const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
   description,
 }) => {
   const { showToast } = useToast();
+  const [isDownloading, setIsDownloading] = useState(false);
 
+  // Server route (public, RFC 5545, honors the TEAMS watermark-removal policy). In the browser the API
+  // base is the same-origin /api proxy, so this is a plain link that also works with right-click / open.
+  const calendarUrl = `${api.defaults.baseURL || '/api'}/sales/${encodeURIComponent(saleId)}/calendar.ics`;
+
+  // Fallback only: used when the server calendar route cannot be reached.
   const generateICS = () => {
     const start = parseISO(startDate);
     const end = parseISO(endDate);
@@ -50,50 +57,89 @@ const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
     ].filter(Boolean);
     const eventDescription = descriptionLines.join('\n');
 
-    const ics = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//FindA.Sale//Sales//EN
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-BEGIN:VEVENT
-UID:${saleId}@finda.sale
-DTSTAMP:${formatDate(new Date())}
-DTSTART:${formatDate(start)}
-DTEND:${formatDate(end)}
-SUMMARY:${title}
-DESCRIPTION:${eventDescription}
-LOCATION:${location}
-URL:${siteUrl}/sales/${saleId}
-END:VEVENT
-END:VCALENDAR`;
+    // RFC 5545 TEXT escaping + CRLF line endings (the server route does folding as well; this is
+    // only the offline fallback).
+    const esc = (v: string) =>
+      (v || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//FindA.Sale//Sales//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:sale-${saleId}@finda.sale`,
+      `DTSTAMP:${formatDate(new Date())}`,
+      `DTSTART:${formatDate(start)}`,
+      `DTEND:${formatDate(end)}`,
+      `SUMMARY:${esc(title)}`,
+      `DESCRIPTION:${esc(eventDescription)}`,
+      `LOCATION:${esc(location)}`,
+      `URL:${siteUrl}/sales/${saleId}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+      '',
+    ].join('\r\n');
 
     return ics;
   };
 
-  const handleDownloadICS = () => {
+  const downloadBlob = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const element = document.createElement('a');
+    element.setAttribute('href', url);
+    element.setAttribute('download', `${title.replace(/\s+/g, '-')}-${saleId}.ics`);
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const downloadFallbackICS = () => {
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/calendar;charset=utf-8,' + encodeURIComponent(generateICS()));
+    element.setAttribute('download', `${title.replace(/\s+/g, '-')}-${saleId}.ics`);
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  const handleDownloadICS = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (isDownloading) return;
+    setIsDownloading(true);
     try {
-      const ics = generateICS();
-      const element = document.createElement('a');
-      element.setAttribute('href', 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics));
-      element.setAttribute('download', `${title.replace(/\s+/g, '-')}-${saleId}.ics`);
-      document.body.appendChild(element);
-      element.click();
-      document.body.removeChild(element);
+      let downloaded = false;
+      try {
+        const res = await fetch(calendarUrl, { credentials: 'omit' });
+        if (res.ok) {
+          downloadBlob(await res.blob());
+          downloaded = true;
+        }
+      } catch (serverErr) {
+        console.warn('Calendar route unavailable, using local fallback:', serverErr);
+      }
+      if (!downloaded) downloadFallbackICS();
       showToast('Calendar event downloaded!', 'success');
     } catch (error) {
       console.error('Calendar download error:', error);
       showToast('Failed to download calendar event', 'error');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
   return (
-    <button
+    <a
+      href={calendarUrl}
       onClick={handleDownloadICS}
-      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm transition-colors"
+      download
+      aria-busy={isDownloading}
+      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm transition-colors ${isDownloading ? 'opacity-60 pointer-events-none' : ''}`}
       aria-label="Download calendar event for this sale"
     >
       📆 Add to Calendar
-    </button>
+    </a>
   );
 };
 

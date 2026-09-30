@@ -1,12 +1,31 @@
+/**
+ * CityDirectorySection (ADR-074 city cluster, wired 2026-09-29).
+ *
+ * Legal posture (resolved 2026-09-29, see decisions-resolved-2026-09-29.md): the city page lists
+ * the same public business fields the site already publishes at /organizers/[id] and
+ * /companies/[city-slug]: name, category and website, plus a claim link. It does NOT pass
+ * googleRating/googleRatingCount or a street address. Google Places ratings can only be shown with
+ * Google's required attribution and are not ours to redisplay, and a scraped street address can be
+ * a private home. Both stay optional props so the component still supports them if the terms
+ * are ever cleared, but the city page never sends them.
+ */
 interface DirectoryOrganizer {
   id: string;
   businessName: string;
-  address: string;
+  address?: string | null;
   website: string | null;
-  googleRating: number | null;
-  googleRatingCount: number | null;
+  googleRating?: number | null;
+  googleRatingCount?: number | null;
   businessCategory: string | null;
-  claimStatus: string;
+  // Current API shape: boolean `claimable`. `claimStatus` is the older shape and is still honoured
+  // when `claimable` is absent. With neither present the entry is not claimable.
+  claimable?: boolean;
+  claimStatus?: string;
+}
+
+function isClaimable(org: DirectoryOrganizer): boolean {
+  if (typeof org.claimable === 'boolean') return org.claimable;
+  return org.claimStatus === 'UNCLAIMED' || org.claimStatus === 'INVITED';
 }
 
 interface CityDirectorySectionProps {
@@ -60,7 +79,7 @@ export function CityDirectorySection({
           Sale Organizers in {cityName}, {cityState}
         </h2>
         <p className="text-slate-600 dark:text-slate-400 mb-8">
-          Estate sale companies, auction houses, flea market operators, and resale organizers operating in this area.
+          Sale companies, auction houses, flea market operators, and resale organizers listed in this area.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -72,7 +91,9 @@ export function CityDirectorySection({
               {/* Name + category */}
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-base font-semibold text-slate-900 dark:text-white leading-snug">
-                  {org.businessName}
+                  <a href={`/organizers/${org.id}`} className="hover:text-blue-600 dark:hover:text-blue-400">
+                    {org.businessName}
+                  </a>
                 </h3>
                 {org.businessCategory && (
                   <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
@@ -81,10 +102,12 @@ export function CityDirectorySection({
                 )}
               </div>
 
-              {/* Address */}
-              <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">
-                {org.address}
-              </p>
+              {/* Address (optional; the city page does not send it, see the docblock) */}
+              {org.address && (
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">
+                  {org.address}
+                </p>
+              )}
 
               {/* Google rating */}
               {org.googleRating != null && (
@@ -113,9 +136,9 @@ export function CityDirectorySection({
                     Visit website
                   </a>
                 )}
-                {org.claimStatus === 'UNCLAIMED' && (
+                {isClaimable(org) && (
                   <a
-                    href={`/claim?id=${org.id}`}
+                    href={`/register?claim=${org.id}`}
                     className="text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
                   >
                     Claim this listing

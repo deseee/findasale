@@ -2,8 +2,11 @@
  * FindA.Sale - City page live-data helpers
  *
  * Turns the sales array from /sales/by-city and the activeByType breakdown
- * from /sales/city-slugs into on-page inventory stats and data-driven FAQ
- * entries. Used by the canonical city+category landing pages:
+ * into on-page inventory stats and data-driven FAQ entries. activeByType comes
+ * from /sales/by-city on the city+category pages (ADR-091: computed from the same
+ * radius set that renders the page) and from /sales/city-slugs on the all-types hub.
+ * Used by the canonical city pages:
+ *   /city/[slug]                     (all-types hub, currentTypeKey 'ALL')
  *   /city/[slug]/estate-sales, /city/[slug]/yard-sales,
  *   /city/[slug]/auctions, /city/[slug]/flea-markets, /city/[slug]/resale
  *

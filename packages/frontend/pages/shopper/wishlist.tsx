@@ -129,7 +129,7 @@ const WishlistPage = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('items');
   const [showAlertForm, setShowAlertForm] = useState(false);
-  const { data: follows, isLoading: followsLoading } = useFollows();
+  const { data: follows, isLoading: followsLoading, isError: followsError } = useFollows();
 
   useEffect(() => {
     if (router.query.tab === 'sellers') {
@@ -187,7 +187,7 @@ const WishlistPage = () => {
   const watching = alertsData ?? [];
 
   const isLoading = favoritesLoading || wishlistsLoading || alertsLoading || followsLoading;
-  const hasError = favoritesError || wishlistsError || alertsError;
+  const hasError = favoritesError || wishlistsError || alertsError || (activeTab === 'sellers' && followsError);
 
   return (
     <>
@@ -509,7 +509,7 @@ const WishlistPage = () => {
               {follows && follows.length > 0 ? (
                 <div className="space-y-3">
                   {follows.map((follow) => (
-                    <Link key={follow.id} href={`/organizer/${follow.organizerId}`}>
+                    <Link key={follow.id} href={`/organizers/${follow.organizerId}`}>
                       <div className="card p-4 dark:bg-gray-800 dark:border-gray-700 flex items-center gap-4 hover:shadow-md transition-shadow">
                         {follow.organizer.profilePhoto ? (
                           <img

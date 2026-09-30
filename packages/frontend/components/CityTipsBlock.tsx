@@ -1,31 +1,33 @@
+/**
+ * CityTipsBlock (ADR-074 city cluster, wired 2026-09-29).
+ *
+ * Renders editorial tips for a city as plain text paragraphs. The earlier draft took an HTML
+ * string and used dangerouslySetInnerHTML; that was the open "needs HTML sanitizing" question.
+ * The decision is to remove the need: this component takes an array of strings and lets React
+ * escape them, so no HTML can ever reach the page from a tip source.
+ *
+ * Renders nothing when there are no paragraphs. Auto-generated generic tips are intentionally NOT
+ * fed into it (ADR-074 section 9: thin, near-duplicate city pages risk a search penalty).
+ */
 interface CityTipsBlockProps {
-  tipContent: string; // HTML string (converted from Markdown)
   cityName: string;
   cityState: string;
+  paragraphs: string[];
 }
 
-/**
- * Renders city tips content as HTML
- * Tip content should be pre-converted to HTML from Markdown
- */
-export function CityTipsBlock({
-  tipContent,
-  cityName,
-  cityState,
-}: CityTipsBlockProps) {
-  return (
-    <section className="py-12 px-4 md:px-8 bg-white dark:bg-slate-800">
-      <div className="max-w-3xl mx-auto">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
-          Hunting Tips for {cityName}, {cityState}
-        </h2>
+export function CityTipsBlock({ cityName, cityState, paragraphs }: CityTipsBlockProps) {
+  const clean = paragraphs.map((p) => p.trim()).filter(Boolean);
+  if (clean.length === 0) return null;
 
-        <div className="prose dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
-          <div
-            dangerouslySetInnerHTML={{ __html: tipContent }}
-            className="space-y-4"
-          />
-        </div>
+  return (
+    <section className="max-w-5xl mx-auto px-4 pb-8" aria-labelledby="city-tips">
+      <h2 id="city-tips" className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-3">
+        Hunting Tips for {cityName}, {cityState}
+      </h2>
+      <div className="space-y-3 text-warm-700 dark:text-warm-300 leading-relaxed">
+        {clean.map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
       </div>
     </section>
   );

@@ -243,9 +243,11 @@ const nextConfig = {
       { source: '/auth/:path*', destination: '/login', permanent: true },
       // /organizer/inventory/[id] never existed as a page — redirect to edit-item
       { source: '/organizer/inventory/:id', destination: '/organizer/edit-item/:id', permanent: false },
-      // Hall of fame pages redirect to leaderboard (hall-of-fame feature is future-phase)
-      { source: '/hall-of-fame', destination: '/leaderboard', permanent: true },
-      { source: '/shopper/hall-of-fame', destination: '/leaderboard', permanent: true },
+      // Hall of Fame is live at /shopper/hall-of-fame (2026-09-29: GET /api/guild/hall-of-fame returns real
+      // Grandmaster data and the page has loading, error and empty states). The old redirects to /leaderboard
+      // are gone; only the short alias remains. NOTE: browsers that cached the previous permanent
+      // /shopper/hall-of-fame -> /leaderboard redirect may keep following it until their cache is cleared.
+      { source: '/hall-of-fame', destination: '/shopper/hall-of-fame', permanent: true },
       // S1: /consignment category renamed to /resale (RETAIL bucket was mislabeled) — 2026-07-09
       { source: '/city/:slug/consignment', destination: '/city/:slug/resale', permanent: true },
       // seo-geo-monitor S1147, 2026-07-21: legacy per-category city landing pages
@@ -266,6 +268,13 @@ const nextConfig = {
       { source: '/yard-sales/:citySlug', destination: '/city/:citySlug/yard-sales', permanent: true },
       { source: '/auctions/:citySlug', destination: '/city/:citySlug/auctions', permanent: true },
       { source: '/flea-markets/:citySlug', destination: '/city/:citySlug/flea-markets', permanent: true },
+      // 2026-09-29: bare hub paths had no page (404). /cities is the real hub listing every city with sales,
+      // so send them there. permanent: false because a dedicated per-type hub page may replace this later.
+      { source: '/city', destination: '/cities', permanent: false },
+      { source: '/estate-sales', destination: '/cities', permanent: false },
+      { source: '/yard-sales', destination: '/cities', permanent: false },
+      { source: '/auctions', destination: '/cities', permanent: false },
+      { source: '/flea-markets', destination: '/cities', permanent: false },
     ];
   },
 

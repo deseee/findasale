@@ -14,7 +14,10 @@ export async function getServerSideProps(ctx: any) {
     // left this constant dated BEFORE the redirect shipped, so the surviving canonical
     // /city/* URLs carried no freshness signal and Google never recrawled them --
     // GSC still reported the old URLs as indexed with the OLD googleCanonical.
-    const STATIC_LASTMOD = '2026-07-28';
+    // 2026-09-29: bumped from '2026-07-28'. City hub and city+category templates changed materially
+    // (curated per-city FAQ and About content, nearby-city links, fresh finds, directory) so crawlers
+    // get a real freshness signal for those templates.
+    const STATIC_LASTMOD = '2026-09-29';
 
     // Fetch all sales and tags to generate URLs
     const salesResponse = await api.get('/sales/sitemap', { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });

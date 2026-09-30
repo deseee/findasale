@@ -43,6 +43,7 @@ import {
   Camera,
   Gift,
   Smartphone,
+  DollarSign,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './AuthContext';
@@ -214,11 +215,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       discountPct: number;
       expiresAt: string;
       memberCount: number;
+      xpAwarded?: boolean;
     }) => {
       const expiresDate = new Date(data.expiresAt);
-      const minutesLeft = Math.round((expiresDate.getTime() - Date.now()) / 60000);
+      const minutesLeft = Math.max(0, Math.round((expiresDate.getTime() - Date.now()) / 60000));
+      // The discount applies automatically when the organizer sends the invoice (no code to type),
+      // once per crew member. The XP line only shows when this member was actually paid XP.
       showToast(
-        `Crew Invasion! Use code ${data.code} for ${data.discountPct}% off your held items. Expires in ${minutesLeft} min.`,
+        `Crew Invasion! Your crew earned ${data.discountPct}% off held items at this sale. It applies automatically when the organizer sends your invoice. Expires in ${minutesLeft} min.` +
+          (data.xpAwarded ? ' You also earned bonus XP.' : ''),
         'success'
       );
     });
@@ -402,6 +407,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             )}
           </>
         )}
+        {/* DEAD CODE, kept on purpose (removal not yet approved by Patrick; do not re-audit).
+            authLinks is only rendered by the mobile drawer's final else branch, i.e. when the viewer has
+            neither the ORGANIZER nor the USER role (an ADMIN-only account) or is logged out. Anyone with
+            the ORGANIZER role is caught by the first drawer branch (`roles.includes('ORGANIZER') ? ...`),
+            so this whole ORGANIZER sub-block can never render. The live organizer drawer is the
+            ORGANIZER branch of the mobile menu below, fed by lib/organizerNav.ts. Any nav change made
+            only here has no visible effect (that is how the 2026-07-30 Shared With You fix was missed). */}
         {user?.roles?.includes('ORGANIZER') && (
           <>
 <SectionHeader icon={Store} label="Your Sales" color="amber" />
@@ -502,6 +514,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
           </>
         )}
+        {/* DEAD CODE, kept on purpose (removal not yet approved by Patrick; do not re-audit).
+            Same reason as the ORGANIZER sub-block above: authLinks is only reached for viewers with
+            neither USER nor ORGANIZER, and the drawer's second branch
+            (`roles.includes('USER') ? renderMobileShopperNav() ...`) catches every USER first. Shopper
+            entries belong in lib/shopperNav.ts (rendered by renderMobileShopperNav), not here. */}
         {user?.roles?.includes('USER') && (
           <>
             {/* Shopper Dashboard: always show for users (even dual-role) with subtle indicator */}
@@ -702,6 +719,19 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/admin/social-accounts" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Share2 size={16} className="text-red-500" />
               <span>Social Accounts</span>
+            </Link>
+            {/* Added 2026-09-29 for parity with the organizer-branch admin block (/admin/encyclopedia). */}
+            <Link href="/admin/encyclopedia" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <BookOpen size={16} className="text-red-500" />
+              <span>Encyclopedia</span>
+            </Link>
+            <Link href="/admin/creators" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Users size={16} className="text-red-500" />
+              <span>Creators</span>
+            </Link>
+            <Link href="/admin/creator-commissions" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <DollarSign size={16} className="text-red-500" />
+              <span>Creator Commissions</span>
             </Link>
           </>
         )}
@@ -1101,6 +1131,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/admin/encyclopedia" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <BookOpen size={14} className="inline mr-2" /> Encyclopedia
                         </Link>
+                        <Link href="/admin/creators" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Users size={14} className="inline mr-2" /> Creators
+                        </Link>
+                        <Link href="/admin/creator-commissions" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <DollarSign size={14} className="inline mr-2" /> Creator Commissions
+                        </Link>
                       </>
                     )}
 
@@ -1166,6 +1202,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Zap size={14} className="inline mr-2" /> {!tierKnown ? 'Subscription' : canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
                 </Link>
 
+                {/* DUPLICATE (kept on purpose, removal not yet approved by Patrick; do not re-audit):
+                    the 'account' group renders My Profile and Settings (CORE_NAV_ENTRIES my-profile /
+                    settings, surfaces sidebar + mobileMenu), and the shared drawer footer further down
+                    renders My Profile and Settings again for organizers (same hrefs
+                    /organizer/profile and /organizer/settings). An organizer therefore sees each twice
+                    in the mobile drawer. The footer copy exists because it also serves shopper-only
+                    users (Explorer Profile / Shopper Settings) and now dual-role labels. */}
                 {mobileCoreLinks('account')}
 
                 {/* Pro Tools Section: Collapsible */}
@@ -1323,6 +1366,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <UserPlus size={14} className="inline mr-2" /> Host a Sale
                     </button>
                   )}
+                  {/* DUPLICATE (kept on purpose, removal not yet approved by Patrick; do not re-audit):
+                      for organizers this My Profile and the Settings link below repeat the entries
+                      mobileCoreLinks('account') already rendered higher in the drawer. */}
                   {isOrganizer && (
                     <Link href="/organizer/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <UserCircle size={14} className="inline mr-2 text-amber-600" /> My Profile
@@ -1333,9 +1379,22 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <UserCircle size={14} className="inline mr-2 text-indigo-500" /> Explorer Profile
                     </Link>
                   )}
-                  <Link href={isOrganizer ? "/organizer/settings" : "/shopper/settings"} className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                    <Settings size={14} className={`inline mr-2 ${isOrganizer ? "text-amber-500" : "text-indigo-500"}`} /> Settings
-                  </Link>
+                  {/* Dual-role (organizer + shopper) accounts get both settings pages, labelled the same
+                      way AvatarDropdown labels them; single-role accounts keep the plain "Settings" link. */}
+                  {isOrganizer && isUser ? (
+                    <>
+                      <Link href="/organizer/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                        <Settings size={14} className="inline mr-2 text-amber-500" /> Organizer Settings
+                      </Link>
+                      <Link href="/shopper/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                        <Settings size={14} className="inline mr-2 text-indigo-500" /> Shopper Settings
+                      </Link>
+                    </>
+                  ) : (
+                    <Link href={isOrganizer ? "/organizer/settings" : "/shopper/settings"} className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Settings size={14} className={`inline mr-2 ${isOrganizer ? "text-amber-500" : "text-indigo-500"}`} /> Settings
+                    </Link>
+                  )}
                   {!isStandalone && (
                     <>
                       <button

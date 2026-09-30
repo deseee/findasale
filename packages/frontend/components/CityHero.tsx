@@ -68,7 +68,7 @@ export function CityHero({
             Search All Deals
           </Link>
           <Link
-            href={`/bounties/new?city=${city.slug}`}
+            href="/shopper/bounties"
             className="inline-flex items-center justify-center px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold rounded-lg transition-colors"
           >
             Post a Bounty

@@ -48,16 +48,22 @@ const RegisterPage = () => {
   // ?ref= for shopper-to-shopper referral rewards (existing system)
   // ?aff= for organizer-to-organizer affiliate program (new system)
   // ?claim= for organizer profile claim flow: Feature #443
+  // ?role=organizer preselects the Sale Organizer account type (homepage "List it free" link);
+  // the Account Type dropdown still lets the visitor switch back to Shopper.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
     const aff = params.get('aff');
     const invite = params.get('invite');
     const claim = params.get('claim');
+    const roleParam = params.get('role');
     if (ref) setFormData(prev => ({ ...prev, referralCode: ref }));
     if (aff) setFormData(prev => ({ ...prev, affiliateReferralCode: aff }));
     // Invite codes are for organizer beta access: pre-select ORGANIZER role
     if (invite) setFormData(prev => ({ ...prev, inviteCode: invite.toUpperCase(), role: 'ORGANIZER' }));
+    if (roleParam && roleParam.toLowerCase() === 'organizer') {
+      setFormData(prev => ({ ...prev, role: 'ORGANIZER' }));
+    }
     // Claim flow: arriving from organizer profile "Claim This Profile" button
     if (claim) {
       sessionStorage.setItem('claimOrganizerId', claim);

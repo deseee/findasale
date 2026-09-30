@@ -2,15 +2,19 @@
  * FindA.Sale — City SEO Framework
  *
  * Single source of truth for all city-based SEO landing pages.
- * Used by:
- *   - /estate-sales/[city-slug]  (live)
- *   - /yard-sales/[city-slug]    (future)
- *   - /auctions/[city-slug]      (future)
- *   - /flea-markets/[city-slug]  (future)
+ * Used by the canonical city pages (updated 2026-09-29; the old /estate-sales/[city-slug] family
+ * now only 308-redirects to these, see next.config.js):
+ *   - /city/[slug]                    (all-types hub: curated tips and nearby cities via lib/seo/cityCluster.ts)
+ *   - /city/[slug]/estate-sales       (getCityMeta About content + getEstateSalesFaqs)
+ *   - /city/[slug]/yard-sales         (getYardSaleMeta + getYardSaleFaqs)
+ *   - /city/[slug]/auctions           (getAuctionMeta + getAuctionFaqs)
+ *   - /city/[slug]/flea-markets       (getFleaMarketMeta + getFleaMarketFaqs)
+ *   - /city/[slug]/resale             (no curated copy, live-data FAQs only)
+ * Category pages merge these curated FAQs with the live-data FAQs from lib/seo/cityStats.ts.
  *
- * To add a new city: add a row to CITY_DATA below.
- * To add a new page type: call getEstateSalesFaqs() with a saleType param,
- *   or create a parallel getFaqs() function for that type.
+ * To add a new city: add a row to CITY_DATA below (hasCuratedCityMeta() then returns true).
+ * To add a new page type: add a parallel getXxxMeta()/getXxxFaqs() pair and register it in
+ *   getCuratedCategoryContent() at the bottom of this file.
  *
  * Framework exports:
  *   CityMeta         — type for per-city content
@@ -523,6 +527,14 @@ const CITY_DATA: Record<string, Omit<CityMeta, 'slug'>> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * True when the slug has a hand-curated CITY_DATA row (as opposed to the generated fallback in
+ * getCityMeta). The city page only renders editorial tips for curated cities.
+ */
+export function hasCuratedCityMeta(slug: string): boolean {
+  return Object.prototype.hasOwnProperty.call(CITY_DATA, slug);
+}
+
 /** Returns CityMeta for a slug, or generates a reasonable fallback. */
 export function getCityMeta(slug: string): CityMeta {
   const data = CITY_DATA[slug];
@@ -565,7 +577,7 @@ export function getEstateSalesFaqs(cityName: string, stateCode: string): FaqItem
     },
     {
       question: `What time should I arrive at an estate sale in ${cityName}?`,
-      answer: `For desirable sales, arriving 15–30 minutes before opening gives you the best selection. Jewelry, art, and antiques move quickly in the first hour. If a sale uses a numbered entry system, arrive earlier. Day-two and day-three visits reward patient shoppers with steeper discounts. Often 25–50% off.`,
+      answer: `For desirable sales, arriving 15–30 minutes before opening gives you the best selection. Jewelry, art, and antiques move quickly in the first hour. If a sale uses a numbered entry system, arrive earlier. Day-two and day-three visits reward patient shoppers with steeper discounts, often 25–50% off.`,
     },
     {
       question: `Can I negotiate prices at estate sales?`,
@@ -789,15 +801,15 @@ export function getYardSaleFaqs(cityName: string, stateCode: string): FaqItem[] 
   return [
     {
       question: `When are yard sales typically held in ${cityName}, ${stateCode}?`,
-      answer: `In ${cityName}, yard sales are most common on Friday mornings, Saturdays, and Sundays between April and October. Weekend mornings. Especially Saturday from 7–8 AM. Are peak time for serious shoppers. Spring cleaning season (April–May) and fall (September–October) bring the highest volume of sales.`,
+      answer: `In ${cityName}, yard sales are most common on Friday mornings, Saturdays, and Sundays between April and October. Weekend mornings are the peak time for serious shoppers, especially Saturday from 7–8 AM. Spring cleaning season (April–May) and fall (September–October) bring the highest volume of sales.`,
     },
     {
       question: `How do I find yard sales near me in ${cityName}?`,
-      answer: `FindA.Sale lists yard sales in ${cityName} as soon as they're posted. Check this page Thursday evening. Most organizers post weekend sales mid-week. You can also use the map view to find sales within a specific distance from your current location.`,
+      answer: `FindA.Sale lists yard sales in ${cityName} as soon as they're posted. Check this page Thursday evening, since most organizers post weekend sales mid-week. You can also use the map view to find sales within a specific distance from your current location.`,
     },
     {
       question: `What's the best app for finding yard sales in ${cityName}, ${stateCode}?`,
-      answer: `FindA.Sale is your best resource for finding yard sales in ${cityName}. It lists yard sales, garage sales, estate sales, and flea markets in one place. Updated daily. Bookmark this page or browse the map to find sales near you this weekend.`,
+      answer: `FindA.Sale is your best resource for finding yard sales in ${cityName}. It lists yard sales, garage sales, flea markets, auctions, and more in one place, and it is updated daily. Bookmark this page or browse the map to find sales near you this weekend.`,
     },
     {
       question: `Are there garage sales this weekend in ${cityName}?`,
@@ -940,7 +952,7 @@ export function getAuctionFaqs(cityName: string, stateCode: string): FaqItem[] {
     },
     {
       question: `Are ${cityName} auctions open to the public?`,
-      answer: `Most estate and general auctions in ${cityName} are open to the public. No invitation or membership required. Registration (free) is typically all that's needed to bid. Some specialty auctions (art, jewelry) may require proof of financial qualification to participate. Check individual auction listings for specific requirements.`,
+      answer: `Most estate and general auctions in ${cityName} are open to the public. No invitation or membership is required, and free registration is typically all you need to bid. Some specialty auctions (art, jewelry) may require proof of financial qualification to participate. Check individual auction listings for specific requirements.`,
     },
   ];
 }
@@ -1051,7 +1063,7 @@ export function getFleaMarketFaqs(cityName: string, stateCode: string): FaqItem[
     },
     {
       question: `What time do flea markets open in ${cityName}, ${stateCode}?`,
-      answer: `Most flea markets in ${cityName} open between 7–9 AM on weekends and run until early afternoon. Some markets offer early-bird access for a small fee. This gives you first pick before the general public arrives. Check individual market listings for specific hours.`,
+      answer: `Most flea markets in ${cityName} open between 7–9 AM on weekends and run until early afternoon. Some markets offer early-bird access for a small fee, which gives you first pick before the general public arrives. Check individual market listings for specific hours.`,
     },
     {
       question: `Can I sell at a flea market in ${cityName}?`,
@@ -1066,8 +1078,61 @@ export function getFleaMarketFaqs(cityName: string, stateCode: string): FaqItem[
       answer: `FindA.Sale lists flea markets in ${cityName} and nearby cities as they're posted. Check this page on Thursday or Friday for the most complete weekend listing. You can also use the map view to find flea markets within a specific distance from your location.`,
     },
     {
-      question: `What's the difference between a flea market and an estate sale?`,
-      answer: `Flea markets are recurring vendor markets where multiple sellers set up booths to sell goods. Vendors rent their spaces and return week after week. Estate sales are one-time events that liquidate the entire contents of a single home or estate over a weekend. Both offer great finds, but flea markets provide a more consistent, browsable shopping experience while estate sales are time-limited and location-specific.`,
+      question: `How are flea markets different from other sale types?`,
+      answer: `Flea markets are recurring vendor markets where multiple sellers set up booths to sell goods. Vendors rent their spaces and return week after week. Other sale types, such as a one-time sale of the entire contents of a single home, run once over a weekend. Both offer great finds, but flea markets provide a more consistent, browsable shopping experience while one-time sales are time-limited and location-specific.`,
     },
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Per-category curated content resolver (added 2026-09-29)
+// ---------------------------------------------------------------------------
+
+export type CuratedCategoryContent = {
+  /** About section copy, or null when this city has no hand-written copy for the type (generic fallback text is never shown). */
+  about: { knownFor: string; tip: string } | null;
+  /** Curated FAQs for the type (empty for types with none, e.g. resale). */
+  faqs: FaqItem[];
+};
+
+/**
+ * Returns the curated About copy and FAQs for a sale type on a city page.
+ * About copy is returned only for hand-curated cities: the generated fallback is identical
+ * boilerplate across ~1,200 city pages, which is the thin-content risk ADR-074 section 9 warns about.
+ * FAQs are city-name-aware templates, so they are always returned for the four typed categories.
+ *
+ * @param saleType  Sale type enum (ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL)
+ */
+export function getCuratedCategoryContent(
+  saleType: string,
+  slug: string,
+  cityName: string,
+  stateCode: string
+): CuratedCategoryContent {
+  switch (saleType) {
+    case 'ESTATE': {
+      const meta = getCityMeta(slug);
+      return {
+        about: hasCuratedCityMeta(slug) ? { knownFor: meta.knownFor, tip: meta.tip } : null,
+        faqs: getEstateSalesFaqs(cityName, stateCode),
+      };
+    }
+    case 'YARD':
+      return {
+        about: Object.prototype.hasOwnProperty.call(YARD_SALE_ABOUT, slug) ? getYardSaleMeta(slug, cityName, stateCode) : null,
+        faqs: getYardSaleFaqs(cityName, stateCode),
+      };
+    case 'AUCTION':
+      return {
+        about: Object.prototype.hasOwnProperty.call(AUCTION_ABOUT, slug) ? getAuctionMeta(slug, cityName, stateCode) : null,
+        faqs: getAuctionFaqs(cityName, stateCode),
+      };
+    case 'FLEA_MARKET':
+      return {
+        about: Object.prototype.hasOwnProperty.call(FLEA_MARKET_ABOUT, slug) ? getFleaMarketMeta(slug, cityName, stateCode) : null,
+        faqs: getFleaMarketFaqs(cityName, stateCode),
+      };
+    default:
+      return { about: null, faqs: [] };
+  }
 }

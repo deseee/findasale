@@ -5,10 +5,12 @@ module.exports = {
   // not). Keep this false so next-sitemap can never overwrite that curated file
   // with a weaker version — even if the Vercel postbuild hook does run.
   generateRobotsTxt: false,
-  // Ensure city and cities index pages are included in the static sitemap
+  // Ensure the cities index page is included in the static sitemap.
+  // 2026-09-29: '/city' was removed from this list. There is no pages/city/index.tsx, so it
+  // returned 404 and a 404 must never be advertised in a sitemap. next.config.js now redirects
+  // /city to /cities (the real hub), and /cities is the entry that belongs here.
   additionalPaths: async (config) => [
     await config.transform(config, '/cities'),
-    await config.transform(config, '/city'),
   ],
   exclude: [
     '/server-sitemap.xml',

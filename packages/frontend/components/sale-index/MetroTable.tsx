@@ -27,7 +27,8 @@ interface MetroTableProps {
 
 /**
  * Ranked metro table for the Weekend Sale Index.
- * Each row links to the live /estate-sales/{slug} city page (full page only).
+ * Each row links to the canonical /city/{slug}/estate-sales page (the legacy /estate-sales/{slug}
+ * path only 308-redirects there), full page only.
  * In embed mode the metro name is plain text (the embed has a single backlink
  * in its footer rather than per-row links).
  */

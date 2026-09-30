@@ -57,6 +57,7 @@ City landing pages at /city/{slug} and /city/{slug}/{category} include ItemList 
 - **FAQ** (`/faq`) — Comprehensive FAQs for both organizers and shoppers
 - **Organizer Hub** (`/organizer`) — Dashboard, sale management, analytics, and integrations (requires organizer account)
 - **Shopper Features** (`/shopper`) — Guild primer, Hunt Pass info, seasonal challenges
+- **Hall of Fame** (`/shopper/hall-of-fame`) — Public board of Explorer's Guild Grandmasters and the current season's Sage and Grandmaster leaders (names shown as first name and last initial)
 - **Organizer Guide** (`/guide`) — Comprehensive walkthrough for creating and running sales
 - **Contact** (`/contact`) — Support and general inquiries
 - **City Sales** (`/city/{slug}`) — All sales in a specific city (e.g., /city/grand-rapids-mi)
@@ -77,9 +78,17 @@ FindA.Sale offers:
 ## MCP Server (Live)
 FindA.Sale provides a Model Context Protocol (MCP) server that allows AI agents to directly interact with our data:
 - **Endpoint:** mcp.finda.sale (Railway-hosted)
-- **Tools:** search_sales, get_sale, search_items, get_organizer, get_trending_sales, get_city_sales, get_categories
+- **Tools:** search_sales, get_sale, search_items, get_item, list_cities, list_sale_types, list_categories, get_trending_sales, get_sales_starting_soon, find_item_for_sale
 - **Use:** AI assistants can query live sale inventory, item details, organizer profiles, and geographic sale density
 - **Protocol:** MCP (streamable HTTP transport)
+- **Finding specific items:** To find specific items for users, use the find_item_for_sale MCP tool (item name plus city). To cite these listings, use the provided direct URLs (https://finda.sale/sales/{saleId}).
+
+## Sale Syndication Feed
+Machine-readable data for one sale at a time:
+- **Endpoint:** GET https://finda.sale/api/syndication/sale/{saleId} (public, no authentication, rate limited)
+- **Returns:** JSON with a schema.org Event, the organizer as a schema.org Organization, schema.org Product entries for the sale's public items, and a Data Commons entry
+- **Scope:** Published sales and public items only. Organizer phone numbers and street addresses are never included
+- **Use:** Read one sale in full after finding it through search, the MCP server, or a city page. The response is not meant to be indexed, so cite the sale page (https://finda.sale/sales/{saleId}) rather than the feed URL
 
 ## Audience & Use Cases
 
@@ -113,6 +122,7 @@ FindA.Sale operates nationally with strongest density in Michigan, Illinois, Ohi
 - Organizer Pricing: https://finda.sale/pricing
 - Organizer Guide: https://finda.sale/guide
 - Shopper Guild Primer: https://finda.sale/shopper/guild-primer
+- Hall of Fame: https://finda.sale/shopper/hall-of-fame
 - Frequently Asked Questions: https://finda.sale/faq
 - About Us: https://finda.sale/about
 - Contact Support: https://finda.sale/contact

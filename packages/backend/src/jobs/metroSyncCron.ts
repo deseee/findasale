@@ -11,6 +11,7 @@ import cron from 'node-cron';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
+import { parseCitySlug, slugMatchesCity } from '../utils/cityFinds';
 
 // Phase 1: 20 major metro markets (can expand to 50+ in Phase 2)
 interface MetroConfig {
@@ -106,6 +107,12 @@ async function getOwnItemsForMetro(metro: MetroConfig): Promise<OwnItem[]> {
             equals: stateAbbrev,
             mode: 'insensitive',
           },
+          // ADR-074 wiring fix (2026-09-29): this used to filter by STATE only, so every Michigan
+          // metro row was stamped with all Michigan items. Pre-filter by the city's distinctive
+          // word here; the exact city match is enforced after the query (slugMatchesCity).
+          ...(parseCitySlug(metro.slug)
+            ? { city: { contains: parseCitySlug(metro.slug)!.matchToken, mode: 'insensitive' as const } }
+            : {}),
         },
         createdAt: {
           gte: thirtyDaysAgo,
@@ -128,10 +135,13 @@ async function getOwnItemsForMetro(metro: MetroConfig): Promise<OwnItem[]> {
       orderBy: {
         createdAt: 'desc',
       },
-      take: 12,
+      // Over-fetch, then keep only exact city matches (SQL contains is a pre-filter).
+      take: 60,
     });
 
-    return items;
+    return items
+      .filter((it) => it.sale && slugMatchesCity(metro.slug, it.sale.city, it.sale.state))
+      .slice(0, 12);
   } catch (error) {
     console.error(`[MetroSync] Error fetching own items for ${metro.slug}:`, error);
     return [];

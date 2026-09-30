@@ -18,6 +18,21 @@ import { buildFaqJsonLd } from '@/lib/seo/cityData';
 import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import { hasKnownCityRegion } from '@/lib/seo/cityRegion';
 import CityLiveStats from '@/components/CityLiveStats';
+// ADR-074 city cluster (wired 2026-09-29): fresh finds, editorial tips, public directory, internal links.
+import { CityTopFinds } from '@/components/CityTopFinds';
+import { CityTipsBlock } from '@/components/CityTipsBlock';
+import { CityDirectorySection } from '@/components/CityDirectorySection';
+import { CityNearbyLinks } from '@/components/CityNearbyLinks';
+import {
+  fetchCityFinds,
+  fetchCityDirectory,
+  getCuratedCityTips,
+  pickNearbyCities,
+  CityFindCardData,
+  DirectoryOrganizerData,
+  NearbyCityLinkData,
+  CitySlugRow,
+} from '@/lib/seo/cityCluster';
 
 // Category slug → display label + saleType enum
 const CATEGORY_META: Record<string, { label: string; plural: string; saleType: string }> = {
@@ -58,6 +73,11 @@ interface CityPageProps {
   allCategories: string[];
   activeByType: Record<string, number>;
   stats: CitySaleStats;
+  // ADR-074 cluster data. Every field is optional-in-effect: an empty array renders nothing.
+  finds: CityFindCardData[];
+  directory: DirectoryOrganizerData[];
+  tips: string[];
+  nearbyCities: NearbyCityLinkData[];
 }
 
 export default function CityPage({
@@ -69,6 +89,10 @@ export default function CityPage({
   allCategories,
   activeByType,
   stats,
+  finds,
+  directory,
+  tips,
+  nearbyCities,
 }: CityPageProps) {
   // Client-only "now" for live/ended badges — avoids hydration mismatch on this
   // ISR page (revalidate: 86400). Server always renders with clientNow === null
@@ -125,6 +149,14 @@ export default function CityPage({
     activeByType,
   });
   const faqJsonLd = buildFaqJsonLd(liveFaqs);
+
+  // Per-type views of this city (only types that actually have sales here).
+  const typeLinks = allCategories
+    .map((saleType) => {
+      const catSlug = Object.keys(CATEGORY_META).find((k) => CATEGORY_META[k].saleType === saleType);
+      return catSlug ? { href: `/city/${citySlug}/${catSlug}`, label: CATEGORY_META[catSlug].plural } : null;
+    })
+    .filter((t): t is { href: string; label: string } => t !== null);
 
   return (
     <>
@@ -190,6 +222,9 @@ export default function CityPage({
           activeByType={activeByType}
         />
 
+        {/* ADR-074: fresh real items from sales in this city. Renders nothing when there are none. */}
+        <CityTopFinds cityName={cityName} items={finds} />
+
         {/* Category filter tabs */}
         {allCategories.length > 0 && (
           <div className="max-w-5xl mx-auto px-4 pb-4">
@@ -219,7 +254,7 @@ export default function CityPage({
         )}
 
         {/* Sale grid */}
-        <div className="max-w-5xl mx-auto px-4 pb-16">
+        <div id="city-sales" className="max-w-5xl mx-auto px-4 pb-16">
           {sales.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-warm-500 dark:text-warm-400 text-lg mb-4">
@@ -358,6 +393,11 @@ export default function CityPage({
             </Link>
           </div>
         </div>
+
+        {/* ADR-074 cluster, below the primary content. Each block renders nothing when it has no data. */}
+        <CityTipsBlock cityName={cityName} cityState={cityState} paragraphs={tips} />
+        <CityDirectorySection cityName={cityName} cityState={cityState} organizers={directory} />
+        <CityNearbyLinks cityName={cityName} nearbyCities={nearbyCities} typeLinks={typeLinks} />
       </main>
     </>
   );
@@ -421,6 +461,7 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
   let totalCount = 0;
   let allCategories: string[] = [];
   let activeByType: Record<string, number> = {};
+  let citySlugRows: CitySlugRow[] = [];
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
   let res: Response;
@@ -462,9 +503,9 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
     const res = await fetch(`${apiBaseUrl}/sales/city-slugs`, { headers: process.env.REVALIDATE_SECRET ? { 'x-ssr-secret': process.env.REVALIDATE_SECRET } : undefined });
     if (res.ok) {
       const data = await res.json();
-      const row = (data.slugs ?? []).find(
-        (r: { slug: string; activeByType?: Record<string, number> }) => r.slug === citySlug
-      );
+      const allRows: Array<CitySlugRow & { activeByType?: Record<string, number> }> = Array.isArray(data.slugs) ? data.slugs : [];
+      citySlugRows = allRows; // reused below for nearby-city links (only cities with live sales qualify)
+      const row = allRows.find((r) => r.slug === citySlug);
       if (row && row.activeByType && typeof row.activeByType === 'object') {
         activeByType = row.activeByType;
       }
@@ -474,6 +515,11 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
   }
 
   const stats = computeSaleStats(sales);
+
+  // ADR-074 cluster. All best effort: these helpers never throw, and an empty result just hides the block.
+  const [finds, directory] = await Promise.all([fetchCityFinds(citySlug), fetchCityDirectory(citySlug)]);
+  const tips = getCuratedCityTips(citySlug);
+  const nearbyCities = pickNearbyCities(citySlug, citySlugRows);
 
   return {
     props: {
@@ -485,6 +531,10 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
       allCategories,
       activeByType,
       stats,
+      finds,
+      directory,
+      tips,
+      nearbyCities,
     },
     revalidate: 86400, // ISR: 24 hours
   };

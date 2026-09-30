@@ -34,6 +34,14 @@ import {
   Gift,
   Ticket,
   ArrowLeftRight,
+  Users,
+  Stamp,
+  FileCheck,
+  Search,
+  Bell,
+  Bookmark,
+  DollarSign,
+  LayoutDashboard,
 } from 'lucide-react';
 
 export type ShopperNavGroup = 'collection' | 'explore' | 'connect' | 'huntExclusives';
@@ -50,7 +58,10 @@ export interface ShopperNavEntry {
 
 export const SHOPPER_NAV_ENTRIES: ShopperNavEntry[] = [
   { id: 'wishlist', label: 'Wishlist', href: '/shopper/wishlist', icon: Heart, group: 'collection' },
+  { id: 'my-collections', label: 'My Collections', href: '/wishlists', icon: Bookmark, group: 'collection' },
   { id: 'following', label: 'Following', href: '/shopper/wishlist?tab=sellers', icon: Star, group: 'collection' },
+  { id: 'saved-searches', label: 'Saved Searches', href: '/shopper/saved-searches', icon: Search, group: 'collection' },
+  { id: 'notify-me', label: 'Notify Me Alerts', href: '/shopper/notify-me', icon: Bell, group: 'collection' },
   { id: 'bids', label: 'My Bids', href: '/shopper/bids', icon: Gavel, group: 'collection' },
   { id: 'holds', label: 'My Holds', href: '/shopper/holds', icon: Clock, group: 'collection' },
   { id: 'history', label: 'My History', href: '/shopper/history', icon: Package, group: 'collection' },
@@ -67,18 +78,31 @@ export const SHOPPER_NAV_ENTRIES: ShopperNavEntry[] = [
   { id: 'haul-posts', label: 'Haul Posts', href: '/shopper/haul-posts', icon: Camera, group: 'explore' },
   { id: 'curio', label: 'Curio', href: '/shopper/curio', icon: Sparkles, group: 'explore' },
   { id: 'early-access-cache', label: 'Early Access Cache', href: '/shopper/early-access-cache', icon: Zap, group: 'explore' },
-  // Same page as Connect > Bounty Board. Kept only because the shopper-only drawer showed it here
-  // (no links removed); candidate for cleanup.
-  { id: 'explore-bounties', label: 'Bounties', href: '/shopper/bounties', icon: Target, group: 'explore' },
+  // Was a duplicate of Connect > Bounty Board (same /shopper/bounties href). Repointed 2026-09-29 to the
+  // shopper's own bounty submissions page so the entry is a distinct, useful link (id kept stable).
+  // Added 2026-09-29 for parity with the avatar dropdown's Explore section (mobile drawer was missing these).
+  { id: 'challenges', label: 'Challenges', href: '/challenges', icon: Target, group: 'explore' },
+  { id: 'surprise-me', label: 'Surprise Me', href: '/surprise-me', icon: Sparkles, group: 'explore' },
+  { id: 'hall-of-fame', label: 'Hall of Fame', href: '/shopper/hall-of-fame', icon: Trophy, group: 'explore' },
+  { id: 'explore-bounties', label: 'My Bounty Submissions', href: '/shopper/bounties/submissions', icon: FileCheck, group: 'explore' },
 
   { id: 'appraisals', label: 'Appraisals', href: '/shopper/appraisals', icon: Star, group: 'connect' },
   { id: 'bounty-board', label: 'Bounty Board', href: '/shopper/bounties', icon: Target, group: 'connect' },
   { id: 'guild-primer', label: "Explorer's Guild", href: '/shopper/guild-primer', icon: Star, group: 'connect' },
   { id: 'rewards', label: 'Rewards', href: '/coupons', icon: Ticket, group: 'connect' },
+  { id: 'rank-guide', label: 'Rank Guide', href: '/shopper/ranks', icon: Trophy, group: 'connect' },
   { id: 'leaderboard', label: 'Leaderboard', href: '/leaderboard', icon: Trophy, group: 'connect' },
   { id: 'achievements', label: 'Achievements', href: '/shopper/achievements', icon: Award, group: 'connect' },
+  { id: 'sale-passport', label: 'Sale Passport', href: '/shopper/achievements#sale-passport', icon: Stamp, group: 'connect' },
   { id: 'reputation', label: 'Reputation', href: '/shopper/reputation', icon: Shield, group: 'connect' },
   { id: 'refer-friend', label: 'Refer a Friend', href: '/referral-dashboard', icon: Gift, group: 'connect' },
+  { id: 'crews', label: 'Crews', href: '/shopper/crews', icon: Users, group: 'connect' },
+  // Creator Program (2026-09-29). Access is a CreatorProfile record, not a role, so the nav cannot know who has
+  // joined without an extra request. Both entries are therefore always shown and both are truthful:
+  // /creator/dashboard shows a "Learn more and join" prompt to anyone who has not joined, and /creator/join
+  // shows "You are in the Creator Program" with a dashboard link to anyone who has.
+  { id: 'creator-dashboard', label: 'Creator Dashboard', href: '/creator/dashboard', icon: LayoutDashboard, group: 'connect' },
+  { id: 'creator-join', label: 'Earn as a Creator', href: '/creator/join', icon: DollarSign, group: 'connect' },
   { id: 'trades', label: 'Trades', href: '/shopper/trades', icon: ArrowLeftRight, group: 'connect', soon: true },
 
   { id: 'rare-finds', label: 'Rare Finds', href: '/shopper/rare-finds', icon: Sparkles, group: 'huntExclusives' },

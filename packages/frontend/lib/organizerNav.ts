@@ -23,7 +23,8 @@
  *   consignors.tsx     requiredTier="TEAMS"
  *   locations.tsx      TierGate requiredTier="TEAMS"
  *   shopify.tsx        if (tier !== 'TEAMS')
- *   stripe-connect.tsx if (!canAccess('TEAMS'))
+ *   consignor-settlement/index.tsx  ConsignorPayoutsView locked placeholder below TEAMS
+ *   stripe-connect.tsx (legacy, no nav entry) if (!canAccess('TEAMS'))
  */
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -107,6 +108,12 @@ export interface OrganizerNavEntry {
   surfaces: NavSurface[];
   /** Lower sorts first. */
   priority: number;
+  /**
+   * Shown in the "Selling tools" quick-access card on the organizer dashboard
+   * (see quickAccessNavEntries). Tier labels, lock states and hrefs on that card
+   * come straight from this entry, so they cannot drift from the nav.
+   */
+  quickAccess?: boolean;
 }
 
 /**
@@ -120,7 +127,7 @@ export interface OrganizerNavEntry {
 // Collapsed to TEAMS 2026-07-28 (Patrick approved). These five retail entries are
 // ALSO rendered in the TEAMS accordion, and every destination page hard-gates at
 // TEAMS (consignors.tsx, discount-rules.tsx, locations.tsx, shopify.tsx,
-// stripe-connect.tsx). Gating the sidebar copy at PRO showed PRO organizers five
+// and the consignor-settlement ledger view). Gating the sidebar copy at PRO showed PRO organizers five
 // links that walled them on arrival.
 export const SIDEBAR_RETAIL_TIER: OrganizerTier = 'TEAMS';
 
@@ -210,7 +217,7 @@ export const TEAMS_NAV_ENTRIES: OrganizerNavEntry[] = [
     label: 'Consignors',
     href: '/organizer/consignors',
     icon: Users,
-    title: 'Consignor portal and payouts management. TEAMS',
+    title: 'Consignors and their payments. TEAMS',
     requiredTier: 'TEAMS',
     group: 'retail',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
@@ -239,11 +246,17 @@ export const TEAMS_NAV_ENTRIES: OrganizerNavEntry[] = [
     priority: 100,
   },
   {
-    id: 'stripe-connect',
+    // Repointed 2026-09-29 (was id 'stripe-connect' -> /organizer/stripe-connect). Stripe is closed;
+    // consignors are now paid through Square or settled by the organizer, and the ledger that tracks
+    // what each consignor is owed lives at /organizer/consignor-settlement. The old
+    // /organizer/stripe-connect page still exists and is reachable by URL only (no nav entry).
+    // Group stays 'retail' on purpose: the sidebar only renders the teams/developerTools/workspace/retail
+    // groups from TEAMS_NAV_ENTRIES, so a 'postSales' group here would hide the entry on the sidebar.
+    id: 'consignor-payouts',
     label: 'Consignor Payouts',
-    href: '/organizer/stripe-connect',
+    href: '/organizer/consignor-settlement',
     icon: CreditCard,
-    title: 'Send payouts to consignors. TEAMS',
+    title: 'Work out what each consignor is owed and record what you paid them. TEAMS',
     requiredTier: 'TEAMS',
     group: 'retail',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
@@ -359,6 +372,7 @@ export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
     group: 'proTools',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 30,
+    quickAccess: true,
   },
   {
     id: 'fraud-signals',
@@ -403,6 +417,7 @@ export const PRO_NAV_ENTRIES: OrganizerNavEntry[] = [
     group: 'proTools',
     surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'],
     priority: 90,
+    quickAccess: true,
   },
   {
     id: 'brand-kit',
@@ -436,6 +451,8 @@ export function proNavForSurface(surface: NavSurface): OrganizerNavEntry[] {
  * TIER GATES verified against the destination pages (2026-09-29):
  *   send-invoice.tsx     TierGate requiredTier="PRO"
  *   photo-ops/index.tsx  TierGate requiredTier="PRO"
+ *   inventory.tsx        TierGate requiredTier="PRO" (persistent inventory, roadmap #25)
+ *   send-update/index.tsx TierGate requiredTier="PRO" (text updates cost real money per message)
  * Every other entry below is open to SIMPLE. print-inventory.tsx is open to
  * everyone (only its marketplace export is PRO) so it stays SIMPLE here.
  *
@@ -456,18 +473,18 @@ export const CORE_NAV_ENTRIES: OrganizerNavEntry[] = [
   { id: 'dashboard', label: 'Organizer Dashboard', href: '/organizer/dashboard', icon: LayoutDashboard, title: 'Your sales at a glance', requiredTier: 'SIMPLE', group: 'top', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
 
   { id: 'all-sales', label: 'All Sales', href: '/organizer/sales', icon: List, title: 'Every sale you have created. Pick one to add items', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
-  { id: 'create-sale', label: 'Create Sale', href: '/organizer/create-sale', icon: PlusCircle, requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
+  { id: 'create-sale', label: 'Create Sale', href: '/organizer/create-sale', icon: PlusCircle, requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20, quickAccess: true },
   { id: 'plan-sale', label: 'Plan a Sale', href: '/plan', icon: Clock, requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
   { id: 'holds', label: 'Holds', href: '/organizer/holds', icon: Bookmark, title: 'Reserve items for buyers before the sale starts', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
-  { id: 'pos', label: 'POS / Checkout', href: '/organizer/pos', icon: ShoppingCart, title: 'Process in-person payments at your sale', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50 },
+  { id: 'pos', label: 'POS / Checkout', href: '/organizer/pos', icon: ShoppingCart, title: 'Process in-person payments at your sale', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50, quickAccess: true },
   { id: 'send-invoice', label: 'Email Invoice', href: '/organizer/send-invoice', icon: Send, title: 'Email a one-off invoice to anyone. No hold, no account required', requiredTier: 'PRO', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 60 },
   { id: 'ripples', label: 'Sale Ripples', href: '/organizer/ripples', icon: Activity, title: 'Live activity around your sale', requiredTier: 'SIMPLE', group: 'yourSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 70 },
 
-  { id: 'promote', label: 'Share & Promote', href: '/organizer/promote', icon: Share2, title: 'Share and promote your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
-  { id: 'send-update', label: 'Send Update', href: '/organizer/send-update', icon: MessageSquare, title: 'Send updates to buyers', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
+  { id: 'promote', label: 'Share & Promote', href: '/organizer/promote', icon: Share2, title: 'Share and promote your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10, quickAccess: true },
+  { id: 'send-update', label: 'Send Update', href: '/organizer/send-update', icon: MessageSquare, title: 'Text updates to shoppers who opted in. PRO', requiredTier: 'PRO', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
   { id: 'photo-ops', label: 'Photo Ops', href: '/organizer/photo-ops', icon: Camera, title: 'Mark photo spots at your sale', requiredTier: 'PRO', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
-  { id: 'qr-codes', label: 'QR Codes', href: '/organizer/qr-codes', icon: Tag, title: 'QR codes for your sale and how often they are scanned', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
-  { id: 'print-kit', label: 'Print Kit', href: '/organizer/print-kit', icon: Printer, title: 'Signs and flyers for your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50 },
+  { id: 'qr-codes', label: 'QR Codes', href: '/organizer/qr-codes', icon: Tag, title: 'QR codes for your sale and how often they are scanned', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40, quickAccess: true },
+  { id: 'print-kit', label: 'Print Kit', href: '/organizer/print-kit', icon: Printer, title: 'Signs and flyers for your sale', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50, quickAccess: true },
   { id: 'starter-kit', label: 'Starter Kit', href: '/organizer/starter-kit', icon: BookOpen, title: 'Printable sale day guide. Checklists, pricing tips, day-of runbook', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 60 },
   { id: 'checklist', label: 'Sale Checklist', href: '/organizer/checklist', icon: CheckCircle, title: 'Sale preparation checklist', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 70 },
   { id: 'offline', label: 'Offline Mode', href: '/organizer/offline', icon: Wifi, title: 'Keep selling when the connection drops', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 80 },
@@ -475,9 +492,9 @@ export const CORE_NAV_ENTRIES: OrganizerNavEntry[] = [
   { id: 'appraisals', label: 'Appraisals', href: '/organizer/appraisals', icon: Star, title: 'Ask the community what an item is worth, or help appraise for XP', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 95 },
   { id: 'message-templates', label: 'Message Templates', href: '/organizer/message-templates', icon: FileText, title: 'Saved buyer communication templates', requiredTier: 'SIMPLE', group: 'inSaleTools', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 100 },
 
-  { id: 'inventory', label: 'Inventory', href: '/organizer/inventory', icon: Package, title: 'Manage your persistent inventory across all sales', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
+  { id: 'inventory', label: 'Inventory', href: '/organizer/inventory', icon: Package, title: 'Manage your persistent inventory across all sales. PRO', requiredTier: 'PRO', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 10 },
   { id: 'orders', label: 'Orders', href: '/organizer/orders', icon: Package, title: 'Orders placed on your sales', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 20 },
-  { id: 'markdown-retag', label: 'Markdown Re-tag List', href: '/organizer/markdown-retag', icon: Tag, title: 'Auto-marked-down items that still need a new tag or sticker on the shelf', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 25 },
+  { id: 'markdown-retag', label: 'Markdown Re-tag List', href: '/organizer/markdown-retag', icon: Tag, title: 'Auto-marked-down items that still need a new tag or sticker on the shelf', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 25, quickAccess: true },
   { id: 'bounties', label: 'Bounties', href: '/organizer/bounties', icon: Trophy, title: 'Buyer bounty requests for your sale items', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 30 },
   { id: 'coupons', label: 'Coupons', href: '/coupons', icon: Ticket, title: 'Generate and manage coupons for shoppers and your purchases', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 40 },
   { id: 'print-inventory', label: 'Print & Labels', href: '/organizer/print-inventory', icon: Printer, title: 'Print item sheets, labels and signage', requiredTier: 'SIMPLE', group: 'postSales', surfaces: ['sidebar', 'mobileMenu', 'avatarDropdown'], priority: 50 },
@@ -498,4 +515,18 @@ export function coreNavGroupForSurface(surface: NavSurface, group: NavGroup): Or
   return CORE_NAV_ENTRIES.filter((e) => e.group === group && e.surfaces.includes(surface)).sort(
     (a, b) => a.priority - b.priority,
   );
+}
+
+/**
+ * Entries for the dashboard "Selling tools" quick-access card (2026-09-29): every entry flagged
+ * `quickAccess`, Core first (in list order) then Pro Tools (in priority order). The caller applies
+ * useOrganizerTier().canAccess(entry.requiredTier) and renders locked entries as upgrade links, so
+ * tier labels and hrefs always match the nav. This replaces the never-rendered SELLING_TOOLS
+ * constant in pages/organizer/dashboard.tsx.
+ */
+export function quickAccessNavEntries(): OrganizerNavEntry[] {
+  const core = CORE_NAV_ENTRIES.filter((e) => e.quickAccess);
+  const pro = PRO_NAV_ENTRIES.filter((e) => e.quickAccess).sort((a, b) => a.priority - b.priority);
+  const teams = TEAMS_NAV_ENTRIES.filter((e) => e.quickAccess).sort((a, b) => a.priority - b.priority);
+  return [...core, ...pro, ...teams];
 }

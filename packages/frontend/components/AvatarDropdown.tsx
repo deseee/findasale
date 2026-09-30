@@ -47,6 +47,11 @@ import {
   Settings,
   Gift,
   Smartphone,
+  Stamp,
+  FileCheck,
+  Bell,
+  DollarSign,
+  BookOpen,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { teamsNavForSurface, proNavForSurface, coreNavGroupForSurface } from '../lib/organizerNav';
@@ -430,6 +435,46 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <Users size={14} className="text-red-400" />
                     <span>Invites</span>
                   </Link>
+                  <Link
+                    href="/admin/creators"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Users size={14} className="text-red-400" />
+                    <span>Creators</span>
+                  </Link>
+                  <Link
+                    href="/admin/creator-commissions"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <DollarSign size={14} className="text-red-400" />
+                    <span>Creator Commissions</span>
+                  </Link>
+                  <Link
+                    href="/admin/scraper"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Activity size={14} className="text-red-400" />
+                    <span>Scraper Management</span>
+                  </Link>
+                  <Link
+                    href="/admin/social-accounts"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Share2 size={14} className="text-red-400" />
+                    <span>Social Accounts</span>
+                  </Link>
+                  <Link
+                    href="/admin/encyclopedia"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <BookOpen size={14} className="text-red-400" />
+                    <span>Encyclopedia</span>
+                  </Link>
                 </>
               )}
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
@@ -708,6 +753,24 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Following</span>
                   </Link>
                   <Link
+                    href="/shopper/saved-searches"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Searches you saved, ready to re-run"
+                  >
+                    <Search size={16} className="text-indigo-500" />
+                    <span>Saved Searches</span>
+                  </Link>
+                  <Link
+                    href="/shopper/notify-me"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Get an email when a sale or item you want is listed"
+                  >
+                    <Bell size={16} className="text-indigo-500" />
+                    <span>Notify Me Alerts</span>
+                  </Link>
+                  <Link
                     href="/shopper/bids"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -769,6 +832,10 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                   <Link href="/trending" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
                     <TrendingUp size={16} className="text-indigo-500" />
                     <span>Trending</span>
+                  </Link>
+                  <Link href="/clearance" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)} title="Clearance items from active sales">
+                    <Tag size={16} className="text-indigo-500" />
+                    <span>Clearance</span>
                   </Link>
                   <Link href="/trails" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
                     <Map size={16} className="text-indigo-500" />
@@ -886,6 +953,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Bounty Board</span>
                   </Link>
                   <Link
+                    href="/shopper/bounties/submissions"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Bounties you have submitted and their status"
+                  >
+                    <FileCheck size={16} className="text-indigo-500" />
+                    <span>My Bounty Submissions</span>
+                  </Link>
+                  <Link
                     href="/shopper/ranks"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -919,6 +995,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Achievements</span>
                   </Link>
                   <Link
+                    href="/shopper/achievements#sale-passport"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Your Sale Passport stamps and milestones"
+                  >
+                    <Stamp size={16} className="text-indigo-500" />
+                    <span>Sale Passport</span>
+                  </Link>
+                  <Link
                     href="/shopper/reputation"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -933,6 +1018,33 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                   >
                     <Gift size={16} className="text-indigo-500" />
                     <span>Refer a Friend</span>
+                  </Link>
+                  <Link
+                    href="/shopper/crews"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Shopping crews you belong to"
+                  >
+                    <Users size={16} className="text-indigo-500" />
+                    <span>Crews</span>
+                  </Link>
+                  <Link
+                    href="/creator/dashboard"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Your creator links, clicks, and commissions"
+                  >
+                    <LayoutDashboard size={16} className="text-indigo-500" />
+                    <span>Creator Dashboard</span>
+                  </Link>
+                  <Link
+                    href="/creator/join"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Share sales and earn a commission on purchases you send"
+                  >
+                    <DollarSign size={16} className="text-indigo-500" />
+                    <span>Earn as a Creator</span>
                   </Link>
                   <Link
                     href="/shopper/trades"
