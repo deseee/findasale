@@ -108,7 +108,7 @@ describe('processVintedSoldReport', () => {
     });
     const r = await processVintedSoldReport('org_1', [{ vintedId: '9879473979', title: MR_NATURAL }], d);
     expect(r).toEqual([expect.objectContaining({ result: 'sold', itemId: 'item_mr', via: 'title', vintedListingClosed: true })]);
-    expect(d.commitSale).toHaveBeenCalledWith('item_mr', SOLD_VIA_VINTED);
+    expect(d.commitSale).toHaveBeenCalledWith('item_mr', SOLD_VIA_VINTED, '9879473979');
     expect(order).toEqual(['close', 'commit']);
     expect(d.loadCandidateItems).toHaveBeenCalledWith('org_1');
   });
@@ -186,7 +186,7 @@ describe('title-only entry (Vinted sold email, no listing id)', () => {
     };
     const first = await processVintedSoldTitleReport('org_1', 'Mr. Natural #2 R. Crumb (San Francisco Comic Book Company Oct 1971)', d);
     expect(first).toEqual(expect.objectContaining({ vintedId: '', result: 'sold', itemId: 'item_mr', via: 'title' }));
-    expect(d.commitSale).toHaveBeenCalledWith('item_mr', SOLD_VIA_VINTED);
+    expect(d.commitSale).toHaveBeenCalledWith('item_mr', SOLD_VIA_VINTED, '');
     const second = await processVintedSoldReport('org_1', [{ vintedId: '9879473979', title: MR_NATURAL }], d);
     expect(second[0].result).toBe('alreadySold');
   });

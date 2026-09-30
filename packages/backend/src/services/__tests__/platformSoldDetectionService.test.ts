@@ -38,7 +38,7 @@ describe('processPlatformSoldReport', () => {
     expect(r).toMatchObject({ result: 'sold', itemId: 'item_pw', via: 'title', listingClosed: true, platform: 'MERCARI' });
     expect(d.loadPlatformJobs).toHaveBeenCalledWith('org_1', 'MERCARI');
     expect(d.closeListingRecord).toHaveBeenCalledWith('item_pw', 'MERCARI');
-    expect(d.commitSale).toHaveBeenCalledWith('item_pw', 'MERCARI');
+    expect(d.commitSale).toHaveBeenCalledWith('item_pw', 'MERCARI', 'MERCARI', 'm55401730709');
     expect((d.closeListingRecord as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan((d.commitSale as jest.Mock).mock.invocationCallOrder[0]);
   });
 

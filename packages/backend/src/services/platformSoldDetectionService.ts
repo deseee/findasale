@@ -21,7 +21,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { commitFacebookNativeSale } from './facebookNativeSaleService';
+import { commitFacebookNativeSale, isMultiStockItem } from './facebookNativeSaleService';
 import {
   buildVintedSoldMatchContext,
   matchVintedSoldEntry,
@@ -61,7 +61,12 @@ export interface PlatformSoldDeps {
   ) => Promise<Array<{ itemId: string; remoteListingId: string | null }>>;
   /** Writes <platform> REMOVE/REMOVED when the item's listing there is live on record; true if written. */
   closeListingRecord?: (itemId: string, platform: SoldDetectionPlatform) => Promise<boolean>;
-  commitSale?: (itemId: string, soldVia: string) => Promise<{ alreadyCommitted: boolean }>;
+  commitSale?: (
+    itemId: string,
+    soldVia: string,
+    platform?: SoldDetectionPlatform,
+    remoteListingId?: string,
+  ) => Promise<{ alreadyCommitted: boolean; partial?: boolean }>;
   getItemStatus?: (itemId: string) => Promise<string | null>;
 }
 
@@ -93,6 +98,8 @@ async function defaultLoadPlatformJobs(organizerId: string, platform: SoldDetect
 // REMOVE/SKIPPED row is a failed attempt, not a state change). Only written while the latest
 // row for this platform is POST/POSTED, so a repeat email is a no-op.
 export async function closePlatformListingRecord(itemId: string, platform: SoldDetectionPlatform): Promise<boolean> {
+  // Multi-unit item (2026-09-30): commitFacebookNativeSale closes the row inside the stock transaction.
+  if (await isMultiStockItem(itemId)) return false;
   const latest = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform, NOT: { action: 'REMOVE', status: 'SKIPPED' } },
     orderBy: { createdAt: 'desc' },
@@ -112,9 +119,18 @@ export async function closePlatformListingRecord(itemId: string, platform: SoldD
   return true;
 }
 
-async function defaultCommitSale(itemId: string, soldVia: string) {
-  const r = await commitFacebookNativeSale(itemId, soldVia);
-  return { alreadyCommitted: r.alreadyCommitted };
+async function defaultCommitSale(
+  itemId: string,
+  soldVia: string,
+  platform?: SoldDetectionPlatform,
+  remoteListingId?: string,
+) {
+  const r = await commitFacebookNativeSale(
+    itemId,
+    soldVia,
+    platform ? { soldOnPlatform: { platform, remoteListingId: remoteListingId || null } } : {},
+  );
+  return { alreadyCommitted: r.alreadyCommitted, partial: r.partial === true };
 }
 
 async function defaultGetItemStatus(itemId: string): Promise<string | null> {
@@ -155,15 +171,16 @@ export async function processPlatformSoldReport(
   // this platform's listing still marked live (which would queue a delete of the sold listing).
   let listingClosed = false;
   let alreadyCommitted: boolean;
+  let partial = false;
   try {
     listingClosed = await closeListingRecord(m.itemId, platform);
-    ({ alreadyCommitted } = await commitSale(m.itemId, soldVia));
+    ({ alreadyCommitted, partial = false } = await commitSale(m.itemId, soldVia, platform, remoteListingId));
   } catch (err: any) {
     console.error(`[PlatformSoldDetection] ${platform} commit failed for item`, m.itemId, err?.message || err);
     return { ...base, result: 'error', itemId: m.itemId, via: m.via, listingClosed, reason: 'commit_failed' };
   }
   if (!alreadyCommitted) {
-    return { ...base, result: 'sold', itemId: m.itemId, via: m.via, itemStatus: 'SOLD', listingClosed };
+    return { ...base, result: 'sold', itemId: m.itemId, via: m.via, itemStatus: partial ? 'AVAILABLE' : 'SOLD', listingClosed: listingClosed || partial };
   }
   const status = await getItemStatus(m.itemId);
   return {

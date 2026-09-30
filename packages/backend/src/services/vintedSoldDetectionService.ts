@@ -36,7 +36,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { commitFacebookNativeSale } from './facebookNativeSaleService';
+import { commitFacebookNativeSale, isMultiStockItem } from './facebookNativeSaleService';
 
 export const SOLD_VIA_VINTED = 'VINTED';
 export const VINTED_SOLD_MAX_ENTRIES = 200;
@@ -144,7 +144,7 @@ export interface VintedSoldDeps {
   loadVintedJobs?: (organizerId: string) => Promise<Array<{ itemId: string; remoteListingId: string | null }>>;
   /** Writes VINTED REMOVE/REMOVED when the item's Vinted listing is live on record; true if written. */
   closeVintedListingRecord?: (itemId: string) => Promise<boolean>;
-  commitSale?: (itemId: string, soldVia: string) => Promise<{ alreadyCommitted: boolean }>;
+  commitSale?: (itemId: string, soldVia: string, remoteListingId?: string) => Promise<{ alreadyCommitted: boolean; partial?: boolean }>;
   getItemStatus?: (itemId: string) => Promise<string | null>;
 }
 
@@ -176,6 +176,9 @@ async function defaultLoadVintedJobs(organizerId: string) {
 // (REMOVE/SKIPPED is a failed attempt, not a state change -- same exclusion getPendingRemovals
 // applies). Only written while the latest VINTED row is POST/POSTED, so a repeat report is a no-op.
 async function defaultCloseVintedListingRecord(itemId: string): Promise<boolean> {
+  // Multi-unit item (2026-09-30): commitFacebookNativeSale closes the row itself, inside the same
+  // transaction as the stock decrement -- closing it here first would consume the idempotency key.
+  if (await isMultiStockItem(itemId)) return false;
   const latest = await prisma.marketplaceListingJob.findFirst({
     where: { itemId, platform: 'VINTED', NOT: { action: 'REMOVE', status: 'SKIPPED' } },
     orderBy: { createdAt: 'desc' },
@@ -195,9 +198,11 @@ async function defaultCloseVintedListingRecord(itemId: string): Promise<boolean>
   return true;
 }
 
-async function defaultCommitSale(itemId: string, soldVia: string) {
-  const r = await commitFacebookNativeSale(itemId, soldVia);
-  return { alreadyCommitted: r.alreadyCommitted };
+async function defaultCommitSale(itemId: string, soldVia: string, remoteListingId?: string) {
+  const r = await commitFacebookNativeSale(itemId, soldVia, {
+    soldOnPlatform: { platform: 'VINTED', remoteListingId: remoteListingId || null },
+  });
+  return { alreadyCommitted: r.alreadyCommitted, partial: r.partial === true };
 }
 
 async function defaultGetItemStatus(itemId: string): Promise<string | null> {
@@ -262,9 +267,10 @@ export async function processVintedSoldReport(
     // SOLD with its Vinted listing still marked live (which would queue a Vinted delete).
     let vintedListingClosed = false;
     let alreadyCommitted: boolean;
+    let partial = false;
     try {
       vintedListingClosed = await closeVintedListingRecord(m.itemId);
-      ({ alreadyCommitted } = await commitSale(m.itemId, SOLD_VIA_VINTED));
+      ({ alreadyCommitted, partial = false } = await commitSale(m.itemId, SOLD_VIA_VINTED, entry.vintedId));
     } catch (err: any) {
       // One bad entry never fails the batch; the extension does not mark it reported, so it retries.
       console.error('[VintedSoldDetection] commit failed for item', m.itemId, err?.message || err);
@@ -272,7 +278,8 @@ export async function processVintedSoldReport(
       continue;
     }
     if (!alreadyCommitted) {
-      results.push({ ...entry, result: 'sold', matched: true, itemId: m.itemId, via: m.via, itemStatus: 'SOLD', vintedListingClosed });
+      // A multi-unit item that still has stock stays AVAILABLE; its Vinted listing closed and re-queues.
+      results.push({ ...entry, result: 'sold', matched: true, itemId: m.itemId, via: m.via, itemStatus: partial ? 'AVAILABLE' : 'SOLD', vintedListingClosed: vintedListingClosed || partial });
       continue;
     }
     const status = await getItemStatus(m.itemId);
