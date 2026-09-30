@@ -46,7 +46,7 @@ Most XP-earning actions are things you'd do anyway:
 - **Purchases**: the most consistent source of XP per session.
 - **Haul posts**: one per sale, quick to do, earns a flat amount each time.
 - **Reviews**: written reviews of organizers earn more than a star-only rating.
-- **Referrals**: when a Crew member follows your shared sale link and makes a purchase.
+- **Referrals**: inviting friends with your referral link at [/shopper/referrals](/shopper/referrals).
 - **Daily streaks**: opening the app on consecutive days builds a streak multiplier.
 - **Trail completions**: finishing all stops on a Treasure Trail.
 
@@ -106,7 +106,7 @@ You can set your profile to private, which removes your username from public lea
 
 - [Post a haul](post-a-haul): one of the fastest ways to earn consistent monthly XP.
 - [Bounties: get paid to find items](bounties-shopper): purchases from bounty claims count toward monthly XP totals.
-- [Create or join a Crew](crews): Crew referral bonuses contribute a small amount to both shoppers' monthly totals.`,
+- [Create or join a Crew](crews): every crew has its own leaderboard of its members, ranked by guild XP. It is separate from the monthly league.`,
 };
 
 export default entry;

@@ -64,7 +64,7 @@ Partial completion (some stops but not all) doesn't award the badge, but any XP 
 
 From any Trail detail page, tap the **Share** icon. This generates a link anyone can open: they don't need a FindA.Sale account to see the Trail map and sale details. If they do have an account, the link takes them straight to the Follow button.
 
-This is an easy way to hand a route to your Crew for a Saturday without anyone having to plan it themselves.
+This is an easy way to hand a route to your Crew for a Saturday without anyone having to plan it themselves. Crews do not have built-in chat, so send the link through whatever group message you already use.
 
 ---
 
@@ -105,7 +105,7 @@ The XP from Trail completion counts toward your monthly and all-time totals, whi
 ## Related guides
 
 - [Post a haul](post-a-haul): document what you found at each Trail stop.
-- [Create or join a Crew](crews): share the Trail link with your Crew so everyone follows the same route.
+- [Create or join a Crew](crews): send the Trail link to your Crew so everyone follows the same route.
 - [Bounties: get paid to find items](bounties-shopper): if a Trail stop has something a bounty poster needs, you can claim it.
 
 ---

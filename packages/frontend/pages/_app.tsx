@@ -41,6 +41,7 @@ const PosPaymentRequestAlert = dynamic(() => import('../components/PosPaymentReq
 import ErrorBoundary from '../components/ErrorBoundary';
 const NudgeBar = dynamic(() => import('../components/NudgeBar'), { ssr: false });
 const RankUpManager = dynamic(() => import('../components/RankUpManager'), { ssr: false });
+const PassportUnlockManager = dynamic(() => import('../components/PassportUnlockManager'), { ssr: false }); // Sale Passport (feature #29): global stamp/milestone unlock toasts
 import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
 const DegradationBanner = dynamic(() => import('../components/DegradationBanner'), { ssr: false }); // Feature #20: Proactive Degradation Mode
 import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20: Proactive Degradation Mode
@@ -594,6 +595,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <PosPaymentRequestAlert />
               {/* Explorer's Guild: Rank-up celebration modal */}
               <RankUpManager />
+              {/* Sale Passport: stamp and milestone unlock toasts */}
+              <PassportUnlockManager />
               {/* Cookie Consent Banner */}
               <CookieConsentBanner />
               {/* GA4: consent-gated, env-var-controlled */}

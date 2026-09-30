@@ -11,6 +11,7 @@ import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS, recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
+import { awardXp, computeTreasureHuntScanXp } from './xpService'; // Daily hunt claim XP (2026-09-29)
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -172,9 +173,14 @@ export async function getTodayHunt(): Promise<any> {
  */
 export function checkIfItemMatchesHunt(item: any, hunt: any): boolean {
   const searchText = `${item.title} ${item.category || ''}`.toLowerCase();
-  return hunt.keywords.some((keyword: string) =>
-    searchText.includes(keyword.toLowerCase())
-  );
+  return (hunt.keywords as string[]).some((keyword: string) => {
+    const k = String(keyword || '').trim().toLowerCase();
+    if (!k) return false;
+    // Word-start match (2026-09-29): "art" must not match "cart"/"party"/"smart", while "paint"
+    // still matches "painting" and "vintage paperback" still matches as a phrase.
+    const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}`, 'i').test(searchText);
+  });
 }
 
 /**
@@ -202,16 +208,186 @@ export async function markFound(userId: string, huntId: number, itemId: string):
     throw new Error('Hunt not found');
   }
 
-  // Create find record and award points in transaction
-  const find = await prisma.treasureHuntFind.create({
-    data: {
-      userId,
-      huntId,
-      itemId,
-      foundAt: new Date(),
+  // Create find record. The unique (userId, huntId) key makes a concurrent double-claim safe.
+  let find;
+  try {
+    find = await prisma.treasureHuntFind.create({
+      data: {
+        userId,
+        huntId,
+        itemId,
+        foundAt: new Date(),
+      },
+    });
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      throw new Error("Item already found for today's hunt");
+    }
+    throw err;
+  }
+
+  // XP is awarded by claimDailyHunt() below (the single caller), which owns the rank +
+  // Hunt Pass multiplier math. markFound only records the find.
+  return find;
+}
+
+// ---------------------------------------------------------------------------
+// Daily hunt claim (2026-09-29): the "Claim your XP" action on the item page.
+// ---------------------------------------------------------------------------
+
+export type HuntItemState =
+  | 'NO_HUNT' // no hunt today (should not happen: getTodayHunt generates one)
+  | 'NOT_FOUND' // item does not exist
+  | 'NOT_A_MATCH' // item does not fit today's clue (UI shows nothing)
+  | 'UNAVAILABLE' // item or its sale is not live
+  | 'OWN_ITEM' // shopper is the organizer of this sale
+  | 'HUNT_EXPIRED' // client is holding yesterday's hunt id
+  | 'ALREADY_FOUND' // shopper already claimed today's hunt
+  | 'ELIGIBLE'; // shopper can claim right now
+
+export interface HuntItemStatus {
+  state: HuntItemState;
+  huntId?: number;
+  clue?: string;
+  category?: string;
+  /** Base XP before rank / Hunt Pass multipliers (D-XP-015 constant). */
+  pointReward?: number;
+  /** Ends of the hunt's day, server clock (the hunt is "today only"). */
+  expiresAt?: string;
+}
+
+function endOfHuntDayIso(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map((n) => parseInt(n, 10));
+  return new Date(y, (m || 1) - 1, (d || 1) + 1, 0, 0, 0, 0).toISOString();
+}
+
+async function loadHuntItem(itemId: string) {
+  return prisma.item.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      title: true,
+      category: true,
+      status: true,
+      isActive: true,
+      draftStatus: true,
+      saleId: true,
+      sale: { select: { id: true, status: true, organizer: { select: { userId: true } } } },
     },
   });
+}
 
-  // Note: Treasure hunt XP rewards handled by xpService in new explorer guild system
-  return find;
+function isLiveHuntItem(item: any): boolean {
+  return (
+    !!item &&
+    item.isActive !== false &&
+    item.draftStatus === 'PUBLISHED' &&
+    item.status !== 'GRACE_LOCKED' &&
+    item.status !== 'DONATED' &&
+    item.sale?.status === 'PUBLISHED'
+  );
+}
+
+/**
+ * Non-mutating status for the item page. userId is optional (anonymous visitors get
+ * ELIGIBLE and are sent to login by the UI when they try to claim). Never reveals keywords.
+ */
+export async function getHuntItemStatus(itemId: string, userId?: string): Promise<HuntItemStatus> {
+  const hunt = await getTodayHunt();
+  if (!hunt) return { state: 'NO_HUNT' };
+
+  const base = {
+    huntId: hunt.id as number,
+    clue: hunt.clue as string,
+    category: hunt.category as string,
+    pointReward: 3, // XP_AWARDS.TREASURE_HUNT_SCAN (D-XP-015)
+    expiresAt: endOfHuntDayIso(hunt.date as string),
+  };
+
+  const item: any = await loadHuntItem(itemId);
+  if (!item) return { state: 'NOT_FOUND' };
+  if (!checkIfItemMatchesHunt(item, hunt)) return { state: 'NOT_A_MATCH', huntId: base.huntId };
+  if (!isLiveHuntItem(item)) return { state: 'UNAVAILABLE', ...base };
+
+  if (userId) {
+    if (item.sale?.organizer?.userId === userId) return { state: 'OWN_ITEM', ...base };
+    const existing = await prisma.treasureHuntFind.findUnique({
+      where: { userId_huntId: { userId, huntId: hunt.id } },
+    });
+    if (existing) return { state: 'ALREADY_FOUND', ...base };
+  }
+  return { state: 'ELIGIBLE', ...base };
+}
+
+export interface HuntClaimResult {
+  state: 'CLAIMED' | HuntItemState;
+  huntId?: number;
+  xpEarned?: number;
+  guildXp?: number;
+  explorerRank?: string;
+  rankIncreased?: boolean;
+}
+
+/**
+ * Claim today's Daily Treasure Hunt with an item. Server-validated and idempotent:
+ *  - the item must be live (published item in a published sale) and match today's clue;
+ *  - an organizer cannot claim on their own sale;
+ *  - one claim per shopper per hunt (unique key), so a repeat call returns ALREADY_FOUND
+ *    and never awards twice, even under concurrent requests;
+ *  - a client still holding a previous day's huntId gets HUNT_EXPIRED.
+ * XP = the D-XP-015 base scaled by rank multiplier and the Hunt Pass +10% bonus.
+ */
+export async function claimDailyHunt(userId: string, itemId: string, clientHuntId?: number): Promise<HuntClaimResult> {
+  const hunt = await getTodayHunt();
+  if (!hunt) return { state: 'NO_HUNT' };
+  if (typeof clientHuntId === 'number' && clientHuntId !== hunt.id) {
+    return { state: 'HUNT_EXPIRED', huntId: hunt.id };
+  }
+
+  const item: any = await loadHuntItem(itemId);
+  if (!item) return { state: 'NOT_FOUND', huntId: hunt.id };
+
+  const existing = await prisma.treasureHuntFind.findUnique({
+    where: { userId_huntId: { userId, huntId: hunt.id } },
+  });
+  if (existing) return { state: 'ALREADY_FOUND', huntId: hunt.id };
+
+  if (!isLiveHuntItem(item)) return { state: 'UNAVAILABLE', huntId: hunt.id };
+  if (item.sale?.organizer?.userId === userId) return { state: 'OWN_ITEM', huntId: hunt.id };
+  if (!checkIfItemMatchesHunt(item, hunt)) return { state: 'NOT_A_MATCH', huntId: hunt.id };
+
+  try {
+    await markFound(userId, hunt.id, itemId);
+  } catch (err: any) {
+    if (String(err?.message || '').includes('already found')) {
+      return { state: 'ALREADY_FOUND', huntId: hunt.id };
+    }
+    throw err;
+  }
+
+  let xpEarned = 0;
+  let guildXp: number | undefined;
+  let explorerRank: string | undefined;
+  let rankIncreased = false;
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { explorerRank: true } });
+    const xp = await computeTreasureHuntScanXp(userId, (user?.explorerRank ?? 'INITIATE') as any);
+    const result = await awardXp(userId, 'TREASURE_HUNT_DAILY', xp, {
+      itemId,
+      saleId: item.saleId ?? undefined,
+      description: `Daily Treasure Hunt found: ${item.title}`,
+      preMultipliedHuntPassXp: true,
+    });
+    if (result) {
+      xpEarned = result.xpAwarded;
+      guildXp = result.newXp;
+      explorerRank = result.newRank;
+      rankIncreased = result.rankIncreased;
+    }
+  } catch (err) {
+    // The find is recorded; an XP failure must not turn a valid claim into an error.
+    console.error('[treasure-hunt] Failed to award daily hunt XP:', err);
+  }
+
+  return { state: 'CLAIMED', huntId: hunt.id, xpEarned, guildXp, explorerRank, rankIncreased };
 }

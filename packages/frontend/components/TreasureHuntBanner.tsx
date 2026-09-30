@@ -23,17 +23,30 @@ const TreasureHuntBanner: React.FC = () => {
   const { user } = useAuth();
   const [isDismissed, setIsDismissed] = useState(false);
 
-  // Check localStorage on mount
+  // Dismissal lasts for today only (2026-09-29): the clue changes daily, so a permanent dismiss
+  // (the old behavior, stored as 'true' forever) hid every future day's hunt too. The stored
+  // value is today's date; a legacy 'true' value no longer matches, so those shoppers see the
+  // banner again and can dismiss it for the day.
+  const todayKey = () => new Date().toDateString();
+
   useEffect(() => {
-    const dismissed = typeof window !== 'undefined' && localStorage.getItem('treasureHuntBannerDismissed');
-    if (dismissed) {
-      setIsDismissed(true);
+    try {
+      const dismissed = typeof window !== 'undefined' && localStorage.getItem('treasureHuntBannerDismissed');
+      if (dismissed && dismissed === todayKey()) {
+        setIsDismissed(true);
+      }
+    } catch {
+      /* storage blocked: banner simply shows */
     }
   }, []);
 
   const handleDismiss = () => {
     setIsDismissed(true);
-    localStorage.setItem('treasureHuntBannerDismissed', 'true');
+    try {
+      localStorage.setItem('treasureHuntBannerDismissed', todayKey());
+    } catch {
+      /* storage blocked: dismissal lasts for this view only */
+    }
   };
 
   const { data: hunt, isLoading, isError } = useQuery({
@@ -124,9 +137,17 @@ const TreasureHuntBanner: React.FC = () => {
                 Found!
               </div>
             ) : user ? (
-              <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
-                Find it to earn XP!
-              </p>
+              <div className="text-right">
+                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                  Find it to earn XP! Open a matching item and tap Claim your XP.
+                </p>
+                <a
+                  href={`/search?q=${encodeURIComponent(hunt.category)}`}
+                  className="mt-1 inline-block text-sm font-semibold text-amber-700 dark:text-amber-300 hover:underline"
+                >
+                  Start hunting in {hunt.category}
+                </a>
+              </div>
             ) : (
               <p className="text-sm text-amber-700 dark:text-amber-300">
                 <a href="/login" className="font-semibold hover:underline">

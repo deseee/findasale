@@ -4,6 +4,8 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import api from '../../../lib/api';
 import Head from 'next/head';
+import { claimUnlockToasts } from '../../../components/MilestoneUnlockedToast'; // Sale Passport: shared toast dedupe so PassportUnlockManager never toasts the same stamp again
+import { useMarkPassportSeen, UnlockedStamp, UnlockedMilestone } from '../../../hooks/useLoyaltyPassport';
 
 interface CheckInResponse {
   success: boolean;
@@ -15,6 +17,11 @@ interface CheckInResponse {
   rankIncreased?: boolean;
   queuePosition?: number | null;
   localLegendBadge?: string; // Feature #399: set when Local Legend badge earned
+  // Sale Passport (2026-09-29): present only when this check-in unlocked a stamp or milestone
+  passportUnlocks?: {
+    stamps: { key: string; name: string; icon: string }[];
+    milestones: { milestone: number; badgeType: string; name: string }[];
+  };
 }
 
 const CheckInPage: React.FC = () => {
@@ -25,6 +32,7 @@ const CheckInPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [checkInResult, setCheckInResult] = useState<CheckInResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const markPassportSeen = useMarkPassportSeen();
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -61,6 +69,36 @@ const CheckInPage: React.FC = () => {
           const zip = data.localLegendBadge.replace('LOCAL_LEGEND_', '');
           showToast(`📍 Local Legend unlocked for ${zip}!`, 'success');
         }
+
+        // Sale Passport: the inline celebration below comes straight from the response. Mark these
+        // unlocks as seen (claimUnlockToasts is the same dedupe PassportUnlockManager uses), so the
+        // global watcher does not toast the same stamp a second time. Best effort, never blocks.
+        const unlocks = data.passportUnlocks;
+        if (unlocks && (unlocks.stamps.length > 0 || unlocks.milestones.length > 0)) {
+          try {
+            const unseenRes = await api.get('/loyalty/passport/unseen');
+            const unseen = (unseenRes.data ?? { stamps: [], milestones: [] }) as {
+              stamps: UnlockedStamp[];
+              milestones: UnlockedMilestone[];
+            };
+            const stampKeys = unlocks.stamps.map((st) => st.key);
+            const milestoneNums = unlocks.milestones.map((m) => m.milestone);
+            const matchedStamps = (unseen.stamps ?? []).filter((st) => stampKeys.includes(st.key));
+            const matchedMilestones = (unseen.milestones ?? []).filter((m) => milestoneNums.includes(m.milestone));
+            const claimedStampIds = claimUnlockToasts(matchedStamps.map((st) => st.id));
+            const claimedMilestoneIds = claimUnlockToasts(matchedMilestones.map((m) => `milestone-${m.milestone}`));
+            if (claimedStampIds.length > 0 || claimedMilestoneIds.length > 0) {
+              markPassportSeen.mutate({
+                stampIds: claimedStampIds,
+                milestones: matchedMilestones
+                  .filter((m) => claimedMilestoneIds.includes(`milestone-${m.milestone}`))
+                  .map((m) => m.milestone),
+              });
+            }
+          } catch {
+            // Non-fatal: worst case the global watcher toasts these once.
+          }
+        }
       } catch (err: any) {
         const message = err.response?.data?.message || 'Failed to check in';
         setError(message);
@@ -71,6 +109,8 @@ const CheckInPage: React.FC = () => {
     };
 
     performCheckIn();
+    // markPassportSeen is intentionally not a dependency (a new mutation object every render would re-run the check-in).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user, showToast]);
 
   const handleRetry = () => {
@@ -175,6 +215,37 @@ const CheckInPage: React.FC = () => {
                     🎟️ You&apos;re #{checkInResult.queuePosition} in line
                   </p>
                 )}
+                {checkInResult.passportUnlocks &&
+                  (checkInResult.passportUnlocks.stamps.length > 0 ||
+                    checkInResult.passportUnlocks.milestones.length > 0) && (
+                    <div
+                      role="status"
+                      className="mt-3 mb-3 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-gray-700 p-3 text-left"
+                    >
+                      <p className="text-sm font-bold text-warm-900 dark:text-warm-100 mb-1">
+                        Sale Passport updated
+                      </p>
+                      <ul className="space-y-1">
+                        {checkInResult.passportUnlocks.stamps.map((st) => (
+                          <li key={st.key} className="text-sm text-warm-800 dark:text-warm-200">
+                            <span aria-hidden="true">{st.icon}</span> {st.name} stamp collected
+                          </li>
+                        ))}
+                        {checkInResult.passportUnlocks.milestones.map((m) => (
+                          <li key={`m-${m.milestone}`} className="text-sm text-warm-800 dark:text-warm-200">
+                            <span aria-hidden="true">✨</span> {m.name} unlocked
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        onClick={() => router.push('/shopper/achievements#sale-passport')}
+                        className="mt-2 text-xs font-semibold text-sage-700 dark:text-sage-300 hover:underline"
+                      >
+                        View Passport
+                      </button>
+                    </div>
+                  )}
               </>
             ) : (
               <>

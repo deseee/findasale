@@ -8,6 +8,7 @@ import { useUserBadges } from '../../hooks/useUserBadges';
 import { AchievementBadge } from '../../components/AchievementBadge';
 import { LocalLegendBadgeList } from '../../components/LocalLegendBadge';
 import { OGBuyerBadgeList } from '../../components/OGBuyerBadge';
+import { LoyaltyPassport } from '../../components/LoyaltyPassport'; // Feature #29: Sale Passport
 
 // Explorer Rank definitions — must match RANK_THRESHOLDS in backend xpService.ts
 const RANKS = [
@@ -136,6 +137,11 @@ export default function AchievementsPage() {
             <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
               Earn XP from shopping actions to progress through the Explorer's Guild ranks
             </p>
+          </div>
+
+          {/* Sale Passport (feature #29): 12 collectible stamps + milestone badges, free for every shopper */}
+          <div className="mb-8">
+            <LoyaltyPassport />
           </div>
 
           {shoppingAchievements.length > 0 && (

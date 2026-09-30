@@ -768,7 +768,11 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Guild/Crew Creation</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">500</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time / Max 50 members / XP-only</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">
+                        One-time spend / Public crew, free to join / Max 50 members / Up to 3 crews per shopper /
+                        Members get a crew leaderboard, a photo feed and a 1.25x check-in bonus.{' '}
+                        <Link href="/shopper/crews" className="text-purple-600 dark:text-purple-300 underline">Browse or create a crew</Link>
+                      </td>
                     </tr>
                   </tbody>
                 </table>

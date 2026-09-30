@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `# Achievements and the Hall of Fame
 
-Achievements are milestone badges you unlock for specific actions. The Hall of Fame is a public board that recognizes top XP earners each month. They're connected but different: here's how both work.
+Achievements are milestone badges you unlock for specific actions. The Hall of Fame is a public board that recognizes the Explorer's Guild's top-ranked members. They're connected but different: here's how both work.
 
 ---
 
@@ -57,32 +57,23 @@ Your achievements are also visible on your public profile. Other shoppers can se
 
 ## The Hall of Fame
 
-The Hall of Fame is at [/shopper/hall-of-fame](/shopper/hall-of-fame). It's a public board showing the top XP earners for the current month and all time.
+The Hall of Fame is at [/shopper/hall-of-fame](/shopper/hall-of-fame). It's a public page with two boards:
 
-**Monthly board:** The top 10 XP earners for the calendar month. This resets on the first of each month. The previous month's results are archived and stay visible.
+**Grandmasters (all time):** Every member who has reached the Grandmaster rank, listed by total guild XP with the highest first. Grandmaster is the top of the ladder, so this board is short and hard to join.
 
-**All-time board:** The top earners since the platform launched. Much harder to crack: these are people who have been hunting consistently for months or years.
+**This Season's Leaders:** Members at Sage or Grandmaster, ranked by the XP they have earned this season. A season runs from January 1 to December 31 (UTC). The board starts fresh every January 1, so everyone begins the season at zero and a newer member can outrank a long-time one with a strong year. Your rank is permanent and never resets; only the season board starts over. Early in a season it may be empty or short.
+
+Names are shown as a first name and last initial, like "Jane D.". If a member has made their collector profile public, their name links to it.
 
 ---
 
 ## How to get on the Hall of Fame
 
-Earn the most XP in a calendar month. The top 10 are featured.
+Earn guild XP and climb the ranks. Reach Sage to be eligible for the season board, then earn as much XP as you can this season to move up it. Grandmaster gets you onto the all-time board. See [How ranks work](/guides/how-ranks-work) for the XP needed at each rank.
 
-The actions that move you up fastest are also the ones that cost nothing: posting hauls, keeping your login streak, completing trades, writing reviews, and referring friends. Hunt Pass members earn bonus XP on these same actions, which helps if you're competing for a spot.
-
-If you land in the top 10, you earn a bonus XP award on top of whatever you accumulated that month. Check the [Guild Primer](/shopper/guild-primer) for the current bonus amount. It can change.
+The actions that move you up fastest are also the ones that cost nothing: posting hauls, keeping your login streak, completing trades, writing reviews, and referring friends. Hunt Pass members earn bonus XP on these same actions, which helps you climb faster. Check the [Guild Primer](/shopper/guild-primer) for current XP amounts.
 
 ---
-
-## What being on the Hall of Fame gets you
-
-- A public feature on the [/shopper/hall-of-fame](/shopper/hall-of-fame) page for that month
-- A bonus XP award (see [Guild Primer](/shopper/guild-primer) for current amount)
-- A Hall of Fame badge on your profile for that month
-- Your entry preserved in the monthly archive permanently
-
-Past Hall of Fame entries don't disappear. You can scroll back through every month and see who made it.
 
 ---
 
@@ -98,10 +89,10 @@ No. Each achievement is a one-time unlock. The XP is awarded once. After that it
 A few. They won't appear in your locked list: you'll just get a notification when you hit the trigger. No hints here, but they tend to reward unusual combinations of activity.
 
 **What if I'm close to a Hall of Fame spot but miss the cutoff?**
-Your XP from that month still counts toward your rank. Nothing is lost, you just didn't make the monthly top 10. Try again next month.
+Your XP still counts toward your rank. Nothing is lost. Keep earning XP and you will move up the boards.
 
 **Can crews earn Hall of Fame recognition?**
-There's a separate crew leaderboard. The Hall of Fame at [/shopper/hall-of-fame](/shopper/hall-of-fame) features individual shoppers. Crew standings are tracked separately.
+Not at this time. Each crew has its own leaderboard that ranks its members by guild XP, but crews are not ranked against each other. The Hall of Fame at [/shopper/hall-of-fame](/shopper/hall-of-fame) features individual shoppers.
 
 **Are achievement XP amounts listed somewhere?**
 Yes. The [Guild Primer](/shopper/guild-primer) has current XP values for achievements alongside all other XP sources.

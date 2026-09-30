@@ -578,46 +578,24 @@ export async function getLeaderboard(limit: number = 50) {
 }
 
 /**
- * Apply seasonal reset to all users
- * Drops rank to seasonal floor, keeps XP for history
- * Called annually on Jan 1 UTC
+ * Season boundary hook (called by jobs/seasonalResetJob.ts on Jan 1 UTC).
  *
- * Health-scout finding 2026-07-26 (Low): this previously did an unbounded
- * prisma.user.findMany() across the entire User table, then one
- * prisma.user.update() PER USER (N+1 round-trips). SEASONAL_RESET_FLOOR only
- * has 5 possible source ranks (ExplorerRank enum), and explorerRank is
- * already indexed (@@index([explorerRank])), so the reset is rewritten as
- * one batched updateMany() per rank bucket instead — O(5) queries total,
- * no user rows loaded into app memory, regardless of table size.
+ * REDESIGNED 2026-09-29: this NO LONGER lowers anyone's rank and writes nothing. The old version
+ * dropped stored explorerRank to SEASONAL_RESET_FLOOR without touching guildXp, but awardXp()
+ * recomputes rank from guildXp on every award, so demoted members snapped back at their next XP
+ * event and the seasonal board could not be trusted. Ranks are permanent milestones (gamedesign
+ * S417 decision #14); the season is a separate score, XP earned since Jan 1 UTC, computed from the
+ * PointsTransaction ledger by services/seasonStandingsService.ts, which starts at zero on its own.
+ *
+ * Kept as an exported function so the job and any manual caller keep working. SEASONAL_RESET_FLOOR
+ * is retained (unused) for reference to the retired design.
  */
 export async function applySeasonalReset() {
-  try {
-    const newSeasonalResetAt = new Date(
-      new Date().getFullYear(),
-      0,
-      1,
-      0,
-      0,
-      0,
-      0
-    ); // Jan 1 UTC midnight
-
-    let totalUpdated = 0;
-    for (const [oldRank, newRank] of Object.entries(SEASONAL_RESET_FLOOR) as [ExplorerRank, ExplorerRank][]) {
-      const result = await prisma.user.updateMany({
-        where: { explorerRank: oldRank },
-        data: {
-          explorerRank: newRank,
-          seasonalResetAt: newSeasonalResetAt,
-        },
-      });
-      totalUpdated += result.count;
-    }
-
-    console.log(`[xpService] Seasonal reset applied to ${totalUpdated} users (batched by rank)`);
-  } catch (error) {
-    console.error('[xpService] Failed to apply seasonal reset:', error);
-  }
+  const seasonStart = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1));
+  console.log(
+    `[xpService] Season boundary ${seasonStart.toISOString()}: ranks are permanent, no demotion applied. ` +
+      `The seasonal board ranks XP earned since this date.`
+  );
 }
 
 /**

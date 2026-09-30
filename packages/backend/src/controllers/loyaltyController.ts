@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
-import { getPassport } from '../services/loyaltyService';
+import { getPassport, getUnseenUnlocks, markPassportSeen } from '../services/loyaltyService';
 import { prisma } from '../index';
+import { opaqueUserId } from '../utils/opaqueUserId';
+import { firstNameLastInitial } from '../utils/publicDisplayName';
 
 /**
  * GET /api/loyalty/passport
@@ -17,6 +19,50 @@ export async function getMyPassport(req: Request, res: Response) {
     res.json(passport);
   } catch (error) {
     console.error('Error fetching passport:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+/**
+ * GET /api/loyalty/passport/unseen[?sync=1]
+ * Authenticated. Lightweight read for the global unlock watcher: Sale Passport stamps and
+ * milestones earned but not yet shown as a toast. sync=1 re-derives stamps first (throttled).
+ */
+export async function getMyPassportUnseen(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const sync = req.query.sync === '1' || req.query.sync === 'true';
+    const unseen = await getUnseenUnlocks(userId, { sync });
+    res.json(unseen);
+  } catch (error) {
+    console.error('Error fetching unseen passport unlocks:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+/**
+ * POST /api/loyalty/passport/seen
+ * Body: { all?: boolean, stampIds?: string[], milestones?: number[] }
+ * Authenticated. Marks unlock toasts as shown. Only ever touches the caller's own rows.
+ */
+export async function markMyPassportSeen(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    const body = (req.body ?? {}) as { all?: unknown; stampIds?: unknown; milestones?: unknown };
+    const result = await markPassportSeen(userId, {
+      all: body.all === true,
+      stampIds: Array.isArray(body.stampIds) ? (body.stampIds as string[]) : undefined,
+      milestones: Array.isArray(body.milestones) ? (body.milestones as number[]) : undefined,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error marking passport unlocks seen:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -102,9 +148,16 @@ export async function getCollectorLeague(req: Request, res: Response) {
     });
 
     // Add rank position and highlight current user
+    // Public-safe shape (2026-09-29): no real user ids or full names for other members. `id` is the
+    // opaque id (same scheme as the Hall of Fame), `name` is "First L.". The viewer is flagged with
+    // isCurrentUser, computed here from the real id, so the page never needs to compare ids.
     const leaderboard = topUsers.map((user, index) => ({
       position: index + 1,
-      ...user,
+      id: opaqueUserId(user.id),
+      name: firstNameLastInitial(user.name) ?? 'Explorer',
+      explorerRank: user.explorerRank,
+      guildXp: user.guildXp,
+      huntPassActive: user.huntPassActive,
       isCurrentUser: userId ? user.id === userId : false
     }));
 

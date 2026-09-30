@@ -3,6 +3,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { paymentLimiter } from '../middleware/rateLimiter';
 import { recordVisit, getStreak } from '../services/streakService';
 import { prisma } from '../lib/prisma';
+import { createNotification } from '../lib/notificationService';
 import {
   HUNT_PASS_PRICE_CENTS,
   BILLING_INTERVAL_DAYS,
@@ -11,6 +12,58 @@ import {
 } from '../services/squareBillingService';
 
 const router = Router();
+
+/** Long US date in UTC, e.g. "October 28, 2026" (server locale must never leak into copy). */
+const formatLongDate = (d: Date): string =>
+  d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
+/** ISO week string "2026-W12", same convention as services/streakService.ts. */
+const isoWeek = (date: Date): string => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+};
+
+const startOfTodayUtc = (): Date => {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+};
+
+/**
+ * Record one day of a daily streak (UserStreak, type 'save' | 'buy'). Same-day repeats are
+ * no-ops; a gap of more than one day restarts the streak at 1.
+ */
+async function recordDailyStreak(userId: string, type: 'save' | 'buy') {
+  const today = startOfTodayUtc();
+  const existing = await prisma.userStreak.findUnique({ where: { userId_type: { userId, type } } });
+  if (!existing) {
+    const created = await prisma.userStreak.create({
+      data: { userId, type, currentStreak: 1, longestStreak: 1, lastActivityDate: today },
+    });
+    return { current: created.currentStreak, longest: created.longestStreak, alreadyRecordedToday: false };
+  }
+  const last = existing.lastActivityDate ? new Date(existing.lastActivityDate) : null;
+  if (last) last.setUTCHours(0, 0, 0, 0);
+  if (last && last.getTime() === today.getTime()) {
+    return { current: existing.currentStreak, longest: existing.longestStreak, alreadyRecordedToday: true };
+  }
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const consecutive = !!last && last.getTime() === yesterday.getTime();
+  const nextCurrent = consecutive ? existing.currentStreak + 1 : 1;
+  const updated = await prisma.userStreak.update({
+    where: { userId_type: { userId, type } },
+    data: {
+      currentStreak: nextCurrent,
+      longestStreak: Math.max(existing.longestStreak, nextCurrent),
+      lastActivityDate: today,
+    },
+  });
+  return { current: updated.currentStreak, longest: updated.longestStreak, alreadyRecordedToday: false };
+}
 
 /**
  * GET /api/streaks/profile
@@ -32,13 +85,19 @@ router.get('/profile', authenticate, async (req: AuthRequest, res: Response) => 
         huntPassActive: true,
         huntPassExpiry: true,
         huntPassStripeSubscriptionId: true,
+        huntPassBillingProcessor: true,
+        huntPassCancelAtPeriodEnd: true,
       },
     });
 
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Get streak data (visit, save, buy)
+    // Get streak data (weekly visit streak) plus the daily save/buy streaks
     const streakData = await getStreak(req.user.id);
+    const dailyRows = await prisma.userStreak.findMany({
+      where: { userId: req.user.id, type: { in: ['save', 'buy'] } },
+      select: { type: true, currentStreak: true, longestStreak: true, lastActivityDate: true },
+    });
 
     res.json({
       userId: user.id,
@@ -49,7 +108,14 @@ router.get('/profile', authenticate, async (req: AuthRequest, res: Response) => 
       huntPassActive: user.huntPassActive,
       huntPassExpiry: user.huntPassExpiry ? user.huntPassExpiry.toISOString() : null,
       huntPassSubscriptionId: user.huntPassStripeSubscriptionId,
+      // Cancel state (2026-09-29): true = cancel is scheduled, access continues until huntPassExpiry
+      huntPassCancelAtPeriodEnd: !!user.huntPassCancelAtPeriodEnd,
+      huntPassBillingProcessor: user.huntPassBillingProcessor,
       streaks: streakData,
+      dailyStreaks: dailyRows.reduce((acc: Record<string, { current: number; longest: number }>, r) => {
+        acc[r.type] = { current: r.currentStreak, longest: r.longestStreak };
+        return acc;
+      }, {}),
     });
   } catch (err) {
     console.error('GET /api/streaks/profile error:', err);
@@ -76,13 +142,30 @@ router.post('/visit', authenticate, async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/streaks/save
- * Records a save/favorite activity.
+ * Records today's save (favorite) activity toward the daily save streak (UserStreak type 'save').
+ * Server-validated: only counts if the shopper actually saved an item or sale today, so a client
+ * cannot inflate a streak by calling this route. Idempotent within a day.
+ * (2026-09-29: previously returned a fake "Save recorded!" without recording anything.)
  */
 router.post('/save', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    res.json({ message: 'Save recorded!' });
+    const savedToday = await prisma.favorite.findFirst({
+      where: { userId: req.user.id, createdAt: { gte: startOfTodayUtc() } },
+      select: { id: true },
+    });
+    if (!savedToday) {
+      return res.json({ recorded: false, reason: 'NO_SAVE_TODAY', message: 'No saved item found for today, so nothing was recorded.' });
+    }
+
+    const result = await recordDailyStreak(req.user.id, 'save');
+    res.json({
+      recorded: !result.alreadyRecordedToday,
+      alreadyRecordedToday: result.alreadyRecordedToday,
+      streak: { current: result.current, longest: result.longest },
+      message: result.alreadyRecordedToday ? 'Already counted today.' : 'Save streak updated.',
+    });
   } catch (err) {
     console.error('POST /api/streaks/save error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -91,13 +174,34 @@ router.post('/save', authenticate, async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/streaks/purchase
- * Records a purchase/buy streak activity.
+ * Records today's purchase activity toward the daily buy streak (UserStreak type 'buy').
+ * Server-validated against a real paid purchase today (test transactions excluded). Idempotent
+ * within a day. (2026-09-29: previously returned a fake "Purchase recorded!".)
  */
 router.post('/purchase', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    res.json({ message: 'Purchase recorded!' });
+    const boughtToday = await prisma.purchase.findFirst({
+      where: {
+        userId: req.user.id,
+        status: { in: ['PAID', 'COMPLETED'] },
+        isTestTransaction: false,
+        createdAt: { gte: startOfTodayUtc() },
+      },
+      select: { id: true },
+    });
+    if (!boughtToday) {
+      return res.json({ recorded: false, reason: 'NO_PURCHASE_TODAY', message: 'No completed purchase found for today, so nothing was recorded.' });
+    }
+
+    const result = await recordDailyStreak(req.user.id, 'buy');
+    res.json({
+      recorded: !result.alreadyRecordedToday,
+      alreadyRecordedToday: result.alreadyRecordedToday,
+      streak: { current: result.current, longest: result.longest },
+      message: result.alreadyRecordedToday ? 'Already counted today.' : 'Buy streak updated.',
+    });
   } catch (err) {
     console.error('POST /api/streaks/purchase error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -106,11 +210,57 @@ router.post('/purchase', authenticate, async (req: AuthRequest, res: Response) =
 
 /**
  * GET /api/streaks/leaderboard
- * Public endpoint: returns top users by streak.
+ * Public endpoint: top shoppers by live weekend-visit streak (VisitStreak, the data the visit
+ * route records). "Live" = last visit was this ISO week or last week, so a streak that quietly
+ * lapsed months ago is not shown as current. Names are first name + last initial only.
+ * Honest empty state: when no shopper has a live streak the response is
+ * { leaderboard: [], empty: true } and never a fabricated row.
+ * (2026-09-29: previously always returned an empty list with no explanation.)
  */
 router.get('/leaderboard', async (_req, res: Response) => {
   try {
-    res.json({ leaderboard: [] });
+    const now = new Date();
+    const thisWeek = isoWeek(now);
+    const lastWeek = isoWeek(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+
+    const rows = await prisma.visitStreak.findMany({
+      where: {
+        currentStreak: { gt: 0 },
+        lastVisitWeek: { in: [thisWeek, lastWeek] },
+        user: { fraudSuspect: false },
+      },
+      orderBy: [{ currentStreak: 'desc' }, { longestStreak: 'desc' }],
+      take: 50,
+      select: {
+        currentStreak: true,
+        longestStreak: true,
+        user: { select: { name: true, explorerRank: true, huntPassActive: true } },
+      },
+    });
+
+    const shortName = (full: string | null | undefined): string => {
+      const parts = (full || '').trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) return 'Explorer';
+      if (parts.length === 1) return parts[0];
+      return `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+    };
+
+    const leaderboard = rows.map((r, index) => ({
+      position: index + 1,
+      displayName: shortName(r.user?.name),
+      currentStreak: r.currentStreak,
+      longestStreak: r.longestStreak,
+      explorerRank: r.user?.explorerRank ?? null,
+      huntPassActive: !!r.user?.huntPassActive,
+    }));
+
+    res.json({
+      leaderboard,
+      empty: leaderboard.length === 0,
+      metric: 'weekend_visit_streak',
+      unit: 'weeks',
+      week: thisWeek,
+    });
   } catch (err) {
     console.error('GET /api/streaks/leaderboard error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -230,8 +380,13 @@ router.post('/subscribe-huntpass', authenticate, paymentLimiter, async (req: Aut
 
 /**
  * POST /api/streaks/cancel-huntpass
- * Sets the Hunt Pass subscription to cancel at the end of the current billing period.
- * The pass stays active until expiry; customer.subscription.deleted webhook handles deactivation.
+ * Self-serve cancel-at-period-end (FTC click-to-cancel: as easy as sign-up, in-app, one confirm).
+ * Access continues until huntPassExpiry (the end of the period already paid for); the renewal
+ * job (jobs/squareBillingChargeJob.ts) deactivates the pass at expiry instead of charging again.
+ * Idempotent: a repeat call returns the same scheduled-cancel state with alreadyCancelled: true.
+ * Sends an in-app + email confirmation the first time. No billing amounts are touched and no
+ * charge or refund is made here. Scoped to req.user.id only (no target user accepted from input).
+ * Undo: POST /api/streaks/resume-huntpass.
  */
 router.post('/cancel-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -244,34 +399,60 @@ router.post('/cancel-huntpass', authenticate, async (req: AuthRequest, res: Resp
         huntPassBillingProcessor: true,
         huntPassActive: true,
         huntPassExpiry: true,
+        huntPassCancelAtPeriodEnd: true,
       },
     });
 
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Square Plan B (2026-09-13): cancel-at-period-end semantics, same as the Stripe branch
-    // below, but there is no processor subscription object to update -- just flip the flag
-    // jobs/squareBillingChargeJob.ts checks at the next renewal instead of charging again.
+    const respond = (alreadyCancelled: boolean, expiresAtDate: Date | null) => {
+      const expiresAt = expiresAtDate ? expiresAtDate.toISOString() : null;
+      return res.json({
+        cancelAtPeriodEnd: true,
+        alreadyCancelled,
+        expiresAt,
+        message: expiresAtDate
+          ? `Your Hunt Pass is canceled and will not renew. You keep every Hunt Pass perk until ${formatLongDate(expiresAtDate)}.`
+          : 'Your Hunt Pass is canceled and will not renew.',
+      });
+    };
+
+    const sendConfirmation = (expiresAtDate: Date | null) => {
+      createNotification({
+        userId: req.user!.id,
+        type: 'huntpass_cancel_scheduled',
+        title: 'Your Hunt Pass is canceled',
+        body: expiresAtDate
+          ? `Your Hunt Pass will not renew and you will not be charged again. You keep your Hunt Pass perks until ${formatLongDate(expiresAtDate)}. Changed your mind? You can keep it any time before then from the Hunt Pass page.`
+          : 'Your Hunt Pass will not renew and you will not be charged again. Changed your mind? You can keep it any time from the Hunt Pass page.',
+        link: '/shopper/hunt-pass',
+        channel: 'OPERATIONAL',
+        sendEmail: true,
+      }).catch((err: unknown) => console.error('[streaks] cancel-huntpass confirmation failed:', err));
+    };
+
+    // Square Plan B (2026-09-13): cancel-at-period-end semantics -- there is no processor
+    // subscription object to update, just flip the flag jobs/squareBillingChargeJob.ts checks at
+    // the next renewal instead of charging again.
     if (user.huntPassBillingProcessor === 'square') {
       if (!user.huntPassActive) {
         return res.status(400).json({ message: 'No active Hunt Pass subscription found.' });
       }
-      await prisma.user.update({
-        where: { id: req.user.id },
+      // Atomic claim so two concurrent cancels send one confirmation.
+      const claim = await prisma.user.updateMany({
+        where: { id: req.user.id, huntPassActive: true, huntPassCancelAtPeriodEnd: false },
         data: { huntPassCancelAtPeriodEnd: true },
       });
-      const expiresAt = user.huntPassExpiry ? user.huntPassExpiry.toISOString() : null;
-      return res.json({
-        cancelAtPeriodEnd: true,
-        expiresAt,
-        message: expiresAt
-          ? `Your Hunt Pass will remain active until ${new Date(expiresAt).toLocaleDateString()}.`
-          : 'Your Hunt Pass will not renew.',
-      });
+      if (claim.count === 1) sendConfirmation(user.huntPassExpiry);
+      return respond(claim.count !== 1, user.huntPassExpiry);
     }
 
     if (!user.huntPassStripeSubscriptionId) {
       return res.status(400).json({ message: 'No active Hunt Pass subscription found.' });
+    }
+
+    if (user.huntPassCancelAtPeriodEnd) {
+      return respond(true, user.huntPassExpiry);
     }
 
     const { getStripe } = await import('../utils/stripe');
@@ -281,15 +462,76 @@ router.post('/cancel-huntpass', authenticate, async (req: AuthRequest, res: Resp
       cancel_at_period_end: true,
     });
 
-    const expiresAt = new Date(updated.current_period_end * 1000).toISOString();
-
-    res.json({
-      cancelAtPeriodEnd: true,
-      expiresAt,
-      message: `Your Hunt Pass will remain active until ${new Date(expiresAt).toLocaleDateString()}.`,
+    const expiresAtDate = new Date(updated.current_period_end * 1000);
+    // Mirror the scheduled-cancel state locally so the UI can show it (legacy Stripe branch).
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { huntPassCancelAtPeriodEnd: true },
     });
+    sendConfirmation(expiresAtDate);
+    respond(false, expiresAtDate);
   } catch (err) {
     console.error('POST /api/streaks/cancel-huntpass error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * POST /api/streaks/resume-huntpass
+ * Undo a scheduled cancel ("Keep my Hunt Pass"). Only valid while the pass is still active and
+ * the paid period has not ended: it clears the cancel flag so the normal renewal at
+ * huntPassExpiry proceeds exactly as before. It does NOT charge anything and does not change
+ * the billing date or amount. If the pass has already ended, the shopper must subscribe again
+ * through the normal sign-up flow (which needs a card). Idempotent. Scoped to req.user.id.
+ */
+router.post('/resume-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        huntPassStripeSubscriptionId: true,
+        huntPassBillingProcessor: true,
+        huntPassActive: true,
+        huntPassExpiry: true,
+        huntPassCancelAtPeriodEnd: true,
+      },
+    });
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const periodEnded = !!user.huntPassExpiry && user.huntPassExpiry.getTime() <= Date.now();
+    if (!user.huntPassActive || (user.huntPassCancelAtPeriodEnd && periodEnded)) {
+      return res.status(400).json({
+        code: 'PASS_ENDED',
+        message: 'Your Hunt Pass has already ended. Subscribe again to get it back.',
+      });
+    }
+
+    const expiresAt = user.huntPassExpiry ? user.huntPassExpiry.toISOString() : null;
+    const renewalCopy = user.huntPassExpiry
+      ? `Your Hunt Pass is on. It will renew on ${formatLongDate(user.huntPassExpiry)}.`
+      : 'Your Hunt Pass is on.';
+
+    if (!user.huntPassCancelAtPeriodEnd) {
+      return res.json({ cancelAtPeriodEnd: false, alreadyActive: true, expiresAt, message: renewalCopy });
+    }
+
+    if (user.huntPassBillingProcessor !== 'square' && user.huntPassStripeSubscriptionId) {
+      const { getStripe } = await import('../utils/stripe');
+      const stripe = getStripe();
+      await stripe.subscriptions.update(user.huntPassStripeSubscriptionId, { cancel_at_period_end: false });
+    }
+
+    await prisma.user.updateMany({
+      where: { id: req.user.id, huntPassActive: true, huntPassCancelAtPeriodEnd: true },
+      data: { huntPassCancelAtPeriodEnd: false },
+    });
+
+    res.json({ cancelAtPeriodEnd: false, alreadyActive: false, expiresAt, message: renewalCopy });
+  } catch (err) {
+    console.error('POST /api/streaks/resume-huntpass error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
