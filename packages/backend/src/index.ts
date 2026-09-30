@@ -47,10 +47,17 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-// P0-2: Fail fast if STRIPE_SECRET_KEY is missing — prevents accidental use of test key in production
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.error('FATAL: STRIPE_SECRET_KEY not set');
+// P0-2: STRIPE_SECRET_KEY check. 2026-09-29: payments run on Square and Stripe is closed by default
+// (STRIPE_PLATFORM_CLOSED only reopens it when explicitly 'false'), so a missing key is a hard exit
+// only when Stripe is enabled; while it is closed we log one warning and keep booting. The decision
+// lives in utils/stripeBootConfig.ts (pure, unit tested).
+import { evaluateStripeBootConfig } from './utils/stripeBootConfig';
+const stripeBoot = evaluateStripeBootConfig(process.env);
+if (stripeBoot.action === 'exit') {
+  console.error(stripeBoot.message);
   process.exit(1);
+} else if (stripeBoot.action === 'warn') {
+  console.warn(`⚠️  ${stripeBoot.message}`);
 }
 
 import * as Sentry from '@sentry/node';
@@ -61,6 +68,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createRateLimitStore, resilientLimiter, isWhitelistedIP, isTrustedServerRequest, createBurstAlerter, getVerifiedSessionUserId } from './middleware/rateLimitShared'; // rate-limit hardening (2026-08-27): Redis store/whitelist/burst-alert helpers extracted here so routes/auth.ts and middleware/rateLimiter.ts can reach them without a circular import back to this file. getVerifiedSessionUserId added 2026-09-05 -- see its definition for the globalLimiter cookie-session recognition fix.
 import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
+import { isExtensionBearerRequest } from './middleware/extensionBearerOnly';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
 import saleRoutes from './routes/sales';
@@ -71,6 +79,7 @@ import extensionRoutes from './routes/extension'; // ADR-084: Marketplace Autofi
 import favoriteRoutes from './routes/favorites';
 import userRoutes from './routes/users';
 import stripeRoutes from './routes/stripe';
+import { stripeUnavailableGuard, isStripeNotConfiguredError } from './utils/stripe'; // 2026-09-29: lazy Stripe client, 503 instead of a crash when no key is set
 import stripeConnectRoutes from './routes/stripeConnect';
 import squareConnectRoutes from './routes/squareConnect'; // Square migration (2026-09-07, Wave 1 #2): Connect-equivalent onboarding
 import squarePaymentRoutes from './routes/squarePayment'; // Square migration Wave 1 #1 (Checkout, 2026-09-07)
@@ -571,6 +580,10 @@ const contactLimiter = rateLimit({
 // handleEbayAccountDeletion and handleEbayNotification ignore req.body, so raw buffer is fine.
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }));
+// 2026-09-29: Stripe-only webhooks answer 503 STRIPE_NOT_CONFIGURED when no STRIPE_SECRET_KEY is set
+// (Stripe is closed; the server boots without a key) instead of crashing inside the handler.
+app.use('/api/stripe/webhook', stripeUnavailableGuard);
+app.use('/api/billing/webhook', stripeUnavailableGuard);
 app.use('/api/square/webhook', express.raw({ type: 'application/json' })); // Square migration Wave 1 #5: HMAC signature check needs the exact raw body
 app.use('/api/ebay/account-deletion', express.raw({ type: '*/*' }));
 app.use('/api/ebay/notifications', express.raw({ type: '*/*' }));
@@ -601,8 +614,9 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
     // so the extension could read inventory but never record a listing as listed or removed. Skip
     // CSRF only for Bearer-authenticated requests to /api/extension; a cookie-only request to the
     // same path still gets validated.
-    const hasBearer = (req.headers.authorization || '').startsWith('Bearer ');
-    if (req.path.startsWith('/api/extension') && hasBearer) {
+    // 2026-09-30: routes/extension.ts runs extensionBearerOnly first, which drops the session cookie on such a request
+    // so authenticate() can only use the Bearer token (it used to prefer the cookie, which made this skip bypassable).
+    if (isExtensionBearerRequest(req)) {
       return next();
     }
     // Booth-token cart sessions (ADR-015 Contract Defined -- vendor covers register via
@@ -963,6 +977,11 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   // attempting to send again causes "Cannot set headers after they are sent". Log and bail.
   if (res.headersSent) {
     console.error('Global error handler: response already sent, suppressing duplicate response');
+    return;
+  }
+  // 2026-09-29: a legacy Stripe path called with no STRIPE_SECRET_KEY is a clear, non-secret 503.
+  if (isStripeNotConfiguredError(err)) {
+    res.status(503).json({ code: 'STRIPE_NOT_CONFIGURED', message: 'Stripe is not configured on this server. Payments run on Square.' });
     return;
   }
   const status = (err as any).status || (err as any).statusCode || 500;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
+import { extensionBearerOnly } from '../middleware/extensionBearerOnly';
 import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, markItemAlreadyPostedManually, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals, getAutolistQueue, getPriceSyncQueue, markItemPriceSyncedForPlatform, setItemRemoteListingId, reportVintedSold, postExtensionLogs } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
@@ -8,6 +9,10 @@ import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkip
 // cookie by the extension background worker). CORS for /api/extension is opened in
 // index.ts (Bearer-only, no credentials) so the chrome-extension origin is allowed.
 const router = Router();
+
+// 2026-09-30: index.ts skips CSRF for Bearer requests on this path, so every state-changing request here must be
+// authenticated by the Bearer token ALONE (never by the session cookie that authenticate() would otherwise prefer).
+router.use(extensionBearerOnly);
 
 router.get('/items', authenticate, requireOrganizer, requireTier('PRO'), getExtensionItems);
 router.post('/items/:id/listed', authenticate, requireOrganizer, requireTier('PRO'), markItemListed);

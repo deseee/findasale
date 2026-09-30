@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import { createNotification } from '../lib/notificationService';
+import { issueRefreshToken } from '../services/refreshTokenService';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import type { Organizer } from '@prisma/client';
@@ -399,6 +400,11 @@ export const authenticateComplete = async (req: Request, res: Response) => {
         return res.status(401).json({ message: 'Authentication replay detected' });
       }
 
+      // 2026-09-30: password and OAuth login already refuse suspended / soft-deleted accounts; the passkey path never did.
+      if (user.deletedAt || user.suspendedAt) {
+        return res.status(403).json({ message: 'This account is not available. Contact support@finda.sale.' });
+      }
+
       // Load organizer if user is an organizer (for subscriptionTier and other fields in JWT)
       // S1178 BQ fix: user.role (scalar, deprecated) can drift out of sync with the
       // canonical user.roles[] array -- a user whose organizer privilege lives only in
@@ -465,7 +471,8 @@ export const authenticateComplete = async (req: Request, res: Response) => {
 
       // P0 Security Fix pattern (matches authController.ts login()): short-lived access
       // token + long-lived refresh token, refresh token carries only version claims.
-      const refreshToken = jwt.sign(
+      // 2026-09-30: rotation family row + jti (services/refreshTokenService.ts)
+      const refreshToken = await issueRefreshToken(
         {
           id: user.id,
           email: user.email,
@@ -475,8 +482,7 @@ export const authenticateComplete = async (req: Request, res: Response) => {
           tokenVersion: user.tokenVersion,
           organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         },
-        process.env.JWT_REFRESH_SECRET || jwtSecret,
-        { expiresIn: '30d' }
+        { req }
       );
 
       res.cookie('accessToken', token, {

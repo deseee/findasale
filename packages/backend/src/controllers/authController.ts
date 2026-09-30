@@ -14,6 +14,10 @@ import { issueChallenge, verifyChallenge } from '../lib/registrationChallenge';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { AuthRequest } from '../middleware/auth';
+import { escapeHtml } from '../utils/htmlEscape';
+import { isSameOriginRedirect, checkAdultDob, passwordProblem, normalizeEmailInput, stripSensitiveUserFields, hashOpaqueToken, tokenLookupCandidates } from '../utils/authSecurity';
+import { issueRefreshToken } from '../services/refreshTokenService';
+import { enforceOAuthAssertion } from '../utils/oauthAssertion';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
 const ALLOWED_REDIRECT_URIS = () => {
@@ -29,10 +33,10 @@ const ALLOWED_REDIRECT_URIS = () => {
 const isValidRedirectUri = (uri: string | null | undefined): boolean => {
   if (!uri) return true; // null/undefined is valid (no redirect requested)
 
-  const allowed = ALLOWED_REDIRECT_URIS();
-
-  // Only allow URLs that start with one of the allowed prefixes
-  return allowed.some(allowedUri => uri.startsWith(allowedUri));
+  // 2026-09-29: exact ORIGIN match. The old `uri.startsWith(frontendUrl)` accepted https://finda.sale.evil.com
+  // and https://finda.sale@evil.com/x (open redirect). ALLOWED_REDIRECT_URIS above is kept for reference; any path
+  // on the frontend origin is fine, so origin equality is the whole test.
+  return isSameOriginRedirect(uri, process.env.FRONTEND_URL || 'http://localhost:3000');
 };
 
 // P0 SECURITY FIX (2026-07-19): GET /auth/register-challenge — issues a stateless,
@@ -49,13 +53,56 @@ export const getRegistrationChallenge = async (req: Request, res: Response) => {
   }
 };
 
+// 2026-09-30 (enumeration): a sign-up for an address that already has an account used to answer 409, which told anyone
+// whether an email is registered. Both outcomes now answer with this same 201 body and NO session (Set-Cookie would
+// be a tell), and the existing owner gets a "someone tried to register with your address" email instead. The
+// frontend signs the new user in with a follow-up POST /auth/login (see pages/register.tsx).
+export const REGISTER_ACCEPTED_BODY = { message: 'Check your email to finish signing up' };
+
+// At most one notice per address per hour, so the register form cannot be used to mail-bomb a victim.
+const registerNoticeSentAt = new Map<string, number>();
+const REGISTER_NOTICE_WINDOW_MS = 60 * 60 * 1000;
+/** Test helper. */
+export const __resetRegisterNoticeThrottle = () => registerNoticeSentAt.clear();
+
+function notifyExistingOwnerOfRegistrationAttempt(existing: { email: string; name?: string | null }) {
+  try {
+    const key = existing.email.toLowerCase();
+    const now = Date.now();
+    const last = registerNoticeSentAt.get(key);
+    if (last !== undefined && now - last < REGISTER_NOTICE_WINDOW_MS) return;
+    registerNoticeSentAt.set(key, now);
+    if (registerNoticeSentAt.size > 5000) {
+      for (const [k, t] of registerNoticeSentAt) if (now - t >= REGISTER_NOTICE_WINDOW_MS) registerNoticeSentAt.delete(k);
+    }
+    const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+    const base = process.env.FRONTEND_URL || 'https://finda.sale';
+    // Not awaited: response time must not depend on whether the address has an account.
+    void Promise.resolve(transactionalEmailService.emails.send({
+      from: fromEmail,
+      to: existing.email,
+      subject: 'Someone tried to sign up with your email address',
+      html: `
+        <p>Hello,</p>
+        <p>Someone tried to create a FindA.Sale account using this email address. Because an account already exists for it, nothing was changed.</p>
+        <p>If that was you, you can <a href="${base}/login">sign in</a>, or <a href="${base}/forgot-password">reset your password</a> if you have forgotten it.</p>
+        <p>If it was not you, you can ignore this email. Nobody has access to your account.</p>
+        <p>The FindA.Sale Team</p>
+      `,
+    })).catch((err) => console.error('[register] Failed to send existing-account notice:', err));
+  } catch (err) {
+    console.error('[register] Failed to send existing-account notice:', err);
+  }
+}
+
 export const register = async (req: Request, res: Response) => {
   try {
     const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province, challengeToken, challengeNonce, website, claimOrganizerId } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
-    const email = rawEmail?.trim().toLowerCase();
-    const name = rawName?.trim();
+    // 2026-09-29: non-string body values used to throw a TypeError here (500) instead of a 400.
+    const email = normalizeEmailInput(rawEmail);
+    const name = typeof rawName === 'string' ? rawName.trim() : undefined;
 
     // Security: IP-based rate limiting on registrations
     const clientIp = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
@@ -89,13 +136,16 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if user already exists (Platform Safety #101: Email Verification Uniqueness)
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
-      return res.status(409).json({ message: 'An account already exists with this email address.' });
+    // 2026-09-29: register accepted any password (even none, which then crashed bcrypt with a 500) and any junk email.
+    if (!email || email.length > 254 || !email.includes('@')) {
+      return res.status(400).json({ message: 'A valid email address is required.' });
+    }
+    if (name === undefined || name.length > 200) {
+      return res.status(400).json({ message: 'A valid name is required.' });
+    }
+    const registerPasswordProblem = passwordProblem(password);
+    if (registerPasswordProblem) {
+      return res.status(400).json({ message: registerPasswordProblem });
     }
 
     // Validate invite code if provided (beta access gate)
@@ -120,16 +170,13 @@ export const register = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Date of birth is required.' });
     }
 
-    try {
-      const dob = new Date(dateOfBirth);
-      const today = new Date();
-      const age = (today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-
-      if (age < 18) {
-        return res.status(400).json({ message: 'You must be 18 or older to use FindA.Sale.' });
-      }
-    } catch (error) {
+    // 2026-09-29: an unparseable date used to pass (NaN < 18 is false). checkAdultDob rejects it.
+    const registerDob = checkAdultDob(dateOfBirth);
+    if (registerDob === 'invalid') {
       return res.status(400).json({ message: 'Invalid date of birth format.' });
+    }
+    if (registerDob === 'minor') {
+      return res.status(400).json({ message: 'You must be 18 or older to use FindA.Sale.' });
     }
 
     // #369: Quebec Block — Bill 96 provincial language law compliance
@@ -141,8 +188,24 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // Hash password
+    // Check if user already exists (Platform Safety #101: Email Verification Uniqueness).
+    // 2026-09-30: runs AFTER every validation above so a bad invite code / date of birth answers identically for a
+    // new and an existing address, then answers exactly like a successful sign-up (see REGISTER_ACCEPTED_BODY).
+    // The password is hashed anyway and the IP rate-limit counter advances, so neither latency nor the eventual 429
+    // reveals the branch.
     const saltRounds = 10;
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      await bcrypt.hash(password, saltRounds);
+      notifyExistingOwnerOfRegistrationAttempt(existingUser);
+      await recordRegistration(clientIp);
+      return res.status(201).json(REGISTER_ACCEPTED_BODY);
+    }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Generate unique referral code
@@ -153,10 +216,12 @@ export const register = async (req: Request, res: Response) => {
     // Invite codes are issued for organizer beta access — always promote to ORGANIZER
     const effectiveRole = validatedInvite ? 'ORGANIZER' : safeRole;
 
+    // 2026-09-30: the raw token only goes into the email link; the database stores its SHA-256 (hashOpaqueToken).
+    const rawEmailVerificationToken = crypto.randomBytes(32).toString('hex');
+
     // DB2: Wrap user + organizer + referral creation atomically — prevents race-condition duplicate rewards
     const user = await prisma.$transaction(async (tx) => {
-      // Generate email verification token
-      const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+      const emailVerificationToken = hashOpaqueToken(rawEmailVerificationToken);
 
       // Hash deviceFingerprint before storage — raw fingerprint strings can exceed PostgreSQL btree
       // index row size limit (2704 bytes). SHA-256 produces a fixed 64-char hex string.
@@ -330,17 +395,17 @@ export const register = async (req: Request, res: Response) => {
     if (user.emailVerificationToken) {
       try {
         const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
-        const verifyLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/verify-email?token=${user.emailVerificationToken}`;
+        const verifyLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/verify-email?token=${rawEmailVerificationToken}`;
 
         await transactionalEmailService.emails.send({
           from: fromEmail,
           to: user.email,
           subject: 'Verify Your FindA.Sale Email Address',
           html: `
-            <p>Hi ${user.name || 'there'},</p>
+            <p>Hi ${escapeHtml(user.name || 'there')},</p>
             <p>Welcome to FindA.Sale! To complete your account setup, please verify your email address by clicking the link below:</p>
             <p><a href="${verifyLink}" style="display: inline-block; padding: 10px 20px; background-color: #b45309; color: white; text-decoration: none; border-radius: 4px;">Verify Email Address</a></p>
-            <p>This link will expire in 7 days.</p>
+            <p>This link will expire in 24 hours.</p>
             <p>If you didn't create this account, you can ignore this email.</p>
             <p>The FindA.Sale Team</p>
           `,
@@ -445,95 +510,18 @@ export const register = async (req: Request, res: Response) => {
       }
     }
 
-    // Load organizer if user is an organizer (for subscriptionTier in JWT)
-    let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
-    let subscriptionLapsed = false;
-    if (user.role === 'ORGANIZER' || user.roles?.includes('ORGANIZER')) {
-      organizerProfile = await prisma.organizer.findUnique({
-        where: { userId: user.id }
-      });
-
-      // Feature #75: Check subscription lapse status from roleSubscriptions
-      const roleSubscription = await prisma.userRoleSubscription.findFirst({
-        where: {
-          userId: user.id,
-          role: 'ORGANIZER',
-        },
-      });
-
-      if (roleSubscription) {
-        // Subscription is lapsed if tierLapsedAt is set AND tierResumedAt is null
-        subscriptionLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
-      }
-    }
-
-    // Generate JWT — include name, referralCode so AuthContext can decode without a round-trip
-    // Feature #72 Phase 2: Include roles array from user.roles (array field in User model)
-    // Fallback to single-role array if roles is empty, for backward compatibility
-    const userRoles = (user.roles && user.roles.length > 0) ? user.roles : [user.role];
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        roles: userRoles,
-        referralCode: user.referralCode,
-        tokenVersion: user.tokenVersion,
-        emailVerified: user.emailVerified, // S512: gate dashboard banner
-        subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
-        subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
-        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
-        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
-        onboardingComplete: organizerProfile?.onboardingComplete ?? false,
-        createdAt: user.createdAt.toISOString(),
-        huntPassActive: user.huntPassActive,
-        huntPassExpiry: user.huntPassExpiry,
-        guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: '1h' } // S708: bumped from 15m — was causing apparent sign-offs on idle tabs
-    );
-
-    // P0 Security Fix: Set httpOnly cookies for secure token storage
-    const refreshToken = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        roles: userRoles,
-        // P2 Security Fix: embed version claims so /auth/refresh can enforce invalidation
-        tokenVersion: user.tokenVersion,
-        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
-      },
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
-    );
-
-    res.cookie('accessToken', token, {
-      httpOnly: true,
-      secure: true, // P0 Security Fix Item 7: Always require HTTPS
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 1000, // 1 hour (S708 — must match JWT expiresIn above)
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: true, // P0 Security Fix Item 7: Always require HTTPS
-      sameSite: 'lax',
-      path: '/', // P0 FIX: was '/auth/refresh' — browser path matching breaks when requests
-      // go through Next.js proxy (/api/auth/refresh vs /auth/refresh). Use '/' so the
-      // refresh cookie is sent regardless of proxy path depth.
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
-    });
-
-    // Return user without password. Still include token in body for backward compatibility during transition
-    const { password: _, ...userWithoutPassword } = user;
-    res.status(201).json({ user: userWithoutPassword, token });
+    // 2026-09-30: no session here. A brand-new account and an already-registered address must be
+    // indistinguishable to the caller (status, body, and no Set-Cookie), so the sign-up answers with the same generic
+    // message either way. The browser signs the new user in with a follow-up POST /auth/login using the credentials
+    // it just submitted (pages/register.tsx); that call succeeds for the new account and simply fails for anyone who
+    // does not own the existing one.
+    res.status(201).json(REGISTER_ACCEPTED_BODY);
   } catch (error) {
+    // Two sign-ups for the same new address racing each other: the loser hits the unique index. Answer like the
+    // winner instead of leaking a 500 that only occurs for a fresh address.
+    if ((error as any)?.code === 'P2002' && String((error as any)?.meta?.target ?? '').includes('email')) {
+      return res.status(201).json(REGISTER_ACCEPTED_BODY);
+    }
     console.error('Registration error:', error);
     res.status(500).json({ message: 'Server error during registration' });
   }
@@ -542,14 +530,31 @@ export const register = async (req: Request, res: Response) => {
 // Phase 31: OAuth social login — find-or-create user by provider identity, return JWT
 export const oauthLogin = async (req: Request, res: Response) => {
   try {
-    const { provider, providerId, email: rawEmail, name: rawName, returnTo, inviteCode } = req.body;
+    const { provider, providerId, email: rawEmail, name: rawName, returnTo, inviteCode, oauthAssertion } = req.body;
 
-    if (!provider || !providerId) {
+    // 2026-09-29: provider/providerId flow straight into Prisma `where` clauses. A JSON object such as
+    // {"not":""} is a Prisma filter, not a value, so `providerId: {"not":""}` matched the first OAuth user in the
+    // table and logged the caller in as them. Both must be plain strings.
+    if (typeof provider !== 'string' || typeof providerId !== 'string' || !provider || !providerId) {
       return res.status(400).json({ message: 'provider and providerId are required' });
     }
+    if (provider.length > 40 || providerId.length > 255) {
+      return res.status(400).json({ message: 'provider and providerId are required' });
+    }
+    if (inviteCode !== undefined && inviteCode !== null && typeof inviteCode !== 'string') {
+      return res.status(400).json({ message: 'Invalid invite code' });
+    }
 
-    const email = rawEmail?.trim().toLowerCase() || null;
-    const name  = rawName?.trim() || 'User';
+    const email = normalizeEmailInput(rawEmail) ?? null;
+    const name  = (typeof rawName === 'string' ? rawName.trim() : '') || 'User';
+
+    // 2026-09-29: the browser used to be trusted to say who signed in. Require the HMAC assertion the NextAuth
+    // server signs (utils/oauthAssertion.ts) whenever OAUTH_BRIDGE_SECRET is configured.
+    const oauthDenied = enforceOAuthAssertion(oauthAssertion, { provider, providerId, email });
+    if (oauthDenied) {
+      console.warn(`[auth] /auth/oauth rejected: assertion ${oauthDenied} provider=${provider}`);
+      return res.status(401).json({ code: 'OAUTH_ASSERTION_INVALID', message: 'Sign-in could not be verified. Please try again.' });
+    }
 
     // 1. Find by OAuth identity (returning user)
     let user = await prisma.user.findFirst({
@@ -673,6 +678,12 @@ export const oauthLogin = async (req: Request, res: Response) => {
       }
     }
 
+    // 2026-09-29: the password login rejects suspended/deleted accounts but the OAuth path never did, so a suspended
+    // user could simply sign in with Google and mint a fresh session.
+    if (user.deletedAt || user.suspendedAt) {
+      return res.status(403).json({ message: 'This account is not available. Contact support@finda.sale.' });
+    }
+
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
     let subscriptionLapsed = false;
@@ -725,7 +736,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
-    const refreshToken = jwt.sign(
+    const refreshToken = await issueRefreshToken(
       {
         id: user.id,
         email: user.email,
@@ -736,8 +747,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         tokenVersion: user.tokenVersion,
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
+      { req } // 2026-09-30: rotation family row + jti (services/refreshTokenService.ts)
     );
 
     res.cookie('accessToken', token, {
@@ -758,7 +768,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
     });
 
-    const { password: _, ...userWithoutPassword } = user;
+    const userWithoutPassword = stripSensitiveUserFields(user);
 
     // SECURITY FIX P0: Validate returnTo against allowlist to prevent open redirect attacks
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -799,10 +809,11 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     const resetTokenExpiry = new Date();
     resetTokenExpiry.setHours(resetTokenExpiry.getHours() + 1); // Token valid for 1 hour
 
+    // 2026-09-30: only the SHA-256 is stored; the raw token exists only in the emailed link.
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        resetToken: resetToken,
+        resetToken: hashOpaqueToken(resetToken),
         resetTokenExpiry: resetTokenExpiry
       }
     });
@@ -817,7 +828,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
         to: user.email,
         subject: 'Reset Your FindA.Sale Password',
         html: `
-          <p>Hi ${user.name},</p>
+          <p>Hi ${escapeHtml(user.name)},</p>
           <p>We received a request to reset your password. Click the link below to create a new password:</p>
           <p><a href="${process.env.FRONTEND_URL}/reset-password?token=${resetToken}" style="display: inline-block; padding: 10px 20px; background-color: #b45309; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a></p>
           <p>This link will expire in 1 hour.</p>
@@ -843,7 +854,8 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
 // payload, signs both tokens, and sets both httpOnly cookies -- the exact logic login()
 // used to inline. Extracted so login() and the new exitImpersonation() below always mint
 // a real session identically, in exactly one place, instead of two copies that can drift.
-function mintSessionTokens(
+async function mintSessionTokens(
+  req: Request,
   res: Response,
   user: NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>,
   organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>>,
@@ -877,7 +889,7 @@ function mintSessionTokens(
   );
 
   // P0 Security Fix: Set httpOnly cookies for secure token storage
-  const refreshToken = jwt.sign(
+  const refreshToken = await issueRefreshToken(
     {
       id: user.id,
       email: user.email,
@@ -888,8 +900,7 @@ function mintSessionTokens(
       tokenVersion: user.tokenVersion,
       organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
     },
-    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-    { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
+    { req } // 2026-09-30: rotation family row + jti (services/refreshTokenService.ts)
   );
 
   res.cookie('accessToken', token, {
@@ -910,14 +921,18 @@ function mintSessionTokens(
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
   });
 
-  const { password: _pw, ...userWithoutPassword } = user;
+  const userWithoutPassword = stripSensitiveUserFields(user);
   return { token, userWithoutPassword };
 }
 
 export const login = async (req: Request, res: Response) => {
   try {
     const { email: rawLoginEmail, password } = req.body;
-    const email = rawLoginEmail?.trim().toLowerCase();
+    // 2026-09-29: non-string email/password used to throw (500). Reject as bad credentials, same shape as a miss.
+    const email = normalizeEmailInput(rawLoginEmail);
+    if (!email || typeof password !== 'string' || !password) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
 
     // #106: Account enumeration prevention
     // Measure timing start to ensure both paths take similar time
@@ -934,9 +949,9 @@ export const login = async (req: Request, res: Response) => {
     let passwordMatch = false;
     if (user && user.password) {
       passwordMatch = await bcrypt.compare(password, user.password);
-    } else if (!user) {
-      // Compute a dummy hash to match timing of actual password check
-      // This prevents timing attacks that detect user existence
+    } else {
+      // Compute a dummy hash to match timing of actual password check. Runs for a missing user AND for an existing
+      // user with no password (OAuth-only), so neither is distinguishable from a wrong password by response time.
       await bcrypt.compare(password, '$2a$10$dummyhashtopreventtimingatttacks.thishashnevermatches');
     }
 
@@ -991,7 +1006,7 @@ export const login = async (req: Request, res: Response) => {
 
     // Generate JWT + refreshToken + cookies via the shared helper (2026-09-25,
     // exit-impersonation-adr) -- see mintSessionTokens() above.
-    const { token, userWithoutPassword } = mintSessionTokens(res, user, organizerProfile, subscriptionLapsed);
+    const { token, userWithoutPassword } = await mintSessionTokens(req, res, user, organizerProfile, subscriptionLapsed);
     // Still include token in body for backward compatibility during transition
     res.json({ user: userWithoutPassword, token });
 
@@ -1054,7 +1069,7 @@ export const exitImpersonation = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const { token, userWithoutPassword } = mintSessionTokens(res, admin, organizerProfile, subscriptionLapsed);
+    const { token, userWithoutPassword } = await mintSessionTokens(req, res, admin, organizerProfile, subscriptionLapsed);
     res.json({ user: userWithoutPassword, token });
   } catch (error) {
     console.error('[exitImpersonation] error:', error);
@@ -1189,7 +1204,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
     );
 
     // P0 Security Fix: Set httpOnly cookies for secure token storage
-    const refreshToken = jwt.sign(
+    const refreshToken = await issueRefreshToken(
       {
         id: updatedUser.id,
         email: updatedUser.email,
@@ -1200,8 +1215,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         tokenVersion: updatedUser.tokenVersion,
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
-      { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
+      { req } // 2026-09-30: rotation family row + jti (services/refreshTokenService.ts)
     );
 
     res.cookie('accessToken', token, {
@@ -1222,7 +1236,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (S708 — must match refreshToken expiresIn)
     });
 
-    const { password: _, ...userWithoutPassword } = updatedUser;
+    const userWithoutPassword = stripSensitiveUserFields(updatedUser);
 
     res.json({
       success: true,
@@ -1245,10 +1259,14 @@ export const verifyEmail = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Verification token is required' });
     }
 
-    // Find user by email verification token
-    const user = await prisma.user.findFirst({
-      where: { emailVerificationToken: token }
-    });
+    // 2026-09-30: tokens are stored hashed ('sha256:<hex>'); hash the presented one and match that first, then fall
+    // back to a legacy plaintext row written before this change (it expires within 24h). A presented value that
+    // itself starts with the hash marker yields no candidates, so a leaked stored hash cannot be replayed.
+    let user: Awaited<ReturnType<typeof prisma.user.findFirst>> = null;
+    for (const candidate of tokenLookupCandidates(token)) {
+      user = await prisma.user.findFirst({ where: { emailVerificationToken: candidate } });
+      if (user) break;
+    }
 
     if (!user) {
       return res.status(400).json({ message: 'Invalid or expired verification token' });
@@ -1267,9 +1285,10 @@ export const verifyEmail = async (req: Request, res: Response) => {
       });
     }
 
-    // Mark email as verified
-    await prisma.user.update({
-      where: { id: user.id },
+    // Mark email as verified. 2026-09-30: single-use is ATOMIC: the conditional updateMany only matches while this
+    // exact stored token is still set, so two concurrent requests with the same link cannot both succeed.
+    const claimed = await prisma.user.updateMany({
+      where: { id: user.id, emailVerificationToken: user.emailVerificationToken },
       data: {
         emailVerified: true,
         emailVerifiedAt: new Date(),
@@ -1277,6 +1296,9 @@ export const verifyEmail = async (req: Request, res: Response) => {
         emailVerificationTokenExpiry: null, // P0-3: Clear expiry alongside token
       }
     });
+    if (claimed.count !== 1) {
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
+    }
 
     res.status(200).json({
       message: 'Email verified successfully! You can now create sales.',
@@ -1303,17 +1325,13 @@ export const oauthVerifyAge = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Date of birth is required.' });
     }
 
-    // Validate age
-    try {
-      const dob = new Date(dateOfBirth);
-      const today = new Date();
-      const age = (today.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-
-      if (age < 18) {
-        return res.status(400).json({ message: 'You must be 18 or older to use FindA.Sale.' });
-      }
-    } catch (error) {
+    // Validate age (2026-09-29: invalid dates no longer pass; see checkAdultDob)
+    const verifyDob = checkAdultDob(dateOfBirth);
+    if (verifyDob === 'invalid') {
       return res.status(400).json({ message: 'Invalid date of birth format.' });
+    }
+    if (verifyDob === 'minor') {
+      return res.status(400).json({ message: 'You must be 18 or older to use FindA.Sale.' });
     }
 
     // Update user's ageVerifiedAt timestamp
@@ -1324,9 +1342,7 @@ export const oauthVerifyAge = async (req: AuthRequest, res: Response) => {
       }
     });
 
-    const userWithoutPassword = Object.fromEntries(
-      Object.entries(user).filter(([key]) => key !== 'password')
-    );
+    const userWithoutPassword = stripSensitiveUserFields(user);
 
     res.json({
       success: true,
@@ -1353,9 +1369,15 @@ export const linkOAuthProvider = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Not authenticated' });
     }
 
-    const { provider, providerId } = req.body;
-    if (!provider || !providerId) {
+    const { provider, providerId, email: linkEmail, oauthAssertion: linkAssertion } = req.body;
+    // 2026-09-29: strings only (Prisma filter-object injection) and a signed assertion, exactly like /auth/oauth.
+    if (typeof provider !== 'string' || typeof providerId !== 'string' || !provider || !providerId || provider.length > 40 || providerId.length > 255) {
       return res.status(400).json({ message: 'provider and providerId are required' });
+    }
+    const linkDenied = enforceOAuthAssertion(linkAssertion, { provider, providerId, email: normalizeEmailInput(linkEmail) });
+    if (linkDenied) {
+      console.warn(`[auth] /auth/oauth/link rejected: assertion ${linkDenied} provider=${provider}`);
+      return res.status(401).json({ code: 'OAUTH_ASSERTION_INVALID', message: 'Sign-in could not be verified. Please try again.' });
     }
 
     // Reject if this OAuth identity is already attached to a DIFFERENT account.

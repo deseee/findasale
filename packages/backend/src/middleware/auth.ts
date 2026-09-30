@@ -15,10 +15,28 @@ export interface AuthRequest extends Request {
   };
 }
 
+// 2026-09-30: a full-strength access JWT in `?token=` leaks through access logs, browser history, Referer headers and
+// shared links, and it stays valid for an hour. Nothing in the repo uses it any more (the brand-kit PDF buttons fetch
+// with the cookie as a blob), so the query-string fallback is OFF everywhere by default. A route that genuinely must
+// accept a URL token has to be listed, by exact path or path prefix, in AUTH_URL_TOKEN_PATHS (comma separated), and
+// even then the token must have been issued within URL_TOKEN_MAX_AGE_SECONDS. New code that needs a link-borne
+// credential should mint a dedicated single-purpose short token instead of reusing the session JWT.
+const URL_TOKEN_MAX_AGE_SECONDS = 5 * 60;
+
+export function urlTokenAllowedFor(req: Request): boolean {
+  const list = (process.env.AUTH_URL_TOKEN_PATHS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (list.length === 0) return false;
+  const path = (req.originalUrl || req.url || '').split('?')[0];
+  return list.some((entry) => path === entry || path.startsWith(entry.endsWith('/') ? entry : `${entry}/`));
+}
+
+const warnedUrlTokenPaths = new Set<string>();
+
 export const optionalAuthenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // P0 Security Fix: Try cookie first (httpOnly), then Authorization header, then query param
+    // P0 Security Fix: Try cookie first (httpOnly), then Authorization header, then (allowlisted routes only) query param
     let token: string | null = null;
+    let tokenFromUrl = false;
 
     // Try httpOnly cookie first
     if (req.cookies?.accessToken) {
@@ -33,10 +51,19 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
       }
     }
 
-    // Fallback to query parameter for routes accessed via <a href> (PDF downloads, etc.)
-    // where Authorization header is not automatically sent by the browser
-    if (!token && req.query.token) {
-      token = req.query.token as string;
+    // Query-parameter fallback: allowlisted routes only (see URL_TOKEN_MAX_AGE_SECONDS above). Elsewhere the value is
+    // ignored, so the request is simply anonymous.
+    if (!token && typeof req.query.token === 'string' && req.query.token) {
+      if (urlTokenAllowedFor(req)) {
+        token = req.query.token;
+        tokenFromUrl = true;
+      } else {
+        const p = (req.originalUrl || req.url || '').split('?')[0];
+        if (!warnedUrlTokenPaths.has(p) && warnedUrlTokenPaths.size < 200) {
+          warnedUrlTokenPaths.add(p);
+          console.warn(`[auth] ignoring ?token= JWT on ${p}: URL tokens are not accepted on this route`);
+        }
+      }
     }
 
     if (!token) {
@@ -45,10 +72,22 @@ export const optionalAuthenticate = async (req: AuthRequest, res: Response, next
 
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) return next();
-    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { id: string; role?: string; roles?: string[] };
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { id: string; role?: string; roles?: string[]; tokenVersion?: number; iat?: number };
+    if (tokenFromUrl && (typeof decoded.iat !== 'number' || Date.now() / 1000 - decoded.iat > URL_TOKEN_MAX_AGE_SECONDS)) {
+      return next(); // a URL-borne token must be fresh; a stale one is anonymous, never an error
+    }
 
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
-    if (user) {
+    // 2026-09-29: honor tokenVersion here exactly like `authenticate` does. A token invalidated by a password
+    // change / reset / logout-all used to keep identifying the user on every optionalAuthenticate route (viewer-specific
+    // hold and invoice fields, personalised data). A stale token is treated as anonymous, never as an error.
+    const staleTokenVersion = user
+      ? (decoded.tokenVersion === undefined ? user.tokenVersion > 0 : decoded.tokenVersion !== user.tokenVersion)
+      : false;
+    // 2026-09-30: a suspended or soft-deleted account is not identified on optional routes either (guest checkout and
+    // other viewer-aware routes must not treat it as a signed-in user).
+    const blockedAccount = Boolean(user && (user.suspendedAt || user.deletedAt));
+    if (user && !staleTokenVersion && !blockedAccount) {
       req.user = user;
       // SECURITY FIX S692: Always use DB roles — never JWT roles.
       // JWT roles go stale immediately when an admin changes a user's role.
@@ -158,6 +197,16 @@ export const checkTierLapse = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
+const SUSPENDED_ALLOWED_PATHS = new Set(['/api/auth/me', '/api/auth/logout', '/auth/me', '/auth/logout']);
+
+/** True when a suspended user may still use this route (own status, logout, admin console for admins). */
+export function suspensionExempt(req: Request, user: { role?: string; roles?: string[] }): boolean {
+  const path = (req.originalUrl || req.url || '').split('?')[0].replace(/\/+$/, '');
+  if (SUSPENDED_ALLOWED_PATHS.has(path)) return true;
+  const isAdmin = user.role === 'ADMIN' || Boolean(user.roles?.includes('ADMIN'));
+  return isAdmin && (path === '/api/admin' || path.startsWith('/api/admin/'));
+}
+
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // P0 Security Fix: Try cookie first (httpOnly), then Authorization header
@@ -192,23 +241,6 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    // Platform Safety #117: Check account suspension — block checkout/purchase endpoints
-    // Allow read-only endpoints like browsing/viewing to proceed (handled at route level)
-    if (user.suspendedAt) {
-      // Check if this is a checkout/purchase route
-      const route = req.path;
-      const checkoutPatterns = ['/checkout', '/purchase', '/payment', '/stripe'];
-      const isCheckoutRoute = checkoutPatterns.some((pattern) => route.includes(pattern));
-
-      if (isCheckoutRoute) {
-        return res.status(403).json({
-          message: 'Your account has been suspended',
-          reason: user.suspendReason,
-          details: 'Contact support@finda.sale for account review',
-        });
-      }
-    }
-
     // P0 Fix 4: Validate tokenVersion — if JWT has stale version, token is invalidated
     if (decoded.tokenVersion === undefined ? user.tokenVersion > 0 : decoded.tokenVersion !== user.tokenVersion) {
       return res.status(401).json({ message: 'Token has been invalidated' });
@@ -219,6 +251,25 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       if (decoded.organizerTokenVersion !== user.organizer.tokenVersion) {
         return res.status(401).json({ message: 'Session invalidated. Please log in again.' });
       }
+    }
+
+    // Platform Safety #117 / 2026-09-30: suspension is enforced on EVERY authenticated route, not just checkout paths
+    // (a suspended account used to keep full access to messaging, listings, bidding and organizer tools). The user row
+    // is already loaded above on every request, so this needs no extra query and no cache: an unsuspend takes effect on
+    // the very next request. Checked after the token-version tests so a stale token learns nothing about the account.
+    // A soft-deleted account is refused outright. Exemptions: a suspended user may still read their own status
+    // (GET /auth/me) and log out, and an ADMIN keeps /api/admin/* so an admin account can never be locked out of the
+    // console that unsuspends accounts.
+    if (user.deletedAt) {
+      return res.status(401).json({ code: 'ACCOUNT_DELETED', message: 'This account is no longer available.' });
+    }
+    if (user.suspendedAt && !suspensionExempt(req, user)) {
+      return res.status(403).json({
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'Your account has been suspended',
+        reason: user.suspendReason,
+        details: 'Contact support@finda.sale for account review',
+      });
     }
 
     // Attach user to request
