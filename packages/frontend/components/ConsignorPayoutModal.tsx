@@ -1,234 +1,252 @@
-import React, { useState, useEffect } from 'react';
-import api from '../lib/api';
-import { useToast } from './ToastContext';
-import AccessibleModal from './AccessibleModal';
+import React, { useRef, useState } from 'react';
+import Link from 'next/link';
+import {
+  csApi,
+  MarkPaidBody,
+  useSettlementPreview,
+} from '../hooks/useConsignorSettlement';
+import {
+  Batch,
+  LIVE_BATCH_STATUSES,
+  errMsg,
+  fmtDate,
+  fmtMoney,
+  methodLabel,
+} from '../lib/types/consignorSettlement';
+import MarkPaidFields from './consignor-payouts/MarkPaidFields';
+import { ModalShell, btnOutline, btnPrimary } from './consignor-payouts/ui';
+
+/**
+ * Record a payment.
+ *
+ * You pay the consignor yourself (cash, check, Square, bank transfer, other) and record it here.
+ * FindA.Sale does not send or hold any money. Recording a payment puts the consignor's unpaid sales
+ * into a payout run, locks the amounts, and marks that payment as paid, using the same
+ * mark-paid flow as the Consignor payouts page.
+ *
+ * Only open this for TEAMS organizers: it fetches as soon as it mounts.
+ */
 
 interface ConsignorPayoutModalProps {
   consignorId: string;
   consignorName: string;
   commissionRate: number;
+  /** Stored payout preference, used to pre-fill "Paid by". */
+  preferredPayoutMethod?: string | null;
+  email?: string | null;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-interface PayoutSummary {
-  totalSales: string | number;
-  commissionAmount: string | number;
-  netPayout: string | number;
+interface Recorded {
+  amount: number;
   method: string;
+  paidAt: string;
 }
+
+/** Marks an error that should be shown as a "go finish this in the run" message, not a failure. */
+const blockedError = (message: string, href: string): Error => {
+  const err: any = new Error(message);
+  err.blockedHref = href;
+  return err as Error;
+};
 
 const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
   consignorId,
   consignorName,
   commissionRate,
+  preferredPayoutMethod,
+  email,
   onClose,
   onSuccess,
 }) => {
-  const { showToast } = useToast();
+  const preview = useSettlementPreview({ consignorId }, true);
+  const [recorded, setRecorded] = useState<Recorded | null>(null);
+  const [blocked, setBlocked] = useState<{ message: string; href: string } | null>(null);
 
-  const [saleId, setSaleId] = useState<string>('');
-  const [method, setMethod] = useState<string>('CASH');
-  const [notes, setNotes] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sales, setSales] = useState<Array<{ id: string; title: string }>>([]);
-  const [loadingSales, setLoadingSales] = useState(true);
-  const [payoutResult, setPayoutResult] = useState<PayoutSummary | null>(null);
+  const lines = preview.data ? preview.data.unsettled : [];
+  const line = lines.filter((l) => l.consignorId === consignorId)[0] || (lines.length === 1 ? lines[0] : null);
+  const owed = line ? line.net : 0;
+  const preferred = preferredPayoutMethod || (line ? line.preferredPayoutMethod : null);
+  const hasEmail = !!email || (line ? !!line.email : false);
+  const emailKnown = email !== undefined || (line ? line.emailKnown : false);
 
-  // Fetch organizer's sales on mount
-  useEffect(() => {
-    fetchSales();
-  }, []);
-
-  const fetchSales = async () => {
-    try {
-      setLoadingSales(true);
-      const response = await api.get('/sales/mine');
-      setSales(response.data.sales || []);
-    } catch (error: any) {
-      console.error('Error fetching sales:', error);
-      showToast('Failed to load sales', 'error');
-    } finally {
-      setLoadingSales(false);
-    }
+  // The focus trap can call onClose again while unmounting, so closing must be idempotent.
+  const closedRef = useRef(false);
+  const close = () => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    if (recorded) onSuccess();
+    onClose();
   };
 
-  const handleRunPayout = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!method) {
-      showToast('Please select a payment method', 'error');
-      return;
-    }
-
-    setIsSubmitting(true);
+  const record = async (body: MarkPaidBody) => {
+    setBlocked(null);
     try {
-      const payload = {
-        saleId: saleId || undefined,
-        method,
-        notes: notes || undefined,
-      };
+      // 1. Put this consignor's unpaid sales into a run (or find the run they are already in).
+      const created = await csApi.createRun({ consignorIds: [consignorId] });
+      const batch: Batch = await csApi.batch(created.batchId);
+      const payout = batch.payouts.filter((p) => p.consignorId === consignorId)[0];
+      if (!payout || !payout.id) {
+        throw new Error('We could not find this consignor in the payout run. Please try again.');
+      }
+      if (payout.status === 'PAID') {
+        throw new Error('This consignor is already recorded as paid in that payout run.');
+      }
+      if (Math.abs(payout.netPayout - owed) > 0.005) {
+        throw new Error('The amount owed changed. Close this window and open it again to see the new amount.');
+      }
 
-      const response = await api.post(`/consignors/${consignorId}/payout`, payload);
-      setPayoutResult(response.data);
-      showToast('Payout created successfully', 'success');
+      // 2. Lock the amounts if the run has not been approved yet.
+      const runHref = batch.saleId
+        ? `/organizer/consignor-settlement/${batch.saleId}`
+        : '/organizer/consignor-settlement';
+      if (batch.status === 'DRAFT') {
+        if (batch.payouts.length > 1) {
+          // Approving would lock other consignors' amounts too. Do not do that silently.
+          throw blockedError(
+            `${consignorName} is in a payout run with other consignors that has not been approved yet. Approve that run first, then record the payment there.`,
+            runHref
+          );
+        }
+        await csApi.approve(batch.id, { sendStatements: false });
+      } else if (LIVE_BATCH_STATUSES.indexOf(batch.status) === -1) {
+        throw new Error('That payout run cannot take payments right now.');
+      }
 
-      // Reset form
-      setSaleId('');
-      setMethod('CASH');
-      setNotes('');
-
-      // Call onSuccess after a delay to show success state
-      setTimeout(() => {
-        onSuccess();
-        onClose();
-      }, 1500);
-    } catch (error: any) {
-      console.error('Error running payout:', error);
-      showToast(error.response?.data?.error || 'Failed to run payout', 'error');
-    } finally {
-      setIsSubmitting(false);
+      // 3. Record the payment.
+      await csApi.markPaid(payout.id, body);
+      setRecorded({ amount: payout.netPayout, method: body.method, paidAt: body.paidAt });
+    } catch (e: any) {
+      if (e && e.blockedHref) {
+        setBlocked({ message: e.message, href: e.blockedHref });
+        return;
+      }
+      throw new Error(errMsg(e, 'We could not record this payment. Please try again.'));
     }
   };
 
   return (
-    <AccessibleModal
-      isOpen={true}
-      onClose={onClose}
-      ariaLabelledBy="consignor-payout-modal-title"
-    >
-      <div
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <h2 id="consignor-payout-modal-title" className="text-xl font-bold text-warm-900 dark:text-white mb-1">
-          Process Payout
-        </h2>
-        <p className="text-sm text-warm-500 dark:text-warm-400 mb-4">
-          {consignorName}, {Number(commissionRate).toFixed(1)}% commission
-        </p>
+    <ModalShell titleId="consignor-payout-modal-title" onClose={close}>
+      <h2 id="consignor-payout-modal-title" className="text-xl font-bold text-warm-900 dark:text-white mb-1">
+        Record a payment
+      </h2>
+      <p className="text-sm text-warm-500 dark:text-warm-400 mb-4">
+        {consignorName}, {Number(commissionRate).toFixed(1)}% to consignor
+      </p>
 
-        {payoutResult ? (
-          // Success state
+      {recorded ? (
+        <div>
           <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-4">
-            <p className="text-sm font-bold text-green-700 dark:text-green-400 mb-3">
-              ✓ Payout Processed
+            <p className="text-sm font-bold text-green-700 dark:text-green-400 mb-2">Payment recorded</p>
+            <p className="text-2xl font-bold text-warm-900 dark:text-white">{fmtMoney(recorded.amount)}</p>
+            <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">
+              {methodLabel(recorded.method)}
+              {fmtDate(recorded.paidAt) ? `, ${fmtDate(recorded.paidAt)}` : ''}
             </p>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-warm-600 dark:text-warm-400">Total Sales:</span>
-                <span className="font-bold text-warm-900 dark:text-white">
-                  ${Number(payoutResult.totalSales).toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-warm-600 dark:text-warm-400">Commission ({commissionRate}%):</span>
-                <span className="font-bold text-warm-900 dark:text-white">
-                  ${Number(payoutResult.commissionAmount).toFixed(2)}
-                </span>
-              </div>
-              <div className="border-t border-green-200 dark:border-green-700 pt-2 mt-2 flex justify-between">
-                <span className="text-warm-600 dark:text-warm-400">Net Payout:</span>
-                <span className="font-bold text-green-600 dark:text-green-400 text-lg">
-                  ${Number(payoutResult.netPayout).toFixed(2)}
-                </span>
-              </div>
-              <div className="text-xs text-warm-500 dark:text-warm-400 mt-2">
-                Method: {payoutResult.method}
-              </div>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="w-full mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition-colors"
-            >
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <Link href="/organizer/consignor-settlement" className={btnOutline + ' flex-1'}>
+              See all payouts
+            </Link>
+            <button type="button" onClick={close} className={btnPrimary + ' flex-1'}>
               Done
             </button>
           </div>
-        ) : (
-          // Form state
-          <form onSubmit={handleRunPayout}>
-            <div className="mb-4">
-              <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-2">
-                Payment Method *
-              </label>
-              <select
-                value={method}
-                onChange={e => setMethod(e.target.value)}
-                className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                required
-              >
-                <option value="CASH">Cash</option>
-                <option value="CHECK">Check</option>
-                <option value="VENMO">Venmo</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
+        </div>
+      ) : preview.isLoading ? (
+        <p className="text-sm text-warm-600 dark:text-warm-400" aria-busy="true">
+          Loading what is owed...
+        </p>
+      ) : preview.isError ? (
+        <div>
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 mb-4"
+          >
+            <p className="text-sm text-red-700 dark:text-red-300">
+              {errMsg(preview.error, 'We could not load what is owed to this consignor.')}
+            </p>
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <button type="button" onClick={close} className={btnOutline + ' flex-1'}>
+              Close
+            </button>
+            <button type="button" onClick={() => preview.refetch()} className={btnPrimary + ' flex-1'}>
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : (!line || owed <= 0) && preview.data && (preview.data.openBatchId || preview.data.hasOpenPayout) ? (
+        <div>
+          <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+            {consignorName} is already in a payout run that is still open. Record the payment from that run.
+          </p>
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <button type="button" onClick={close} className={btnOutline + ' flex-1'}>
+              Close
+            </button>
+            <Link href="/organizer/consignor-settlement" className={btnPrimary + ' flex-1'}>
+              Open payout runs
+            </Link>
+          </div>
+        </div>
+      ) : !line || owed <= 0 ? (
+        <div>
+          <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+            Nothing is owed to {consignorName} right now. When an item you are holding for them sells, it
+            shows up here.
+          </p>
+          <button type="button" onClick={close} className={btnPrimary + ' w-full'}>
+            Close
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="bg-warm-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
+            <p className="text-xs font-bold uppercase text-warm-500 dark:text-warm-400">Unpaid sales</p>
+            <p className="text-sm text-warm-700 dark:text-warm-300 mt-1">
+              {line.itemCount} {line.itemCount === 1 ? 'item' : 'items'}, {fmtMoney(line.gross)} in sales
+            </p>
+            {line.items.length > 0 && (
+              <ul className="mt-2 text-xs text-warm-600 dark:text-warm-400 space-y-1">
+                {line.items.slice(0, 5).map((i) => (
+                  <li key={i.id} className="flex justify-between gap-3">
+                    <span className="min-w-0 break-words">{i.title}</span>
+                    <span className="flex-shrink-0">{fmtMoney(i.salePrice)}</span>
+                  </li>
+                ))}
+                {line.items.length > 5 && <li>and {line.items.length - 5} more</li>}
+              </ul>
+            )}
+          </div>
 
-            <div className="mb-4">
-              <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-2">
-                Sale (Optional. Leave blank for all sales)
-              </label>
-              {loadingSales ? (
-                <p className="text-sm text-warm-500 dark:text-warm-400">Loading sales...</p>
-              ) : (
-                <select
-                  value={saleId}
-                  onChange={e => setSaleId(e.target.value)}
-                  className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                >
-                  <option value="">All sales</option>
-                  {sales.map(sale => (
-                    <option key={sale.id} value={sale.id}>
-                      {sale.title}
-                    </option>
-                  ))}
-                </select>
-              )}
+          {blocked && (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-900 dark:text-amber-200"
+            >
+              <p className="mb-2">{blocked.message}</p>
+              <Link href={blocked.href} className="font-bold underline">
+                Open that payout run
+              </Link>
             </div>
+          )}
 
-            <div className="mb-4">
-              <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-2">
-                Notes (Optional)
-              </label>
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                rows={3}
-                placeholder="e.g., Paid via Venmo on 3/15"
-                className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mb-6">
-              <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase">
-                Commission Calculation
-              </p>
-              <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
-                Payout = (Total Sold Item Price) × {Number(commissionRate).toFixed(1)}%
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || loadingSales}
-                className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-bold transition-colors"
-              >
-                {isSubmitting ? 'Processing...' : 'Run Payout'}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </AccessibleModal>
+          <MarkPaidFields
+            idPrefix="record-payment"
+            consignorName={consignorName}
+            amount={owed}
+            preferredPayoutMethod={preferred}
+            hasEmail={hasEmail}
+            emailKnown={emailKnown}
+            onCancel={close}
+            onSubmit={record}
+            footnote="Recording a payment locks these amounts. You pay the consignor yourself. FindA.Sale does not send or hold any money."
+          />
+        </>
+      )}
+    </ModalShell>
   );
 };
 

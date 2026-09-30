@@ -4,8 +4,24 @@ import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ItemRarity } from '@prisma/client';
-import { sendConsignorPayout } from '../services/consignorEmailService';
-import { calculateConsignorPayout, seedDefaultCommissionTiers, getConsignorMarkdownPolicyNotice } from '../services/commissionCalcService';
+import { sendConsignorPaymentRecorded } from '../services/consignorEmailService';
+import { seedDefaultCommissionTiers, getConsignorMarkdownPolicyNotice } from '../services/commissionCalcService';
+import {
+  LedgerError,
+  METHOD_LABELS,
+  STATEMENT_FOOTER,
+  buildStatement,
+  getOwedByConsignor,
+  money,
+  normalizeLegacyMethodInput,
+  normalizePayoutStatus,
+  payoutReference,
+  periodLabelFor,
+  recordDirectPayout,
+  serializeExcluded,
+  serializePayout,
+  validateMarkPaidInput,
+} from '../services/consignorLedgerService';
 import { renderConsignorAgreementForConsignor } from '../services/consignorAgreementService';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 
@@ -174,11 +190,30 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
           select: { id: true, title: true, price: true },
         },
         payouts: {
-          select: { id: true, totalSales: true, commissionAmount: true, paidAt: true },
+          select: {
+            id: true,
+            totalSales: true,
+            commissionAmount: true,
+            netPayout: true,
+            paidAt: true,
+            method: true,
+            status: true,
+            settlementBatchId: true,
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Organizer-settles ledger (2026-09-29): what each consignor is owed comes from the ledger
+    // (SOLD items with no live payout line), not from summing the payout history. Fails open:
+    // the list must still load if the owed calculation errors, so those fields become null.
+    let owedByConsignor: Awaited<ReturnType<typeof getOwedByConsignor>> | null = null;
+    try {
+      owedByConsignor = await getOwedByConsignor(prisma, workspace.id);
+    } catch (owedErr) {
+      console.error('[listConsignors] owed calculation failed:', owedErr);
+    }
 
     // consignmentUnclaimedItemsJob.ts / "Unclaimed" badge support (2026-09-25): count each
     // consignor's AVAILABLE items whose intake (createdAt) is older than that consignor's own
@@ -238,10 +273,17 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
       ...c,
       unclaimedCount: unclaimedCountByConsignor.get(c.id) || 0,
       relistCapExceededCount: relistCapExceededCountByConsignor.get(c.id) || 0,
+      // Ledger figures. owedAmount is the consignor's share still owed, as a 2-decimal string.
+      owedAmount: owedByConsignor ? owedByConsignor.get(c.id)?.owedAmount ?? '0.00' : null,
+      owedItemCount: owedByConsignor ? owedByConsignor.get(c.id)?.owedItemCount ?? 0 : null,
+      owedHeldItemCount: owedByConsignor ? owedByConsignor.get(c.id)?.heldItemCount ?? 0 : null,
       payouts: c.payouts.map((p) => ({
         ...p,
         totalSales: p.totalSales.toString(),
         commissionAmount: p.commissionAmount.toString(),
+        netPayout: p.netPayout.toString(),
+        status: normalizePayoutStatus(p.status).status,
+        rawStatus: p.status,
       })),
     }));
 
@@ -607,14 +649,19 @@ export const deleteConsignor = async (req: AuthRequest, res: Response) => {
 
 /**
  * POST /api/consignors/:id/payout
- * Run a payout for a consignor
- * Body: { saleId?, method, notes? }
- * Payout logic:
- *  - Find all SOLD items for this consignor (optionally filtered by saleId)
- *  - Sum item prices → totalSales
- *  - commissionAmount = totalSales * consignor.commissionRate / 100
- *  - netPayout = commissionAmount
- *  - Create ConsignorPayout record
+ * Record a payout to a consignor. Body: { saleId?, method, notes?, notifyConsignor?, paidAt?, reference?,
+ * acknowledgeLegacyOverlap? }
+ *
+ * Organizer-settles ledger (2026-09-29): FindA.Sale never sends this money. The organizer paid the
+ * consignor themselves and this records it. The endpoint and the modal's request/response contract are
+ * unchanged, but internally it now goes through consignorLedgerService.recordDirectPayout:
+ *  - only UNSETTLED sold items are included (an item already in a live payout line is never paid twice)
+ *  - the payout and its per-item lines are created and marked paid in one transaction
+ *  - a second call with nothing owed is a 409 (NOTHING_OWED), not a $0 payout
+ *  - the consignor is emailed only when notifyConsignor is true, and the email says a payment was
+ *    RECORDED (not "Payout received"), using the real sale or period name
+ * Commission math is calculateConsignorPayout via the ledger (ADR-096): never computed here.
+ * Legacy method values from the older modal map onto the new vocabulary (VENMO -> OTHER with a note).
  * Requires: authenticate, TEAMS subscription
  */
 export const runPayout = async (req: AuthRequest, res: Response) => {
@@ -653,53 +700,64 @@ export const runPayout = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Consignor not found' });
     }
 
-    // Find all SOLD items for this consignor
-    const soldItems = await prisma.item.findMany({
-      where: {
-        consignorId: id,
-        status: 'SOLD',
-        ...(saleId && { saleId }), // Optional: filter by sale
-      },
-      select: { id: true, price: true },
-    });
-
-    // ADR-096: shared helper -- flat math if !useTieredCommission (identical to
-    // pre-ADR-096 behavior), per-item tiered math if true. Never duplicate this
-    // calculation inline; consignorSettlementController.ts uses the same helper.
-    const { gross: totalSales, net: netPayout, tierBreakdown } = await calculateConsignorPayout(
-      consignor,
-      soldItems
-    );
-    const commissionAmount = netPayout; // kept as a distinct field name for API/back-compat; extensible for future deductions
-
-    // Create payout record
-    const payout = await prisma.consignorPayout.create({
-      data: {
-        consignorId: id,
-        saleId: saleId || null,
-        totalSales,
-        commissionAmount,
-        netPayout,
-        method: method || null,
-        notes: notes || null,
-        ...(tierBreakdown ? { tierBreakdown } : {}),
-      },
-    });
-
-    // Feature #335: Send payout email if consignor has email
-    if (consignor.email) {
-      sendConsignorPayout({
-        consignorName: consignor.name,
-        consignorEmail: consignor.email,
-        payoutAmount: netPayout.toNumber(),
-        saleName: 'your sale',
-        organizerName: workspace.name || 'your organizer',
-        method: method || undefined,
-      }).catch(err => console.warn('[consignor-email] Payout email failed:', err));
+    if (saleId !== undefined && saleId !== null && saleId !== '') {
+      if (typeof saleId !== 'string') return res.status(400).json({ error: 'saleId must be a sale id' });
+      const sale = await prisma.sale.findFirst({ where: { id: saleId, organizerId: organizer.id }, select: { id: true } });
+      if (!sale) return res.status(404).json({ error: 'Sale not found' });
     }
 
-    return res.status(201).json(payout);
+    const mapped = normalizeLegacyMethodInput(method);
+    const noteText = [mapped.noteSuffix, typeof notes === 'string' ? notes.trim() : null].filter(Boolean).join(' | ');
+    const input = validateMarkPaidInput({
+      method: mapped.method,
+      paidAt: req.body.paidAt,
+      reference: req.body.reference,
+      note: noteText || null,
+      notifyConsignor: req.body.notifyConsignor,
+    });
+
+    const recorded = await recordDirectPayout(prisma, {
+      workspaceId: workspace.id,
+      actorUserId: req.user.id,
+      consignorId: id,
+      saleId: saleId || null,
+      input,
+      acknowledgeLegacyOverlap: req.body.acknowledgeLegacyOverlap === true,
+    });
+
+    // Optional, opt-in email: says a payment was recorded, never "Payout received".
+    let notification: { requested: boolean; sent?: boolean; reason?: string } = { requested: input.notifyConsignor };
+    if (input.notifyConsignor) {
+      try {
+        const statement = await buildStatement(prisma, { workspaceId: workspace.id, payoutId: recorded.payout.id });
+        const r = await sendConsignorPaymentRecorded({
+          consignorName: consignor.name,
+          consignorEmail: consignor.email,
+          organizerName: workspace.name || 'Your organizer',
+          periodLabel: statement.periodLabel,
+          amount: statement.totals.consignorShare ?? '0.00',
+          method: input.method,
+          methodLabel: METHOD_LABELS[input.method],
+          paidAt: input.paidAt,
+          reference: statement.reference,
+          paymentReference: input.reference,
+        });
+        notification = { requested: true, sent: r.sent, ...(r.reason ? { reason: r.reason } : {}) };
+      } catch (emailErr) {
+        console.warn('[consignor-email] Payment recorded email failed:', emailErr);
+        notification = { requested: true, sent: false, reason: 'ERROR' };
+      }
+    }
+
+    return res.status(201).json({
+      ...serializePayout(recorded.payout),
+      notification,
+      excluded: recorded.excluded.map(serializeExcluded),
+    });
   } catch (error) {
+    if (error instanceof LedgerError) {
+      return res.status(error.status).json({ error: error.message, code: error.code, ...error.extra });
+    }
     console.error('[runPayout] Error:', error);
     return res.status(500).json({ error: 'Failed to run payout' });
   }
@@ -743,7 +801,17 @@ export const getConsignorPortal = async (req: Request, res: Response) => {
           },
           orderBy: { createdAt: 'desc' },
         },
+        // Organizer-settles ledger (2026-09-29): a consignor only ever sees payouts the organizer has
+        // APPROVED or PAID. Never DRAFT runs, VOID rows, SIMULATED test rows, ON_HOLD rows or
+        // legacy standalone rows. PAID: ledger PAID plus the legacy COMPLETED spelling. PENDING is
+        // shown only inside an APPROVED (or PARTIALLY_PAID) run.
         payouts: {
+          where: {
+            OR: [
+              { status: { in: ['PAID', 'COMPLETED'] } },
+              { status: 'PENDING', settlementBatch: { status: { in: ['APPROVED', 'PARTIALLY_PAID'] } } },
+            ],
+          },
           select: {
             id: true,
             totalSales: true,
@@ -751,7 +819,22 @@ export const getConsignorPortal = async (req: Request, res: Response) => {
             netPayout: true,
             method: true,
             paidAt: true,
+            paidReference: true,
             createdAt: true,
+            status: true,
+            saleId: true,
+            sale: { select: { title: true } },
+            items: {
+              select: {
+                titleSnapshot: true,
+                soldAt: true,
+                listPrice: true,
+                priceBeforeMarkdown: true,
+                ratePct: true,
+                consignorShare: true,
+              },
+              orderBy: [{ soldAt: 'asc' }, { titleSnapshot: 'asc' }],
+            },
           },
           orderBy: { createdAt: 'desc' },
         },
@@ -761,6 +844,36 @@ export const getConsignorPortal = async (req: Request, res: Response) => {
     if (!consignor) {
       return res.status(404).json({ error: 'Portal not found' });
     }
+
+    // Statement lines per payout (title, sold date, price with the pre-markdown price when marked
+    // down, rate, consignor share). organizerShare, collected amounts and internal notes are never exposed.
+    const portalPayouts = consignor.payouts.map((p) => {
+      const norm = normalizePayoutStatus(p.status).status;
+      return {
+        id: p.id,
+        reference: payoutReference(p.id),
+        status: norm,
+        statusLabel: norm === 'PAID' ? 'Paid' : 'Approved, payment pending',
+        periodLabel: periodLabelFor(p, p.items),
+        totalSales: money(p.totalSales),
+        commissionAmount: money(p.commissionAmount),
+        netPayout: money(p.netPayout),
+        method: p.method,
+        paidAt: p.paidAt,
+        paidReference: p.paidReference,
+        createdAt: p.createdAt,
+        lines: p.items.map((i) => ({
+          title: i.titleSnapshot,
+          soldAt: i.soldAt,
+          listPrice: money(i.listPrice),
+          priceBeforeMarkdown: money(i.priceBeforeMarkdown),
+          markedDown: i.priceBeforeMarkdown !== null && Number(i.priceBeforeMarkdown) > Number(i.listPrice),
+          ratePct: money(i.ratePct),
+          consignorShare: money(i.consignorShare),
+        })),
+        footer: STATEMENT_FOOTER,
+      };
+    });
 
     // In-app consignor agreement (Patrick, 2026-09-25): rendered fresh on every portal
     // load from this consignor's real commissionRate/returnPeriodDays/unsoldItemDisposition
@@ -774,7 +887,7 @@ export const getConsignorPortal = async (req: Request, res: Response) => {
         phone: consignor.phone,
       },
       items: consignor.items,
-      payouts: consignor.payouts,
+      payouts: portalPayouts,
       agreement: agreement
         ? {
             version: agreement.version,

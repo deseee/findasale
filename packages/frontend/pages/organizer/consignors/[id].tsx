@@ -1,8 +1,11 @@
 /**
- * Consignor Detail & Payout Page
+ * Consignor Detail & Payments Page
  *
- * Shows consignor's items and payout history
- * Provides modal to run a new payout
+ * Shows consignor's items and payment history.
+ * Provides a modal to record a payment. You pay consignors yourself; FindA.Sale keeps the
+ * numbers and never sends or holds money.
+ *
+ * TEAMS only. Below TEAMS this renders a static locked placeholder and makes no requests.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -13,7 +16,9 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import ConsignorPayoutModal from '../../../components/ConsignorPayoutModal';
-import TierGate from '../../../components/TierGate';
+import LockedPlaceholder from '../../../components/consignor-payouts/LockedPlaceholder';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
+import { payoutStatusLabel } from '../../../lib/types/consignorSettlement';
 import { ChevronLeft } from 'lucide-react';
 
 interface Consignor {
@@ -22,6 +27,7 @@ interface Consignor {
   email: string | null;
   phone: string | null;
   commissionRate: string | number;
+  preferredPayoutMethod?: string | null;
   items: Array<{
     id: string;
     title: string;
@@ -35,6 +41,7 @@ interface Consignor {
     commissionAmount: string | number;
     netPayout: string | number;
     method: string | null;
+    status?: string | null;
     paidAt: string | null;
     createdAt: string;
   }>;
@@ -45,6 +52,7 @@ const ConsignorDetailPage: React.FC = () => {
   const { id } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { canAccess, tierLoading, tierKnown } = useOrganizerTier();
 
   const [consignor, setConsignor] = useState<Consignor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,10 +73,11 @@ const ConsignorDetailPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (id && typeof id === 'string') {
+    // Gate the fetch on TEAMS so SIMPLE and PRO organizers make no request and see no error toast.
+    if (id && typeof id === 'string' && canAccess('TEAMS')) {
       fetchConsignor();
     }
-  }, [id]);
+  }, [id, canAccess]);
 
   // Redirect if not authenticated
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -81,7 +90,15 @@ const ConsignorDetailPage: React.FC = () => {
     fetchConsignor(); // Refresh to show new payout
   };
 
-  if (authLoading || loading) {
+  if (authLoading || tierLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!canAccess('TEAMS')) {
+    return <LockedPlaceholder tierKnown={tierKnown} />;
+  }
+
+  if (loading) {
     return <div>Loading...</div>;
   }
 
@@ -106,17 +123,13 @@ const ConsignorDetailPage: React.FC = () => {
   const totalSalesAmount = consignor.items
     .filter(i => i.status === 'SOLD')
     .reduce((sum, i) => sum + Number(i.price), 0);
-  const totalPayouted = consignor.payouts.reduce(
-    (sum, p) => sum + Number(p.netPayout),
-    0
-  );
+  // Only payments recorded as paid count. Unpaid, on-hold and cancelled entries are not money paid out.
+  const totalPayouted = consignor.payouts
+    .filter(p => !p.status || p.status === 'PAID' || (!!p.paidAt && p.status !== 'VOID'))
+    .reduce((sum, p) => sum + Number(p.netPayout), 0);
 
   return (
-    <TierGate
-      requiredTier="TEAMS"
-      featureName="Consignor Details"
-      description="View consignor details, items, and payouts."
-    >
+    <>
       <Head>
         <title>{`${consignor.name ?? ''} | FindA.Sale`}</title>
       </Head>
@@ -145,9 +158,9 @@ const ConsignorDetailPage: React.FC = () => {
 
             <button
               onClick={() => setShowPayoutModal(true)}
-              className="mt-4 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+              className="mt-4 min-h-[44px] bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
             >
-              Run Payout
+              Record a payment
             </button>
           </div>
 
@@ -170,7 +183,7 @@ const ConsignorDetailPage: React.FC = () => {
               </p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-warm-200 dark:border-gray-700">
-              <p className="text-xs font-bold text-warm-500 dark:text-warm-400 uppercase">Payouted</p>
+              <p className="text-xs font-bold text-warm-500 dark:text-warm-400 uppercase">Paid to consignor</p>
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
                 ${totalPayouted.toFixed(2)}
               </p>
@@ -197,7 +210,7 @@ const ConsignorDetailPage: React.FC = () => {
                   : 'border-transparent text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-300'
               }`}
             >
-              Payouts ({consignor.payouts.length})
+              Payments ({consignor.payouts.length})
             </button>
           </div>
 
@@ -271,7 +284,7 @@ const ConsignorDetailPage: React.FC = () => {
             <div>
               {consignor.payouts.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center border border-warm-200 dark:border-gray-700">
-                  <p className="text-warm-600 dark:text-warm-400">No payouts recorded yet</p>
+                  <p className="text-warm-600 dark:text-warm-400">No payments recorded yet</p>
                 </div>
               ) : (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 overflow-hidden">
@@ -293,6 +306,9 @@ const ConsignorDetailPage: React.FC = () => {
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-bold text-warm-700 dark:text-warm-300 uppercase">
                             Method
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-warm-700 dark:text-warm-300 uppercase">
+                            Status
                           </th>
                         </tr>
                       </thead>
@@ -317,6 +333,9 @@ const ConsignorDetailPage: React.FC = () => {
                             <td className="px-4 py-3 text-sm text-warm-600 dark:text-warm-400">
                               {payout.method || 'N/A'}
                             </td>
+                            <td className="px-4 py-3 text-sm text-warm-600 dark:text-warm-400">
+                              {payout.status ? payoutStatusLabel(payout.status) : 'N/A'}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -335,11 +354,13 @@ const ConsignorDetailPage: React.FC = () => {
           consignorId={consignor.id}
           consignorName={consignor.name}
           commissionRate={Number(consignor.commissionRate)}
+          preferredPayoutMethod={consignor.preferredPayoutMethod}
+          email={consignor.email}
           onClose={() => setShowPayoutModal(false)}
           onSuccess={handlePayoutSuccess}
         />
       )}
-    </TierGate>
+    </>
   );
 };
 

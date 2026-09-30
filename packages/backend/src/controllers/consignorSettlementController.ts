@@ -1,31 +1,68 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { Decimal } from '@prisma/client/runtime/library';
 import { payConsignorViaACH } from '../services/stripeConnectService';
-import { sendConsignorPayout } from '../services/consignorEmailService';
-import { calculateConsignorPayout } from '../services/commissionCalcService';
+import {
+  sendConsignorPayout,
+  sendConsignorStatement,
+  sendConsignorPaymentRecorded,
+  ConsignorEmailResult,
+} from '../services/consignorEmailService';
+import {
+  LedgerError,
+  METHOD_LABELS,
+  Statement,
+  approveRun,
+  buildBatchCsv,
+  buildStatement,
+  cancelRun,
+  createSettlementRun,
+  getAnnualSummary,
+  getPriorRuns,
+  getSalesSummary,
+  holdPayout,
+  listPayoutEvents,
+  loadBatchDetail,
+  loadPayoutForWorkspace,
+  loadUnsettled,
+  markPayoutPaid,
+  refreshDraftRun,
+  releasePayout,
+  requireReason,
+  serializeBatch,
+  serializeExcluded,
+  serializePayout,
+  serializeUnsettledConsignor,
+  undoPayoutPaid,
+  validateMarkPaidInput,
+  voidPayout,
+  writeEvent,
+} from '../services/consignorLedgerService';
 
 /**
- * #239 Multi-Consignor Estate Settlement — Phase 1 (plumbing, Stripe TEST MODE).
+ * Consignor settlement, organizer-settles model (2026-09-29). Replaces the #239 Phase 1
+ * Stripe-simulation flow.
  *
- * Distinct from settlementController.ts (single-client SaleSettlement / ClientPayout).
- * This module groups MANY consignors' SOLD items for one sale into a settlement batch.
+ * FindA.Sale NEVER initiates, holds or routes consignor money. This module is a ledger,
+ * statements and payment records: an organizer previews what is owed, creates a settlement run
+ * (a DRAFT snapshot), refreshes it while it is a draft, approves it (a checkpoint only, no
+ * payment rail is ever called), pays consignors outside FindA.Sale (cash, check, Square, bank
+ * transfer, other) and records each payment with "mark paid".
  *
- * LIVE-TRANSFERS GATE: real money movement only happens when the env flag
- *   STRIPE_CONNECT_LIVE_TRANSFERS === 'true'
- * Defaults OFF. With the flag OFF, approving a batch records the batch + per-consignor
- * payouts and SIMULATES transfers (no funds move). The merchant-of-record / source-of-funds
- * legal decision is blocked pending legal review — the scaffolding here is identical under
- * either legal model; only the gated branch differs.
+ * Distinct from settlementController.ts (single-client SaleSettlement / ClientPayout). The
+ * word "settle" here means the organizer settling up with consignors.
+ *
+ * Every route: authenticated organizer (requireOrganizer in the router), TEAMS only (403
+ * otherwise), owner-only in v1, and every record is reached through the caller's own
+ * workspace id, so another workspace's ids are a 404, never a leak. All the ledger rules
+ * (unsettled definition, double-pay guard, rounding, state machines) live in
+ * services/consignorLedgerService.ts.
  */
-const liveTransfersEnabled = (): boolean =>
-  process.env.STRIPE_CONNECT_LIVE_TRANSFERS === 'true';
 
-/** Resolve the authenticated organizer + their workspace. */
-async function getOrganizerWorkspace(
-  userId: string
-): Promise<{ organizer: any; workspace: any } | null> {
+type Ctx = { organizer: any; workspace: any; userId: string };
+
+/** Resolve the authenticated organizer + their workspace (owner only, v1). */
+async function getOrganizerWorkspace(userId: string): Promise<{ organizer: any; workspace: any } | null> {
   const organizer = await prisma.organizer.findUnique({ where: { userId } });
   if (!organizer) return null;
   const workspace = await prisma.organizerWorkspace.findFirst({
@@ -34,233 +71,583 @@ async function getOrganizerWorkspace(
   return workspace ? { organizer, workspace } : null;
 }
 
-/** Serialize Decimal-bearing batch/payout records for JSON. */
-function serializeBatch(batch: any) {
-  return {
-    ...batch,
-    totalGross: batch.totalGross?.toString?.() ?? batch.totalGross,
-    totalConsignorPayouts:
-      batch.totalConsignorPayouts?.toString?.() ?? batch.totalConsignorPayouts,
-    payouts: (batch.payouts || []).map((p: any) => ({
-      ...p,
-      totalSales: p.totalSales?.toString?.() ?? p.totalSales,
-      commissionAmount: p.commissionAmount?.toString?.() ?? p.commissionAmount,
-      netPayout: p.netPayout?.toString?.() ?? p.netPayout,
-    })),
-  };
+/** Auth + organizer + TEAMS gate. Sends the error response itself and returns null on failure. */
+async function resolveContext(req: AuthRequest, res: Response): Promise<Ctx | null> {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return null;
+  }
+  const result = await getOrganizerWorkspace(req.user.id);
+  if (!result) {
+    res.status(404).json({ error: 'Organizer profile not found' });
+    return null;
+  }
+  if (result.organizer.subscriptionTier !== 'TEAMS') {
+    res.status(403).json({ error: 'TEAMS subscription required' });
+    return null;
+  }
+  return { organizer: result.organizer, workspace: result.workspace, userId: req.user.id };
 }
+
+function handleError(res: Response, err: unknown, label: string) {
+  if (err instanceof LedgerError) {
+    return res.status(err.status).json({ error: err.message, code: err.code, ...err.extra });
+  }
+  console.error(`[${label}] Error:`, err);
+  return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+}
+
+function parseAsOf(raw: unknown): Date | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string') throw new LedgerError(400, 'INVALID_AS_OF', 'asOf must be an ISO date string');
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) throw new LedgerError(400, 'INVALID_AS_OF', 'asOf is not a valid date');
+  return d;
+}
+
+const truthy = (v: unknown) => v === true || v === 'true' || v === '1';
 
 /**
- * Internal: group SOLD items for a sale by consignor and compute the money split.
- * consignorCut = gross * commissionRate / 100  (platform fee NOT re-deducted here).
+ * Email one statement and, only if it actually went out, stamp statementSentAt / statementSentTo
+ * and write a STATEMENT_SENT event. Exported for tests.
  */
-async function buildSettlementLines(saleId: string, workspaceId: string) {
-  const consignors = await prisma.consignor.findMany({
-    where: {
-      workspaceId,
-      items: { some: { saleId, status: 'SOLD' } },
-    },
-    include: {
-      items: {
-        where: { saleId, status: 'SOLD' },
-        select: { id: true, price: true },
-      },
-    },
-  });
-
-  let totalGross = new Decimal(0);
-  let totalNet = new Decimal(0);
-
-  // ADR-096: shared helper -- same calculateConsignorPayout() runPayout() uses,
-  // so the ad-hoc single-consignor payout path and this batch settlement path
-  // can never silently diverge (see ADR-090 for why that matters).
-  const rows = await Promise.all(
-    consignors.map(async (c) => {
-      const { gross, net, tierBreakdown } = await calculateConsignorPayout(c, c.items);
-      totalGross = totalGross.plus(gross);
-      totalNet = totalNet.plus(net);
-      return {
-        consignorId: c.id,
-        name: c.name,
-        email: c.email,
-        commissionRate: c.commissionRate,
-        stripeOnboarded: c.stripeOnboarded,
-        stripeAccountId: c.stripeAccountId,
-        itemCount: c.items.length,
-        gross,
-        net,
-        tierBreakdown,
-      };
-    })
-  );
-
-  return { rows, totalGross, totalNet };
+export async function dispatchStatement(
+  db: any,
+  p: { workspaceId: string; payoutId: string; actorUserId: string | null }
+): Promise<ConsignorEmailResult & { statement: Statement }> {
+  const statement = await buildStatement(db, { workspaceId: p.workspaceId, payoutId: p.payoutId });
+  const result = await sendConsignorStatement({ statement, toEmail: statement.consignor.email });
+  if (result.sent) {
+    const now = new Date();
+    await db.consignorPayout.update({
+      where: { id: p.payoutId },
+      data: { statementSentAt: now, statementSentTo: statement.consignor.email },
+    });
+    await writeEvent(db, {
+      payoutId: p.payoutId,
+      consignorId: statement.consignor.id,
+      workspaceId: p.workspaceId,
+      type: 'STATEMENT_SENT',
+      actorUserId: p.actorUserId,
+      reference: statement.reference,
+      note: `Statement emailed to ${statement.consignor.email}`,
+    });
+  }
+  return { ...result, statement };
 }
+
+// ── Preview ────────────────────────────────────────────────────────────────────────────────
 
 /**
  * GET /api/consignor-settlements/preview/:saleId
- * Non-persisted preview: per-consignor gross / % / net split table.
+ * GET /api/consignor-settlements/preview?consignorId=&asOf=
+ * Non-persisted: what is owed right now. Returns { mode, unsettled, priorRuns } plus scope,
+ * excluded items and totals.
  */
 export const previewConsignorSettlement = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
     const { saleId } = req.params;
+    const consignorId = typeof req.query.consignorId === 'string' ? req.query.consignorId : undefined;
+    const asOf = parseAsOf(req.query.asOf);
+    const acknowledgeLegacyOverlap = truthy(req.query.acknowledgeLegacyOverlap);
 
-    const result = await getOrganizerWorkspace(req.user.id);
-    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
-    const { organizer, workspace } = result;
-    if (organizer.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ error: 'TEAMS subscription required' });
+    let sale: any = null;
+    if (saleId) {
+      sale = await prisma.sale.findFirst({
+        where: { id: saleId, organizerId: ctx.organizer.id },
+        select: { id: true, title: true, status: true },
+      });
+      if (!sale) return res.status(404).json({ error: 'Sale not found' });
+    } else if (consignorId) {
+      const consignor = await prisma.consignor.findFirst({ where: { id: consignorId, workspaceId: ctx.workspace.id }, select: { id: true } });
+      if (!consignor) return res.status(404).json({ error: 'Consignor not found' });
+    } else {
+      return res.status(400).json({ error: 'A saleId or a consignorId is required', code: 'SCOPE_REQUIRED' });
     }
 
-    const sale = await prisma.sale.findFirst({
-      where: { id: saleId, organizerId: organizer.id },
-      select: { id: true, title: true, status: true },
+    const unsettled = await loadUnsettled(prisma, {
+      workspaceId: ctx.workspace.id,
+      saleId: sale ? sale.id : undefined,
+      consignorIds: !saleId && consignorId ? [consignorId] : undefined,
+      asOf,
+      acknowledgeLegacyOverlap,
     });
-    if (!sale) return res.status(404).json({ error: 'Sale not found' });
-
-    const lines = await buildSettlementLines(saleId, workspace.id);
-
-    // Surface any existing batch so the UI can show "already settled" state.
-    const existingBatch = await prisma.consignorSettlementBatch.findFirst({
-      where: { saleId, status: { notIn: ['FAILED'] } },
-      select: { id: true, status: true },
+    const priorRuns = await getPriorRuns(prisma, {
+      workspaceId: ctx.workspace.id,
+      saleId: sale ? sale.id : undefined,
+      consignorId: !saleId && consignorId ? consignorId : undefined,
     });
+
+    const itemCount = unsettled.consignors.reduce((n, c) => n + c.lines.length, 0);
+    const gross = unsettled.consignors.reduce((s, c) => s + Number(c.gross), 0);
+    const share = unsettled.consignors.reduce((s, c) => s + Number(c.net), 0);
 
     return res.status(200).json({
-      saleId: sale.id,
-      saleTitle: sale.title,
-      saleStatus: sale.status,
-      liveTransfersEnabled: liveTransfersEnabled(),
-      existingBatch,
-      totalGross: lines.totalGross.toFixed(2),
-      totalConsignorPayouts: lines.totalNet.toFixed(2),
-      consignors: lines.rows.map((r) => ({
-        consignorId: r.consignorId,
-        name: r.name,
-        email: r.email,
-        commissionRate: r.commissionRate.toString(),
-        itemCount: r.itemCount,
-        gross: r.gross.toFixed(2),
-        net: r.net.toFixed(2),
-        stripeOnboarded: r.stripeOnboarded,
-        payoutMethod: r.stripeOnboarded ? 'ACH' : 'MANUAL_CASH_CHECK',
-        tierBreakdown: r.tierBreakdown ?? null,
-      })),
+      mode: 'ORGANIZER_SETTLES',
+      saleId: sale ? sale.id : null,
+      saleTitle: sale ? sale.title : null,
+      saleStatus: sale ? sale.status : null,
+      consignorId: !saleId && consignorId ? consignorId : null,
+      asOf: asOf ? asOf.toISOString() : null,
+      unsettled: unsettled.consignors.map(serializeUnsettledConsignor),
+      excluded: unsettled.excluded.map(serializeExcluded),
+      priorRuns,
+      totals: {
+        consignorCount: unsettled.consignors.length,
+        itemCount,
+        gross: gross.toFixed(2),
+        consignorShare: share.toFixed(2),
+      },
     });
-  } catch (error) {
-    console.error('[previewConsignorSettlement] Error:', error);
-    return res.status(500).json({ error: 'Failed to build settlement preview' });
+  } catch (err) {
+    return handleError(res, err, 'previewConsignorSettlement');
   }
 };
+
+/**
+ * GET /api/consignor-settlements/sales-summary
+ * [{ saleId, saleTitle, unsettledCount, unsettledAmount, heldCount }] for the My Sales card.
+ * saleId null = consignment inventory. Returns a bare array.
+ */
+export const getConsignorSalesSummary = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    return res.status(200).json(await getSalesSummary(prisma, ctx.workspace.id));
+  } catch (err) {
+    return handleError(res, err, 'getConsignorSalesSummary');
+  }
+};
+
+// ── Runs ───────────────────────────────────────────────────────────────────────────────────
 
 /**
  * POST /api/consignor-settlements
- * Body: { saleId }
- * Create a DRAFT batch with one ConsignorPayout per consignor that has SOLD items.
- * No money moves. Refuses to create a second open (non-FAILED) batch for the same sale.
+ * Body: { saleId?, consignorIds?, asOf?, acknowledgeLegacyOverlap? }
+ * Creates a DRAFT run (one payout per consignor, one line per item) in one transaction. No money
+ * moves. Several runs per sale are allowed (later sold items join a later run); an item can only
+ * ever be in one live payout, so a concurrent create returns 409 with the existing batch id.
  */
 export const createConsignorSettlementBatch = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-    const { saleId } = req.body;
-    if (!saleId) return res.status(400).json({ error: 'saleId is required' });
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const body = req.body || {};
 
-    const result = await getOrganizerWorkspace(req.user.id);
-    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
-    const { organizer, workspace } = result;
-    if (organizer.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ error: 'TEAMS subscription required' });
+    if (body.saleId !== undefined && body.saleId !== null && (typeof body.saleId !== 'string' || !body.saleId)) {
+      return res.status(400).json({ error: 'saleId must be a sale id', code: 'INVALID_SALE_ID' });
+    }
+    let consignorIds: string[] | undefined;
+    if (body.consignorIds !== undefined && body.consignorIds !== null) {
+      if (!Array.isArray(body.consignorIds) || body.consignorIds.length > 500 || body.consignorIds.some((x: unknown) => typeof x !== 'string' || !x)) {
+        return res.status(400).json({ error: 'consignorIds must be a list of consignor ids (500 at most)', code: 'INVALID_CONSIGNOR_IDS' });
+      }
+      consignorIds = Array.from(new Set<string>(body.consignorIds));
+    }
+    const asOf = parseAsOf(body.asOf);
+
+    if (body.saleId) {
+      const sale = await prisma.sale.findFirst({ where: { id: body.saleId, organizerId: ctx.organizer.id }, select: { id: true } });
+      if (!sale) return res.status(404).json({ error: 'Sale not found' });
+    }
+    if (consignorIds && consignorIds.length) {
+      const found = await prisma.consignor.findMany({ where: { id: { in: consignorIds }, workspaceId: ctx.workspace.id }, select: { id: true } });
+      if (found.length !== consignorIds.length) return res.status(404).json({ error: 'Consignor not found' });
     }
 
-    const sale = await prisma.sale.findFirst({
-      where: { id: saleId, organizerId: organizer.id },
-      select: { id: true },
+    const { batch, excluded } = await createSettlementRun(prisma, {
+      workspaceId: ctx.workspace.id,
+      actorUserId: ctx.userId,
+      saleId: body.saleId ?? undefined,
+      consignorIds,
+      asOf,
+      acknowledgeLegacyOverlap: body.acknowledgeLegacyOverlap === true,
     });
-    if (!sale) return res.status(404).json({ error: 'Sale not found' });
-
-    const existing = await prisma.consignorSettlementBatch.findFirst({
-      where: { saleId, status: { notIn: ['FAILED'] } },
-    });
-    if (existing) {
-      return res.status(409).json({
-        error: 'A settlement batch already exists for this sale',
-        batchId: existing.id,
-      });
-    }
-
-    const lines = await buildSettlementLines(saleId, workspace.id);
-    if (lines.rows.length === 0) {
-      return res
-        .status(400)
-        .json({ error: 'No SOLD consignor items found for this sale' });
-    }
-
-    const batch = await prisma.consignorSettlementBatch.create({
-      data: {
-        saleId,
-        workspaceId: workspace.id,
-        status: 'DRAFT',
-        totalGross: lines.totalGross,
-        totalConsignorPayouts: lines.totalNet,
-        payouts: {
-          create: lines.rows.map((r) => ({
-            consignorId: r.consignorId,
-            saleId,
-            totalSales: r.gross,
-            commissionAmount: r.net,
-            netPayout: r.net,
-            // Un-onboarded consignors are flagged for manual payout, never hard-blocking.
-            method: r.stripeOnboarded ? 'ACH' : null,
-            status: r.stripeOnboarded ? 'PENDING' : 'MANUAL_CASH_CHECK',
-            ...(r.tierBreakdown ? { tierBreakdown: r.tierBreakdown } : {}),
-          })),
-        },
-      },
-      include: { payouts: true },
-    });
-
-    return res.status(201).json(serializeBatch(batch));
-  } catch (error) {
-    console.error('[createConsignorSettlementBatch] Error:', error);
-    return res.status(500).json({ error: 'Failed to create settlement batch' });
+    return res.status(201).json({ ...serializeBatch(batch), excluded: excluded.map(serializeExcluded) });
+  } catch (err) {
+    return handleError(res, err, 'createConsignorSettlementBatch');
   }
 };
 
-/**
- * GET /api/consignor-settlements/:batchId
- * Fetch a batch with its payouts (split table data).
- */
+/** GET /api/consignor-settlements/:batchId (payouts include consignorId, per-item lines, payoutsByConsignorId). */
 export const getConsignorSettlementBatch = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
-    const { batchId } = req.params;
-
-    const result = await getOrganizerWorkspace(req.user.id);
-    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
-    const { workspace } = result;
-
-    const batch = await prisma.consignorSettlementBatch.findFirst({
-      where: { id: batchId, workspaceId: workspace.id },
-      include: {
-        payouts: {
-          include: {
-            consignor: { select: { name: true, email: true, stripeOnboarded: true } },
-          },
-        },
-      },
-    });
-    if (!batch) return res.status(404).json({ error: 'Settlement batch not found' });
-
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const batch = await loadBatchDetail(prisma, ctx.workspace.id, req.params.batchId);
     return res.status(200).json(serializeBatch(batch));
-  } catch (error) {
-    console.error('[getConsignorSettlementBatch] Error:', error);
-    return res.status(500).json({ error: 'Failed to fetch settlement batch' });
+  } catch (err) {
+    return handleError(res, err, 'getConsignorSettlementBatch');
+  }
+};
+
+/** POST /api/consignor-settlements/:batchId/refresh (DRAFT only). Returns the batch plus { diff }. */
+export const refreshConsignorSettlementBatch = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const { batch, diff } = await refreshDraftRun(prisma, {
+      workspaceId: ctx.workspace.id,
+      batchId: req.params.batchId,
+      actorUserId: ctx.userId,
+    });
+    return res.status(200).json({ ...serializeBatch(batch), diff });
+  } catch (err) {
+    return handleError(res, err, 'refreshConsignorSettlementBatch');
   }
 };
 
 /**
  * POST /api/consignor-settlements/:batchId/approve
+ * Body: { sendStatements?: boolean }  (opt-in; statements go only to consignors with an email
+ * and only once each per approve retry).
+ * DRAFT -> APPROVED. NEVER calls any payment rail and never calls payConsignorViaACH: approval is
+ * an organizer checkpoint that unlocks recording payments.
+ */
+export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const { batchId } = req.params;
+    const sendStatements = req.body?.sendStatements === true;
+
+    const outcome = await approveRun(prisma, { workspaceId: ctx.workspace.id, batchId, actorUserId: ctx.userId });
+
+    const statements: { payoutId: string; consignorId: string; consignorName: string | null; sent: boolean; reason?: string }[] = [];
+    if (sendStatements) {
+      const detail = await loadBatchDetail(prisma, ctx.workspace.id, batchId);
+      for (const payout of detail.payouts) {
+        if (payout.status !== 'PENDING' || payout.statementSentAt) continue;
+        const r = await dispatchStatement(prisma, { workspaceId: ctx.workspace.id, payoutId: payout.id, actorUserId: ctx.userId });
+        statements.push({ payoutId: payout.id, consignorId: payout.consignorId, consignorName: payout.consignor?.name ?? null, sent: r.sent, ...(r.reason ? { reason: r.reason } : {}) });
+      }
+    }
+
+    const batch = await loadBatchDetail(prisma, ctx.workspace.id, batchId);
+    return res.status(200).json({ ...serializeBatch(batch), noop: outcome.noop, statements });
+  } catch (err) {
+    return handleError(res, err, 'approveConsignorSettlementBatch');
+  }
+};
+
+/** POST /api/consignor-settlements/:batchId/cancel  Body: { reason }. Blocked if any payout is PAID. */
+export const cancelConsignorSettlementBatch = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const reason = requireReason(req.body?.reason);
+    const outcome = await cancelRun(prisma, { workspaceId: ctx.workspace.id, batchId: req.params.batchId, actorUserId: ctx.userId, reason });
+    const batch = await loadBatchDetail(prisma, ctx.workspace.id, req.params.batchId);
+    return res.status(200).json({ ...serializeBatch(batch), noop: outcome.noop });
+  } catch (err) {
+    return handleError(res, err, 'cancelConsignorSettlementBatch');
+  }
+};
+
+// ── Payout actions ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/consignor-settlements/payouts/:id/mark-paid
+ * Body: { method, paidAt, reference?, note?, notifyConsignor? }
+ * Records that the organizer paid this payout in full (amount is always the payout total).
+ * Idempotent: same body again is a 200 no-op; a different body is a 409.
+ */
+export const markConsignorPayoutPaid = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const input = validateMarkPaidInput(req.body || {});
+    const outcome = await markPayoutPaid(prisma, {
+      workspaceId: ctx.workspace.id,
+      payoutId: req.params.id,
+      actorUserId: ctx.userId,
+      input,
+      amount: req.body?.amount,
+    });
+
+    let notification: { requested: boolean; sent?: boolean; reason?: string } = { requested: input.notifyConsignor };
+    if (input.notifyConsignor && !outcome.noop) {
+      try {
+        const statement = await buildStatement(prisma, { workspaceId: ctx.workspace.id, payoutId: req.params.id });
+        const r = await sendConsignorPaymentRecorded({
+          consignorName: statement.consignor.name,
+          consignorEmail: statement.consignor.email,
+          organizerName: statement.organizerName,
+          periodLabel: statement.periodLabel,
+          amount: statement.totals.consignorShare ?? '0.00',
+          method: input.method,
+          methodLabel: METHOD_LABELS[input.method],
+          paidAt: input.paidAt,
+          reference: statement.reference,
+          paymentReference: input.reference,
+        });
+        notification = { requested: true, sent: r.sent, ...(r.reason ? { reason: r.reason } : {}) };
+      } catch (err) {
+        console.warn('[markConsignorPayoutPaid] notification failed:', err);
+        notification = { requested: true, sent: false, reason: 'ERROR' };
+      }
+    }
+    return res.status(200).json({ payout: serializePayout(outcome.payout), noop: outcome.noop, notification });
+  } catch (err) {
+    return handleError(res, err, 'markConsignorPayoutPaid');
+  }
+};
+
+/** POST /api/consignor-settlements/payouts/:id/undo-paid  Body: { reason }. PAID -> PENDING, audited. */
+export const undoConsignorPayoutPaid = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const reason = requireReason(req.body?.reason);
+    const out = await undoPayoutPaid(prisma, { workspaceId: ctx.workspace.id, payoutId: req.params.id, actorUserId: ctx.userId, reason });
+    return res.status(200).json({ payout: serializePayout(out.payout), noop: out.noop });
+  } catch (err) {
+    return handleError(res, err, 'undoConsignorPayoutPaid');
+  }
+};
+
+/** POST /api/consignor-settlements/payouts/:id/hold  Body: { reason }. PENDING -> ON_HOLD. */
+export const holdConsignorPayout = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const reason = requireReason(req.body?.reason);
+    const out = await holdPayout(prisma, { workspaceId: ctx.workspace.id, payoutId: req.params.id, actorUserId: ctx.userId, reason });
+    return res.status(200).json({ payout: serializePayout(out.payout), noop: out.noop });
+  } catch (err) {
+    return handleError(res, err, 'holdConsignorPayout');
+  }
+};
+
+/** POST /api/consignor-settlements/payouts/:id/release. ON_HOLD -> PENDING. */
+export const releaseConsignorPayout = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const out = await releasePayout(prisma, { workspaceId: ctx.workspace.id, payoutId: req.params.id, actorUserId: ctx.userId });
+    return res.status(200).json({ payout: serializePayout(out.payout), noop: out.noop });
+  } catch (err) {
+    return handleError(res, err, 'releaseConsignorPayout');
+  }
+};
+
+/** POST /api/consignor-settlements/payouts/:id/void  Body: { reason }. Unpaid payout -> VOID, items become unsettled again. */
+export const voidConsignorPayout = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const reason = requireReason(req.body?.reason);
+    const out = await voidPayout(prisma, { workspaceId: ctx.workspace.id, payoutId: req.params.id, actorUserId: ctx.userId, reason });
+    return res.status(200).json({ payout: serializePayout(out.payout), noop: out.noop });
+  } catch (err) {
+    return handleError(res, err, 'voidConsignorPayout');
+  }
+};
+
+/**
+ * POST /api/consignor-settlements/payouts/:id/send-statement
+ * Emails the statement to the consignor (rate limited to 3 per 24h per payout in the router).
+ * 200 { sent: true, statementSentAt, statementSentTo } or 422 { sent: false, reason } where reason
+ * is NO_EMAIL | SUPPRESSED | BLOCKED_DOMAIN (ERROR is a 502). Failures do not count toward the limit.
+ */
+export const sendConsignorPayoutStatement = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const payout = await loadPayoutForWorkspace(prisma, ctx.workspace.id, req.params.id);
+    if (['VOID', 'SIMULATED', 'FAILED'].includes(payout.status)) {
+      return res.status(409).json({ error: 'A voided payout has no statement to send.', code: 'INVALID_STATE' });
+    }
+    if (payout.settlementBatch && payout.settlementBatch.status === 'DRAFT') {
+      return res.status(409).json({ error: 'Approve the run before sending statements.', code: 'BATCH_NOT_APPROVED' });
+    }
+    const r = await dispatchStatement(prisma, { workspaceId: ctx.workspace.id, payoutId: payout.id, actorUserId: ctx.userId });
+    if (r.sent) {
+      const fresh = await prisma.consignorPayout.findUnique({ where: { id: payout.id }, select: { statementSentAt: true, statementSentTo: true } });
+      return res.status(200).json({
+        sent: true,
+        statementSentAt: fresh?.statementSentAt ? new Date(fresh.statementSentAt).toISOString() : null,
+        statementSentTo: fresh?.statementSentTo ?? null,
+      });
+    }
+    return res.status(r.reason === 'ERROR' ? 502 : 422).json({ sent: false, reason: r.reason });
+  } catch (err) {
+    return handleError(res, err, 'sendConsignorPayoutStatement');
+  }
+};
+
+/** GET /api/consignor-settlements/payouts/:id/statement (JSON). */
+export const getConsignorPayoutStatement = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const statement = await buildStatement(prisma, { workspaceId: ctx.workspace.id, payoutId: req.params.id });
+    return res.status(200).json(statement);
+  } catch (err) {
+    return handleError(res, err, 'getConsignorPayoutStatement');
+  }
+};
+
+/** GET /api/consignor-settlements/payouts/:id/events (append-only audit trail, newest first). */
+export const getConsignorPayoutEvents = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const events = await listPayoutEvents(prisma, ctx.workspace.id, req.params.id);
+    return res.status(200).json({ events });
+  } catch (err) {
+    return handleError(res, err, 'getConsignorPayoutEvents');
+  }
+};
+
+/** Render a statement as a PDF buffer with pdfkit (already a backend dependency, used by brandKitPrintController and donationController). */
+export async function renderStatementPdf(st: Statement): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const PDFDocument = require('pdfkit');
+  return new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'LETTER', margin: 48 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const usd = (v: string | null) => `$${Number(v ?? 0).toFixed(2)}`;
+    const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
+    const cols = { item: 48, sold: 252, price: 322, rate: 424, share: 476 };
+
+    const header = () => {
+      doc.font('Helvetica-Bold').fontSize(9);
+      const y = doc.y;
+      doc.text('Item', cols.item, y, { width: 200 });
+      doc.text('Sold', cols.sold, y, { width: 66 });
+      doc.text('Price', cols.price, y, { width: 96 });
+      doc.text('Rate', cols.rate, y, { width: 48 });
+      doc.text('Your share', cols.share, y, { width: 88, align: 'right' });
+      doc.moveTo(48, y + 13).lineTo(564, y + 13).strokeColor('#999999').stroke();
+      doc.y = y + 18;
+    };
+
+    doc.font('Helvetica-Bold').fontSize(18).text(st.organizerName, 48, 48);
+    doc.font('Helvetica').fontSize(12).text('Consignment statement');
+    doc.moveDown(0.5);
+    doc.fontSize(10);
+    doc.text(`Consignor: ${st.consignor.name}`);
+    doc.text(`Period: ${st.periodLabel}`);
+    doc.text(`Reference: ${st.reference}`);
+    doc.text(`Status: ${st.statusLabel}`);
+    doc.moveDown(1);
+
+    if (st.lines.length) {
+      header();
+      for (const l of st.lines) {
+        if (doc.y > 700) {
+          doc.addPage();
+          header();
+        }
+        const y = doc.y;
+        doc.font('Helvetica').fontSize(9);
+        doc.text(l.title, cols.item, y, { width: 198, height: 12, ellipsis: true });
+        doc.text(date(l.soldAt), cols.sold, y, { width: 66 });
+        doc.text(l.markedDown && l.priceBeforeMarkdown ? `${usd(l.listPrice)} (was ${usd(l.priceBeforeMarkdown)})` : usd(l.listPrice), cols.price, y, { width: 100 });
+        doc.text(`${Number(l.ratePct ?? 0).toFixed(2)}%`, cols.rate, y, { width: 48 });
+        doc.text(usd(l.consignorShare), cols.share, y, { width: 88, align: 'right' });
+        doc.y = y + 16;
+      }
+    } else {
+      doc.font('Helvetica').fontSize(10).text('This is an earlier record without item detail.');
+    }
+
+    if (doc.y > 660) doc.addPage();
+    doc.moveDown(1);
+    doc.font('Helvetica-Bold').fontSize(10);
+    doc.text(`Items: ${st.totals.itemCount}    Total sales: ${usd(st.totals.gross)}`, 48);
+    doc.fontSize(13).text(`Your share: ${usd(st.totals.consignorShare)}`, 48);
+    doc.moveDown(1);
+    doc.font('Helvetica').fontSize(8).fillColor('#555555').text(st.footer, 48, doc.y, { width: 516 });
+    doc.end();
+  });
+}
+
+/**
+ * GET /api/consignor-settlements/payouts/:id/statement.pdf
+ * If pdfkit cannot be loaded or rendering fails, returns the JSON statement instead (header
+ * X-Statement-Format: json-fallback) and the frontend falls back to its print view.
+ */
+export const getConsignorPayoutStatementPdf = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const statement = await buildStatement(prisma, { workspaceId: ctx.workspace.id, payoutId: req.params.id });
+    let pdf: Buffer;
+    try {
+      pdf = await renderStatementPdf(statement);
+    } catch (pdfErr) {
+      console.warn('[getConsignorPayoutStatementPdf] pdfkit unavailable, returning JSON fallback:', pdfErr);
+      res.setHeader('X-Statement-Format', 'json-fallback');
+      return res.status(200).json(statement);
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="statement-${statement.reference}.pdf"`);
+    res.setHeader('Content-Length', String(pdf.length));
+    return res.status(200).end(pdf);
+  } catch (err) {
+    return handleError(res, err, 'getConsignorPayoutStatementPdf');
+  }
+};
+
+/** GET /api/consignor-settlements/:batchId/export.csv (formula-injection neutralized). */
+export const exportConsignorSettlementCsv = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const batch = await loadBatchDetail(prisma, ctx.workspace.id, req.params.batchId);
+    const csv = buildBatchCsv(batch);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="consignor-settlement-run-${Number(batch.runNumber ?? 1)}.csv"`);
+    return res.status(200).send('﻿' + csv);
+  } catch (err) {
+    return handleError(res, err, 'exportConsignorSettlementCsv');
+  }
+};
+
+/** GET /api/consignor-settlements/annual-summary?year=YYYY (paid payouts by date paid, per consignor). */
+export const getConsignorAnnualSummary = async (req: AuthRequest, res: Response) => {
+  try {
+    const ctx = await resolveContext(req, res);
+    if (!ctx) return;
+    const currentYear = new Date().getUTCFullYear();
+    const raw = req.query.year;
+    const year = raw === undefined || raw === '' ? currentYear : Number(raw);
+    if (!Number.isInteger(year) || year < 2000 || year > currentYear + 1) {
+      return res.status(400).json({ error: 'year must be a four digit year', code: 'INVALID_YEAR' });
+    }
+    return res.status(200).json(await getAnnualSummary(prisma, ctx.workspace.id, year));
+  } catch (err) {
+    return handleError(res, err, 'getConsignorAnnualSummary');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// LEGACY (not routed). Kept in place, never called by the organizer-settles flow.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Legacy LIVE-TRANSFERS gate. Real money movement only happened when the env flag
+ *   STRIPE_CONNECT_LIVE_TRANSFERS === 'true'
+ * Stripe is closed and the new flow never reads this flag. Left in place, unused.
+ */
+export const liveTransfersEnabled = (): boolean =>
+  process.env.STRIPE_CONNECT_LIVE_TRANSFERS === 'true';
+
+/**
+ * DEPRECATED, NOT ROUTED (2026-09-29). The pre-ledger Stripe approve handler, kept in place per Patrick's
+ * BUILD OR WIRE, NEVER STRIP rule. The live approve route now calls approveConsignorSettlementBatch above,
+ * which never touches a payment rail. Nothing in the new flow calls this function or payConsignorViaACH.
+ * Original description follows.
+ *
+ * POST /api/consignor-settlements/:batchId/approve (legacy)
  * Transition DRAFT|PARTIAL|PROCESSING -> APPROVED and process per-consignor payouts.
  *
  * - LIVE flag OFF (default): each ACH payout is SIMULATED (no money moves); batch -> COMPLETED.
@@ -269,7 +656,7 @@ export const getConsignorSettlementBatch = async (req: AuthRequest, res: Respons
  *   are skipped on re-run; manual CASH/CHECK payouts untouched. Batch ends COMPLETED if all
  *   money-moving payouts succeeded, else PARTIAL.
  */
-export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Response) => {
+export const legacyStripeApproveConsignorSettlementBatch = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
     const { batchId } = req.params;
@@ -338,7 +725,7 @@ export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Res
       }
 
       if (!live) {
-        // TEST MODE: simulate the transfer — record intent, move no money.
+        // TEST MODE: simulate the transfer - record intent, move no money.
         await prisma.consignorPayout.update({
           where: { id: payout.id },
           data: {

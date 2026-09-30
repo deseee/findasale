@@ -1,6 +1,7 @@
 import { buildEmail } from './emailTemplateService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
-import { suppressionService } from './suppressionService';
+import { suppressionService, isEmailDomainBlocked } from './suppressionService';
+import type { Statement } from './consignorLedgerService';
 
 
 const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -366,4 +367,213 @@ export const sendConsignorIntakeRequestNotice = async (params: {
   } catch (err) {
     console.error('[consignor-email] Failed to send intake request notice email:', err);
   }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// Organizer-settles ledger emails (2026-09-29)
+//
+// FindA.Sale never initiates, holds or routes consignor money, so these emails only REPORT what
+// the organizer recorded: a statement, or "a payment was recorded". They go through the
+// transactional (Resend) rail, never the Gmail/outreach rail, never to the finda.sale zone,
+// and they return a result instead of swallowing failures so callers only stamp
+// statementSentAt when an email actually went out.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+export type ConsignorEmailFailureReason = 'NO_EMAIL' | 'SUPPRESSED' | 'BLOCKED_DOMAIN' | 'ERROR';
+
+export interface ConsignorEmailResult {
+  sent: boolean;
+  reason?: ConsignorEmailFailureReason;
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Header-safe single line (subjects must never carry line breaks). */
+function oneLine(value: unknown): string {
+  return String(value ?? '').replace(/[\r\n\u2028\u2029]+/g, ' ').trim();
+}
+
+function fmtDate(value: Date | string | null | undefined): string {
+  if (!value) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function fmtMoney(value: string | number | null | undefined): string {
+  const n = Number(value ?? 0);
+  return `$${(Number.isFinite(n) ? n : 0).toFixed(2)}`;
+}
+
+/**
+ * Shared send path: NO_EMAIL, then BLOCKED_DOMAIN (finda.sale zone, competitors, placeholders),
+ * then SUPPRESSED (hard bounce / complaint), then the Resend send itself. Any failure to send
+ * is reported as ERROR; nothing here throws.
+ */
+async function sendLedgerEmail(
+  to: string | null | undefined,
+  subject: string,
+  html: string,
+  text: string
+): Promise<ConsignorEmailResult> {
+  const address = (to ?? '').trim();
+  if (!address) return { sent: false, reason: 'NO_EMAIL' };
+  if (isEmailDomainBlocked(address)) {
+    console.warn('[consignor-email] Blocked domain, not sending ledger email');
+    return { sent: false, reason: 'BLOCKED_DOMAIN' };
+  }
+  try {
+    if (await suppressionService.isHardSuppressed(address)) {
+      return { sent: false, reason: 'SUPPRESSED' };
+    }
+    const result = await transactionalEmailService.emails.send({ to: address, subject, html, text });
+    if (result && result.sent) return { sent: true };
+    if (result && result.reason === 'suppressed') return { sent: false, reason: 'SUPPRESSED' };
+    console.error('[consignor-email] Ledger email not sent:', result?.reason);
+    return { sent: false, reason: 'ERROR' };
+  } catch (err) {
+    console.error('[consignor-email] Ledger email failed:', err);
+    return { sent: false, reason: 'ERROR' };
+  }
+}
+
+const MAX_EMAIL_STATEMENT_LINES = 100;
+
+/**
+ * Email a consignor their statement. `statement` comes from consignorLedgerService.buildStatement.
+ * The footer is the attorney-review sales tax sentence carried on the statement itself.
+ */
+export const sendConsignorStatement = async (params: {
+  statement: Statement;
+  toEmail: string | null | undefined;
+}): Promise<ConsignorEmailResult> => {
+  const st = params.statement;
+  const shown = st.lines.slice(0, MAX_EMAIL_STATEMENT_LINES);
+  const hidden = st.lines.length - shown.length;
+
+  const rows = shown
+    .map((l) => {
+      const price = l.markedDown && l.priceBeforeMarkdown
+        ? `${fmtMoney(l.listPrice)} (was ${fmtMoney(l.priceBeforeMarkdown)})`
+        : fmtMoney(l.listPrice);
+      return `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(l.title)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">${escapeHtml(fmtDate(l.soldAt))}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">${escapeHtml(price)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;">${escapeHtml(Number(l.ratePct ?? 0).toFixed(2))}%</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;text-align:right;">${escapeHtml(fmtMoney(l.consignorShare))}</td>
+      </tr>`;
+    })
+    .join('');
+  const hiddenNote = hidden > 0
+    ? `<p style="color:#666;font-size:13px;">${hidden} more item${hidden === 1 ? '' : 's'} not shown here. Ask ${escapeHtml(st.organizerName)} for the full statement.</p>`
+    : '';
+  const table = shown.length
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0;">
+        <thead><tr style="text-align:left;background:#f3f4f6;">
+          <th style="padding:6px 8px;">Item</th><th style="padding:6px 8px;">Sold</th><th style="padding:6px 8px;">Price</th><th style="padding:6px 8px;">Rate</th><th style="padding:6px 8px;text-align:right;">Your share</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>${hiddenNote}`
+    : '';
+
+  const html = buildEmail({
+    preheader: `Consignment statement ${st.reference}: ${fmtMoney(st.totals.consignorShare)}`,
+    headline: 'Your consignment statement',
+    body: `<p>Hi ${escapeHtml(st.consignor.name)},</p>
+      <p><strong>${escapeHtml(st.organizerName)}</strong> sent you this statement for <strong>${escapeHtml(st.periodLabel)}</strong>.</p>
+      <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0;">
+        <p style="margin:4px 0;color:#444;">Reference: <strong>${escapeHtml(st.reference)}</strong></p>
+        <p style="margin:4px 0;color:#444;">Status: <strong>${escapeHtml(st.statusLabel)}</strong></p>
+        <p style="margin:4px 0;color:#444;">Items: <strong>${st.totals.itemCount}</strong> &nbsp; Total sales: <strong>${escapeHtml(fmtMoney(st.totals.gross))}</strong></p>
+        <p style="margin:8px 0 0;color:#111;font-size:18px;">Your share: <strong>${escapeHtml(fmtMoney(st.totals.consignorShare))}</strong></p>
+      </div>
+      ${table}
+      <p style="color:#666;font-size:12px;">${escapeHtml(st.footer)}</p>`,
+    accentColor: '#3b82f6',
+  });
+
+  const textLines = [
+    `Consignment statement from ${st.organizerName}`,
+    `Period: ${st.periodLabel}`,
+    `Reference: ${st.reference}`,
+    `Status: ${st.statusLabel}`,
+    ...shown.map((l) => `- ${l.title}: ${fmtMoney(l.listPrice)} at ${Number(l.ratePct ?? 0).toFixed(2)}% = ${fmtMoney(l.consignorShare)}`),
+    hidden > 0 ? `${hidden} more items not shown.` : '',
+    `Your share: ${fmtMoney(st.totals.consignorShare)}`,
+    st.footer,
+  ].filter(Boolean);
+
+  return sendLedgerEmail(
+    params.toEmail,
+    `Consignment statement from ${oneLine(st.organizerName)} (${st.reference})`,
+    html,
+    textLines.join('\n')
+  );
+};
+
+/**
+ * Tell a consignor the organizer RECORDED a payment. This is a record, not a receipt from
+ * FindA.Sale: the organizer paid outside FindA.Sale and FindA.Sale never holds or sends the funds.
+ * Only sent when the organizer opts in (notifyConsignor: true).
+ */
+export const sendConsignorPaymentRecorded = async (params: {
+  consignorName: string;
+  consignorEmail: string | null | undefined;
+  organizerName: string;
+  periodLabel: string;
+  amount: string | number;
+  method?: string | null;
+  methodLabel?: string | null;
+  paidAt?: Date | string | null;
+  reference: string; // statement reference (last 8 chars of the payout id)
+  paymentReference?: string | null; // organizer-entered check number / confirmation code
+}): Promise<ConsignorEmailResult> => {
+  const amount = fmtMoney(params.amount);
+  const methodText = params.methodLabel || params.method || '';
+  const dateText = fmtDate(params.paidAt);
+  const details = [
+    dateText ? `Date: <strong>${escapeHtml(dateText)}</strong>` : '',
+    methodText ? `Method: <strong>${escapeHtml(methodText)}</strong>` : '',
+    params.paymentReference ? `Payment reference: <strong>${escapeHtml(params.paymentReference)}</strong>` : '',
+    `Statement reference: <strong>${escapeHtml(params.reference)}</strong>`,
+  ]
+    .filter(Boolean)
+    .map((line) => `<p style="margin:4px 0;color:#444;">${line}</p>`)
+    .join('');
+
+  const html = buildEmail({
+    preheader: `${params.organizerName} recorded a payment of ${amount}`,
+    headline: 'A payment was recorded',
+    body: `<p>Hi ${escapeHtml(params.consignorName)},</p>
+      <p><strong>${escapeHtml(params.organizerName)}</strong> recorded a payment of <strong>${escapeHtml(amount)}</strong> to you for <strong>${escapeHtml(params.periodLabel)}</strong>.</p>
+      <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0;">${details}</div>
+      <p style="color:#666;font-size:13px;">The payment was made by ${escapeHtml(params.organizerName)} directly. FindA.Sale keeps the records but does not hold or send consignor payments. If something looks wrong, contact ${escapeHtml(params.organizerName)}.</p>`,
+    accentColor: '#3b82f6',
+  });
+
+  const text = [
+    `${params.organizerName} recorded a payment of ${amount} to you for ${params.periodLabel}.`,
+    dateText ? `Date: ${dateText}` : '',
+    methodText ? `Method: ${methodText}` : '',
+    params.paymentReference ? `Payment reference: ${params.paymentReference}` : '',
+    `Statement reference: ${params.reference}`,
+    `The payment was made by ${params.organizerName} directly. FindA.Sale does not hold or send consignor payments.`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return sendLedgerEmail(
+    params.consignorEmail,
+    `${oneLine(params.organizerName)} recorded a payment of ${amount}`,
+    html,
+    text
+  );
 };

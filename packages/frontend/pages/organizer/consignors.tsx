@@ -16,6 +16,8 @@ import { useToast } from '../../components/ToastContext';
 import TierGate from '../../components/TierGate';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import ConsignorPayoutModal from '../../components/ConsignorPayoutModal';
+import { PAYMENT_METHODS, fmtMoney } from '../../lib/types/consignorSettlement';
 import Link from 'next/link';
 import { Trash2, Edit2, DollarSign, Copy, Check, Percent, Camera, X, Link2, RefreshCw, Mail, MessageCircle, Inbox, CalendarClock } from 'lucide-react';
 
@@ -30,6 +32,12 @@ interface Consignor {
   unclaimedCount: number; // consignmentUnclaimedItemsJob.ts (2026-09-25): AVAILABLE items past returnPeriodDays, precomputed server-side by listConsignors
   relistCapExceededCount: number; // Relist Cap (2026-09-25): RELIST-disposition AVAILABLE items past returnPeriodDays + workspace maxRelistDays, precomputed server-side by listConsignors
   notes: string | null;
+  // Consignor payouts (organizer-settles ledger): how the organizer usually pays this consignor,
+  // and what is still unpaid. owedAmount/owedItemCount are precomputed server-side by listConsignors;
+  // both are optional so an older API response cannot break the page.
+  preferredPayoutMethod?: string | null;
+  owedAmount?: string | number | null;
+  owedItemCount?: number | null;
   portalToken: string;
   items: Array<{ id: string; title: string; price: string | number; status: string }>;
   payouts: Array<{
@@ -95,6 +103,9 @@ const ConsignorsPage: React.FC = () => {
   const [rapidCaptureTarget, setRapidCaptureTarget] = useState<{ id: string; name: string } | null>(null);
   const [rapidCaptureSaleId, setRapidCaptureSaleId] = useState('');
 
+  // Record a payment: which consignor the payment modal is open for (null = closed).
+  const [paymentTarget, setPaymentTarget] = useState<Consignor | null>(null);
+
   // Form fields
   const [formData, setFormData] = useState({
     name: '',
@@ -103,6 +114,7 @@ const ConsignorsPage: React.FC = () => {
     commissionRate: '',
     useTieredCommission: false,
     unsoldItemDisposition: '',
+    preferredPayoutMethod: '',
     notes: '',
   });
 
@@ -217,6 +229,7 @@ const ConsignorsPage: React.FC = () => {
       commissionRate: '',
       useTieredCommission: false,
       unsoldItemDisposition: '',
+      preferredPayoutMethod: '',
       notes: '',
     });
     setIncludeItem(false);
@@ -236,6 +249,7 @@ const ConsignorsPage: React.FC = () => {
       commissionRate: String(consignor.commissionRate),
       useTieredCommission: Boolean((consignor as any).useTieredCommission),
       unsoldItemDisposition: consignor.unsoldItemDisposition || '',
+      preferredPayoutMethod: consignor.preferredPayoutMethod || '',
       notes: consignor.notes || '',
     });
     setEditingConsignor(consignor);
@@ -295,6 +309,8 @@ const ConsignorsPage: React.FC = () => {
         commissionRate: rate,
         useTieredCommission: formData.useTieredCommission,
         unsoldItemDisposition: formData.unsoldItemDisposition || null,
+        // Edit sends null when cleared so the preference can be removed; create just omits it.
+        preferredPayoutMethod: formData.preferredPayoutMethod || (modalMode === 'edit' ? null : undefined),
         notes: formData.notes || undefined,
       };
       if (modalMode === 'create' && includeItem) {
@@ -525,7 +541,7 @@ const ConsignorsPage: React.FC = () => {
     <TierGate
       requiredTier="TEAMS"
       featureName="Consignor Management"
-      description="Manage consignors, track items, and run payouts. Available on TEAMS and above."
+      description="Manage consignors, track items, and record payments. Available on TEAMS and above."
     >
       <Head>
         <title>Consignors | FindA.Sale</title>
@@ -542,6 +558,15 @@ const ConsignorsPage: React.FC = () => {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
+              {canAccess('TEAMS') && (
+                <Link
+                  href="/organizer/consignor-settlement"
+                  className="flex items-center justify-center gap-2 min-h-[44px] px-4 py-2 rounded-lg font-bold text-sm bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 transition-colors"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Payouts
+                </Link>
+              )}
               <Link
                 href="/organizer/intake-appointments"
                 className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold text-sm bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 transition-colors"
@@ -709,6 +734,14 @@ const ConsignorsPage: React.FC = () => {
                       <p className="text-sm text-amber-600 dark:text-amber-400 font-bold mt-2">
                         Commission: {Number(consignor.commissionRate).toFixed(1)}%
                       </p>
+                      {/* Consignor payouts: what is still unpaid to this consignor. */}
+                      {Number(consignor.owedAmount || 0) > 0 && (
+                        <p className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
+                          Owed {fmtMoney(consignor.owedAmount)}
+                          {Number(consignor.owedItemCount || 0) > 0 &&
+                            `, ${consignor.owedItemCount} ${consignor.owedItemCount === 1 ? 'item' : 'items'}`}
+                        </p>
+                      )}
                       {/* consignmentUnclaimedItemsJob.ts (2026-09-25): informational badge only --
                           mirrors the same daily nudge the organizer gets by email/in-app, surfaced
                           here so it's visible without waiting for that notification. Never implies
@@ -804,12 +837,20 @@ const ConsignorsPage: React.FC = () => {
                       <Camera className="w-4 h-4" />
                       Rapid Capture
                     </button>
+                    {canAccess('TEAMS') && (
+                      <button
+                        onClick={() => setPaymentTarget(consignor)}
+                        className="flex items-center gap-2 min-h-[44px] px-3 py-2 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg font-medium text-sm transition-colors"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        Record a payment
+                      </button>
+                    )}
                     <button
                       onClick={() => router.push(`/organizer/consignors/${consignor.id}`)}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg font-medium text-sm transition-colors"
+                      className="flex items-center gap-2 min-h-[44px] px-3 py-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg font-medium text-sm transition-colors"
                     >
-                      <DollarSign className="w-4 h-4" />
-                      Payout
+                      Details
                     </button>
                     <button
                       onClick={() => handleDelete(consignor.id, consignor.name)}
@@ -990,6 +1031,30 @@ const ConsignorsPage: React.FC = () => {
                     </span>
                   </span>
                 </label>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                  Preferred payout method
+                </label>
+                <select
+                  name="preferredPayoutMethod"
+                  value={formData.preferredPayoutMethod}
+                  onChange={handleFormChange}
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 min-h-[44px] focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  aria-label="Preferred payout method"
+                >
+                  <option value="">No preference</option>
+                  {PAYMENT_METHODS.map(m => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                  How you usually pay this consignor. It pre-fills "Paid by" when you record a payment.
+                  You pay them yourself. FindA.Sale does not send or hold any money.
+                </p>
               </div>
 
               <div className="mb-6">
@@ -1410,6 +1475,21 @@ const ConsignorsPage: React.FC = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Record a payment (repointed to the consignor payouts mark-paid flow) */}
+      {paymentTarget && canAccess('TEAMS') && (
+        <ConsignorPayoutModal
+          consignorId={paymentTarget.id}
+          consignorName={paymentTarget.name}
+          commissionRate={Number(paymentTarget.commissionRate)}
+          preferredPayoutMethod={paymentTarget.preferredPayoutMethod}
+          email={paymentTarget.email}
+          onClose={() => setPaymentTarget(null)}
+          onSuccess={() => {
+            fetchConsignors();
+          }}
+        />
       )}
     </TierGate>
   );
