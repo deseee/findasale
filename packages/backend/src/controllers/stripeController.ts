@@ -30,8 +30,10 @@ import {
   AUCTION_BUYER_PREMIUM_RATE,
   calculateApplicationFee,
   formatBuyerPremiumRate,
+  getInclusiveFeeRangePercent,
   getPlatformFeeRate,
   isAuctionListing,
+  resolveReportingFeeRate,
   snapshotForCommissionOnly,
   snapshotFromBreakdown,
   SubscriptionTier,
@@ -2456,7 +2458,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // (same event class, different trigger).
         const tierRank: Record<'SIMPLE' | 'PRO' | 'TEAMS', number> = { SIMPLE: 0, PRO: 1, TEAMS: 2 };
         if (tierRank[newTier] < tierRank[oldTier as 'SIMPLE' | 'PRO' | 'TEAMS']) {
-          const newFeePct = newTier === 'SIMPLE' ? '10%' : '8%';
+          // Inclusive fee schedule (card processing included), read from feeCalculator so it cannot drift.
+          const newFeeRange = getInclusiveFeeRangePercent(newTier);
+          const newFeePct = `${newFeeRange.min}% in person and ${newFeeRange.max}% online`;
           createNotification({
             userId: organizer.user.id,
             type: 'organizer_tier_changed',
@@ -2718,8 +2722,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     select: { title: true, organizer: { select: { subscriptionTier: true, userId: true } } },
                   })
                 : null;
-              const cartFeeRate = getPlatformFeeRate(
-                (cartSale?.organizer?.subscriptionTier ?? null) as SubscriptionTier
+              // 2026-09-30: restate the fee with the reporting resolver, not the legacy flat tier rate. The buyer was
+              // charged when the Checkout Session was CREATED, so the era comes from session.created (unix seconds),
+              // never from today: a session opened under the retired 10% / 8% model keeps those rates, one opened under
+              // the inclusive model (2026-09-24 on) gets the inclusive ONLINE rate. resolveReportingFeeRate falls back
+              // to getPlatformFeeRate itself for the pre-inclusive era, so nothing else about this branch changes.
+              const cartFeeRate = resolveReportingFeeRate(
+                (cartSale?.organizer?.subscriptionTier ?? null) as SubscriptionTier,
+                typeof session.created === 'number' ? new Date(session.created * 1000) : null,
+                'ONLINE'
               );
               // S1195 (2026-08-08, notification-gap dispatch): captured here (inside the tx
               // closure, where cartSale is in scope) and read after the transaction commits,
@@ -3709,6 +3720,9 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     // result below and relayed in the response (0 / null for every non-split refund).
     let cashPortionToRefundByHand = 0;
     let cashRefundMessage: string | null = null;
+    // Card-not-present surcharge (2026-09-30): dollars of the buyer's Card-not-present fee returned with this
+    // refund (proportional to the principal refunded; 0 for every purchase without one).
+    let surchargeRefundedAmount = 0;
 
     // Money movement — the PAID-status check, payment-intent-exists check, 30-day window,
     // the PAID->REFUNDING TOCTOU compare-and-swap claim + idempotency key, the booth-cart-vs
@@ -3729,6 +3743,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
         cashPortionToRefundByHand = squareRefund.cashPortionToRefundByHand;
         cashRefundMessage = squareRefund.message;
         isFullRefund = squareRefund.isFullRefund;
+        surchargeRefundedAmount = squareRefund.surchargeRefundedAmount ?? 0;
       } else {
         await executeVerifiedRefund(purchaseId, refundAmount, initiatedBy);
       }
@@ -3742,11 +3757,21 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     // Restore item to AVAILABLE if it exists -- FULL refunds only (money review P1-14). A partial refund
     // leaves the purchase PAID and the buyer still holds the item, so putting it back on sale would let
     // it be sold twice.
+    //
+    // GUARDED (2026-09-30): the old unconditional `item.update` could clobber a concurrent re-hold or
+    // re-sale of the same item that landed between the refund and this line. Now only the SOLD -> AVAILABLE
+    // transition is allowed (an item already re-held or re-sold is left alone), and only while no OTHER
+    // PAID purchase of this item exists (so SOLD still belongs to the purchase that was just refunded).
     if (purchase.itemId && isFullRefund) {
-      await prisma.item.update({
-        where: { id: purchase.itemId },
-        data: { status: 'AVAILABLE' }
+      const otherPaidPurchases = await prisma.purchase.count({
+        where: { itemId: purchase.itemId, id: { not: purchaseId }, status: 'PAID' },
       });
+      if (otherPaidPurchases === 0) {
+        await prisma.item.updateMany({
+          where: { id: purchase.itemId, status: 'SOLD' },
+          data: { status: 'AVAILABLE' },
+        });
+      }
     }
 
     // Send confirmation email to shopper (shared helper — see refundService.ts;
@@ -3755,6 +3780,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       toEmail: purchase.user?.email,
       buyerName: purchase.user?.name,
       refundAmount,
+      surchargeRefundAmount: surchargeRefundedAmount,
       wasCapped,
       itemTitle: purchase.item?.title,
       organizerBusinessName: purchase.sale?.organizer?.businessName,
@@ -3773,7 +3799,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
         userId: purchase.userId,
         type: 'refund_issued',
         title: 'Refund issued',
-        body: `A refund of $${refundAmount.toFixed(2)} was issued for "${purchase.item?.title || 'item'}"`,
+        body: `A refund of $${(refundAmount + surchargeRefundedAmount).toFixed(2)} was issued for "${purchase.item?.title || 'item'}"${surchargeRefundedAmount > 0 ? ` (includes the $${surchargeRefundedAmount.toFixed(2)} Card-not-present fee)` : ''}`,
         // Stripe dead-link fix (2026-09-09, findasale-dev BUG MODE): /shopper/purchases is not
         // a real route (404s); purchaseId is the route param already used above (== purchase.id).
         link: `/purchases/${purchaseId}`,
@@ -3793,10 +3819,20 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       remainingRefundable: Math.max(0, (Math.round(purchase.amount * 100) - alreadyRefundedCents - requestedRefundCents) / 100),
       // Split tender (2026-09-29): only present when part of the sale was paid in cash.
       ...(cashPortionToRefundByHand > 0 ? { cashPortionToRefundByHand, cashRefundMessage } : {}),
+      // Card-not-present surcharge (2026-09-30): only present when part of the fee was returned with this
+      // refund. `refundAmount` stays the principal; totalRefundedToBuyer is principal plus the surcharge share.
+      ...(surchargeRefundedAmount > 0 ? { surchargeRefundedAmount, totalRefundedToBuyer: refundAmount + surchargeRefundedAmount } : {}),
     });
   } catch (error) {
+    // Detail stays server-side (logged here and captured by the error tracker); the client gets a generic
+    // message plus a stable code (2026-09-30: the raw error message used to be echoed back).
     console.error('createRefund error:', error);
-    res.status(500).json({ message: error instanceof Error ? `Failed to issue refund: ${error.message}` : 'Failed to issue refund' });
+    try {
+      Sentry.captureException(error instanceof Error ? error : new Error(String(error)), { tags: { area: 'create-refund' }, extra: { purchaseId: req.params?.purchaseId } });
+    } catch {
+      // Sentry may not be initialized -- silently continue
+    }
+    res.status(500).json({ message: 'We could not issue this refund. Please try again, or contact support if it keeps happening.', code: 'REFUND_FAILED' });
   }
 };
 

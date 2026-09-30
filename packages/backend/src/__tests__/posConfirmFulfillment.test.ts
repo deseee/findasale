@@ -19,7 +19,7 @@ jest.mock('../lib/prisma', () => {
   const p: any = {
     item: { findMany: jest.fn() },
     itemReservation: { updateMany: jest.fn() },
-    purchase: { findMany: jest.fn(), create: jest.fn() },
+    purchase: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
     organizer: { findUnique: jest.fn() },
     pOSPaymentRequest: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
     $transaction: jest.fn(),
@@ -55,6 +55,8 @@ jest.mock('../lib/notificationService', () => ({ createNotification: (...a: any[
 jest.mock('../lib/transactionalEmailService', () => ({ transactionalEmailService: { send: jest.fn() } }));
 jest.mock('../services/xpService', () => ({ awardXp: jest.fn(), applyHuntPassMultiplier: jest.fn(), XP_AWARDS: {} }));
 jest.mock('../services/achievementService', () => ({ checkAndAward: jest.fn() }));
+var mockFireEngagement = jest.fn();
+jest.mock('../services/squarePurchaseEngagementService', () => ({ fireSquarePurchaseEngagement: (...a: any[]) => mockFireEngagement(...a) }));
 jest.mock('../controllers/ebayController', () => ({ endEbayListingIfExists: jest.fn() }));
 jest.mock('../services/shopifyService', () => ({ markShopifyItemSold: jest.fn() }));
 jest.mock('../services/marketplace/discogsListingConnector', () => ({ withdrawDiscogsListingIfExists: jest.fn() }));
@@ -138,6 +140,7 @@ beforeEach(() => {
   db.pOSPaymentRequest.update.mockResolvedValue({});
   db.purchase.findMany.mockResolvedValue([]);
   db.purchase.create.mockResolvedValue({});
+  db.purchase.findFirst.mockResolvedValue({ id: 'pur_first' });
   db.itemReservation.updateMany.mockResolvedValue({ count: 0 });
   db.item.findMany.mockResolvedValue([
     { id: 'i1', price: 60 },
@@ -387,5 +390,50 @@ describe('P1-10: an item gone after the card was captured', () => {
     expect(res.json.mock.calls[0][0]).toMatchObject({ refunded: true });
     expect(mockCreateNotification).not.toHaveBeenCalled();
     expect(mockCreateAndCapturePayment).not.toHaveBeenCalled();
+  });
+});
+
+describe('2026-09-30: an item deleted after the request was created', () => {
+  it('a shortfall of surviving items goes down the ITEM_UNAVAILABLE auto-refund path, records nothing and awards nothing', async () => {
+    // i2 no longer exists: only i1 comes back, so the $40 would have been absorbed into a misc row.
+    db.item.findMany.mockResolvedValue([{ id: 'i1', price: 60 }]);
+    const res = await confirm();
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: false, code: 'ITEM_UNAVAILABLE' });
+    expect(db.pOSPaymentRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: 'req1', status: { in: ['ACCEPTED', 'EXPIRED', 'CANCELLED', 'DECLINED'] } },
+      data: { status: 'FULFILLMENT_FAILED' },
+    });
+    expect(mockRefundFailed).toHaveBeenCalledWith('req1');
+    expect(mockSellItemUnits).not.toHaveBeenCalled(); // thrown before any stock moved
+    expect(db.purchase.create).not.toHaveBeenCalled(); // no misc row absorbing the missing item
+    expect(mockFireEngagement).not.toHaveBeenCalled();
+  });
+
+  it('no shortfall (every requested item exists) still succeeds', async () => {
+    const res = await confirm();
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: true });
+    expect(db.purchase.create).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('2026-09-30: engagement awards go through the shared, deduped service', () => {
+  it('fires fireSquarePurchaseEngagement exactly once with the FIRST purchase id, and no longer awards XP directly', async () => {
+    await confirm();
+    expect(db.purchase.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { squarePaymentId: 'sq_pay_1', userId: 'shopper1' }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    );
+    expect(mockFireEngagement).toHaveBeenCalledTimes(1);
+    expect(mockFireEngagement).toHaveBeenCalledWith('pur_first');
+    expect(jest.requireMock('../services/xpService').awardXp).not.toHaveBeenCalled();
+    expect(jest.requireMock('../services/achievementService').checkAndAward).not.toHaveBeenCalled();
+  });
+
+  it('a confirm that loses the compare-and-swap awards nothing', async () => {
+    db.pOSPaymentRequest.updateMany.mockResolvedValue({ count: 0 });
+    db.pOSPaymentRequest.findUnique.mockResolvedValueOnce(baseRequest()).mockResolvedValueOnce({ status: 'PAID' });
+    await confirm();
+    expect(mockFireEngagement).not.toHaveBeenCalled();
   });
 });

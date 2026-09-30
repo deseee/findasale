@@ -10,6 +10,7 @@ import { emailService } from '../lib/emailService';
 import { createNotification } from '../lib/notificationService';
 import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
 import { executeVerifiedRefund, RefundError } from '../services/refundService';
+import { resolvePlatformRevenueDollars } from '../utils/feeCalculator'; // 2026-09-30: platform revenue from the stored fee snapshot (inclusive model), legacy 10/8 only for pre-2026-09-24 rows without a snapshot
 import { executeVerifiedSquareRefund } from '../services/squareRefundService'; // Square migration Wave 1 #4 (2026-09-07): one added branch in bulkRefundPurchases below routes SQUARE-processor purchases through the Square-side choke point.
 import { suppressionService } from '../services/suppressionService';
 import { handOffCrewsBeforeUserDeletion } from '../services/crewService'; // crew founder/memberCount handoff before user.delete (purgeUser)
@@ -167,8 +168,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     let transactionRevenueLast30d = 0;
     purchasesLast30d.forEach((p: any) => {
       const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
-      const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
-      transactionRevenueLast30d += Math.round(p.amount * feeRate * 100);
+      transactionRevenueLast30d += Math.round(resolvePlatformRevenueDollars(p, tier) * 100);
     });
 
     // Transaction revenue (today)
@@ -203,8 +203,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     let transactionRevenueToday = 0;
     purchasestoday.forEach((p: any) => {
       const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
-      const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
-      transactionRevenueToday += Math.round(p.amount * feeRate * 100);
+      transactionRevenueToday += Math.round(resolvePlatformRevenueDollars(p, tier) * 100);
     });
 
     // Ala-carte revenue today
@@ -321,8 +320,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       let dayTransactionRevenue = 0;
       dayPurchases.forEach((p: any) => {
         const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
-        const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
-        dayTransactionRevenue += Math.round(p.amount * feeRate * 100);
+        dayTransactionRevenue += Math.round(resolvePlatformRevenueDollars(p, tier) * 100);
       });
       sparklines.transactionRevenue.push(dayTransactionRevenue);
 
@@ -1167,7 +1165,7 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching AI usage:', error);
-    res.status(500).json({ message: 'Failed to fetch AI usage' });
+    res.status(500).json({ message: 'Failed to fetch auto-tools usage' });
   }
 };
 
@@ -1175,10 +1173,10 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
 export const resetAIUsage = async (req: AuthRequest, res: Response) => {
   try {
     await resetMonthlyAICost();
-    res.json({ message: 'AI usage counter reset successfully' });
+    res.json({ message: 'Auto-tools usage counter reset successfully' });
   } catch (error) {
     console.error('Error resetting AI usage:', error);
-    res.status(500).json({ message: 'Failed to reset AI usage' });
+    res.status(500).json({ message: 'Failed to reset auto-tools usage' });
   }
 };
 
@@ -2583,7 +2581,7 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
       ? (rawReason as 'duplicate' | 'fraudulent' | 'requested_by_customer')
       : 'requested_by_customer';
 
-    const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string; cashPortionToRefundByHand?: number; cashRefundMessage?: string | null }> = [];
+    const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string; cashPortionToRefundByHand?: number; cashRefundMessage?: string | null; surchargeRefundedAmount?: number }> = [];
 
     // Sequential loop, intentionally not parallelized -- see file comment above.
     for (const purchaseId of purchaseIds) {
@@ -2622,6 +2620,8 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         // knows the rest is owed in cash. Absent on every non-split refund.
         const cashByHand = 'cashPortionToRefundByHand' in result ? result.cashPortionToRefundByHand : 0;
         const cashMessage = 'message' in result ? result.message : null;
+        // Card-not-present surcharge (2026-09-30): the buyer's Card-not-present fee returned with this refund.
+        const bulkSurchargeRefunded = 'surchargeRefundedAmount' in result ? (result.surchargeRefundedAmount ?? 0) : 0;
         // BUG FIX 2026-08-28 (P0, live-DB-confirmed): executeVerifiedRefund deliberately does NOT
         // reset Item.status itself -- refundService.ts's own comment says that happens in "each
         // caller...right after this function returns", matching stripeController.ts's createRefund
@@ -2647,6 +2647,7 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
           success: true,
           refundedAmount: result.refundedAmount,
           ...(cashByHand > 0 ? { cashPortionToRefundByHand: cashByHand, cashRefundMessage: cashMessage } : {}),
+          ...(bulkSurchargeRefunded > 0 ? { surchargeRefundedAmount: bulkSurchargeRefunded } : {}),
         });
       } catch (err) {
         if (err instanceof RefundError) {

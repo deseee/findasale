@@ -40,7 +40,8 @@ import { createHoldInvoiceSquareCheckout, generateHoldInvoiceId } from '../servi
 import { SquareOnboardingIncompleteError, buildSquareIdempotencyKey } from '../services/squarePaymentService'; // thrown by createHoldInvoiceSquareCheckout when the organizer's Square onboarding is incomplete; buildSquareIdempotencyKey added Wave S2 #4 (2026-09-09) for the POS QR payment-link Square branch below
 import { createSquareCheckoutLink, deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService'; // Square changeover Wave S2 #4 (2026-09-09): POS QR payment link, Square branch
 import { isValidCents, cardLegProblem, wouldExceedCashFeeExposureCap, resolveCashCommissionRate, cashCommissionOn, accrueSplitCashLegOnce, MAX_POS_AMOUNT_CENTS, MIN_SPLIT_CARD_LEG_CENTS } from '../services/cashFeeService'; // Split tender on the QR payment link (2026-09-29): validation, cash-fee exposure cap, and idempotent cash-leg commission accrual
-import { escapeHtml } from '../utils/htmlEscape'; // 2026-09-29: shopper/organizer-controlled text interpolated into the invoice email
+import { escapeHtml, safeHttpsUrl } from '../utils/htmlEscape'; // 2026-09-29: shopper/organizer-controlled text interpolated into the invoice email; safeHttpsUrl (2026-09-30): the stored payment link URL is re-validated before it goes into an email
+import { redisIncrWithWindow } from '../middleware/rateLimitShared'; // 2026-09-30: per-organizer hourly cap on emailing payment links (same Redis fixed-window helper the guest-checkout velocity guard uses)
 import { normalizeMiscLines, evaluateInvoicePricing, authorizeDiscountAndCheckFloor } from '../services/posInvoiceLinePricing'; // 2026-09-29 money review P1-6/8: integer-cent lines, discount permission + catalog floor on the hold invoice and the QR link
 
 /** Payment-link expiry bounds for the optional expiresInSeconds on POST /api/pos/payment-links. */
@@ -1414,7 +1415,8 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
           });
         }
         console.error('[pos] sendHoldInvoice: Square payment link creation failed:', squareError);
-        return res.status(400).json({ message: 'Failed to create Square payment link', error: squareError?.message });
+        // 2026-09-30: no raw processor text to the client (it is logged above); a stable code instead.
+        return res.status(400).json({ message: 'Failed to create Square payment link', code: 'SQUARE_PAYMENT_LINK_FAILED' });
       }
 
       if (!squareResult.ok) {
@@ -1610,45 +1612,138 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/** Max payment-link emails one organizer can send per hour (2026-09-30, phishing-relay hardening). */
+export const PAYMENT_LINK_EMAIL_MAX_PER_HOUR = 20;
+const PAYMENT_LINK_EMAIL_WINDOW_SECONDS = 60 * 60;
+// In-memory fallback window used only when Redis is unavailable (Redis is the shared, multi-instance source
+// of truth). Per process, so it is a weaker cap than Redis, but it still bounds a single instance.
+const paymentLinkEmailLocalWindows = new Map<string, { count: number; resetAt: number }>();
+
+/** Test hook: clears the in-memory fallback counters. */
+export const __resetPaymentLinkEmailLimiterForTests = (): void => paymentLinkEmailLocalWindows.clear();
+
+/**
+ * True when this organizer already used up its hourly allowance of payment-link emails. Counts the attempt
+ * being checked. Redis fixed window first; per-process memory when Redis is not connected.
+ */
+async function paymentLinkEmailRateLimited(organizerId: string): Promise<boolean> {
+  const redisCount = await redisIncrWithWindow(`rl:pos-link-email:${organizerId}`, PAYMENT_LINK_EMAIL_WINDOW_SECONDS);
+  if (redisCount !== null) return redisCount > PAYMENT_LINK_EMAIL_MAX_PER_HOUR;
+  const now = Date.now();
+  const entry = paymentLinkEmailLocalWindows.get(organizerId);
+  if (!entry || entry.resetAt <= now) {
+    paymentLinkEmailLocalWindows.set(organizerId, { count: 1, resetAt: now + PAYMENT_LINK_EMAIL_WINDOW_SECONDS * 1000 });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > PAYMENT_LINK_EMAIL_MAX_PER_HOUR;
+}
+
+/** A plain single mailbox: no whitespace, control characters, angle brackets, quotes, or list separators. */
+export function isPlainEmailAddress(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const v = value.trim();
+  if (!v || v.length > 254) return false;
+  return /^[^\s@<>",;:()\[\]\\]{1,64}@[^\s@<>",;:()\[\]\\]+\.[^\s@<>",;:()\[\]\\]{2,}$/.test(v);
+}
+
 /**
  * POST /api/pos/payment-links/email
- * Send a Stripe payment link URL to a shopper's email via Resend.
- * Used when organizer generates a QR code and wants to also email the link.
+ * Email a shopper the organizer's OWN active payment link (Square hosted checkout) via the platform sender.
+ * Used when the organizer generates a QR code and wants to also email the link.
  *
- * Body: { paymentLinkUrl: string, buyerEmail: string, amount: number }
+ * Body: { linkId: string, buyerEmail: string }
+ *
+ * SECURITY (2026-09-30, payment review finding 1): this used to email ANY address a caller-supplied
+ * paymentLinkUrl and amount from the platform sender, i.e. an open phishing relay signed by our domain.
+ * The server now looks the link up itself: it must be an ACTIVE, unexpired POSPaymentLink owned by the
+ * requesting organizer (and on that organizer's own sale). The URL and the amount in the email are the
+ * STORED ones; nothing the caller sends for either is trusted. Legacy callers that still send
+ * { paymentLinkUrl, buyerEmail, amount } without a linkId are accepted only when paymentLinkUrl is EXACTLY
+ * the stored URL of one of this organizer's active links; otherwise the request is refused. The recipient is
+ * validated as a single plain address, sends are capped per organizer per hour (Redis window), and every
+ * value that reaches the HTML is escaped. Errors are generic with a stable `code`; detail is logged only.
  */
 export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
   try {
     const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
-    const { paymentLinkUrl, buyerEmail, amount } = req.body as {
-      paymentLinkUrl?: string;
-      buyerEmail?: string;
-      amount?: number;
+    const { linkId, paymentLinkUrl, buyerEmail } = (req.body ?? {}) as {
+      linkId?: unknown;
+      paymentLinkUrl?: unknown;
+      buyerEmail?: unknown;
+      amount?: unknown; // legacy field: accepted by the API shape but NEVER used, the stored amount is
     };
 
-    if (!paymentLinkUrl || !buyerEmail) {
-      return res.status(400).json({ message: 'paymentLinkUrl and buyerEmail required' });
+    if (!isPlainEmailAddress(buyerEmail)) {
+      return res.status(400).json({ message: 'Enter a valid email address', code: 'INVALID_EMAIL' });
+    }
+    const recipient = buyerEmail.trim();
+
+    const hasLinkId = typeof linkId === 'string' && linkId.length > 0 && linkId.length <= 64;
+    const hasLegacyUrl = typeof paymentLinkUrl === 'string' && paymentLinkUrl.length > 0 && paymentLinkUrl.length <= 2048;
+    if (!hasLinkId && !hasLegacyUrl) {
+      return res.status(400).json({ message: 'A payment link is required', code: 'PAYMENT_LINK_REQUIRED' });
+    }
+
+    if (await paymentLinkEmailRateLimited(organizer.id)) {
+      return res.status(429).json({ message: 'You have emailed the maximum number of payment links for now. Please try again in an hour.', code: 'RATE_LIMITED' });
+    }
+
+    // Scoped to the requesting organizer AND that organizer's own sale. A link id (or URL) that belongs to
+    // anyone else is indistinguishable from one that does not exist.
+    const ownerScope = { organizerId: organizer.id, sale: { organizerId: organizer.id } };
+    const link = hasLinkId
+      ? await prisma.pOSPaymentLink.findFirst({
+          where: { id: linkId as string, ...ownerScope },
+          include: { sale: { select: { title: true } } },
+        })
+      : await prisma.pOSPaymentLink.findFirst({
+          where: {
+            ...ownerScope,
+            status: 'ACTIVE',
+            OR: [{ squarePaymentLinkUrl: paymentLinkUrl as string }, { stripePaymentLinkUrl: paymentLinkUrl as string }],
+          },
+          include: { sale: { select: { title: true } } },
+        });
+    if (!link) {
+      return res.status(404).json({ message: 'Payment link not found', code: 'PAYMENT_LINK_NOT_FOUND' });
+    }
+    if (link.status !== 'ACTIVE') {
+      return res.status(409).json({ message: 'This payment link is no longer active', code: 'PAYMENT_LINK_NOT_ACTIVE' });
+    }
+    if (link.expiresAt && link.expiresAt.getTime() <= Date.now()) {
+      return res.status(409).json({ message: 'This payment link has expired', code: 'PAYMENT_LINK_EXPIRED' });
+    }
+
+    const storedUrl = link.processor === 'SQUARE' ? link.squarePaymentLinkUrl : link.stripePaymentLinkUrl;
+    const checkoutUrl = safeHttpsUrl(storedUrl);
+    if (!checkoutUrl) {
+      console.error(`[pos] sendPaymentLinkEmail: link ${link.id} has no usable stored https URL`);
+      return res.status(409).json({ message: 'This payment link cannot be emailed', code: 'PAYMENT_LINK_URL_UNAVAILABLE' });
     }
 
     const { buildEmail } = await import('../services/emailTemplateService');
-    
+
     const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
-    const amountStr = amount ? `$${Number(amount).toFixed(2)}` : 'your items';
+    // Stored amount, integer cents. buildEmail treats headline as HTML and ctaUrl is escaped by the template;
+    // body is HTML, so every dynamic piece is escaped here.
+    const amountStr = link.amount > 0 ? `$${(link.amount / 100).toFixed(2)}` : 'your items';
+    const saleTitle = link.sale?.title ? String(link.sale.title) : '';
     const html = buildEmail({
       preheader: `Your payment link is ready`,
-      headline: `Pay ${amountStr}. Tap the button below.`,
-      body: `<p>The organizer has sent you a secure payment link for ${amountStr}. Tap below to pay from your phone.</p>`,
+      headline: escapeHtml(`Pay ${amountStr}. Tap the button below.`),
+      body: `<p>The organizer${saleTitle ? ` of ${escapeHtml(saleTitle)}` : ''} has sent you a secure payment link for ${escapeHtml(amountStr)}. Tap below to pay from your phone.</p>`,
       ctaText: 'Pay Now',
-      ctaUrl: paymentLinkUrl,
+      ctaUrl: checkoutUrl,
       accentColor: '#10b981',
     });
 
     await transactionalEmailService.emails.send({
       from: fromEmail,
-      to: buyerEmail,
+      to: recipient,
       subject: `Your checkout is ready: ${amountStr}`,
       html,
     });
@@ -1656,7 +1751,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
     res.json({ status: 'SENT' });
   } catch (error) {
     console.error('[pos] sendPaymentLinkEmail error:', error);
-    res.status(500).json({ message: 'Failed to send email' });
+    res.status(500).json({ message: 'Failed to send email', code: 'EMAIL_SEND_FAILED' });
   }
 };
 

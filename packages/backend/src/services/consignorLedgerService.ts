@@ -14,9 +14,11 @@ import { csvCell as safeCsvCell } from '../utils/csvSafe';
  * payment rail. Ledger correctness and idempotency come before everything else.
  *
  * INDUSTRY-STANDARD DEFAULTS (v1, recorded here so they are not re-litigated):
- *  - Payout basis is Item.price (the tag price). collectedAmount (paid purchases net of
- *    refunds) and basisSource are stored on every line and a variance flag is raised when
- *    they differ; the payout itself is NOT changed by the variance in v1.
+ *  - Payout basis is Item.price (the tag price), EXCEPT when the purchase was partly refunded
+ *    (refundedAmount > 0): then the basis is the net sold amount (collectedAmount) and basisSource
+ *    is PURCHASE. collectedAmount (paid purchases net of refunds) and basisSource are stored on every
+ *    line and a variance flag is raised when collected and the tag price differ; a run with any
+ *    variance line needs an explicit acknowledgement to be approved (approveRun).
  *  - Items whose latest purchase is refunded, being refunded or disputed are excluded from a
  *    snapshot (reported as `excluded`, not silently dropped) and reappear if they become
  *    payable again.
@@ -441,7 +443,11 @@ export async function loadUnsettled(db: LedgerDb, opts: LoadUnsettledOptions): P
 
   const keep = new Set(opts.keepItemIds ?? []);
   const excluded: ExcludedItem[] = [];
-  const candidatesByConsignor = new Map<string, { item: any; soldAt: Date | null; price: Decimal; collected: Decimal | null; purchaseId: string | null }[]>();
+  // `price` is the payout BASIS handed to calculateConsignorPayout; `listPrice` is the tag price kept for the snapshot/variance.
+  const candidatesByConsignor = new Map<
+    string,
+    { item: any; soldAt: Date | null; price: Decimal; listPrice: Decimal; basisSource: 'ITEM_PRICE' | 'PURCHASE'; collected: Decimal | null; purchaseId: string | null }[]
+  >();
 
   for (const item of items) {
     if (alreadySettled.has(item.id)) continue; // already in a live payout: not owed again
@@ -464,7 +470,9 @@ export async function loadUnsettled(db: LedgerDb, opts: LoadUnsettledOptions): P
       exclude('NO_PRICE');
       continue;
     }
-    const price = roundToCents(rawPrice);
+    const listPrice = roundToCents(rawPrice);
+    let price = listPrice;
+    let basisSource: 'ITEM_PRICE' | 'PURCHASE' = 'ITEM_PRICE';
 
     const relevant = (item.purchases || [])
       .filter((p: any) => PURCHASE_RELEVANT.has(p.status))
@@ -483,6 +491,20 @@ export async function loadUnsettled(db: LedgerDb, opts: LoadUnsettledOptions): P
         paid.reduce((sum: Decimal, p: any) => sum.plus(D(p.amount)).minus(D(p.refundedAmount)), new Decimal(0))
       );
       purchaseId = paid[0].id;
+
+      // PARTIAL REFUNDS (2026-09-30): a PAID purchase that carries a refundedAmount was partly refunded, so the
+      // consignor must not be paid a share of money the buyer got back. The basis becomes the NET sold amount
+      // (paid minus refunded) and basisSource records that (PURCHASE). A purchase with nothing refunded keeps
+      // the tag-price basis exactly as before (variance is still flagged when they differ).
+      const anyRefunded = paid.some((p: any) => D(p.refundedAmount).greaterThan(0));
+      if (anyRefunded) {
+        if (collected.lessThanOrEqualTo(0)) {
+          exclude('REFUNDED');
+          continue;
+        }
+        price = collected;
+        basisSource = 'PURCHASE';
+      }
     }
 
     if (!opts.acknowledgeLegacyOverlap && !keep.has(item.id)) {
@@ -497,7 +519,7 @@ export async function loadUnsettled(db: LedgerDb, opts: LoadUnsettledOptions): P
     }
 
     const list = candidatesByConsignor.get(item.consignorId) ?? [];
-    list.push({ item, soldAt, price, collected, purchaseId });
+    list.push({ item, soldAt, price, listPrice, basisSource, collected, purchaseId });
     candidatesByConsignor.set(item.consignorId, list);
   }
 
@@ -525,24 +547,24 @@ export async function loadUnsettled(db: LedgerDb, opts: LoadUnsettledOptions): P
     const lines: LedgerLine[] = candidates.map((x) => {
       const calcLine = calcById.get(x.item.id);
       if (!calcLine) throw new Error(`calculateConsignorPayout returned no line for item ${x.item.id}`);
-      const variance = x.collected !== null && x.collected.minus(x.price).abs().greaterThanOrEqualTo(0.01);
+      const variance = x.collected !== null && x.collected.minus(x.listPrice).abs().greaterThanOrEqualTo(0.01);
       return {
         itemId: x.item.id,
         title: String(x.item.title),
         saleId: x.item.saleId ?? null,
         soldAt: x.soldAt,
-        listPrice: x.price,
+        listPrice: x.listPrice,
         priceBeforeMarkdown:
           x.item.priceBeforeMarkdown !== null && x.item.priceBeforeMarkdown !== undefined
             ? roundToCents(x.item.priceBeforeMarkdown)
             : null,
         collectedAmount: x.collected,
         purchaseId: x.purchaseId,
-        basisSource: 'ITEM_PRICE',
+        basisSource: x.basisSource,
         varianceFlag: variance,
         ratePct: calcLine.ratePct,
         consignorShare: calcLine.share,
-        organizerShare: x.price.minus(calcLine.share),
+        organizerShare: x.price.minus(calcLine.share), // basis minus share (basis is the net sold amount after a partial refund)
         tierLabel: calcLine.tierLabel,
       };
     });
@@ -1225,7 +1247,10 @@ export async function refreshDraftRun(db: LedgerDb, p: { workspaceId: string; ba
  * DRAFT -> APPROVED. Never calls any payment rail (and never payConsignorViaACH). Idempotent:
  * approving an already-approved run is a 200 no-op.
  */
-export async function approveRun(db: LedgerDb, p: { workspaceId: string; batchId: string; actorUserId: string | null }) {
+export async function approveRun(
+  db: LedgerDb,
+  p: { workspaceId: string; batchId: string; actorUserId: string | null; acknowledgeVariance?: boolean }
+) {
   const existing = await db.consignorSettlementBatch.findFirst({ where: { id: p.batchId, workspaceId: p.workspaceId }, select: { id: true, status: true } });
   if (!existing) throw notFound('Settlement batch');
   if (['APPROVED', 'PARTIALLY_PAID', 'PAID'].includes(existing.status)) return { noop: true };
@@ -1251,6 +1276,23 @@ export async function approveRun(db: LedgerDb, p: { workspaceId: string; batchId
       });
       if (payouts.length === 0) {
         throw new LedgerError(409, 'EMPTY_BATCH', 'This run has no payouts to approve.');
+      }
+      // Variance gate (2026-09-30): a line whose collected amount differs from the tag price was only ever
+      // FLAGGED, never stopped. Approving locks the amounts, so a run with any live variance line needs an
+      // explicit acknowledgement. Checked after the DRAFT claim inside the transaction: throwing rolls the
+      // claim back, and a refresh (DRAFT only) cannot interleave because it serializes on the same batch.
+      if (p.acknowledgeVariance !== true) {
+        const varianceLines = await tx.consignorPayoutItem.count({
+          where: { payout: { settlementBatchId: p.batchId }, varianceFlag: true, activeItemKey: { not: null } },
+        });
+        if (varianceLines > 0) {
+          throw new LedgerError(
+            409,
+            'VARIANCE_ACK_REQUIRED',
+            `${varianceLines} line${varianceLines === 1 ? '' : 's'} in this run sold for a different amount than the tag price. Review them, then confirm you have checked the variance to approve.`,
+            { varianceLineCount: varianceLines }
+          );
+        }
       }
       for (const payout of payouts) {
         await writeEvent(tx, {

@@ -550,13 +550,82 @@ export const REVERSED_PURCHASE_STATUSES = ['REFUNDED', 'REFUNDING', 'DISPUTED', 
 
 export type CommissionState = 'PENDING' | 'APPROVED' | 'PAID' | 'REVERSED';
 
+/** The purchase fields commission proration needs. All optional so a caller that does not select them sees "never refunded". */
+export interface CommissionPurchaseShape {
+  status: string;
+  amount?: number | null;
+  refundedAmount?: number | null;
+}
+
+/** What to select from Purchase wherever a commission amount is computed (status for state, the rest for proration). */
+const PURCHASE_COMMISSION_SELECT = { status: true, amount: true, refundedAmount: true } as const;
+
+/**
+ * Commission after a PARTIAL refund (2026-09-30). A creator's commission is a share of the platform fee on
+ * the purchase, and a partial refund returns that fee in proportion (Square refunds the app fee
+ * proportionally), so the commission is prorated by (1 - refunded / amount) in integer cents, floored so
+ * it can never round up and is never negative. Unrefunded purchases return the stored commission
+ * untouched. A fully refunded purchase prorates to 0 (and its status already reads as reversed).
+ */
+export function proratedCommissionCents(c: {
+  commissionCents: number;
+  purchaseAmountCents?: number;
+  purchase: CommissionPurchaseShape | null;
+}): number {
+  const refundedDollars = Number(c.purchase?.refundedAmount);
+  if (!c.purchase || !Number.isFinite(refundedDollars) || refundedDollars <= 0) return c.commissionCents;
+  const purchaseDollars = Number(c.purchase.amount);
+  const amountCents = Number.isFinite(purchaseDollars) && purchaseDollars > 0 ? Math.round(purchaseDollars * 100) : Number(c.purchaseAmountCents) || 0;
+  if (amountCents <= 0) return c.commissionCents;
+  const refundedCents = Math.min(amountCents, Math.round(refundedDollars * 100));
+  const keptCents = amountCents - refundedCents;
+  return Math.max(0, Math.min(c.commissionCents, Math.floor((c.commissionCents * keptCents) / amountCents)));
+}
+
+/** Markers settleCommission writes into payoutNote so the paid / clawed-back amounts survive without a schema change. */
+const PAID_CENTS_MARKER = /\[paid-cents:(\d+)\]/g;
+const CLAWBACK_CENTS_MARKER = /\[clawback-cents:(\d+)\]/g;
+function sumMarker(note: string | null | undefined, re: RegExp, mode: 'last' | 'sum'): number | null {
+  if (!note) return null;
+  let found: number | null = null;
+  for (const m of note.matchAll(new RegExp(re.source, 'g'))) {
+    const n = parseInt(m[1], 10);
+    found = mode === 'sum' ? (found ?? 0) + n : n;
+  }
+  return found;
+}
+
+/**
+ * Cents already PAID to the creator that the purchase's refunds now make excess: paid amount (the amount in
+ * the [paid-cents:N] marker, else the full stored commission for a row paid before the marker existed)
+ * minus what the commission is worth now (0 once the purchase is reversed) minus clawbacks already
+ * recorded. 0 unless the row is PAID. This is what a clawback must recover; nothing here moves money.
+ */
+export function clawbackExcessCents(c: {
+  payoutStatus: string;
+  payoutNote?: string | null;
+  commissionCents: number;
+  purchaseAmountCents?: number;
+  purchase: CommissionPurchaseShape | null;
+}): number {
+  if (c.payoutStatus !== 'PAID' || !c.purchase) return 0;
+  const paid = sumMarker(c.payoutNote, PAID_CENTS_MARKER, 'last') ?? c.commissionCents;
+  const worthNow = REVERSED_PURCHASE_STATUSES.includes(c.purchase.status) ? 0 : proratedCommissionCents(c);
+  const clawed = sumMarker(c.payoutNote, CLAWBACK_CENTS_MARKER, 'sum') ?? 0;
+  return Math.max(0, paid - worthNow - clawed);
+}
+
 export function commissionStateOf(c: {
   payoutStatus: string;
   eligibleAt: Date;
-  purchase: { status: string } | null;
+  purchase: CommissionPurchaseShape | null;
+  commissionCents?: number;
+  purchaseAmountCents?: number;
 }, now: Date = new Date()): CommissionState {
   if (c.payoutStatus === 'VOIDED') return 'REVERSED';
   if (!c.purchase || REVERSED_PURCHASE_STATUSES.includes(c.purchase.status)) return 'REVERSED';
+  // A partial refund that leaves nothing of the commission (prorated to 0) is reversed too.
+  if (typeof c.commissionCents === 'number' && c.commissionCents > 0 && proratedCommissionCents({ commissionCents: c.commissionCents, purchaseAmountCents: c.purchaseAmountCents, purchase: c.purchase }) === 0) return 'REVERSED';
   if (c.payoutStatus === 'PAID') return 'PAID';
   return c.eligibleAt.getTime() <= now.getTime() ? 'APPROVED' : 'PENDING';
 }
@@ -586,7 +655,7 @@ export async function getCreatorDashboard(creatorUserId: string, now: Date = new
         payoutStatus: true,
         eligibleAt: true,
         createdAt: true,
-        purchase: { select: { status: true } },
+        purchase: { select: PURCHASE_COMMISSION_SELECT },
         affiliateLink: { select: { sale: { select: { title: true } } } },
       },
     }),
@@ -609,16 +678,20 @@ export async function getCreatorDashboard(creatorUserId: string, now: Date = new
 
   for (const c of conversions) {
     const state = commissionStateOf(c, now);
-    if (state === 'PENDING') totals.pendingCents += c.commissionCents;
-    else if (state === 'APPROVED') totals.approvedCents += c.commissionCents;
-    else if (state === 'PAID') totals.paidCents += c.commissionCents;
+    // Partial refunds (2026-09-30): count only the commission that survives the refund; the refunded
+    // share is reported as reversed.
+    const kept = state === 'REVERSED' ? 0 : proratedCommissionCents(c);
+    if (state === 'PENDING') totals.pendingCents += kept;
+    else if (state === 'APPROVED') totals.approvedCents += kept;
+    else if (state === 'PAID') totals.paidCents += kept;
     else totals.reversedCents += c.commissionCents;
+    if (state !== 'REVERSED') totals.reversedCents += c.commissionCents - kept;
     if (state !== 'REVERSED') {
       totals.grossSalesCents += c.purchaseAmountCents;
       totals.activeConversions += 1;
       if (c.affiliateLinkId) {
         const cur = perLink.get(c.affiliateLinkId) ?? { commissionCents: 0, conversions: 0 };
-        cur.commissionCents += c.commissionCents;
+        cur.commissionCents += kept;
         cur.conversions += 1;
         perLink.set(c.affiliateLinkId, cur);
       }
@@ -628,7 +701,7 @@ export async function getCreatorDashboard(creatorUserId: string, now: Date = new
         id: c.id,
         saleTitle: c.affiliateLink?.sale?.title ?? null,
         purchaseAmountCents: c.purchaseAmountCents,
-        commissionCents: c.commissionCents,
+        commissionCents: state === 'REVERSED' ? c.commissionCents : proratedCommissionCents(c),
         state,
         createdAt: c.createdAt,
         eligibleAt: c.eligibleAt,
@@ -710,14 +783,19 @@ export async function listAdminCommissions(
   let clawbackDueCents = 0;
   const decorated = rows.map((r) => {
     const state = commissionStateOf(r, now);
-    totals[state] += r.commissionCents;
+    // Partial refunds (2026-09-30): a live commission counts at its prorated value; the refunded share is REVERSED.
+    const keptCents = state === 'REVERSED' ? r.commissionCents : proratedCommissionCents(r);
+    totals[state] += keptCents;
+    if (state !== 'REVERSED' && keptCents < r.commissionCents) totals.REVERSED += r.commissionCents - keptCents;
     // A commission that was ALREADY paid out to the creator and whose purchase was later refunded or
     // lost to a dispute. commissionStateOf reports it as REVERSED (the purchase is), which hides that
     // real money left the building. Clawing it back from the creator is a manual process (nothing
     // here moves money); recordCommissionClawback (settleCommission action 'CLAWBACK') records it.
-    const clawbackDue = r.payoutStatus === 'PAID' && !!r.purchase && REVERSED_PURCHASE_STATUSES.includes(r.purchase.status);
-    if (clawbackDue) clawbackDueCents += r.commissionCents;
-    return { row: r, state, clawbackDue };
+    // Also true for a PARTIAL refund of a paid commission: the excess over the prorated commission is owed back.
+    const rowClawbackCents = clawbackExcessCents(r);
+    const clawbackDue = rowClawbackCents > 0;
+    if (clawbackDue) clawbackDueCents += rowClawbackCents;
+    return { row: r, state, clawbackDue, rowClawbackCents, keptCents };
   });
   const matches = (d: { state: CommissionState }) => wanted === 'ALL' || d.state === wanted;
   const filtered = decorated.filter(matches);
@@ -733,13 +811,16 @@ export async function listAdminCommissions(
     pageSource = filtered.slice((page - 1) * limit, page * limit);
     hasMore = filtered.length > page * limit;
   }
-  const pageRows = pageSource.map(({ row, state, clawbackDue }) => ({
+  const pageRows = pageSource.map(({ row, state, clawbackDue, rowClawbackCents, keptCents }) => ({
     id: row.id,
     createdAt: row.createdAt,
     eligibleAt: row.eligibleAt,
     state,
     clawbackDue,
-    commissionCents: row.commissionCents,
+    clawbackDueCents: rowClawbackCents,
+    // The commission that stands after any partial refund; originalCommissionCents is what was first recorded.
+    commissionCents: keptCents,
+    originalCommissionCents: row.commissionCents,
     commissionRateBps: row.commissionRateBps,
     purchaseAmountCents: row.purchaseAmountCents,
     platformFeeCents: row.platformFeeCents,
@@ -788,7 +869,7 @@ function readLedgerBatch(after: string | null) {
       payoutStatus: true,
       paidAt: true,
       payoutNote: true,
-      purchase: { select: { status: true } },
+      purchase: { select: PURCHASE_COMMISSION_SELECT },
       affiliateLink: { select: { sale: { select: { title: true } } } },
       creator: { select: { id: true, name: true, email: true, creatorProfile: { select: { code: true } } } },
     },
@@ -829,7 +910,8 @@ export async function settleCommission(
     payoutStatus: true,
     payoutNote: true,
     eligibleAt: true,
-    purchase: { select: { status: true } },
+    purchaseAmountCents: true,
+    purchase: { select: PURCHASE_COMMISSION_SELECT },
   } as const;
   const row = await prisma.affiliateConversion.findUnique({ where: { id }, select });
   if (!row) throw new CreatorError('NOT_FOUND', 404, 'Commission not found.');
@@ -854,10 +936,13 @@ export async function settleCommission(
     if (row.payoutStatus !== 'PAID') {
       throw new CreatorError('NOT_CLAWBACKABLE', 409, 'Only a commission that was already paid can have a clawback recorded.');
     }
-    if (!row.purchase || !REVERSED_PURCHASE_STATUSES.includes(row.purchase.status)) {
-      throw new CreatorError('NOT_REVERSED', 409, 'This purchase has not been refunded or lost to a dispute, so there is nothing to claw back.');
+    if (clawbackExcessCents(row) <= 0) {
+      throw new CreatorError('NOT_REVERSED', 409, 'This purchase has not been refunded or lost to a dispute, or the commission already paid is not more than what still stands, so there is nothing to claw back.');
     }
   }
+  const rowReversed = !!row.purchase && REVERSED_PURCHASE_STATUSES.includes(row.purchase.status);
+  const clawbackCents = action === 'CLAWBACK' ? clawbackExcessCents(row) : 0;
+  const payableCents = proratedCommissionCents(row);
 
   const where =
     action === 'PAID'
@@ -869,22 +954,52 @@ export async function settleCommission(
         }
       : action === 'VOIDED'
         ? { id, payoutStatus: 'UNPAID' }
-        : {
-            id,
-            payoutStatus: 'PAID',
-            purchase: { is: { status: { in: REVERSED_PURCHASE_STATUSES } } },
-          };
+        : rowReversed
+          ? {
+              id,
+              payoutStatus: 'PAID',
+              purchase: { is: { status: { in: REVERSED_PURCHASE_STATUSES } } },
+            }
+          : {
+              // PARTIAL-refund excess: the row stays PAID (more refunds can follow), so pin the note this call
+              // read; a concurrent clawback record changes it and this then matches nothing.
+              id,
+              payoutStatus: 'PAID',
+              payoutNote: row.payoutNote ?? null,
+              purchase: { is: { status: { notIn: REVERSED_PURCHASE_STATUSES } } },
+            };
+  // payoutNote is capped at 1000 characters; machine-readable markers ride at the END of the text that is
+  // kept, so trimming drops the oldest free text, never a marker.
+  const joinNote = (prev: string | null, add: string) => {
+    const room = Math.max(0, 1000 - add.length - 3);
+    const kept = prev ? prev.slice(-room) : '';
+    return [kept, add].filter(Boolean).join(' | ').slice(-1000);
+  };
   const data =
     action === 'CLAWBACK'
       ? {
-          payoutStatus: 'CLAWBACK_RECORDED',
-          payoutNote: [row.payoutNote, `Clawback recorded: ${noteText}`].filter(Boolean).join(' | ').slice(0, 1000),
+          payoutStatus: rowReversed ? 'CLAWBACK_RECORDED' : 'PAID',
+          // Fully reversed: terminal CLAWBACK_RECORDED and the note reads exactly as it always did. A PARTIAL-refund
+          // excess keeps the row PAID and records the recovered cents in a marker so a later refund's excess is exact.
+          payoutNote: rowReversed
+            ? [row.payoutNote, `Clawback recorded: ${noteText}`].filter(Boolean).join(' | ').slice(0, 1000)
+            : joinNote(row.payoutNote, `Partial-refund clawback recorded: ${noteText} [clawback-cents:${clawbackCents}]`),
         }
-      : {
-          payoutStatus: action,
-          payoutNote: noteText || null,
-          ...(action === 'PAID' ? { paidAt: now } : {}),
-        };
+      : action === 'PAID'
+        ? {
+            payoutStatus: 'PAID',
+            // A commission prorated for a partial refund records the cents actually payable, so a later refund's
+            // excess is exact; an unrefunded one is written exactly as before (the full stored commission is implied).
+            payoutNote:
+              payableCents < row.commissionCents
+                ? joinNote(null, `${noteText ? `${noteText} ` : ''}[paid-cents:${payableCents}]`.trim())
+                : noteText || null,
+            paidAt: now,
+          }
+        : {
+            payoutStatus: action,
+            payoutNote: noteText || null,
+          };
 
   const result = await prisma.affiliateConversion.updateMany({ where, data });
   if (result.count === 0) {
@@ -902,12 +1017,12 @@ export async function settleCommission(
       row.creatorUserId,
       'creator_commission_paid',
       'Your commission was paid',
-      `A commission of $${(row.commissionCents / 100).toFixed(2)} was marked as paid. Details are on your creator dashboard.`,
+      `A commission of $${(payableCents / 100).toFixed(2)} was marked as paid. Details are on your creator dashboard.`,
       '/creator/dashboard'
     ).catch(() => {});
   }
 
-  return { id, payoutStatus: action === 'CLAWBACK' ? 'CLAWBACK_RECORDED' : action };
+  return { id, payoutStatus: action === 'CLAWBACK' ? (rowReversed ? 'CLAWBACK_RECORDED' : 'PAID') : action };
 }
 
 // ---------------------------------------------------------------------------
@@ -933,11 +1048,11 @@ export async function sendCreatorWeeklySummaries(now: Date = new Date()): Promis
         prisma.affiliateClick.count({ where: { affiliateLink: { userId: profile.userId }, createdAt: { gte: weekAgo } } }),
         prisma.affiliateConversion.findMany({
           where: { creatorUserId: profile.userId, createdAt: { gte: weekAgo } },
-          select: { commissionCents: true, purchase: { select: { status: true } } },
+          select: { commissionCents: true, purchaseAmountCents: true, purchase: { select: PURCHASE_COMMISSION_SELECT } },
         }),
       ]);
       const active = conversions.filter((c) => !REVERSED_PURCHASE_STATUSES.includes(c.purchase?.status ?? ''));
-      const commission = active.reduce((sum, c) => sum + c.commissionCents, 0);
+      const commission = active.reduce((sum, c) => sum + proratedCommissionCents(c), 0);
       // Quiet weeks stay quiet: nothing to report means no notification.
       if (clicks > 0 || active.length > 0) {
         await createNotification(

@@ -200,7 +200,7 @@ describe('loadUnsettled', () => {
     expect(r.excluded.every((e) => e.reason === 'NO_PRICE')).toBe(true);
   });
 
-  it('stores collectedAmount and basisSource per line and flags variance without changing the payout', async () => {
+  it('stores collectedAmount and basisSource per line and flags variance; a partial refund makes the NET sold amount the basis', async () => {
     const c = fake.seedConsignor(ws.workspaceId);
     const same = fake.seedItem(c.id, { price: 20, title: 'Same' });
     fake.seedPurchase(same.id, { amount: 20 });
@@ -216,13 +216,18 @@ describe('loadUnsettled', () => {
     expect(line(same.id).collectedAmount!.toFixed(2)).toBe('20.00');
     expect(line(off.id).varianceFlag).toBe(true);
     expect(line(off.id).collectedAmount!.toFixed(2)).toBe('30.00');
-    expect(line(off.id).listPrice.toFixed(2)).toBe('40.00'); // basis is still the tag price in v1
+    expect(line(off.id).listPrice.toFixed(2)).toBe('40.00'); // a register discount alone keeps the tag-price basis (variance is only flagged)
+    expect(line(off.id).basisSource).toBe('ITEM_PRICE');
     expect(line(partial.id).collectedAmount!.toFixed(2)).toBe('40.00');
     expect(line(partial.id).varianceFlag).toBe(true);
+    expect(line(partial.id).basisSource).toBe('PURCHASE'); // 2026-09-30: partly refunded, so the basis is the net $40
+    expect(line(partial.id).listPrice.toFixed(2)).toBe('50.00'); // the tag price is still recorded
+    expect(line(partial.id).consignorShare.toFixed(2)).toBe('20.00'); // 50% of the NET $40, not of $50
+    expect(line(partial.id).organizerShare.toFixed(2)).toBe('20.00');
     expect(line(cash.id).collectedAmount).toBeNull();
     expect(line(cash.id).varianceFlag).toBe(false);
     expect(r.consignors[0].hasVariance).toBe(true);
-    expect(r.consignors[0].net.toFixed(2)).toBe('60.00'); // 50% of 120 list total, variance does not change it
+    expect(r.consignors[0].net.toFixed(2)).toBe('55.00'); // 50% of (20 + 40 + 40 net + 10): only the refund changes the basis
   });
 
   it('respects saleId scope (a sale, or consignment inventory with a null saleId) and asOf', async () => {
@@ -439,6 +444,41 @@ describe('refreshDraftRun', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────
+describe('partial refunds and the variance gate (2026-09-30)', () => {
+  it('a purchase refunded down to nothing is excluded as REFUNDED, not paid out', async () => {
+    const c = fake.seedConsignor(ws.workspaceId);
+    const gone = fake.seedItem(c.id, { price: 25 });
+    fake.seedPurchase(gone.id, { amount: 25, refundedAmount: 25 }); // PAID row with the whole amount refunded
+    const r = await ledger.loadUnsettled(db, { workspaceId: ws.workspaceId });
+    expect(r.consignors).toHaveLength(0);
+    expect(r.excluded.map((e) => e.reason)).toEqual(['REFUNDED']);
+  });
+
+  it('approving a run with a variance line needs an explicit acknowledgement (409 VARIANCE_ACK_REQUIRED), then succeeds', async () => {
+    const c = fake.seedConsignor(ws.workspaceId, { email: 'v@example.com' });
+    const off = fake.seedItem(c.id, { price: 40, saleId: sale.id });
+    fake.seedPurchase(off.id, { amount: 30 });
+    const { batch } = await ledger.createSettlementRun(db, { workspaceId: ws.workspaceId, actorUserId: ws.userId, saleId: sale.id });
+
+    await expect(ledger.approveRun(db, { workspaceId: ws.workspaceId, batchId: batch.id, actorUserId: ws.userId })).rejects.toMatchObject({
+      status: 409,
+      code: 'VARIANCE_ACK_REQUIRED',
+      extra: { varianceLineCount: 1 },
+    });
+    expect(fake.store.consignorSettlementBatch[0].status).toBe('DRAFT'); // the claim was rolled back
+
+    const ok = await ledger.approveRun(db, { workspaceId: ws.workspaceId, batchId: batch.id, actorUserId: ws.userId, acknowledgeVariance: true });
+    expect(ok.noop).toBe(false);
+    expect(fake.store.consignorSettlementBatch[0].status).toBe('APPROVED');
+  });
+
+  it('a run with no variance line approves without any acknowledgement', async () => {
+    const { batch } = await makeRun();
+    const r = await ledger.approveRun(db, { workspaceId: ws.workspaceId, batchId: batch.id, actorUserId: ws.userId });
+    expect(r.noop).toBe(false);
+  });
+});
+
 describe('approveRun', () => {
   it('moves DRAFT to APPROVED, records who and when, and leaves every payout PENDING', async () => {
     const { batch } = await makeRun({ consignors: 2 });

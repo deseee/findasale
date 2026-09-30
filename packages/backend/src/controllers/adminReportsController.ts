@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { resolvePlatformRevenueDollars, getPlatformFeeRate, getInclusivePlatformFeeRate, INCLUSIVE_FEE_MODEL_EFFECTIVE_AT, SubscriptionTier } from '../utils/feeCalculator'; // 2026-09-30: inclusive fee model is the source of truth; legacy rate only for pre-2026-09-24 rows without a snapshot
 
 // Raw row shape returned by the per-organizer aggregate query.
 // COUNT(...) comes back from Postgres as bigint; numeric SUM(...) as Prisma.Decimal | null.
@@ -13,6 +14,9 @@ interface OrganizerPerformanceRow {
   itemsCount: bigint;
   soldItemsCount: bigint;
   totalGmv: Prisma.Decimal | null; // sum of Purchase.amount (dollars)
+  snapshotRevenue: Prisma.Decimal | null; // sum of commissionAmount + buyerPremiumAmount over rows WITH a fee snapshot (dollars)
+  legacyUnsnapshottedGmv: Prisma.Decimal | null; // GMV of rows with NO snapshot created before the inclusive fee model
+  inclusiveUnsnapshottedGmv: Prisma.Decimal | null; // GMV of rows with NO snapshot created on/after it
   lastSaleAt: Date | null;
   joinedAt: Date;
 }
@@ -41,9 +45,9 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
     const direction = order === 'desc' ? 'DESC' : 'ASC';
     // Map the public sortBy to a computed SQL expression. sellThrough divides
     // sold/total items (guarding against divide-by-zero) so the ordering matches
-    // the rate the client sees. revenue sorts by GMV (a monotonic proxy for
-    // platformRevenue, which is just GMV * a per-tier constant — both produce the
-    // same ordering since the fee rate is always positive).
+    // the rate the client sees. revenue sorts by GMV (an approximate proxy for
+    // platformRevenue: since 2026-09-30 platformRevenue is the summed per-purchase fee
+    // snapshot, which tracks GMV closely but not exactly across tiers and channels).
     const sortColumnMap: Record<string, string> = {
       revenue: '"totalGmv"',
       sales: '"salesCount"',
@@ -77,6 +81,35 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
               AND ps."deletedAt" IS NULL
               AND p.status = 'PAID'
           )                                      AS "totalGmv",
+          (
+            SELECT COALESCE(SUM(COALESCE(p."commissionAmount", 0) + COALESCE(p."buyerPremiumAmount", 0)), 0)
+            FROM "Purchase" p
+            JOIN "Sale" ps ON ps.id = p."saleId"
+            WHERE ps."organizerId" = o.id
+              AND ps."deletedAt" IS NULL
+              AND p.status = 'PAID'
+              AND p."commissionAmount" IS NOT NULL
+          )                                      AS "snapshotRevenue",
+          (
+            SELECT COALESCE(SUM(p.amount), 0)
+            FROM "Purchase" p
+            JOIN "Sale" ps ON ps.id = p."saleId"
+            WHERE ps."organizerId" = o.id
+              AND ps."deletedAt" IS NULL
+              AND p.status = 'PAID'
+              AND p."commissionAmount" IS NULL
+              AND p."createdAt" < ${INCLUSIVE_FEE_MODEL_EFFECTIVE_AT}
+          )                                      AS "legacyUnsnapshottedGmv",
+          (
+            SELECT COALESCE(SUM(p.amount), 0)
+            FROM "Purchase" p
+            JOIN "Sale" ps ON ps.id = p."saleId"
+            WHERE ps."organizerId" = o.id
+              AND ps."deletedAt" IS NULL
+              AND p.status = 'PAID'
+              AND p."commissionAmount" IS NULL
+              AND p."createdAt" >= ${INCLUSIVE_FEE_MODEL_EFFECTIVE_AT}
+          )                                      AS "inclusiveUnsnapshottedGmv",
           MAX(s."createdAt")                     AS "lastSaleAt",
           o."createdAt"                          AS "joinedAt"
         FROM "Organizer" o
@@ -99,9 +132,16 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
       // totalGmv is the sum of Purchase.amount in dollars (Decimal | null).
       const totalGmvDollars = row.totalGmv ? Number(row.totalGmv) : 0;
 
-      // Platform fee: SIMPLE=10%, PRO/TEAMS=8% — identical math to the prior impl.
-      const feeRate = row.subscriptionTier === 'SIMPLE' ? 0.1 : 0.08;
-      const platformRevenue = Math.round(totalGmvDollars * feeRate);
+      // Platform revenue (2026-09-30): what the platform actually kept, from each purchase's fee
+      // snapshot (commission + buyer premium). Purchases with NO snapshot are restated by era: the
+      // legacy 10%/8% before 2026-09-24 (what they were really charged), the inclusive ONLINE rate
+      // (SIMPLE 9.5%, PRO/TEAMS 7.5%) on/after it. This used to be GMV x the retired 10%/8% for all.
+      const tierForFee = row.subscriptionTier as SubscriptionTier;
+      const platformRevenue = Math.round(
+        (row.snapshotRevenue ? Number(row.snapshotRevenue) : 0) +
+          (row.legacyUnsnapshottedGmv ? Number(row.legacyUnsnapshottedGmv) : 0) * getPlatformFeeRate(tierForFee) +
+          (row.inclusiveUnsnapshottedGmv ? Number(row.inclusiveUnsnapshottedGmv) : 0) * getInclusivePlatformFeeRate(tierForFee, 'ONLINE')
+      );
 
       return {
         id: row.id,
@@ -112,7 +152,7 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
         soldItemsCount,
         sellThroughRate: parseFloat(sellThroughRate.toFixed(4)),
         totalGmv: Math.round(totalGmvDollars * 100), // cents
-        platformRevenue, // dollars (matches prior output: round(gmvDollars * feeRate))
+        platformRevenue, // whole dollars (see the fee-snapshot note above)
         lastSaleAt: row.lastSaleAt,
         joinedAt: row.joinedAt,
       };
@@ -176,8 +216,7 @@ export const getRevenueReport = async (req: AuthRequest, res: Response) => {
     let transactionRevenue = 0;
     purchases.forEach((p: any) => {
       const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
-      const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
-      transactionRevenue += Math.round(p.amount * feeRate * 100); // in cents
+      transactionRevenue += Math.round(resolvePlatformRevenueDollars(p, tier) * 100); // in cents
     });
 
     // Approximate subscription revenue (MRR × days / 30)
@@ -215,8 +254,7 @@ export const getRevenueReport = async (req: AuthRequest, res: Response) => {
       let dayTransactionRevenue = 0;
       dayPurchases.forEach((p: any) => {
         const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
-        const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
-        dayTransactionRevenue += Math.round(p.amount * feeRate * 100);
+        dayTransactionRevenue += Math.round(resolvePlatformRevenueDollars(p, tier) * 100);
       });
 
       const newOrgCount = await prisma.organizer.count({

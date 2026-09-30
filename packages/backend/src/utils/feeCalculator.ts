@@ -67,8 +67,16 @@
 export type SubscriptionTier = 'SIMPLE' | 'PRO' | 'TEAMS' | null;
 
 /**
- * Get the ORGANIZER COMMISSION rate based on subscription tier.
- * This applies to every sale type, auctions included.
+ * LEGACY organizer commission rate (the retired 10% SIMPLE / 8% PRO+TEAMS model).
+ *
+ * NO REAL CHARGE PATH USES THIS ANY MORE (audited 2026-09-30): checkout, POS, payment links, hold
+ * invoices, cash-fee accrual, auctions, bounties and booth carts all charge through
+ * getInclusivePlatformFeeRate / calculateInclusiveCommissionCents below. It survives only to
+ *   (a) restate HISTORICAL purchases that were really charged at 10/8 and carry no fee snapshot
+ *       (see resolveReportingFeeRate, which switches on INCLUSIVE_FEE_MODEL_EFFECTIVE_AT), and
+ *   (b) record the legacy Stripe cart-checkout webhook row (Stripe is closed).
+ * Do NOT call it for anything that moves money or quotes a CURRENT fee. Use getInclusivePlatformFeeRate.
+ *
  * @param tier The organizer's subscription tier (or null defaults to SIMPLE)
  * @returns Fee rate as decimal (0.10 for SIMPLE, 0.08 for PRO/TEAMS)
  */
@@ -331,6 +339,14 @@ export const resolveOrganizerFeeReport = (
 /**
  * ── INCLUSIVE PLATFORM FEE MODEL (Patrick ruling, 2026-09-24) ────────────────────────────
  *
+ * STATUS 2026-09-30: THE MIGRATION IS COMPLETE FOR EVERY CHARGE PATH. An audit of every call site
+ * found no money-moving path still on getPlatformFeeRate (checkout, POS, payment links, hold
+ * invoices, cash-fee accrual, auctions, bounties, booth carts, guest invoices, reservations all use
+ * the inclusive functions below; refunds reverse the stored per-purchase amounts and recompute
+ * nothing). The paragraph that follows is the ORIGINAL rollout note and describes the state before
+ * that migration; the legacy 10/8 rate now only restates pre-2026-09-24 history (see
+ * resolveReportingFeeRate at the bottom of this file).
+ *
  * ADDITIVE to the model above -- getPlatformFeeRate/calculateApplicationFee and every one of
  * their existing call sites are UNCHANGED and continue to charge the flat 10%/8% commission
  * with the processor's own cost billed to the organizer as a SEPARATE line (see
@@ -460,4 +476,58 @@ export const applyInclusiveFloor = (
     organizerCommissionCents: flooredCommissionCents,
     applicationFeeCents: breakdown.buyerPremiumCents + flooredCommissionCents,
   };
+};
+
+/**
+ * ── REPORTING SOURCE OF TRUTH (2026-09-30) ───────────────────────────────────────────────
+ * The instant the inclusive model became the model every charge path uses (Patrick ruling,
+ * 2026-09-24). A purchase created before this was charged at the legacy 10% / 8% with the card
+ * processor's cost as a separate line; one created on or after it was charged at the inclusive
+ * rates with card processing included. Reports that have to restate a purchase with NO fee
+ * snapshot pick the era from the purchase's own createdAt, so history is never restated at
+ * today's rates and new rows are never restated at the retired ones.
+ */
+export const INCLUSIVE_FEE_MODEL_EFFECTIVE_AT = new Date('2026-09-24T00:00:00.000Z');
+
+/** True when a purchase created at `createdAt` was charged under the inclusive fee model. */
+export const isInclusiveFeeEra = (createdAt: Date | string | null | undefined): boolean => {
+  if (!createdAt) return true; // no timestamp: treat as current
+  const t = new Date(createdAt).getTime();
+  return Number.isNaN(t) ? true : t >= INCLUSIVE_FEE_MODEL_EFFECTIVE_AT.getTime();
+};
+
+/**
+ * The commission rate to restate ONE purchase with when it has no fee snapshot: legacy 10/8 for a
+ * purchase from before the inclusive model, otherwise the inclusive rate for its channel
+ * (`source` POS => IN_PERSON, anything else => ONLINE). Reporting only, never a charge.
+ */
+export const resolveReportingFeeRate = (
+  tier: SubscriptionTier,
+  createdAt: Date | string | null | undefined,
+  source?: string | null
+): number =>
+  isInclusiveFeeEra(createdAt)
+    ? getInclusivePlatformFeeRate(tier, source === 'POS' ? 'IN_PERSON' : 'ONLINE')
+    : getPlatformFeeRate(tier);
+
+/**
+ * Platform revenue in DOLLARS from ONE paid purchase, for the admin dashboards: the snapshot's
+ * commission plus buyer premium (what the platform actually kept, cash-debt recoupment excluded,
+ * since that is repayment of an earlier sale's commission, not new revenue). A purchase with no
+ * snapshot is restated at resolveReportingFeeRate.
+ */
+export const resolvePlatformRevenueDollars = (
+  purchase: {
+    amount?: number | null;
+    commissionAmount?: number | null;
+    buyerPremiumAmount?: number | null;
+    createdAt?: Date | string | null;
+    source?: string | null;
+  },
+  tier: SubscriptionTier
+): number => {
+  if (purchase.commissionAmount !== null && purchase.commissionAmount !== undefined) {
+    return (Number(purchase.commissionAmount) || 0) + (Number(purchase.buyerPremiumAmount) || 0);
+  }
+  return (Number(purchase.amount) || 0) * resolveReportingFeeRate(tier, purchase.createdAt, purchase.source);
 };

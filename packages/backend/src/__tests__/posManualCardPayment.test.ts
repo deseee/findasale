@@ -192,6 +192,10 @@ describe('POS manual card entry -- manualCardPayment (Square rebuild)', () => {
     expect(purchase!.squarePaymentId).toBe('sqp_manual_happy');
     expect(purchase!.userId).toBeNull(); // walk-up shopper, no FindA.Sale account
     expect(purchase!.amount).toBeCloseTo(50, 2);
+    // CNP surcharge (2026-09-30): persisted on the row (needs migration 20260930000000_pos_cnp_surcharge),
+    // and Purchase.amount stays EXCLUSIVE of it. Not runnable without the DB; covered with mocks in
+    // posSplitTenderControllers.test.ts and squareRefundCnpSurcharge.test.ts.
+    expect(purchase!.cnpSurchargeCents).toBe(expectedCnpFeeCents);
 
     const itemAfter = await prisma.item.findUnique({ where: { id: item.id } });
     expect(itemAfter!.status).toBe('SOLD');

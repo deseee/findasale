@@ -78,7 +78,7 @@ jest.mock('../services/cashFeeRefundReversalService', () => {
 
 import { prisma } from '../lib/prisma';
 import * as Sentry from '@sentry/node';
-import { executeVerifiedSquareRefund } from '../services/squareRefundService';
+import { executeVerifiedSquareRefund, buildSquareRefundIdempotencyKey } from '../services/squareRefundService';
 import { reverseSplitCashCommissionForRefund as mockedReverse } from '../services/cashFeeRefundReversalService';
 
 // The mocked module above replaces reverseSplitCashCommissionForRefund with a jest.fn for the refund
@@ -141,7 +141,7 @@ describe('executeVerifiedSquareRefund, split purchase', () => {
     expect(mockRefundPayment).toHaveBeenCalledTimes(1);
     const req = mockRefundPayment.mock.calls[0][0];
     expect(req.amountMoney).toEqual({ amount: BigInt(6000), currency: 'USD' });
-    expect(req.idempotencyKey).toBe('square-refund-pur_1');
+    expect(req.idempotencyKey).toBe(buildSquareRefundIdempotencyKey('pur_1', 0, 6000)); // digest of purchase + prior + amount
     expect(req.paymentId).toBe('sq_pay_1');
 
     const data = finalizeData();
@@ -220,7 +220,9 @@ describe('executeVerifiedSquareRefund, split purchase', () => {
   });
 
   it('restores PAID and rethrows when Square rejects, without writing a cash portion or reversing anything', async () => {
-    mockRefundPayment.mockRejectedValue(new Error('square says no'));
+    // A DEFINITIVE rejection (HTTP 4xx): nothing was refunded, so PAID is restored. An ambiguous failure
+    // (timeout / 5xx) deliberately leaves REFUNDING instead; see squareRefundStateHandling.test.ts.
+    mockRefundPayment.mockRejectedValue(Object.assign(new Error('square says no'), { statusCode: 400 }));
     await expect(executeVerifiedSquareRefund('pur_1', 100, 'organizer')).rejects.toThrow('square says no');
     expect(db.purchase.updateMany).toHaveBeenLastCalledWith({ where: { id: 'pur_1', status: 'REFUNDING' }, data: { status: 'PAID' } });
     expect(reverseMock).not.toHaveBeenCalled();
@@ -483,7 +485,7 @@ describe('executeVerifiedSquareRefund, partial refunds (P1-14)', () => {
     db.purchase.findUnique.mockResolvedValue(plain({ refundedAmount: 30 }));
     const res = await executeVerifiedSquareRefund('pur_1', 70, 'organizer');
     const req = mockRefundPayment.mock.calls[0][0];
-    expect(req.idempotencyKey).toBe('square-refund-pur_1-r3000');
+    expect(req.idempotencyKey).toBe(buildSquareRefundIdempotencyKey('pur_1', 3000, 7000));
     expect(req.reason).toContain('[FindA.Sale ref pur_1:3000:7000:o]');
     expect(req.amountMoney).toEqual({ amount: BigInt(7000), currency: 'USD' });
     expect(finalizeData()).toMatchObject({ status: 'REFUNDED', refundedAmount: 100 });

@@ -301,8 +301,9 @@ export const refreshConsignorSettlementBatch = async (req: AuthRequest, res: Res
 
 /**
  * POST /api/consignor-settlements/:batchId/approve
- * Body: { sendStatements?: boolean }  (opt-in; statements go only to consignors with an email
- * and only once each per approve retry).
+ * Body: { sendStatements?: boolean, acknowledgeVariance?: boolean }  (sendStatements is opt-in; statements go only
+ * to consignors with an email and only once each per approve retry. acknowledgeVariance is required when any line
+ * sold for a different amount than the tag price).
  * DRAFT -> APPROVED. NEVER calls any payment rail and never calls payConsignorViaACH: approval is
  * an organizer checkpoint that unlocks recording payments.
  */
@@ -312,8 +313,11 @@ export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Res
     if (!ctx) return;
     const { batchId } = req.params;
     const sendStatements = req.body?.sendStatements === true;
+    // Variance gate (2026-09-30): a run with lines that sold for a different amount than the tag price is only
+    // approved when the organizer explicitly acknowledges it; otherwise 409 VARIANCE_ACK_REQUIRED.
+    const acknowledgeVariance = req.body?.acknowledgeVariance === true;
 
-    const outcome = await approveRun(prisma, { workspaceId: ctx.workspace.id, batchId, actorUserId: ctx.userId });
+    const outcome = await approveRun(prisma, { workspaceId: ctx.workspace.id, batchId, actorUserId: ctx.userId, acknowledgeVariance });
 
     const statements: { payoutId: string; consignorId: string; consignorName: string | null; sent: boolean; reason?: string }[] = [];
     if (sendStatements) {

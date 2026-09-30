@@ -19,8 +19,8 @@ const fs = require('fs');
 const path = require('path');
 
 const mockPrisma: any = {
-  purchase: { findUnique: jest.fn() },
-  item: { update: jest.fn() },
+  purchase: { findUnique: jest.fn(), count: jest.fn() },
+  item: { update: jest.fn(), updateMany: jest.fn() },
   dispute: { findUnique: jest.fn(), update: jest.fn() },
   user: { findUnique: jest.fn() },
   boothCartTransaction: { findUnique: jest.fn() },
@@ -115,6 +115,8 @@ const purchaseRow = (over: any = {}) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   mockPrisma.item.update.mockResolvedValue({});
+  mockPrisma.item.updateMany.mockResolvedValue({ count: 1 });
+  mockPrisma.purchase.count.mockResolvedValue(0); // no OTHER PAID purchase of the item
   mockPrisma.purchase.findUnique.mockResolvedValue(purchaseRow());
   mockExecuteSquare.mockResolvedValue(squareResult());
   mockExecuteStripe.mockResolvedValue({ refundedAmount: 100, purchase: { id: 'p1', itemId: 'item1', amount: 100 } });
@@ -131,7 +133,7 @@ describe('stripeController.createRefund', () => {
   it('a partial Square refund keeps the item OFF the market and reports the balance left', async () => {
     const res = await call({ amount: 30 });
     expect(mockExecuteSquare).toHaveBeenCalledWith('p1', 30, 'organizer');
-    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
     expect(res.json.mock.calls[0][0]).toMatchObject({ refundAmount: 30, isFullRefund: false, remainingRefundable: 70 });
   });
 
@@ -140,7 +142,7 @@ describe('stripeController.createRefund', () => {
     mockExecuteSquare.mockResolvedValue(squareResult({ refundedAmount: 70, totalRefundedAmount: 100, remainingRefundable: 0, isFullRefund: true }));
     const res = await call({});
     expect(mockExecuteSquare).toHaveBeenCalledWith('p1', 70, 'organizer');
-    expect(mockPrisma.item.update).toHaveBeenCalledWith({ where: { id: 'item1' }, data: { status: 'AVAILABLE' } });
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', status: 'SOLD' }, data: { status: 'AVAILABLE' } });
     expect(res.json.mock.calls[0][0]).toMatchObject({ refundAmount: 70, isFullRefund: true, remainingRefundable: 0 });
   });
 
@@ -149,7 +151,7 @@ describe('stripeController.createRefund', () => {
     mockExecuteSquare.mockResolvedValue(squareResult({ refundedAmount: 20, totalRefundedAmount: 50, remainingRefundable: 50, isFullRefund: false }));
     const res = await call({ amount: 20 });
     expect(mockExecuteSquare).toHaveBeenCalledWith('p1', 20, 'organizer');
-    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
     expect(res.json.mock.calls[0][0]).toMatchObject({ isFullRefund: false, remainingRefundable: 50 });
   });
 
@@ -171,7 +173,7 @@ describe('stripeController.createRefund', () => {
     mockExecuteSquare.mockRejectedValue(new MockRefundError('Refund already in progress or not refundable', 400));
     const res = await call({});
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
   });
 
   it('the legacy Stripe path stays full-refund only (no partial tracking there) and still restores the item', async () => {
@@ -182,7 +184,25 @@ describe('stripeController.createRefund', () => {
 
     res = await call({});
     expect(mockExecuteStripe).toHaveBeenCalledWith('p1', 100, 'organizer');
-    expect(mockPrisma.item.update).toHaveBeenCalledWith({ where: { id: 'item1' }, data: { status: 'AVAILABLE' } });
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', status: 'SOLD' }, data: { status: 'AVAILABLE' } });
+  });
+
+  it('a full refund does NOT put the item back on sale when another PAID purchase of it exists', async () => {
+    mockPrisma.purchase.findUnique.mockResolvedValue(purchaseRow({ refundedAmount: 30 }));
+    mockExecuteSquare.mockResolvedValue(squareResult({ refundedAmount: 70, totalRefundedAmount: 100, remainingRefundable: 0, isFullRefund: true }));
+    mockPrisma.purchase.count.mockResolvedValue(1);
+    await call({});
+    expect(mockPrisma.purchase.count).toHaveBeenCalledWith({ where: { itemId: 'item1', id: { not: 'p1' }, status: 'PAID' } });
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('an unexpected failure returns a generic message with a code, never the raw error text', async () => {
+    mockExecuteSquare.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432 secret-host'));
+    const res = await call({});
+    expect(res.status).toHaveBeenCalledWith(500);
+    const body = res.json.mock.calls[0][0];
+    expect(body.code).toBe('REFUND_FAILED');
+    expect(JSON.stringify(body)).not.toMatch(/ECONNREFUSED|secret-host|10\.0\.0\.5/);
   });
 });
 

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import * as Sentry from '@sentry/node';
 import { SquareClient, SquareEnvironment } from 'square';
@@ -9,6 +10,7 @@ import { resolveVendorBoothSquareAccessToken, SquareBoothOnboardingIncompleteErr
 import { resolveSplitRefund, roundMoney } from './cashFeeService'; // Split tender (2026-09-29): cap the processor refund at the card leg; the cash leg is refunded by hand
 import type { SplitRefundResolution } from './cashFeeService'; // partial-refund finalize helpers (2026-09-29)
 import { reverseSplitCashCommissionForRefund } from './cashFeeRefundReversalService'; // Split tender (2026-09-29): proportional, idempotent reversal of the cash-leg commission on the refunded cash value
+import { resolveCnpSurchargeRefund } from './cnpSurcharge'; // CNP surcharge (2026-09-30): the manual-card surcharge is refunded proportionally with the principal; helpers are pure integer-cents math
 
 /**
  * squareRefundService.ts -- Square-side mirror of refundService.ts's single-choke-point
@@ -169,33 +171,68 @@ const REFUND_INITIATOR_FROM_CODE: Record<string, RefundInitiator> = { o: 'organi
  * listing the payment's refunds and matching this tag, then finishes the purchase from it. The tag is
  * ASCII, about 60 characters, and appended after the human reason (Square allows 192).
  */
-export function buildSquareRefundTag(purchaseId: string, priorCents: number, amountCents: number, initiatedBy: RefundInitiator): string {
-  return `[FindA.Sale ref ${purchaseId}:${priorCents}:${amountCents}:${REFUND_INITIATOR_CODE[initiatedBy]}]`;
+export function buildSquareRefundTag(
+  purchaseId: string,
+  priorCents: number,
+  amountCents: number,
+  initiatedBy: RefundInitiator,
+  surchargeCents = 0
+): string {
+  // CNP surcharge (2026-09-30): when this refund also returns part of the card-not-present surcharge, a
+  // SEPARATE ` [cnp <cents>]` marker follows the original tag. The original `[FindA.Sale ref ...]` text is
+  // byte-for-byte what it always was, so an older parser (and this one) still matches it; the marker is
+  // informational for reconcile (it can cross-check the surcharge share it recomputes).
+  const base = `[FindA.Sale ref ${purchaseId}:${priorCents}:${amountCents}:${REFUND_INITIATOR_CODE[initiatedBy]}]`;
+  return surchargeCents > 0 ? `${base} [cnp ${Math.round(surchargeCents)}]` : base;
 }
 
 export function parseSquareRefundTag(
   reason: string | null | undefined
-): { purchaseId: string; priorCents: number; amountCents: number; initiatedBy: RefundInitiator } | null {
+): { purchaseId: string; priorCents: number; amountCents: number; initiatedBy: RefundInitiator; surchargeCents?: number } | null {
   if (!reason) return null;
   const m = /\[FindA\.Sale ref ([^:\]\s]+):(\d+):(\d+):([oad])\]/.exec(reason);
   if (!m) return null;
+  // Optional CNP marker (2026-09-30): absent on every refund without a surcharge share and on every older tag.
+  const cnp = /\[cnp (\d+)\]/.exec(reason);
   return {
     purchaseId: m[1],
     priorCents: parseInt(m[2], 10),
     amountCents: parseInt(m[3], 10),
     initiatedBy: REFUND_INITIATOR_FROM_CODE[m[4]],
+    ...(cnp ? { surchargeCents: parseInt(cnp[1], 10) } : {}),
   };
 }
 
 /**
- * Square refund idempotency key. A purchase's FIRST refund keeps the key it has always had
- * (`square-refund-<id>`), so a retry of an in-flight first refund still dedupes. A later partial
- * refund of the same purchase embeds the cents already refunded, because Square rejects the same key
- * with a different amount (IDEMPOTENCY_KEY_REUSED). Still deterministic per logical refund: a retry of
- * the same refund starts from the same prior total and so reuses the same key (no double refund).
+ * Square refund idempotency key. Deterministic per LOGICAL refund: the same purchase, the same cents
+ * already refunded before it and the same total cents sent to Square always yield the same key, so a
+ * retry of one in-flight refund dedupes at Square (no double refund). The refund AMOUNT is part of the
+ * key (fix 2026-09-30): Square rejects a reused key carrying a different amount
+ * (IDEMPOTENCY_KEY_REUSED), so a retry after a failed attempt with a corrected amount would otherwise
+ * be refused. Square caps the key length (45 characters), and a cuid plus these numbers can exceed it,
+ * so the key is a fixed-length digest (`sqr-` plus 32 hex characters = 36) rather than the raw parts.
+ * The reconcile tag (buildSquareRefundTag) is unchanged and independent of this key.
  */
-export function buildSquareRefundIdempotencyKey(purchaseId: string, priorRefundedCents: number): string {
-  return priorRefundedCents > 0 ? `square-refund-${purchaseId}-r${priorRefundedCents}` : `square-refund-${purchaseId}`;
+export function buildSquareRefundIdempotencyKey(purchaseId: string, priorRefundedCents: number, amountCents = 0): string {
+  const digest = createHash('sha256')
+    .update(`square-refund:${purchaseId}:${Math.round(priorRefundedCents)}:${Math.round(amountCents)}`)
+    .digest('hex')
+    .slice(0, 32);
+  return `sqr-${digest}`;
+}
+
+/**
+ * True when Square DEFINITIVELY refused the RefundPayment request (nothing was refunded and nothing
+ * will be): an HTTP 4xx answer other than 408 (request timeout), or the processor-status rejection
+ * executeVerifiedSquareRefund raises itself as a RefundError after Square answered REJECTED/FAILED.
+ * Anything else (timeout, 5xx, network error, an error with no HTTP status) is AMBIGUOUS: Square may
+ * have accepted the refund, so the caller must not restore PAID (that would allow a second refund of
+ * the same money) and leaves the purchase REFUNDING for reconcileStuckSquareRefunds.
+ */
+export function isDefinitiveSquareRejection(err: unknown): boolean {
+  if (err instanceof RefundError) return true;
+  const status = Number((err as any)?.statusCode ?? (err as any)?.status);
+  return Number.isInteger(status) && status >= 400 && status < 500 && status !== 408;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -419,6 +456,15 @@ export async function executeVerifiedSquareRefund(
   cashPortionToRefundByHand: number;
   /** Organizer-facing sentence about the cash hand-back, or null when nothing is owed by hand. */
   message: string | null;
+  /**
+   * Card-not-present surcharge (2026-09-30): dollars of the buyer's surcharge returned with THIS refund
+   * (0 for a purchase that carried none), the cumulative surcharge returned including this call, and this
+   * refund's total to the buyer (principal card refund plus surcharge share, i.e. what Square was asked
+   * to refund; the cash hand-back is separate). `refundedAmount` above stays principal-only.
+   */
+  surchargeRefundedAmount: number;
+  totalSurchargeRefunded: number;
+  refundedWithSurchargeAmount: number;
   purchase: {
     id: string;
     userId: string | null;
@@ -533,6 +579,27 @@ export async function executeVerifiedSquareRefund(
   });
   const squareRefundAmount = split.isSplit ? split.processorRefundAmount : refundAmount;
 
+  // CARD-NOT-PRESENT SURCHARGE (2026-09-30): the buyer was charged cnpSurchargeCents ON TOP of
+  // purchase.amount (manual card entry). Card-network surcharge rules: a refund returns it in proportion
+  // to the principal refunded, so the Square refund is principal + surcharge share, in integer cents and
+  // cumulative across partial refunds (share(cumulative principal) - share(prior principal), so any
+  // sequence sums to exactly the surcharge and can never exceed it). The share is measured against the CARD
+  // leg (the surcharge was never charged on a cash leg). Status, stock, the refund cap and every fee
+  // reversal stay on PRINCIPAL: the surcharge is not sale revenue and not platform-fee base. 0 for every
+  // purchase without a surcharge, so those refunds are byte-for-byte what they were.
+  const cnpSurchargeCents = Math.max(0, Math.round(Number(purchase.cnpSurchargeCents) || 0));
+  const cardPrincipalCents = Math.round(split.cardCollectedAmount * 100);
+  const priorCashHandBackCents = split.isSplit
+    ? Math.min(priorRefundedCents, Math.max(0, Math.round((Number(purchase.refundCashPortion) || 0) * 100)))
+    : 0;
+  const cnpRefund = resolveCnpSurchargeRefund({
+    surchargeCents: cnpSurchargeCents,
+    cardPrincipalCents,
+    priorPrincipalCents: Math.min(cardPrincipalCents, priorRefundedCents - priorCashHandBackCents),
+    thisPrincipalCents: Math.round(squareRefundAmount * 100),
+  });
+  const squareTotalRefundCents = Math.round(squareRefundAmount * 100) + cnpRefund.thisShareCents;
+
   // TOCTOU claim -- identical idiom to refundService.ts's PAID->REFUNDING compare-and-swap. Also
   // pinned to the refundedAmount this call read (money review P1-14): with partial refunds a purchase
   // returns to PAID between refunds, so without this a refund that completed after our read would
@@ -549,54 +616,57 @@ export async function executeVerifiedSquareRefund(
   let squareRefundId: string | null = null;
 
   if (!isCashPurchase) {
-    if (!purchase.squarePaymentId) {
-      await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
-      throw new RefundError('This Square purchase has no squarePaymentId on file. Cannot resolve which payment to refund.', 400);
-    }
-    // Vendor-booth-cart purchases refund against the BOOTH's OWN connected Square account
-    // (the booth is the merchant of record for its own leg, exactly as it already is on the
-    // Stripe side -- see refundService.ts's isBoothCartPurchase branch for the precedent this
-    // mirrors). Every other Square purchase refunds against the ORGANIZER's own account,
-    // unchanged from before this dispatch.
-    let accessToken: string;
-    if (isBoothCartPurchase) {
-      const vendorBoothId = purchase.item?.vendorBoothId;
-      if (!vendorBoothId) {
-        await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
-        throw new RefundError("Could not resolve this booth-cart purchase's vendor booth. Cannot resolve which Square account to refund against.", 400);
-      }
-      const booth = await prisma.vendorBooth.findUnique({
-        where: { id: vendorBoothId },
-        select: { id: true, userId: true, squareAccountId: true, squareOnboarded: true },
-      });
-      if (!booth) {
-        await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
-        throw new RefundError('The vendor booth for this purchase could not be found.', 404);
-      }
-      try {
-        accessToken = await resolveVendorBoothSquareAccessToken(booth);
-      } catch (err) {
-        await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
-        if (err instanceof SquareBoothOnboardingIncompleteError) {
-          throw new RefundError(
-            `Square refunds aren't available for this booth yet (vendorBoothId=${vendorBoothId}) -- ` +
-              'Square onboarding is incomplete or the stored OAuth token is missing/expired with no ' +
-              'usable refresh token on file.',
-            501,
-            { vendorBoothId }
-          );
-        }
-        throw err;
-      }
-    } else {
-      if (!organizerId) {
-        await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
-        throw new RefundError('Could not resolve the organizer for this Square purchase. Cannot resolve which Square account to refund against.', 400);
-      }
-      accessToken = await resolveSquareAccessToken(organizerId);
-    }
-
+    // Everything from here to the finalize runs inside ONE guarded flow (fix 2026-09-30). Before this,
+    // token resolution sat outside the try, so a failure there stranded the row in REFUNDING, and the
+    // catch reverted to PAID on ANY error, including a timeout AFTER Square accepted the refund, which
+    // let the same money be refunded twice. Now: a failure BEFORE the RefundPayment request is sent, or
+    // a definitive Square 4xx / REJECTED / FAILED answer, restores PAID (nothing moved); an AMBIGUOUS
+    // failure after the request went out leaves REFUNDING so reconcileStuckSquareRefunds finishes it
+    // from the tagged refund at Square.
+    let refundRequestSent = false;
     try {
+      if (!purchase.squarePaymentId) {
+        throw new RefundError('This Square purchase has no squarePaymentId on file. Cannot resolve which payment to refund.', 400);
+      }
+      // Vendor-booth-cart purchases refund against the BOOTH's OWN connected Square account
+      // (the booth is the merchant of record for its own leg, exactly as it already is on the
+      // Stripe side -- see refundService.ts's isBoothCartPurchase branch for the precedent this
+      // mirrors). Every other Square purchase refunds against the ORGANIZER's own account,
+      // unchanged from before this dispatch.
+      let accessToken: string;
+      if (isBoothCartPurchase) {
+        const vendorBoothId = purchase.item?.vendorBoothId;
+        if (!vendorBoothId) {
+          throw new RefundError("Could not resolve this booth-cart purchase's vendor booth. Cannot resolve which Square account to refund against.", 400);
+        }
+        const booth = await prisma.vendorBooth.findUnique({
+          where: { id: vendorBoothId },
+          select: { id: true, userId: true, squareAccountId: true, squareOnboarded: true },
+        });
+        if (!booth) {
+          throw new RefundError('The vendor booth for this purchase could not be found.', 404);
+        }
+        try {
+          accessToken = await resolveVendorBoothSquareAccessToken(booth);
+        } catch (err) {
+          if (err instanceof SquareBoothOnboardingIncompleteError) {
+            throw new RefundError(
+              `Square refunds aren't available for this booth yet (vendorBoothId=${vendorBoothId}) -- ` +
+                'Square onboarding is incomplete or the stored OAuth token is missing/expired with no ' +
+                'usable refresh token on file.',
+              501,
+              { vendorBoothId }
+            );
+          }
+          throw err;
+        }
+      } else {
+        if (!organizerId) {
+          throw new RefundError('Could not resolve the organizer for this Square purchase. Cannot resolve which Square account to refund against.', 400);
+        }
+        accessToken = await resolveSquareAccessToken(organizerId);
+      }
+
       const client = getSquareClientForToken(accessToken);
       const refundReasonText = reason ? mapReasonToSquareText(reason) : undefined;
 
@@ -605,14 +675,15 @@ export async function executeVerifiedSquareRefund(
       // real method is `refundPayment`, not `create`. Same request shape already used below.
       // Split tender (2026-09-29): skip the Square call entirely when the card leg has nothing to
       // refund (the whole refund is cash to hand back). Never ask Square for more than it captured.
-      if (squareRefundAmount > 0) {
-        const squareRefundCents = Math.round(squareRefundAmount * 100);
+      if (squareTotalRefundCents > 0) {
+        const squareRefundCents = squareTotalRefundCents;
         // The reason carries the reconcile tag (see buildSquareRefundTag) so a refund Square accepted
         // but whose finalize failed can be matched back to this purchase by reconcileStuckSquareRefunds.
-        const tag = buildSquareRefundTag(purchase.id, priorRefundedCents, requestedCents, initiatedBy);
+        const tag = buildSquareRefundTag(purchase.id, priorRefundedCents, requestedCents, initiatedBy, cnpRefund.thisShareCents);
         const reasonText = `${refundReasonText ? `${refundReasonText} ` : ''}${tag}`.slice(0, 192);
+        refundRequestSent = true; // from here a failure may mean Square DID accept the refund
         const refundResponse: any = await client.refunds.refundPayment({
-          idempotencyKey: buildSquareRefundIdempotencyKey(purchase.id, priorRefundedCents),
+          idempotencyKey: buildSquareRefundIdempotencyKey(purchase.id, priorRefundedCents, squareRefundCents),
           paymentId: purchase.squarePaymentId,
           amountMoney: {
             amount: BigInt(squareRefundCents),
@@ -647,11 +718,38 @@ export async function executeVerifiedSquareRefund(
         );
       }
     } catch (squareErr) {
-      await prisma.purchase.updateMany({
-        where: { id: purchaseId, status: 'REFUNDING' },
-        data: { status: 'PAID' },
-      });
-      throw squareErr;
+      if (!refundRequestSent || isDefinitiveSquareRejection(squareErr)) {
+        // Nothing was refunded (the request never went out, or Square definitively refused it).
+        await prisma.purchase.updateMany({
+          where: { id: purchaseId, status: 'REFUNDING' },
+          data: { status: 'PAID' },
+        });
+        throw squareErr;
+      }
+      // AMBIGUOUS (timeout, 5xx, network): Square may have accepted the refund. Leave REFUNDING as the
+      // reconcilable marker; never restore PAID here, or the same money could be refunded twice.
+      console.error(`[executeVerifiedSquareRefund] ambiguous Square error for purchase ${purchaseId}; left REFUNDING for reconcile:`, squareErr);
+      try {
+        Sentry.captureException(squareErr instanceof Error ? squareErr : new Error(String(squareErr)), {
+          level: 'error',
+          tags: { area: 'square-refund-ambiguous' },
+          extra: {
+            purchaseId,
+            squarePaymentId: purchase.squarePaymentId,
+            refundAmount,
+            priorRefundedAmount,
+            initiatedBy,
+            note: 'Square RefundPayment gave no definitive answer; purchase left REFUNDING. reconcileStuckSquareRefunds finishes it (or restores PAID if Square has no such refund).',
+          },
+        });
+      } catch {
+        // Sentry may not be initialized -- silently continue
+      }
+      throw new RefundError(
+        'The refund request to the card processor did not return a clear answer. Do not issue it again. It will be completed or cancelled automatically once the processor confirms; contact support if this purchase still shows as refunding after a while.',
+        502,
+        { code: 'REFUND_OUTCOME_UNKNOWN', purchaseId }
+      );
     }
   }
 
@@ -708,6 +806,9 @@ export async function executeVerifiedSquareRefund(
     isFullRefund: outcome.isFullRefund,
     cashPortionToRefundByHand: split.cashPortionToRefundByHand,
     message: split.message,
+    surchargeRefundedAmount: cnpRefund.thisShareCents / 100,
+    totalSurchargeRefunded: cnpRefund.cumulativeShareCents / 100,
+    refundedWithSurchargeAmount: squareTotalRefundCents / 100,
     purchase: {
       id: purchase.id,
       userId: purchase.userId,
@@ -837,6 +938,26 @@ export async function reconcileStuckSquareRefunds(
           isCashPurchase: false,
           organizerId,
         });
+        // CNP surcharge (2026-09-30): the surcharge share is a pure function of the purchase row and the
+        // cumulative principal, so finalize needs nothing from Square for it. Cross-check the marker the
+        // refund carried against the recomputed share and alert (never block) on a mismatch.
+        if (match.tag.surchargeCents !== undefined) {
+          const rowSurcharge = Math.max(0, Math.round(Number((purchase as any).cnpSurchargeCents) || 0));
+          const cardCents = Math.round(split.cardCollectedAmount * 100);
+          const recomputed = resolveCnpSurchargeRefund({
+            surchargeCents: rowSurcharge,
+            cardPrincipalCents: cardCents,
+            priorPrincipalCents: Math.min(cardCents, priorCents - (split.isSplit ? Math.min(priorCents, Math.max(0, Math.round((Number(purchase.refundCashPortion) || 0) * 100))) : 0)),
+            thisPrincipalCents: Math.round(split.processorRefundAmount * 100),
+          }).thisShareCents;
+          if (recomputed !== match.tag.surchargeCents) {
+            Sentry.captureMessage('Square refund reconcile: CNP surcharge share on the refund tag differs from the recomputed share', {
+              level: 'warning',
+              tags: { area: 'square-refund-reconcile' },
+              extra: { purchaseId: purchase.id, squareRefundId: match.refundId, tagSurchargeCents: match.tag.surchargeCents, recomputedSurchargeCents: recomputed },
+            });
+          }
+        }
         if (!outcome.alreadyFinalized) {
           await runPostRefundBookkeeping({ purchase, split, organizerId });
           summary.finalized += 1;
@@ -1076,15 +1197,22 @@ export async function handleSquareDisputeWebhook(event: SquareDisputeWebhookEven
     return;
   }
 
-  const purchase = await prisma.purchase.findFirst({
+  // ALL rows of the payment (2026-09-30): a multi-item POS cart shares ONE Square payment id across
+  // its Purchase rows, and a dispute is against the payment, so every row moves together. The old
+  // findFirst touched a single arbitrary row.
+  const includeShape = {
+    item: { include: { sale: { include: { organizer: { select: { userId: true, id: true } } } } } },
+    sale: { include: { organizer: { select: { userId: true, id: true } } } },
+    user: true,
+  } as const;
+  const rows = await prisma.purchase.findMany({
     where: { squarePaymentId: paymentId },
-    include: {
-      item: { include: { sale: { include: { organizer: { select: { userId: true, id: true } } } } } },
-      sale: { include: { organizer: { select: { userId: true, id: true } } } },
-      user: true,
-    },
+    include: includeShape,
+    orderBy: { createdAt: 'asc' },
   });
-
+  // Primary row for buyer / organizer / sale context: the first that resolves a sale, preferring one with a buyer account.
+  const resolvable = rows.filter((r: any) => r.sale ?? r.item?.sale);
+  const purchase: any = resolvable.find((r: any) => r.user) ?? resolvable[0] ?? null;
   const disputeSale = purchase?.sale ?? purchase?.item?.sale;
   if (!purchase || !disputeSale) {
     console.warn(`[squareRefundService] Could not resolve a Purchase for Square dispute ${dispute.id} (payment ${paymentId}) -- event type ${event.type}.`);
@@ -1095,78 +1223,165 @@ export async function handleSquareDisputeWebhook(event: SquareDisputeWebhookEven
     return;
   }
 
+  // Failures are RETHROWN (2026-09-30): the webhook controller marks the event FAILED on a throw and
+  // Square redelivers it. The handler used to swallow every error, so a transient DB failure left the
+  // event COMPLETED with the dispute unrecorded. Retries are safe because (a) every status change is a
+  // guarded updateMany that a replay finds already applied, and (b) each non-idempotent side effect runs
+  // through runDisputeStepOnce, which records completion in ProcessedWebhookEvent (no schema change)
+  // so a replay never repeats it.
+  const captureDisputeError = (err: unknown, phase: string) => {
+    console.error(`[squareRefundService] Failed to process Square dispute ${dispute.id} (${phase}):`, err);
+    try {
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        tags: { area: 'square-dispute' },
+        extra: { disputeId: dispute.id, paymentId, phase },
+      });
+    } catch {
+      // Sentry may not be initialized -- silently continue
+    }
+  };
+
   if (event.type === 'dispute.created') {
     try {
-      await prisma.purchase.update({ where: { id: purchase.id }, data: { status: 'DISPUTED' } });
-      console.log(`[squareRefundService] Purchase marked DISPUTED: purchase_id=${purchase.id}, dispute_id=${dispute.id}`);
+      // Guarded transition: ONLY rows that are PAID (which includes a partially refunded purchase; a
+      // partial refund leaves the row PAID with refundedAmount tracked). Never from REFUNDING (an
+      // in-flight refund must still finalize; overwriting it made finalizeSquareRefundTx flip 0 rows and
+      // record nothing) and never from REFUNDED (that would hide the refund).
+      const claim = await prisma.purchase.updateMany({
+        where: { squarePaymentId: paymentId, status: 'PAID' },
+        data: { status: 'DISPUTED' },
+      });
+      console.log(`[squareRefundService] ${claim.count} purchase row(s) marked DISPUTED: payment_id=${paymentId}, dispute_id=${dispute.id}`);
+
+      // Rows we deliberately did not flip: surface them, because the organizer may be out the money twice.
+      const unflipped = rows.filter((r: any) => r.status === 'REFUNDING' || r.status === 'REFUNDED');
+      if (unflipped.length > 0) {
+        Sentry.captureMessage('Square dispute opened on a payment with rows already refunding or refunded; left as-is, manual review needed', {
+          level: 'warning',
+          tags: { area: 'square-dispute' },
+          extra: { disputeId: dispute.id, paymentId, purchases: unflipped.map((r: any) => ({ id: r.id, status: r.status })) },
+        });
+      }
 
       if (purchase.user) {
-        await prisma.user.update({ where: { id: purchase.user.id }, data: { chargebackCount: { increment: 1 } } });
-        const updatedUser = await prisma.user.findUnique({ where: { id: purchase.user.id }, select: { chargebackCount: true, suspendedAt: true } });
-        if (updatedUser && updatedUser.chargebackCount >= 3 && !updatedUser.suspendedAt) {
-          await prisma.user.update({ where: { id: purchase.user.id }, data: { suspendedAt: new Date(), suspendReason: 'SERIAL_CHARGEBACKS' } });
-          console.warn(`[squareRefundService] Buyer suspended after chargeback #${updatedUser.chargebackCount}: user=${purchase.user.id}`);
-        }
-
+        // Buyer strike + suspension: once per dispute (not once per cart row).
+        await runDisputeStepOnce(dispute.id, 'buyer', async () => {
+          await prisma.user.update({ where: { id: purchase.user.id }, data: { chargebackCount: { increment: 1 } } });
+          const updatedUser = await prisma.user.findUnique({ where: { id: purchase.user.id }, select: { chargebackCount: true, suspendedAt: true } });
+          if (updatedUser && updatedUser.chargebackCount >= 3 && !updatedUser.suspendedAt) {
+            await prisma.user.update({ where: { id: purchase.user.id }, data: { suspendedAt: new Date(), suspendReason: 'SERIAL_CHARGEBACKS' } });
+            // 2026-09-30: record that THIS dispute applied the suspension, so a WON decision lifts only a suspension
+            // the dispute logic set (never a manual admin one, which has its own reason). A step marker rather than
+            // text in suspendReason, because suspendReason is shown to the user on the suspended-account screen.
+            await recordDisputeStep(dispute.id, 'suspended');
+            console.warn(`[squareRefundService] Buyer suspended after chargeback #${updatedUser.chargebackCount}: user=${purchase.user.id}`);
+          }
+        });
+        // XP clawback is per purchase row (XP is earned per row).
         const { clawBackChargebackXp } = await import('./xpService');
-        const clawedBackXp = await clawBackChargebackXp(purchase.id, purchase.user.id);
-        console.log(`[squareRefundService] Clawed back ${clawedBackXp} XP from user ${purchase.user.id} for chargeback`);
+        for (const row of rows as any[]) {
+          if (!row.user) continue;
+          await runDisputeStepOnce(dispute.id, `xp:${row.id}`, async () => {
+            const clawedBackXp = await clawBackChargebackXp(row.id, row.user.id);
+            console.log(`[squareRefundService] Clawed back ${clawedBackXp} XP from user ${row.user.id} for chargeback`);
+          });
+        }
       }
 
-      const { recordChargebackIncident } = await import('./fraudService');
-      await recordChargebackIncident(disputeSale!.organizerId, purchase.id, dispute.id);
-
-      const monthYear = new Date().toISOString().slice(0, 7);
-      const metrics = await prisma.platformMetrics.upsert({
-        where: { monthYear },
-        create: { monthYear, chargebackCount: 1, transactionCount: 1 },
-        update: { chargebackCount: { increment: 1 } },
+      await runDisputeStepOnce(dispute.id, 'fraud', async () => {
+        const { recordChargebackIncident } = await import('./fraudService');
+        await recordChargebackIncident(disputeSale.organizerId, purchase.id, dispute.id);
       });
-      if (metrics.transactionCount > 0 && metrics.chargebackCount / metrics.transactionCount > 0.008) {
-        console.error(`[squareRefundService] ALERT: Chargeback rate exceeded 0.8% for ${monthYear}:`, metrics);
-      }
 
-      const disputeOrganizerUserId = disputeSale!.organizer?.userId;
-      if (disputeOrganizerUserId) {
-        createNotification({
+      await runDisputeStepOnce(dispute.id, 'metrics', async () => {
+        const monthYear = new Date().toISOString().slice(0, 7);
+        const metrics = await prisma.platformMetrics.upsert({
+          where: { monthYear },
+          create: { monthYear, chargebackCount: 1, transactionCount: 1 },
+          update: { chargebackCount: { increment: 1 } },
+        });
+        if (metrics.transactionCount > 0 && metrics.chargebackCount / metrics.transactionCount > 0.008) {
+          console.error(`[squareRefundService] ALERT: Chargeback rate exceeded 0.8% for ${monthYear}:`, metrics);
+        }
+      });
+
+      await runDisputeStepOnce(dispute.id, 'notify', async () => {
+        const disputeOrganizerUserId = disputeSale.organizer?.userId;
+        if (!disputeOrganizerUserId) {
+          console.error(`[squareRefundService] Skipped chargeback_opened notification for purchase ${purchase.id} -- organizer.userId did not resolve`);
+          return;
+        }
+        const itemLabel = rows.length > 1 ? `${rows.length} items` : `"${purchase.item?.title || 'an item'}"`;
+        // A notification failure must not fail the webhook (it would be retried for a cosmetic email).
+        await createNotification({
           userId: disputeOrganizerUserId,
           type: 'chargeback_opened',
           title: 'Chargeback filed against a sale',
-          body: `A buyer's bank has filed a chargeback for "${purchase.item?.title || 'an item'}". This may affect your Square balance -- check your Square Dashboard for details and any response deadline.`,
-          link: `/organizer/sales/${disputeSale!.id}`,
+          body: `A buyer's bank has filed a chargeback for ${itemLabel}. This may affect your Square balance -- check your Square Dashboard for details and any response deadline.`,
+          link: `/organizer/sales/${disputeSale.id}`,
           channel: 'OPERATIONAL',
           sendEmail: true,
-        }).catch((err) => console.error(`[squareRefundService] Failed to create chargeback_opened notification for purchase ${purchase.id}:`, err));
-      } else {
-        console.error(`[squareRefundService] Skipped chargeback_opened notification for purchase ${purchase.id} -- organizer.userId did not resolve`);
-      }
-    } catch (err) {
-      console.error(`[squareRefundService] Failed to process dispute.created ${dispute.id}:`, err);
-      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
-        tags: { area: 'square-dispute' },
-        extra: { disputeId: dispute.id, paymentId },
+        }).catch((err: unknown) => console.error(`[squareRefundService] Failed to create chargeback_opened notification for purchase ${purchase.id}:`, err));
       });
+    } catch (err) {
+      captureDisputeError(err, 'dispute.created');
+      throw err;
     }
     return;
   }
 
-  if (event.type === 'dispute.state.updated' && dispute.state === 'LOST') {
+  // WON: the bank sided with the merchant, so the sale stands. Return every DISPUTED row of the payment
+  // to PAID (the only state a row can be disputed FROM: the created branch only ever flips PAID, and a
+  // partial refund keeps a row PAID, so PAID is exactly the pre-dispute state and no prior status needs
+  // to be stored). Guarded on DISPUTED so a row that has since been refunded or lost is never touched.
+  if (event.type === 'dispute.state.updated' && dispute.state === 'WON') {
+    try {
+      const restored = await prisma.purchase.updateMany({
+        where: { squarePaymentId: paymentId, status: 'DISPUTED' },
+        data: { status: 'PAID' },
+      });
+      console.log(`[squareRefundService] Square dispute WON for payment ${paymentId} (dispute ${dispute.id}): ${restored.count} purchase row(s) restored to PAID.`);
+
+      // 2026-09-30: undo what the OPENED step did to the buyer. Each reversal runs at most once per dispute
+      // (runDisputeStepOnce) and only if the matching OPENED step actually ran (its marker exists), so a WON for a
+      // dispute we never penalised, or a redelivered WON, changes nothing.
+      await reverseBuyerDisputePenalties(dispute.id, rows as any[]);
+
+      if (restored.count === 0) {
+        const lost = rows.filter((r: any) => r.status === 'DISPUTE_LOST');
+        if (lost.length > 0) {
+          Sentry.captureMessage('Square dispute WON but purchase rows are already DISPUTE_LOST; needs manual review', {
+            tags: { area: 'square-dispute' },
+            extra: { disputeId: dispute.id, paymentId, purchaseIds: lost.map((r: any) => r.id) },
+          });
+        }
+      }
+    } catch (err) {
+      captureDisputeError(err, 'dispute.state.updated(WON)');
+      throw err;
+    }
+    return;
+  }
+
+  // LOST (or ACCEPTED, where the merchant conceded: the funds go to the cardholder either way).
+  if (event.type === 'dispute.state.updated' && (dispute.state === 'LOST' || dispute.state === 'ACCEPTED')) {
     try {
       // TOCTOU claim -- same compare-and-swap idiom as executeVerifiedSquareRefund /
       // refundService.ts, guarding against a duplicate/redelivered event applying this twice.
       const claim = await prisma.purchase.updateMany({
-        where: { id: purchase.id, status: 'DISPUTED' },
+        where: { squarePaymentId: paymentId, status: 'DISPUTED' },
         data: { status: 'DISPUTE_LOST' },
       });
-      if (claim.count !== 1) {
-        const current = await prisma.purchase.findUnique({ where: { id: purchase.id }, select: { status: true } });
-        if (current?.status === 'DISPUTE_LOST') {
-          console.log(`[squareRefundService] Purchase ${purchase.id} already DISPUTE_LOST -- skipping duplicate dispute.state.updated(LOST).`);
+      if (claim.count < 1) {
+        const current = await prisma.purchase.findMany({ where: { squarePaymentId: paymentId }, select: { id: true, status: true } });
+        const statuses = current.map((r: any) => r.status);
+        if (statuses.length > 0 && statuses.every((st: string) => st === 'DISPUTE_LOST')) {
+          console.log(`[squareRefundService] Payment ${paymentId} already DISPUTE_LOST -- skipping duplicate dispute.state.updated(${dispute.state}).`);
         } else {
-          console.error(`[squareRefundService] dispute.state.updated(LOST) for purchase ${purchase.id} but it was NOT in DISPUTED state (actual: ${current?.status ?? 'not found'}) -- needs manual review.`);
+          console.error(`[squareRefundService] dispute.state.updated(${dispute.state}) for payment ${paymentId} but no row was in DISPUTED state (actual: ${statuses.join(',') || 'not found'}) -- needs manual review.`);
           Sentry.captureMessage('Square dispute LOST but purchase was not in DISPUTED state', {
             tags: { area: 'square-dispute' },
-            extra: { disputeId: dispute.id, purchaseId: purchase.id, actualStatus: current?.status ?? null },
+            extra: { disputeId: dispute.id, paymentId, actualStatuses: current.map((r: any) => ({ id: r.id, status: r.status })) },
           });
         }
         return;
@@ -1180,7 +1395,7 @@ export async function handleSquareDisputeWebhook(event: SquareDisputeWebhookEven
       // Square/the card network directly from THAT account's own balance -- FindA.Sale never
       // held those funds and has nothing to reverse. This is true regardless of the
       // SQUARE_DISPUTE_LIVE_CLAWBACK flag below.
-      console.log(`[squareRefundService] Square dispute LOST for purchase ${purchase.id} (dispute ${dispute.id}) -- no platform-side principal reversal needed, liability already on the organizer's own Square account.`);
+      console.log(`[squareRefundService] Square dispute ${dispute.state} for payment ${paymentId} (dispute ${dispute.id}, ${claim.count} row(s)) -- no platform-side principal reversal needed, liability already on the organizer's own Square account.`);
 
       if (squareDisputeClawbackEnabled()) {
         // GENUINELY UNRESEARCHED, NOT INVENTED (see handoff item 5): Square's own docs confirm
@@ -1192,20 +1407,93 @@ export async function handleSquareDisputeWebhook(event: SquareDisputeWebhookEven
         // reconciliation. Rather than guess at an unconfirmed Square API call to claw back the
         // platform's own app_fee_money share, this flag (when on) raises a clear, actionable
         // signal for manual/product review instead of attempting unverified money movement.
-        console.error(`[squareRefundService] SQUARE_DISPUTE_LIVE_CLAWBACK is on but the app_fee_money clawback mechanism for a lost Square dispute is UNRESEARCHED -- no automated action taken for purchase ${purchase.id} (dispute ${dispute.id}). Needs manual review: does FindA.Sale's platform fee for this sale need to be manually returned?`);
+        console.error(`[squareRefundService] SQUARE_DISPUTE_LIVE_CLAWBACK is on but the app_fee_money clawback mechanism for a lost Square dispute is UNRESEARCHED -- no automated action taken for payment ${paymentId} (dispute ${dispute.id}). Needs manual review: does FindA.Sale's platform fee for this sale need to be manually returned?`);
         Sentry.captureMessage('Square dispute LOST -- app_fee_money clawback mechanism unresearched, manual review needed', {
           tags: { area: 'square-dispute-clawback' },
-          extra: { disputeId: dispute.id, purchaseId: purchase.id, amountMoney: dispute.amount_money },
+          extra: { disputeId: dispute.id, paymentId, purchaseIds: rows.map((r: any) => r.id), amountMoney: dispute.amount_money },
         });
       } else {
-        console.log(`[squareRefundService] SQUARE_DISPUTE_LIVE_CLAWBACK is off -- no clawback review flagged for dispute ${dispute.id} (purchase ${purchase.id}).`);
+        console.log(`[squareRefundService] SQUARE_DISPUTE_LIVE_CLAWBACK is off -- no clawback review flagged for dispute ${dispute.id} (payment ${paymentId}).`);
       }
     } catch (err) {
-      console.error(`[squareRefundService] Failed to process dispute.state.updated(LOST) ${dispute.id}:`, err);
-      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
-        tags: { area: 'square-dispute' },
-        extra: { disputeId: dispute.id, paymentId },
-      });
+      captureDisputeError(err, `dispute.state.updated(${dispute.state})`);
+      throw err;
     }
+  }
+}
+
+/** True when the dispute step's completion marker exists. */
+async function disputeStepRecorded(disputeId: string, step: string): Promise<boolean> {
+  const done = await prisma.processedWebhookEvent.findUnique({ where: { eventId: `square-dispute-step:${disputeId}:${step}` } });
+  return !!done;
+}
+
+/** Record a step marker directly (used for facts that are not themselves run-once effects). Idempotent. */
+async function recordDisputeStep(disputeId: string, step: string): Promise<void> {
+  try {
+    await prisma.processedWebhookEvent.create({ data: { eventId: `square-dispute-step:${disputeId}:${step}`, status: 'COMPLETED' } });
+  } catch (err: any) {
+    if (err?.code !== 'P2002') throw err;
+  }
+}
+
+/**
+ * WON dispute: reverse the buyer penalties the OPENED step applied (2026-09-30).
+ *   - chargebackCount goes down by one, never below 0 (guarded updateMany on chargebackCount > 0)
+ *   - a suspension is lifted ONLY if this dispute's logic applied it (the 'suspended' step marker), it is still the
+ *     SERIAL_CHARGEBACKS suspension, and the count is back under the threshold of 3. A manual admin suspension has a
+ *     different reason and is never touched; a suspension from a dispute opened before the marker existed is left for
+ *     a person to review.
+ *   - XP clawed back for each purchase row is restored through the existing XP ledger (restoreChargebackXp) under
+ *     its own run-once key `square-dispute-step:<id>:xp-restore:<rowId>`, distinct from the clawback key.
+ * Failures throw, so the webhook is retried; completed steps are never repeated.
+ */
+async function reverseBuyerDisputePenalties(disputeId: string, rows: any[]): Promise<void> {
+  const buyerRow = rows.find((r) => r.user);
+  if (!buyerRow) return;
+  const buyerId: string = buyerRow.user.id;
+
+  if (await disputeStepRecorded(disputeId, 'buyer')) {
+    await runDisputeStepOnce(disputeId, 'won-buyer', async () => {
+      await prisma.user.updateMany({ where: { id: buyerId, chargebackCount: { gt: 0 } }, data: { chargebackCount: { decrement: 1 } } });
+      const after = await prisma.user.findUnique({ where: { id: buyerId }, select: { chargebackCount: true, suspendedAt: true, suspendReason: true } });
+      const suspendedByDispute = await disputeStepRecorded(disputeId, 'suspended');
+      if (suspendedByDispute && after?.suspendedAt && after.suspendReason === 'SERIAL_CHARGEBACKS' && after.chargebackCount < 3) {
+        await prisma.user.updateMany({
+          where: { id: buyerId, suspendedAt: { not: null }, suspendReason: 'SERIAL_CHARGEBACKS' },
+          data: { suspendedAt: null, suspendReason: null },
+        });
+        console.warn(`[squareRefundService] Dispute ${disputeId} WON: lifted the serial-chargeback suspension for user ${buyerId} (count now ${after.chargebackCount}).`);
+      } else if (after?.suspendedAt) {
+        console.log(`[squareRefundService] Dispute ${disputeId} WON: user ${buyerId} stays suspended (not applied by this dispute, other reason, or count still ${after.chargebackCount}).`);
+      }
+    });
+  }
+
+  const { restoreChargebackXp } = await import('./xpService');
+  for (const row of rows) {
+    if (!row.user) continue;
+    if (!(await disputeStepRecorded(disputeId, `xp:${row.id}`))) continue; // nothing was clawed back for this row
+    await runDisputeStepOnce(disputeId, `xp-restore:${row.id}`, async () => {
+      const restored = await restoreChargebackXp(row.id, row.user.id, disputeId);
+      console.log(`[squareRefundService] Dispute ${disputeId} WON: restored ${restored} XP to user ${row.user.id} for purchase ${row.id}.`);
+    });
+  }
+}
+
+/**
+ * Run a non-idempotent dispute side effect at most once per (dispute, step), across webhook redeliveries.
+ * Completion is recorded in ProcessedWebhookEvent under a namespaced id (no schema change) AFTER the
+ * effect succeeds, so a failure retries the step and a success is never repeated.
+ */
+async function runDisputeStepOnce(disputeId: string, step: string, fn: () => Promise<void>): Promise<void> {
+  const key = `square-dispute-step:${disputeId}:${step}`;
+  const done = await prisma.processedWebhookEvent.findUnique({ where: { eventId: key } });
+  if (done) return;
+  await fn();
+  try {
+    await prisma.processedWebhookEvent.create({ data: { eventId: key, status: 'COMPLETED' } });
+  } catch (err: any) {
+    if (err?.code !== 'P2002') throw err; // already recorded by a concurrent delivery
   }
 }

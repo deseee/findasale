@@ -199,6 +199,56 @@ describe('manualCardPayment -- split tender', () => {
     expect(res.json.mock.calls[0][0]).toMatchObject({ isSplitPayment: false });
   });
 
+  // CNP surcharge persistence (2026-09-30): each Purchase row records its share of the surcharge charged,
+  // allocated over the rows' CARD legs with largest-remainder allocation, so rows sum EXACTLY to the
+  // surcharge (cnpFeeCents) and Purchase.amount stays exclusive of it.
+  describe('CNP surcharge persisted on the Purchase rows', () => {
+    const createdRows = () => db.purchase.create.mock.calls.map((c: any[]) => c[0].data);
+
+    beforeEach(() => {
+      db.purchase.findMany.mockResolvedValue([]); // no prior rows for this payment: fall through to creating them
+      db.purchase.create.mockImplementation(async () => ({ id: `purchase${db.purchase.create.mock.calls.length}` }));
+      // jest.resetAllMocks() (top-level beforeEach) wiped the factory's resolved value; the handler calls .catch on it.
+      jest.requireMock('../services/checkoutGuard').recordSuspectedSignal.mockResolvedValue(undefined);
+    });
+
+    it('a single all-card row carries the whole surcharge (365 on $100), amount unchanged', async () => {
+      const res = makeRes();
+      await manualCardPayment({ body: manualBody(), headers: {}, user: { id: 'owner1' } } as any, res);
+      const rows = createdRows();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].cnpSurchargeCents).toBe(365);
+      expect(rows[0].amount).toBe(100); // the surcharge is never folded into the sale amount
+      expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, cnpFeeCents: 365 });
+    });
+
+    it('three rows that do not divide evenly still sum exactly to the surcharge', async () => {
+      const res = makeRes();
+      await manualCardPayment(
+        { body: manualBody({ items: [{ amount: 33.34, label: 'A' }, { amount: 33.33, label: 'B' }, { amount: 33.33, label: 'C' }] }), headers: {}, user: { id: 'owner1' } } as any,
+        res
+      );
+      const rows = createdRows();
+      expect(rows).toHaveLength(3);
+      const shares = rows.map((r: any) => r.cnpSurchargeCents);
+      expect(shares.reduce((a: number, b: number) => a + b, 0)).toBe(365);
+      expect(rows.map((r: any) => r.amount)).toEqual([33.34, 33.33, 33.33]);
+    });
+
+    it('split tender: the surcharge is weighted by each row\'s card leg (item amount minus its cash share)', async () => {
+      const res = makeRes();
+      // $60 + $40 rows, $40 cash: cash shares 24/16, card legs 36/24, surcharge on $60 card = 225 -> 135 / 90
+      await manualCardPayment(
+        { body: manualBody({ items: [{ amount: 60, label: 'A' }, { amount: 40, label: 'B' }], cashAmountCents: 4000, expectedTotalCents: 10000 }), headers: {}, user: { id: 'owner1' } } as any,
+        res
+      );
+      const rows = createdRows();
+      expect(rows.map((r: any) => r.cnpSurchargeCents)).toEqual([135, 90]);
+      expect(rows.map((r: any) => r.cashLegAmount)).toEqual([24, 16]);
+      expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, cnpFeeCents: 225 });
+    });
+  });
+
   it('refuses cash that covers the whole total (no double collect), before any Square call', async () => {
     for (const cash of [10000, 15000]) {
       const res = makeRes();

@@ -169,6 +169,9 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
       return res.json({ totalRevenue: 0, totalFees: 0, itemsSold: 0, itemsUnsold: 0, sales: [] });
     }
 
+    // LEGACY 10% / 8% (2026-09-30 audit): fallback ONLY for a purchase with no fee snapshot (the
+    // select below carries the snapshot columns, which always win). It restates pre-snapshot history at
+    // the rate it was really charged and is never a charge.
     const tierRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
 
     // Fetch all sales with items and purchases

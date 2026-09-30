@@ -27,6 +27,10 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
     });
     if (!organizer) return res.status(404).json({ message: 'Organizer not found' });
 
+    // LEGACY 10% / 8% (2026-09-30 audit): used ONLY as the fallback for a purchase with NO fee snapshot
+    // (resolveOrganizerFeeReport prefers the snapshot). Every purchase since the snapshot shipped
+    // (2026-08-17), including every one charged at the inclusive rates, carries a snapshot, so this
+    // restates only pre-snapshot history at the rate it was really charged. It is never a charge.
     const tierRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
 
     const sales = await prisma.sale.findMany({

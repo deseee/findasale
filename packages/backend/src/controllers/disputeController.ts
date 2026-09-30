@@ -257,6 +257,9 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     // cash + card split (Square can only refund the card leg). Relayed in the response below.
     let cashPortionToRefundByHand = 0;
     let cashRefundMessage: string | null = null;
+    // Card-not-present surcharge (2026-09-30): the buyer's Card-not-present fee returned with this refund
+    // (proportional to the principal refunded; 0 when the purchase carried none).
+    let surchargeRefundedAmount = 0;
     // Partial refunds (2026-09-29, money review P1-14): the item goes back on sale ONLY when this refund
     // brings the purchase to fully refunded. A partial refund leaves the purchase PAID and the buyer keeps
     // the item, so restoring it would let it be sold twice.
@@ -323,6 +326,9 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
           cashPortionToRefundByHand = refundResult.cashPortionToRefundByHand;
           cashRefundMessage = refundResult.message;
         }
+        if ('surchargeRefundedAmount' in refundResult) {
+          surchargeRefundedAmount = refundResult.surchargeRefundedAmount ?? 0;
+        }
         actualRefundedAmount = refundedAmount;
         refundedItemId = refundedPurchase.itemId;
         // Square results say so directly (cumulative across earlier partial refunds); the Stripe path has no
@@ -387,6 +393,7 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
         sendRefundConfirmationEmail({
           ...refundConfirmationParams,
           refundAmount: actualRefundedAmount,
+          surchargeRefundAmount: surchargeRefundedAmount,
           wasCapped: refundCapApplied,
         });
       }
@@ -403,7 +410,7 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
         userId: existingDispute.buyerId,
         type: 'refund_issued',
         title: 'Refund issued',
-        body: `Your dispute was resolved with a refund of $${actualRefundedAmount.toFixed(2)}.`,
+        body: `Your dispute was resolved with a refund of $${(actualRefundedAmount + surchargeRefundedAmount).toFixed(2)}.${surchargeRefundedAmount > 0 ? ` This includes the $${surchargeRefundedAmount.toFixed(2)} Card-not-present fee.` : ''}`,
         // Stripe dead-link fix (2026-09-09, findasale-dev BUG MODE): /shopper/purchases is not
         // a real route (404s). existingDispute.orderId is the purchase id -- by the time this
         // code runs, the IDOR guard above (lines ~271-292) has already resolved orderId to a

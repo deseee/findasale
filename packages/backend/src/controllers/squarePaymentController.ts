@@ -29,7 +29,7 @@ import {
   createSquareCharge,
   toSquareMoney,
 } from '../services/squarePaymentService';
-import { applyCashDebtToAppFee, settleCashDebtCollection } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
+import { applyCashDebtToAppFee, settleCashDebtCollection, releaseCashDebtClaim } from '../services/cashFeeService'; // Stripe-removal cash-fee-debt recoupment (2026-09-12)
 import { saveOrUpdateDefaultAddress } from '../services/addressService'; // ADR-126 (2026-09-16): opt-in address save
 import { recordAffiliateConversion, resolveAffiliateAttribution } from '../services/creatorAffiliateService'; // 2026-09-29: creator program attribution + commission ledger
 import { getSquarePlatformClient, getPlatformSquareLocationId } from '../utils/square'; // #132 (2026-09-18): À La Carte Square rail, mirrors boostService.ts's platform-level flat-fee pattern
@@ -356,20 +356,28 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
       saleAmountCents: finalPriceCents,
     });
 
-    const chargeResult = await createSquareCharge({
-      organizerAccessToken,
-      idempotencyKey,
-      sourceId,
-      amountCents: finalPriceCents,
-      appFeeCents,
-      locationId: item.sale!.organizer.squareLocationId,
-      referenceId: item.id,
-      note: item.title ? item.title.slice(0, 80) : undefined,
-      buyerEmailAddress: !req.user && normalizedGuestEmail ? normalizedGuestEmail : undefined,
-      verificationToken: typeof verificationToken === 'string' ? verificationToken : undefined,
-    });
+    // applyCashDebtToAppFee CLAIMED debtAppliedCents above (2026-09-30): give it back if the charge never happens.
+    let chargeResult: Awaited<ReturnType<typeof createSquareCharge>>;
+    try {
+      chargeResult = await createSquareCharge({
+        organizerAccessToken,
+        idempotencyKey,
+        sourceId,
+        amountCents: finalPriceCents,
+        appFeeCents,
+        locationId: item.sale!.organizer.squareLocationId,
+        referenceId: item.id,
+        note: item.title ? item.title.slice(0, 80) : undefined,
+        buyerEmailAddress: !req.user && normalizedGuestEmail ? normalizedGuestEmail : undefined,
+        verificationToken: typeof verificationToken === 'string' ? verificationToken : undefined,
+      });
+    } catch (chargeErr) {
+      await releaseCashDebtClaim({ organizerId: item.sale!.organizerId, debtAppliedCents });
+      throw chargeErr;
+    }
 
     if (!chargeResult.ok) {
+      await releaseCashDebtClaim({ organizerId: item.sale!.organizerId, debtAppliedCents });
       if (!req.user) {
         await recordGuestCheckoutFailure({ hashedIp: guestIpHash, hashedDeviceFingerprint: guestFpHash });
       }
@@ -436,9 +444,7 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
         },
       });
 
-      // Only settle on the branch that actually just created the row -- the findFirst-hit
-      // (idempotent retry) branch above must never decrement cashFeeBalance a second time for
-      // the same real charge.
+      // The debt was claimed before the charge (2026-09-30); this is now only the confirmation.
       await settleCashDebtCollection({ organizerId: item.sale!.organizerId, debtAppliedCents });
 
       // Creator program (2026-09-29): commission ledger row + conversion counter. Idempotent per
@@ -471,6 +477,10 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
           console.warn('[squarePayment] save-address-on-checkout failed (non-fatal):', addrErr);
         }
       }
+    } else {
+      // Idempotent retry of a sale that is already recorded: the original request's claim paid for that charge,
+      // so give back the claim this call just made (2026-09-30).
+      await releaseCashDebtClaim({ organizerId: item.sale!.organizerId, debtAppliedCents });
     }
 
     // Platform Safety #102 (auth) / post-payment guest self-dealing check (S1072 Finding #4
@@ -739,19 +749,27 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       saleAmountCents: totalCents,
     });
 
-    const chargeResult = await createSquareCharge({
-      organizerAccessToken,
-      idempotencyKey,
-      sourceId,
-      amountCents: totalCents,
-      appFeeCents,
-      locationId: organizer?.squareLocationId,
-      referenceId: saleId,
-      note: `Cart checkout -- ${items.length} item(s)`,
-      verificationToken: typeof verificationToken === 'string' ? verificationToken : undefined,
-    });
+    // applyCashDebtToAppFee CLAIMED debtAppliedCents above (2026-09-30): give it back if the charge never happens.
+    let chargeResult: Awaited<ReturnType<typeof createSquareCharge>>;
+    try {
+      chargeResult = await createSquareCharge({
+        organizerAccessToken,
+        idempotencyKey,
+        sourceId,
+        amountCents: totalCents,
+        appFeeCents,
+        locationId: organizer?.squareLocationId,
+        referenceId: saleId,
+        note: `Cart checkout -- ${items.length} item(s)`,
+        verificationToken: typeof verificationToken === 'string' ? verificationToken : undefined,
+      });
+    } catch (chargeErr) {
+      await releaseCashDebtClaim({ organizerId: items[0].sale!.organizerId, debtAppliedCents });
+      throw chargeErr;
+    }
 
     if (!chargeResult.ok) {
+      await releaseCashDebtClaim({ organizerId: items[0].sale!.organizerId, debtAppliedCents });
       return res.status(402).json({ error: chargeResult.message, code: 'SQUARE_PAYMENT_DECLINED' });
     }
 
@@ -841,10 +859,13 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       });
     }
 
-    // Only settle on the call that actually just created new rows -- an idempotent retry where
-    // every item already had a Purchase row must never decrement cashFeeBalance a second time.
+    // The debt was claimed before the charge (2026-09-30). A call that created new rows keeps its claim; an
+    // idempotent retry where every item already had a Purchase row must give back the claim it just made (the
+    // original request's claim already paid for that charge).
     if (anyNewPurchaseCreated) {
       await settleCashDebtCollection({ organizerId: items[0].sale!.organizerId, debtAppliedCents });
+    } else {
+      await releaseCashDebtClaim({ organizerId: items[0].sale!.organizerId, debtAppliedCents });
     }
 
     if (chargeResult.cardFingerprint) {

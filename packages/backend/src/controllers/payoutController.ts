@@ -3,8 +3,9 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, resolveOrganizerFeeReport } from '../utils/feeCalculator';
+import { resolveReportingFeeRate, isInclusiveFeeEra, resolveOrganizerFeeReport } from '../utils/feeCalculator'; // 2026-09-30: fee source of truth is the inclusive model; the legacy 10/8 rate only restates pre-2026-09-24 history (resolveReportingFeeRate)
 import { buyCheapestLabel, ShippingLabelPurchaseError } from '../services/shippingLabelService';
+import { cnpSurchargeReceiptFields } from '../services/cnpSurcharge'; // CNP surcharge (2026-09-30): refund dialog / refund history amounts
 
 /**
  * Stripe-to-Square changeover gap fix (2026-09-09, S-URGENT-PAYOUTS-STRIPE-ONLY): this whole
@@ -254,6 +255,11 @@ export interface EarningsBreakdownItem {
   // pickedUpAt is the LOCAL_PICKUP equivalent of shippingLabelPurchasedAt above.
   deliveryMethod?: string | null;
   pickedUpAt?: Date | null;
+  // Card-not-present surcharge (2026-09-30): present only on a manually keyed card sale. The buyer paid it
+  // ON TOP of salePrice; it is not revenue and not fee base. The refund returns it in proportion to the
+  // principal refunded, so the Orders refund dialog can say how much of it is still to be returned.
+  cnpSurchargeAmount?: number;
+  cnpSurchargeRefundedAmount?: number;
 }
 
 /**
@@ -270,7 +276,12 @@ export interface EarningsBreakdownItem {
  * Stripe 2.9% + $0.30, Square (Online API category, the one this codebase's checkout actually
  * uses) 2.9% + $0.30 -- confirmed live via Square's own fee-schedule support article this
  * session, not assumed identical to Stripe by coincidence. Actual fees may vary slightly either
- * way. Platform fee is tier-aware: 10% for SIMPLE, 8% for PRO/TEAMS (S388).
+ * way. Platform fee is tier-aware (S388).
+ *
+ * 2026-09-30 UPDATE: that per-row processor estimate now applies ONLY to a purchase from before
+ * the inclusive fee model (2026-09-24). Since then card processing is INCLUDED in the platform
+ * fee (8% / 9.5% SIMPLE, 6% / 7.5% PRO and TEAMS, $0.75 minimum), so a newer row reports a 0
+ * processor fee and net = sale price minus platform fee.
  */
 export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
   try {
@@ -317,10 +328,14 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
     });
 
     const items: EarningsBreakdownItem[] = purchases.map((p) => {
-      const tierRate = getPlatformFeeRate(organizer.subscriptionTier as any);
+      // Only used when the row has NO fee snapshot (resolveOrganizerFeeReport prefers the snapshot).
+      // A pre-2026-09-24 row is restated at the legacy 10/8 it was really charged at; a later row at
+      // the inclusive rate for its channel (POS => in person, otherwise online).
+      const tierRate = resolveReportingFeeRate(organizer.subscriptionTier as any, p.createdAt, p.source);
       // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
-      // The organizer's fee line is their COMMISSION ONLY: 10%/8% of the hammer or list price,
-      // on auctions exactly as on any other sale. The auction buyer's 5% premium came out of
+      // The organizer's fee line is their COMMISSION ONLY (the inclusive tier rate: 8% in person /
+      // 9.5% online SIMPLE, 6% / 7.5% PRO and TEAMS, $0.75 minimum, card processing included) of the
+      // hammer or list price, on auctions exactly as on any other sale. The auction buyer's 5% premium came out of
       // the WINNER's pocket, so it is stripped out of both the reported sale price and the fee.
       // A $200 win at SIMPLE reports $200.00 gross / $20.00 fee, and gross − fee − Stripe is
       // exactly what lands. (Reversal: an earlier pass the same day reported the stored
@@ -331,17 +346,23 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
       // was on SIMPLE keeps reporting its 10% fee after they upgrade to PRO, instead of being
       // silently restated at 8%. Pre-snapshot rows fall back to the recompute below.
       const { grossSalePrice: salePrice, platformFee } = resolveOrganizerFeeReport(p, tierRate);
-      // Processor's cut is charged on what the card was actually run for — the premium-inclusive
-      // total — not on the reported hammer price. Rate/fixed-fee picked per THIS ROW's own
-      // processor (p.processor), never the organizer's current processor -- see the
-      // processor-fee mislabeling fix note on EarningsBreakdownItem above.
+      // CARD PROCESSING IS INCLUDED in the platform fee (Patrick ruling 2026-09-24, inclusive fee
+      // model): on a purchase from that model there is NO separate processor fee on top, so the
+      // estimate is 0 and net = sale price minus the platform fee. Only a purchase from BEFORE the
+      // model (isInclusiveFeeEra false) keeps the old estimate of the processor's published rate,
+      // charged on what the card was actually run for (the premium-inclusive total), with the
+      // rate/fixed-fee picked per THIS ROW's own processor (p.processor), never the organizer's
+      // current processor -- see the processor-fee mislabeling fix note on EarningsBreakdownItem.
       const rowProcessor = p.processor === 'SQUARE' ? 'SQUARE' : 'STRIPE';
-      const processorFee = parseFloat(
-        (rowProcessor === 'SQUARE'
-          ? p.amount * SQUARE_RATE + SQUARE_FIXED
-          : p.amount * STRIPE_RATE + STRIPE_FIXED
-        ).toFixed(2)
-      );
+      const inclusiveRow = isInclusiveFeeEra(p.createdAt);
+      const processorFee = inclusiveRow
+        ? 0
+        : parseFloat(
+            (rowProcessor === 'SQUARE'
+              ? p.amount * SQUARE_RATE + SQUARE_FIXED
+              : p.amount * STRIPE_RATE + STRIPE_FIXED
+            ).toFixed(2)
+          );
       const netPayout = parseFloat((salePrice - platformFee - processorFee).toFixed(2));
 
       return {
@@ -357,7 +378,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         platformFee,
         processor: rowProcessor,
         processorFee,
-        processorFeeLabel: rowProcessor === 'SQUARE' ? 'Square' : 'Stripe',
+        processorFeeLabel: inclusiveRow ? 'Included in platform fee' : rowProcessor === 'SQUARE' ? 'Square' : 'Stripe',
         netPayout,
         // ADR-110 Decision Flag 3: `p` is a full Purchase row (no `select` on the base
         // model above, same "comes along for free" pattern the fee-snapshot columns
@@ -382,6 +403,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         // that never had a shippingZip at all.
         deliveryMethod: p.deliveryMethod,
         pickedUpAt: p.pickedUpAt,
+        ...(Number(p.cnpSurchargeCents) > 0 ? cnpSurchargeReceiptFields(p) : {}),
       };
     });
 
@@ -405,7 +427,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         totalNetPayout: parseFloat(totals.totalNetPayout.toFixed(2)),
       },
       count: items.length,
-      note: "Processor fee is estimated per sale at that sale's own processor's published rate (Stripe: 2.9% + $0.30; Square Online API: 2.9% + $0.30, confirmed 2026-09-09). Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS, on every sale including auctions. On an auction the winning bidder also pays a separate buyer premium on top of their bid: 5% by default, or whatever rate you set on that sale. It comes out of their pocket, not yours, so it is not included in the sale price or fees shown here.",
+      note: "Platform fee is 8% in person and 9.5% online for SIMPLE, and 6% in person and 7.5% online for PRO/TEAMS, with a $0.75 minimum per sale. Card processing is included in that fee, so there is no separate processor fee on top, and it applies to every sale including auctions. Sales made before September 24, 2026 were charged under the earlier model, where the card processor's fee (estimated at its published rate of 2.9% + $0.30) was a separate line from the platform fee. On an auction the winning bidder also pays a separate 5% buyer premium on top of their bid, set by FindA.Sale. It comes out of their pocket, not yours, so it is not included in the sale price or fees shown here.",
       // Cash POS: accumulated fees awaiting payout deduction
       cashFeeBalance: organizer.cashFeeBalance,
       cashFeeBalanceUpdatedAt: organizer.cashFeeBalanceUpdatedAt,
@@ -424,6 +446,8 @@ export interface RefundHistoryItem {
   refundedAmount: number | null;
   refundedAt: Date | null;
   refundInitiatedBy: string | null;
+  // Card-not-present surcharge returned with the refund (2026-09-30); absent when the purchase had none.
+  cnpSurchargeRefundedAmount?: number;
 }
 
 /**
@@ -473,6 +497,9 @@ export const getRefundHistory = async (req: AuthRequest, res: Response) => {
       refundedAmount: p.refundedAmount,
       refundedAt: p.refundedAt,
       refundInitiatedBy: p.refundInitiatedBy,
+      ...(Number(p.cnpSurchargeCents) > 0
+        ? { cnpSurchargeRefundedAmount: cnpSurchargeReceiptFields(p).cnpSurchargeRefundedAmount }
+        : {}),
     }));
 
     res.json({

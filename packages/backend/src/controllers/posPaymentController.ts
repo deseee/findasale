@@ -6,8 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
-import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpService';
-import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
+import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-30: replaces the direct awardXp / checkAndAward calls (Feature #58 achievement tracking now runs inside this service, deduped per purchase)
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
@@ -18,9 +17,11 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError, recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard; recordSuspectedSignal: manual card entry has no verifiable buyer account either (2026-09-12)
 import { snapshotForCommissionOnly, getInclusivePlatformFeeRate, calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); inclusive-fee migration (2026-09-24, Patrick ruling): replaces getPlatformFeeRate (flat tier rate) at both card-fee sites in this file -- both are IN_PERSON channel (POS register, not buyer self-serve)
-import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection, wouldExceedCashFeeExposureCap, accrueSplitCashLegOnce, allocateCentsProportionally, validateSplitTender, cardLegProblem, isValidCents, MAX_POS_AMOUNT_CENTS } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12); wouldExceedCashFeeExposureCap: cash-fee exposure cap pre-check (2026-09-24, Patrick ruling)
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection, releaseCashDebtClaim, wouldExceedCashFeeExposureCap, accrueSplitCashLegOnce, allocateCentsProportionally, validateSplitTender, cardLegProblem, isValidCents, MAX_POS_AMOUNT_CENTS } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12); wouldExceedCashFeeExposureCap: cash-fee exposure cap pre-check (2026-09-24, Patrick ruling)
+import { CNP_FEE_LABEL } from '../services/cnpSurcharge'; // CNP surcharge (2026-09-30): buyer-facing label for the surcharge line on the manual-card receipt; the surcharge itself is persisted per row (Purchase.cnpSurchargeCents) so refunds can return it proportionally
 import { resolvePosDiscount } from '../services/posDiscountService';
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
+import { posPaymentFailureBody } from '../services/posPaymentFailure'; // 2026-09-30: generic client message + stable code for payment-adapter failures; detail is logged server-side only
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
 import * as squarePos from '../services/squarePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): phone-based Square POS adapter -- charge creation moved to accept/confirm time, see file header
 import { transactionalEmailService } from '../lib/transactionalEmailService'; // 2026-09-16 fix: shopper receipt/notification email gap on manual-card + QR POS payments (mirrors cashPaymentController.ts's receipt pattern)
@@ -1131,14 +1132,25 @@ export const cancelPaymentRequest = async (req: AuthRequest, res: Response) => {
 
     const cancelReason = reason || 'ORGANIZER_CANCEL';
 
-    // Update status to CANCELLED
-    const updated = await prisma.pOSPaymentRequest.update({
-      where: { id },
+    // Update status to CANCELLED, guarded (2026-09-30): the read above is not a lock. If the shopper's
+    // confirm (or a decline/expiry) moved the request out of PENDING/ACCEPTED in the meantime, an unguarded
+    // update overwrote a PAID/in-flight request with CANCELLED. Compare-and-swap on the status instead, and
+    // report a lost race as a 409 so the organizer sees the request was already settled.
+    const cancelClaim = await prisma.pOSPaymentRequest.updateMany({
+      where: { id, status: { in: ['PENDING', 'ACCEPTED'] } },
       data: {
         status: 'CANCELLED',
         declineReason: cancelReason,
       },
     });
+    if (cancelClaim.count !== 1) {
+      const current = await prisma.pOSPaymentRequest.findUnique({ where: { id }, select: { status: true } });
+      return res.status(409).json({
+        message: 'This payment request was already updated and can no longer be cancelled.',
+        code: 'PAYMENT_REQUEST_STATE_CHANGED',
+        status: current?.status ?? null,
+      });
+    }
 
     // Emit socket event to shopper
     try {
@@ -1364,7 +1376,8 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         });
 
         if (!sandboxResult.ok) {
-          return res.status(sandboxResult.status).json({ message: sandboxResult.message, error: sandboxResult.message });
+          const failure = posPaymentFailureBody(sandboxResult, `confirm ${requestId} (sandbox)`, { includeErrorField: true });
+          return res.status(failure.status).json(failure.body);
         }
 
         // Persist regardless of captured state -- same retry-safety reasoning as the real
@@ -1422,7 +1435,8 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         });
 
         if (!result.ok) {
-          return res.status(result.status).json({ message: result.message, error: result.message });
+          const failure = posPaymentFailureBody(result, `confirm ${requestId} (Square)`, { includeErrorField: true });
+          return res.status(failure.status).json(failure.body);
         }
 
         // Persist the Square paymentId regardless of captured state -- a held (captured:
@@ -1468,7 +1482,8 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       });
 
       if (!result.ok) {
-        return res.status(result.status).json({ message: result.message, error: result.message });
+        const failure = posPaymentFailureBody(result, `confirm ${requestId} (Stripe)`, { includeErrorField: true });
+        return res.status(failure.status).json(failure.body);
       }
 
       externalPaymentId = result.externalPaymentId;
@@ -1634,6 +1649,22 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             })) ?? [];
           const recordedItemIds = new Set(recordedRows.map((r: { itemId: string | null }) => r.itemId).filter(Boolean) as string[]);
           const miscAlreadyRecorded = recordedRows.some((r: { itemId: string | null }) => r.itemId === null);
+
+          // Shortfall guard (2026-09-30): fulfillItems is built from the SURVIVING item rows. An item deleted
+          // (or moved off this sale) after the request was created used to vanish from that list and its
+          // price was absorbed into the misc remainder row, so the shopper paid for goods that were never
+          // recorded or reserved. Compare against the requested ids; a shortfall goes down the same
+          // ITEM_UNAVAILABLE / FULFILLMENT_FAILED auto-refund path as an item that sells out mid-payment
+          // (the throw rolls the transaction back). Skipped when rows for this payment are already recorded:
+          // that is a replay of an earlier partial write, and a later item deletion (Purchase.itemId is set
+          // null on delete) must not turn a recorded sale into a refund.
+          const requestedItemIds = Array.from(new Set<string>(posRequest.itemIds ?? []));
+          if (recordedRows.length === 0 && fulfillItems.length < requestedItemIds.length) {
+            const foundIds = new Set(fulfillItems.map((it) => it.id));
+            const missingId = requestedItemIds.find((id) => !foundIds.has(id)) ?? requestedItemIds[0];
+            console.error(`[pos-payment] Request ${requestId}: ${requestedItemIds.length - fulfillItems.length} requested item(s) no longer exist (e.g. ${missingId}).`);
+            throw new PosFulfillmentUnavailableError(missingId, 'item no longer exists');
+          }
 
           for (let idx = 0; idx < fulfillItems.length; idx++) {
             const item = fulfillItems[idx];
@@ -1823,26 +1854,27 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     }
 
 
-    // Feature #58: Award PURCHASE_MADE achievement for linked shopper (fire-and-forget)
-    if (posRequest.shopperUserId) {
-      checkAndAward(posRequest.shopperUserId, 'PURCHASE_MADE').catch(err =>
-        console.warn('[achievement] Failed to check PURCHASE_MADE (POS):', err)
-      );
-    }
-
-    // Award XP to shopper for purchase
+    // Engagement awards (XP, first-purchase milestones, referral rewards, OG Buyer badge, PURCHASE_MADE
+    // achievement, Sale Passport stamp), 2026-09-30: this block used to call awardXp / checkAndAward directly
+    // with no purchase id and no dedupe, so a replayed confirm double-awarded and the XP could not be
+    // clawed back on a chargeback (clawBackChargebackXp finds XP by purchaseId). The shared Square
+    // engagement service is the single implementation: it is keyed on the FIRST Purchase row of this payment
+    // (one award per payment, not per cart line), dedupes on the purchase reference, skips test rows, and
+    // for POS rows only rewards a shopper-linked row carrying a real Square payment id. Fire-and-forget:
+    // it never throws and never delays the response.
     if (posRequest.shopperUserId) {
       try {
-        const baseXp = XP_AWARDS.PURCHASE;
-        const multipliedXp = await applyHuntPassMultiplier(posRequest.shopperUserId, baseXp);
-        awardXp(posRequest.shopperUserId, 'PURCHASE_COMPLETED', multipliedXp, {
-          saleId: posRequest.saleId,
-          preMultipliedHuntPassXp: true,
-        }).catch((err: any) =>
-          console.error('[XP] Failed to award XP for POS purchase:', err)
-        );
+        const firstPurchase = await prisma.purchase.findFirst({
+          where:
+            posRequest.processor === 'SQUARE'
+              ? { squarePaymentId: externalPaymentId, userId: posRequest.shopperUserId }
+              : { stripePaymentIntentId: { startsWith: externalPaymentId }, userId: posRequest.shopperUserId },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true },
+        });
+        fireSquarePurchaseEngagement(firstPurchase?.id ?? null);
       } catch (err: any) {
-        console.warn('[pos-payment] Failed to award XP:', err.message);
+        console.warn('[pos-payment] Failed to schedule purchase engagement awards:', err?.message);
       }
     }
 
@@ -2313,7 +2345,8 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       });
 
       if (!sandboxResult.ok) {
-        return res.status(sandboxResult.status).json({ message: sandboxResult.message });
+        const failure = posPaymentFailureBody(sandboxResult, 'manual card entry (sandbox)');
+        return res.status(failure.status).json(failure.body);
       }
 
       if (!sandboxResult.captured) {
@@ -2352,27 +2385,36 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         saleAmountCents: totalChargeCents,
       }));
 
-      const result = await squarePos.createAndCapturePayment({
-        organizer: {
-          id: organizer.id,
-          squareOnboarded: organizer.squareOnboarded,
-          squareMerchantId: organizer.squareMerchantId,
-          // preflight.squareLocationId (not organizer.squareLocationId): if this organizer's
-          // location was just backfilled by preflightAccountStatus above, `organizer` itself
-          // still holds the stale pre-preflight value resolved at the top of this request.
-          squareLocationId: preflight.squareLocationId,
-        },
-        accessToken: preflight.accessToken,
-        sourceId: sourceId!,
-        amountCents: totalChargeCents,
-        appFeeCents,
-        // No POSPaymentRequest row exists for this flow -- sourceId itself is the idempotency
-        // seed. See this function's own header comment for the full reasoning.
-        posRequestId: sourceId!,
-      });
+      // applyCashDebtToAppFee CLAIMED debtAppliedCents above (2026-09-30): give it back if the charge never happens.
+      let result: Awaited<ReturnType<typeof squarePos.createAndCapturePayment>>;
+      try {
+        result = await squarePos.createAndCapturePayment({
+          organizer: {
+            id: organizer.id,
+            squareOnboarded: organizer.squareOnboarded,
+            squareMerchantId: organizer.squareMerchantId,
+            // preflight.squareLocationId (not organizer.squareLocationId): if this organizer's
+            // location was just backfilled by preflightAccountStatus above, `organizer` itself
+            // still holds the stale pre-preflight value resolved at the top of this request.
+            squareLocationId: preflight.squareLocationId,
+          },
+          accessToken: preflight.accessToken,
+          sourceId: sourceId!,
+          amountCents: totalChargeCents,
+          appFeeCents,
+          // No POSPaymentRequest row exists for this flow -- sourceId itself is the idempotency
+          // seed. See this function's own header comment for the full reasoning.
+          posRequestId: sourceId!,
+        });
+      } catch (chargeErr) {
+        await releaseCashDebtClaim({ organizerId: organizer.id, debtAppliedCents });
+        throw chargeErr;
+      }
 
       if (!result.ok) {
-        return res.status(result.status).json({ message: result.message });
+        await releaseCashDebtClaim({ organizerId: organizer.id, debtAppliedCents });
+        const failure = posPaymentFailureBody(result, 'manual card entry (Square)');
+        return res.status(failure.status).json(failure.body);
       }
 
       if (!result.captured) {
@@ -2438,6 +2480,9 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // this is checked once per charge rather than per item.
     const existingPurchases = await prisma.purchase.findMany({ where: { squarePaymentId } });
     if (existingPurchases.length > 0) {
+      // Idempotent retry of a charge that is already recorded: the original request's claim paid for it, so
+      // give back the claim this call just made (2026-09-30).
+      await releaseCashDebtClaim({ organizerId: organizer.id, debtAppliedCents });
       return res.json({
         success: true,
         purchaseIds: existingPurchases.map((p) => p.id),
@@ -2460,6 +2505,18 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     const manualCashShares = isManualSplit
       ? allocateCentsProportionally(manualCashCents, chargedItems.map((ci) => Math.round(ci.amount * 100)))
       : chargedItems.map(() => 0);
+    // CNP surcharge persistence (2026-09-30): each row's share of the surcharge actually charged, in
+    // whole cents, allocated with the same largest-remainder helper so the rows sum EXACTLY to
+    // cnpFeeCents. Weighted by each row's CARD leg (item amount minus its cash share), because the
+    // surcharge was only ever charged on the card portion. Purchase.amount stays exclusive of it (it
+    // is never sale revenue nor platform-fee base); the refund path (squareRefundService) reads
+    // cnpSurchargeCents to return it proportionally with a refund.
+    const manualCardLegWeights = chargedItems.map((ci, i) => Math.max(0, Math.round(ci.amount * 100) - (manualCashShares[i] ?? 0)));
+    let manualSurchargeShares = allocateCentsProportionally(cnpFeeCents, manualCardLegWeights);
+    if (cnpFeeCents > 0 && manualSurchargeShares.reduce((a, b) => a + b, 0) !== cnpFeeCents) {
+      // Degenerate weights (no row carries a positive card leg): spread evenly rather than lose the surcharge.
+      manualSurchargeShares = allocateCentsProportionally(cnpFeeCents, chargedItems.map(() => 1));
+    }
     // Inclusive-fee migration (2026-09-24): baseAppFeeCents may include the per-transaction
     // minimum-fee floor (calculateInclusiveCommissionCents), which a flat itemAmountCents *
     // cardFeeRate multiplication would not reflect on a small-ticket sale where the floor is
@@ -2497,6 +2554,8 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
             cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
             cashLegAmount: manualCashShares[idx] > 0 ? manualCashShares[idx] / 100 : undefined,
+            // CNP surcharge (2026-09-30): this row's share, so a refund can return it proportionally.
+            cnpSurchargeCents: manualSurchargeShares[idx] ?? 0,
             ...snapshotForCommissionOnly(itemFeeCents / 100, cardFeeRate),
             discountType: item.rowDiscountCents > 0 ? discountResolution.discountType : null,
             discountValueRaw: item.rowDiscountCents > 0 ? discountResolution.discountValueRaw : null,
@@ -2589,7 +2648,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         const html = buildEmail({
           preheader: `Receipt for your purchase`,
           headline: 'Your receipt from FindA.Sale 🎉',
-          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul>${isManualSplit ? `<p>Paid in cash: $${(manualCashCents / 100).toFixed(2)}</p>` : ''}<p><strong>Total${isManualSplit ? ' charged to card' : ''}: $${(totalChargeCents / 100).toFixed(2)}</strong></p>`,
+          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul>${isManualSplit ? `<p>Paid in cash: $${(manualCashCents / 100).toFixed(2)}</p>` : ''}${cnpFeeCents > 0 ? `<p>${CNP_FEE_LABEL}: $${(cnpFeeCents / 100).toFixed(2)}</p>` : ''}<p><strong>Total${isManualSplit ? ' charged to card' : ''}: $${(totalChargeCents / 100).toFixed(2)}</strong></p>`,
           ctaText: 'Visit FindA.Sale',
           ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
           accentColor: '#10b981',

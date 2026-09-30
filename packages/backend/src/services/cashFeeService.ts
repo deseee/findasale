@@ -192,6 +192,9 @@ export async function accrueCashFeeBalance(params: {
  * Two-phase, mirroring every other charge-then-record pattern in this codebase (compute the
  * fee, attempt the charge, only mutate the DB once the charge is CONFIRMED to have succeeded):
  *
+ *   [UPDATED 2026-09-30: applyCashDebtToAppFee now CLAIMS the debt atomically before the charge and
+ *   releaseCashDebtClaim re-credits it on a failed charge; settleCashDebtCollection is a no-op
+ *   confirmation. The text below describes the original design.]
  *   1. `applyCashDebtToAppFee` -- PRE-CHARGE. Pure computation, no DB write. Call this after
  *      computing a card sale's normal `platformFeeAmount`/appFeeCents, before sending the
  *      charge to Square. Returns the (possibly larger) appFeeCents to actually request, capped
@@ -228,10 +231,18 @@ export function computeCashDebtRoomCents(params: {
 }
 
 /**
- * PRE-CHARGE. Reads the organizer's current `cashFeeBalance` and returns the appFeeCents to
- * actually charge (base commission + whatever debt fits). No DB write -- see file-header note.
- * `debtAppliedCents` is what the caller must pass to `settleCashDebtCollection` AFTER a
- * confirmed-successful charge, and must persist as `cashDebtCollectedAmount` on the Purchase row.
+ * PRE-CHARGE CLAIM (fix 2026-09-30). Works out how much outstanding `cashFeeBalance` fits in this card
+ * sale's app fee and CLAIMS it atomically BEFORE the charge is sent: a conditional decrement
+ * (`cashFeeBalance >= claim`) whose row count says whether this call really got the money. Only what was
+ * actually claimed pads the fee, so two concurrent card sales can never both pad with the same debt (the
+ * old read-then-later-decrement let both charge the organizer for it, and the second guarded decrement then
+ * silently did nothing). A lost race re-reads the balance and claims what is still left (up to 3 tries).
+ *
+ * The caller MUST then either (a) keep the claim because the charge went through (settleCashDebtCollection
+ * is now only a confirmation and moves nothing), or (b) call `releaseCashDebtClaim` with the same
+ * `debtAppliedCents` when the charge definitively failed, or when an idempotent retry finds the sale already
+ * recorded (the original request's claim already paid for that charge). `debtAppliedCents` is also what
+ * must be persisted as `cashDebtCollectedAmount` on the Purchase row.
  */
 export async function applyCashDebtToAppFee(params: {
   organizerId: string;
@@ -240,37 +251,71 @@ export async function applyCashDebtToAppFee(params: {
   tx?: CashFeeClient;
 }): Promise<{ appFeeCents: number; debtAppliedCents: number }> {
   const client = (params.tx ?? prisma) as Prisma.TransactionClient;
-  const organizer = await client.organizer.findUnique({
-    where: { id: params.organizerId },
-    select: { cashFeeBalance: true },
-  });
-  const debtAppliedCents = computeCashDebtRoomCents({
-    cashFeeBalance: organizer?.cashFeeBalance ?? 0,
-    baseAppFeeCents: params.baseAppFeeCents,
-    saleAmountCents: params.saleAmountCents,
-  });
-  return { appFeeCents: params.baseAppFeeCents + debtAppliedCents, debtAppliedCents };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const organizer = await client.organizer.findUnique({
+      where: { id: params.organizerId },
+      select: { cashFeeBalance: true },
+    });
+    const wantedCents = computeCashDebtRoomCents({
+      cashFeeBalance: organizer?.cashFeeBalance ?? 0,
+      baseAppFeeCents: params.baseAppFeeCents,
+      saleAmountCents: params.saleAmountCents,
+    });
+    if (wantedCents <= 0) break;
+    const wanted = roundMoney(wantedCents / 100);
+    const claim = await client.organizer.updateMany({
+      where: { id: params.organizerId, cashFeeBalance: { gte: wanted } },
+      data: {
+        cashFeeBalance: { decrement: wanted },
+        cashFeeBalanceUpdatedAt: new Date(),
+      },
+    });
+    if (claim.count === 1) {
+      return { appFeeCents: params.baseAppFeeCents + wantedCents, debtAppliedCents: wantedCents };
+    }
+    // Another sale claimed part of it first: re-read and claim what is left.
+  }
+  return { appFeeCents: params.baseAppFeeCents, debtAppliedCents: 0 };
 }
 
 /**
- * POST-CHARGE. Call ONLY after Square has confirmed the charge succeeded, with the exact
- * `debtAppliedCents` returned by `applyCashDebtToAppFee` for that same charge. No-op when 0.
+ * POST-CHARGE confirmation. Since 2026-09-30 the debt is claimed BEFORE the charge (see
+ * applyCashDebtToAppFee), so once Square has confirmed the payment there is nothing left to move: this is a
+ * deliberate no-op kept so every caller's apply -> charge -> settle sequence still reads the same. Do NOT
+ * decrement here again (that would collect the debt twice).
  */
 export async function settleCashDebtCollection(params: {
   organizerId: string;
   debtAppliedCents: number;
   tx?: CashFeeClient;
 }): Promise<void> {
+  void params;
+}
+
+/**
+ * Give back a claim made by applyCashDebtToAppFee when its charge did not happen (definitive decline, or an
+ * idempotent retry that found the sale already recorded). Re-credits `cashFeeBalance` by exactly the claimed
+ * amount. No-op for 0. Never throws: a failure here must not mask the response the caller is about to send, so
+ * it is logged loudly instead (the organizer then simply owes slightly less, never more).
+ */
+export async function releaseCashDebtClaim(params: {
+  organizerId: string;
+  debtAppliedCents: number;
+  tx?: CashFeeClient;
+}): Promise<void> {
   if (!(params.debtAppliedCents > 0)) return;
-  const collected = roundMoney(params.debtAppliedCents / 100);
   const client: Prisma.TransactionClient = (params.tx ?? prisma) as Prisma.TransactionClient;
-  await client.organizer.updateMany({
-    where: { id: params.organizerId, cashFeeBalance: { gte: collected } },
-    data: {
-      cashFeeBalance: { decrement: collected },
-      cashFeeBalanceUpdatedAt: new Date(),
-    },
-  });
+  try {
+    await client.organizer.updateMany({
+      where: { id: params.organizerId },
+      data: {
+        cashFeeBalance: { increment: roundMoney(params.debtAppliedCents / 100) },
+        cashFeeBalanceUpdatedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    console.error(`[cashFeeService] could not re-credit a released cash-debt claim of ${params.debtAppliedCents} cents for organizer ${params.organizerId}:`, err);
+  }
 }
 
 /**

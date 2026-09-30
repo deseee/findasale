@@ -128,8 +128,13 @@ export function sendRefundConfirmationEmail(params: {
   // Purchase at all -- there is genuinely no purchase id for that case, so the URL
   // below falls back to the real shopper purchase-history list page instead.
   purchaseId?: string | null;
+  // Card-not-present surcharge (2026-09-30): dollars of the buyer's Card-not-present fee returned WITH this
+  // refund (on top of `refundAmount`, which stays the principal). Absent/0 for every refund without one.
+  surchargeRefundAmount?: number | null;
 }): void {
   if (!params.toEmail) return;
+  const surchargeRefund = Number(params.surchargeRefundAmount) > 0 ? Number(params.surchargeRefundAmount) : 0;
+  const totalRefund = params.refundAmount + surchargeRefund;
 
   const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'support@finda.sale';
   const itemTitle = params.itemTitle || 'your purchase';
@@ -145,7 +150,8 @@ export function sendRefundConfirmationEmail(params: {
     html: `
           <h2>Refund Processed</h2>
           <p>Hi ${params.buyerName || 'Shopper'},</p>
-          <p>We've issued a refund of <strong>$${params.refundAmount.toFixed(2)}</strong> for <strong>${itemTitle}</strong> from <strong>${params.organizerBusinessName || 'a sale'}</strong>.</p>
+          <p>We've issued a refund of <strong>$${totalRefund.toFixed(2)}</strong> for <strong>${itemTitle}</strong> from <strong>${params.organizerBusinessName || 'a sale'}</strong>.</p>
+          ${surchargeRefund > 0 ? `<p>This includes $${surchargeRefund.toFixed(2)} of the Card-not-present fee you paid at the register.</p>` : ''}
           <p>The refund will appear in your original payment method within 1-2 business days.</p>
           ${params.wasCapped ? `<p style="color: #ef4444; font-size: 14px;"><strong>Note:</strong> Your refund was capped at 50% because your account is less than 30 days old (Platform Safety Policy #100).</p>` : ''}
           <p><a href="${purchaseHistoryUrl}">View your purchase history</a></p>

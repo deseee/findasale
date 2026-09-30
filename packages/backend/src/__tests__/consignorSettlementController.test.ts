@@ -823,3 +823,35 @@ describe('getConsignorPortal payout visibility', () => {
     expect(res.body.payouts.map((p: any) => p.id)).not.toContain(ids.approved);
   });
 });
+
+describe('approve variance acknowledgement (2026-09-30)', () => {
+  async function seedVarianceRun() {
+    const c = fake.seedConsignor(ws.workspaceId, { name: 'Consignor V', email: 'v@example.com' });
+    const item = fake.seedItem(c.id, { price: 40, title: 'Discounted lamp', saleId: sale.id });
+    fake.seedPurchase(item.id, { amount: 30 }); // sold for less than the tag price
+    const { batch } = await ledger.createSettlementRun(db, { workspaceId: ws.workspaceId, actorUserId: ws.userId, saleId: sale.id });
+    return batch;
+  }
+
+  it('answers 409 VARIANCE_ACK_REQUIRED without acknowledgeVariance and leaves the run a DRAFT', async () => {
+    const batch = await seedVarianceRun();
+    const res = await call(settle.approveConsignorSettlementBatch, { params: { batchId: batch.id }, body: { sendStatements: true } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({ code: 'VARIANCE_ACK_REQUIRED', varianceLineCount: 1 });
+    expect(fake.store.consignorSettlementBatch[0].status).toBe('DRAFT');
+    expect(mStatement).not.toHaveBeenCalled();
+  });
+
+  it('approves when the body carries acknowledgeVariance: true', async () => {
+    const batch = await seedVarianceRun();
+    const res = await call(settle.approveConsignorSettlementBatch, { params: { batchId: batch.id }, body: { acknowledgeVariance: true } });
+    expect(res.statusCode).toBe(200);
+    expect(fake.store.consignorSettlementBatch[0].status).toBe('APPROVED');
+  });
+
+  it('a truthy string is not an acknowledgement (only the boolean true counts)', async () => {
+    const batch = await seedVarianceRun();
+    const res = await call(settle.approveConsignorSettlementBatch, { params: { batchId: batch.id }, body: { acknowledgeVariance: 'true' } });
+    expect(res.statusCode).toBe(409);
+  });
+});

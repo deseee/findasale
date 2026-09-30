@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { cnpSurchargeReceiptFields } from '../services/cnpSurcharge'; // CNP surcharge (2026-09-30): own receipt line + refunded share
 
 export const getMyReceipts = async (req: AuthRequest, res: Response) => {
   try {
@@ -29,6 +30,13 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
         processor: true,
         squarePaymentId: true,
         boothCartTransactionId: true,
+        // Card-not-present surcharge (2026-09-30): charged on top of `amount`, shown as its own receipt
+        // line; the refund columns let the receipt show how much of it has been returned.
+        status: true,
+        cnpSurchargeCents: true,
+        cashLegAmount: true,
+        refundedAmount: true,
+        refundCashPortion: true,
         sale: {
           select: {
             id: true,
@@ -108,10 +116,27 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
     const receipts = Array.from(transactionGroups.values()).map((group) => {
       const first = group[0];
       const total = group.reduce((sum, p) => sum + p.amount, 0);
+      // Card-not-present surcharge (2026-09-30): summed in whole cents across the group's rows. `total`
+      // stays the sale principal (the surcharge is not sale revenue); totalCharged is what the card was
+      // actually run for.
+      let cnpSurchargeCents = 0;
+      let cnpSurchargeRefundedCents = 0;
+      for (const p of group) {
+        const f = cnpSurchargeReceiptFields(p);
+        cnpSurchargeCents += Math.round(f.cnpSurchargeAmount * 100);
+        cnpSurchargeRefundedCents += Math.round(f.cnpSurchargeRefundedAmount * 100);
+      }
       return {
         id: first.id,
         issuedAt: first.createdAt,
         total,
+        ...(cnpSurchargeCents > 0
+          ? {
+              cnpSurchargeAmount: cnpSurchargeCents / 100,
+              cnpSurchargeRefundedAmount: cnpSurchargeRefundedCents / 100,
+              totalCharged: Math.round(total * 100 + cnpSurchargeCents) / 100,
+            }
+          : {}),
         items: group.map((p) => ({
           itemTitle: p.item?.title ?? (p.sale?.title ? `${p.sale.title} Purchase` : 'POS Purchase'),
           photoUrl: undefined,
@@ -151,6 +176,12 @@ export const getReceipt = async (req: AuthRequest, res: Response) => {
             userId: true,
             amount: true,
             createdAt: true,
+            // Card-not-present surcharge (2026-09-30)
+            status: true,
+            cnpSurchargeCents: true,
+            cashLegAmount: true,
+            refundedAmount: true,
+            refundCashPortion: true,
             sale: {
               select: {
                 id: true,
@@ -186,7 +217,9 @@ export const getReceipt = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json({ receipt });
+    // Card-not-present surcharge (2026-09-30): its own receipt line, plus the refunded share. Zeros when
+    // the purchase carried none.
+    res.json({ receipt: { ...receipt, ...cnpSurchargeReceiptFields(receipt.purchase) } });
   } catch (error) {
     console.error('getReceipt error:', error);
     res.status(500).json({ message: 'Failed to fetch receipt' });
