@@ -5682,6 +5682,22 @@ async function fillRequiredAspects(
         source = 'identifier-default';
       }
     }
+    // Artist: never substring-match item.tags against the enum. A format tag ("LP") matched an
+    // artist literally named "LP", so a Tonio K. record was about to list as Artist="LP" (2026-09-30).
+    else if (/^artist$/i.test(aspect.name)) {
+      const hit = aspect.enumValues
+        .filter((v) => v.length >= 3 && matchesWholeWord(titleLower, v.toLowerCase()))
+        .sort((a, b) => b.length - a.length)[0];
+      if (hit) { picked = hit; source = 'title-whole-word-match'; }
+      else if (aspect.mode === 'FREE_TEXT') {
+        const lead = item.title.split(/\b(?:vinyl|lp|cd|cassette|record|\d{4})\b/i)[0].trim();
+        if (lead.length >= 2) { picked = lead.slice(0, 65); source = 'title-derived-artist'; }
+      }
+      if (!picked) {
+        console.warn(`[eBay AspectFill] category ${categoryId}: SKIPPED Artist (no whole-word enum match in title, not FREE_TEXT) -- organizer must add an "Artist:<name>" tag`);
+        continue;
+      }
+    }
     // Standard handling for other aspects (Type, Style, Material, etc.)
     else if (aspect.enumValues.length > 0) {
       // Check item.tags[] for direct enum value matches
