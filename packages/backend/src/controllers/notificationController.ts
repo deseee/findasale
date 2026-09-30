@@ -3,6 +3,29 @@ import twilio from 'twilio';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
+import {
+  SMS_CONSENT_PENDING_TTL_MS,
+  SMS_CONSENT_SOURCE_DOUBLE_OPT_IN,
+  SMS_CONSENT_VERSION,
+  SMS_MAX_ORGANIZER_MESSAGE_CHARS,
+  SMS_MAX_SEGMENTS,
+  checkQuietHours,
+  composeSmsBody,
+  describeAllowedWindow,
+  estimateSmsSegments,
+  getSentInLast24h,
+  getSmsDailyCap,
+  getSmsFraming,
+  isPhoneOptedOut,
+  loadSmsAudience,
+  normalizePhoneE164,
+  phoneStorageVariants,
+  resolveSendTimeZone,
+} from '../services/smsComplianceService';
+import { sendCompliantSmsBatch, sendConsentConfirmationSms } from '../services/compliantSms';
+import { getClientIp } from '../utils/getClientIp';
+import { escapeHtml, safeHttpsUrl } from '../utils/htmlEscape';
+import { maskEmail } from '../utils/logMask';
 
 // Lazy-loaded Twilio client
 let _twilioClient: any = null;
@@ -25,14 +48,41 @@ const getTwilioClient = () => {
   return _twilioClient;
 };
 
-// Subscribe to sale notifications
+const EMAIL_FORMAT = /^[^\s@<>",;:()\[\]\\]+@[^\s@<>",;:()\[\]\\]+\.[^\s@<>",;:()\[\]\\]{2,}$/;
+/** Confirmation texts to one number per day across all sales/accounts (stops one number being texted repeatedly). */
+const MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_DAY = 3;
+/** A pending opt-in for the same sale and number is not re-texted for this long. */
+const CONFIRMATION_RESEND_COOLDOWN_MS = 10 * 60 * 1000;
+
+const SMS_PENDING_NOTICE =
+  'If this number can receive texts, we sent one text to confirm. Reply YES to turn on text updates. ' +
+  'If you ever replied STOP to our number, text START to it first, then try again.';
+
+// Subscribe to sale notifications.
+// Body: { saleId, phone?, email?, smsConsent? }
+//  - phone (non-empty): smsConsent MUST be true. DOUBLE OPT-IN (2026-09-29): the number is stored with
+//    smsConsentPendingAt (plus consent evidence: IP, user agent, copy version, source) and smsConsentAt stays
+//    NULL. ONE confirmation text ("Reply YES ...") goes to that number; the inbound webhook
+//    (smsWebhookController) sets smsConsentAt only when the number itself replies YES/START within 48
+//    hours. A pending row is never texted (except that one confirmation). Any signed-in account can type
+//    any number, so typing a number proves nothing about who owns it.
+//  - The response is identical whether or not the number is already used by another account, on the STOP
+//    list, or throttled (no phone-number oracle), and never echoes the number or the stored row.
+//  - phone null or '': clears the number and every consent field ("turn off texts").
+//  - a field that is omitted is left unchanged (it used to be wiped to null on every call).
+//  - email-only subscribing works exactly as before (format validated).
 export const subscribeToSale = async (req: AuthRequest, res: Response) => {
   try {
-    const { saleId, phone, email } = req.body;
+    const { saleId, phone, email, smsConsent } = (req.body ?? {}) as {
+      saleId?: unknown;
+      phone?: unknown;
+      email?: unknown;
+      smsConsent?: unknown;
+    };
     const userId = req.user.id;
 
     // Validate inputs
-    if (!saleId) {
+    if (!saleId || typeof saleId !== 'string') {
       return res.status(400).json({ message: 'Sale ID is required' });
     }
 
@@ -45,32 +95,170 @@ export const subscribeToSale = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    // Create or update subscription
-    const subscription = await prisma.saleSubscriber.upsert({
-      where: {
-        saleId_userId: {
-          userId,
-          saleId
-        }
-      },
-      update: {
-        phone: phone || null,
-        email: email || null
-      },
-      create: {
-        userId,
-        saleId,
-        phone: phone || null,
-        email: email || null
-      }
+    const existing = await prisma.saleSubscriber.findUnique({
+      where: { saleId_userId: { userId, saleId } },
     });
 
+    const data: Record<string, unknown> = {};
+    const now = new Date();
+    let smsStatus: 'NONE' | 'OFF' | 'PENDING' | 'CONFIRMED' = 'NONE';
+    let confirmTo: string | null = null;
+
+    if (email !== undefined) {
+      if (email === null || (typeof email === 'string' && email.trim() === '')) {
+        data.email = null;
+      } else if (typeof email !== 'string' || email.trim().length > 254 || !EMAIL_FORMAT.test(email.trim())) {
+        return res.status(400).json({ message: 'Enter a valid email address.', code: 'INVALID_EMAIL' });
+      } else {
+        data.email = email.trim().toLowerCase();
+      }
+    }
+
+    if (phone !== undefined) {
+      if (phone === null || (typeof phone === 'string' && phone.trim() === '')) {
+        data.phone = null;
+        data.smsConsentAt = null;
+        data.smsConsentSource = null;
+        data.smsConsentPendingAt = null;
+        smsStatus = 'OFF';
+      } else {
+        const e164 = normalizePhoneE164(phone);
+        if (!e164) {
+          return res.status(400).json({ message: 'Enter a valid mobile phone number.', code: 'INVALID_PHONE' });
+        }
+        if (smsConsent !== true) {
+          return res.status(400).json({
+            message: 'Please agree to receive text messages to add your phone number.',
+            code: 'SMS_CONSENT_REQUIRED',
+          });
+        }
+
+        const sameNumber = existing?.phone === e164;
+        if (sameNumber && existing?.smsConsentAt) {
+          // Already confirmed for this number on this sale: nothing to change, nothing to send.
+          smsStatus = 'CONFIRMED';
+        } else if (
+          sameNumber &&
+          existing?.smsConsentPendingAt &&
+          now.getTime() - new Date(existing.smsConsentPendingAt).getTime() < CONFIRMATION_RESEND_COOLDOWN_MS
+        ) {
+          // Just texted a moment ago: do not text again, do not extend the window.
+          smsStatus = 'PENDING';
+        } else {
+          // Numbers we will not store or text (STOP list, lookup failure, too many recent confirmations) get
+          // the same "pending" answer as everyone else, so the response reveals nothing about the number.
+          let blocked = false;
+          try {
+            blocked = await isPhoneOptedOut(e164);
+            if (!blocked) {
+              const recent = await prisma.saleSubscriber.count({
+                where: {
+                  phone: { in: phoneStorageVariants(e164) },
+                  smsConsentPendingAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+                  ...(sameNumber ? { NOT: { id: existing!.id } } : {}),
+                },
+              });
+              blocked = recent >= MAX_CONFIRMATION_TEXTS_PER_PHONE_PER_DAY;
+            }
+          } catch (lookupErr) {
+            console.error('[subscribe] phone pre-check failed, treating as blocked:', (lookupErr as Error)?.message);
+            blocked = true;
+          }
+          smsStatus = 'PENDING';
+          if (!blocked) {
+            data.phone = e164;
+            data.smsConsentAt = null;
+            data.smsConsentPendingAt = now;
+            data.smsConsentSource = SMS_CONSENT_SOURCE_DOUBLE_OPT_IN;
+            data.smsConsentVersion = SMS_CONSENT_VERSION;
+            data.smsConsentIp = getClientIp(req).slice(0, 64);
+            data.smsConsentUserAgent = String(req.get('user-agent') ?? '').slice(0, 300) || null;
+            confirmTo = e164;
+            // Free the (sale, number) slot from unconfirmed holders (squatters): rows with no confirmed
+            // consent whose pending window is over, or that never had one.
+            await prisma.saleSubscriber.updateMany({
+              where: {
+                saleId,
+                phone: e164,
+                smsConsentAt: null,
+                AND: [
+                  { OR: [{ userId: null }, { userId: { not: userId } }] },
+                  { OR: [{ smsConsentPendingAt: null }, { smsConsentPendingAt: { lt: new Date(now.getTime() - SMS_CONSENT_PENDING_TTL_MS) } }] },
+                ],
+              },
+              data: { phone: null, smsConsentPendingAt: null, smsConsentSource: null },
+            });
+          }
+        }
+      }
+    }
+
+    // Create or update subscription
+    const write = (payload: Record<string, unknown>) =>
+      prisma.saleSubscriber.upsert({
+        where: {
+          saleId_userId: {
+            userId,
+            saleId
+          }
+        },
+        update: payload,
+        create: {
+          userId,
+          saleId,
+          phone: null,
+          email: null,
+          smsConsentAt: null,
+          smsConsentSource: null,
+          ...payload,
+        } as any,
+      });
+
+    let subscription;
+    try {
+      subscription = await write(data);
+    } catch (error) {
+      if ((error as any)?.code !== 'P2002' || confirmTo === null) throw error;
+      // Another account already holds a CONFIRMED opt-in for this number on this sale. Answer exactly as
+      // for a fresh number (no oracle): keep the caller's other changes, store no phone, send nothing.
+      const { phone: _p, smsConsentAt: _a, smsConsentPendingAt: _pa, smsConsentSource: _s, smsConsentVersion: _v, smsConsentIp: _i, smsConsentUserAgent: _u, ...rest } = data;
+      subscription = await write(rest);
+      confirmTo = null;
+    }
+
+    if (confirmTo) {
+      // One confirmation text. Its outcome is logged (masked) but never changes the response.
+      try {
+        const organizer = await prisma.organizer.findUnique({
+          where: { id: sale.organizerId },
+          select: { id: true, businessName: true, timezone: true },
+        });
+        const outcome = await sendConsentConfirmationSms({
+          to: confirmTo,
+          saleTitle: sale.title,
+          orgName: organizer?.businessName ?? null,
+          organizerId: organizer?.id ?? null,
+          saleId,
+          orgTimeZone: organizer?.timezone ?? null,
+        });
+        if (outcome !== 'sent') console.warn(`[subscribe] confirmation text not sent for sale ${saleId}: ${outcome}`);
+      } catch (confirmErr) {
+        console.error('[subscribe] confirmation text failed:', (confirmErr as Error)?.message);
+      }
+    }
+
     res.json({
-      message: 'Successfully subscribed to sale notifications',
-      subscription
+      message: smsStatus === 'PENDING' ? SMS_PENDING_NOTICE : 'Subscription saved',
+      smsStatus,
+      subscription: { id: subscription.id, saleId: subscription.saleId },
     });
   } catch (error) {
-    console.error('Error subscribing to sale:', error);
+    if ((error as any)?.code === 'P2002') {
+      // Unreachable for phone conflicts (handled above without revealing them); anything else that
+      // hits the unique index gets the same neutral answer.
+      return res.json({ message: SMS_PENDING_NOTICE, smsStatus: 'PENDING', subscription: null });
+    }
+    console.error('Error subscribing to sale:', (error as Error)?.message);
     res.status(500).json({ message: 'Failed to subscribe to sale' });
   }
 };
@@ -96,12 +284,21 @@ export const unsubscribeFromSale = async (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Successfully unsubscribed from sale notifications' });
   } catch (error) {
+    if ((error as any)?.code === 'P2025') {
+      // delete() throws P2025 when there is no such subscription: that is a 404, not a server error.
+      return res.status(404).json({ message: 'You are not subscribed to this sale.' });
+    }
     console.error('Error unsubscribing from sale:', error);
     res.status(500).json({ message: 'Failed to unsubscribe from sale' });
   }
 };
 
 // H10: Public one-click unsubscribe by email — no auth required (CAN-SPAM compliance)
+// DEPRECATED / DEAD (2026-09-29): not mounted on any route (routes/notifications.ts does not import it), and it
+// must NOT be mounted as written: it is unauthenticated and deletes every subscription for any email address
+// passed in the query string, so anyone could unsubscribe anyone else. Real unsubscribes use the per-user
+// token flow in controllers/unsubscribeController.ts (types 'saleReminders', 'newSales', 'all', ...).
+// Kept only so nothing that references it breaks.
 export const unsubscribeByEmail = async (req: Request, res: Response) => {
   try {
     const email = (req.query.email as string)?.trim().toLowerCase();
@@ -112,7 +309,7 @@ export const unsubscribeByEmail = async (req: Request, res: Response) => {
     const result = await prisma.saleSubscriber.deleteMany({
       where: { email }
     });
-    console.info(`Unsubscribed ${result.count} subscription(s)`);
+    console.info(`Unsubscribed ${result.count} subscription(s) for ${maskEmail(email)}`);
     res.json({ message: 'Successfully unsubscribed from all sale reminders', count: result.count });
   } catch (error) {
     console.error('Error unsubscribing by email:', error);
@@ -125,9 +322,21 @@ export const getUserSubscriptions = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user.id;
 
+    // Explicit select: the row also holds consent evidence (IP address, user agent) that the browser never needs.
     const subscriptions = await prisma.saleSubscriber.findMany({
       where: { userId },
-      include: {
+      select: {
+        id: true,
+        saleId: true,
+        userId: true,
+        phone: true,
+        email: true,
+        smsConsentAt: true,
+        smsConsentPendingAt: true,
+        smsConsentSource: true,
+        emailOptOutAt: true,
+        createdAt: true,
+        updatedAt: true,
         sale: {
           select: {
             title: true,
@@ -146,14 +355,50 @@ export const getUserSubscriptions = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Send SMS update to subscribers
-export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
-  try {
-    const { saleId, message } = req.body;
-    const organizerId = req.user.organizerProfile?.id;
+// Only one blast per organizer at a time (double-click / retry protection on top of the rate limiter).
+// Per-process fast path only: the authoritative guard is the database-backed reservation in
+// services/compliantSms.ts (exclusive RESERVED row under a Postgres advisory lock).
+const sendingOrganizers = new Set<string>();
+// No longer used here (sendCompliantSmsBatch owns concurrency); kept because nothing is removed.
+const SMS_SEND_CONCURRENCY = 10;
+void SMS_SEND_CONCURRENCY;
 
-    if (!saleId || !message) {
+const isSmsConfigured = (): boolean => !!getTwilioClient() && !!process.env.TWILIO_PHONE_NUMBER;
+
+// Send SMS update to subscribers who explicitly opted in to texts for this sale.
+// Route guards (routes/notifications.ts): authenticate, requireTier('PRO'), burst + hourly rate limits.
+// Compliance (services/smsComplianceService.ts): recorded consent only, STOP suppression list,
+// quiet hours in the organizer's timezone, sender prefix + "Reply STOP to opt out." on every text,
+// rolling 24 hour per-organizer recipient cap, segment limit, audit row per send (SmsSendLog).
+export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
+  let lockedOrganizerId: string | null = null;
+  try {
+    const { saleId, message } = (req.body ?? {}) as { saleId?: unknown; message?: unknown };
+    const profile = req.user?.organizerProfile;
+    const organizerId: string | undefined = profile?.id;
+
+    if (!organizerId) {
+      return res.status(403).json({ message: 'Organizer profile not found.', code: 'ORGANIZER_PROFILE_REQUIRED' });
+    }
+
+    if (typeof saleId !== 'string' || !saleId || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ message: 'Sale ID and message are required' });
+    }
+
+    const text = message.trim();
+    if (text.length > SMS_MAX_ORGANIZER_MESSAGE_CHARS) {
+      return res.status(400).json({
+        message: `Keep your message to ${SMS_MAX_ORGANIZER_MESSAGE_CHARS} characters or fewer.`,
+        code: 'MESSAGE_TOO_LONG',
+      });
+    }
+    const body = composeSmsBody(profile.businessName, text);
+    const segmentInfo = estimateSmsSegments(body);
+    if (segmentInfo.segments > SMS_MAX_SEGMENTS) {
+      return res.status(400).json({
+        message: 'That message is too long once your name and the opt-out line are added. Shorten it, or remove emoji and special characters.',
+        code: 'MESSAGE_TOO_LONG',
+      });
     }
 
     // Verify user is organizer of this sale
@@ -169,50 +414,177 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not authorized to send updates for this sale' });
     }
 
-    // Get Twilio client
-    const twilioClient = getTwilioClient();
-    if (!twilioClient || !process.env.TWILIO_PHONE_NUMBER) {
-      return res.status(503).json({ message: 'SMS service not configured' });
+    if ((sale as any).status === 'ENDED') {
+      return res.status(409).json({ message: 'This sale has ended. Text updates can only be sent for active sales.', code: 'SALE_ENDED' });
     }
 
-    // Get subscribers with phone numbers
-    const subscribers = await prisma.saleSubscriber.findMany({
-      where: {
+    // Twilio must be configured
+    if (!isSmsConfigured()) {
+      return res.status(503).json({ message: 'SMS service not configured', code: 'SMS_NOT_CONFIGURED' });
+    }
+
+    // Quiet hours (no texts before 8 AM or from 9 PM in the organizer's timezone)
+    const timeZone = resolveSendTimeZone(profile.timezone);
+    const quiet = checkQuietHours(new Date(), timeZone);
+    if (!quiet.allowed) {
+      return res.status(422).json({
+        message: `Texts can only be sent between ${describeAllowedWindow()} (${timeZone}). Try again after ${quiet.nextAllowedAt?.toISOString() ?? '8:00 AM'}.`,
+        code: 'QUIET_HOURS',
+        timeZone,
+        nextAllowedAt: quiet.nextAllowedAt,
+      });
+    }
+
+    // Fast path: one blast per organizer per process. The real guard is database-backed (an exclusive
+    // RESERVED SmsSendLog row taken under a Postgres advisory lock in sendCompliantSmsBatch), so it also
+    // holds across server processes and restarts.
+    if (sendingOrganizers.has(organizerId)) {
+      return res.status(409).json({ message: 'A text update is already being sent. Wait for it to finish.', code: 'SEND_IN_PROGRESS' });
+    }
+    sendingOrganizers.add(organizerId);
+    lockedOrganizerId = organizerId;
+
+    // Only shoppers with recorded consent who have not replied STOP
+    const audience = await loadSmsAudience(saleId);
+    if (audience.eligible.length === 0) {
+      return res.json({
+        message: 'No shoppers have opted in to text updates for this sale yet.',
+        sentCount: 0,
+        failedCount: 0,
+        skippedOptOutCount: audience.optedOut,
+        skippedByCapCount: 0,
+        partial: false,
+        audienceSize: 0,
+      });
+    }
+
+    // Consent is already enforced by loadSmsAudience (smsConsentAt IS NOT NULL, STOP list applied), hence
+    // requireConsent:false. Cost control is the rolling 24 hour cap: an audience larger than the remaining
+    // allowance is sent PARTIALLY (earliest subscribers first) instead of being refused outright, and the
+    // allowance is reserved in the database BEFORE anything is sent and reconciled afterwards.
+    const result = await sendCompliantSmsBatch(
+      audience.eligible.map((to) => ({ to, message: text })),
+      {
+        organizerId,
         saleId,
-        phone: {
-          not: null
-        }
-      },
-      take: 100,
-    });
+        orgName: profile.businessName,
+        orgTimeZone: profile.timezone,
+        orgTier: profile.subscriptionTier,
+        minTier: 'PRO',
+        requireConsent: false,
+        exclusive: true,
+        logMessage: text,
+      }
+    );
 
-    if (subscribers.length === 0) {
-      return res.json({ message: 'No subscribers with phone numbers found' });
-    }
-
-    // Send SMS to each subscriber
-    const results: Array<{ phone: string | null; success: boolean; sid?: string; error?: string }> = [];
-    for (const subscriber of subscribers) {
-      try {
-        const sms = await twilioClient.messages.create({
-          body: message,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: subscriber.phone!
-        });
-        results.push({ phone: subscriber.phone, success: true, sid: sms.sid });
-      } catch (error) {
-        console.error(`Failed to send SMS to ${subscriber.phone}:`, error);
-        results.push({ phone: subscriber.phone, success: false, error: (error as Error).message });
+    if (result.blocked) {
+      switch (result.blocked) {
+        case 'cap_reached':
+          return res.status(429).json({
+            message: `You have reached today's limit of ${result.dailyCap} text messages. It resets on a rolling 24 hour basis.`,
+            code: 'DAILY_CAP_REACHED',
+            dailyCap: result.dailyCap,
+            remainingToday: 0,
+          });
+        case 'in_progress':
+          return res.status(409).json({ message: 'A text update is already being sent. Wait for it to finish.', code: 'SEND_IN_PROGRESS' });
+        case 'quiet_hours':
+          return res.status(422).json({
+            message: `Texts can only be sent between ${describeAllowedWindow()} (${result.timeZone}).`,
+            code: 'QUIET_HOURS',
+            timeZone: result.timeZone,
+            nextAllowedAt: result.nextAllowedAt,
+          });
+        case 'not_configured':
+          return res.status(503).json({ message: 'SMS service not configured', code: 'SMS_NOT_CONFIGURED' });
+        case 'tier':
+          return res.status(403).json({ message: 'Text updates require the PRO plan or higher.', code: 'TIER_REQUIRED' });
+        default:
+          return res.status(503).json({
+            message: 'Could not safely start the send. Nothing was sent. Try again shortly.',
+            code: 'SMS_SEND_UNAVAILABLE',
+          });
       }
     }
 
+    const skippedOptOutCount = audience.optedOut + result.skippedOptedOut;
+    const partial = result.skippedByCap > 0;
     res.json({
-      message: `Sent ${results.filter(r => r.success).length} of ${results.length} messages`,
-      results
+      message: partial
+        ? `Sent ${result.sent} of ${audience.eligible.length} text messages. ${result.skippedByCap} shopper${result.skippedByCap === 1 ? ' was' : 's were'} not texted because you reached today's limit of ${result.dailyCap} texts.`
+        : `Sent ${result.sent} of ${audience.eligible.length} text message${audience.eligible.length === 1 ? '' : 's'}`,
+      sentCount: result.sent,
+      failedCount: result.failed,
+      skippedOptOutCount,
+      skippedByCapCount: result.skippedByCap,
+      partial,
+      audienceSize: audience.eligible.length,
+      remainingToday: result.remainingToday ?? 0,
     });
   } catch (error) {
     console.error('Error sending SMS update:', error);
     res.status(500).json({ message: 'Failed to send SMS update' });
+  } finally {
+    if (lockedOrganizerId) sendingOrganizers.delete(lockedOrganizerId);
+  }
+};
+
+// GET /notifications/sms-audience/:saleId
+// What the send-update page needs before the organizer writes anything: how many shoppers will
+// be texted, why others will not, the remaining daily allowance, and whether quiet hours are on.
+// Returns counts only, never phone numbers or names.
+export const getSmsAudienceSummary = async (req: AuthRequest, res: Response) => {
+  try {
+    const profile = req.user?.organizerProfile;
+    const organizerId: string | undefined = profile?.id;
+    if (!organizerId) {
+      return res.status(403).json({ message: 'Organizer profile not found.', code: 'ORGANIZER_PROFILE_REQUIRED' });
+    }
+
+    const { saleId } = req.params;
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true, title: true, organizerId: true, status: true },
+    });
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+    if (sale.organizerId !== organizerId) {
+      return res.status(403).json({ message: 'Not authorized to send updates for this sale' });
+    }
+
+    const [audience, sentToday] = await Promise.all([loadSmsAudience(saleId), getSentInLast24h(organizerId)]);
+    const cap = getSmsDailyCap();
+    const timeZone = resolveSendTimeZone(profile.timezone);
+    const quiet = checkQuietHours(new Date(), timeZone);
+    const framing = getSmsFraming(profile.businessName);
+
+    res.json({
+      saleId: sale.id,
+      saleTitle: sale.title,
+      saleEnded: (sale as any).status === 'ENDED',
+      eligibleCount: audience.eligible.length,
+      optedOutCount: audience.optedOut,
+      noConsentCount: audience.noConsent,
+      pendingConfirmationCount: audience.pendingConfirmation,
+      dailyCap: cap,
+      sentLast24h: sentToday,
+      remainingToday: Math.max(0, cap - sentToday),
+      quietHours: {
+        allowedNow: quiet.allowed,
+        timeZone,
+        window: describeAllowedWindow(),
+        nextAllowedAt: quiet.nextAllowedAt,
+      },
+      maxMessageChars: SMS_MAX_ORGANIZER_MESSAGE_CHARS,
+      maxSegments: SMS_MAX_SEGMENTS,
+      messagePrefix: framing.prefix,
+      messageSuffix: framing.suffix,
+      smsConfigured: isSmsConfigured(),
+    });
+  } catch (error) {
+    console.error('Error loading SMS audience:', error);
+    res.status(500).json({ message: 'Failed to load text update audience' });
   }
 };
 
@@ -223,21 +595,25 @@ const firstNameOf = (name: string | null | undefined): string => {
   return first && first.length > 0 ? first : 'there';
 };
 
-// Helper: build the HTML for a weekly digest email
-const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string, nearYou: boolean): string => {
+// Helper: build the HTML for a weekly digest email (exported so the escaping can be unit tested)
+export const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string, nearYou: boolean): string => {
   const saleCards = sales.map((sale) => {
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const endDate = new Date(sale.endDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    const photo = sale.photoUrls?.[0] ? `<img src="${sale.photoUrls[0]}" alt="${sale.title}" style="width:100%;height:160px;object-fit:cover;border-radius:6px 6px 0 0;" />` : '';
+    // Untrusted text (sale titles, addresses, business names) and the photo URL are escaped / validated:
+    // an unescaped title or a photo URL such as `" onerror="...` would otherwise become markup in every
+    // recipient's inbox (utils/htmlEscape.ts).
+    const photoUrl = safeHttpsUrl(sale.photoUrls?.[0]);
+    const photo = photoUrl ? `<img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(sale.title)}" style="width:100%;height:160px;object-fit:cover;border-radius:6px 6px 0 0;" />` : '';
     return `
       <div style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px;overflow:hidden;font-family:sans-serif;">
         ${photo}
         <div style="padding:14px;">
-          <h3 style="margin:0 0 4px;font-size:16px;color:#111827;">${sale.title}</h3>
-          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">${sale.address}, ${sale.city}, ${sale.state}</p>
+          <h3 style="margin:0 0 4px;font-size:16px;color:#111827;">${escapeHtml(sale.title)}</h3>
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">${escapeHtml(sale.address)}, ${escapeHtml(sale.city)}, ${escapeHtml(sale.state)}</p>
           <p style="margin:0 0 10px;font-size:13px;color:#374151;">${startDate} – ${endDate}</p>
-          <p style="margin:0 0 10px;font-size:12px;color:#9ca3af;">By ${sale.organizer?.businessName || 'Unknown Organizer'}</p>
-          <a href="${frontendUrl}/sales/${sale.id}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">View Sale →</a>
+          <p style="margin:0 0 10px;font-size:12px;color:#9ca3af;">By ${escapeHtml(sale.organizer?.businessName || 'Unknown Organizer')}</p>
+          <a href="${escapeHtml(frontendUrl)}/sales/${escapeHtml(sale.id)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">View Sale →</a>
         </div>
       </div>`;
   }).join('');
@@ -256,8 +632,8 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, un
 
     <!-- Greeting -->
     <p style="color:#374151;font-size:15px;margin-bottom:20px;">
-      Hi ${firstNameOf(userName)},<br><br>
-      Here are the sales happening this weekend${nearYou ? ' near you' : ''}: estate sales, yard sales, auctions, flea markets, and more. Don't miss out!
+      Hi ${escapeHtml(firstNameOf(userName))},<br><br>
+      Here are the sales happening this weekend${nearYou ? ' near you' : ''}: yard sales, auctions, flea markets, consignment sales, and more. Don't miss out!
     </p>
 
     <!-- Sale cards -->
@@ -267,10 +643,10 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, un
     <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px;text-align:center;">
       <p style="color:#9ca3af;font-size:12px;margin:0;">
         You're receiving this because you have a FindA.Sale account.<br>
-        <a href="${frontendUrl}" style="color:#2563eb;">View all sales</a> &middot;
-        <a href="${frontendUrl}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
+        <a href="${escapeHtml(frontendUrl)}" style="color:#2563eb;">View all sales</a> &middot;
+        <a href="${escapeHtml(frontendUrl)}/shopper/dashboard" style="color:#2563eb;">My Dashboard</a>
       </p>
-      <p style="font-size:12px;color:#9ca3af;margin-top:8px;">Don't want these? <a href="${unsubUrl}" style="color:#6b7280;">Unsubscribe</a></p>
+      <p style="font-size:12px;color:#9ca3af;margin-top:8px;">Don't want these? <a href="${escapeHtml(unsubUrl)}" style="color:#6b7280;">Unsubscribe</a></p>
       <p style="font-size:11px;color:#9ca3af;margin-top:8px;">${process.env.OUTREACH_PHYSICAL_ADDRESS || '219 E Michigan Ave, Suite F, Paw Paw, MI 49079'}</p>
     </div>
   </div>
@@ -425,7 +801,7 @@ export const sendWeeklyDigest = async () => {
         // Rate limit guard — small delay between sends
         await new Promise((resolve) => setTimeout(resolve, 200));
       } catch (error) {
-        console.error(`Weekly digest: failed to send to ${user.email}:`, error);
+        console.error(`Weekly digest: failed to send to ${maskEmail(user.email)}:`, error);
         failed++;
       }
     }

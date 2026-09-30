@@ -11,6 +11,8 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import Head from 'next/head';
 import Link from 'next/link';
+import TierGate from '../../../components/TierGate';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 
 interface Sale {
   id: string;
@@ -34,6 +36,7 @@ const SendUpdateLandingPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
+  const { canAccess } = useOrganizerTier();
 
   // Fetch organizer's sales
   const { data: salesData, isLoading, isError, refetch } = useQuery<Sale[]>({
@@ -42,7 +45,7 @@ const SendUpdateLandingPage = () => {
       const res = await api.get('/organizers/me/sales');
       return res.data;
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && canAccess('PRO'),
   });
 
   // Auth guard
@@ -84,6 +87,11 @@ const SendUpdateLandingPage = () => {
         <title>Send Update. FindA.Sale</title>
       </Head>
 
+      <TierGate
+        requiredTier="PRO"
+        featureName="Text Updates"
+        description="Text your shoppers directly about a sale. Text updates are included with PRO and TEAMS because every text message has a real cost. Shoppers choose to opt in, and they can reply STOP any time."
+      >
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header with breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4">
@@ -103,7 +111,7 @@ const SendUpdateLandingPage = () => {
               Choose a Sale
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-sm">
-              Select a sale to send a message update to your shoppers about this sale.
+              Select a sale to text an update to the shoppers who opted in to text updates for it.
             </p>
           </div>
 
@@ -193,6 +201,7 @@ const SendUpdateLandingPage = () => {
           )}
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

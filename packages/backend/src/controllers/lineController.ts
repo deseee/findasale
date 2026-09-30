@@ -1,8 +1,18 @@
 import { Request, Response } from 'express';
-import { prisma } from '../index';
+// Same singleton as '../index' (index.ts re-exports './lib/prisma'); importing it from here keeps this
+// controller loadable without booting the Express entry point (tests, scripts).
+import { prisma } from '../lib/prisma';
 import twilio from 'twilio';
 import { AuthRequest } from '../middleware/auth';
 import { handleEarlyBirdBadge, handleExplorerBadge } from './userController';
+import {
+  cleanSmsText,
+  sendCompliantSms,
+  sendCompliantSmsBatch,
+} from '../services/compliantSms';
+import type { SmsBatchOptions, SmsBatchResult } from '../services/compliantSms';
+import { describeAllowedWindow } from '../services/smsComplianceService';
+import { maskPhoneDisplay } from '../utils/logMask';
 
 // Initialize Twilio client only if credentials are available
 let twilioClient: ReturnType<typeof twilio> | null = null;
@@ -23,22 +33,56 @@ const initTwilio = () => {
   }
 };
 
-initTwilio();
+// initTwilio() is no longer called at load (2026-09-29): every line text now goes through
+// services/compliantSms.ts, which owns its own lazy Twilio client. The function stays (nothing removed).
+// initTwilio();
 
-// Helper: send SMS if Twilio is configured, otherwise no-op
-const sendSMS = async (to: string, body: string): Promise<void> => {
-  if (twilioClient && process.env.TWILIO_PHONE_NUMBER) {
-    try {
-      await twilioClient.messages.create({
-        body,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to,
-      });
-    } catch (error) {
-      console.error(`Failed to send SMS to ${to}:`, error);
-    }
-  }
+/**
+ * DEAD / DISABLED (2026-09-29): the old raw sender. It texted any stored number with no consent check,
+ * no STOP-list check, no quiet hours, no sender prefix or STOP footer, no daily cap and no SmsSendLog row,
+ * and it logged the full phone number. Kept only so nothing that references it breaks; it no longer
+ * sends. Use sendCompliantSms / sendCompliantSmsBatch from services/compliantSms.ts.
+ */
+const sendSMS = async (_to: string, _body: string): Promise<void> => {
+  console.warn('[lineController] sendSMS() is disabled: use services/compliantSms.ts (sendCompliantSms).');
+  void initTwilio;
+  void twilioClient;
 };
+
+/**
+ * Line texts are transactional messages about a sale the shopper opted in to text updates for, so they
+ * follow the same consent rule as organizer updates: SaleSubscriber.smsConsentAt must be set (double
+ * opt-in). Decision (2026-09-29): joining the virtual line does NOT count as consent, because the join
+ * flow (POST /lines/:saleId/join) takes no phone number; it only looks up the number already stored on the
+ * shopper's sale subscription. No confirmed consent means no text (the shopper still sees their place on
+ * the sale page). Bulk texts (/start, /notify) respect quiet hours; the one-to-one "you are next" and
+ * "you joined" texts do not, because they answer something the shopper is doing at that moment.
+ */
+const lineSmsContext = (
+  organizer: { id: string; businessName?: string | null; timezone?: string | null; subscriptionTier?: unknown },
+  saleId: string,
+  over: Partial<SmsBatchOptions> = {}
+): SmsBatchOptions => ({
+  organizerId: organizer.id,
+  saleId,
+  orgName: organizer.businessName ?? null,
+  orgTimeZone: organizer.timezone ?? null,
+  orgTier: organizer.subscriptionTier,
+  minTier: 'PRO',
+  ...over,
+});
+
+/** Counts only, never phone numbers. */
+const summarizeSms = (r: SmsBatchResult) => ({
+  sent: r.sent,
+  failed: r.failed,
+  blocked: r.blocked,
+  skippedNoConsent: r.skippedNoConsent,
+  skippedInvalidPhone: r.skippedInvalidPhone,
+  skippedOptedOut: r.skippedOptedOut,
+  skippedByCap: r.skippedByCap,
+  remainingToday: r.remainingToday,
+});
 
 // Helper: verify the authenticated user is an organizer of the given sale
 const getOrganizerForSale = async (userId: string, saleId: string) => {
@@ -83,21 +127,33 @@ export const startLine = async (req: AuthRequest, res: Response) => {
       lineEntries.push(entry);
     }
 
-    // Notify subscribers of their position
-    for (const subscriber of subscribers) {
-      if (subscriber.phone) {
-        const entry = lineEntries.find(e => e.userId === subscriber.userId);
-        await sendSMS(
-          subscriber.phone,
-          `The virtual line for "${ctx.sale.title}" is now open! You are #${entry?.position} in line. We'll text you when it's your turn.`
-        );
-      }
-    }
+    // Notify subscribers of their position (compliant path: consent, STOP list, quiet hours, prefix +
+    // STOP footer, daily cap with partial send, SmsSendLog). Only subscribers with confirmed consent are texted.
+    const positionByUser = new Map(lineEntries.map((e) => [e.userId, e.position]));
+    const lineTitle = cleanSmsText(ctx.sale.title, 40);
+    const smsResult = await sendCompliantSmsBatch(
+      subscribers
+        .filter((subscriber) => !!subscriber.phone)
+        .map((subscriber) => {
+          const position = positionByUser.get(subscriber.userId as string);
+          return {
+            to: subscriber.phone as string,
+            consentAt: subscriber.smsConsentAt,
+            message: `The virtual line for "${lineTitle}" is now open! You are #${position} in line. We'll text you when it's your turn.`,
+            altMessage: `The line is open! You are #${position} in line. We'll text you when it's your turn.`,
+          };
+        }),
+      lineSmsContext(ctx.organizer, saleId, { exclusive: true, logMessage: '[line] line opened' })
+    );
 
     res.json({
       message: 'Line started successfully',
       lineCount: lineEntries.length,
       entries: lineEntries,
+      sms: summarizeSms(smsResult),
+      ...(smsResult.blocked === 'quiet_hours'
+        ? { smsNote: `Texts were not sent because they can only go out between ${describeAllowedWindow()} (${smsResult.timeZone}).` }
+        : {}),
     });
   } catch (error) {
     console.error('Error starting line:', error);
@@ -137,14 +193,23 @@ export const callNext = async (req: AuthRequest, res: Response) => {
       where: { saleId_userId: { userId: nextEntry.userId, saleId } },
     });
 
+    // One-to-one, real time: not held back by quiet hours (see lineSmsContext). Still needs confirmed consent.
+    let smsOutcome: string = 'skipped_no_phone';
     if (subscriber?.phone) {
-      await sendSMS(
-        subscriber.phone,
-        `It's your turn at "${ctx.sale.title}"! Please proceed to the entrance now.`
+      const turnTitle = cleanSmsText(ctx.sale.title, 40);
+      const sent = await sendCompliantSms(
+        {
+          to: subscriber.phone,
+          consentAt: subscriber.smsConsentAt,
+          message: `It's your turn at "${turnTitle}"! Please proceed to the entrance now.`,
+          altMessage: `It's your turn! Please proceed to the entrance now.`,
+        },
+        lineSmsContext(ctx.organizer, saleId, { enforceQuietHours: false, logMessage: '[line] your turn' })
       );
+      smsOutcome = sent.outcome;
     }
 
-    res.json({ message: 'Next person notified', entry: updatedEntry });
+    res.json({ message: 'Next person notified', entry: updatedEntry, smsOutcome });
   } catch (error) {
     console.error('Error calling next person:', error);
     res.status(500).json({ message: 'Failed to call next person' });
@@ -171,7 +236,13 @@ export const getLineStatus = async (req: AuthRequest, res: Response) => {
       take: 500,
     });
 
-    res.json(entries);
+    // Never send shoppers' phone numbers to the organizer's browser (2026-09-29): masked form only.
+    res.json(
+      entries.map((entry) => ({
+        ...entry,
+        user: entry.user ? { ...entry.user, phone: maskPhoneDisplay(entry.user.phone) } : entry.user,
+      }))
+    );
   } catch (error) {
     console.error('Error fetching line status:', error);
     res.status(500).json({ message: 'Failed to fetch line status' });
@@ -243,23 +314,56 @@ export const broadcastPositionUpdates = async (req: AuthRequest, res: Response) 
       take: 500,
     });
 
-    let smsSent = 0;
-    for (const entry of waitingEntries) {
-      const subscriber = await prisma.saleSubscriber.findUnique({
-        where: { saleId_userId: { userId: entry.userId, saleId } },
+    // One query for every waiting shopper's subscription instead of one per entry.
+    const subscribers = await prisma.saleSubscriber.findMany({
+      where: { saleId, userId: { in: waitingEntries.map((e) => e.userId) } },
+      select: { userId: true, phone: true, smsConsentAt: true },
+    });
+    const subscriberByUser = new Map<string, { phone: string | null; smsConsentAt: Date | null }>(subscribers.filter((s) => !!s.userId).map((s) => [s.userId as string, s] as const));
+    const updateTitle = cleanSmsText(ctx.sale.title, 40);
+    const smsResult = await sendCompliantSmsBatch(
+      waitingEntries.flatMap((entry) => {
+        const subscriber = subscriberByUser.get(entry.userId);
+        if (!subscriber?.phone) return [];
+        return [
+          {
+            to: subscriber.phone,
+            consentAt: subscriber.smsConsentAt,
+            message: `Update for "${updateTitle}": You are now #${entry.position} in line. We'll notify you when it's your turn.`,
+            altMessage: `You are now #${entry.position} in line. We'll notify you when it's your turn.`,
+          },
+        ];
+      }),
+      lineSmsContext(ctx.organizer, saleId, { exclusive: true, logMessage: '[line] position update' })
+    );
+
+    if (smsResult.blocked) {
+      const blocked: Record<string, { status: number; message: string }> = {
+        tier: { status: 403, message: 'Line texts require the PRO plan or higher.' },
+        no_organizer: { status: 403, message: 'Organizer profile not found.' },
+        not_configured: { status: 503, message: 'SMS service not configured.' },
+        quiet_hours: { status: 422, message: `Texts can only be sent between ${describeAllowedWindow()} (${smsResult.timeZone}).` },
+        opt_out_lookup_failed: { status: 503, message: 'Could not verify the text opt-out list. Nothing was sent. Try again shortly.' },
+        in_progress: { status: 409, message: 'A text update is already being sent. Wait for it to finish.' },
+        cap_reached: { status: 429, message: `You have reached today's limit of ${smsResult.dailyCap} text messages. It resets on a rolling 24 hour basis.` },
+        reservation_failed: { status: 503, message: 'Could not reserve text allowance. Nothing was sent. Try again shortly.' },
+      };
+      const b = blocked[smsResult.blocked];
+      return res.status(b.status).json({
+        message: b.message,
+        code: smsResult.blocked.toUpperCase(),
+        smsSent: 0,
+        totalWaiting: waitingEntries.length,
+        sms: summarizeSms(smsResult),
       });
-      if (subscriber?.phone) {
-        await sendSMS(
-          subscriber.phone,
-          `Update for "${ctx.sale.title}": You are now #${entry.position} in line. We'll notify you when it's your turn.`
-        );
-        smsSent++;
-        // Respect Twilio rate limits
-        await new Promise(r => setTimeout(r, 100));
-      }
     }
 
-    res.json({ message: 'Position updates sent', smsSent, totalWaiting: waitingEntries.length });
+    res.json({
+      message: 'Position updates sent',
+      smsSent: smsResult.sent,
+      totalWaiting: waitingEntries.length,
+      sms: summarizeSms(smsResult),
+    });
   } catch (error) {
     console.error('Error broadcasting position updates:', error);
     res.status(500).json({ message: 'Failed to broadcast position updates' });
@@ -315,10 +419,24 @@ export const joinLine = async (req: AuthRequest, res: Response) => {
       where: { saleId_userId: { userId: req.user.id, saleId } },
     });
     if (subscriber?.phone) {
-      await sendSMS(
-        subscriber.phone,
-        `You've joined the virtual line for "${sale.title}"! You are #${position} in line. We'll text you when it's your turn.`
-      );
+      // The shopper just tapped Join, so this confirmation is real time (no quiet hours), but it still
+      // needs confirmed consent, the STOP list, the organizer's PRO tier and the daily cap.
+      const organizer = await prisma.organizer.findUnique({
+        where: { id: sale.organizerId },
+        select: { id: true, businessName: true, timezone: true, subscriptionTier: true },
+      });
+      if (organizer) {
+        const joinTitle = cleanSmsText(sale.title, 40);
+        await sendCompliantSms(
+          {
+            to: subscriber.phone,
+            consentAt: subscriber.smsConsentAt,
+            message: `You've joined the virtual line for "${joinTitle}"! You are #${position} in line. We'll text you when it's your turn.`,
+            altMessage: `You joined the line! You are #${position}. We'll text you when it's your turn.`,
+          },
+          lineSmsContext(organizer, saleId, { enforceQuietHours: false, logMessage: '[line] joined' })
+        );
+      }
     }
 
     res.status(201).json({

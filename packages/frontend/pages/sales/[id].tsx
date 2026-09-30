@@ -305,6 +305,8 @@ interface SaleDetailPageProps {
  * GuestSaleAlert: no-login email capture for logged-out sale-page visitors.
  * Strangers arriving from a shared link can get alerts WITHOUT being bounced to /login.
  * Reuses the existing public POST /search/notify endpoint (no auth required).
+ * Anonymous alerts use double opt-in: the endpoint always answers { status: 'pending_confirmation' }
+ * (identical whether or not the email is on file), so the success text tells the visitor to confirm by email.
  */
 const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ saleTitle, saleCity }) => {
   const [email, setEmail] = useState('');
@@ -322,7 +324,7 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
     <div className="rounded-lg border border-[#C8552B]/25 bg-[#C8552B]/5 dark:bg-[#C8552B]/10 p-4">
       <h3 className="text-sm font-semibold text-[#1A1814] dark:text-[#F2F0EA] mb-0.5">Get alerts for this sale</h3>
       {submitted ? (
-        <p className="text-sm font-medium text-[#C8552B]">&#10003; You&apos;re on the list. We&apos;ll email you when new items are added.</p>
+        <p className="text-sm font-medium text-[#C8552B]">&#10003; Check your email to confirm your alert. We only start watching once you confirm.</p>
       ) : (
         <>
           <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] mb-3">We&apos;ll email you when items are added. No account needed.</p>
@@ -423,13 +425,24 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // false, so it now also stops polling when the tab is hidden. Net effect: half the
   // invocations from this page with zero change to foreground live-update freshness.
 
-  // Track QR scan: fires once when utm_source=qr_sign is in the URL
+  // Track QR scan: fires for ANY QR-originated visit (utm_source starting with "qr": qr, qr_sign,
+  // qr_yard_sign, qr_directional_sign, qr_table_tent, qr_tear_off, qr_full_kit, ...) and at most once
+  // per browser session per sale, so a refresh or back-navigation does not inflate the count. The
+  // server also caps counted scans per IP + sale (middleware/trackScanLimiter.ts).
   useEffect(() => {
     if (!id || typeof window === 'undefined') return;
+    const saleKey = Array.isArray(id) ? id[0] : id;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('utm_source') === 'qr_sign') {
-      api.post(`/sales/${id}/track-scan`).catch(() => { /* non-fatal */ });
+    const source = (params.get('utm_source') || '').toLowerCase();
+    if (!source.startsWith('qr')) return;
+    const storageKey = `fas_qr_track_scan_${saleKey}`;
+    try {
+      if (sessionStorage.getItem(storageKey) === '1') return;
+      sessionStorage.setItem(storageKey, '1');
+    } catch {
+      /* sessionStorage blocked (private mode): fall through and count this visit */
     }
+    api.post(`/sales/${saleKey}/track-scan`).catch(() => { /* non-fatal */ });
   }, [id]);
 
   // Facebook Commerce Manager: build the cart from a forwarded checkout link.

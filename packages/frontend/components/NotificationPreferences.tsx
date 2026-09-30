@@ -8,10 +8,15 @@ interface NotificationPrefs {
   emailFlashDeals?: boolean;
   emailWeeklyDigest?: boolean;
   pushSalesNearMe?: boolean;
+  // Privacy (default OFF): show my first name and last initial in the public "going" list on sales.
+  showNameInGoingList?: boolean;
 }
 
 interface NotificationPreferencesProps {
-  userPrefs?: NotificationPrefs;
+  // The full stored prefs object may hold keys this form does not edit (organizer digest, price
+  // alerts, ...). They are passed through untouched on save so PATCH /users/me (which replaces
+  // notificationPrefs wholesale) never erases them.
+  userPrefs?: NotificationPrefs & Record<string, unknown>;
 }
 
 const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userPrefs: rawUserPrefs = {} }) => {
@@ -21,6 +26,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
     emailFlashDeals: userPrefs.emailFlashDeals ?? true,
     emailWeeklyDigest: userPrefs.emailWeeklyDigest ?? true,
     pushSalesNearMe: userPrefs.pushSalesNearMe ?? true,
+    showNameInGoingList: userPrefs.showNameInGoingList === true,
   });
 
   const { showToast } = useToast();
@@ -28,7 +34,7 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
 
   const updateMutation = useMutation({
     mutationFn: (newPrefs: NotificationPrefs) =>
-      api.patch('/users/me', { notificationPrefs: newPrefs }),
+      api.patch('/users/me', { notificationPrefs: { ...userPrefs, ...newPrefs } }),
     onSuccess: () => {
       showToast('Notification preferences updated', 'success');
       queryClient.invalidateQueries({ queryKey: ['user'] });
@@ -101,6 +107,23 @@ const NotificationPreferences: React.FC<NotificationPreferencesProps> = ({ userP
           />
           <span className="ml-3 text-sm text-warm-900 dark:text-warm-200">
             Push notifications: New sales near me
+          </span>
+        </label>
+
+        {/* Privacy: name in the public "going" list (off unless the shopper opts in) */}
+        <label className="flex items-start cursor-pointer">
+          <input
+            type="checkbox"
+            checked={prefs.showNameInGoingList === true}
+            onChange={() => handleToggle('showNameInGoingList')}
+            disabled={updateMutation.isPending}
+            className="w-4 h-4 mt-0.5 text-amber-600 rounded focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          />
+          <span className="ml-3 text-sm text-warm-900 dark:text-warm-200">
+            Show my first name and last initial in the public &quot;going&quot; list on sales I RSVP to
+            <span className="block text-xs text-warm-500 dark:text-warm-400 mt-0.5">
+              Off by default. Otherwise you are counted but not named.
+            </span>
           </span>
         </label>
       </div>

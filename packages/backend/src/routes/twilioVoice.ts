@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import twilio from 'twilio';
 import { emailService } from '../lib/emailService';
+import { verifyTwilioSignature } from '../services/smsComplianceService';
+import { maskPhone } from '../services/smsComplianceService';
+import { escapeHtml, safeHttpsUrl, sanitizeHeaderText } from '../utils/htmlEscape';
 
 // Inbound voice + voicemail handling for the existing FindA.Sale Twilio toll-free
 // number (TWILIO_PHONE_NUMBER, +18556943115). That number is otherwise used only
@@ -31,7 +34,16 @@ const router = Router();
  * header. Returns true/false; also handles the "not configured" case by
  * returning false (fail-closed) after logging.
  */
+// 2026-09-29: now delegates to verifyTwilioSignature (services/smsComplianceService.ts), the same check the SMS
+// webhook uses, so TWILIO_WEBHOOK_BASE_URL is honored here too. Behind a proxy that rewrites the host, the URL
+// Express sees differs from the URL Twilio signed and the voice webhooks failed closed (401) while the SMS one
+// worked. The original implementation below is kept, unused (nothing removed).
 function isValidTwilioRequest(req: Request): boolean {
+  return verifyTwilioSignature(req);
+}
+
+/** DEAD (2026-09-29): superseded by isValidTwilioRequest -> verifyTwilioSignature above. */
+function isValidTwilioRequestLegacy(req: Request): boolean {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) {
     console.error('[TwilioVoice] TWILIO_AUTH_TOKEN not set — rejecting webhook (fail-closed).');
@@ -51,6 +63,7 @@ function isValidTwilioRequest(req: Request): boolean {
 
   return twilio.validateRequest(authToken, twilioSignature, url, req.body || {});
 }
+void isValidTwilioRequestLegacy;
 
 // POST /api/twilio/voice-incoming — "A call comes in" webhook.
 router.post('/voice-incoming', (req: Request, res: Response) => {
@@ -59,8 +72,9 @@ router.post('/voice-incoming', (req: Request, res: Response) => {
     return;
   }
 
-  const host = req.get('host');
-  const recordingCallbackUrl = `${req.protocol}://${host}/api/twilio/voice-recording-complete`;
+  // Same base URL Twilio signed against (TWILIO_WEBHOOK_BASE_URL when set), otherwise the request host.
+  const webhookBase = (process.env.TWILIO_WEBHOOK_BASE_URL || '').replace(/\/+$/, '');
+  const recordingCallbackUrl = `${webhookBase || `${req.protocol}://${req.get('host')}`}/api/twilio/voice-recording-complete`;
 
   const twiml = new twilio.twiml.VoiceResponse();
   twiml.say(
@@ -100,9 +114,11 @@ router.post('/voice-recording-complete', async (req: Request, res: Response) => 
     return;
   }
 
-  const from = (req.body?.From as string) || 'Unknown number';
-  const recordingUrl = (req.body?.RecordingUrl as string) || '';
-  const callSid = (req.body?.CallSid as string) || '';
+  const from = sanitizeHeaderText((req.body?.From as string) || 'Unknown number', 40);
+  const recordingUrlRaw = (req.body?.RecordingUrl as string) || '';
+  // Only a plain https URL is linked; anything else is shown as text (escaped), never as a link.
+  const recordingUrl = safeHttpsUrl(recordingUrlRaw);
+  const callSid = sanitizeHeaderText((req.body?.CallSid as string) || '', 64);
 
   try {
     const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
@@ -114,13 +130,13 @@ router.post('/voice-recording-complete', async (req: Request, res: Response) => 
       subject: `New voicemail from ${from}`,
       html: `
         <p>You have a new voicemail on the FindA.Sale support line.</p>
-        <p><strong>From:</strong> ${from}</p>
-        <p><strong>Recording:</strong> ${recordingUrl ? `<a href="${recordingUrl}">${recordingUrl}</a>` : '(no recording URL provided)'}</p>
-        <p style="color:#666;font-size:12px">Note: opening the recording link requires the Twilio account login (Basic Auth), same as any Twilio recording URL. Call SID: ${callSid || 'n/a'}</p>
+        <p><strong>From:</strong> ${escapeHtml(from)}</p>
+        <p><strong>Recording:</strong> ${recordingUrl ? `<a href="${escapeHtml(recordingUrl)}">${escapeHtml(recordingUrl)}</a>` : recordingUrlRaw ? `(recording URL not linked: ${escapeHtml(sanitizeHeaderText(recordingUrlRaw, 120))})` : '(no recording URL provided)'}</p>
+        <p style="color:#666;font-size:12px">Note: opening the recording link requires the Twilio account login (Basic Auth), same as any Twilio recording URL. Call SID: ${escapeHtml(callSid || 'n/a')}</p>
       `,
       jobName: 'twilio-voicemail-notification',
     });
-    console.log(`[TwilioVoice] Voicemail notification email sent for call ${callSid} from ${from}`);
+    console.log(`[TwilioVoice] Voicemail notification email sent for call ${callSid} from ${maskPhone(from)}`);
   } catch (err) {
     console.error('[TwilioVoice] Failed to send voicemail notification email:', err);
   }

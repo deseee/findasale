@@ -415,6 +415,11 @@ describe('Email & SMS Reminder System E2E', () => {
           saleAddress: `${testSale.address}, ${testSale.city}, ${testSale.state}`,
           startDate: testSale.startDate,
           reminderType: 'one-day',
+          // 2026-09-29: sendReminderSMS is now gated (consent, PRO tier, daily cap). An invalid phone is skipped, never thrown.
+          smsConsentAt: new Date(),
+          orgTier: 'PRO',
+          organizerId: testOrganizer.id,
+          saleId: testSale.id,
         });
       } catch (error) {
         console.log('✓ SMS error handled gracefully');
