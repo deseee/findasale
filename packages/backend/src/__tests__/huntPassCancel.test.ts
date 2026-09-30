@@ -256,10 +256,11 @@ describe('streak routes no longer fake success', () => {
     expect(where).toMatchObject({ userId: 'u1', isTestTransaction: false, status: { in: ['PAID', 'COMPLETED'] } });
   });
 
-  it('GET /leaderboard returns real live streaks with short names, and an honest empty flag', async () => {
+  it('GET /leaderboard returns real live streaks with short names (opted-in members only), and an honest empty flag', async () => {
+    const optedIn = { showNameInGoingList: true };
     db.visitStreak.findMany.mockResolvedValue([
-      { currentStreak: 6, longestStreak: 8, user: { name: 'Patricia Anne Johnson', explorerRank: 'RANGER', huntPassActive: true } },
-      { currentStreak: 3, longestStreak: 3, user: { name: 'Sam', explorerRank: 'SCOUT', huntPassActive: false } },
+      { currentStreak: 6, longestStreak: 8, user: { name: 'Patricia Anne Johnson', explorerRank: 'RANGER', huntPassActive: true, notificationPrefs: optedIn } },
+      { currentStreak: 3, longestStreak: 3, user: { name: 'Sam', explorerRank: 'SCOUT', huntPassActive: false, notificationPrefs: optedIn } },
     ]);
     const res = mockRes();
     await handlerFor('/leaderboard', 'get')({}, res);
@@ -270,6 +271,18 @@ describe('streak routes no longer fake success', () => {
     const where = db.visitStreak.findMany.mock.calls[0][0].where;
     expect(where.currentStreak).toEqual({ gt: 0 });
     expect(where.user).toEqual({ fraudSuspect: false });
+
+    // no opt-in (or an email address as the account name): never shown by name
+    db.visitStreak.findMany.mockResolvedValue([
+      { currentStreak: 5, longestStreak: 5, user: { name: 'Pat Smith', explorerRank: 'SCOUT', huntPassActive: false, notificationPrefs: {} } },
+      { currentStreak: 4, longestStreak: 4, user: { name: 'pat@example.com', explorerRank: 'SCOUT', huntPassActive: false, notificationPrefs: optedIn } },
+    ]);
+    const resHidden = mockRes();
+    await handlerFor('/leaderboard', 'get')({}, resHidden);
+    const hidden = resHidden.json.mock.calls[0][0].leaderboard;
+    expect(hidden[0].displayName).toBe('Explorer');
+    expect(hidden[1].displayName).toBe('Explorer');
+    expect(JSON.stringify(hidden)).not.toMatch(/pat@example\.com|Pat Smith/);
 
     db.visitStreak.findMany.mockResolvedValue([]);
     const res2 = mockRes();

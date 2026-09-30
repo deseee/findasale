@@ -52,6 +52,7 @@ jest.mock('../../services/organizerBillingLedger', () => ({
   claimBillingCharge: (...a: any[]) => mockClaimCharge(...a),
   completeBillingCharge: (...a: any[]) => mockCompleteCharge(...a),
   failBillingCharge: (...a: any[]) => mockFailCharge(...a),
+  findRecentCompletedSubscribeCharge: jest.fn().mockResolvedValue(null),
 }));
 
 import {

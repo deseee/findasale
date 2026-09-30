@@ -65,6 +65,32 @@ export async function triggerGracePeriod(organizerId: string, previousTier: stri
   return graceEndAt;
 }
 
+/** Item statuses that are live for shoppers and therefore count toward (and can be locked by) a per-sale cap. */
+export const CAP_COUNTED_STATUSES: readonly string[] = ['AVAILABLE', 'ACTIVE'];
+
+/**
+ * Per sale: the items that exceed `cap`. Only CAP_COUNTED_STATUSES items count; they are ordered
+ * oldest first (createdAt, then id for a stable result) and everything after the first `cap` (the
+ * newest ones) is returned. Never returns an item in any other status.
+ */
+export function selectItemsOverCap<T extends { id: string; status?: string | null; createdAt: Date | string }>(
+  sales: Array<{ items: T[] }>,
+  cap: number
+): T[] {
+  if (!(cap >= 0) || !Number.isFinite(cap)) return [];
+  const over: T[] = [];
+  for (const sale of sales) {
+    const counted = (sale.items ?? [])
+      .filter(i => i.status !== undefined && i.status !== null && CAP_COUNTED_STATUSES.includes(i.status))
+      .sort((a, b) => {
+        const d = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return d !== 0 ? d : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      });
+    if (counted.length > cap) over.push(...counted.slice(cap));
+  }
+  return over;
+}
+
 /**
  * Finalize grace period: lock items over the organizer's CURRENT tier limit and remove staff
  * access, but only when the organizer has really lost what they are being locked out of.
@@ -97,18 +123,21 @@ export async function finalizeGracePeriod(organizerId: string) {
   const currentTier = ((organizer as any).subscriptionTier as string) || 'SIMPLE';
   const limits = TIER_LIMITS[currentTier as keyof typeof TIER_LIMITS] ?? TIER_LIMITS['SIMPLE'];
   const ownerStillOnTeams = currentTier === 'TEAMS';
-  const allItems = organizer.sales.flatMap(s => s.items);
 
-  // Sort items by createdAt DESC (newest first), lock the oldest ones
-  const sortedItems = allItems.sort((a, b) =>
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  const itemsToLock = sortedItems.slice(limits.itemsPerSale);
+  // 2026-09-29: the item cap is PER SALE and only counts items that are live for shoppers.
+  // The previous version pooled every item of every sale, sliced the pool with the per-sale limit
+  // and included SOLD / RESERVED / INVOICE_ISSUED items, so if a finite cap ever came back it
+  // would have hidden sold inventory and items of sales that were under the cap. Now each sale is
+  // handled on its own: only AVAILABLE / ACTIVE items count toward the cap, the oldest ones are
+  // kept, and the newest beyond the cap are locked. Items in any other status (SOLD, RESERVED,
+  // INVOICE_ISSUED, AUCTION_ENDED, DONATED, already GRACE_LOCKED, ...) are never touched.
+  const itemsToLock = selectItemsOverCap(organizer.sales, limits.itemsPerSale);
 
-  // Lock items over the current tier's limit
+  // Lock items over the current tier's limit (status re-checked in the write so an item that sold
+  // between the read above and this write is never locked)
   if (itemsToLock.length > 0) {
     await prisma.item.updateMany({
-      where: { id: { in: itemsToLock.map(i => i.id) } },
+      where: { id: { in: itemsToLock.map(i => i.id) }, status: { in: [...CAP_COUNTED_STATUSES] } },
       data: {
         status: 'GRACE_LOCKED',
         graceLockedAt: new Date(),

@@ -12,6 +12,7 @@ const mockChargeStoredCard = jest.fn();
 const mockClaimCharge = jest.fn();
 const mockCompleteCharge = jest.fn();
 const mockFailCharge = jest.fn();
+const mockFindRecentCompleted = jest.fn();
 
 jest.mock('square', () => ({ SquareError: class SquareError extends Error {} }));
 jest.mock('../../utils/square', () => ({ getSquarePlatformClient: jest.fn() }));
@@ -44,6 +45,7 @@ jest.mock('../../services/organizerBillingLedger', () => ({
   claimBillingCharge: (...a: any[]) => mockClaimCharge(...a),
   completeBillingCharge: (...a: any[]) => mockCompleteCharge(...a),
   failBillingCharge: (...a: any[]) => mockFailCharge(...a),
+  findRecentCompletedSubscribeCharge: (...a: any[]) => mockFindRecentCompleted(...a),
 }));
 
 import { createSquareBillingSubscription } from '../billingController';
@@ -94,6 +96,7 @@ beforeEach(() => {
   mockChargeStoredCard.mockResolvedValue({ ok: true, paymentId: 'pay_1', status: 'COMPLETED' });
   mockCompleteCharge.mockResolvedValue(undefined);
   mockFailCharge.mockResolvedValue(true);
+  mockFindRecentCompleted.mockResolvedValue(null);
   mockClearGracePeriod.mockResolvedValue({ itemsRestored: 0, membersRestored: 0 });
   jest.spyOn(console, 'error').mockImplementation(() => undefined);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -131,7 +134,7 @@ describe('new_period: a lapsed / returning Square organizer is charged before an
     expect(charge.cardId).toBe('card_1');
     // idempotency parts carry organizer + tier + period id + card discriminator
     expect(charge.idempotencyParts).toEqual(expect.arrayContaining(['org_1', 'PRO', 'cnon:1']));
-    expect(charge.idempotencyParts.some((p: string) => p.startsWith('subscribe:PRO:none:'))).toBe(true);
+    expect(charge.idempotencyParts.some((p: string) => p.startsWith('subscribe:none:'))).toBe(true);
     expect(mockCompleteCharge).toHaveBeenCalledWith('chg_1', 'pay_1');
     const data = mockOrganizerUpdate.mock.calls[0][0].data;
     expect(data.subscriptionTier).toBe('PRO');
@@ -159,7 +162,8 @@ describe('new_period: a lapsed / returning Square organizer is charged before an
   });
 
   it('dunning recovery (past_due, period already ended) charges a fresh period and clears dunning fields', async () => {
-    row = baseRow({ subscriptionTier: 'PRO', subscriptionStatus: 'past_due', billingCurrentPeriodEnd: new Date(Date.now() - 2 * DAY) });
+    const endedAt = new Date(Date.now() - 2 * DAY);
+    row = baseRow({ subscriptionTier: 'PRO', subscriptionStatus: 'past_due', billingCurrentPeriodEnd: endedAt });
     const res = makeRes();
     await createSquareBillingSubscription(req({ tier: 'PRO', sourceId: 'cnon:2' }), res);
     expect(res.statusCode).toBe(200);
@@ -167,6 +171,8 @@ describe('new_period: a lapsed / returning Square organizer is charged before an
     const data = mockOrganizerUpdate.mock.calls[0][0].data;
     expect(data).toMatchObject({ billingDunningFailCount: 0, billingNextRetryAt: null, billingGraceEndsAt: null, billingLastFailureReason: null, subscriptionStatus: 'active' });
     expect(data.tokenVersion).toBeUndefined(); // same tier, no JWT invalidation needed
+    // 2026-09-30: the ended period is claimed under the SAME ledger key the daily job uses, so the two are mutually exclusive
+    expect(mockClaimCharge.mock.calls[0][0].periodKey).toBe(`renewal:${endedAt.toISOString()}`);
   });
 });
 

@@ -96,7 +96,7 @@ describe('renewal success', () => {
     const upd = mockOrgUpdateMany.mock.calls[0][0];
     expect(upd.where).toEqual({ id: 'org_1', billingCurrentPeriodEnd: end }); // conditional: only if still that period
     const next = new Date(upd.data.billingCurrentPeriodEnd).getTime();
-    const expected = new Date(end.getTime()); expected.setDate(expected.getDate() + 30);
+    const expected = new Date(end.getTime() + 30 * DAY); // exact UTC milliseconds (2026-09-30), not local-time setDate
     expect(next).toBe(expected.getTime());
     expect(upd.data.subscriptionStatus).toBe('active');
   });
@@ -109,14 +109,14 @@ describe('catch-up after downtime', () => {
     await processOrganizerBilling();
     expect(mockChargeStoredCard).toHaveBeenCalledTimes(1);
     const next = new Date(mockOrgUpdateMany.mock.calls[0][0].data.billingCurrentPeriodEnd).getTime();
-    const expected = new Date(end.getTime()); expected.setDate(expected.getDate() + 30);
+    const expected = new Date(end.getTime() + 30 * DAY); // exact UTC milliseconds (2026-09-30), not local-time setDate
     expect(next).toBe(expected.getTime());
     expect(next).toBeLessThan(Date.now()); // still in the past: the next daily run bills the next period, one per run
   });
 
   it('the next run bills the NEXT period with a different period key', async () => {
     const end = new Date(Date.now() - 95 * DAY);
-    const nextEnd = new Date(end.getTime()); nextEnd.setDate(nextEnd.getDate() + 30);
+    const nextEnd = new Date(end.getTime() + 30 * DAY);
     mockOrgFindMany.mockResolvedValueOnce([dueOrg(end)]).mockResolvedValueOnce([dueOrg(nextEnd)]);
     await processOrganizerBilling();
     await processOrganizerBilling();

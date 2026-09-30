@@ -79,7 +79,7 @@ export function getTierBenefits(tier: OrganizerTier): TierBenefits {
       label: 'Verified Organizer',
       perks: [
         'Verified Organizer badge on all listings',
-        'Standard platform fee (10% flat)',
+        'Standard platform fee for your plan (card processing included)',
         'Basic organizer profile page',
       ],
     },
@@ -90,7 +90,7 @@ export function getTierBenefits(tier: OrganizerTier): TierBenefits {
       perks: [
         'Silver Organizer badge on all listings',
         'Priority placement in search results',
-        'Standard platform fee (10% flat)',
+        'Standard platform fee for your plan (card processing included)',
         'Enhanced organizer profile page',
         'Access to advanced analytics',
       ],
@@ -102,7 +102,7 @@ export function getTierBenefits(tier: OrganizerTier): TierBenefits {
       perks: [
         'Gold Organizer badge on all listings',
         'Featured on homepage',
-        'Standard platform fee (10% flat)',
+        'Standard platform fee for your plan (card processing included)',
         'Premium organizer profile page',
         'Early access to new features',
       ],

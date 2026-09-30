@@ -1,6 +1,7 @@
 import { SquareError } from 'square';
 import { getSquarePlatformClient } from '../utils/square';
 import { toSquareMoney, buildSquareIdempotencyKey } from './squarePaymentService';
+import { addDaysUtc, MS_PER_DAY } from '../utils/billingPeriod'; // 2026-09-30: one UTC-millisecond way to advance periods / deadlines (no local-time setDate)
 
 /**
  * Square Plan B Billing Service (2026-09-13) -- Cards API + FindA.Sale-owned scheduler for
@@ -47,8 +48,6 @@ export const SQUARE_TIER_PRICE_CENTS: Record<BillableOrganizerTier, number> = {
   TEAMS: 7900,
 };
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
 /**
  * 2026-09-29 upgrade proration (PRO -> TEAMS while a paid PRO period is still running).
  * Decision: the organizer gets TEAMS immediately and pays the PRICE DIFFERENCE prorated by the
@@ -93,15 +92,11 @@ export const DUNNING_GRACE_DAYS = 7;
 export const DUNNING_RETRY_INTERVAL_DAYS = 2;
 
 export function computeNextRetryAt(from: Date = new Date()): Date {
-  const next = new Date(from.getTime());
-  next.setDate(next.getDate() + DUNNING_RETRY_INTERVAL_DAYS);
-  return next;
+  return addDaysUtc(from, DUNNING_RETRY_INTERVAL_DAYS);
 }
 
 export function computeGraceEndsAt(from: Date = new Date()): Date {
-  const end = new Date(from.getTime());
-  end.setDate(end.getDate() + DUNNING_GRACE_DAYS);
-  return end;
+  return addDaysUtc(from, DUNNING_GRACE_DAYS);
 }
 
 // Hacker-pass fix (2026-09-13): only a genuine SquareError (an actual decline/response

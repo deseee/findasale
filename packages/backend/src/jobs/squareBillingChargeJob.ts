@@ -40,13 +40,13 @@ import {
   chargeStoredCard,
   BillableOrganizerTier,
 } from '../services/squareBillingService';
-import { claimBillingCharge, completeBillingCharge, failBillingCharge } from '../services/organizerBillingLedger';
+import { claimBillingCharge, completeBillingCharge, failBillingCharge, huntPassPeriodKey } from '../services/organizerBillingLedger';
+import { addDaysUtc, renewalPeriodKey } from '../utils/billingPeriod';
 
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date.getTime());
-  d.setDate(d.getDate() + days);
-  return d;
-}
+// 2026-09-30: periods advance by exact UTC milliseconds (utils/billingPeriod.ts), the same arithmetic the
+// subscribe path uses. The old local-time setDate here landed 23 or 25 hours off across a DST change and
+// differed by server time zone, so the period end this job wrote could disagree with subscribe's.
+const addDays = addDaysUtc;
 
 // ---------------------------------------------------------------------------
 // 1. Organizer PRO/TEAMS renewals
@@ -272,7 +272,7 @@ export async function processOrganizerBilling(): Promise<void> {
       // times this job runs or how far behind it is; COMPLETED is terminal and is never rewritten
       // as FAILED.
       const periodStart = org.billingCurrentPeriodEnd!;
-      const periodKey = `renewal:${periodStart.toISOString()}`;
+      const periodKey = renewalPeriodKey(periodStart);
       const claim = await claimBillingCharge({
         organizerId: org.id,
         periodKey,
@@ -287,11 +287,18 @@ export async function processOrganizerBilling(): Promise<void> {
 
       let paymentId: string | null = null;
       let paid = false;
+      // 2026-09-30: when the period was actually paid by the SUBSCRIBE path (which shares this period
+      // key, so the two can never both charge) for a different tier than the organizer row shows
+      // (paid TEAMS, activation crashed), heal to the tier that was PAID, not the stale one.
+      let healTier: BillableOrganizerTier | null = null;
       if (claim.state === 'already_completed') {
         // Paid earlier (for example the charge went through but the period update failed): heal the
         // organizer row below WITHOUT charging again.
         paid = true;
         paymentId = claim.paymentId;
+        if (claim.kind === 'SUBSCRIBE' && claim.tier !== tier && (claim.tier === 'PRO' || claim.tier === 'TEAMS')) {
+          healTier = claim.tier;
+        }
         console.warn(`[squareBillingChargeJob] Organizer ${org.id} period ${periodKey} already COMPLETED -- advancing the period without a new charge`);
       } else {
         const result = await chargeStoredCard({
@@ -341,6 +348,7 @@ export async function processOrganizerBilling(): Promise<void> {
             billingNextRetryAt: null,
             billingGraceEndsAt: null,
             billingLastFailureReason: null,
+            ...(healTier ? { subscriptionTier: healTier, tokenVersion: { increment: 1 } } : {}),
           },
         });
         if (advanced.count !== 1) {
@@ -350,7 +358,7 @@ export async function processOrganizerBilling(): Promise<void> {
         if (org.userId) {
           await prisma.userRoleSubscription.updateMany({
             where: { userId: org.userId, role: 'ORGANIZER' },
-            data: { subscriptionStatus: 'active', tierLapsedAt: null, tierResumedAt: new Date() },
+            data: { subscriptionStatus: 'active', tierLapsedAt: null, tierResumedAt: new Date(), ...(healTier ? { subscriptionTier: healTier } : {}) },
           });
         }
         console.log(`[squareBillingChargeJob] Charged organizer ${org.id} $${(amountCents / 100).toFixed(2)} for ${tier} renewal (payment ${paymentId})`);
@@ -474,13 +482,21 @@ async function sendHuntPassNotification(
   });
 }
 
-async function handleHuntPassChargeFailure(u: DueHuntPassUser, reason: string): Promise<void> {
+/**
+ * Hunt Pass failure handling (2026-09-29 hardening, same rules as the organizer path):
+ * every write is CONDITIONAL on huntPassExpiry still being the period this run tried to bill
+ * (`periodStart`). If the shopper resubscribed or another attempt already paid and advanced the
+ * period while this charge was in flight, the updateMany matches nothing and the failure is
+ * stale: no dunning state, no deactivation, no notification.
+ */
+async function handleHuntPassChargeFailure(u: DueHuntPassUser, periodStart: Date, reason: string): Promise<void> {
   const now = new Date();
   const graceEndsAt = u.huntPassGraceEndsAt ?? computeGraceEndsAt(now);
+  const stillThisPeriod = { id: u.id, huntPassExpiry: periodStart };
 
   if (now > graceEndsAt) {
-    await prisma.user.update({
-      where: { id: u.id },
+    const deactivated = await prisma.user.updateMany({
+      where: stillThisPeriod,
       data: {
         huntPassActive: false,
         huntPassCancelledAt: now,
@@ -490,6 +506,10 @@ async function handleHuntPassChargeFailure(u: DueHuntPassUser, reason: string): 
         huntPassLastFailureReason: reason,
       },
     });
+    if (deactivated.count !== 1) {
+      console.log(`[squareBillingChargeJob] Hunt Pass period changed for user ${u.id} while the failed charge was processed -- ignoring the stale failure`);
+      return;
+    }
     await sendHuntPassNotification(u, 'dunning_exhausted', reason);
     console.warn(`[squareBillingChargeJob] Hunt Pass dunning grace exhausted for user ${u.id} -- deactivated (reason: ${reason})`);
     return;
@@ -497,8 +517,8 @@ async function handleHuntPassChargeFailure(u: DueHuntPassUser, reason: string): 
 
   const isFirstFailure = u.huntPassDunningFailCount === 0;
   const newFailCount = u.huntPassDunningFailCount + 1;
-  await prisma.user.update({
-    where: { id: u.id },
+  const recorded = await prisma.user.updateMany({
+    where: stillThisPeriod,
     data: {
       huntPassDunningFailCount: newFailCount,
       huntPassNextRetryAt: computeNextRetryAt(now),
@@ -506,11 +526,15 @@ async function handleHuntPassChargeFailure(u: DueHuntPassUser, reason: string): 
       huntPassLastFailureReason: reason,
     },
   });
+  if (recorded.count !== 1) {
+    console.log(`[squareBillingChargeJob] Hunt Pass period changed for user ${u.id} while the failed charge was processed -- ignoring the stale failure`);
+    return;
+  }
   await sendHuntPassNotification(u, isFirstFailure ? 'first_failure' : 'retry_failure', reason);
   console.warn(`[squareBillingChargeJob] Hunt Pass charge failed for user ${u.id} (attempt ${newFailCount}, reason: ${reason}) -- access retained`);
 }
 
-async function processHuntPassBilling(): Promise<void> {
+export async function processHuntPassBilling(): Promise<void> {
   const now = new Date();
 
   const dueUsers = await prisma.user.findMany({
@@ -539,9 +563,14 @@ async function processHuntPassBilling(): Promise<void> {
 
   for (const u of dueUsers) {
     try {
+      // The period this run is billing is identified by its start, the huntPassExpiry read above.
+      const periodStart = u.huntPassExpiry!;
+
       if (u.huntPassCancelAtPeriodEnd) {
-        await prisma.user.update({
-          where: { id: u.id },
+        // Conditional so a shopper who undid the cancellation (or resubscribed) after the scan is
+        // never deactivated a moment later.
+        const ended = await prisma.user.updateMany({
+          where: { id: u.id, huntPassCancelAtPeriodEnd: true, huntPassExpiry: periodStart },
           data: {
             huntPassActive: false,
             huntPassCancelledAt: now,
@@ -552,23 +581,82 @@ async function processHuntPassBilling(): Promise<void> {
             huntPassLastFailureReason: null,
           },
         });
+        if (ended.count !== 1) {
+          console.log(`[squareBillingChargeJob] Hunt Pass for user ${u.id} changed after being queued for cancellation -- skipping deactivation`);
+          continue;
+        }
         console.log(`[squareBillingChargeJob] Hunt Pass for user ${u.id} reached end of canceled period -- deactivated`);
         continue;
       }
 
-      const result = await chargeStoredCard({
-        customerId: u.huntPassSquareCustomerId!,
-        cardId: u.huntPassSquareCardId!,
+      // 2026-09-29: claim the renewal period in the billing ledger BEFORE charging. The ledger has a
+      // UNIQUE (organizerId, periodKey); for Hunt Pass rows organizerId carries the shopper's USER id
+      // (the column is a plain string, no foreign key) and the periodKey is discriminated with the
+      // `huntpass:` prefix, so one period can be charged only once however many times this job runs
+      // or however far behind it is. COMPLETED is terminal and never rewritten as FAILED.
+      const periodKey = huntPassPeriodKey(u.id, periodStart);
+      const claim = await claimBillingCharge({
+        organizerId: u.id,
+        periodKey,
+        kind: 'HUNT_PASS_RENEWAL',
+        tier: 'HUNT_PASS',
         amountCents: HUNT_PASS_PRICE_CENTS,
-        idempotencyParts: ['huntpass-billing', u.id, u.huntPassExpiry!.toISOString()],
-        note: 'FindA.Sale Hunt Pass renewal',
-        referenceId: u.id,
       });
+      if (claim.state === 'in_progress') {
+        console.log(`[squareBillingChargeJob] Hunt Pass user ${u.id} period ${periodKey} is already being charged by another attempt -- skipping this run`);
+        continue;
+      }
 
-      if (result.ok) {
-        const nextExpiry = addDays(u.huntPassExpiry ?? now, BILLING_INTERVAL_DAYS);
-        await prisma.user.update({
-          where: { id: u.id },
+      let paymentId: string | null = null;
+      let paid = false;
+      if (claim.state === 'already_completed') {
+        // Paid earlier (for example the charge went through but the expiry update failed): heal the
+        // user row below WITHOUT charging again.
+        paid = true;
+        paymentId = claim.paymentId;
+        console.warn(`[squareBillingChargeJob] Hunt Pass user ${u.id} period ${periodKey} already COMPLETED -- advancing the period without a new charge`);
+      } else {
+        const result = await chargeStoredCard({
+          customerId: u.huntPassSquareCustomerId!,
+          cardId: u.huntPassSquareCardId!,
+          amountCents: HUNT_PASS_PRICE_CENTS,
+          // period id + card + dunning attempt number: a retry after a decline gets a fresh key
+          // (Square never has to replay a cached decline, and a new card is never
+          // IDEMPOTENCY_KEY_REUSED), a crash-retry of the SAME attempt reuses the key so Square
+          // dedupes it.
+          idempotencyParts: ['huntpass-billing', u.id, periodStart.toISOString(), u.huntPassSquareCardId!, `try${u.huntPassDunningFailCount}`],
+          note: 'FindA.Sale Hunt Pass renewal',
+          referenceId: u.id,
+          requireCompleted: true,
+        });
+        if (result.ok) {
+          paid = true;
+          paymentId = result.paymentId;
+          try {
+            await completeBillingCharge(claim.id, result.paymentId);
+          } catch (ledgerErr) {
+            console.error(`[squareBillingChargeJob] CRITICAL: payment ${result.paymentId} COMPLETED for Hunt Pass user ${u.id} but the ledger write failed:`, ledgerErr);
+          }
+        } else {
+          const markedFailed = await failBillingCharge(claim.id, result.message);
+          if (markedFailed) {
+            await handleHuntPassChargeFailure(u, periodStart, result.message);
+            continue;
+          }
+          // The ledger row is already COMPLETED (a racing attempt paid this period): this failure is
+          // stale. Treat the period as paid.
+          paid = true;
+          console.warn(`[squareBillingChargeJob] Hunt Pass user ${u.id} period ${periodKey} was already COMPLETED by another attempt -- ignoring the failed result`);
+        }
+      }
+
+      if (paid) {
+        // Advance from the ORIGINAL expiry by exactly one period (never from now), and only if the
+        // user row still shows that same expiry, so nothing can advance it twice. If the job was down
+        // for N periods, each run bills one period and moves the expiry forward one period.
+        const nextExpiry = addDays(periodStart, BILLING_INTERVAL_DAYS);
+        const advanced = await prisma.user.updateMany({
+          where: { id: u.id, huntPassExpiry: periodStart },
           data: {
             huntPassExpiry: nextExpiry,
             huntPassDunningFailCount: 0,
@@ -577,9 +665,11 @@ async function processHuntPassBilling(): Promise<void> {
             huntPassLastFailureReason: null,
           },
         });
-        console.log(`[squareBillingChargeJob] Charged Hunt Pass renewal for user ${u.id} (payment ${result.paymentId})`);
-      } else {
-        await handleHuntPassChargeFailure(u, result.message);
+        if (advanced.count !== 1) {
+          console.warn(`[squareBillingChargeJob] Hunt Pass expiry changed for user ${u.id} while renewal ${periodKey} was processed -- not advancing again (payment ${paymentId})`);
+          continue;
+        }
+        console.log(`[squareBillingChargeJob] Charged Hunt Pass renewal for user ${u.id} (payment ${paymentId})`);
       }
     } catch (err) {
       console.error(`[squareBillingChargeJob] Unexpected error processing Hunt Pass for user ${u.id}:`, err);

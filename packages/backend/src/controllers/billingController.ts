@@ -19,9 +19,17 @@ import {
   computeUpgradeProrationCents,
   type BillableOrganizerTier,
 } from '../services/squareBillingService';
-import { claimBillingCharge, completeBillingCharge, failBillingCharge } from '../services/organizerBillingLedger';
+import { claimBillingCharge, completeBillingCharge, failBillingCharge, findRecentCompletedSubscribeCharge } from '../services/organizerBillingLedger';
+import { addDaysUtc, renewalPeriodKey } from '../utils/billingPeriod'; // 2026-09-30: every period / trial end is exact UTC-millisecond arithmetic, same as the renewal job
 
-const stripe = getStripe();
+// 2026-09-29: lazy. This used to call getStripe() at import time, which throws when
+// STRIPE_SECRET_KEY is missing and would crash the whole server at boot even though Stripe is closed
+// and payments run on Square. The proxy resolves the real client on first property access, so the
+// existing `stripe.subscriptions...` / `stripe.webhooks...` call sites are unchanged, and a legacy
+// path that is really called without a key throws StripeNotConfiguredError (503) at that moment.
+const stripe: ReturnType<typeof getStripe> = new Proxy({} as ReturnType<typeof getStripe>, {
+  get: (_target, prop) => (getStripe() as any)[prop],
+});
 
 // 2026-09-29: Stripe's platform account is permanently closed (see the removal note below), so
 // every Stripe API call for an organizer subscription fails. While this is true (the default),
@@ -30,8 +38,6 @@ const stripe = getStripe();
 // code below, untouched, and become reachable again only if STRIPE_PLATFORM_CLOSED is set to the
 // literal string 'false' (for example if a Stripe account is ever reopened).
 const STRIPE_PLATFORM_CLOSED = process.env.STRIPE_PLATFORM_CLOSED !== 'false';
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function isPaidTierValue(tier: unknown): boolean {
   return tier === 'PRO' || tier === 'TEAMS';
@@ -57,7 +63,7 @@ function resolveCancellationPeriodEnd(organizer: any, now: Date = new Date()): {
   if (organizer.billingGraceEndsAt) {
     return { periodEnd: new Date(organizer.billingGraceEndsAt), isEstimate: true };
   }
-  return { periodEnd: new Date(now.getTime() + BILLING_INTERVAL_DAYS * MS_PER_DAY), isEstimate: true };
+  return { periodEnd: addDaysUtc(now, BILLING_INTERVAL_DAYS), isEstimate: true };
 }
 
 /**
@@ -684,7 +690,16 @@ function isRecordNotFoundError(err: unknown): boolean {
  * after a COMPLETED Square payment id (chargeStoredCard requireCompleted). A declined card is 402
  * CARD_DECLINED and leaves tier, period end and stored card untouched. The charge is claimed in
  * the OrganizerBillingCharge ledger first (unique per organizer + period key), so a retry after a
- * crash finds the COMPLETED row and re-applies the grant without charging again. The Square
+ * crash finds the COMPLETED row and re-applies the grant without charging again.
+ *
+ * ONE CHARGE PER PERIOD (2026-09-30): a new_period subscribe by an organizer whose period end has
+ * ALREADY PASSED (dunning, lapsed trial) claims the SAME ledger key the daily job uses for that period
+ * (`renewal:<periodEndISO>`), so the job and this endpoint can never both charge it: the unique
+ * (organizerId, periodKey) row makes the loser 'in_progress' or 'already_completed'. Every other
+ * new_period key is `subscribe:<period end or none>:<UTC day>` with NO tier in it, and the retry lookup
+ * is tier-blind: when a period was already PAID (COMPLETED) but never activated, the grant applies the
+ * tier that was actually paid (never a silent second charge for a different tier; the organizer can
+ * then upgrade, which is prorated). The Square
  * idempotency key contains organizerId + kind + tier + period key + amount + the card sourceId, so
  * retrying with a NEW card after a decline is never IDEMPOTENCY_KEY_REUSED.
  *
@@ -795,6 +810,10 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
     // ---- Charge (new_period / upgrade only). Nothing below this block runs unless it succeeds. ----
     let amountCents = 0;
     let paymentId: string | null = null;
+    // The tier that gets granted: the requested tier, unless the period being applied was already PAID
+    // for a different tier (then that paid tier, never a second charge).
+    let grantTier: BillableOrganizerTier = validatedTier;
+    let tierAdjusted = false;
     if (mode === 'new_period' || mode === 'upgrade') {
       const kind = mode === 'upgrade' ? 'UPGRADE' : 'SUBSCRIBE';
       amountCents =
@@ -805,10 +824,40 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
         console.error(`[Billing] createSquareBillingSubscription computed a non-positive charge (${amountCents}) for organizer ${organizer.id}, mode ${mode} -- refusing to grant anything`);
         return res.status(500).json({ message: 'Failed to set up Square billing' });
       }
-      const periodKey =
+      // A period end that is already past on a Square-billed organizer is a period the daily job bills
+      // under `renewal:<periodEndISO>`: share that exact key so the two paths are mutually exclusive.
+      const pastDuePeriodEnd =
+        mode === 'new_period' &&
+        organizer.billingProcessor === 'square' &&
+        !!currentPeriodEnd &&
+        currentPeriodEnd.getTime() <= now.getTime();
+      let periodKey =
         mode === 'upgrade'
           ? `upgrade:${currentTier}>${validatedTier}:${currentPeriodEnd!.toISOString()}`
-          : `subscribe:${validatedTier}:${currentPeriodEnd ? currentPeriodEnd.toISOString() : 'none'}:${utcDayKey(now)}`;
+          : pastDuePeriodEnd
+            ? renewalPeriodKey(currentPeriodEnd!)
+            : `subscribe:${currentPeriodEnd ? currentPeriodEnd.toISOString() : 'none'}:${utcDayKey(now)}`;
+      if (mode === 'new_period') {
+        // UTC-day edge (2026-09-29): the key above ends in today's UTC day. If an earlier attempt for
+        // this organizer + tier was charged (COMPLETED) within the last 24h but the plan was never
+        // activated (the period end is unchanged), a retry after UTC midnight would build a different
+        // key and charge a second time. Reuse that earlier row's exact key instead: the claim below
+        // then reports 'already_completed' and the grant is re-applied WITHOUT a new charge. The lookup
+        // is TIER-BLIND (2026-09-30): a paid PRO whose activation failed, then a TEAMS request the same
+        // day, must reuse the PRO row (and grant PRO) rather than charge TEAMS on top. The renewal key
+        // has no UTC day in it, so it needs no lookup; it still runs so rows written under the older
+        // `subscribe:<TIER>:...` key format are honoured during rollout. A lookup failure propagates
+        // (500, nothing charged), the same fail-closed rule as the claim itself.
+        const prior = await findRecentCompletedSubscribeCharge({
+          organizerId: organizer.id,
+          periodEndKey: currentPeriodEnd ? currentPeriodEnd.toISOString() : 'none',
+          now,
+        });
+        if (prior) {
+          console.warn(`[Billing] createSquareBillingSubscription found a recent COMPLETED-but-unactivated charge for organizer ${organizer.id} (${prior.periodKey}) -- re-applying it instead of charging a new period`);
+          periodKey = prior.periodKey;
+        }
+      }
 
       const claim = await claimBillingCharge({
         organizerId: organizer.id,
@@ -827,6 +876,12 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
         // A previous attempt was charged (COMPLETED) but the plan was never activated, for example a
         // crash between the two writes. Re-apply the grant below WITHOUT charging again.
         paymentId = claim.paymentId ?? 'previously-completed';
+        if (typeof claim.amountCents === 'number') amountCents = claim.amountCents;
+        if ((claim.tier === 'PRO' || claim.tier === 'TEAMS') && claim.tier !== validatedTier) {
+          grantTier = claim.tier;
+          tierAdjusted = true;
+          console.warn(`[Billing] createSquareBillingSubscription: period already PAID as ${claim.tier} for organizer ${organizer.id}, requested ${validatedTier} -- granting ${claim.tier}, no second charge`);
+        }
         console.warn(`[Billing] createSquareBillingSubscription re-applying an already COMPLETED charge for organizer ${organizer.id} (period ${periodKey}) without a new charge`);
       } else {
         const charge = await chargeStoredCard({
@@ -864,9 +919,9 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
     }
 
     // ---- Grant. Only reached with a COMPLETED payment (charge modes) or an explicit trial. ----
-    const trialEndsAt = mode === 'trial_start' ? new Date(now.getTime() + ORGANIZER_TRIAL_DAYS * MS_PER_DAY) : null;
+    const trialEndsAt = mode === 'trial_start' ? addDaysUtc(now, ORGANIZER_TRIAL_DAYS) : null;
     const grantData: Record<string, unknown> = {
-      subscriptionTier: validatedTier,
+      subscriptionTier: grantTier,
       subscriptionStatus: mode === 'trial_start' || mode === 'trial_update' ? 'trialing' : 'active',
       billingProcessor: 'square',
       billingInterval: 'monthly',
@@ -882,11 +937,11 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
       grantData.billingCurrentPeriodEnd = trialEndsAt;
       grantData.trialEndsAt = trialEndsAt;
     } else if (mode === 'new_period') {
-      grantData.billingCurrentPeriodEnd = new Date(now.getTime() + BILLING_INTERVAL_DAYS * MS_PER_DAY);
+      grantData.billingCurrentPeriodEnd = addDaysUtc(now, BILLING_INTERVAL_DAYS);
       grantData.trialEndsAt = null;
     }
     // trial_update and upgrade never move billingCurrentPeriodEnd or trialEndsAt.
-    if (currentTier !== validatedTier) {
+    if (currentTier !== grantTier) {
       grantData.tokenVersion = { increment: 1 }; // real tier change -- invalidate any stale tier claim in a live JWT
     }
 
@@ -924,14 +979,14 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
       create: {
         userId: req.user.id,
         role: 'ORGANIZER',
-        subscriptionTier: validatedTier,
+        subscriptionTier: grantTier,
         subscriptionStatus: updated.subscriptionStatus,
         trialEndsAt: roleTrialEndsAt,
         tierLapsedAt: null,
         tierResumedAt: new Date(),
       },
       update: {
-        subscriptionTier: validatedTier,
+        subscriptionTier: grantTier,
         subscriptionStatus: updated.subscriptionStatus,
         trialEndsAt: roleTrialEndsAt,
         tierLapsedAt: null,
@@ -946,7 +1001,7 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
     // still set (finalizeGracePeriod clears it when it locks). Best-effort: a failure here must
     // never fail a subscription the organizer has already paid for.
     try {
-      const restored = await clearGracePeriod(organizer.id, validatedTier);
+      const restored = await clearGracePeriod(organizer.id, grantTier);
       if (restored && (restored.itemsRestored > 0 || restored.membersRestored > 0)) {
         console.log(`[Billing] Square subscribe restored ${restored.itemsRestored} locked item(s) and ${restored.membersRestored} staff member(s) for organizer ${organizer.id}`);
       }
@@ -965,6 +1020,13 @@ export const createSquareBillingSubscription = async (req: AuthRequest, res: Res
       trialEndsAt: mode === 'trial_start' ? trialEndsAt : organizer.trialEndsAt ?? null,
       chargedCents: amountCents,
       mode,
+      ...(tierAdjusted
+        ? {
+            tierAdjusted: true,
+            requestedTier: validatedTier,
+            message: `Your ${grantTier} plan was already paid for this period, so it is now active and you were not charged again. To move to ${validatedTier}, upgrade from your subscription settings: you will only pay the prorated difference.`,
+          }
+        : {}),
     });
   } catch (error) {
     console.error('[Billing] createSquareBillingSubscription error:', error);
