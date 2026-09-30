@@ -537,6 +537,9 @@ const EditItemPage = () => {
       ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
       bestOfferAcceptPct: undefined,
       bestOfferDeclinePct: undefined,
+      // formData.consignorId is '' for an item with no consignor; the backend reads '' as an
+      // attempted attach and 404s "Consignor not found". Same touched-gate as the normal save.
+      consignorId: consignorTouched ? (formData.consignorId || null) : undefined,
     };
     await api.put(`/items/${id}`, savePayload);
   };
@@ -559,9 +562,10 @@ const EditItemPage = () => {
       // Auto-save current form state first so eBay push uses the latest values (not stale DB state).
       // Inline PUT (not updateMutation): updateMutation.onSuccess navigates to /dashboard which would abort the push.
       await saveFormState();
-    } catch (err) {
+    } catch (err: any) {
       setEbayPushPending(false);
-      showToast('Save failed. Fix errors before pushing to eBay', 'error');
+      const serverMsg = err?.response?.data?.message || err?.response?.data?.error;
+      showToast(serverMsg ? `Save failed: ${serverMsg}` : 'Save failed. Fix errors before pushing to eBay', 'error');
       return;
     }
     ebayPushMutation.mutate({ itemId: String(id) });
@@ -572,9 +576,10 @@ const EditItemPage = () => {
     try {
       // Persist current form state (incl. Brand/MPN/UPC) before publishing so eBay sees latest values.
       await saveFormState();
-    } catch (err) {
+    } catch (err: any) {
       setEbayPushPending(false);
-      showToast('Save failed. Fix errors before publishing to eBay', 'error');
+      const serverMsg = err?.response?.data?.message || err?.response?.data?.error;
+      showToast(serverMsg ? `Save failed: ${serverMsg}` : 'Save failed. Fix errors before publishing to eBay', 'error');
       return;
     }
     ebayPublishMutation.mutate({ itemId: String(id) });
