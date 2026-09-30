@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe, getTestStripe } from '../utils/stripe';
+import { isStripePlatformClosed } from '../utils/stripeBootConfig'; // 2026-09-30: Stripe platform closed
 import { createNotification } from '../lib/notificationService';
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // Wave 2 (2026-09-29): reclaimed-PAID rows earn the same XP, milestones, achievement and Sale Passport stamp as a webhook-settled purchase (shared, idempotent, never throws)
 import { getSquareOrderPaymentStatus } from '../services/squareCheckoutLinkService'; // Square reconciliation follow-up (2026-09-09): reuses the shared Orders-API lookup built for posStrandedSaleReconcileCron.ts's Square branch -- see that file's own getSquareOrderPaymentStatus usage.
@@ -227,7 +228,13 @@ export const reclaimStalePurchases = async (): Promise<void> => {
     let failedCount = 0;
     let inFlightSkipped = 0;
 
-    for (const [piId, group] of byPi) {
+    // Stripe platform permanently closed (2026-09-30): no PaymentIntent can be verified, so the
+    // Stripe loop is skipped (one quiet info log). The Square loop below is unchanged.
+    if (byPi.size > 0 && isStripePlatformClosed(process.env)) {
+      console.info(`[purchaseExpiryJob] Stripe platform closed -- left ${byPi.size} Stripe PaymentIntent group(s) untouched (no Stripe API calls).`);
+    }
+    const stripeGroups = isStripePlatformClosed(process.env) ? [] : Array.from(byPi.entries());
+    for (const [piId, group] of stripeGroups) {
       try {
         const stripeClient = group.isTestTransaction ? getTestStripe() : getStripe();
         // Direct-Charge purchases live on the organizer's own connected Stripe account, not

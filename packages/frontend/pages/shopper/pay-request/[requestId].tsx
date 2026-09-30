@@ -4,7 +4,6 @@ import Head from 'next/head';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { usePOSPaymentRequest } from '../../../hooks/usePOSPaymentRequest';
-import { PaymentRequestForm } from '../../../components/PaymentRequestForm';
 import { SquarePaymentRequestForm } from '../../../components/SquarePaymentRequestForm'; // Square migration Wave 1 #3 (2026-09-07)
 import api from '../../../lib/api';
 
@@ -293,20 +292,6 @@ export default function PaymentRequestPage() {
               />
             </div>
           )}
-          {showPaymentForm && request.processor !== 'SQUARE' && request.clientSecret && (
-            <div className="mb-6">
-              <PaymentRequestForm
-                requestId={request.id}
-                clientSecret={request.clientSecret}
-                totalAmountCents={request.isSplitPayment && request.cardAmountCents ? request.cardAmountCents : request.totalAmountCents}
-                stripeAccountId={request.organizerStripeAccountId}
-                onSuccess={handlePaymentSuccess}
-                onError={handlePaymentError}
-                isProcessing={isPaid}
-              />
-            </div>
-          )}
-
           {/* Action Buttons */}
           {!showPaymentForm && !isExpired && !isPaid && !isDeclined && (
             <div className="space-y-3 mb-6">

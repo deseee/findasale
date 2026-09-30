@@ -17,19 +17,13 @@
  * (no persisted POSPaymentRequest row exists for this walk-up, no-shopper-account
  * flow, unlike the QR/phone rail).
  *
- * The OTHER mode this component supports, isSetupIntentMode (triggered by a
- * setupIntentClientSecret prop, used by the venue/vendor-booth QR rail --
- * pages/pay/[setupIntentClientSecretToken].tsx), is UNTOUCHED by this rebuild: it is
- * still Stripe-based (stripe.confirmCardSetup against an existing platform
- * SetupIntent) and was explicitly NOT confirmed dead, so its imports/logic/UI below
- * are left exactly as they were.
+ * (The former Stripe setup-intent mode, used by the retired venue QR phone page, was
+ * removed 2026-09-30 along with the Stripe client packages.)
  *
  * States: idle (form), processing (charging), success (receipt), error (decline message)
  */
 
 import { useState } from 'react';
-import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { StripeCardElementOptions } from '@stripe/stripe-js';
 import api from '../lib/api';
 import SquarePaymentRequestForm from './SquarePaymentRequestForm';
 
@@ -42,7 +36,7 @@ interface PosManualCardProps {
   onError: (message: string) => void;
   // Square rebuild (2026-09-12): the organizer's connected Square location, needed by
   // SquarePaymentRequestForm to initialize the Web Payments SDK for a register-entered
-  // card. Unused in setup-intent mode (that mode is still Stripe, unaffected).
+  // card.
   squareLocationId?: string | null;
   // POS Cashier Discount Permission parity (2026-08-28 feature, wired into this flow
   // for the first time in this rebuild -- the dead Stripe version never accepted these
@@ -54,17 +48,6 @@ interface PosManualCardProps {
   discountType?: 'PERCENT' | 'FIXED';
   discountValue?: number;
   discountReasonNote?: string;
-  // Venue/multi-vendor QR rail (2026-07-31): when set, this component confirms an
-  // EXISTING platform SetupIntent (stripe.confirmCardSetup) instead of creating and
-  // confirming a PaymentIntent of its own. Used by
-  // pages/pay/[setupIntentClientSecretToken].tsx, the shopper-facing phone page for
-  // the venue register's QR button -- the register already created this SetupIntent
-  // via createBoothCartQrSetupIntent and is polling for it to succeed; the actual
-  // per-booth PaymentIntents are created server-side afterward
-  // (authorizeBoothCartQrLegs), never here. No network call to
-  // /stripe/terminal/manual-card-payment-intent (nor its Square replacement) happens
-  // in this mode.
-  setupIntentClientSecret?: string;
   // ── Split tender (2026-09-29, P1 double-collect fix) ──────────────────────────────────────
   // Whole cents the cashier already collected in cash for THIS cart. When > 0 the card is charged
   // only the remainder (cart total - cash), never the full cart on top of the cash already taken;
@@ -159,7 +142,6 @@ export default function PosManualCard({
   discountType,
   discountValue,
   discountReasonNote,
-  setupIntentClientSecret,
   cashAmountCents,
   cashCoversTotal,
   platformFee,
@@ -167,10 +149,6 @@ export default function PosManualCard({
   onUseCash,
   onClearCash,
 }: PosManualCardProps) {
-  const isSetupIntentMode = !!setupIntentClientSecret;
-  const stripe = useStripe();
-  const elements = useElements();
-
   const [state, setState] = useState<ManualCardState>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const feeEstimate = cartTotal * CNP_FEE_RATE_ESTIMATE + CNP_FEE_FIXED_DOLLARS_ESTIMATE;
@@ -182,7 +160,7 @@ export default function PosManualCard({
   // cart total - cash already collected, then the server's keyed-in surcharge on top of that.
   // totalWithFee/cnpFeeAmount above are now only the post-charge actuals shown on the success screen.
   const cartTotalCents = Math.round(cartTotal * 100);
-  const splitCashCents = !isSetupIntentMode && cashAmountCents && cashAmountCents > 0 ? cashAmountCents : 0;
+  const splitCashCents = cashAmountCents && cashAmountCents > 0 ? cashAmountCents : 0;
   const cardSubtotalCents = Math.max(0, cartTotalCents - splitCashCents);
   const chargeFeeCents = Math.round(cardSubtotalCents * CNP_FEE_RATE_ESTIMATE) + CNP_FEE_FIXED_CENTS_ESTIMATE;
   const chargeCents = cardSubtotalCents + chargeFeeCents;
@@ -193,7 +171,7 @@ export default function PosManualCard({
     : null;
   const minChargeCents = minCardChargeCents ?? 50;
   let blockedReason: string | null = null;
-  if (!isSetupIntentMode) {
+  {
     const way = splitCashCents > 0
       ? 'Collect more of this sale in cash, or take the whole sale in cash.'
       : 'Take this sale in cash instead.';
@@ -206,94 +184,6 @@ export default function PosManualCard({
     }
   }
   const [successTimestamp, setSuccessTimestamp] = useState<string>('');
-
-  // Stripe Elements styling (dark mode aware) -- setup-intent mode only (Stripe,
-  // unaffected by this rebuild). Reads the actual applied theme (the 'dark' class
-  // Tailwind's darkMode:'class' toggles on <html>) rather than
-  // window.matchMedia('(prefers-color-scheme: dark)'), which only reflects OS
-  // preference and misses a user who explicitly picked dark mode in-app while their OS
-  // is light (see hooks/useTheme.ts). (S-dark-mode-audit)
-  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
-
-  const cardElementOptions: StripeCardElementOptions = {
-    style: {
-      base: {
-        fontSize: '16px',
-        color: isDark ? '#f5f5f5' : '#1a1a1a',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        '::placeholder': {
-          color: isDark ? '#9ca3af' : '#6b7280',
-        },
-      },
-      invalid: {
-        color: '#ef4444',
-      },
-    },
-    hidePostalCode: false,
-  };
-
-  // Setup-intent mode ONLY (venue/vendor-booth QR rail, Stripe, untouched by this
-  // rebuild) -- confirms an EXISTING platform SetupIntent the register already created.
-  // The register-entered ("manual card entry") flow below never calls this; it uses
-  // handleSquareSourceId instead, wired to SquarePaymentRequestForm's onSuccess.
-  const handleProcessPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!stripe || !elements) {
-      setErrorMessage('Stripe not loaded. Please reload the page.');
-      setState('error');
-      onError('Stripe not loaded.');
-      return;
-    }
-
-    setState('processing');
-    setErrorMessage('');
-
-    const cardElement = elements.getElement(CardElement);
-    if (!cardElement) {
-      setErrorMessage('CardElement not found');
-      setState('error');
-      onError('CardElement not found');
-      return;
-    }
-
-    try {
-      const { error, setupIntent } = await stripe.confirmCardSetup(setupIntentClientSecret!, {
-        payment_method: {
-          card: cardElement,
-          billing_details: {
-            email: buyerEmail || undefined,
-          },
-        },
-      });
-
-      if (error) {
-        setErrorMessage(error.message || 'Card was declined. Please try another card.');
-        setState('error');
-        onError(error.message || 'Card setup declined');
-        return;
-      }
-
-      if (!setupIntent || setupIntent.status !== 'succeeded') {
-        setErrorMessage(`Card status: ${setupIntent?.status ?? 'unknown'}. Please contact the cashier.`);
-        setState('error');
-        onError(`Unexpected setup intent status: ${setupIntent?.status ?? 'unknown'}`);
-        return;
-      }
-
-      const now = new Date();
-      setSuccessTimestamp(
-        now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-      );
-      setState('success');
-      onSuccess('Card confirmed. Show this screen to the cashier to finish your purchase.');
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred confirming your card.';
-      setErrorMessage(errorMsg);
-      setState('error');
-      onError(errorMsg);
-    }
-  };
 
   // Register-entered card flow (Square rebuild, 2026-09-12). Fired by
   // SquarePaymentRequestForm's onSuccess once the organizer's device has tokenized the
@@ -378,46 +268,34 @@ export default function PosManualCard({
     <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
       {/* Header */}
       <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-        💳 {isSetupIntentMode ? 'Enter Your Card' : 'Manual Card Entry'}
+        💳 Manual Card Entry
       </h4>
       <p className="text-xs text-warm-600 dark:text-warm-400 mb-4">
-        {isSetupIntentMode ? 'Your card is confirmed here, then charged at the register.' : 'Card-not-present payment'}
+        Card-not-present payment
       </p>
 
       {/* ═══ IDLE STATE: Form ═══ */}
       {state === 'idle' && (
         <div className="space-y-4">
           {/* CNP Fee + Dispute Warning -- only applies to the register-entered manual
-              flow (higher processing fee, no dispute protection). Not shown in
-              setup-intent mode: the real per-booth charge (and its own, unrelated fee
-              math) happens later, server-side, on the register's own account. */}
-          {!isSetupIntentMode && (
-            <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
-              <div className="flex items-start gap-2">
-                <span className="text-amber-600 dark:text-amber-400 text-base mt-0.5">⚠</span>
-                <div>
-                  <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
-                  <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
-                    Card-not-present fee: {(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
-                    {' '}(Square's rate for a manually keyed card), added to the card amount and shown as its own line on the receipt. It is refunded in proportion to any refund.
-                  </p>
-                  <p className="text-xs text-amber-800 dark:text-amber-300">
-                    <strong>No dispute protection.</strong> If a shopper disputes this charge, you may lose the sale amount plus a dispute fee with no recourse.
-                  </p>
-                </div>
+              flow (higher processing fee, no dispute protection). */}
+          <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 dark:text-amber-400 text-base mt-0.5">⚠</span>
+              <div>
+                <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
+                  Card-not-present fee: {(CNP_FEE_RATE_ESTIMATE * 100).toFixed(1)}% + ${CNP_FEE_FIXED_DOLLARS_ESTIMATE.toFixed(2)}
+                  {' '}(Square's rate for a manually keyed card), added to the card amount and shown as its own line on the receipt. It is refunded in proportion to any refund.
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  <strong>No dispute protection.</strong> If a shopper disputes this charge, you may lose the sale amount plus a dispute fee with no recourse.
+                </p>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Total -- setup-intent mode shows a single read-only amount (display only,
-              from the register's own total; no CNP fee is added here since no charge
-              happens on this page at all). */}
-          {isSetupIntentMode ? (
-            <div className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 text-center">
-              <p className="text-xs text-warm-600 dark:text-warm-400">Amount due</p>
-              <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">${cartTotal.toFixed(2)}</p>
-            </div>
-          ) : (
+          {(
             <>
               {/* Split tender (2026-09-29): show exactly what was already collected and that the
                   card is charged only the remainder. */}
@@ -462,30 +340,7 @@ export default function PosManualCard({
           {/* Separator */}
           <div className="border-t border-warm-200 dark:border-gray-700"></div>
 
-          {isSetupIntentMode ? (
-            /* Setup-intent mode: Stripe Elements card form (unchanged from before this rebuild). */
-            <form onSubmit={handleProcessPayment} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">
-                  Card Details
-                </label>
-                <div className="p-3 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700">
-                  <CardElement options={cardElementOptions} />
-                </div>
-                <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
-                  Your card info is never stored.
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={!stripe || !elements}
-                className="w-full py-3 rounded-lg bg-sage-700 text-white font-semibold hover:bg-sage-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {`Confirm Card $${cartTotal.toFixed(2)}`}
-              </button>
-            </form>
-          ) : blockedReason ? (
+          {blockedReason ? (
             /* Blocked (2026-09-29): cash covers the sale, or the card amount is below what a card
                can be charged. The card form is not rendered at all, so a shopper's card is never
                tokenized for a charge that cannot (or must not) happen. */
@@ -548,7 +403,7 @@ export default function PosManualCard({
             </div>
           </div>
           <p className="text-center text-xs text-warm-600 dark:text-warm-400">
-            Amount: ${isSetupIntentMode ? totalWithFee.toFixed(2) : (chargeCents / 100).toFixed(2)}
+            Amount: ${(chargeCents / 100).toFixed(2)}
           </p>
         </div>
       )}
@@ -559,15 +414,15 @@ export default function PosManualCard({
           <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700">
             <p className="text-3xl mb-2">✓</p>
             <p className="text-sm font-bold text-green-900 dark:text-green-100 mb-1">
-              {isSetupIntentMode ? 'Card Confirmed' : 'Payment Confirmed'}
+              Payment Confirmed
             </p>
             <p className="text-xs text-green-700 dark:text-green-300">
-              {isSetupIntentMode ? 'Show this screen to the cashier to finish your purchase.' : 'Card charged successfully'}
+              Card charged successfully
             </p>
           </div>
 
           <div className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 space-y-2 text-sm">
-            {!isSetupIntentMode && cnpFeeAmount > 0 ? (
+            {cnpFeeAmount > 0 ? (
               <>
                 <div className="flex justify-between">
                   <span className="text-warm-600 dark:text-warm-400">Sale amount:</span>
@@ -615,23 +470,20 @@ export default function PosManualCard({
           <div className="flex gap-2">
             <button
               onClick={handleRetry}
-              className={isSetupIntentMode ? "w-full py-2 rounded-lg bg-sage-700 text-white text-sm font-semibold hover:bg-sage-800 transition" : "flex-1 py-2 rounded-lg bg-sage-700 text-white text-sm font-semibold hover:bg-sage-800 transition"}
+              className="flex-1 py-2 rounded-lg bg-sage-700 text-white text-sm font-semibold hover:bg-sage-800 transition"
             >
               Try Again
             </button>
-            {/* "Use Cash" only makes sense on the register's own manual-entry flow --
-                there is no cash fallback on a shopper's own phone (setup-intent mode). */}
-            {!isSetupIntentMode && (
-              <button
-                onClick={() => {
-                  setState('idle');
-                  onError('User switched to cash payment');
-                }}
-                className="flex-1 py-2 rounded-lg bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-semibold hover:bg-warm-300 dark:hover:bg-gray-600 transition"
-              >
-                Use Cash
-              </button>
-            )}
+            <button
+              onClick={() => {
+                setState('idle');
+                onError('User switched to cash payment');
+              }}
+              className="flex-1 py-2 rounded-lg bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-semibold hover:bg-warm-300 dark:hover:bg-gray-600 transition"
+            >
+              Use Cash
+            </button>
+
           </div>
         </div>
       )}

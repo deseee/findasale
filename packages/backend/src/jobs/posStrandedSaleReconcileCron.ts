@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
+import { isStripePlatformClosed } from '../utils/stripeBootConfig'; // 2026-09-30: Stripe platform closed, Stripe branches make no API calls
 import { createNotification } from '../lib/notificationService';
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder';
 import { shouldUseDirectCharge } from '../services/stripeConnectService';
@@ -213,7 +214,8 @@ const reclaimExpiredPaymentLink = async (
         } else {
           console.warn(`[pos-reconcile] SQUARE-processor link ${link.id} has no squarePaymentLinkId -- cannot deactivate (non-fatal).`);
         }
-      } else {
+      } else if (!isStripePlatformClosed(process.env)) {
+        // Stripe platform closed (2026-09-30): no Stripe API call; the link row is already flipped locally.
         await stripe().paymentLinks.update(link.stripePaymentLinkId!, { active: false }, stripeRequestOptions);
       }
     } catch (deactivateErr: any) {
@@ -297,6 +299,10 @@ export const manuallyReclaimPosPaymentLink = async (
         return { outcome: 'already_paid' };
       }
     } else {
+      if (isStripePlatformClosed(process.env)) {
+        // Stripe platform closed (2026-09-30): cannot verify a Stripe link, so never revert it blindly.
+        return { outcome: 'error', message: 'This payment link was created with a payment processor that is no longer available, so it cannot be verified or cancelled from here. Please contact support.' };
+      }
       const sessions = await stripe().checkout.sessions.list(
         { payment_link: link.stripePaymentLinkId!, limit: 5 },
         stripeRequestOptions
@@ -366,6 +372,12 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
 
   console.log(`[pos-reconcile] Checking ${candidates.length} ACTIVE POS payment link(s) older than 10 min for stranded sales.`);
 
+  // Stripe platform permanently closed (2026-09-30): in-window STRIPE links cannot be verified, so they are
+  // left untouched with a single info log after the loop. SQUARE links and the local stale-row EXPIRED flip
+  // (which now skips the Stripe deactivate call) behave as before.
+  const stripeClosed = isStripePlatformClosed(process.env);
+  let stripeSkippedClosed = 0;
+
   for (const link of candidates) {
     // Square changeover Wave S3 (2026-09-09): SQUARE-processor links skip all Stripe-specific
     // Direct-charge account-context resolution below -- there is no Stripe account to route
@@ -426,6 +438,11 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
           linkStripeRequestOptions
         );
       }
+      continue;
+    }
+
+    if (!isSquareLink && stripeClosed) {
+      stripeSkippedClosed++;
       continue;
     }
 
@@ -595,6 +612,10 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
     } catch (err: any) {
       console.error(`[pos-reconcile] STRANDED-UNRECOVERED link=${link.id} -- error while reconciling:`, err?.message ?? err);
     }
+  }
+
+  if (stripeSkippedClosed > 0) {
+    console.info(`[pos-reconcile] Stripe platform closed -- left ${stripeSkippedClosed} in-window Stripe payment link(s) untouched (no Stripe API calls).`);
   }
 };
 

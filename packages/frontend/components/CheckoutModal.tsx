@@ -1,377 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router';
-import { loadStripe, Stripe } from '@stripe/stripe-js';
-import {
-  Elements,
-  PaymentElement,
-  useStripe,
-  useElements,
-} from '@stripe/react-stripe-js';
 import api from '../lib/api';
-import { formatBuyerPremiumPct, AUCTION_BUYER_PREMIUM_LABEL } from '../lib/platformFees';
 import AccessibleModal from './AccessibleModal';
 import { useAuth } from './AuthContext';
 import { SquarePaymentRequestForm } from './SquarePaymentRequestForm';
 import { getAffiliateLinkIdForCheckout } from '../lib/affiliateAttribution';
 
-// Lazy-initialize Stripe on client-side only to avoid SSR errors
-let stripePromise: Promise<Stripe | null> | null = null;
-const getStripePromise = () => {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  if (!stripePromise) {
-    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-  }
-  return stripePromise;
-};
-
-// Inner form rendered inside the Elements provider
-interface PaymentFormProps {
-  itemTitle: string;
-  itemPrice: number;      // post-discount price (what Stripe charges)
-  originalAmount?: number; // pre-discount item price (for strikethrough display)
-  platformFee: number;
-  discountApplied?: number;
-  saleName?: string;
-  saleAddress?: string;
-  saleDates?: string;
-  buyerPremium?: number;  // buyer premium amount in dollars
-  shippingCost?: number;  // ADR-110 Track 1: server-computed real shipping total (dollars), 0 when not requested/applicable
-  buyerPremiumRate?: number; // buyer premium rate as decimal (e.g., 0.05 for 5%)
-  isAuction?: boolean;    // true if item is an auction
-  purchaseId?: string;    // purchase ID for redirect after success
-  organizerName?: string; // ADR-025 checkout disclosure: organizer display name, threaded from parent page
-  saleId?: string;        // ADR-025 checkout disclosure: used to link to the sale/storefront page
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, shippingCost = 0, isAuction = false, purchaseId, saleName, saleAddress, saleDates, organizerName, saleId, onClose, onSuccess }: PaymentFormProps) => {
-  const router = useRouter();
-  const { user } = useAuth();
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [tosAgreed, setTosAgreed] = useState(false);
-  const [buyerPremiumAgreed, setBuyerPremiumAgreed] = useState(!isAuction); // auto-agree if not auction
-  const [paymentSucceeded, setPaymentSucceeded] = useState(false);
-
-  // TOTAL-DISPLAY FIX (2026-08-17). `itemPrice` is the server's total MINUS any buyer premium
-  // (see loadIntent below), so re-adding the premium here reproduces the server's charge
-  // exactly. It used to read `itemPrice + (isAuction ? buyerPremium : 0)` against an itemPrice
-  // that was already the premium-inclusive total, so a $200 auction win displayed $220.00
-  // ("Item price $210.00 / Buyer Premium $10.00") while Stripe was correctly charging $210.00.
-  // Gated on the premium itself rather than on `isAuction` (a client-side listingType check)
-  // so the two can never disagree: the server decides whether a premium applies, and it sends
-  // 0 when it doesn't — including on a Sale.coversFee auction, where the organizer absorbs it.
-  // itemPrice remains post-discount, so the coupon display path is unchanged.
-  const total = itemPrice + buyerPremium + shippingCost;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    // GA4 #470: checkout_initiated conversion event
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('event', 'checkout_initiated', { amount: total });
-    }
-
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        // Return URL is required but we handle success inline via webhook
-        // Stripe dead-link fix (2026-09-09, findasale-dev BUG MODE): /shopper/purchases
-        // is not a real route (404s). purchaseId is already a prop on this component
-        // (threaded through from the parent page) -- use it to land on the real
-        // persistent purchase page. Falls back to /shopper/checkout-success (a real
-        // page that itself handles a missing purchaseId by looking up the buyer's most
-        // recent purchase) for the rare case this modal is invoked without one.
-        return_url: purchaseId
-          ? `${window.location.origin}/purchases/${purchaseId}`
-          : `${window.location.origin}/shopper/checkout-success`,
-      },
-      redirect: 'if_required',
-    });
-
-    if (error) {
-      setErrorMessage(error.message ?? 'Payment failed. Please try again.');
-      setIsSubmitting(false);
-    } else {
-      // GA4 #470: purchase_completed conversion event
-      if (typeof window !== 'undefined' && window.gtag) {
-        window.gtag('event', 'purchase_completed', {
-          value: total,
-          currency: 'USD',
-          transaction_id: paymentIntent?.id ?? '',
-        });
-      }
-      setPaymentSucceeded(true);
-      // Success confirmation now persists until user clicks "Done" button
-      // This ensures users see their purchase confirmation and can verify details
-    }
-  };
-
-  const handleRetry = () => {
-    setErrorMessage(null);
-    setIsSubmitting(false);
-  };
-
-  const handleDone = () => {
-    // Guest checkout (2026-07-18): /purchases/[id] requires a logged-in session (it looks up
-    // the purchase via an authenticated endpoint): redirecting a guest there would immediately
-    // bounce them to /login right after they just paid. Guests already saw the full inline
-    // confirmation screen above (item, total, sale info) and get an emailed receipt, so for
-    // guests "Done" just closes the modal. Authenticated buyers keep the persistent page.
-    if (purchaseId && user) {
-      router.push(`/purchases/${purchaseId}`);
-    } else {
-      // Fallback: close modal and let parent handle redirect
-      onClose();
-    }
-  };
-
-  if (paymentSucceeded) {
-    return (
-      <div className="text-center">
-        <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-          <p className="text-3xl mb-2">✅</p>
-          <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-1">Order Confirmed!</p>
-          <p className="text-xs text-green-700 dark:text-green-400 mb-3">Your payment has been processed successfully.</p>
-        </div>
-
-        <div className="mb-4 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg text-left space-y-3">
-          <div>
-            <p className="text-xs text-warm-500 dark:text-warm-300">Item</p>
-            <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
-          </div>
-
-          <div>
-            <p className="text-xs text-warm-500 dark:text-warm-300">Total Paid</p>
-            <p className="text-lg font-bold text-warm-900 dark:text-warm-100">${total.toFixed(2)}</p>
-          </div>
-
-          {saleName && (
-            <div>
-              <p className="text-xs text-warm-500 dark:text-warm-300">Sale</p>
-              <p className="font-semibold text-warm-900 dark:text-warm-100">{saleName}</p>
-            </div>
-          )}
-
-          {saleAddress && (
-            <div>
-              <p className="text-xs text-warm-500 dark:text-warm-300">Location & Dates</p>
-              <p className="text-sm text-warm-900 dark:text-warm-100">
-                📍 {saleAddress}
-                {saleDates && <span> | {saleDates}</span>}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* ADR-025 / legal-direct-charges-migration-2026-08-09.md deliverable #1:
-            longer receipt/confirmation disclosure. This inline success screen is the ONLY
-            confirmation guests ever see (they can't reach the authenticated /purchases/[id]
-            page), so it carries the full disclosure rather than just the micro-disclosure. */}
-        {organizerName ? (
-          <p className="text-xs text-warm-600 mb-4 leading-relaxed">
-            This purchase was made directly with <strong>{organizerName}</strong> and processed
-            securely by Stripe. If you have any questions about your order (pickup,
-            condition, timing), {organizerName} is who to contact first
-            {saleId ? (
-              <>
-                {' '}via the{' '}
-                <a
-                  href={`/sales/${saleId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-warm-900 dark:text-warm-100"
-                >
-                  sale page
-                </a>
-                .
-              </>
-            ) : '.'}
-            {' '}FindA.Sale is here if you need help finding them or navigating the platform.
-          </p>
-        ) : (
-          <p className="text-xs text-warm-600 mb-4">
-            Contact the organizer for pickup details.
-          </p>
-        )}
-
-        <button
-          onClick={handleDone}
-          className="w-full py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
-        >
-          Done
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded-lg">
-        <p className="text-sm text-warm-600 dark:text-warm-300">Item</p>
-        <p className="font-semibold text-warm-900 dark:text-warm-100">{itemTitle}</p>
-      </div>
-
-      <div className="mb-4 space-y-1 text-sm">
-        <div className="flex justify-between text-warm-600">
-          <span>Item price</span>
-          <span>
-            {discountApplied > 0 && originalAmount != null ? (
-              <>
-                <span className="line-through text-warm-400 mr-1">${originalAmount.toFixed(2)}</span>
-                <span className="text-green-600 font-medium">${itemPrice.toFixed(2)}</span>
-              </>
-            ) : (
-              `$${itemPrice.toFixed(2)}`
-            )}
-          </span>
-        </div>
-        {/* The organizer's platform fee is never shown to buyers on any sale type: it comes out of the
-            organizer's payout, not the buyer's charge. The buyer premium line below is a separate,
-            buyer-paid fee that applies to auction items only. */}
-        {discountApplied > 0 && (
-          <div className="flex justify-between text-green-600 font-medium">
-            <span>🎟️ Coupon discount</span>
-            <span>−${discountApplied.toFixed(2)}</span>
-          </div>
-        )}
-        {shippingCost > 0 && (
-          <div className="flex justify-between text-warm-600">
-            <span>Shipping</span>
-            <span>${shippingCost.toFixed(2)}</span>
-          </div>
-        )}
-        {buyerPremium > 0 && (
-          <div className="flex justify-between text-warm-600">
-            {/* The premium is the platform rate (5%). The label still renders the rate the
-                SERVER reported charging, when it reported one, rather than assuming — the
-                number beside it is that same charge, and a label that could disagree with the
-                money next to it is the whole class of bug this row has had twice. Falls back to
-                the platform constant if the server sent an amount but no rate. */}
-            <span>
-              Buyer Premium (
-              {buyerPremiumRate > 0
-                ? formatBuyerPremiumPct(buyerPremiumRate * 100)
-                : AUCTION_BUYER_PREMIUM_LABEL}
-              )
-            </span>
-            <span>${buyerPremium.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="flex justify-between font-bold text-warm-900 dark:text-warm-100 border-t border-warm-300 dark:border-gray-600 pt-2 mt-2">
-          <span>Total Due</span>
-          <span>${total.toFixed(2)}</span>
-        </div>
-        <p className="text-xs text-warm-500 mt-2">
-          No hidden fees. What you see is what you pay.
-        </p>
-      </div>
-
-      <div className="mb-5">
-        <PaymentElement />
-      </div>
-
-      {errorMessage && (
-        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
-          <p className="mb-2">{errorMessage}</p>
-          <p className="text-xs text-red-600 mb-3">You can also try a different card. Just update your payment details above.</p>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="text-xs underline text-red-600 hover:text-red-800 font-medium"
-          >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* Buyer Premium consent (auction items only) */}
-      {isAuction && buyerPremium > 0 && (
-        <label className="flex items-start gap-2 mb-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={buyerPremiumAgreed}
-            onChange={(e) => setBuyerPremiumAgreed(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-warm-300 accent-amber-600"
-            aria-required="true"
-          />
-          <span className="text-xs text-warm-600 leading-relaxed">
-            I understand a buyer premium of{' '}
-            {buyerPremiumRate > 0
-              ? formatBuyerPremiumPct(buyerPremiumRate * 100)
-              : AUCTION_BUYER_PREMIUM_LABEL}{' '}
-            (${buyerPremium.toFixed(2)}) will be added to my total.
-          </span>
-        </label>
-      )}
-
-      {/* ToS consent */}
-      <label className="flex items-start gap-2 mb-4 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={tosAgreed}
-          onChange={(e) => setTosAgreed(e.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-warm-300 accent-amber-600"
-          aria-required="true"
-        />
-        <span className="text-xs text-warm-600 leading-relaxed">
-          I understand all sales are final: no returns or refunds. I agree to the{' '}
-          <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
-            Terms of Service
-          </a>{' '}
-          and{' '}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
-            Privacy Policy
-          </a>
-          .{' '}
-          <a href="/contact" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
-            Contact support
-          </a>{' '}
-          for disputes.
-        </span>
-      </label>
-
-      {/* ADR-025 / legal-direct-charges-migration-2026-08-09.md deliverable #1:
-          micro-disclosure near the payment button. Ships universally (not gated to the
-          Direct-charges allowlist) -- the organizer is the real seller of record under
-          both the DESTINATION and DIRECT charge shapes, so this statement is honest
-          regardless of which model actually processed this specific purchase. */}
-      {organizerName && (
-        <p className="text-xs text-warm-500 mb-3">
-          Buying from {organizerName} &middot; Payment processed securely by Stripe.
-        </p>
-      )}
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isSubmitting}
-          className="flex-1 py-2 px-4 border border-warm-300 dark:border-gray-600 rounded text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={!stripe || !elements || isSubmitting || !tosAgreed || !buyerPremiumAgreed}
-          className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? 'Processing...' : `Pay $${total.toFixed(2)}`}
-        </button>
-      </div>
-    </form>
-  );
-};
-
-// Outer modal that fetches the payment intent and sets up Elements.
-// Pass either itemId (new purchase) OR purchaseId (resume existing, e.g. auction winner).
+// Checkout modal. Stripe removal (2026-09-30): the Stripe Elements/PaymentIntent branch is gone;
+// Square (single-item + bounty) is the only live payment path, everything else shows a
+// seller-not-ready / cannot-complete message.
 interface CheckoutModalProps {
   itemId?: string;
   purchaseId?: string;
@@ -426,18 +62,8 @@ interface CheckoutModalProps {
 
 const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, organizerName, saleId, shippingAvailable = false, shippingPrice = null, bountySubmissionId, bountyItemPrice, bountyClientSecret, organizerSquareOnboarded, organizerSquareMerchantId, organizerSquareLocationId, rawItemPrice, onClose, onSuccess }: CheckoutModalProps) => {
   const { user } = useAuth();
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [itemPrice, setItemPrice] = useState(0);
-  const [originalAmount, setOriginalAmount] = useState<number | undefined>(undefined);
-  const [platformFee, setPlatformFee] = useState(0);
-  const [discountApplied, setDiscountApplied] = useState(0);
-  const [buyerPremium, setBuyerPremium] = useState(0);
-  const [buyerPremiumRate, setBuyerPremiumRate] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [resolvedTitle, setResolvedTitle] = useState(itemTitle);
-  const [saleName, setSaleName] = useState<string>('');
-  const [saleAddress, setSaleAddress] = useState<string>('');
-  const [saleDates, setSaleDates] = useState<string>('');
   const [purchaseId, setPurchaseId] = useState<string | undefined>(initialPurchaseId);
 
   // ADR-110 Track 1: "ship this to me" intent + ZIP, collected before the PaymentElement
@@ -470,7 +96,6 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   const [shippingCityInput, setShippingCityInput] = useState('');
   const [shippingStateInput, setShippingStateInput] = useState('');
   const [shippingAddressError, setShippingAddressError] = useState<string | null>(null);
-  const [shippingCost, setShippingCost] = useState(0);
 
   // Guest checkout idempotency fix (2026-08-04): a stable per-mount token so that any
   // retry of create-payment-intent within this same mounted CheckoutModal reuses the
@@ -542,68 +167,26 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   useEffect(() => {
     if (!started) return; // wait until user clicks "Continue to Pay"
 
-    // Orphaned-PaymentIntent fix (2026-09-09): bounty purchase, Stripe (non-Square) organizer.
-    // The real PaymentIntent + its clientSecret already exist (created by
-    // completeBountyPurchase before this modal opened) -- render it directly, skip loadIntent's
-    // network paths entirely. See the bountyClientSecret prop comment above for why this does
-    // NOT go through the initialPurchaseId/getPendingPayment resume branch below instead.
-    if (bountyClientSecret) {
-      setClientSecret(bountyClientSecret);
-      setItemPrice(bountyItemPrice ?? 0);
-      return;
-    }
-
-    // Square migration single-item-checkout fix (2026-09-11, findasale-dev BUG MODE): this
-    // organizer has no live Stripe Connect account -- skip the Stripe create-payment-intent
-    // path entirely. The isItemSquareOnly render branch below (mirrors isBountySquare) handles
-    // tokenization and charging via /square-payment/create-payment instead.
+    // Square migration single-item-checkout fix (2026-09-11): a Square-onboarded organizer's
+    // item is rendered by the isItemSquareOnly branch below (SquarePaymentRequestForm ->
+    // /square-payment/create-payment); nothing to load here.
     if (isItemSquareOnly) {
       return;
     }
 
-    const loadIntent = async () => {
-      try {
-        let data: any;
-        if (initialPurchaseId) {
-          // Resume an existing pending purchase (auction winners)
-          const response = await api.get(`/stripe/pending-payment/${initialPurchaseId}`);
-          data = response.data;
-          if (data.itemTitle) setResolvedTitle(data.itemTitle);
-        } else if (itemId) {
-          // Stripe removal (2026-09-12): this branch only runs for a non-Square-onboarded
-          // organizer -- isItemSquareOnly already returned early above for anyone with a
-          // live Square account (see that guard a few lines up). There is no payment
-          // processor left to route this through, so surface the standard seller-not-ready
-          // message instead of calling the now-deleted /stripe/create-payment-intent
-          // endpoint (removed this pass along with stripeController.ts's createPaymentIntent).
-          setLoadError("This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.");
-          return;
-        } else {
-          setLoadError('Invalid checkout configuration.');
-          return;
-        }
-        setClientSecret(data.clientSecret);
-        // Strip the buyer premium AND shipping back out so the "Item price" row shows the
-        // hammer/list price alone -- "Buyer Premium" and "Shipping" each add their own line
-        // back once, in PaymentForm. data.totalAmount stays authoritative for what Stripe
-        // charges; data.shippingCost is the server-computed real total, never estimated here.
-        const premiumDue = data.buyerPremium ?? 0;
-        const shippingDue = data.shippingCost ?? 0;
-        setShippingCost(shippingDue);
-        setItemPrice(parseFloat(((data.totalAmount ?? 0) - premiumDue - shippingDue).toFixed(2)));
-        setPlatformFee(data.platformFee);
-        if (data.buyerPremium) setBuyerPremium(data.buyerPremium);
-        if (data.buyerPremiumRate) setBuyerPremiumRate(data.buyerPremiumRate);
-        if (data.saleName) setSaleName(data.saleName);
-        if (data.saleAddress) setSaleAddress(data.saleAddress);
-        if (data.saleDates) setSaleDates(data.saleDates);
-      } catch (err: any) {
-        const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Could not start checkout. Please try again.';
-        setLoadError(errorMsg);
-      }
-    };
-
-    loadIntent();
+    // Stripe removal (2026-09-12/30): there is no processor left for a non-Square organizer,
+    // and Stripe-era pending purchases (auction-winner resume via initialPurchaseId, or a bounty
+    // clientSecret) can no longer be paid because Stripe's platform account/API is closed.
+    // Surface an honest message instead of calling a dead endpoint.
+    if (initialPurchaseId || bountyClientSecret) {
+      setLoadError("This payment can no longer be completed online. Please contact the organizer to arrange your purchase.");
+      return;
+    }
+    if (itemId) {
+      setLoadError("This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.");
+      return;
+    }
+    setLoadError('Invalid checkout configuration.');
   }, [started, itemId, initialPurchaseId, bountyClientSecret, bountyItemPrice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSuccess = () => {
@@ -681,13 +264,6 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   };
 
   const isOpen = true; // This modal is shown conditionally by parent
-  // Dark-mode-aware Stripe Elements appearance (S-dark-mode-audit): reads the actual
-  // applied theme (the 'dark' class Tailwind's darkMode:'class' toggles on <html>), not
-  // window.matchMedia('(prefers-color-scheme: dark)') -- that only reflects OS preference
-  // and misses a user who explicitly picked dark mode in-app while their OS is light
-  // (see hooks/useTheme.ts). Without this, Stripe's PaymentElement always renders its
-  // default light UI regardless of the app's theme.
-  const isDarkMode = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   return (
     <AccessibleModal
@@ -1094,12 +670,12 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm mb-4" role="alert" id="checkout-load-error">
               {/* S1006: render the actual server message so buyers see WHY (was a bare "Try Again") */}
               <p className="mb-2 font-medium">{loadError}</p>
-              {/* Allow user to retry: clears error and reloads payment intent */}
+              {/* No live processor to retry against (Stripe removal): offer a way out instead */}
               <button
                 className="block text-xs underline text-red-600 hover:text-red-800 font-medium"
-                onClick={() => { setLoadError(null); }}
+                onClick={onClose}
               >
-                Try Again
+                Close
               </button>
               {/* Allow user to retry without coupon if coupon was the issue */}
               {couponInput && loadError.toLowerCase().includes('coupon') && (
@@ -1113,33 +689,6 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             </div>
           )}
 
-          {!loadError && !clientSecret && (
-            <div className="py-8 text-center text-warm-500">Loading payment form...</div>
-          )}
-
-          {clientSecret && (
-            <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: isDarkMode ? 'night' : 'stripe' } }}>
-              <PaymentForm
-                itemTitle={resolvedTitle}
-                itemPrice={itemPrice}
-                originalAmount={originalAmount}
-                platformFee={platformFee}
-                discountApplied={discountApplied}
-                buyerPremium={buyerPremium}
-                buyerPremiumRate={buyerPremiumRate}
-                shippingCost={shippingCost}
-                isAuction={isAuction}
-                purchaseId={purchaseId}
-                saleName={saleName}
-                saleAddress={saleAddress}
-                saleDates={saleDates}
-                organizerName={organizerName}
-                saleId={saleId}
-                onClose={onClose}
-                onSuccess={handleSuccess}
-              />
-            </Elements>
-          )}
             </>
           )}
         </>

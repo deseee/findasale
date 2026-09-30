@@ -272,7 +272,6 @@ import { scheduleFootageRetentionCron } from './jobs/footageRetentionCron'; // A
 import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // Webhook event pruning (30-day retention)
 import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operational-log retention sweep (60-day retention)
 import { scheduleScrapedSalePruneCron } from './jobs/pruneScrapedSales'; // Stale scraped ENDED-sale prune (volume reclaim, ADR 2026-07-05)
-import { scheduleStripeMigrationReconcileCron } from './jobs/stripeMigrationReconcileCron'; // ADR 1 2026-07-11: Stripe migration reconciliation backstop (daily, 04:30)
 import { scheduleVendorBoothFeeBillingCron } from './jobs/vendorBoothFeeBillingCron'; // ADR-090 Phase 4: flat VendorBooth.boothFee periodic billing (monthly, 1st @ 06:00 UTC)
 import { scheduleVendorBoothFeeRetryCron } from './jobs/vendorBoothFeeRetryCron'; // booth-rent auto-pay dunning sweep (daily, 07:00 UTC) -- 2026-09-14 Square design §6.3
 import { scheduleArchivalCron, expireStaleVenueCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly) + daily stale venue expiry
@@ -1057,11 +1056,6 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // #112 daily: Expire stale scraped venue records (RETAIL/FLEA_MARKET) whose date window lapsed
   expireStaleVenueCron();
   scheduleScrapedSalePruneCron(); // gated by PRUNE_ENABLED env
-
-  // ADR 1 2026-07-11: Register daily Stripe migration reconciliation cron (04:30 server
-  // time, after the 04:00 prune job) — self-healing backstop for the account.updated
-  // webhook cutover, independent of webhook subscription/config correctness.
-  scheduleStripeMigrationReconcileCron();
 
   // ADR-090 Phase 4: Register monthly VendorBooth flat boothFee billing cron (1st of
   // the month, 06:00 UTC) — charges each CONFIRMED booth's saved payment method and

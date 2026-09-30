@@ -1,9 +1,8 @@
 /**
- * /organizer/pos: Stripe Terminal POS v2
+ * /organizer/pos: In-person POS (Square / cash)
  *
  * In-person payment screen with multi-item cart, quick-add buttons, cash payments, and numpad.
- * Reader: BBPOS WisePOS E / S700 (WiFi, internet discovery mode)
- * SDK: @stripe/terminal-js (browser SDK, loaded dynamically to avoid SSR)
+ * Card-reader hardware support is currently disabled (Stripe Terminal SDK removed 2026-09-30).
  *
  * Features:
  *   - Multi-item cart with add/remove
@@ -16,8 +15,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { loadStripe, Stripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
 import jsQR from 'jsqr';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
@@ -128,21 +125,6 @@ const ENABLE_STRIPE_TERMINAL_CARD_READER = false;
 // untouched -- different call site, different code path, still Stripe, not confirmed dead.
 const ENABLE_MANUAL_CARD_ENTRY = true;
 
-// Venue-mode Stripe QR stopgap (2026-09-10, BUG MODE dispatch): handleVenueGenerateQr ->
-// createBoothCartQrSetupIntent (vendorBoothCartController.ts) calls
-// stripe().customers.create/setupIntents.create UNCONDITIONALLY -- guaranteed to fail for
-// every organizer now that Stripe's platform account is permanently closed (same root cause
-// as ENABLE_STRIPE_TERMINAL_CARD_READER above). Unlike the card-reader flow, a fully-working
-// drop-in replacement already exists in this same subsystem: the Square QR rail
-// (handleVenueGenerateSquareQr / finishVenueSquareCheckout / paymentMode 'square_qr') mirrors
-// this flow exactly and is confirmed live. Rather than porting Square into this button, the
-// dead Stripe QR mode is gated off entirely -- state/handlers (handleVenueGenerateQr,
-// finishVenueQrCheckout, the poll effect, venueQrStatus/venueQrUrl/venueQrClientSecret/
-// venueQrSetupIntentId) are kept intact, nothing deleted, only the selector button and its
-// content panel are hidden so the mode can never be reached. Square QR is the only venue QR
-// option shown while this is false.
-const ENABLE_VENUE_STRIPE_QR = false;
-
 interface CashPaymentResponse {
   platformFee: number;
   cashFeeBalance: number;
@@ -185,18 +167,6 @@ interface PendingPayment {
   cardAmountCents?: number;
   cardDisplayAmount?: string;
 }
-
-// ─── Stripe Helper ────────────────────────────────────────────────────────────────
-
-// Lazy-initialize Stripe on client-side only to avoid SSR errors
-let stripePromise: Promise<Stripe | null> | null = null;
-const getStripePromise = () => {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  if (!stripePromise) {
-    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-  }
-  return stripePromise;
-};
 
 // ─── Venue-mode query helper (S1178 hard-nav fix, 2026-07-30) ───────────────────────
 // router.query.venue/boothToken is unreliable on the very first client render(s) of
@@ -487,17 +457,6 @@ export default function POSPage() {
   const [venueCheckoutFailure, setVenueCheckoutFailure] = useState<string | null>(null);
   const [venueCapturing, setVenueCapturing] = useState(false);
   const [venueCaptureFailed, setVenueCaptureFailed] = useState(false);
-  const venueTerminalRef = useRef<any>(null);
-
-  // ─── Venue mode: Stripe QR rail state (S1178 follow-up, Task 3, 2026-07-31) ────────
-  // Reuses the EXISTING createBoothCartQrSetupIntent / authorizeBoothCartQrLegs backend
-  // endpoints (built for this exact multi-vendor-split purpose) plus the register-side
-  // "generate -> display QR -> poll -> done" shape already proven by the non-venue
-  // paymentLink* QR flow above (same react-qr-code component, same 3s poll interval).
-  const [venueQrStatus, setVenueQrStatus] = useState<'idle' | 'generating' | 'waiting' | 'confirmed'>('idle');
-  const [venueQrClientSecret, setVenueQrClientSecret] = useState('');
-  const [venueQrSetupIntentId, setVenueQrSetupIntentId] = useState('');
-  const [venueQrUrl, setVenueQrUrl] = useState('');
 
   // ─── Venue mode: Square QR rail (vendor-booth-cart-checkout dispatch, 2026-09-07) ──
   // Square has no server-hosted session object to poll the way Stripe's SetupIntent does
@@ -839,59 +798,11 @@ export default function POSPage() {
 
   // ─── Initialize Stripe Terminal SDK ───────────────────────────────────────────────────────
 
+  // Stripe Terminal SDK removed 2026-09-30 (Stripe platform account permanently closed):
+  // the reader can no longer be connected, so this only reports that honestly.
   const initTerminal = useCallback(async () => {
-    if (!ENABLE_STRIPE_TERMINAL_CARD_READER) {
-      setReaderStatus('error');
-      setErrorMessage('Card-reader hardware support is being updated. Cash, QR, and Venmo/Zelle are available now.');
-      return;
-    }
-    if (sdkLoadedRef.current) return;
-    setReaderStatus('connecting');
-    try {
-      const { loadStripeTerminal } = await import('@stripe/terminal-js');
-      const StripeTerminal = await loadStripeTerminal();
-
-      const terminal = StripeTerminal!.create({
-        onFetchConnectionToken: async () => {
-          const res = await api.post<{ secret: string }>('/stripe/terminal/connection-token', {
-            ...(selectedSaleIdRef.current ? { saleId: selectedSaleIdRef.current } : {}),
-          });
-          return res.data.secret;
-        },
-        onUnexpectedReaderDisconnect: () => {
-          setReaderStatus('disconnected');
-          setErrorMessage('Reader disconnected unexpectedly. Please reconnect.');
-        },
-      });
-
-      const discoverResult = await terminal.discoverReaders({
-        simulated: process.env.NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED === 'true',
-      });
-
-      if ('error' in discoverResult) {
-        throw new Error(discoverResult.error.message);
-      }
-
-      if (!discoverResult.discoveredReaders.length) {
-        setReaderStatus('error');
-        setErrorMessage('No readers found. Ensure WisePOS E is powered on and on the same WiFi network.');
-        return;
-      }
-
-      const connectResult = await terminal.connectReader(discoverResult.discoveredReaders[0]);
-      if ('error' in connectResult) {
-        throw new Error(connectResult.error.message);
-      }
-
-      terminalRef.current = terminal;
-      sdkLoadedRef.current = true;
-      setReaderStatus('connected');
-      setErrorMessage('');
-    } catch (err: any) {
-      console.error('[pos] Terminal init error:', err);
-      setReaderStatus('error');
-      setErrorMessage(err?.message ?? 'Failed to connect to reader.');
-    }
+    setReaderStatus('error');
+    setErrorMessage('Card-reader hardware support is being updated. Cash, QR, and Venmo/Zelle are available now.');
   }, []);
 
   // ─── Item search ────────────────────────────────────────────────────────────────────
@@ -1424,80 +1335,18 @@ export default function POSPage() {
   // this pass; cash/venmo/zelle/QR-payment-link venue support is a flagged follow-up --
   // no per-vendor fee-attribution path exists yet for those rails (BoothCartLeg.rail is
   // 'TERMINAL' | 'QR' only). ────────────────────────────────────────────────────────────
-  const connectReaderForVenueBooth = useCallback(async (vendorBoothId: string) => {
-    // Card-reader hardware is Stripe Terminal based and is switched off (Square is the only live
-    // processor). Guard so this can never load the SDK or reach the terminal endpoints while the
-    // flag is false. runVenueBoothLeg catches this and reports the booth leg as failed.
-    if (!ENABLE_STRIPE_TERMINAL_CARD_READER) {
-      throw new Error('Card-reader hardware support is being updated. Cash and Square QR are available now.');
-    }
-    const { loadStripeTerminal } = await import('@stripe/terminal-js');
-    const StripeTerminal = await loadStripeTerminal();
-
-    if (venueTerminalRef.current) {
-      try { await venueTerminalRef.current.disconnectReader(); } catch {}
-      venueTerminalRef.current = null;
-    }
-
-    const terminal = StripeTerminal!.create({
-      onFetchConnectionToken: async () => {
-        const res = await api.post<{ secret: string }>(
-          `/organizer/hubs/${venueHubId}/cart/${venueCart!.id}/terminal/connection-token`,
-          { vendorBoothId },
-          venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
-        );
-        return res.data.secret;
-      },
-      onUnexpectedReaderDisconnect: () => {
-        setVenueCheckoutFailure('The card reader disconnected. No card was charged.');
-      },
-    });
-
-    const discoverResult = await terminal.discoverReaders({
-      simulated: process.env.NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED === 'true',
-    });
-    if ('error' in discoverResult) throw new Error(discoverResult.error.message);
-    if (!discoverResult.discoveredReaders.length) {
-      throw new Error('No readers found. Ensure the card reader is powered on and on the same WiFi network.');
-    }
-    const connectResult = await terminal.connectReader(discoverResult.discoveredReaders[0]);
-    if ('error' in connectResult) throw new Error(connectResult.error.message);
-
-    venueTerminalRef.current = terminal;
-    return terminal;
-  }, [venueHubId, venueCart, venueBoothToken]);
-
+  // Stripe Terminal per-booth card-reader leg removed 2026-09-30 (Stripe platform account
+  // permanently closed; the /terminal/* booth endpoints already return 503). The reader
+  // button is disabled, so this is only a safety net: it fails the leg honestly with no
+  // card touched, exactly as the flag-off guard did before.
   const runVenueBoothLeg = useCallback(async (booth: { vendorBoothId: string; vendorName: string; subtotalCents: number }) => {
-    setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'connecting' }));
-    try {
-      const terminal = await connectReaderForVenueBooth(booth.vendorBoothId);
-      const authRes = await api.post(
-        `/organizer/hubs/${venueHubId}/cart/${venueCart!.id}/terminal/authorize`,
-        { vendorBoothId: booth.vendorBoothId },
-        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
-      );
-      const { clientSecret } = authRes.data;
-
-      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'ready' }));
-      showToast(`Tap card for ${booth.vendorName}, $${(booth.subtotalCents / 100).toFixed(2)}`, 'success');
-
-      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'tapping' }));
-      const collectResult = await terminal.collectPaymentMethod(clientSecret);
-      if ('error' in collectResult) throw new Error(collectResult.error.message);
-      const processResult = await terminal.processPayment(collectResult.paymentIntent);
-      if ('error' in processResult) throw new Error(processResult.error.message);
-
-      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'authorized' }));
-      return true;
-    } catch (err: any) {
-      console.error(`[pos] Venue booth leg failed for ${booth.vendorBoothId}:`, err);
-      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'failed' }));
-      setVenueCheckoutFailure(
-        `${err?.response?.data?.error || err?.response?.data?.message || err?.message || 'The card was not accepted.'} No card was charged. This cart is closing.`
-      );
-      return false;
-    }
-  }, [connectReaderForVenueBooth, venueHubId, venueCart, showToast, venueBoothToken]);
+    console.error(`[pos] Venue booth card-reader leg unavailable for ${booth.vendorBoothId}`);
+    setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'failed' }));
+    setVenueCheckoutFailure(
+      'Card-reader hardware support is being updated. Cash and Square QR are available now. No card was charged. This cart is closing.'
+    );
+    return false;
+  }, []);
 
   const cancelVenueCart = useCallback(async () => {
     if (!venueCart) return;
@@ -1668,119 +1517,6 @@ export default function POSPage() {
       setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || 'Cash sale failed. Please try again.');
     }
   }, [venueHubId, venueCart, cart.length, cashReceived, cartTotal, venueBoothToken]);
-
-  // ─── Venue mode: Stripe QR checkout (S1178 follow-up, Task 3, 2026-07-31) ─────────────
-  // Patrick: "the same as what's already there for QR ... they're both already built,
-  // just reuse them." The register side of this reuses createBoothCartQrSetupIntent
-  // (already built for exactly this multi-vendor-split purpose) + the SAME
-  // generate/display/poll shape the non-venue paymentLink* flow above already uses.
-  // The shopper's own phone loads pages/pay/[setupIntentClientSecretToken].tsx, which
-  // reuses PosManualCard's Stripe Elements card form (in its new setup-intent mode) to
-  // call stripe.confirmCardSetup -- this register side never touches the card itself.
-  const handleVenueGenerateQr = useCallback(async () => {
-    if (!venueCart || !cart.length) return;
-    setVenueQrStatus('generating');
-    setErrorMessage('');
-    setVenueCheckoutFailure(null);
-    try {
-      const res = await api.post<{ clientSecret: string; setupIntentId: string }>(
-        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/qr/setup-intent`,
-        {},
-        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
-      );
-      const { clientSecret, setupIntentId } = res.data;
-      setVenueQrClientSecret(clientSecret);
-      setVenueQrSetupIntentId(setupIntentId);
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      setVenueQrUrl(`${origin}/pay/${encodeURIComponent(clientSecret)}?amount=${cartTotal.toFixed(2)}`);
-      setVenueQrStatus('waiting');
-    } catch (err: any) {
-      console.error('[pos] Venue QR setup-intent failed:', err);
-      setVenueQrStatus('idle');
-      setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to start QR checkout.');
-    }
-  }, [venueHubId, venueCart, cart.length, cartTotal, venueBoothToken]);
-
-  const handleVenueQrReset = useCallback(() => {
-    setVenueQrStatus('idle');
-    setVenueQrClientSecret('');
-    setVenueQrSetupIntentId('');
-    setVenueQrUrl('');
-  }, []);
-
-  // Once the shopper's phone confirms the SetupIntent (detected by the poll below),
-  // clone the resulting PaymentMethod into every represented booth's account
-  // (authorizeBoothCartQrLegs) and capture through the SAME shared /capture endpoint
-  // the Terminal rail uses -- cash is the only rail that skips this authorize/capture
-  // split (Task 2). Whole-cart-fail on any error, same policy as startVenueCheckout.
-  const finishVenueQrCheckout = useCallback(async () => {
-    if (!venueCart) return;
-    setVenueCapturing(true);
-    setVenueCheckoutFailure(null);
-    try {
-      await api.post(
-        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/qr/authorize`,
-        { setupIntentId: venueQrSetupIntentId },
-        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
-      );
-      await api.post(
-        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/capture`,
-        {},
-        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
-      );
-      setSuccessMessage(`✅ Venue sale of $${cartTotal.toFixed(2)} accepted via QR.`);
-      setPaymentStatus('success');
-      clearCart();
-      setVenueCart(null);
-      // Cart-on-load UX trap fix (2026-09-06): no auto-start effect left to reset a guard
-      // ref for -- the next sale's cart is created lazily on the next add-item call.
-    } catch (err: any) {
-      console.error('[pos] Venue QR finish failed:', err);
-      await cancelVenueCart();
-      setPaymentStatus('error');
-      setVenueCheckoutFailure(
-        `${err?.response?.data?.error || err?.response?.data?.message || err?.message || 'The QR payment could not be finished.'} This cart is closing.`
-      );
-    } finally {
-      setVenueCapturing(false);
-      handleVenueQrReset();
-    }
-  }, [venueHubId, venueCart, venueQrSetupIntentId, cartTotal, cancelVenueCart, venueBoothToken, handleVenueQrReset]);
-
-  // Poll Stripe directly for the SetupIntent's status -- same 3s interval the
-  // non-venue paymentLink* QR flow already uses (see "Payment link polling" below).
-  // No new backend status endpoint needed: the clientSecret already lets the browser
-  // ask Stripe itself, same as any other Stripe.js client-side confirmation flow.
-  useEffect(() => {
-    if (venueQrStatus !== 'waiting' || !venueQrClientSecret) return;
-    let cancelled = false;
-    const interval = setInterval(async () => {
-      try {
-        const stripe = await getStripePromise();
-        if (!stripe || cancelled) return;
-        const { setupIntent } = await stripe.retrieveSetupIntent(venueQrClientSecret);
-        if (cancelled) return;
-        if (setupIntent?.status === 'succeeded') {
-          clearInterval(interval);
-          setVenueQrStatus('confirmed');
-        }
-      } catch (err) {
-        console.error('[pos] Venue QR poll error:', err);
-      }
-    }, 3000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [venueQrStatus, venueQrClientSecret]);
-
-  // Fire the authorize+capture sequence exactly once, the instant the poll above
-  // detects the shopper finished on their phone.
-  useEffect(() => {
-    if (venueQrStatus !== 'confirmed') return;
-    finishVenueQrCheckout();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [venueQrStatus]);
 
   // ─── Venue mode: Square QR checkout (vendor-booth-cart-checkout dispatch, 2026-09-07) ──
   // Mirrors handleVenueGenerateQr/finishVenueQrCheckout above exactly in shape; only the
@@ -1991,89 +1727,9 @@ export default function POSPage() {
       await startVenueCheckout();
       return;
     }
-    // Terminal card flow (payment-intent / capture endpoints, incl. the split cashAmountCents
-    // param) is only reachable while the reader flag is on. terminalRef is also null otherwise.
-    if (!ENABLE_STRIPE_TERMINAL_CARD_READER) return;
-    if (!cart.length || !terminalRef.current) return;
-    setPaymentStatus('creating');
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    try {
-      const items = cart.map(c => ({
-        ...(c.itemId ? { itemId: c.itemId } : {}),
-        amount: c.amount,
-        label: c.title,
-      }));
-
-      // Idempotency guard (double-tap / retry): reuse the same token across retries of this
-      // exact cart; a fresh token is only issued once the cart actually changes or a prior
-      // attempt is explicitly cancelled (see the ref's declaration comment above).
-      if (!clientTransactionIdRef.current) {
-        clientTransactionIdRef.current = generateClientTransactionId();
-      }
-      const clientTransactionId = clientTransactionIdRef.current;
-
-      // Calculate split payment amounts
-      const totalAmountCents = Math.round(cartTotal * 100);
-      const cashReceivedCents = Math.round(cashReceived * 100);
-      const remainingCents = cashReceivedCents > 0 && cashReceivedCents < totalAmountCents
-        ? totalAmountCents - cashReceivedCents
-        : 0;
-
-      const piRes = await api.post<{
-        paymentIntentId: string;
-        clientSecret: string;
-        purchaseIds: string[];
-        totalAmount: number;
-        platformFee: number;
-      }>('/stripe/terminal/payment-intent', {
-        items, // raw, undiscounted per-item amounts -- backend applies the discount itself
-        saleId: selectedSaleId,
-        clientTransactionId,
-        ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
-        ...(remainingCents > 0 ? { cashAmountCents: cashReceivedCents } : {}),
-        // POS Cashier Discount Permission (2026-08-28)
-        ...(discountAmount > 0 ? {
-          discountType,
-          discountValue: discountValueToSubmit,
-          ...(discountReasonNote.trim() ? { discountReasonNote: discountReasonNote.trim() } : {}),
-        } : {}),
-      });
-
-      const { paymentIntentId: piId, clientSecret } = piRes.data;
-      setPaymentIntentId(piId);
-
-      setPaymentStatus('waiting_for_card');
-      const collectResult = await terminalRef.current.collectPaymentMethod(clientSecret);
-      if ('error' in collectResult) {
-        throw new Error(collectResult.error.message);
-      }
-
-      setPaymentStatus('processing');
-      const processResult = await terminalRef.current.processPayment(collectResult.paymentIntent);
-      if ('error' in processResult) {
-        throw new Error(processResult.error.message);
-      }
-
-      await api.post('/stripe/terminal/capture', { paymentIntentId: piId });
-
-      setPaymentStatus('success');
-      const chargeAmount = remainingCents > 0 ? (remainingCents / 100).toFixed(2) : cartTotal.toFixed(2);
-      setSuccessMessage(
-        `✅ Card payment of $${chargeAmount} accepted${buyerEmail.trim() ? `. Receipt sent to ${buyerEmail.trim()}` : ''}.`
-      );
-
-      showSurvey('OG-3');
-      clearCart();
-    } catch (err: any) {
-      console.error('[pos] Payment error:', err);
-      setPaymentStatus('error');
-      // Surface the specific backend message (e.g. "Item X is not available") when present
-      const message =
-        err?.response?.data?.message ?? err?.message ?? 'Payment failed. Please try again.';
-      setErrorMessage(message);
-    }
+    // The Stripe Terminal card-reader flow was removed 2026-09-30 (Stripe platform account is
+    // permanently closed). Non-venue card charges go through manual card entry / QR / Send to
+    // Phone; there is nothing to do here for the reader flow.
   };
 
   const handleCashPayment = async () => {
@@ -3729,24 +3385,6 @@ export default function POSPage() {
                 >
                   <span>💵</span><span className="text-xs">Cash</span>
                 </button>
-                {/* Venue-mode Stripe QR selector gated off (2026-09-10 stopgap, see
-                    ENABLE_VENUE_STRIPE_QR above) -- Square QR below is the only venue QR
-                    option while this stays false; nothing deleted, just unreachable. */}
-                {ENABLE_VENUE_STRIPE_QR && (
-                  <button
-                    onClick={() => setPaymentMode('qr')}
-                    disabled={cart.length === 0}
-                    className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
-                      paymentMode === 'qr'
-                        ? 'bg-sage-700 text-white'
-                        : cart.length === 0
-                        ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
-                        : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    <span>📲</span><span className="text-xs">QR. Scan to pay</span>
-                  </button>
-                )}
                 <button
                   onClick={() => setPaymentMode('square_qr')}
                   disabled={cart.length === 0}
@@ -3832,59 +3470,6 @@ export default function POSPage() {
                     {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
                       `💵 Record Cash Sale $${cartTotal.toFixed(2)}`}
                   </button>
-                </>
-              ) : (paymentMode === 'qr' && ENABLE_VENUE_STRIPE_QR) ? (
-                <>
-                  {/* Register-side QR display -- same generate/display/poll shape as
-                      the non-venue paymentLink* QR flow (PosPaymentQr) further down,
-                      using the same react-qr-code component already imported in this
-                      file (see the Venmo QR block below for its other existing use).
-                      Gated by ENABLE_VENUE_STRIPE_QR (2026-09-10 stopgap) as a safety
-                      net -- the selector button above no longer sets paymentMode to
-                      'qr' in venue mode, so this branch is unreachable while the flag
-                      is false, but the condition stays explicit rather than relying on
-                      that alone. */}
-                  {(venueQrStatus === 'idle') && (
-                    <button
-                      onClick={handleVenueGenerateQr}
-                      disabled={!venueCart || cart.length === 0}
-                      className="w-full py-4 rounded-xl font-semibold transition bg-sage-700 text-white hover:bg-sage-800 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      📲 Generate QR to pay ${cartTotal.toFixed(2)}
-                    </button>
-                  )}
-                  {venueQrStatus === 'generating' && (
-                    <button disabled className="w-full py-4 rounded-xl font-semibold bg-sage-700 text-white opacity-70">
-                      Generating…
-                    </button>
-                  )}
-                  {venueQrStatus === 'waiting' && venueQrUrl && (
-                    <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 space-y-3">
-                      <p className="text-xs text-warm-600 dark:text-warm-400 text-center">
-                        Total: ${cartTotal.toFixed(2)}
-                      </p>
-                      <div className="flex justify-center bg-white p-3 rounded-lg">
-                        <QRCode value={venueQrUrl} size={200} />
-                      </div>
-                      <p className="text-center text-xs text-warm-600 dark:text-warm-400">
-                        Have the shopper scan this QR with their phone camera and enter their card there.
-                      </p>
-                      <p className="text-center text-sm text-warm-600 dark:text-warm-400">
-                        ⏳ Waiting for payment…
-                      </p>
-                      <button
-                        onClick={handleVenueQrReset}
-                        className="w-full py-2 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-600 dark:text-warm-400 text-sm hover:bg-warm-50 dark:hover:bg-gray-700 transition"
-                      >
-                        Cancel &amp; Regenerate
-                      </button>
-                    </div>
-                  )}
-                  {(venueQrStatus === 'confirmed' || venueCapturing) && (
-                    <button disabled className="w-full py-4 rounded-xl font-semibold bg-sage-700 text-white opacity-70">
-                      Finishing sale…
-                    </button>
-                  )}
                 </>
               ) : paymentMode === 'square_qr' ? (
                 <>
@@ -4136,34 +3721,32 @@ export default function POSPage() {
 
       {/* Payment Method: Manual Card Entry */}
       {!venueHubId && ENABLE_MANUAL_CARD_ENTRY && paymentMode === 'manual_card' && cart.length > 0 && (
-        <Elements stripe={getStripePromise()}>
-          <PosManualCard
-            cartTotal={cartTotal}
-            cart={cart}
-            selectedSaleId={selectedSaleId}
-            buyerEmail={buyerEmail}
-            squareLocationId={organizerSquareLocationId}
-            discountAmount={discountAmount}
-            discountType={discountType}
-            discountValue={discountValueToSubmit}
-            discountReasonNote={discountReasonNote}
-            // Split tender (2026-09-29, P1 double-collect fix): the cash already taken is passed
-            // through so the card is charged the REMAINDER, never the full cart on top of it.
-            cashAmountCents={hasPartialCash ? cashCents : 0}
-            cashCoversTotal={cashCoversTotal}
-            platformFee={posFee}
-            minCardChargeCents={minCardChargeCents}
-            onUseCash={() => setPaymentMode('cash')}
-            onClearCash={() => setCashNumpadValue('')}
-            onSuccess={(message) => {
-              showToast(message, 'success');
-              handleNewTransaction();
-            }}
-            onError={(message) => {
-              showToast(message, 'error');
-            }}
-          />
-        </Elements>
+        <PosManualCard
+          cartTotal={cartTotal}
+          cart={cart}
+          selectedSaleId={selectedSaleId}
+          buyerEmail={buyerEmail}
+          squareLocationId={organizerSquareLocationId}
+          discountAmount={discountAmount}
+          discountType={discountType}
+          discountValue={discountValueToSubmit}
+          discountReasonNote={discountReasonNote}
+          // Split tender (2026-09-29, P1 double-collect fix): the cash already taken is passed
+          // through so the card is charged the REMAINDER, never the full cart on top of it.
+          cashAmountCents={hasPartialCash ? cashCents : 0}
+          cashCoversTotal={cashCoversTotal}
+          platformFee={posFee}
+          minCardChargeCents={minCardChargeCents}
+          onUseCash={() => setPaymentMode('cash')}
+          onClearCash={() => setCashNumpadValue('')}
+          onSuccess={(message) => {
+            showToast(message, 'success');
+            handleNewTransaction();
+          }}
+          onError={(message) => {
+            showToast(message, 'error');
+          }}
+        />
       )}
 
       {/* Payment Method: QR Code */}

@@ -5,7 +5,6 @@ import { Decimal } from '@prisma/client/runtime/library';
 // S-STRIPE-SQUARE-ONBOARDING-GUARD (2026-09-09): createConnectAccount no longer
 // used in this file -- the genuinely-new-vendor branch now blocks new-Stripe-
 // identity creation instead (Stripe platform account closed).
-import { createOnboardingLink, getAccountStatus } from '../services/stripeConnectService';
 // Square migration (2026-09-07, Wave 1 #2): vendor-booth-operator's Square-side onboarding.
 // buildSquareAuthorizeUrl/resolveExistingSquareIdentityForUser mirror the existing Stripe
 // reuse-resolution pattern below (see startVendorBoothStripeOnboarding) -- the actual OAuth
@@ -908,79 +907,26 @@ export const listMyVendorBooths = async (req: AuthRequest, res: Response) => {
 /**
  * POST /api/vendor-booth/:vendorBoothId/stripe/onboard
  * Auth: booth owner only (req.user.id === VendorBooth.userId).
+ *
+ * Stripe platform account permanently closed (2026-09-30): no Stripe onboarding link, account read
+ * or account link can be made for a booth any more, so this no longer touches
+ * services/stripeConnectService. It keeps the auth/ownership checks and answers with the same
+ * STRIPE_CLOSED_USE_SQUARE 409 shape the new-vendor branch already used.
  */
 export const startVendorBoothStripeOnboarding = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
     const { vendorBoothId } = req.params;
-    const { returnUrl, refreshUrl } = req.body;
 
     const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId } });
     if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
 
-    let accountId = booth.stripeAccountId;
-
-    // ADR-021 (2026-07-08, Patrick-flagged real finding, not a hypothetical):
-    // a booth must NEVER force a real business through Stripe onboarding a
-    // second time when the claiming user already has a working Stripe Connect
-    // account as an Organizer. Resolve-existing-first, create-new only as a
-    // last resort. This check runs even if `accountId` is already set on the
-    // booth, so a booth stuck pointing at an orphaned/never-onboarded account
-    // (e.g. a stale test account) gets corrected the next time onboarding is
-    // attempted, instead of forever re-onboarding the wrong account.
-    if (!accountId) {
-      const organizer = await prisma.organizer.findUnique({ where: { userId: booth.userId! } });
-      if (organizer?.stripeConnectId) {
-        // Read the REAL current state from Stripe -- never assume/default a
-        // reused account's type or onboarded status.
-        const liveStatus = await getAccountStatus(organizer.stripeConnectId);
-        accountId = organizer.stripeConnectId;
-        await prisma.vendorBooth.update({
-          where: { id: booth.id },
-          data: {
-            stripeAccountId: accountId,
-            stripeAccountType: liveStatus.accountType || 'express',
-            stripeOnboarded: liveStatus.chargesEnabled && liveStatus.payoutsEnabled,
-          },
-        });
-        // Reusing an already-working Connect account means this booth just became
-        // payment-ready in one shot, with no return trip through Stripe's hosted flow --
-        // so the organizer notification fires here too, not only in the status poll below.
-        if (liveStatus.chargesEnabled && liveStatus.payoutsEnabled) {
-          notifyOrganizerBoothStripeConnected(booth.id).catch(err =>
-            console.warn('[booth-lifecycle] Stripe notification failed for booth', booth.id, err)
-          );
-        }
-
-        // Already has a real, existing Stripe identity -- no onboarding
-        // redirect needed. The frontend should show "linked to your existing
-        // account" rather than sending them through Stripe's hosted flow again.
-        return res.status(200).json({ linkedExistingAccount: true, chargesEnabled: liveStatus.chargesEnabled, payoutsEnabled: liveStatus.payoutsEnabled });
-      }
-
-      // No existing Organizer/Stripe identity found -- genuinely new vendor.
-      // S-STRIPE-SQUARE-ONBOARDING-GUARD (2026-09-09): Stripe's platform account is
-      // now PERMANENTLY closed. Previously (ADR-020/ADR-021), a genuinely new vendor
-      // reaching this point got a brand-new Stripe Standard account created here --
-      // that call now hard-fails 100% of the time. Per the Square changeover decision
-      // (2026-09-09), no NEW Stripe identity may be created for a booth with no
-      // existing one -- block and point the caller at the already-live Square
-      // vendor-booth onboarding endpoint instead. The reuse-existing-identity branch
-      // above (a claiming user who already has a working Stripe Connect account as an
-      // Organizer) is untouched.
-      return res.status(409).json({
-        error: 'Stripe is no longer available for new vendor booth payment accounts. Please connect with Square instead.',
-        code: 'STRIPE_CLOSED_USE_SQUARE',
-        squareOnboardingUrl: `/api/vendor-booth/${vendorBoothId}/square/onboard`,
-      });
-    }
-
-    const defaultReturn = `${process.env.FRONTEND_URL || 'https://finda.sale'}/vendor-booth/${booth.boothToken}?onboarding=complete`;
-    const defaultRefresh = `${process.env.FRONTEND_URL || 'https://finda.sale'}/vendor-booth/${booth.boothToken}?onboarding=refresh`;
-    const url = await createOnboardingLink(accountId, returnUrl || defaultReturn, refreshUrl || defaultRefresh);
-
-    return res.status(200).json({ onboardingUrl: url });
+    return res.status(409).json({
+      error: 'Stripe is no longer available for vendor booth payment accounts. Please connect with Square instead.',
+      code: 'STRIPE_CLOSED_USE_SQUARE',
+      squareOnboardingUrl: `/api/vendor-booth/${vendorBoothId}/square/onboard`,
+    });
   } catch (error) {
     console.error('[startVendorBoothStripeOnboarding] Error:', error);
     return res.status(500).json({ error: 'Failed to start Stripe onboarding' });
@@ -990,6 +936,11 @@ export const startVendorBoothStripeOnboarding = async (req: AuthRequest, res: Re
 /**
  * GET /api/vendor-booth/:vendorBoothId/stripe/status
  * Auth: booth owner only.
+ *
+ * Stripe platform account permanently closed (2026-09-30): no live Stripe read is possible, so this
+ * reports the booth's persisted state only (no API call, no DB write, no notification). Response
+ * keys are unchanged (stripeOnboarded, payoutsEnabled, status); payoutsEnabled is always false
+ * because a Stripe-connected booth cannot be paid out through Stripe any more.
  */
 export const getVendorBoothStripeStatus = async (req: AuthRequest, res: Response) => {
   try {
@@ -1004,32 +955,11 @@ export const getVendorBoothStripeStatus = async (req: AuthRequest, res: Response
       return res.status(200).json({ stripeOnboarded: false, payoutsEnabled: false, status: 'NOT_STARTED' });
     }
 
-    const status = await getAccountStatus(booth.stripeAccountId);
-    if (status.chargesEnabled !== booth.stripeOnboarded) {
-      await prisma.vendorBooth.update({ where: { id: booth.id }, data: { stripeOnboarded: status.chargesEnabled } });
-
-      // Only on the false -> true edge. This endpoint is polled by the vendor booth page
-      // on every load, and stripeOnboarded can flap both directions, so the transition
-      // check here plus the stripeNotifiedAt stamp in the service are BOTH required to
-      // keep this from turning into a repeating alert.
-      if (status.chargesEnabled) {
-        notifyOrganizerBoothStripeConnected(booth.id).catch(err =>
-          console.warn('[booth-lifecycle] Stripe notification failed for booth', booth.id, err)
-        );
-      }
-    }
-
-    // `stripeOnboarded` stays charges_enabled ONLY, unchanged: it is the same value
-    // persisted above and the same value the organizer's Vendor Booths table reads, so
-    // its meaning must not shift here. `payoutsEnabled` is ADDITIVE (2026-07-29) --
-    // getAccountStatus (stripeConnectService.ts :229) has always computed it and this
-    // handler was discarding it, which made a half-onboarded account (charges on, payouts
-    // still blocked) indistinguishable from a finished one. The vendor booth page needs
-    // both to tell "you can be paid" from "you cannot be paid yet".
     return res.status(200).json({
-      stripeOnboarded: status.chargesEnabled,
-      payoutsEnabled: status.payoutsEnabled,
-      status: status.status,
+      stripeOnboarded: booth.stripeOnboarded,
+      payoutsEnabled: false,
+      status: 'STRIPE_CLOSED',
+      code: 'STRIPE_CLOSED_USE_SQUARE',
     });
   } catch (error) {
     console.error('[getVendorBoothStripeStatus] Error:', error);

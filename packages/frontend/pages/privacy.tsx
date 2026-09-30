@@ -30,15 +30,14 @@ const PrivacyPage = () => {
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               When you register, we collect your name, email address, and password (stored as a one-way hash). Organizers
               additionally provide business name, phone number, and payout information required by their connected
-              payment processor (currently Stripe Connect or Square, depending on which processor the Organizer
-              uses).
+              payment processor (currently Square, and additional payment processors we may add).
             </p>
 
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Transaction Information</h3>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               We record purchase history, bid history, and payout records. Payment card details are never stored on our
-              servers. They are transmitted directly to the applicable payment processor (Stripe or Square) and
-              handled under that processor's own PCI-compliant infrastructure.
+              servers. They are transmitted directly to the applicable payment processor (currently Square) and
+              handled under that processor's own PCI-compliant infrastructure. We retain payment processor identifiers (such as transaction IDs and card fingerprints used for fraud prevention) for records and dispute purposes.{/* [ATTORNEY REVIEW: Is retaining processor identifiers and card fingerprints for the 7-year records period acceptable, and does it need separate disclosure or a shorter period?] */}
             </p>
 
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Location Information</h3>
@@ -95,14 +94,15 @@ const PrivacyPage = () => {
             </p>
             <ul className="list-disc list-inside text-warm-700 dark:text-warm-300 space-y-2">
               <li>
-                <strong>Stripe:</strong> For Organizers and transactions connected to Stripe, payment information is
-                shared with Stripe to process transactions. Stripe may collect additional information during Stripe
-                Connect onboarding per their own Privacy Policy.
+                <strong>Square:</strong> Square, Inc. is our current payment processor. Payment information is
+                shared with Square to process transactions and payouts. Square may collect additional
+                information during account verification per its own Privacy Notice. We may add other payment
+                processors in the future and will update this policy when we do.
               </li>
               <li>
-                <strong>Square:</strong> For Organizers and transactions connected to Square, payment information is
-                shared with Square, Inc. to process transactions and payouts. Square may collect additional
-                information during account verification per its own Privacy Notice.
+                <strong>Stripe (historical):</strong> Stripe processed payments on FindA.Sale before it closed our
+                account. Information from those earlier transactions was shared with Stripe under its own Privacy
+                Policy and remains subject to it.
               </li>
               <li>
                 <strong>Cloudinary:</strong> Item photos are stored and served via Cloudinary's CDN.
@@ -193,7 +193,7 @@ const PrivacyPage = () => {
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">8. Third-Party Links &amp; Affiliate Disclosure</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               The Platform may contain links to third-party websites (e.g., your connected payment processor's
-              dashboard, such as Stripe or Square). We are not responsible for the privacy practices of those sites
+              dashboard, such as Square). We are not responsible for the privacy practices of those sites
               and encourage you to review their privacy policies.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">

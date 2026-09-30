@@ -121,7 +121,7 @@ export async function sendVendorBoothInviteEmail(boothId: string): Promise<Booth
         <p><strong>Once you claim the booth you can:</strong></p>
         <ul>
           <li>See the fees for this booth in one place</li>
-          <li>Connect your payment processor (Stripe or Square) so card payments from your booth go straight to you</li>
+          <li>Connect your Square account so card payments from your booth go straight to you</li>
           <li>See the total that sold at your booth in each period</li>
           ${rentBullet}
         </ul>

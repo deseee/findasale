@@ -80,9 +80,6 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // Stripe — excluded entirely from SW; browser fetches directly.
-    // NetworkOnly can still reject via 'no-response' if the SW-context fetch fails
-    // (e.g. CORS restrictions on clover/stripe.js). Best to not intercept at all.
     // ngrok tunnel — network only; SW must not cache or retry these.
     // axios adds ngrok-skip-browser-warning at the page level, but if the
     // tunnel is down the SW has no fallback entry and emits "no-response".
@@ -135,14 +132,14 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // HTML pages — network first (Stripe + eBay CDN excluded so SW never intercepts them)
+    // HTML pages — network first (eBay CDN excluded so SW never intercepts it)
     // i.ebayimg.com excluded: eBay CDN has no CORS headers; any SW fetch() fails.
     // findasale-image-proxy.findasale.workers.dev excluded: CF Worker proxies ESN/eBay images;
     //   SW fetch() fails silently for this domain (same pattern as eBay CDN).
     //   Exclusion lets the browser handle these img requests natively — which works.
     // Unmatched URLs bypass SW entirely and load natively in browser no-cors mode.
     {
-      urlPattern: /^https?:\/\/(?!(?:js|hooks|m|api)\.stripe\.com|i\.ebayimg\.com|findasale-image-proxy\.findasale\.workers\.dev)[^/]+\/(?!api\/).*/i,
+      urlPattern: /^https?:\/\/(?!i\.ebayimg\.com|findasale-image-proxy\.findasale\.workers\.dev)[^/]+\/(?!api\/).*/i,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'pages',
@@ -378,7 +375,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.googletagmanager.com https://web.squarecdn.com https://sandbox.web.squarecdn.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://web.squarecdn.com https://sandbox.web.squarecdn.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://web.squarecdn.com https://sandbox.web.squarecdn.com",
               "font-src 'self' https://fonts.gstatic.com https://unpkg.com https://square-fonts-production-f.squarecdn.com https://d1g145x70srn7h.cloudfront.net",
               // raw.githubusercontent.com: Leaflet colored marker icons (green/amber/gray/orange)
@@ -391,9 +388,9 @@ const nextConfig = {
               // blocking Cloudinary-hosted video (e.g. admin video-pipeline review page) with a
               // generic "No video with supported format and MIME type found" browser error.
               "media-src 'self' https://res.cloudinary.com https://*.cloudinary.com",
-              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://terminal-simulator.stripe.com wss://terminal-simulator.stripe.com wss://ws.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://raw.githubusercontent.com https://res.cloudinary.com https://*.cloudinary.com http://localhost:5000 ${apiOrigin} ${wsOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com`,
+              `connect-src 'self' https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://raw.githubusercontent.com https://res.cloudinary.com https://*.cloudinary.com http://localhost:5000 ${apiOrigin} ${wsOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com`,
               // S486: 'self' added so /video can embed /organizer-video-ad.html in same-origin iframe
-              "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://m.stripe.network https://web.squarecdn.com https://sandbox.web.squarecdn.com",
+              "frame-src 'self' https://web.squarecdn.com https://sandbox.web.squarecdn.com",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
             ].join('; '),

@@ -1505,6 +1505,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       posRequest.processor === 'SQUARE'
         ? { processor: 'SQUARE' as const, squarePaymentId: externalPaymentId }
         : {
+            processor: 'STRIPE' as const,
             // PI ID is @unique — use per-item suffix to allow multiple items per PI
             stripePaymentIntentId: itemId ? `${externalPaymentId}_${itemId}` : externalPaymentId,
             chargeType: 'DIRECT' as const,
@@ -1752,6 +1753,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
                 ...(posRequest.processor === 'SQUARE'
                   ? { processor: 'SQUARE' as const, squarePaymentId: externalPaymentId }
                   : {
+                      processor: 'STRIPE' as const,
                       stripePaymentIntentId: fulfillItems.length === 0 ? externalPaymentId : `${externalPaymentId}_misc`,
                       chargeType: 'DIRECT' as const,
                       stripeAccountId: organizerProfile.stripeConnectId,

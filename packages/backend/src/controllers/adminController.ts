@@ -2581,7 +2581,7 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
       ? (rawReason as 'duplicate' | 'fraudulent' | 'requested_by_customer')
       : 'requested_by_customer';
 
-    const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string; cashPortionToRefundByHand?: number; cashRefundMessage?: string | null; surchargeRefundedAmount?: number }> = [];
+    const results: Array<{ purchaseId: string; success: boolean; refundedAmount?: number; error?: string; code?: string; cashPortionToRefundByHand?: number; cashRefundMessage?: string | null; surchargeRefundedAmount?: number }> = [];
 
     // Sequential loop, intentionally not parallelized -- see file comment above.
     for (const purchaseId of purchaseIds) {
@@ -2611,6 +2611,9 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         // RefundError class (see squareRefundService.ts), so the catch block below is unchanged.
         // Explicit union (type-only): without it TS collapses the two branches to the narrower Stripe result and the
         // 'cashPortionToRefundByHand' in result checks below narrow to unknown.
+        // Processor routing (2026-09-30): SQUARE -> Square choke point; everything else -> executeVerifiedRefund,
+        // which explicitly handles STRIPE (legacy, structured STRIPE_CLOSED_MANUAL_REFUND_REQUIRED on failure),
+        // CASH/MANUAL (record only) and FINIX (structured not-supported error).
         const result = (purchase.processor === 'SQUARE'
           ? await executeVerifiedSquareRefund(purchaseId, bulkRefundAmount, 'admin', reason)
           : await executeVerifiedRefund(purchaseId, bulkRefundAmount, 'admin', reason)) as
@@ -2653,7 +2656,9 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         if (err instanceof RefundError) {
           // Expected, per-item failure (already REFUNDED/FAILED, no payment intent, 30-day
           // window, etc.) -- report it and keep processing the rest of the batch.
-          results.push({ purchaseId, success: false, error: err.message });
+          // details.code carries the structured reason (e.g. STRIPE_CLOSED_MANUAL_REFUND_REQUIRED, FINIX_REFUND_NOT_SUPPORTED).
+          const errCode = typeof err.details?.code === 'string' ? (err.details.code as string) : undefined;
+          results.push({ purchaseId, success: false, error: err.message, ...(errCode ? { code: errCode } : {}) });
         } else {
           console.error(`[admin bulk-refund] Unexpected error refunding purchase ${purchaseId}:`, err);
           results.push({ purchaseId, success: false, error: err instanceof Error ? err.message : 'Unexpected error processing refund' });

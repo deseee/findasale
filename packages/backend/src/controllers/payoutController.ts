@@ -230,7 +230,7 @@ export interface EarningsBreakdownItem {
   // changeover keeps its historically-accurate Stripe label forever, even after the organizer
   // moves to Square). `processorFee` is computed at that row's own processor's published rate.
   // `processorFeeLabel` is the human-readable name for UI display ("Stripe" | "Square").
-  processor: string; // 'STRIPE' | 'SQUARE'
+  processor: string; // 'STRIPE' (legacy) | 'SQUARE' | 'FINIX' | 'CASH'
   processorFee: number;
   processorFeeLabel: string;
   netPayout: number;
@@ -353,16 +353,25 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
       // charged on what the card was actually run for (the premium-inclusive total), with the
       // rate/fixed-fee picked per THIS ROW's own processor (p.processor), never the organizer's
       // current processor -- see the processor-fee mislabeling fix note on EarningsBreakdownItem.
-      const rowProcessor = p.processor === 'SQUARE' ? 'SQUARE' : 'STRIPE';
+      // Explicit label mapping (2026-09-30): SQUARE / STRIPE (legacy) / FINIX / CASH (MANUAL folds into CASH).
+      // Unknown or missing values keep the historical 'STRIPE' label (the schema default).
+      const rawRowProcessor = String(p.processor ?? 'STRIPE').toUpperCase();
+      const rowProcessor: 'SQUARE' | 'STRIPE' | 'FINIX' | 'CASH' =
+        rawRowProcessor === 'SQUARE' ? 'SQUARE'
+        : rawRowProcessor === 'FINIX' ? 'FINIX'
+        : rawRowProcessor === 'CASH' || rawRowProcessor === 'MANUAL' ? 'CASH'
+        : 'STRIPE';
       const inclusiveRow = isInclusiveFeeEra(p.createdAt);
       const processorFee = inclusiveRow
         ? 0
-        : parseFloat(
-            (rowProcessor === 'SQUARE'
-              ? p.amount * SQUARE_RATE + SQUARE_FIXED
-              : p.amount * STRIPE_RATE + STRIPE_FIXED
-            ).toFixed(2)
-          );
+        : rowProcessor === 'CASH' || rowProcessor === 'FINIX'
+          ? 0 // cash has no card fee; Finix rows only exist after the inclusive-fee cutover
+          : parseFloat(
+              (rowProcessor === 'SQUARE'
+                ? p.amount * SQUARE_RATE + SQUARE_FIXED
+                : p.amount * STRIPE_RATE + STRIPE_FIXED
+              ).toFixed(2)
+            );
       const netPayout = parseFloat((salePrice - platformFee - processorFee).toFixed(2));
 
       return {
@@ -378,7 +387,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         platformFee,
         processor: rowProcessor,
         processorFee,
-        processorFeeLabel: inclusiveRow ? 'Included in platform fee' : rowProcessor === 'SQUARE' ? 'Square' : 'Stripe',
+        processorFeeLabel: inclusiveRow ? 'Included in platform fee' : rowProcessor === 'SQUARE' ? 'Square' : rowProcessor === 'FINIX' ? 'Finix' : rowProcessor === 'CASH' ? 'Cash' : 'Stripe',
         netPayout,
         // ADR-110 Decision Flag 3: `p` is a full Purchase row (no `select` on the base
         // model above, same "comes along for free" pattern the fee-snapshot columns

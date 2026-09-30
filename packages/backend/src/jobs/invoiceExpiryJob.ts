@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
+import { isStripePlatformClosed } from '../utils/stripeBootConfig'; // 2026-09-30: Stripe platform closed, Stripe-session invoices cannot be verified
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): STRANDED-PAID reconcile backstop
 import { releaseCrewInvasionRedemptionsForInvoice } from '../services/crewInvasionRedemptionService'; // Crew Invasion per-member redemption (2026-09-29): an expired UNPAID discounted invoice gives the member's discount back
 import { prepareSquareInvoiceForRelease, recordSquarePaidInvoiceFromGate } from '../services/holdInvoiceSquareRelease'; // 2026-09-29 money review P0-2: a Square invoice is checked for payment and its payment link cancelled BEFORE it is expired
@@ -203,6 +204,11 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
     let strandedPaidCount = 0;
     let skippedNoSession = 0;
     let squareRetryLater = 0;
+    // Stripe platform permanently closed (2026-09-30): no Stripe API call is possible, so a
+    // Stripe-session invoice is left untouched (cannot verify paid/unpaid). Square rows and the
+    // non-Stripe branches below run exactly as before.
+    const stripeClosed = isStripePlatformClosed(process.env);
+    let stripeSkippedClosed = 0;
 
     for (const invoice of candidates) {
       try {
@@ -241,6 +247,9 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
             continue;
           }
           console.log(`[invoiceExpiryJob] SQUARE-CLEAR invoice=${invoice.id} -- ${gate.detail}. Expiring.`);
+        } else if (invoice.stripeSessionId && stripeClosed) {
+          stripeSkippedClosed++;
+          continue;
         } else if (invoice.stripeSessionId) {
           // Evidence-first: ask Stripe directly rather than trusting our own
           // PENDING status (see the two confirmed gaps in the header comment).
@@ -446,6 +455,10 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
       } catch (err: any) {
         console.error(`[invoiceExpiryJob] Failed to reclaim invoice ${invoice.id} -- will retry next run:`, err?.message ?? err);
       }
+    }
+
+    if (stripeSkippedClosed > 0) {
+      console.info(`[invoiceExpiryJob] Stripe platform closed -- left ${stripeSkippedClosed} Stripe-session invoice(s) untouched (no Stripe API calls).`);
     }
 
     console.log(`[invoiceExpiryJob] Reclaimed ${reclaimed} expired invoice(s); ${strandedPaidCount} STRANDED-PAID (auto-reconciled where possible, see per-invoice logs + Sentry); skipped ${skippedNoSession} NO-SESSION (needs manual review); ${squareRetryLater} Square invoice(s) held back until Square can confirm the link is cancelled.`);

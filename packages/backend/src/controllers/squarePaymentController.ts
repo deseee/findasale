@@ -486,6 +486,10 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     // Platform Safety #102 (auth) / post-payment guest self-dealing check (S1072 Finding #4
     // shape) -- Square returns the card fingerprint SYNCHRONOUSLY, so this runs inline here
     // instead of in a webhook the way the Stripe path's guest half does.
+    // Fingerprint hygiene (2026-09-30): a card sale with no fingerprint bypasses dedup / self-dealing checks; structured warn so it is greppable.
+    if (!chargeResult.cardFingerprint) {
+      console.warn(JSON.stringify({ level: 'warn', event: 'card_sale_null_fingerprint', source: 'square_single_payment', processor: 'SQUARE', squarePaymentId: chargeResult.paymentId, purchaseId: purchase?.id ?? null, itemId: item.id }));
+    }
     if (chargeResult.cardFingerprint) {
       if (req.user) {
         try {
@@ -868,6 +872,10 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
       await releaseCashDebtClaim({ organizerId: items[0].sale!.organizerId, debtAppliedCents });
     }
 
+    // Fingerprint hygiene (2026-09-30): a card sale with no fingerprint bypasses dedup / self-dealing checks; structured warn so it is greppable.
+    if (!chargeResult.cardFingerprint) {
+      console.warn(JSON.stringify({ level: 'warn', event: 'card_sale_null_fingerprint', source: 'square_cart_payment', processor: 'SQUARE', squarePaymentId: chargeResult.paymentId, purchaseIds: createdPurchaseIds }));
+    }
     if (chargeResult.cardFingerprint) {
       try {
         const dup = await checkPaymentDuplicate(chargeResult.cardFingerprint, req.user.id);

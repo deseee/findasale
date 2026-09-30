@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
-import { getStripe } from '../utils/stripe';
+import * as Sentry from '@sentry/node';
+import { getStripe, isStripeNotConfiguredError } from '../utils/stripe';
 import { notifyVendorBoothSaleRefunded } from './vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 import { settleHubOwnerReversalForLeg } from '../controllers/vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { transactionalEmailService } from '../lib/transactionalEmailService';
@@ -260,7 +261,26 @@ export async function executeVerifiedRefund(
   // A cash purchase (or a null-stripePaymentIntentId purchase) still goes through the TOCTOU
   // claim, the REFUNDED finalize, the hold release, and the stockSold decrement below -- only
   // the actual Stripe API call is skipped for it.
-  const isCashPurchase = !purchase.stripePaymentIntentId || purchase.stripePaymentIntentId.startsWith('cash_');
+  //
+  // Explicit processor routing (2026-09-30, Stripe closed). Purchase.processor is a plain String:
+  //   SQUARE        -> never reaches here (callers route it to executeVerifiedSquareRefund).
+  //   CASH / MANUAL -> cash/manual tender, no card refund, record only (treated as isCashPurchase).
+  //   FINIX         -> Finix charges are not live yet; clear 'not yet supported' error, nothing claimed.
+  //   STRIPE (or legacy/unknown) -> legacy Stripe path; if Stripe is closed/unreachable/rejects, a
+  //                    structured STRIPE_CLOSED_MANUAL_REFUND_REQUIRED error is returned (see catch below).
+  const purchaseProcessor = String((purchase as { processor?: string | null }).processor ?? 'STRIPE').toUpperCase();
+  if (purchaseProcessor === 'FINIX') {
+    throw new RefundError(
+      'Refunds for payments taken through Finix are not supported yet. This refund cannot be sent to the card from the platform; it must be paid outside the platform for now.',
+      501,
+      { code: 'FINIX_REFUND_NOT_SUPPORTED', purchaseId, processor: 'FINIX' }
+    );
+  }
+  const isCashPurchase =
+    purchaseProcessor === 'CASH' ||
+    purchaseProcessor === 'MANUAL' ||
+    !purchase.stripePaymentIntentId ||
+    purchase.stripePaymentIntentId.startsWith('cash_');
 
   // P2-2: Verify purchase is within 30 days
   const purchaseAgeMs = Date.now() - purchase.createdAt.getTime();
@@ -415,13 +435,56 @@ export async function executeVerifiedRefund(
         ...(isDirectCharge ? { stripeAccount: purchase.stripeAccountId! } : {}),
       });
     } catch (stripeErr) {
-      // Stripe failed — revert the claim back to PAID so the caller can retry. Rethrow the
-      // ORIGINAL error unwrapped (not a RefundError) so callers' generic catch-all handling
-      // produces the same 500 response createRefund always has for a Stripe failure.
+      // Stripe failed — revert the claim back to PAID so the caller can retry. Purchase.status
+      // stays PAID (no new columns/statuses): the purchase is NOT marked refunded, so nothing
+      // downstream believes money moved.
       await prisma.purchase.updateMany({
         where: { id: purchaseId, status: 'REFUNDING' },
         data: { status: 'PAID' }
       });
+      // Stripe is permanently closed (2026-09): a not-configured key or any Stripe API/connection
+      // rejection means the original processor cannot return this money. Do not fail opaquely --
+      // alert admins and hand the caller a structured error saying the refund must be paid outside
+      // the platform. Any other (non-Stripe) error is rethrown unwrapped exactly as before.
+      const stripeErrType = (stripeErr as { type?: unknown } | null)?.type;
+      const isStripeUnavailable =
+        isStripeNotConfiguredError(stripeErr) ||
+        (typeof stripeErrType === 'string' && stripeErrType.startsWith('Stripe'));
+      if (isStripeUnavailable) {
+        const originalCode = (stripeErr as { code?: unknown } | null)?.code;
+        console.error(
+          `[executeVerifiedRefund] Stripe unavailable/rejected refund for purchase ${purchaseId} (${String(originalCode ?? stripeErrType ?? 'unknown')}); manual refund required.`,
+          stripeErr
+        );
+        try {
+          Sentry.captureException(stripeErr instanceof Error ? stripeErr : new Error(String(stripeErr)), {
+            level: 'error',
+            tags: { area: 'refund-stripe-closed-manual-required' },
+            extra: {
+              purchaseId,
+              processor: purchaseProcessor,
+              stripePaymentIntentId: purchase.stripePaymentIntentId,
+              refundAmount,
+              initiatedBy,
+              originalErrorCode: originalCode ?? null,
+              note: 'Original processor (Stripe) is closed. Refund must be paid outside the platform; purchase left PAID.',
+            },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+        throw new RefundError(
+          'The original payment processor (Stripe) is closed, so this refund cannot be sent back to the card from the platform. Pay the refund to the shopper outside the platform (for example by check or bank transfer), then record it manually.',
+          409,
+          {
+            code: 'STRIPE_CLOSED_MANUAL_REFUND_REQUIRED',
+            purchaseId,
+            processor: 'STRIPE',
+            refundAmount,
+            manualRefundRequired: true,
+          }
+        );
+      }
       throw stripeErr;
     }
   }

@@ -1086,6 +1086,11 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
         },
       });
 
+      // Fingerprint hygiene (2026-09-30): a card sale with no fingerprint bypasses dedup / self-dealing checks; structured warn so it is greppable.
+      if (!chargeResult.cardFingerprint) {
+        console.warn(JSON.stringify({ level: 'warn', event: 'card_sale_null_fingerprint', source: 'square_bounty_purchase', processor: 'SQUARE', squarePaymentId: chargeResult.paymentId, purchaseId: squarePurchase.id }));
+      }
+
       // Wave 2 (2026-09-29) Sale Passport parity: this Square bounty purchase is created PAID with no
       // other award hook (the Stripe bounty branch fires the same shared engagement call from
       // stripeController's payment_intent.succeeded BOUNTY_SUBMISSION branch, which breaks out before

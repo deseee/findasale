@@ -350,6 +350,7 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
           amount: paymentIntent.amount_received / 100,
           platformFeeAmount: (paymentIntent.application_fee_amount || 0) / 100,
           ...recoveredSnapshot,
+          processor: 'STRIPE', // explicit: never rely on the schema default (Stripe closed 2026-09)
           stripePaymentIntentId: paymentIntent.id,
           status: 'PAID',
           ...(recoveredAffiliateLinkId ? { affiliateLinkId: recoveredAffiliateLinkId } : {}),
@@ -579,6 +580,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       // report needs; inventing a rate to fill the column would be a guess.
                       ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
                       // PI ID is @unique — use per-item suffix to allow multiple items per PI
+                      processor: 'STRIPE', // explicit: never rely on the schema default (Stripe closed 2026-09)
                       stripePaymentIntentId: `${paymentIntent.id}_${item.id}`,
                       source: 'POS',
                       status: 'PAID',
@@ -663,6 +665,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       platformFeeAmount: posRequest.platformFeeCents / 100,
                       // FEE SNAPSHOT (2026-08-17): see the item loop above for why the rate is null.
                       ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
+                      processor: 'STRIPE', // explicit: never rely on the schema default (Stripe closed 2026-09)
                       stripePaymentIntentId: items.length === 0 ? paymentIntent.id : `${paymentIntent.id}_misc`,
                       source: 'POS',
                       status: 'PAID',
@@ -1854,6 +1857,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               platformFeeAmount: 9.99,
               status: 'PAID',
               saleId: paymentIntent.metadata.saleId,
+              processor: 'STRIPE', // explicit: never rely on the schema default (Stripe closed 2026-09)
               stripePaymentIntentId: paymentIntent.id,
               source: 'ALA_CARTE',
               isTestTransaction: false,
@@ -2532,6 +2536,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               platformFeeAmount: 9.99,
               status: 'PAID',
               saleId: session.metadata.saleId,
+              processor: 'STRIPE', // explicit: never rely on the schema default (Stripe closed 2026-09)
               stripePaymentIntentId: alaCartePaymentIntentId,
               source: 'ALA_CARTE',
               isTestTransaction: false,
@@ -2594,6 +2599,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       organizerAbsorbedPremium: session.metadata.feeOrganizerAbsorbedPremium === 'true',
                     }
                   : {}),
+                processor: 'STRIPE', // explicit: never rely on the schema default (Stripe closed 2026-09)
                 stripePaymentIntentId: paymentIntentId,
                 status: 'PAID',
                 chargeType: session.metadata.chargeType === 'DIRECT' ? 'DIRECT' : 'DESTINATION',
@@ -2776,6 +2782,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     ...snapshotForCommissionOnly((cartItem.price ?? 0) * cartFeeRate, cartFeeRate),
                     status: 'PAID',
                     source: 'ONLINE',
+                    processor: 'STRIPE', // explicit: never rely on the schema default (Stripe closed 2026-09)
                     stripePaymentIntentId:
                       typeof session.payment_intent === 'string'
                         ? session.payment_intent

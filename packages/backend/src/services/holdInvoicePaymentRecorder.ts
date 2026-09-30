@@ -825,6 +825,10 @@ export async function markHoldInvoicePaid(
       holdInvoice.shippingAddressLine1 && holdInvoice.shippingCity &&
       holdInvoice.shippingState && holdInvoice.shippingZip
     );
+    // Explicit Purchase.processor (never the schema default 'STRIPE'): a fully-cash-at-register invoice
+    // ('pos-cash' source / no external payment id) never touched a card processor, so its rows are 'CASH'.
+    const purchaseProcessor: string =
+      processor !== 'SQUARE' && (source === 'pos-cash' || !externalPaymentId) ? 'CASH' : processor;
     const shippingFieldsForPurchase = hasShippingAddress
       ? {
           deliveryMethod: 'SHIP',
@@ -880,7 +884,7 @@ export async function markHoldInvoicePaid(
             // established value 'POS' -- see terminalController.ts's own cash/card Purchase
             // rows, which already use 'POS').
             source: source === 'pos-cash' ? 'POS' : 'ONLINE',
-            processor,
+            processor: purchaseProcessor,
             ...(processor === 'SQUARE'
               ? { squarePaymentId: externalPaymentId }
               : { stripePaymentIntentId: externalPaymentId }),
@@ -947,7 +951,7 @@ export async function markHoldInvoicePaid(
             // established value 'POS' -- see terminalController.ts's own cash/card Purchase
             // rows, which already use 'POS').
             source: source === 'pos-cash' ? 'POS' : 'ONLINE',
-            processor,
+            processor: purchaseProcessor,
             ...(processor === 'SQUARE'
               ? { squarePaymentId: externalPaymentId }
               : { stripePaymentIntentId: externalPaymentId }),

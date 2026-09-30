@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
+import { isStripePlatformClosed } from '../utils/stripeBootConfig';
 import {
   attemptDeadInvoiceRefund,
   deadInvoiceAutoRefundEnabled,
@@ -256,6 +257,13 @@ function reportPaidDeadInvoice(params: {
 export const sweepDeadInvoicesForPayment = async (): Promise<void> => {
   if (process.env.DEAD_INVOICE_SWEEP_DISABLED === '1') {
     console.log('[deadInvoicePaidSweep] Disabled via DEAD_INVOICE_SWEEP_DISABLED=1 -- skipping run.');
+    return;
+  }
+
+  // Stripe platform is permanently closed (2026-09-30): every check below is a Stripe API call, so skip
+  // the whole run quietly. Square rows are not swept here (this job only inspects Stripe Checkout sessions).
+  if (isStripePlatformClosed(process.env)) {
+    console.info('[deadInvoicePaidSweep] Stripe platform closed -- skipping run (no Stripe API calls).');
     return;
   }
 

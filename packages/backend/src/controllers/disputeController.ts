@@ -317,6 +317,8 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
         // RefundError class (see squareRefundService.ts), so the catch block below is unchanged.
         // Explicit union (type-only): without it TS collapses the two branches to the narrower Stripe result and the
         // 'in' checks below narrow to unknown.
+        // Processor routing (2026-09-30): non-SQUARE goes through executeVerifiedRefund, which explicitly handles
+        // STRIPE (structured STRIPE_CLOSED_MANUAL_REFUND_REQUIRED when Stripe is closed), CASH/MANUAL, FINIX.
         const refundResult = (purchase.processor === 'SQUARE'
           ? await executeVerifiedSquareRefund(purchase.id, finalRefundAmount, 'dispute')
           : await executeVerifiedRefund(purchase.id, finalRefundAmount, 'dispute')) as
