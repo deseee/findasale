@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { listAdminCommissions, settleCommission } from '../services/creatorAffiliateService';
+import { sendCreatorError } from './creatorAffiliateController';
 
 // GET /api/admin/affiliate/creators
 // Returns paginated list of users who have an AffiliateCode or at least one AffiliateLink,
@@ -157,5 +159,55 @@ export const getCreators = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error fetching creators:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// GET /api/admin/affiliate/commissions?state=ALL|PENDING|APPROVED|PAID|REVERSED&page=&limit=&cursor=
+// Creator Program commission ledger with derived state and totals. Read only. The whole ledger is read
+// (no fixed row window any more); page with `page`, or pass the previous response's `nextCursor` as
+// `cursor` to continue from where it stopped. Rows flagged clawbackDue were already paid to the creator
+// and their purchase was later refunded or disputed: clawing that back is a manual process.
+export const getCommissions = async (req: AuthRequest, res: Response) => {
+  try {
+    res.json(await listAdminCommissions(req.query));
+  } catch (err) {
+    sendCreatorError(res, err, 'Failed to load commissions');
+  }
+};
+
+// POST /api/admin/affiliate/commissions/:id/mark-paid { note? }
+// Records that an admin paid this creator OUTSIDE the app. Only valid for APPROVED commissions.
+// No money moves here and no job calls this: payouts are a deliberate manual step.
+export const markCommissionPaid = async (req: AuthRequest, res: Response) => {
+  try {
+    console.info(`[admin-affiliate] mark-paid commission=${req.params.id} admin=${req.user?.id}`);
+    res.json(await settleCommission(req.params.id, 'PAID', req.body?.note));
+  } catch (err) {
+    sendCreatorError(res, err, 'Failed to mark commission paid');
+  }
+};
+
+// POST /api/admin/affiliate/commissions/:id/void { note } (note required)
+// Cancels an unpaid commission, e.g. suspected fraud found after review.
+export const voidCommission = async (req: AuthRequest, res: Response) => {
+  try {
+    console.info(`[admin-affiliate] void commission=${req.params.id} admin=${req.user?.id}`);
+    res.json(await settleCommission(req.params.id, 'VOIDED', req.body?.note));
+  } catch (err) {
+    sendCreatorError(res, err, 'Failed to void commission');
+  }
+};
+
+// POST /api/admin/affiliate/commissions/:id/record-clawback { note } (note required)
+// Records that an admin handled the clawback of a commission that was ALREADY paid to the creator and
+// whose purchase was later refunded or lost to a dispute. Nothing here takes money back: the clawback
+// itself is manual, this only stops the row showing as outstanding. NEEDS A ROUTE (routes/adminAffiliate.ts, not
+// edited by this pass): router.post('/commissions/:id/record-clawback', recordCommissionClawback).
+export const recordCommissionClawback = async (req: AuthRequest, res: Response) => {
+  try {
+    console.info(`[admin-affiliate] record-clawback commission=${req.params.id} admin=${req.user?.id}`);
+    res.json(await settleCommission(req.params.id, 'CLAWBACK', req.body?.note));
+  } catch (err) {
+    sendCreatorError(res, err, 'Failed to record commission clawback');
   }
 };

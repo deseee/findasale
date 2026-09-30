@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 
@@ -136,7 +137,10 @@ const AdminCreators = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Creator & Affiliate Management</h1>
         <p className="text-warm-600 dark:text-warm-400">
-          All users with affiliate links or referral codes. Click a row to expand referral details.
+          All users with affiliate links or referral codes. Click a row to expand referral details.{' '}
+          <Link href="/admin/creator-commissions" className="text-amber-700 dark:text-amber-400 underline">
+            Creator commissions ledger
+          </Link>
         </p>
       </div>
 

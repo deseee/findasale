@@ -5,143 +5,98 @@ import {
   generateOrGetAffiliateCode,
   getAffiliateCodeWithStats,
 } from '../services/affiliateService';
+import {
+  createOrGetSaleLink,
+  getCreatorAccess,
+  getCreatorDashboard,
+  listCreatorLinks,
+  recordAffiliateClick,
+} from '../services/creatorAffiliateService';
+import { sendCreatorError } from './creatorAffiliateController';
+import { getClientIp } from '../utils/getClientIp';
+
+// Creator program access (2026-09-29): the per-sale link endpoints are gated by an ACTIVE
+// CreatorProfile (self-serve opt-in, POST /api/affiliate/creator/join) with the legacy
+// role === 'CREATOR' string kept as an OR. Previously nothing ever assigned that role, so these
+// endpoints were 403 for every account. See services/creatorAffiliateService.ts.
+const denyNonCreator = async (req: AuthRequest, res: Response): Promise<boolean> => {
+  const access = await getCreatorAccess(req.user);
+  if (access.allowed) return false;
+  res.status(403).json({
+    code: access.suspended ? 'CREATOR_SUSPENDED' : 'CREATOR_REQUIRED',
+    message: access.suspended
+      ? 'Your creator access is suspended. Contact support for details.'
+      : 'Join the Creator Program to create affiliate links.',
+  });
+  return true;
+};
 
 // Generate affiliate link for a sale
 export const generateAffiliateLink = async (req: AuthRequest, res: Response) => {
   try {
-    const { saleId } = req.body;
-    const userId = req.user.id;
-
-    // Check if user has CREATOR role
-    if (req.user.role !== 'CREATOR') {
-      return res.status(403).json({ message: 'Access denied. Creator access required.' });
-    }
-
-    // Check if sale exists
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId }
-    });
-
-    if (!sale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
-
-    // Create or update affiliate link
-    const affiliateLink = await prisma.affiliateLink.upsert({
-      where: {
-        userId_saleId: {
-          userId,
-          saleId
-        }
-      },
-      update: {},
-      create: {
-        userId,
-        saleId
-      }
-    });
-
-    const link = `${process.env.FRONTEND_URL}/affiliate/${affiliateLink.id}`;
-    
+    if (await denyNonCreator(req, res)) return;
+    const { link, url } = await createOrGetSaleLink(req.user.id, req.body?.saleId);
     res.json({
       message: 'Affiliate link generated successfully',
-      link,
-      affiliateLinkId: affiliateLink.id
+      link: url,
+      affiliateLinkId: link.id,
     });
   } catch (error) {
-    console.error('Error generating affiliate link:', error);
-    res.status(500).json({ message: 'Failed to generate affiliate link' });
+    sendCreatorError(res, error, 'Failed to generate affiliate link');
   }
 };
 
 // Get creator's affiliate links
 export const getAffiliateLinks = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user.id;
-
-    // Check if user has CREATOR role
-    if (req.user.role !== 'CREATOR') {
-      return res.status(403).json({ message: 'Access denied. Creator access required.' });
-    }
-
-    const affiliateLinks = await prisma.affiliateLink.findMany({
-      where: { userId },
-      include: {
-        sale: {
-          select: {
-            title: true,
-            startDate: true,
-            endDate: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: 50
-    });
-
-    res.json(affiliateLinks);
+    if (await denyNonCreator(req, res)) return;
+    res.json(await listCreatorLinks(req.user.id, 50));
   } catch (error) {
-    console.error('Error fetching affiliate links:', error);
-    res.status(500).json({ message: 'Failed to fetch affiliate links' });
+    sendCreatorError(res, error, 'Failed to fetch affiliate links');
   }
 };
 
-// Track affiliate link click and redirect
-export const trackAffiliateClick = async (req: Request, res: Response) => {
+// Track affiliate link click. Public (optionalAuthenticate): the frontend /affiliate/[id] page calls
+// this, stores the attribution, then redirects to the sale. Counting rules live in
+// recordAffiliateClick: one counted click per link per hashed IP per UTC day, no bots, no self-clicks.
+export const trackAffiliateClick = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params; // affiliate link ID
-    
-    // Find the affiliate link
-    const affiliateLink = await prisma.affiliateLink.findUnique({
-      where: { id }
+    const result = await recordAffiliateClick({
+      idOrCode: String(req.params.id ?? ''),
+      saleHint: typeof req.query.sale === 'string' ? req.query.sale : undefined,
+      ip: getClientIp(req as Request),
+      userAgent: req.headers['user-agent'],
+      viewerUserId: req.user?.id ?? null,
     });
 
-    if (!affiliateLink) {
+    if (!result) {
       return res.status(404).json({ message: 'Affiliate link not found' });
     }
 
-    // Increment click count
-    await prisma.affiliateLink.update({
-      where: { id },
-      data: { clicks: { increment: 1 } }
-    });
-
-    // Return JSON so the frontend affiliate page can handle the redirect
-    res.json({ saleId: affiliateLink.saleId });
+    res.set('Cache-Control', 'no-store');
+    // `saleId` keeps the original response contract; `affiliateLinkId` is set only when a purchase
+    // made now should be credited (null for a suspended creator, an ended sale, or a self-click).
+    res.json({ saleId: result.saleId, affiliateLinkId: result.affiliateLinkId, counted: result.counted });
   } catch (error) {
     console.error('Error tracking affiliate click:', error);
     res.status(500).json({ message: 'Failed to track affiliate click' });
   }
 };
 
-// Get creator stats
+// Get creator stats (real totals; totalClicks/totalConversions/totalLinks kept for existing callers)
 export const getCreatorStats = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user.id;
-
-    // Check if user has CREATOR role
-    if (req.user.role !== 'CREATOR') {
-      return res.status(403).json({ message: 'Access denied. Creator access required.' });
-    }
-
-    // Get aggregate totals across all affiliate links
-    const totals = await prisma.affiliateLink.aggregate({
-      _sum: { clicks: true, conversions: true },
-      where: { userId }
-    });
-
-    const totalLinks = await prisma.affiliateLink.count({ where: { userId } });
-
+    if (await denyNonCreator(req, res)) return;
+    const dashboard = await getCreatorDashboard(req.user.id);
     res.json({
-      totalClicks: totals._sum.clicks || 0,
-      totalConversions: totals._sum.conversions || 0,
-      totalLinks
+      totalClicks: dashboard.totals.clicks,
+      totalConversions: dashboard.totals.conversions,
+      totalLinks: dashboard.totals.links,
+      ...dashboard.totals,
+      program: dashboard.program,
     });
   } catch (error) {
-    console.error('Error fetching creator stats:', error);
-    res.status(500).json({ message: 'Failed to fetch creator stats' });
+    sendCreatorError(res, error, 'Failed to fetch creator stats');
   }
 };
 

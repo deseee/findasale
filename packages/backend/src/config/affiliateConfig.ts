@@ -98,3 +98,44 @@ export interface PayoutRequestEligibility {
   eligible: boolean;
   reason?: string;
 }
+
+/**
+ * Creator program (per-sale affiliate links), finished 2026-09-29.
+ *
+ * Distinct from the organizer-to-organizer referral program above (AffiliateReferral, 2% / $50
+ * floor). A creator is any signed-in account that opted in and accepted the program terms; they
+ * share links to a public sale and earn a share of FindA.Sale's own fee on purchases that came
+ * through the link. Nothing here pays anyone automatically: commissions accrue in the
+ * AffiliateConversion ledger and an admin settles them manually.
+ *
+ * Every number the dashboard and terms page show is read from this object (via the API), so a
+ * rate change is a one-line edit here and can never drift from the copy. Rate/hold values are the
+ * PROPOSED launch values (10% of platform fee is the figure the creator dashboard already
+ * advertised, and Proposal 2 of claude_docs/research/affiliate-program-research-2026-03-19.md);
+ * Patrick to confirm before the program is promoted.
+ */
+export const CREATOR_PROGRAM = {
+  /** Version string stored with each creator's acceptance. Bump when the terms text changes materially. */
+  TERMS_VERSION: '2026-09-29',
+  /** Commission = this many basis points of FindA.Sale's platform fee on the purchase (1000 = 10%). */
+  COMMISSION_RATE_BPS: 1000,
+  /** Commission counts as approved only this many days after the purchase (refund / chargeback window). */
+  HOLD_DAYS: 30,
+  /** How long a click keeps attributing a purchase (client side, see frontend lib/affiliateAttribution.ts). */
+  ATTRIBUTION_WINDOW_DAYS: 30,
+  /** Creator code format: prefix plus this many random characters. */
+  CODE_PREFIX: 'CRT_',
+  CODE_LENGTH: 6,
+} as const;
+
+/**
+ * Commission (cents) on a purchase, rounded DOWN so we never over-accrue.
+ * @param platformFeeCents FindA.Sale's fee on the purchase, net of any cash-debt recoupment
+ */
+export function calculateCreatorCommissionCents(
+  platformFeeCents: number,
+  rateBps: number = CREATOR_PROGRAM.COMMISSION_RATE_BPS
+): number {
+  if (!Number.isFinite(platformFeeCents) || platformFeeCents <= 0) return 0;
+  return Math.floor((platformFeeCents * rateBps) / 10000);
+}
