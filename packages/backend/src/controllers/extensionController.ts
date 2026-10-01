@@ -9,6 +9,7 @@ import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENT
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
+import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -729,6 +730,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   }
 
   res.json({
+    // 2026-09-30 per-marketplace pause: read by the extension without an extra call.
+    pausedMarketplaces: sanitizePausedPlatforms((organizer as any).pausedMarketplaces),
     organizer: {
       businessName: organizer.businessName,
       // Feature #602 (2026-08-05): client-side convenience gate for the content script --
@@ -1618,30 +1621,44 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     return [...ids].every((x) => x === selfId);
   };
 
-  res.json({
-    items: [
-      ...items.map((i) => ({ ...i, reason: 'SOLD_ELSEWHERE' as const, deleteAllMatches: noOtherLiveItemWithTitle(i.title, i.id) })),
-      ...complianceItems.map((c) => ({ ...c, deleteAllMatches: noOtherLiveItemWithTitle(c.title, c.id) })),
-      ...deletedItemRetryable.map((row) => ({
-        id: row.id,
-        title: row.itemTitle,
-        platforms: [row.platform],
-        listingRefs: row.remoteListingId ? { [row.platform]: row.remoteListingId } : {},
-        reason: 'ITEM_DELETED' as const,
-        deleteAllMatches: noOtherLiveItemWithTitle(row.itemTitle, null),
-      })),
-      ...verifyItems,
-    ],
-    needsManualReview: [
+  // 2026-09-30 per-marketplace pause: entries for a paused platform are held back here, AFTER every
+  // retry/skip computation above, so a paused platform is never offered to the extension, no attempt is
+  // made and no REMOVE/SKIPPED row is written (nothing is counted as a skip). They stay pending server-side
+  // and are served again on the first poll after the organizer resumes. `pausedHeldBack` is informational.
+  const paused = sanitizePausedPlatforms((organizer as any).pausedMarketplaces);
+  const allEntries = [
+    ...items.map((i) => ({ ...i, reason: 'SOLD_ELSEWHERE' as const, deleteAllMatches: noOtherLiveItemWithTitle(i.title, i.id) })),
+    ...complianceItems.map((c) => ({ ...c, deleteAllMatches: noOtherLiveItemWithTitle(c.title, c.id) })),
+    ...deletedItemRetryable.map((row) => ({
+      id: row.id,
+      title: row.itemTitle,
+      platforms: [row.platform] as string[],
+      listingRefs: (row.remoteListingId ? { [row.platform]: row.remoteListingId } : {}) as Record<string, string>,
+      reason: 'ITEM_DELETED' as const,
+      deleteAllMatches: noOtherLiveItemWithTitle(row.itemTitle, null),
+    })),
+    ...verifyItems,
+  ];
+  const pendingOut = applyPauseToRemovalEntries(allEntries, paused);
+  const reviewOut = applyPauseToRemovalEntries(
+    [
       ...needsManualReview,
       ...deletedItemStuck.map((row) => ({
         id: row.id,
         title: row.itemTitle,
         skipCount: row.skipCount,
         lastErrorMessage: row.lastSkipReason,
-        platforms: [row.platform],
+        platforms: [row.platform] as string[],
       })),
     ],
+    paused,
+  );
+
+  res.json({
+    items: pendingOut.kept,
+    needsManualReview: reviewOut.kept,
+    pausedMarketplaces: paused,
+    pausedHeldBack: pendingOut.heldBack,
   });
 };
 
@@ -1774,6 +1791,8 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
 
   const organizer = await prisma.organizer.findUnique({ where: { userId } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+  // 2026-09-30 per-marketplace pause: this is the Facebook price-sync queue.
+  if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true }); return; }
 
   // Mirrors getExtensionItems' base item-list filter (status AVAILABLE, excluding DONT_LIST via
   // the same NULL-safe OR -- see the 2026-07-16 fix comment above) so a sold/removed/do-not-list
@@ -1865,6 +1884,9 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
   const organizer = await prisma.organizer.findUnique({ where: { userId } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
+  // 2026-09-30 per-marketplace pause: this is the Facebook sold-detection poll.
+  if (isPlatformPaused((organizer as any).pausedMarketplaces, 'FACEBOOK')) { res.json({ items: [], paused: true }); return; }
+
   const availableItems = await prisma.item.findMany({
     where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
     select: { id: true, title: true },
@@ -1953,6 +1975,8 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
     // renewDueAt is null for every pre-ADR-100 row (no backfill, ADR-100 §7 Q4) -- such items
     // simply never surface a renewal nudge until a fresh POST row is written for them.
     .filter((i) => i.renewDueAt != null && i.renewDueAt.getTime() <= dueThreshold)
+    // 2026-09-30 per-marketplace pause: never nudge/auto-renew a paused platform's listing.
+    .filter((i) => !isPlatformPaused((organizer as any).pausedMarketplaces, i.platform))
     // Facebook Commerce Policy gate (coins/currency) -- see comment on availableItems' select
     // above. Only excludes platform === 'FACEBOOK'; a coin/currency item due for renewal on
     // Craigslist or Gumtree AU is unaffected.
@@ -2357,6 +2381,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       grailedAutoListEnabled: true,
       poshmarkAutoListEnabled: true,
       mercariAutoListEnabled: true,
+      pausedMarketplaces: true,
     },
   });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
@@ -2373,8 +2398,14 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
   if (organizer.poshmarkAutoListEnabled === true) enabledPlatforms.push('POSHMARK');
   if (organizer.mercariAutoListEnabled === true) enabledPlatforms.push('MERCARI');
 
+  // 2026-09-30 per-marketplace pause: a paused platform never gets a queue, even if its auto-list toggle is on.
+  const pausedForQueue = sanitizePausedPlatforms(organizer.pausedMarketplaces);
+  const activePlatforms = filterPausedPlatforms(enabledPlatforms, pausedForQueue);
+  enabledPlatforms.length = 0;
+  enabledPlatforms.push(...activePlatforms);
+
   if (enabledPlatforms.length === 0) {
-    res.json({ ok: true, queues: emptyQueues });
+    res.json({ ok: true, queues: emptyQueues, pausedMarketplaces: pausedForQueue });
     return;
   }
 
@@ -2538,7 +2569,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     }
   }
 
-  res.json({ ok: true, queues });
+  res.json({ ok: true, queues, pausedMarketplaces: pausedForQueue });
 };
 
 // FACEBOOK excluded -- see getPriceSyncQueue's doc comment for why it already has its own
@@ -2592,7 +2623,7 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
 
   const organizer = await prisma.organizer.findUnique({
     where: { userId },
-    select: { id: true },
+    select: { id: true, pausedMarketplaces: true },
   });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
@@ -2635,7 +2666,8 @@ export const getPriceSyncQueue = async (req: AuthRequest, res: Response): Promis
     }
   }
 
-  const PRICE_SYNC_PLATFORMS: PriceSyncPlatform[] = ['CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI'];
+  // 2026-09-30 per-marketplace pause: skip paused platforms.
+  const PRICE_SYNC_PLATFORMS: PriceSyncPlatform[] = filterPausedPlatforms(['CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI'] as PriceSyncPlatform[], organizer.pausedMarketplaces);
   const queues: Record<PriceSyncPlatform, { id: string; title: string; price: number | null; remoteListingId?: string }[]> = {
     CRAIGSLIST: [], GUMTREE_AU: [], GRAILED: [], POSHMARK: [], MERCARI: [],
   };
@@ -2752,4 +2784,28 @@ export const postExtensionLogs = async (req: AuthRequest, res: Response): Promis
     await prisma.extensionRuntimeLog.createMany({ data: rows });
   }
   res.json({ ok: true, accepted: rows.length, rejected: rawLogs.length - rows.length });
+};
+
+// GET /api/extension/paused-marketplaces -- per-marketplace pause (2026-09-30). Returns the platforms the
+// organizer paused (Organizer.pausedMarketplaces) plus the full list of platforms that can be paused.
+export const getPausedMarketplaces = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { pausedMarketplaces: true } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+  res.json({ ok: true, paused: sanitizePausedPlatforms(organizer.pausedMarketplaces), pausable: [...PAUSABLE_PLATFORMS] });
+};
+
+// PUT /api/extension/paused-marketplaces  body: { paused: string[] } -- replaces the whole list. Unknown
+// platform names are dropped (sanitizePausedPlatforms); a non-array body is rejected with 400.
+export const setPausedMarketplaces = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  const body = req.body as { paused?: unknown } | undefined;
+  if (!body || !Array.isArray(body.paused)) { res.status(400).json({ message: 'paused must be an array of platform names' }); return; }
+  const paused = sanitizePausedPlatforms(body.paused);
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+  await prisma.organizer.update({ where: { id: organizer.id }, data: { pausedMarketplaces: paused } });
+  res.json({ ok: true, paused, pausable: [...PAUSABLE_PLATFORMS] });
 };

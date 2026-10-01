@@ -80,3 +80,5 @@ button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; 
 .removeSetting { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26362d; }
 .renewSetting { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26362d; }
 .select { width: 100%; margin-top: 6px; padding: 7px 8px; border-radius: 6px; border: 1px solid #26362d; background: #1a2620; color: #eef3ee; font: inherit; }
+.pauseSetting { margin-top: 4px; padding-bottom: 10px; }
+.pauseList { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; margin-top: 4px; }

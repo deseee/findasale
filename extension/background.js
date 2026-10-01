@@ -451,7 +451,96 @@ async function silentRemovalInProgress() {
   return true;
 }
 
+// ---- Per-marketplace pause (2026-09-30) ----------------------------------------------------
+// The organizer can pause ONE marketplace (e.g. Facebook after an account suspension) from the popup
+// without turning off automation for every other channel. The list lives on the server
+// (Organizer.pausedMarketplaces, GET/PUT /extension/paused-marketplaces) so the web Add Items page and the
+// autolist queue see it too and it survives a reinstall; a copy is cached here with a short TTL.
+// Failure policy: if the network/server call fails, the LAST KNOWN list is used (never an implicit
+// "nothing paused"), so a paused Facebook stays paused offline. A local change that has not reached the
+// server yet is kept as `dirty` and re-sent before any read replaces it. While a platform is paused
+// nothing here opens a tab, probes the site, or counts a stalled run/backoff.
+const FAS_PAUSED_KEY = 'fasPausedMarketplaces';
+const FAS_PAUSED_TTL_MS = 2 * 60 * 1000;
+const FAS_PAUSED_FAIL_RETRY_MS = 15 * 1000;
+const FAS_PAUSABLE_PLATFORMS = ['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU', 'POSHMARK', 'MERCARI', 'VINTED', 'GRAILED'];
+let fasPausedInFlight = null;
+let fasPausedLastFailAt = 0;
+function fasSanitizePaused(list) {
+  const want = new Set((Array.isArray(list) ? list : []).map((x) => String(x || '').trim().toUpperCase()));
+  return FAS_PAUSABLE_PLATFORMS.filter((p) => want.has(p));
+}
+async function fasReadPausedCache() {
+  try {
+    const st = await chrome.storage.local.get([FAS_PAUSED_KEY]);
+    const c = st[FAS_PAUSED_KEY];
+    if (c && typeof c === 'object') return { list: fasSanitizePaused(c.list), at: Number(c.at) || 0, dirty: c.dirty === true };
+  } catch (e) { /* fall through to empty */ }
+  return { list: [], at: 0, dirty: false };
+}
+async function fasWritePausedCache(list, dirty) {
+  const entry = { list: fasSanitizePaused(list), at: Date.now(), dirty: !!dirty };
+  try { await chrome.storage.local.set({ [FAS_PAUSED_KEY]: entry }); } catch (e) { /* best-effort */ }
+  return entry.list;
+}
+async function fasGetPausedPlatforms(opts) {
+  const cache = await fasReadPausedCache();
+  const force = !!(opts && opts.force);
+  if (!force && !cache.dirty && cache.at && Date.now() - cache.at < FAS_PAUSED_TTL_MS) return cache.list;
+  if (!force && Date.now() - fasPausedLastFailAt < FAS_PAUSED_FAIL_RETRY_MS) return cache.list;
+  if (fasPausedInFlight) return fasPausedInFlight;
+  fasPausedInFlight = (async () => {
+    try {
+      const r = cache.dirty
+        ? await apiFetch('/extension/paused-marketplaces', { method: 'PUT', body: { paused: cache.list } })
+        : await apiFetch('/extension/paused-marketplaces');
+      if (r && r.ok && r.data && Array.isArray(r.data.paused)) {
+        fasPausedLastFailAt = 0;
+        return await fasWritePausedCache(r.data.paused, false);
+      }
+      fasPausedLastFailAt = Date.now();
+      return cache.list; // last known list, never an implicit "not paused"
+    } catch (e) {
+      fasPausedLastFailAt = Date.now();
+      return cache.list;
+    } finally {
+      fasPausedInFlight = null;
+    }
+  })();
+  return fasPausedInFlight;
+}
+async function fasIsPlatformPaused(platform) {
+  const p = String(platform || '').toUpperCase();
+  if (!p) return false;
+  return (await fasGetPausedPlatforms()).indexOf(p) !== -1;
+}
+// Popup save: local copy first (enforced immediately, even offline), then pushed to the server.
+async function fasSetPausedPlatforms(list) {
+  await fasWritePausedCache(list, true);
+  const out = await fasGetPausedPlatforms({ force: true });
+  const cache = await fasReadPausedCache();
+  return { ok: true, paused: out, synced: !cache.dirty };
+}
+// Drops paused platforms from a pending-removals style list (items carrying a `platforms` array).
+// An entry with no `platforms` array is a legacy Facebook-only entry.
+function fasStripPausedFromItems(items, paused) {
+  if (!Array.isArray(items) || !paused || !paused.length) return items || [];
+  const out = [];
+  for (const it of items) {
+    if (!it || !Array.isArray(it.platforms)) { if (paused.indexOf('FACEBOOK') === -1) out.push(it); continue; }
+    const platforms = it.platforms.filter((p) => paused.indexOf(p) === -1);
+    if (!platforms.length) continue;
+    out.push(platforms.length === it.platforms.length ? it : Object.assign({}, it, { platforms }));
+  }
+  return out;
+}
+// Message types that start or continue a publish/removal/sold-check for ONE platform's content script.
+const FAS_PAUSE_START_MSGS = { setQueue: 'FACEBOOK', setCraigslistQueue: 'CRAIGSLIST', setGumtreeAuQueue: 'GUMTREE_AU', setPoshmarkQueue: 'POSHMARK', setMercariQueue: 'MERCARI', setVintedQueue: 'VINTED', setGrailedQueue: 'GRAILED', reopenGrailedTab: 'GRAILED' };
+const FAS_PAUSE_READ_MSGS = { getQueueItem: 'FACEBOOK', getCraigslistQueueItem: 'CRAIGSLIST', getGumtreeAuQueueItem: 'GUMTREE_AU', getPoshmarkQueueItem: 'POSHMARK', getMercariQueueItem: 'MERCARI', getVintedQueueItem: 'VINTED', getGrailedQueueItem: 'GRAILED', getRemovalQueueItem: 'FACEBOOK', getRenewalQueueItem: 'FACEBOOK', getFacebookSoldChecks: 'FACEBOOK' };
+
 async function openSilentRemovalTab() {
+  // Per-marketplace pause: never open a Facebook tab while paused (covers every caller).
+  if (await fasIsPlatformPaused('FACEBOOK')) { console.log('[FAS] Facebook is paused -- not opening a Facebook tab.'); return; }
   // Remember the organizer's current tab so focus can be restored after the (brief) removal.
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
@@ -647,6 +736,7 @@ async function checkPendingUpdates() {
   // yet to run silently), so both 'notify' and 'silent' behave identically here until Phase B.
   const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
+  if (await fasIsPlatformPaused('FACEBOOK')) return 'facebook_paused';
   // S-EXT-FB-ACCOUNT-UNAVAILABLE: nothing can be updated on a Facebook account that is unavailable.
   if (await getPlatformUnavailable('FACEBOOK')) return 'facebook_account_unavailable';
   const resp = await apiFetch('/extension/pending-updates');
@@ -684,8 +774,10 @@ async function checkPriceSyncQueue() {
   const queues = (resp.data && resp.data.queues) || {};
   const PLATFORM_LABELS = { CRAIGSLIST: 'Craigslist', GUMTREE_AU: 'Gumtree Australia', GRAILED: 'Grailed', POSHMARK: 'Poshmark', MERCARI: 'Mercari' };
   const outcomes = [];
+  const pausedForSync = await fasGetPausedPlatforms();
   for (const platform of Object.keys(PLATFORM_LABELS)) {
     const items = queues[platform];
+    if (pausedForSync.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
     if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
     // S-EXT-MERCARI-PRICE-PUSH (2026-09-27, Patrick-approved Phase B): silent mode drives the
     // real background price-push instead of just notifying -- notify mode keeps the exact
@@ -962,7 +1054,10 @@ async function checkCrossPlatformRemovals(pendingItems, opts) {
   const fasAutoRemoveMode = (opts && opts.forceSilent && (stored.fasAutoRemoveMode || 'silent') !== 'off') ? 'silent' : (stored.fasAutoRemoveMode || 'silent');
   if (fasAutoRemoveMode === 'off') return 'off';
   const outcomes = [];
+  const pausedForRemoval = await fasGetPausedPlatforms();
   for (const platform of Object.keys(FAS_CROSS_PLATFORM_REMOVAL_CONFIG)) {
+    // Per-marketplace pause: no queue, no tab, no backoff bookkeeping for a paused platform.
+    if (pausedForRemoval.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
     const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
     const itemsForPlatform = pendingItems.filter((i) => Array.isArray(i.platforms) && i.platforms.includes(platform));
     if (!itemsForPlatform.length) continue;
@@ -1101,6 +1196,9 @@ async function checkPendingRemovals(opts) {
   const resync = !!(opts && opts.resync);
   const { fasAutoRemoveMode = 'silent' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
+  // Per-marketplace pause (2026-09-30): paused platforms are stripped from everything below.
+  const pausedNow = await fasGetPausedPlatforms();
+  const facebookPaused = pausedNow.indexOf('FACEBOOK') !== -1;
   // Guard: don't open another Facebook removal tab while one is mid-run. Also prevents
   // overwriting fasRemovalQueue/fasRemovalIndex under an in-progress content script, which would
   // corrupt its queue position. Notify mode only tracks a tab after a Retry Facebook click.
@@ -1109,12 +1207,13 @@ async function checkPendingRemovals(opts) {
   // stuck on a checkpoint page) also stopped Poshmark/Mercari/Vinted/etc. removals for that poll.
   // It now gates only the Facebook part. Calling it also records a stalled run (see
   // noteStalledRemovalRun) when the previous tab ended without a report.
-  const facebookRunInProgress = await silentRemovalInProgress();
+  // Skipped while paused: silentRemovalInProgress records stalled runs (backoff), and pausing makes that moot.
+  const facebookRunInProgress = facebookPaused ? false : await silentRemovalInProgress();
 
   const resp = await apiFetch('/extension/pending-removals' + (resync ? '?resync=1' : ''));
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
-  const items = (resp.data && resp.data.items) || [];
-  await notifyManualReviewIfNew(resp.data && resp.data.needsManualReview);
+  const items = fasStripPausedFromItems((resp.data && resp.data.items) || [], pausedNow);
+  await notifyManualReviewIfNew(fasStripPausedFromItems(resp.data && resp.data.needsManualReview, pausedNow));
 
   // S-EXT-CROSS-PLATFORM-AUTOREMOVE: runs independently of everything else in this function --
   // must NOT be gated behind Facebook's own early-return conditions below (e.g. `!items.length &&
@@ -1137,6 +1236,8 @@ async function checkPendingRemovals(opts) {
   // then item-level skip counter) dead-lettered their still-live POSHMARK listings for 24h.
   // Older API responses had no `platforms` field -- treat those as Facebook, preserving the
   // pre-existing behaviour rather than silently dropping them.
+  // Per-marketplace pause: no Facebook sold-check fetch, no tab, no "Retry Facebook" probe while paused.
+  if (facebookPaused) { console.log('[FAS] Facebook is paused -- skipping Facebook removal and sold checks.'); return 'facebook_paused'; }
   const facebookItems = items.filter((i) => !Array.isArray(i.platforms) || i.platforms.indexOf('FACEBOOK') !== -1);
 
   // Sold-checks failure is non-fatal to the removal flow above -- a broken/unreachable
@@ -1365,8 +1466,11 @@ async function checkAutoListQueue() {
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const queues = (resp.data && resp.data.queues) || {};
   const outcomes = [];
+  const pausedForQueue = await fasGetPausedPlatforms();
   for (const platform of Object.keys(FAS_AUTOLIST_QUEUE_CFG)) {
     const items = queues[platform];
+    // Per-marketplace pause: never fill a paused platform's posting queue.
+    if (pausedForQueue.indexOf(platform) !== -1) { outcomes.push(platform + ':paused'); continue; }
     if (!Array.isArray(items) || !items.length) { outcomes.push(platform + ':empty'); continue; }
     // S-EXT-FB-ACCOUNT-UNAVAILABLE: never queue auto-posts for an unavailable account.
     if (await getPlatformUnavailable(platform)) { outcomes.push(platform + ':account_unavailable'); continue; }
@@ -1593,7 +1697,8 @@ async function notifyDueRenewals(dueItems) {
 async function checkRenewals() {
   const resp = await apiFetch('/extension/pending-renewals');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
-  const dueItems = (resp.data && resp.data.items) || [];
+  const pausedForRenew = await fasGetPausedPlatforms();
+  const dueItems = ((resp.data && resp.data.items) || []).filter((d) => pausedForRenew.indexOf(d.platform) === -1);
   if (!dueItems.length) return 'no_items';
 
   // 2026-08-09 (Patrick): default flipped true -- "renews should be automated not nudged".
@@ -1718,11 +1823,13 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 chrome.notifications.onClicked.addListener((notifId) => {
   if (notifId === 'fasPendingRemovals') {
     chrome.notifications.clear(notifId);
-    // S-EXT-FB-ACCOUNT-UNAVAILABLE: remember this tab so a redirect to a checkpoint/login page
-    // is recognised as "account unavailable" (see the onUpdated listener near handleFacebookUnavailable).
-    chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true }, (tab) => {
-      void chrome.runtime.lastError;
-      if (tab && tab.id != null) chrome.storage.local.set({ fasFacebookProbeTabId: tab.id });
+    // Per-marketplace pause: a stale notification must not open Facebook.
+    fasIsPlatformPaused('FACEBOOK').then((paused) => {
+      if (paused) return;
+      chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true }, (tab) => {
+        void chrome.runtime.lastError;
+        if (tab && tab.id != null) chrome.storage.local.set({ fasFacebookProbeTabId: tab.id });
+      });
     });
     return;
   }
@@ -2172,6 +2279,28 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
+      // Per-marketplace pause (2026-09-30): popup read/save of the paused list.
+      if (msg.type === 'getPausedMarketplaces') {
+        sendResponse({ ok: true, paused: await fasGetPausedPlatforms({ force: true }), pausable: FAS_PAUSABLE_PLATFORMS });
+        return;
+      }
+      if (msg.type === 'setPausedMarketplaces') {
+        sendResponse(await fasSetPausedPlatforms(msg.paused));
+        return;
+      }
+      // Central pause gate: a paused platform can neither start a publish/removal run nor be handed
+      // a queued item, so its content scripts do nothing. (Does not touch fasRemovalRunBackoff.)
+      {
+        const startPlatform = FAS_PAUSE_START_MSGS[msg.type];
+        const readPlatform = FAS_PAUSE_READ_MSGS[msg.type];
+        const crossPlatform = (msg.type === 'getRemovalQueueItemFor' || msg.type === 'advanceRemovalQueueFor') ? msg.platform : null;
+        const gatePlatform = startPlatform || readPlatform || crossPlatform || (msg.type === 'retryFacebookAccess' ? 'FACEBOOK' : null);
+        if (gatePlatform && await fasIsPlatformPaused(gatePlatform)) {
+          if (startPlatform || msg.type === 'retryFacebookAccess') sendResponse({ ok: false, error: 'platform_paused', platform: gatePlatform });
+          else sendResponse({ ok: true, item: null, index: 0, total: 0, paused: true, items: [], data: { items: [], paused: true } });
+          return;
+        }
+      }
       if (msg.type === 'getGuildXp') {
         // (#596 Guild/XP Toolbar Tie-In) Read-only reuse of the existing authenticated
         // GET /api/xp/profile endpoint (packages/backend/src/controllers/xpController.ts) --

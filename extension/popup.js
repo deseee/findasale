@@ -103,6 +103,54 @@ async function renderFacebookAccountBanner() {
   };
 }
 
+// Per-marketplace pause (2026-09-30). The list is owned by background.js (server-backed, cached);
+// the popup only reads it and asks the worker to save a new one. Channel values here are lowercase
+// ('gumtree_au'), the pause list uses the server's uppercase names ('GUMTREE_AU').
+const PAUSE_CHANNELS = [
+  ['FACEBOOK', 'Facebook Marketplace'], ['CRAIGSLIST', 'Craigslist'], ['POSHMARK', 'Poshmark'],
+  ['MERCARI', 'Mercari'], ['VINTED', 'Vinted'], ['GRAILED', 'Grailed'], ['GUMTREE_AU', 'Gumtree Australia'],
+];
+let pausedPlatforms = [];
+function isChannelPaused(ch) { return pausedPlatforms.indexOf(String(ch || '').toUpperCase()) !== -1; }
+// Marks paused channels in the "Post to" select (disabled, labelled) and moves off a paused selection.
+function applyPausedToChannelSelect() {
+  const sel = $('channel');
+  if (!sel) return;
+  for (const opt of sel.options) {
+    const base = opt.getAttribute('data-label') || opt.textContent;
+    if (!opt.getAttribute('data-label')) opt.setAttribute('data-label', base);
+    const paused = isChannelPaused(opt.value);
+    opt.textContent = paused ? base + ' (paused)' : base;
+    if (paused) { opt.disabled = true; opt.title = 'Paused in your extension settings. Items will not be listed here until you resume.'; }
+    else if (opt.value !== 'nextdoor' && opt.value !== 'gumtree_au') { opt.disabled = false; opt.title = ''; }
+  }
+  if (isChannelPaused(sel.value)) {
+    const firstOk = Array.prototype.find.call(sel.options, (o) => !o.disabled);
+    if (firstOk) { sel.value = firstOk.value; if (typeof onChannelChange === 'function') onChannelChange(); }
+  }
+}
+async function loadPausedMarketplaces() {
+  const box = $('pauseList');
+  if (!box) return;
+  const r = await send({ type: 'getPausedMarketplaces' });
+  pausedPlatforms = (r && r.ok && Array.isArray(r.paused)) ? r.paused : [];
+  box.innerHTML = PAUSE_CHANNELS.map((c) =>
+    '<label class="chk"><input type="checkbox" data-pause="' + c[0] + '"' + (pausedPlatforms.indexOf(c[0]) !== -1 ? ' checked' : '') + '> ' + esc(c[1]) + '</label>'
+  ).join('');
+  box.onchange = async () => {
+    const next = Array.prototype.map.call(box.querySelectorAll('input[data-pause]:checked'), (el) => el.getAttribute('data-pause'));
+    $('pauseResult').textContent = 'Saving\u2026';
+    const res = await send({ type: 'setPausedMarketplaces', paused: next });
+    pausedPlatforms = (res && res.ok && Array.isArray(res.paused)) ? res.paused : next;
+    $('pauseResult').textContent = res && res.ok && res.synced === false
+      ? 'Saved on this device. It will sync to FindA.Sale when the connection is back.'
+      : 'Saved.';
+    applyPausedToChannelSelect();
+    updateCount();
+  };
+  applyPausedToChannelSelect();
+}
+
 async function load() {
   renderFacebookAccountBanner(); // fire-and-forget, never blocks the item list
   setStatus('Loading your FindA.Sale inventory…');
@@ -146,6 +194,7 @@ async function load() {
   await loadAutoRemoveMode();
   await loadAutoRenewSetting();
   await loadHideFromFriendsSetting();
+  await loadPausedMarketplaces();
   render();
 }
 
@@ -373,7 +422,7 @@ async function checkResumeableQueue(channel) {
   banner.innerHTML = 'A ' + esc(cfg.label) + ' posting run is already in progress (item ' + (index + 1) + ' of ' + queue.length + ') &mdash; ' +
     '<button type="button" class="link" id="resumeQueueBtn">reopen that tab</button> instead of picking items again.';
   const btn = document.getElementById('resumeQueueBtn');
-  if (btn) btn.onclick = () => { chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
+  if (btn) btn.onclick = () => { if (isChannelPaused(channel)) return; chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
 }
 
 // (2026-08-08) Best-effort informational note -- last DOM-observed Craigslist login state from
@@ -617,7 +666,7 @@ function sync(id, on) { on ? selected.add(id) : selected.delete(id); updateCount
 function updateCount() {
   $('selCount').textContent = selected.size;
   const btn = $('listBtn');
-  btn.disabled = selected.size === 0;
+  btn.disabled = selected.size === 0 || isChannelPaused(currentChannel());
   const ch = currentChannel();
   // ADR-102 (2026-08-09): generalized from a single craigslist-vs-not check to a small map so
   // Gumtree Australia gets its own label without re-deriving this logic a third time.
@@ -632,6 +681,8 @@ function updateCount() {
 }
 
 async function startQueue() {
+  // Per-marketplace pause: never open a posting tab for a paused channel (background.js also refuses).
+  if (isChannelPaused(currentChannel())) { updateCount(); return; }
   // Facebook Commerce Policy defense-in-depth: row() already disables the checkbox and
   // prunes `selected`, but re-filter here too in case of a stale selection (e.g. selection
   // made before an item's facebookRestricted flag was known). fas-content.js's own pre-submit

@@ -51,6 +51,12 @@
     <details class="note" id="fbPublishNote"><summary>What does this do?</summary>Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></details>
     <details class="note footerSettings">
       <summary>&#9881; More settings</summary>
+      <div class="pauseSetting">
+        <label class="chk">Pause a marketplace</label>
+        <div id="pauseList" class="pauseList"></div>
+        <p class="note dim">Paused marketplaces are skipped for listing, removal and sold checks.</p>
+        <div class="dim" id="pauseResult"></div>
+      </div>
       <div class="removeSetting">
         <label class="chk" for="autoRemoveMode">Keep listings in sync</label>
         <select id="autoRemoveMode" class="select">

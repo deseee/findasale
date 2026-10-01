@@ -636,6 +636,7 @@ model Organizer {
   timezone                        String?
   byAppointment                   Boolean                        @default(false)
   organizerTypes                  String[]                       @default([])
+  pausedMarketplaces              String[]                       @default([]) // 2026-09-30: platforms the organizer paused (e.g. FACEBOOK after a suspension); see services/pausedMarketplaces.ts
   // Feature #356: Organizer broadcasts to followers
   broadcasts                      OrganizerBroadcast[]
   // Feature #354: Business hours

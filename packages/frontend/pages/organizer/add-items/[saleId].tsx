@@ -294,6 +294,13 @@ interface RapidItem {
 // and claude_docs/feature-notes/ADR-2026-09-14-add-items-multichannel-status-aggregation.md.
 // item.channelStatus comes from getDraftItemsBySaleId's response (itemController.ts).
 type ChannelDotState = 'PUBLISHED' | 'ELIGIBLE' | 'PUBLISHED_INELIGIBLE' | null | undefined;
+// Per-marketplace pause (2026-09-30): the paused list uses server platform names; the dot config above is keyed
+// by channelStatus keys. A paused channel is shown as unavailable ("Paused") and never as eligible/live.
+const PAUSE_NAME_TO_DOT_KEY: Record<string, string> = {
+  FACEBOOK: 'facebook', CRAIGSLIST: 'craigslist', GUMTREE_AU: 'gumtreeAu',
+  POSHMARK: 'poshmark', MERCARI: 'mercari', VINTED: 'vinted', GRAILED: 'grailed',
+};
+const PAUSED_TOOLTIP = 'Paused in your extension settings. Items will not be listed here until you resume.';
 const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string; border: string; tint: string }> = [
   { key: 'ebay', label: 'eBay', color: 'bg-blue-500', border: 'border-blue-500', tint: 'bg-blue-500/25' },
   { key: 'shopify', label: 'Shopify', color: 'bg-emerald-500', border: 'border-emerald-500', tint: 'bg-emerald-500/25' },
@@ -313,14 +320,20 @@ const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string; bor
  * nothing at all -- no permanently-empty dot. Every active channel gets its own
  * dot (no cap, no "+N" overflow badge -- Patrick 2026-09-15: show them all).
  * Wraps onto a second line via flex-wrap if an item has many active channels. */
-function ChannelStatusDots({ channelStatus }: { channelStatus?: Record<string, ChannelDotState> | null }) {
+function ChannelStatusDots({ channelStatus, pausedKeys }: { channelStatus?: Record<string, ChannelDotState> | null; pausedKeys?: string[] }) {
   if (!channelStatus) return null;
   const active = CHANNEL_DOT_CONFIG.filter(c => channelStatus[c.key] === 'PUBLISHED' || channelStatus[c.key] === 'ELIGIBLE' || channelStatus[c.key] === 'PUBLISHED_INELIGIBLE');
   if (active.length === 0) return null;
+  const pausedActive = active.filter(c => pausedKeys?.includes(c.key));
   return (
     <div className="flex items-center flex-wrap gap-0.5 mt-0.5" aria-label="Marketplace publish status">
       {active.map(c => {
         const state = channelStatus[c.key];
+        if (pausedKeys?.includes(c.key)) {
+          return (
+            <span key={c.key} title={`${c.label}: Paused. ${PAUSED_TOOLTIP}`} className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-gray-400 bg-gray-200 dark:bg-gray-700" />
+          );
+        }
         // FIX 2026-09-28 (S-COMPLIANCE-STALE-PUBLISHED-DOT): a third dot state for an item that IS
         // still live on this platform but is now blocked by a policy rule added after it was
         // posted (e.g. the Facebook weapons/coin-currency rules) -- a plain green "Published" dot
@@ -343,6 +356,11 @@ function ChannelStatusDots({ channelStatus }: { channelStatus?: Record<string, C
           <span key={c.key} title={title} className={`w-2.5 h-2.5 rounded-full border-2 ${c.border} ${c.tint}`} />
         );
       })}
+      {pausedActive.length > 0 && (
+        <span className="ml-1 text-[10px] text-gray-500 dark:text-gray-400" title={PAUSED_TOOLTIP}>
+          Paused: {pausedActive.map(c => c.label).join(', ')}
+        </span>
+      )}
     </div>
   );
 }
@@ -764,6 +782,26 @@ const AddItemsDetailPage = () => {
     enabled: orgTier === 'TEAMS',
     staleTime: 60 * 1000,
   });
+
+  // Per-marketplace pause (2026-09-30): paused platforms are shown as unavailable on the channel dots.
+  // PRO-gated endpoint, so a 403 (lower tier) or any failure simply means "nothing paused".
+  const { data: pausedMarketplaces = [] } = useQuery<string[]>({
+    queryKey: ['paused-marketplaces'],
+    queryFn: async () => {
+      try {
+        const r = await api.get('/extension/paused-marketplaces');
+        return Array.isArray(r.data?.paused) ? r.data.paused : [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: orgTier === 'PRO' || orgTier === 'TEAMS',
+    staleTime: 60 * 1000,
+  });
+  const pausedDotKeys = useMemo(
+    () => pausedMarketplaces.map((p) => PAUSE_NAME_TO_DOT_KEY[p]).filter(Boolean),
+    [pausedMarketplaces]
+  );
 
   const { data: items = [], isLoading: itemsLoading, isError: itemsError, refetch: refetchItems } = useQuery({
     queryKey: ['items', saleId],
@@ -3166,7 +3204,7 @@ const AddItemsDetailPage = () => {
                               </span>
                             )}
                           </div>
-                          <ChannelStatusDots channelStatus={item.channelStatus} />
+                          <ChannelStatusDots channelStatus={item.channelStatus} pausedKeys={pausedDotKeys} />
                           <button
                             type="button"
                             onClick={(e) => {
