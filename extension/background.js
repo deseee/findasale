@@ -287,10 +287,25 @@ async function reportItemListedOnce(itemId, platform, remoteListingId) {
   }
   pruned[key] = now;
   await chrome.storage.local.set({ fasListedReportDedup: pruned });
+  // FIX 2026-10-02 (Patrick: Vinted publishes not landing in "pushed", forcing manual "already
+  // listed"): the dedup key above is written BEFORE the request, so a FAILED report (not signed in,
+  // 500, network blip, service worker killed) used to poison the key for 2 minutes -- every retry
+  // (second click of "I posted", the onUpdated net) returned {ok:true,deduped:true} and the post was
+  // silently never recorded. Release the key on any non-ok result so a retry really re-sends.
+  const releaseKey = async () => {
+    try {
+      const cur = (await chrome.storage.local.get(['fasListedReportDedup'])).fasListedReportDedup || {};
+      delete cur[key];
+      await chrome.storage.local.set({ fasListedReportDedup: cur });
+    } catch (e) { /* best-effort */ }
+  };
   try {
-    return await apiFetch('/extension/items/' + encodeURIComponent(itemId) + '/listed',
+    const resp = await apiFetch('/extension/items/' + encodeURIComponent(itemId) + '/listed',
       { method: 'POST', body: { remoteListingId: remoteListingId || null, platform } });
+    if (!resp || (!resp.ok && !resp.deduped)) await releaseKey();
+    return resp;
   } catch (e) {
+    await releaseKey();
     return { ok: false, error: (e && e.message) || 'threw' };
   }
 }

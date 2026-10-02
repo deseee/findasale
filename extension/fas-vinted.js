@@ -2463,7 +2463,7 @@
       if (!more) startQueueDelayCountdown(0, 'we finish up');
       // Records this as a single, human-confirmed listing post -- this is NOT a relist/bump call
       // and must never be reused as one. See the file-header constraint.
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) {}
+      try { const mr = await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'VINTED' }); if (mr && !mr.ok && !mr.deduped) console.warn('[FAS Vinted] markListed was NOT recorded:', JSON.stringify(mr)); } catch (e) { console.warn('[FAS Vinted] markListed threw:', e && e.message); }
       // S-EXT-VINTED-REMOTE-LISTING-ID: markListed above never knows the Vinted id (fill-and-stop);
       // look it up in the organizer's own wardrobe while the queue delay runs (bounded, best-effort).
       const capture = vintCapAfterMarkListed(item);
@@ -4404,7 +4404,7 @@
       cont.disabled = true;
       cont.textContent = 'Please wait…';
       await fasVintedRecordPost();
-      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, markListed skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
+      try { const mr = await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); if (mr && !mr.ok && !mr.deduped) console.warn('[FAS Vinted] markListed was NOT recorded:', JSON.stringify(mr)); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, markListed skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
       // S-EXT-VINTED-REMOTE-LISTING-ID: this prompt usually shows on the organizer's own
       // /member/<id>?promo_shown=true landing page right after Vinted's Upload -- the best moment
       // to find the new listing's id in their wardrobe. Runs alongside the queue delay.
