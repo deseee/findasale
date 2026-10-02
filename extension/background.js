@@ -302,13 +302,71 @@ async function reportItemListedOnce(itemId, platform, remoteListingId) {
   try {
     const resp = await apiFetch('/extension/items/' + encodeURIComponent(itemId) + '/listed',
       { method: 'POST', body: { remoteListingId: remoteListingId || null, platform } });
-    if (!resp || (!resp.ok && !resp.deduped)) await releaseKey();
+    if (!resp || (!resp.ok && !resp.deduped)) {
+      await releaseKey();
+      // 401 (signed out of finda.sale) or a network-level failure: keep the report and re-send it
+      // automatically once sign-in is back, instead of leaving the organizer to mark it by hand.
+      if (!resp || resp.status === 401 || resp.status == null || resp.status >= 500) await queuePendingListedReport(itemId, platform, remoteListingId);
+    } else {
+      flushPendingListedReports(); // a call just worked: drain anything queued earlier (fire-and-forget)
+    }
     return resp;
   } catch (e) {
     await releaseKey();
+    await queuePendingListedReport(itemId, platform, remoteListingId);
     return { ok: false, error: (e && e.message) || 'threw' };
   }
 }
+
+// FIX 2026-10-02: durable retry queue for "listed" reports that failed because the extension was
+// signed out of finda.sale (401 not_signed_in -- confirmed live on Vinted publishes) or the server
+// was unreachable. Previously those posts were lost and Patrick had to use "already listed" by hand.
+// The backend /listed endpoint is idempotent (latest POST/POSTED row -> {deduped:true}), so a replay
+// can never create duplicate rows. Entries older than 7 days are dropped.
+const FAS_PENDING_LISTED_KEY = 'fasPendingListedReports';
+const FAS_PENDING_LISTED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+async function queuePendingListedReport(itemId, platform, remoteListingId) {
+  try {
+    const cur = (await chrome.storage.local.get([FAS_PENDING_LISTED_KEY]))[FAS_PENDING_LISTED_KEY] || [];
+    if (!cur.some((r) => r.itemId === itemId && r.platform === platform)) {
+      cur.push({ itemId, platform, remoteListingId: remoteListingId || null, at: Date.now() });
+    }
+    await chrome.storage.local.set({ [FAS_PENDING_LISTED_KEY]: cur.slice(-200) });
+    console.log('[FAS] listed report queued for retry (not recorded yet):', platform, itemId);
+  } catch (e) { /* best-effort */ }
+}
+let fasFlushingPendingListed = false;
+async function flushPendingListedReports() {
+  if (fasFlushingPendingListed) return;
+  fasFlushingPendingListed = true;
+  try {
+    const cur = (await chrome.storage.local.get([FAS_PENDING_LISTED_KEY]))[FAS_PENDING_LISTED_KEY] || [];
+    if (!cur.length) return;
+    const keep = [];
+    let blocked = false;
+    for (const r of cur) {
+      if (Date.now() - r.at > FAS_PENDING_LISTED_MAX_AGE_MS) continue;
+      if (blocked) { keep.push(r); continue; }
+      let resp;
+      try {
+        resp = await apiFetch('/extension/items/' + encodeURIComponent(r.itemId) + '/listed',
+          { method: 'POST', body: { remoteListingId: r.remoteListingId || null, platform: r.platform } });
+      } catch (e) { resp = { ok: false }; }
+      if (resp && (resp.ok || resp.deduped)) { console.log('[FAS] queued listed report recorded:', r.platform, r.itemId); continue; }
+      if (!resp || resp.status === 401 || resp.status == null || resp.status >= 500) { blocked = true; keep.push(r); continue; }
+      // 4xx other than 401 (item deleted / not owned): will never succeed, drop it.
+    }
+    await chrome.storage.local.set({ [FAS_PENDING_LISTED_KEY]: keep });
+  } catch (e) { /* best-effort */ } finally { fasFlushingPendingListed = false; }
+}
+// Sign-in back (finda.sale auth cookie set) or browser start -> replay anything queued.
+try {
+  chrome.cookies.onChanged.addListener((chg) => {
+    if (!chg.removed && chg.cookie && (chg.cookie.name === CFG.COOKIE_NAME || chg.cookie.name === CFG.REFRESH_COOKIE_NAME)) flushPendingListedReports();
+  });
+  chrome.runtime.onStartup.addListener(() => { flushPendingListedReports(); });
+} catch (e) { /* cookies API unavailable: the next successful report still drains the queue */ }
+
 // Registered at top level (not inside a message handler) so it survives MV3 service worker
 // restarts -- Chrome re-runs this whole script on wake and re-registers top-level listeners
 // automatically, the same way the existing onInstalled/onStartup listeners below do.

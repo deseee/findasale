@@ -647,6 +647,10 @@
     'off white': 'White', offwhite: 'White',
     multicolor: 'Multi', multicolour: 'Multi', 'multi-color': 'Multi', 'multi color': 'Multi',
     transparent: 'Clear',
+    // 2026-10-02: values seen on real FindA.Sale items that matched no Vinted swatch word at all
+    // (so Color was skipped and Vinted blocked the upload): nearest real swatch.
+    'multi-colored': 'Multi', multicolored: 'Multi', 'multi colored': 'Multi', colorful: 'Multi',
+    brass: 'Gold', copper: 'Brown', bronze: 'Brown',
   };
   // Real single-fiber synonyms only -- deliberately does NOT include "blended"/"mixed"/"mixed
   // fibers": picking one real fiber (e.g. Cotton) for an item that's actually a poly-cotton blend
