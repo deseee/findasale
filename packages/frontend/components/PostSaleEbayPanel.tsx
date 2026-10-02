@@ -775,6 +775,9 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
           ({alreadyListedCount} already on eBay)
         </p>
       )}
+      <p className="text-xs text-warm-500 dark:text-warm-400 mb-4">
+        Heads up: eBay removes listings with links to other sites, so your eBay descriptions are sent without links. On the free plan, photos carry a small FindA.Sale watermark. eBay discourages watermarks but we have not seen it enforce that rule. If eBay ever sends you a notice about a listing, please email support@finda.sale.
+      </p>
 
       {/* Items Grid/List */}
       {pushableItems.length > 0 ? (

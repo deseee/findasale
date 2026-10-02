@@ -22,8 +22,16 @@ function toFacebookCondition(condition: string | null | undefined): string {
   }
 }
 
-// Append the finda.sale backlink so Marketplace traffic returns home (ADR-084).
-function buildDescription(description: string | null | undefined, saleId: string | null | undefined): string {
+// 2026-10-01 (Patrick: "drop the backlink if against each site's TOS"): the finda.sale backlink (ADR-084)
+// is NO LONGER part of `description`. Vinted (Catalogue Rules / T&Cs s.6), eBay (Links Policy), Depop
+// (ToS s.7.2), Gumtree AU, and by interpretation Poshmark, Mercari and Grailed prohibit external
+// links / off-platform solicitation in listings. `description` is now the clean organizer text for every
+// platform; `descriptionWithBacklink` carries the old text for the platforms where a plain link is not
+// confirmed prohibited (Facebook Marketplace, Craigslist) -- only those content scripts read it.
+function buildDescription(description: string | null | undefined, _saleId?: string | null | undefined): string {
+  return (description || '').trim();
+}
+function buildDescriptionWithBacklink(description: string | null | undefined, saleId: string | null | undefined): string {
   const base = (description || '').trim();
   if (!saleId) return base;
   const link = `View full listing: https://finda.sale/sales/${saleId}`;
@@ -488,6 +496,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     vintedDomesticShippingUsd: vintedPricingByItemId.get(it.id)?.vintedDomesticShippingUsd ?? null,
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
+    descriptionWithBacklink: buildDescriptionWithBacklink(it.description, it.saleId),
     // S-EXT-BATCH-12 (2026-08-20, Patrick + live-Chrome-confirmed root cause): `category` on Item
     // is documented as "eBay L1 category name" (schema.prisma) but in practice holds whatever the
     // AI-tagging pipeline wrote, which for this item was a full colon-delimited eBay-taxonomy
@@ -2501,6 +2510,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     price: it.price != null ? Number(it.price.toFixed(2)) : null,
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
+    descriptionWithBacklink: buildDescriptionWithBacklink(it.description, it.saleId),
     category: it.ebayCategoryName || it.category || null,
     categoryBreadcrumb: it.category || null,
     photoUrls: applyWatermark
