@@ -33,18 +33,30 @@ async function getToken() {
 // worker for the duration of this call — it is NEVER put in a sendMessage/sendResponse
 // payload, chrome.storage, the page DOM, or console.*. Returns the fresh ACCESS token
 // from the response body (data.token) — never the refresh token.
+// DIAGNOSTIC 2026-10-02: why a refresh produced no token (Patrick: Vinted markListed 401
+// not_signed_in even while signed in to finda.sale in the same Chrome). Never contains token values.
+let fasLastRefreshFailure = null;
 async function refreshAccessToken() {
-  const cookie = await chrome.cookies.get({ url: CFG.COOKIE_URL, name: CFG.REFRESH_COOKIE_NAME });
-  if (!cookie || !cookie.value) return null;
+  fasLastRefreshFailure = null;
+  let cookie = null;
+  try { cookie = await chrome.cookies.get({ url: CFG.COOKIE_URL, name: CFG.REFRESH_COOKIE_NAME }); } catch (e) { fasLastRefreshFailure = 'cookie_read_threw:' + (e && e.message); return null; }
+  if (!cookie || !cookie.value) { fasLastRefreshFailure = 'no_refreshToken_cookie_visible_to_extension'; return null; }
   try {
     const res = await fetch(CFG.API_BASE + '/auth/refresh', {
       method: 'POST',
       headers: { 'X-Refresh-Token': cookie.value }
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let code = '';
+      try { const b = await res.json(); code = (b && (b.code || b.error || b.message)) || ''; } catch (e) {}
+      fasLastRefreshFailure = 'refresh_http_' + res.status + (code ? ':' + String(code).slice(0, 60) : '');
+      return null;
+    }
     const data = await res.json().catch(() => null);
+    if (!(data && data.token)) fasLastRefreshFailure = 'refresh_ok_but_no_token_in_body';
     return data && data.token ? data.token : null;
   } catch (e) {
+    fasLastRefreshFailure = 'refresh_fetch_threw:' + (e && e.message);
     return null;
   }
 }
@@ -66,7 +78,7 @@ async function apiFetch(path, opts = {}, _retried = false, _token = null) {
     const fresh = await refreshAccessToken();
     if (fresh) return apiFetch(path, opts, true, fresh);
   }
-  if (!token) return { ok: false, status: 401, error: 'not_signed_in' };
+  if (!token) return { ok: false, status: 401, error: 'not_signed_in', detail: fasLastRefreshFailure || 'no_accessToken_cookie_and_no_refresh_attempted' };
   const res = await fetch(CFG.API_BASE + path, {
     method: opts.method || 'GET',
     headers: Object.assign(
