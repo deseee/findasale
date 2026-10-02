@@ -38,7 +38,7 @@ import { postY } from './posts/designer-piece-or-just-old-furniture-2026';
 import { postZ } from './posts/two-apps-partnering-still-two-logins';
 import { postAA } from './posts/sale-item-caps-cataloging-software-tiers';
 import { postAB } from './posts/what-organizers-spend-to-get-found';
-import { postAC } from './posts/zero-fee-resale-apps-cant-replace-a-managed-sale';
+import { postAC } from './posts/cataloging-is-getting-cheaper-discovery-still-isnt';
 
 export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS, postT, postU, postV, postW, postX, postY, postZ, postAA, postAB, postAC];
 
