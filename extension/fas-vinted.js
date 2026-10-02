@@ -1987,6 +1987,22 @@
   // openVintedSizingDetailsText/findVintedSizingDetailsOpener/findDialogCloseButton/
   // parseWeightLimitForLabelFromText are left defined (unused by this path) rather than deleted,
   // in case a future session finds a safer way to read the panel -- but nothing calls them now.
+  // FIX 2026-10-02 (Patrick live report: an Easton baseball backpack, 33oz, 19x15x6in, got "Small"):
+  // the card path above chose purely by weight, and every item under ~5kg is "Small" by weight, but
+  // Vinted's cards are defined by SIZE ("Small: fits a large envelope", "Medium: fits a shoebox",
+  // "Large: fits a moving box"). Returns the smallest card index (0 Small / 1 Medium / 2 Large) the
+  // item's real package dimensions allow; 0 when dimensions are missing (weight alone decides, as
+  // before). The cutoffs are an ASSUMPTION modeled on the card wording and fas-mercari.js's 14x10x5in
+  // shoebox constant (UNVERIFIED against Vinted's real limits): envelope-flat = <=2in thick and
+  // <=15x12in; shoebox = within 15% of 14x10x5in volume and no axis past 1.5x the box.
+  function vintedMinSizeIndexByDims(item) {
+    const d = [item && item.packageLengthIn, item && item.packageWidthIn, item && item.packageHeightIn].map((x) => (x != null ? Number(x) : NaN));
+    if (d.some((n) => !isFinite(n) || n <= 0)) return 0;
+    d.sort((a, b) => b - a);
+    if (d[2] <= 2 && d[0] <= 15 && d[1] <= 12) return 0;
+    const fitsShoebox = d[0] * d[1] * d[2] <= 14 * 10 * 5 * 1.15 && d[0] <= 21 && d[1] <= 15 && d[2] <= 7.5;
+    return fitsShoebox ? 1 : 2;
+  }
   async function pickVintedSizeCardByRealWeight(item) {
     const ounces = item.packageWeightOz != null ? Number(item.packageWeightOz) : (item.aiPackageWeightOz != null ? Number(item.aiPackageWeightOz) : null);
     if (ounces == null || !isFinite(ounces) || ounces <= 0) return null; // no real weight data -- caller keeps existing Medium-default behavior
@@ -1994,7 +2010,9 @@
     // Dialog is intentionally NOT opened -- see BUG FIX 2026-09-01 comment above. detailsText
     // stays null, so parseVintedCardWeightLimitKg falls through to the card's own text only.
     const detailsText = null;
-    for (const label of ['Small', 'Medium', 'Large']) {
+    const dimMinIdx = vintedMinSizeIndexByDims(item);
+    for (const [idx, label] of ['Small', 'Medium', 'Large'].entries()) {
+      if (idx < dimMinIdx) continue; // too big for this card by dimensions, whatever it weighs
       const card = clickableOptionByExactText(label);
       const limitKg = parseVintedCardWeightLimitKg(card, label, detailsText);
       if (card && limitKg != null && isFinite(limitKg) && itemKg <= limitKg) return { card, label, limitKg, itemKg, source: 'live-page-text' };
@@ -2008,7 +2026,8 @@
     // a confirmed fact, until checked directly against the real package-size step. Logs loudly every
     // time it's used so it's easy to find and correct.
     const UNVERIFIED_FALLBACK_LIMITS_KG = { Small: 5, Medium: 10, Large: 20 };
-    for (const label of ['Small', 'Medium', 'Large']) {
+    for (const [idx, label] of ['Small', 'Medium', 'Large'].entries()) {
+      if (idx < dimMinIdx) continue; // see vintedMinSizeIndexByDims
       if (itemKg <= UNVERIFIED_FALLBACK_LIMITS_KG[label]) {
         const card = clickableOptionByExactText(label);
         if (card) {
