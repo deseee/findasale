@@ -534,6 +534,19 @@ function fasStripPausedFromItems(items, paused) {
   }
   return out;
 }
+
+// Posting-pace hint (2026-10-01): records when each item of a queue was handed on, per marketplace, so the
+// popup can SUGGEST slowing down after a long run. Purely informational: nothing here waits or blocks.
+async function fasRecordPostTime(platform) {
+  try {
+    const key = 'fasPostTimes_' + platform;
+    const st = await chrome.storage.local.get([key]);
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    const times = (Array.isArray(st[key]) ? st[key] : []).filter((t) => t > cutoff);
+    times.push(Date.now());
+    await chrome.storage.local.set({ [key]: times });
+  } catch (e) { /* best-effort */ }
+}
 // Message types that start or continue a publish/removal/sold-check for ONE platform's content script.
 const FAS_PAUSE_START_MSGS = { setQueue: 'FACEBOOK', setCraigslistQueue: 'CRAIGSLIST', setGumtreeAuQueue: 'GUMTREE_AU', setPoshmarkQueue: 'POSHMARK', setMercariQueue: 'MERCARI', setVintedQueue: 'VINTED', setGrailedQueue: 'GRAILED', reopenGrailedTab: 'GRAILED' };
 const FAS_PAUSE_READ_MSGS = { getQueueItem: 'FACEBOOK', getCraigslistQueueItem: 'CRAIGSLIST', getGumtreeAuQueueItem: 'GUMTREE_AU', getPoshmarkQueueItem: 'POSHMARK', getMercariQueueItem: 'MERCARI', getVintedQueueItem: 'VINTED', getGrailedQueueItem: 'GRAILED', getRemovalQueueItem: 'FACEBOOK', getRenewalQueueItem: 'FACEBOOK', getFacebookSoldChecks: 'FACEBOOK' };
@@ -1894,6 +1907,10 @@ chrome.notifications.onClicked.addListener((notifId) => {
 // look like the extension has stalled (there's no on-page "waiting" indicator yet, so anything
 // much longer would read as broken to a non-technical organizer watching the tab). Tune by editing
 // this one constant; nothing else needs to change.
+// 2026-10-01 (Patrick): enforced waits REMOVED for Poshmark, Mercari, Grailed and Gumtree AU (no evidence any of
+// them acts on the gap between listings; see ADR-084 research passes). KEPT for Craigslist (its own "posting too
+// rapidly" block was hit repeatedly in production) and Facebook (account checkpoint 2026-09-20). The
+// POSHMARK/GRAILED/GUMTREE_AU constants and QUEUE_ADVANCE_DELAY_MS below are now unused by those platforms.
 const QUEUE_ADVANCE_DELAY_MS = { MIN: 10000, MAX: 25000 };
 // CRAIGSLIST-only override (2026-08-30, S-EXT-CRAIGSLIST-RATE-LIMIT round 2, Patrick live report --
 // hit "You are posting too rapidly" AGAIN even after the same-session fix that gave the
@@ -2655,7 +2672,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // posting-count limit or confirmed enforcement case -- a modest dedicated bump as cheap
         // insurance, not a response to a real problem. No hourly cap: there's no real automated
         // submission here to pace against.
-        await humanQueueDelay(undefined, GUMTREE_AU_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+        // 2026-10-01 (Patrick): no enforced wait for Gumtree AU (manual-assist; a human copies and posts each one).
         sendResponse({ ok: true, item, index: next, total: (st.fasGumtreeAuQueue || []).length });
       } else if (msg.type === 'gumtreeAuLoginStateObserved') {
         // (ADR-102, 2026-08-09) Same shape as craigslistLoginStateObserved above -- best-effort
@@ -2716,6 +2733,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasPoshmarkIndex: next });
+          await fasRecordPostTime('POSHMARK');
           const item = queue[next] || null;
           // BUG FIX 2026-08-31 (Patrick live report: Poshmark/Mercari never show the queue-advance
           // countdown Craigslist/FB do): humanQueueDelay() only sends its 'fasQueueDelayStarted'
@@ -2729,18 +2747,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // leaving the countdown overlay stuck at "...0s" forever after the last item. Only pace
           // when there's a real next item.
           if (item) {
-            // 2026-09-26 (cross-platform pacing hardening): Poshmark full auto-publish is default
-            // ON at real production volume (up to 113 posts in observed history) -- widened from
-            // the generic 10-25s fallback to Craigslist's conservative 150-210s/item pacing plus the
-            // same real 20/hr sliding cap, intentionally well under the ~300/day unofficial ceiling
-            // even accounting for realistic multi-hour organizer sessions (that ceiling is
-            // directional, not confirmed). See POSHMARK_QUEUE_ADVANCE_DELAY_MS above.
-            const poshHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('POSHMARK', POSHMARK_HOURLY_CAP);
-            if (poshHourlyWaitMs > 0) {
-              console.log('[FAS Poshmark] hourly cap (' + POSHMARK_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(poshHourlyWaitMs / 1000) + 's');
-              await humanQueueDelay(sender.tab && sender.tab.id, { MIN: poshHourlyWaitMs, MAX: poshHourlyWaitMs });
-            }
-            await humanQueueDelay(sender.tab && sender.tab.id, POSHMARK_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+            // 2026-10-01 (Patrick): no enforced wait or hourly cap between Poshmark items. Research found no report of
+            // Poshmark acting on listing speed (its enforcement is about sharing/following automation); the popup
+            // shows a suggestion-only pace hint instead (fasRecordPostTime + showPaceHint).
           }
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
@@ -2781,13 +2790,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasMercariIndex: next });
+          await fasRecordPostTime('MERCARI');
           const item = queue[next] || null;
           // BUG FIX 2026-08-31 (Patrick live report, same root cause as the Poshmark branch above):
           // no tabId was passed, so humanQueueDelay() never sent its countdown notification for
           // Mercari either. 'advanceMercariQueue' always comes from fas-mercari.js's own tab.
           // BUG FIX 2026-09-04 (S-EXT-QUEUE-PACING-STUCK-ON-DONE): same root cause as the FB
           // 'advanceQueue' fix above -- only pace/notify when there's a real next item.
-          if (item) await humanQueueDelay(sender.tab && sender.tab.id); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          // 2026-10-01 (Patrick): no enforced wait between Mercari items (a human click advances each one anyway).
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'markVintedTabNonDiscardable') {
@@ -2991,20 +3001,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           const next = curIndex + 1;
           await chrome.storage.local.set({ fasGrailedIndex: next });
+          await fasRecordPostTime('GRAILED');
           const item = queue[next] || null;
-          // 2026-09-26 (cross-platform pacing hardening): Grailed's ToS has the single strictest
-          // anti-automation clause of any platform studied (requires "prior written consent" for
-          // any third-party tool; its Code of Conduct explicitly names bots/scraping/AI as
-          // suspension grounds) -- good time to harden before volume grows, even though production
-          // volume is still low (4 jobs so far). Widened from the generic 10-25s fallback to
-          // Craigslist's conservative 150-210s/item pacing plus the same real 20/hr sliding cap.
-          // See GRAILED_QUEUE_ADVANCE_DELAY_MS above.
-          const grHourlyWaitMs = await recordPlatformPostAndGetHourlyWaitMs('GRAILED', GRAILED_HOURLY_CAP);
-          if (grHourlyWaitMs > 0) {
-            console.log('[FAS Grailed] hourly cap (' + GRAILED_HOURLY_CAP + '/60min) reached, holding next post ~' + Math.ceil(grHourlyWaitMs / 1000) + 's');
-            await humanQueueDelay(undefined, { MIN: grHourlyWaitMs, MAX: grHourlyWaitMs });
-          }
-          await humanQueueDelay(undefined, GRAILED_QUEUE_ADVANCE_DELAY_MS); // S-EXT-QUEUE-PACING, see this file's top-of-file comment
+          // 2026-10-01 (Patrick): no enforced wait or hourly cap between Grailed items; suggestion-only pace hint in the popup.
           sendResponse({ ok: true, item, index: next, total: queue.length });
         }
       } else if (msg.type === 'getRemovalQueueItem') {
@@ -3111,6 +3110,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         await finishSilentCrossPlatformRemoval('CRAIGSLIST');
         sendResponse({ ok: true });
+      } else if (msg.type === 'platformRestricted') {
+        // A content script saw a full-page bot-wall / verification challenge (or a restriction page) on its
+        // marketplace. Respond like a person would: stop automating that marketplace until the organizer
+        // has looked at their account and un-pauses it in the popup. We never try to solve a challenge.
+        const plat = String(msg.platform || '').toUpperCase();
+        if (plat && plat !== 'FACEBOOK' && FAS_PAUSABLE_PLATFORMS.indexOf(plat) !== -1) {
+          const cur = await fasGetPausedPlatforms();
+          if (cur.indexOf(plat) === -1) {
+            await fasSetPausedPlatforms(cur.concat([plat]));
+            fasLog('warn', 'platformRestricted', 'marketplace paused after challenge/restriction page', { platform: plat, reason: String(msg.reason || '').slice(0, 120) });
+            chrome.notifications.create('fasPlatformRestricted_' + plat, {
+              type: 'basic',
+              iconUrl: 'icon128.png',
+              title: 'FindA.Sale',
+              message: plat.charAt(0) + plat.slice(1).toLowerCase() + ' is showing a verification or restriction page, so FindA.Sale paused ' + plat.charAt(0) + plat.slice(1).toLowerCase() + ' for you. Check your account there, then un-pause it in the FindA.Sale popup. If it was a notice or limit, please email support@finda.sale.',
+              priority: 1
+            });
+          }
+          sendResponse({ ok: true, paused: true });
+        } else {
+          sendResponse({ ok: false, error: 'unsupported_platform' });
+        }
       } else if (msg.type === 'facebookAccountUnavailable') {
         // S-EXT-FB-ACCOUNT-UNAVAILABLE: fas-remove.js saw a login wall / "can't use Marketplace" /
         // suspended-account page on you/selling itself (no redirect for onUpdated to catch).

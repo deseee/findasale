@@ -202,6 +202,51 @@
   }
   // Guessed local duration, used ONLY until the real 'fasQueueDelayStarted' message (if any)
   // corrects it -- matches background.js's QUEUE_ADVANCE_DELAY_MS = {MIN:10000,MAX:25000} exactly.
+  // 2026-10-01 (Patrick: "I don't want timeouts in manual pushes ... you can make suggestions but
+  // it's up to the user"): NO enforced wait or cap on manual Vinted pushes. We only remember when
+  // each listing was confirmed and, if the organizer has been going fast, show a one-line,
+  // dismiss-by-ignoring suggestion on the next item's bar. Nothing blocks, delays or disables.
+  const FAS_VINTED_SUGGEST_PER_HOUR = 12; // suggestion threshold only; a guess, not a Vinted figure
+  async function fasVintedRecordPost() {
+    const KEY = 'fasVintedPostTimes';
+    const now = Date.now();
+    let times = [];
+    try { const r = await chrome.storage.local.get([KEY]); times = Array.isArray(r[KEY]) ? r[KEY] : []; } catch (e) { /* non-fatal */ }
+    times = times.filter((t) => typeof t === 'number' && now - t < 3600000);
+    times.push(now);
+    try { await chrome.storage.local.set({ [KEY]: times }); } catch (e) { /* non-fatal */ }
+  }
+  async function fasVintedPaceSuggestion() {
+    try {
+      const r = await chrome.storage.local.get(['fasVintedPostTimes']);
+      const n = (Array.isArray(r.fasVintedPostTimes) ? r.fasVintedPostTimes : []).filter((t) => typeof t === 'number' && Date.now() - t < 3600000).length;
+      if (n >= FAS_VINTED_SUGGEST_PER_HOUR) {
+        return '<div style="margin-top:6px;font-size:12px;color:#ffcf7a">Suggestion: ' + n + ' listings in the last hour. Some sellers slow down around here to keep marketplaces comfortable. Totally up to you.</div>';
+      }
+    } catch (e) { /* non-fatal */ }
+    return '';
+  }
+  // 2026-10-01 (Patrick: "it will immediately show the next item and would be very easy to
+  // mistakenly click again or double click"): the "next item" buttons sit in the same corner as the
+  // NEXT item's own overlay, so a double click (or a second click a beat later) lands on the new
+  // item's button and falsely marks an unpublished item as listed. Every "next item" button now
+  // starts disarmed for a few seconds ("Ready in 3...") and ignores multi-click events entirely.
+  function fasArmButton(btn, ms) {
+    if (!btn) return;
+    const label = btn.innerHTML;
+    btn.disabled = true;
+    const until = Date.now() + ms;
+    const tick = () => {
+      if (!btn.isConnected || btn.textContent === 'Please wait…') return;
+      const left = until - Date.now();
+      if (left <= 0) { btn.disabled = false; btn.innerHTML = label; return; }
+      btn.textContent = 'Ready in ' + Math.ceil(left / 1000) + '…';
+      setTimeout(tick, 250);
+    };
+    tick();
+    const orig = btn.onclick;
+    btn.addEventListener('click', (e) => { if (e.detail > 1) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  }
   function guessedQueueDelayMs() { return 10000 + Math.random() * 15000; }
   try {
     chrome.runtime.onMessage.addListener((msg) => {
@@ -638,16 +683,13 @@
   // definitely-outside-the-panel, definitely-not-a-link target, so no accidental navigation) closes
   // the panel every time.
   function realOutsideClick(target) {
-    // FIX 2026-09-27 (S-EXT-VINTED-BOT-FINGERPRINT, Patrick-directed real QA finding: this session
-    // has an active `datadome` cookie -- DataDome is a bot-detection service that specifically
-    // watches for synthetic-click fingerprints like an identical exact coordinate reused for every
-    // dismiss-click across an entire session, which is exactly what this function did (hardcoded
-    // clientX:5, clientY:5, every single call, every field, all session long). Randomizing within a
-    // small safe-corner range removes that one specific, easily-flagged repeated fingerprint. Does
-    // not change WHAT gets clicked (still the exact target passed in) or the event sequence itself
-    // -- only the coordinate metadata carried on each event.
-    const jx = 2 + Math.floor(Math.random() * 60);
-    const jy = 2 + Math.floor(Math.random() * 60);
+    // 2026-10-01: coordinates are simply the target's own on-screen center (a real, internally
+    // consistent position for the event), replacing the earlier random-offset scheme. The earlier
+    // scheme and its comment framed this as avoiding a bot-detection fingerprint; that is not a goal
+    // of this extension (see claude/vinted-detection-footprint-review-2026-10-01.md).
+    const rect = target.getBoundingClientRect ? target.getBoundingClientRect() : { left: 0, top: 0, width: 10, height: 10 };
+    const jx = Math.max(1, Math.round(rect.left + Math.min(rect.width, window.innerWidth) / 2));
+    const jy = Math.max(1, Math.round(rect.top + Math.min(rect.height, window.innerHeight) / 2));
     const opts = { bubbles: true, cancelable: true, view: window, clientX: jx, clientY: jy };
     target.dispatchEvent(new PointerEvent('pointerdown', opts));
     target.dispatchEvent(new MouseEvent('mousedown', opts));
@@ -667,51 +709,9 @@
     }
   }
 
-  // FEATURE 2026-09-27 (S-EXT-VINTED-RESET-ROOT-CAUSE, evidence-based). Ported verbatim from
-  // fas-grailed.js's identical helper (added there 2026-08-24, S-EXT-ROUND6, for the exact same
-  // class of problem: live isTrusted instrumentation proved Grailed's Designer autocomplete
-  // required a genuinely browser-trusted click, which a synthetic dispatchEvent()/.click() call
-  // -- isTrusted:false -- can never produce). Applying the same fix here because the evidence now
-  // points the same way, and independently confirms it: this session's own live-observed DataDome
-  // cookie (see realOutsideClick's 2026-09-27 BOT-FINGERPRINT fix above) plus tonight's direct
-  // confirmation from Vinted Support that this account was restricted for "unusual activity...
-  // detected by our tools" both point to bot-detection reacting to how these clicks are produced,
-  // not to page-load timing. The randomized-coordinate fix above and PATCH 21's randomized
-  // inter-step delays below both address the FINGERPRINT/TIMING half of that signal; this addresses
-  // the remaining half neither of those touches -- Vinted's real Language <dialog> (role="dialog",
-  // a genuine native modal, unlike every other field's inline auto-apply panel) is interacted with
-  // via a synthetic .click() (isTrusted:false), and it is the only interaction in this file's 20+
-  // rounds of prior patches ever tied to a reset. Scoped to Language's own two clicks only (see the
-  // fieldId === 'language' branches in pickFromPanel below) -- every other field already works via
-  // plain .click() and stays exactly as-is; this is not a blanket change.
-  // Uses chrome.debugger + CDP Input.dispatchMouseEvent to fire a REAL isTrusted:true click at the
-  // element's current viewport coordinates -- the same mechanism Puppeteer/Playwright use. Returns
-  // true/false for whether the background worker reports the click was actually dispatched (not a
-  // guarantee the UI reacted as hoped). Fails closed (false) if the "debugger" permission isn't
-  // granted yet, another debugger client is already attached to this tab (real DevTools open), or
-  // messaging fails for any reason -- callers fall back to a plain .click() in that case, so this
-  // can only ever add a chance at fixing the reset, never make a previously-working click stop
-  // working.
-  function trustedClick(el) {
-    return new Promise((resolve) => {
-      try {
-        el.scrollIntoView({ block: 'center' });
-        setTimeout(() => {
-          try {
-            const r = el.getBoundingClientRect();
-            const x = r.left + r.width / 2;
-            const y = r.top + r.height / 2;
-            if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) { console.warn('[FAS Vinted] trustedClick: chrome.runtime.sendMessage unavailable (stale/unreloaded extension context) -- falling back to plain click.'); resolve(false); return; }
-            chrome.runtime.sendMessage({ type: 'fasTrustedClick', x, y }, (resp) => {
-              if (chrome.runtime.lastError) { console.warn('[FAS Vinted] trustedClick: sendMessage failed -- ' + chrome.runtime.lastError.message + ' -- falling back to plain click.'); resolve(false); return; }
-              if (!resp || !resp.ok) { console.warn('[FAS Vinted] trustedClick: background reported failure -- ' + (resp && resp.error || 'no response') + ' -- falling back to plain click.'); resolve(false); return; }
-              resolve(true);
-            });
-          } catch (e) { console.warn('[FAS Vinted] trustedClick: threw -- ' + (e && e.message || e) + ' -- falling back to plain click.'); resolve(false); }
-        }, 250); // let the scroll settle before reading the real post-scroll rect
-      } catch (e) { console.warn('[FAS Vinted] trustedClick: threw before scroll -- ' + (e && e.message || e) + ' -- falling back to plain click.'); resolve(false); }
-    });
-  }
+  // 2026-10-01: the debugger/CDP "trusted click" helper that lived here was removed. It existed to make
+  // a click read as human input to bot detection, which is not something this extension tries to do, and
+  // it required the browser's debugger permission. Language is now chosen with a normal click.
 
   // Set true by pickFromPanel's generic-blend Material fallback below; read once, right after the
   // Material tryFill() call in fillListing(), to surface a visible review-overlay warning (not just
@@ -960,8 +960,21 @@
       // through trustedClick() -- see that function's header for why. Every other field keeps the
       // exact plain .click() that's already confirmed working for it, untouched.
       if (fieldId === 'language') {
-        const clickedTrusted = await trustedClick(clickTarget);
-        if (!clickedTrusted) clickTarget.click();
+        // 2026-10-01 (live-tested on Patrick's tab): Language is now an inline radio dropdown, not the
+        // old Save/Cancel modal this trustedClick() was written for. A plain .click() on the "English"
+        // row (after typing "English" in its search box) was confirmed to commit #language_book and
+        // close the panel. trustedClick() scrolls the row into view and clicks by viewport coordinates,
+        // which can land on the wrong row or dismiss the floating panel -- Patrick saw "selects English
+        // but the field doesn't save", twice. Plain click first; trusted click only if it did not stick.
+        clickTarget.click();
+        await sleep(500);
+        const langAfterPlain = document.getElementById('language_book');
+        const langPlainOk = langAfterPlain && norm(langAfterPlain.value) && norm(langAfterPlain.value) !== norm('Select a language');
+        console.log('[FAS Vinted DIAG] language: plain click -> #language_book="' + (langAfterPlain ? langAfterPlain.value : '') + '"');
+        // 2026-10-01: no debugger/CDP "trusted click" fallback any more (security review: it exists to
+        // make input look human to bot detection, which is the wrong goal). If the plain click did not
+        // stick, the post-fill check reports "Language is empty" and the organizer picks it.
+        void langPlainOk;
       } else {
         clickTarget.click();
       }
@@ -1043,7 +1056,10 @@
         // so it never overlaps the leaf-option trustedClick() a few lines above, which needs its
         // own separate chrome.debugger attach and would fail if this one were still held open.
         let fasNavDiagStarted = false;
-        try {
+        // 2026-10-01: CDP nav diagnostic OFF by default (attaches chrome.debugger and auto-dismisses
+        // native dialogs; the investigation it served is closed -- see the security review).
+        const FAS_VINTED_CDP_DIAG = false;
+        if (FAS_VINTED_CDP_DIAG) try {
           const fasNavDiagResp = await chrome.runtime.sendMessage({ type: 'fasNavDiagStart' });
           fasNavDiagStarted = !!(fasNavDiagResp && fasNavDiagResp.ok);
         } catch (e) { /* best-effort diagnostic only -- never block the real click on this */ }
@@ -1133,6 +1149,18 @@
         if (panel) break;
       }
       console.warn('[FAS Vinted] "' + labelText + '" panel did not open on attempt ' + attempt + '/3 while checking for a suggested color -- retrying.');
+      // DIAGNOSTIC 2026-10-01 (Patrick pasted this 3x warning again on comics/books): say what the
+      // "opener" actually was, so the next paste shows whether it is the real #color control or some
+      // other element that merely matched the label text.
+      if (attempt === 1) {
+        console.log('[FAS Vinted DIAG] color opener: tag=' + opener.tagName + ' id=' + (opener.id || '') + ' testid=' + (opener.getAttribute('data-testid') || '') + ' hasColorId=' + !!document.getElementById('color') + ' category=' + ((fieldByLabel('Category') || {}).value || ''));
+        // No #color control on the form at all = this category simply has no Color field (Vinted's
+        // Books & Media forms don't). Retrying two more times just adds ~3s of delay per item.
+        if (!document.getElementById('color')) {
+          console.log('[FAS Vinted] No #color field on this category\'s form -- skipping the suggested-color check.');
+          return false;
+        }
+      }
       await sleep(300);
     }
     if (!panel) return false;
@@ -1409,8 +1437,28 @@
     if (item && /\b(comic|comics|manga|graphic novel|tpb|trade paperback)\b/i.test(norm((item.title || '') + ' ' + (item.description || '')))) {
       quickCandidates.push('Comics');
     }
-    if (quickSegments.length) quickCandidates.push(quickSegments[quickSegments.length - 1]);
-    if (categoryText && quickCandidates.indexOf(categoryText) === -1) quickCandidates.push(categoryText);
+    // BUG FIX 2026-09-30 (Patrick-reported: "signs aren't being selected as a category"): eBay-style
+    // deep paths often END in a qualifier, not a product noun -- e.g. "Collectibles:Advertising:
+    // Merchandise & Memorabilia:Signs:Original:1970-Now" / "...:Signs:Reproduction". The old code
+    // only tried that LAST segment ("1970-Now", "Reproduction") and then the whole string, so
+    // "Signs" was never searched and the Category was left blank. Walk back from the end, skip
+    // qualifier-only segments (era/date ranges, Original/Reproduction/Vintage/Other...), and try
+    // the nearest real noun(s) first. Still capped at 3 total candidates (see the freeze note above).
+    const QUALIFIER_SEG = /^(original|reproduction|repro|reproductions|vintage|antique|contemporary|modern|other|others|unknown|unspecified|mixed|lots?|pre-?\d{4}s?|\d{4}s?(\s*-\s*(now|\d{4}s?))?|1970-now|\d{4}-\d{4}|pre-?war)$/i;
+    const nounSegs = quickSegments.filter((x) => !QUALIFIER_SEG.test(x));
+    const lastNoun = nounSegs.length ? nounSegs[nounSegs.length - 1] : (quickSegments[quickSegments.length - 1] || '');
+    if (lastNoun) quickCandidates.push(lastNoun);
+    // Plain singular of a plural leaf (Vinted's own labels are often singular: "Tins" -> "Tin").
+    if (lastNoun && /[a-z]{4,}s$/i.test(lastNoun) && !/ss$/i.test(lastNoun)) {
+      const singular = lastNoun.replace(/ies$/i, 'y').replace(/(?<!i)es$/i, (m) => m).replace(/s$/i, '');
+      if (singular && quickCandidates.indexOf(singular) === -1 && quickCandidates.length < 3) quickCandidates.push(singular);
+    }
+    // Next-nearest real noun up the path (e.g. "Signs" -> parent "Merchandise & Memorabilia").
+    if (nounSegs.length > 1 && quickCandidates.length < 3) {
+      const parent = nounSegs[nounSegs.length - 2];
+      if (parent && quickCandidates.indexOf(parent) === -1) quickCandidates.push(parent);
+    }
+    if (categoryText && quickCandidates.length < 3 && quickCandidates.indexOf(categoryText) === -1) quickCandidates.push(categoryText);
     for (const seg of quickCandidates) {
       if (!seg) continue;
       // BUG FIX 2026-08-20 (S-EXT-BATCH-10, P0, live-Chrome-confirmed): fieldId here was the
@@ -1445,7 +1493,7 @@
         return ph.indexOf('find a categor') !== -1 || (ph.indexOf('search') !== -1 && ph.indexOf('categor') !== -1);
       });
     if (searchInput) {
-      const searchCandidates = [...segments.slice().reverse(), categoryText];
+      const searchCandidates = [...quickCandidates.filter(Boolean), ...segments.slice().reverse().filter((x) => !QUALIFIER_SEG.test(x)), categoryText].filter((x, i, a) => x && a.indexOf(x) === i).slice(0, 4);
       for (const query of searchCandidates) {
         if (!query) continue;
         searchInput.focus();
@@ -2383,6 +2431,7 @@
     window.addEventListener('beforeunload', fasReviewUnloadHandler);
     window.addEventListener('pagehide', fasReviewUnloadHandler);
     const next = document.getElementById('fas-vin-next');
+    fasArmButton(next, 3500);
     if (next) next.onclick = async () => {
       // FIX 2026-09-01 (S-EXT-VINTED-CONTINUE-UX): immediate, synchronous click feedback --
       // BEFORE awaiting anything below -- so Patrick sees an instant reaction instead of a dead
@@ -2391,7 +2440,8 @@
       // the 'fasQueueDelayStarted' message alone.
       next.disabled = true;
       next.textContent = 'Please wait…';
-      startQueueDelayCountdown(guessedQueueDelayMs(), more ? 'the next item' : 'we finish up');
+      await fasVintedRecordPost();
+      if (!more) startQueueDelayCountdown(0, 'we finish up');
       // Records this as a single, human-confirmed listing post -- this is NOT a relist/bump call
       // and must never be reused as one. See the file-header constraint.
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) {}
@@ -2432,6 +2482,7 @@
     fasCurrentDiagItem = item;
     fasMarkStep('fillListing:start');
     overlay('<b>FindA.Sale</b> - filling the Vinted listing form...');
+    fasVintedPaceSuggestion().then((h) => { if (h && bar) bar.insertAdjacentHTML('beforeend', h); }).catch(() => {});
     const warnings = [];
     await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
     await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
@@ -2682,8 +2733,23 @@
         console.log('[FAS Vinted] Language already shows "' + languageInput.value.trim() + '" -- leaving it untouched.');
       } else {
         fasMarkStep('language:aboutToOpenModal');
-        const langOk = await pickFromPanel('language', 'Language', 'English');
+        let langOk = await pickFromPanel('language', 'Language', 'English');
         fasMarkStep('language:modalResolved');
+        // 2026-10-01 (live-inspected on Patrick's shared tab): Vinted's Language control is now an
+        // inline radio list (panel testid "isbn-language_book-single-list_search-content", a search
+        // box, rows "English" / "Language not listed" / "Other" after typing) rather than the old
+        // Save/Cancel modal. A pick that did not stick commits nothing, so it does not trigger the
+        // field reset -- one more attempt is safe. Judge success by the real #language_book value.
+        await sleep(300);
+        {
+          const li = document.getElementById('language_book');
+          const lt = li ? norm(li.value) : '';
+          if (!(lt && lt !== norm('Select a language'))) {
+            console.warn('[FAS Vinted] Language did not stick on the first attempt (pickFromPanel=' + langOk + ') -- retrying once.');
+            langOk = await pickFromPanel('language', 'Language', 'English');
+            await sleep(300);
+          }
+        }
         // Re-verify the value actually stuck -- pickFromPanel resolving true is not itself proof,
         // given the exact failure mode this fix addresses (a value that was set correctly getting
         // silently reset by something else). Read the real DOM one more time before trusting it.
@@ -2691,12 +2757,13 @@
         const confirmedInput = document.getElementById('language_book');
         const confirmedText = confirmedInput ? norm(confirmedInput.value) : '';
         const confirmedSet = confirmedText && confirmedText !== norm('Select a language');
-        if (langOk && confirmedSet) {
+        if (confirmedSet) { // trust the real DOM value, not pickFromPanel's return (can be false even when the value stuck)
           warnings.push('Language: no per-item language on file -- defaulted to "English" (FindA.Sale catalog is virtually all English-language items). Correct if this item is actually in a different language.');
         } else {
           warnings.push('Language could not be filled automatically -- Vinted requires this for Books/Comics, please set it yourself.');
         }
         fasMarkStep('language:reverifyDone');
+        console.log('[FAS Vinted DIAG] language: pickFromPanel returned ' + langOk + '; #language_book exists=' + !!confirmedInput + ' value="' + (confirmedInput ? confirmedInput.value : '') + '"');
       }
     }
     // BUG FIX 2026-09-27 (Patrick live report + live-observed via screenshot: mid-fill, after
@@ -2732,19 +2799,14 @@
     // Price already has its OWN dedicated re-check above (the 2026-08-30/09-02 stale-validation-
     // error fix), but that check runs BEFORE Language and only looks for a stale error banner, not
     // whether Language itself blanked the value out -- added a real value re-check for Price here too.
-    // PATCH 21 2026-09-27 (Patrick live debugging session): the entire post-Language
-    // re-verification sweep below was running back-to-back at machine speed (live-measured
-    // on a real reset: ~341ms from language:modalResolved to fillListing:reachedReview,
-    // covering title/desc/brand/size/material/condition/price/ISBN/photos re-checks --
-    // ADR-090's Books & Media field-reset-after-Language behavior forces this whole sweep to
-    // exist, so it cannot be removed, but running it as one uniform instant burst right after
-    // the highest-risk moment (the Language modal's own Save click, which is what every traced
-    // reset has landed within ~1s of) is exactly the kind of mechanically-uniform automated
-    // timing signal bot detection watches for -- confirmed as a live account restriction from
-    // Vinted Support tonight ("unusual activity...detected by our tools"), separate from
-    // anything guessed. Spacing each sub-check out with a randomized, human-plausible pause
-    // does not change what gets filled or re-verified, only how fast the burst looks from the
-    // outside.
+    // PATCH 21 2026-09-27: the post-Language re-verification sweep (title, description, brand, size,
+    // material, condition, price, ISBN, photos) used to run in one back-to-back burst, about 341ms
+    // from language:modalResolved to fillListing:reachedReview. ADR-090's Books & Media behavior
+    // (Vinted clears fields after the Language step) means the sweep must stay. Short randomized
+    // pauses between checks give Vinted's own form time to finish re-rendering before each check
+    // reads it, and keep this step from hammering the page. They do not change what is filled or
+    // verified. (Vinted Support separately told Patrick on 2026-09-27 that "unusual activity" had
+    // been detected on the account; the cause was never identified, so no timing claim is made here.)
     fasMarkStep('postLanguage:photosCheckStart');
     await sleep(250 + Math.floor(Math.random() * 450));
     // FIX 2026-09-30 (S-EXT-VINTED-DUPLICATE-PHOTOS, Patrick live report: photos added twice).
@@ -2898,6 +2960,22 @@
     }
     fasMarkStep('postLanguage:priceCheckDone');
     await sleep(250 + Math.floor(Math.random() * 450));
+    // 2026-10-01 (Patrick: "the language one tried to choose English but didn't succeed"): the sweep
+    // above re-checks every field Vinted resets after the Language save EXCEPT Language itself, so a
+    // Language value that was set and then wiped (or never stuck) went completely unreported. Read it
+    // one last time, log it, and surface a persistent review-screen warning if it is empty. Deliberately
+    // NOT re-opening the Language modal here: each Language save is what triggers Vinted's field reset,
+    // so a blind retry would just restart the whole sweep.
+    if (looksLikeVintedBookOrComicItem(item)) {
+      const finalLang = document.getElementById('language_book');
+      const finalLangText = finalLang ? norm(finalLang.value) : '';
+      const finalLangSet = finalLangText && finalLangText !== norm('Select a language');
+      console.log('[FAS Vinted DIAG] language: final check #language_book exists=' + !!finalLang + ' value="' + (finalLang ? finalLang.value : '') + '"');
+      if (!finalLangSet) {
+        console.warn('[FAS Vinted] Language is still empty at the end of the fill (field ' + (finalLang ? 'present' : 'NOT in the DOM') + ') -- set it yourself before publishing.');
+        warnings.push('Language is empty -- Vinted requires it for Books/Comics. Please choose English yourself before publishing.');
+      }
+    }
     return { photosOk, warnings };
   }
 
@@ -3022,10 +3100,10 @@
 
   function vintRemSyntheticClick(target) {
     if (!target) return false;
-    // FIX 2026-09-27 (S-EXT-VINTED-BOT-FINGERPRINT): same fix as realOutsideClick above -- randomize
-    // the coordinate instead of reusing the identical clientX:5/clientY:5 on every call.
-    const jx = 2 + Math.floor(Math.random() * 60);
-    const jy = 2 + Math.floor(Math.random() * 60);
+    // 2026-10-01: use the target's own center as the event position (see realOutsideClick).
+    const rect = target.getBoundingClientRect ? target.getBoundingClientRect() : { left: 0, top: 0, width: 10, height: 10 };
+    const jx = Math.max(1, Math.round(rect.left + rect.width / 2));
+    const jy = Math.max(1, Math.round(rect.top + rect.height / 2));
     const opts = { bubbles: true, cancelable: true, view: window, clientX: jx, clientY: jy };
     target.dispatchEvent(new PointerEvent('pointerdown', opts));
     target.dispatchEvent(new MouseEvent('mousedown', opts));
@@ -3488,6 +3566,41 @@
   // matter what. Go straight to the real delete button instead.
   async function deleteVintedListingOnDetailPage(item) {
     if (looksLikeInterstitial()) return 'interstitial';
+    // 2026-10-01 (Patrick: prefer "mark sold" over delete -- delete/relist cycles are what actually gets
+    // sellers banned): Vinted's own seller sidebar has `mark-as-sold-button` (live-confirmed testid,
+    // see the comment above) and its Help Centre documents it for items sold outside Vinted. Try that
+    // first; the in-page confirmation step is NOT live-verified, so anything unexpected backs out with
+    // Escape and falls through to the existing, proven delete path below -- never a regression.
+    const FAS_VINTED_PREFER_MARK_SOLD = true;
+    const soldBtn = document.querySelector('button[data-testid="mark-as-sold-button"]');
+    if (FAS_VINTED_PREFER_MARK_SOLD && soldBtn && soldBtn.offsetParent !== null) {
+      try {
+        console.log('[FAS Vinted] sold-elsewhere removal: trying Vinted\'s own "Mark as sold" first.');
+        vintRemSyntheticClick(soldBtn);
+        const dlgDeadline = Date.now() + 3500;
+        let confirmed = false;
+        while (Date.now() < dlgDeadline && !confirmed) {
+          await sleep(300);
+          if (!document.querySelector('button[data-testid="mark-as-sold-button"]')) { confirmed = true; break; }
+          const dlg = document.querySelector('[role="dialog"], [data-testid*="modal" i]');
+          if (dlg) {
+            const ok = Array.from(dlg.querySelectorAll('button, [role="button"]')).find((el) => el.offsetParent !== null && /^(confirm|mark as sold|yes|continue|save|done|submit)\b/i.test(String(el.textContent || '').trim()) && !/cancel|delete/i.test(String(el.textContent || '')));
+            if (ok) { vintRemSyntheticClick(ok); await sleep(1200); }
+          }
+        }
+        for (let i = 0; i < 6 && !confirmed; i++) {
+          await sleep(700);
+          if (!document.querySelector('button[data-testid="mark-as-sold-button"]') || /^\/member\//.test(location.pathname)) confirmed = true;
+        }
+        if (confirmed) {
+          console.log('[FAS Vinted] sold-elsewhere removal: listing marked as sold on Vinted (no delete).');
+          return 'deleted'; // downstream treats 'deleted' as "no longer an active listing"
+        }
+        console.log('[FAS Vinted] sold-elsewhere removal: "Mark as sold" did not complete -- falling back to delete.');
+        document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(400);
+      } catch (e) { console.warn('[FAS Vinted] mark-as-sold attempt threw -- falling back to delete:', e && e.message); }
+    }
     const deleteBtn = document.querySelector('button[data-testid="item-delete-button"]');
     if (!deleteBtn) return 'no_delete_action';
 
@@ -4043,7 +4156,7 @@
   // Vinted tabs, and sends nothing unless the whole wardrobe was read. Each sold listing id is
   // reported once (VINT_SOLD_REPORTED_KEY); the backend resolves it to the organizer's item and
   // commits the sale (extensionController.ts reportVintedSold).
-  const VINT_SOLD_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+  const VINT_SOLD_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 2026-10-01: safety net only (was 30 min). PRIMARY Vinted sold detection is the forwarded sold-email poll (ADR-131, backend, every 20 min, zero Vinted traffic)
   const VINT_SOLD_LAST_CHECK_KEY = 'fasVintedSoldCheckLastAt';
   const VINT_SOLD_REPORTED_KEY = 'fasVintedSoldReportedIds';
   const VINT_SOLD_LAST_OUTCOME_KEY = 'fasVintedSoldCheckLastOutcome';
@@ -4261,6 +4374,7 @@
       button('fas-vin-continue', 'Continue to next item &#9654;', true) +
       button('fas-vin-close', 'Not yet', false));
     const cont = document.getElementById('fas-vin-continue');
+    fasArmButton(cont, 3500);
     if (cont) cont.onclick = async () => {
       console.log('[FAS Vinted] continue-prompt: Continue clicked for item ' + queued.item.id);
       // FIX 2026-09-01 (S-EXT-VINTED-CONTINUE-UX): same immediate synchronous feedback as
@@ -4270,7 +4384,7 @@
       // needs the same instant "something happened" reaction, not a dead button for up to 25s.
       cont.disabled = true;
       cont.textContent = 'Please wait…';
-      startQueueDelayCountdown(guessedQueueDelayMs(), 'the next item');
+      await fasVintedRecordPost();
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: queued.item.id, remoteListingId: null, platform: 'VINTED' }); } catch (e) { if (fasContextGone(e)) console.log('[FAS Vinted] continue-prompt: extension was reloaded, markListed skipped. Reload this page.'); else console.warn('[FAS Vinted] continue-prompt: markListed failed:', e && e.message); }
       // S-EXT-VINTED-REMOTE-LISTING-ID: this prompt usually shows on the organizer's own
       // /member/<id>?promo_shown=true landing page right after Vinted's Upload -- the best moment
@@ -4519,6 +4633,7 @@
           button('fas-vin-skip-next', 'Continue to next item &#9654;', true) +
           button('fas-vin-close', 'Not yet', false));
         const skipNext = document.getElementById('fas-vin-skip-next');
+        fasArmButton(skipNext, 3500);
         if (skipNext) skipNext.onclick = () => { location.href = LISTING_URL_HINT; };
         closeBtnHandler();
       } else {
@@ -4586,4 +4701,31 @@
     if (!ranRemoval) start();
     watchForVintedNavigationAway();
   })();
+})();
+
+
+// ---- Challenge / restriction page detector (2026-10-01) ----------------------------------------
+// If the marketplace replaces the page with a full-page bot check or an access-denied wall, tell the
+// background worker so it pauses this marketplace (the organizer un-pauses it in the popup after looking
+// at their account). Deliberately conservative: only a page whose TITLE says so, or a very short page
+// that carries a captcha widget, counts. Normal login or signup pages that embed a captcha do not.
+// This code never interacts with the challenge.
+(function fasChallengeDetector() {
+  const PLATFORM = 'VINTED';
+  let reported = false;
+  function check() {
+    if (reported) return;
+    try {
+      const title = String(document.title || '');
+      const byTitle = /^(access denied|just a moment|attention required|verify you are human|are you a (human|robot)|you have been blocked|request blocked|pardon our interruption)/i.test(title.trim());
+      const bodyLen = ((document.body && document.body.innerText) || '').trim().length;
+      const widget = !!document.querySelector('iframe[src*="captcha-delivery.com"], iframe[src*="geo.captcha-delivery"], #px-captcha, iframe[src*="challenges.cloudflare.com"], #challenge-form, #challenge-running');
+      if (byTitle || (widget && bodyLen < 800)) {
+        reported = true;
+        chrome.runtime.sendMessage({ type: 'platformRestricted', platform: PLATFORM, reason: byTitle ? 'title:' + title.slice(0, 60) : 'challenge_widget' }, () => { void chrome.runtime.lastError; });
+      }
+    } catch (e) { /* never break the page script */ }
+  }
+  setTimeout(check, 2500);
+  setTimeout(check, 9000);
 })();

@@ -6,8 +6,10 @@ then auto-advances through Delivery, Offer, and Groups and clicks **Publish** it
 (2026-07-15 ADR-084 amendment). It stops immediately and asks for help if any step
 doesn't match what it expects — it never guesses past a step it can't find. FindA.Sale
 never logs into Facebook directly; everything runs inside the organizer's own
-browser session. It drives Facebook's form with ordinary content-script events — no
-Chrome debugger permission and no "this extension is debugging your browser" banner.
+browser session. It drives Facebook's form with ordinary content-script events. The
+Chrome `debugger` permission is declared in the manifest but is used only on Grailed
+(a real mouse click for its Designer field) and for dismissing a navigation dialog
+during Vinted runs; the Facebook flow itself does not use it.
 
 Why an extension: Facebook has no Marketplace listing API, only personal profiles
 can list (not Pages), and the bulk-upload spreadsheet has no photo column — so the
@@ -42,8 +44,8 @@ browser session. Full rationale: `claude_docs/architecture/ADR-084-marketplace-a
   content-script synthetic events — `realClick()` in `fas-selectors.js` dispatches a full
   hover/focus/press/release sequence (pointerover → pointerenter → pointermove →
   pointerdown → mousedown → focus → pointerup → mouseup → click), which Facebook's
-  shipping-weight picker and "Update" button accept (confirmed live 2026-07-17). No
-  debugger permission is needed.
+  shipping-weight picker and "Update" button accept (confirmed live 2026-07-17). The
+  Facebook flow does not need the debugger permission.
 - `fas-selectors.js` → the ONLY place Facebook's form is located, by role/aria/text
   (never Facebook's CSS classes). If Facebook changes their form, update this file.
 
@@ -56,9 +58,13 @@ browser session. Full rationale: `claude_docs/architecture/ADR-084-marketplace-a
 - Runs only in the organizer's own session, with human-paced delays between actions,
   opt-in per organizer.
 - Not a pnpm workspace member; never built/deployed by Vercel or Railway.
-- Uses only ordinary content-script synthetic events to interact with Facebook's form —
-  no `debugger` permission, no Chrome DevTools Protocol, and no "is debugging your
-  browser" banner. Facebook's shipping-weight picker and "Update" button accept these
-  events given the full hover/focus/press/release sequence (confirmed live 2026-07-17).
+- Uses only ordinary content-script synthetic events to interact with Facebook's form.
+  Facebook's shipping-weight picker and "Update" button accept these events given the
+  full hover/focus/press/release sequence (confirmed live 2026-07-17). The `debugger`
+  permission (Chrome DevTools Protocol) is used only for Grailed's Designer field and a
+  Vinted navigation dialog; Chrome shows its "is debugging this browser" banner while it
+  is attached.
+- Marketplace policy research, enforcement evidence and the soft-go policy live in
+  ADR-084 (Addendum 2026-10-01 and the research passes after it).
 - findasale-legal reviewed this amendment 2026-07-15 and approved it for shipping with
   the conditions above — see ADR-084's amendment section.

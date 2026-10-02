@@ -169,14 +169,13 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // S-EXT-BOT-FINGERPRINT-REMEDIATION (2026-09-20, confirmed bot fingerprint -- Facebook
-  // account checkpointed for "automated behavior" this session): a single instant native-setter
-  // write + two synthetic events filled Title/Price/Description in 0ms, which no real user does.
-  // Types the value in one character at a time via the same native setter, firing a
-  // keydown/input/keyup triplet per character with a randomized 40-120ms gap between characters
-  // (this file's existing humanPause helper, defined below -- function declarations are hoisted,
-  // so it's already available here), then a trailing 'change' event once typing finishes so
-  // React's final onChange still fires exactly as before.
+  // S-EXT-TYPING-FILL (2026-09-20): fills Title/Price/Description by typing the value one character at
+  // a time through the same native setter, firing keydown/input/keyup per character with a 40-120ms gap
+  // (humanPause, defined below; function declarations are hoisted), then one trailing 'change' so
+  // React's final onChange still fires. This matches how the form is normally used, so Facebook's
+  // field validation and character counters update as they do for a person typing. History: a
+  // Facebook account was checkpointed for "automated behavior" the same day this was added; the exact
+  // cause was never established, and this change is not claimed to prevent that.
   async function fillText(labelText, value) {
     if (value === undefined || value === null || value === '') return true;
     const el = SEL.fieldByLabel(labelText);
@@ -831,7 +830,7 @@
       : null;
     const results = { title: await fillText(LABELS.title, item.title),
                       price: await fillText(LABELS.price, filledPriceValue != null ? String(filledPriceValue) : item.price),
-                      description: await fillText(LABELS.description, item.description) };
+                      description: await fillText(LABELS.description, item.descriptionWithBacklink || item.description) };
     if (!results.title) throw hardError('Item details', 'Couldn\'t find the Title field.');
     if (!results.price) throw hardError('Item details', 'Couldn\'t find the Price field.');
 

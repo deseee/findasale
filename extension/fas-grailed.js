@@ -2134,3 +2134,30 @@
     if (!ranRemoval) start();
   })();
 })();
+
+
+// ---- Challenge / restriction page detector (2026-10-01) ----------------------------------------
+// If the marketplace replaces the page with a full-page bot check or an access-denied wall, tell the
+// background worker so it pauses this marketplace (the organizer un-pauses it in the popup after looking
+// at their account). Deliberately conservative: only a page whose TITLE says so, or a very short page
+// that carries a captcha widget, counts. Normal login or signup pages that embed a captcha do not.
+// This code never interacts with the challenge.
+(function fasChallengeDetector() {
+  const PLATFORM = 'GRAILED';
+  let reported = false;
+  function check() {
+    if (reported) return;
+    try {
+      const title = String(document.title || '');
+      const byTitle = /^(access denied|just a moment|attention required|verify you are human|are you a (human|robot)|you have been blocked|request blocked|pardon our interruption)/i.test(title.trim());
+      const bodyLen = ((document.body && document.body.innerText) || '').trim().length;
+      const widget = !!document.querySelector('iframe[src*="captcha-delivery.com"], iframe[src*="geo.captcha-delivery"], #px-captcha, iframe[src*="challenges.cloudflare.com"], #challenge-form, #challenge-running');
+      if (byTitle || (widget && bodyLen < 800)) {
+        reported = true;
+        chrome.runtime.sendMessage({ type: 'platformRestricted', platform: PLATFORM, reason: byTitle ? 'title:' + title.slice(0, 60) : 'challenge_widget' }, () => { void chrome.runtime.lastError; });
+      }
+    } catch (e) { /* never break the page script */ }
+  }
+  setTimeout(check, 2500);
+  setTimeout(check, 9000);
+})();

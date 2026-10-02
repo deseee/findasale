@@ -346,8 +346,31 @@ function setCurrentListedFlag(it) {
 // Facebook publishes automatically and manages sold-elsewhere removal; Craigslist does neither
 // (the human owns the final publish + all verification), so hide the FB-only controls and show
 // the Craigslist explainer when Craigslist is the selected channel.
+
+// Suggestion only (never blocks the button): after a long run on one marketplace, mention that
+// many sellers slow down. Counts come from background.js (fasRecordPostTime) and, for Vinted,
+// fas-vinted.js (fasVintedPostTimes).
+const FAS_PACE_SUGGEST_PER_HOUR = 12;
+function showPaceHint(ch) {
+  const el = $('paceHint'); if (!el) return;
+  el.hidden = true;
+  const key = ch === 'vinted' ? 'fasVintedPostTimes' : (['poshmark', 'mercari', 'grailed'].indexOf(ch) !== -1 ? 'fasPostTimes_' + ch.toUpperCase() : null);
+  if (!key) return;
+  try {
+    chrome.storage.local.get([key], (st) => {
+      const cutoff = Date.now() - 60 * 60 * 1000;
+      const n = (Array.isArray(st && st[key]) ? st[key] : []).filter((t) => t > cutoff).length;
+      if (n >= FAS_PACE_SUGGEST_PER_HOUR) {
+        el.textContent = 'Suggestion: ' + n + ' items were listed here in the last hour. Some sellers slow down after long runs. This is up to you; nothing is delayed or blocked.';
+        el.hidden = false;
+      }
+    });
+  } catch (e) { /* storage unavailable: no hint */ }
+}
+
 function onChannelChange() {
   const ch = currentChannel();
+  showPaceHint(ch);
   const fb = ch === 'facebook';
   const cl = ch === 'craigslist';
   const gt = ch === 'gumtree_au';
