@@ -4475,12 +4475,24 @@
   // a ban on real guitars/pianos/violins). Confirmed wrong by Patrick's direct live observation
   // of ordinary instruments listed for sale on Vinted. No replacement -- see the backend file for
   // the full writeup.
+  // TOBACCIANA rule (added 2026-10-02), mirrors the backend VINTED tobacciana rule in
+  // marketplaceEligibilityRules.ts -- see that file for the evidence and the dry-run. Only the item
+  // types Vinted actually auto-removed (lighters, cigar/cigarette cases and tins, pipes); NOT a
+  // general tobacco blocklist.
+  const VINTED_TOBACCIANA_NAME_KEYWORDS = [
+    'tobacciana:lighter', 'lighters', 'cigarette lighter', 'cigar lighter',
+    'cigar case', 'cigarette case', 'cigar tin', 'cigarette tin',
+    'tobacciana:pipe', 'smoking pipe', 'tobacco pipe', 'pipe tobacco',
+  ];
+  const VINTED_TOBACCIANA_EXCLUDE_KEYWORDS = ['pouch', 'sticker', 'fluid', 'refill'];
+  const VINTED_TOBACCIANA_REASON = 'Vinted automatically removes lighters and cigar/cigarette cases and tins as restricted tobacco items.';
   function vintedRestrictionReason(category, title) {
     const haystack = (String(category || '') + ' ' + String(title || '')).toLowerCase();
     if (!haystack.trim()) return null;
     const rules = [
       { nameKeywords: VINTED_NOT_ALLOWED_NAME_KEYWORDS, excludeKeywords: VINTED_NOT_ALLOWED_EXCLUDE_KEYWORDS, reason: VINTED_NOT_ALLOWED_REASON },
       { nameKeywords: VINTED_WEAPONS_NAME_KEYWORDS, excludeKeywords: VINTED_WEAPONS_EXCLUDE_KEYWORDS, reason: VINTED_WEAPONS_REASON },
+      { nameKeywords: VINTED_TOBACCIANA_NAME_KEYWORDS, excludeKeywords: VINTED_TOBACCIANA_EXCLUDE_KEYWORDS, reason: VINTED_TOBACCIANA_REASON },
     ];
     for (const rule of rules) {
       const nameHit = rule.nameKeywords.some((kw) => haystack.indexOf(kw) !== -1);

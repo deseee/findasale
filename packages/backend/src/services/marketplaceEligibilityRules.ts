@@ -952,6 +952,29 @@ const RULES: EligibilityRule[] = [
     reason: 'This category isn’t allowed on Vinted (Items Not Allowed policy).',
   },
 
+  // ---- VINTED TOBACCIANA: LIGHTERS / CIGAR & CIGARETTE CASES-TINS / PIPES (added 2026-10-02) --
+  // Two listings were auto-removed on 2026-10-01/02 under "Restricted items" (cigarettes/cigars/pipes):
+  // a Ritmeester Pikeur "Cigar Case ... Tobacco Metal Tin" and 5 Marlboro Adventure Team lighters.
+  // Vinted's written policy does NOT ban lighters or traditional-cigarette accessories, and many
+  // tobacco tins, ashtrays and signs are live on Vinted (checked 2026-10-02), so this is deliberately
+  // NOT a tobacco-brand/word blocklist: it covers only the item types that were actually flagged.
+  // Dry-run against the production Item table (349 rows) before shipping: matches exactly those two
+  // items plus one unposted cigar tin, and no item currently posted on Vinted. Plural 'lighters' only
+  // (bare 'lighter' would catch accessories); cigar BOXES excluded on purpose (widely live on Vinted).
+  // Ashtrays, signs, ads and plain tobacco tins are intentionally NOT blocked. Revisit if the appeal
+  // or more removals show a different pattern. Mirrored in extension/fas-vinted.js.
+  {
+    type: 'CATEGORY_BLOCKLIST',
+    platform: 'VINTED',
+    nameKeywords: [
+      'tobacciana:lighter', 'lighters', 'cigarette lighter', 'cigar lighter',
+      'cigar case', 'cigarette case', 'cigar tin', 'cigarette tin',
+      'tobacciana:pipe', 'smoking pipe', 'tobacco pipe', 'pipe tobacco',
+    ],
+    excludeKeywords: ['pouch', 'sticker', 'fluid', 'refill'],
+    reason: 'Vinted automatically removes lighters and cigar/cigarette cases and tins as restricted tobacco items.',
+  },
+
   // ---- VINTED MUSICAL INSTRUMENTS -- REMOVED 2026-09-27 (same day as the SIZE_WEIGHT_CEILING
   // correction above). This rule was added S-EXT-ELIGIBILITY-SUBSTRING-FIX-2026-09-03 on a
   // misreading of Vinted's own policy page. The prior session read the bullet "Musical
