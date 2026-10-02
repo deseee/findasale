@@ -289,6 +289,7 @@ import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron
 import { startEbayListingSyncCron } from './jobs/ebayListingSyncCron'; // Feature #244 Phase 4: eBay bidirectional listing sync
 import { startEbayStuckOfferRetryCron } from './jobs/ebayStuckOfferRetryCron'; // S1215: auto-retry offers stuck in Pending Publish (offer-aware, never recreates)
 import { startEbayRenewalForecastCron } from './jobs/ebayRenewalForecastCron'; // ADR ebay-renewal-forecasting (2026-09-15): nightly GTC renewal-date forecast + approaching-cap-warning notification, zero eBay API calls
+import { startEbayReconciliationCron } from './jobs/ebayReconciliationCron'; // eBay sync hardening (2026-10-01): nightly read-only eBay live-listing vs FindA reconciliation (logs + alert on real discrepancies)
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { startFacebookMarketplaceEmailPollCron } from './jobs/facebookMarketplaceEmailPollCron'; // ADR-131: Facebook Marketplace order-confirmation-email IMAP poll (gated by FACEBOOK_SOLD_EMAIL_POLL_ENABLED)
@@ -1129,6 +1130,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // forecast cron (3:15 AM UTC — staggered after huntPassExpiryCron/markdownCycleCron
   // and the eBay listing-state crons above). Pure local arithmetic, zero eBay API calls.
   startEbayRenewalForecastCron();
+
+  // eBay sync hardening (2026-10-01): nightly READ-ONLY reconciliation of eBay's live listings vs FindA items (3:45 AM UTC)
+  startEbayReconciliationCron();
 
   // Feature #244 Phase 4: Register eBay Commerce Notification subscription (real-time sold sync)
   registerEbayNotificationSubscription().catch(err =>

@@ -6835,6 +6835,29 @@ model PendingListingRemoval {
   @@index([organizerId])
 }
 
+// eBay sync hardening (2026-10-01): audit trail for every hard delete of an Item row (single delete,
+// bulk delete, stale-draft cleanup). No FK to Item on purpose: it must outlive the deleted row. Written
+// by services/itemDeletionService.ts recordItemDeletion(), which never throws into the delete path.
+// Purpose: when an eBay listing is found live with no FindA item, this answers "was it deleted, by whom,
+// via which path, and did the marketplace withdraw succeed".
+model ItemDeletionLog {
+  id               String   @id @default(cuid())
+  itemId           String
+  organizerId      String?
+  title            String
+  ebayListingId    String?
+  ebayOfferId      String?
+  status           String?
+  source           String // single_delete | bulk_delete | cleanup_stale_drafts | ...
+  actorUserId      String?
+  withdrawSucceeded Boolean? // true = eBay end/withdraw confirmed, false = attempted and failed, null = nothing to withdraw / unknown
+  createdAt        DateTime @default(now())
+
+  @@index([itemId])
+  @@index([ebayListingId])
+  @@index([createdAt])
+}
+
 // Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability.
 // Decision log for every buyer message the extension ran through the price/availability
 // autosend engine (messageAutosendService.ts), whether or not it actually autosent.

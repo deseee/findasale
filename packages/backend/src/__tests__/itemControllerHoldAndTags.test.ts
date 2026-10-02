@@ -45,7 +45,7 @@ jest.mock('../utils/expireCheckoutSession', () => ({
   '../services/itemSaleGuard', '../services/shopifyService', '../services/marketplace/discogsListingConnector',
   '../services/marketplace/reverbConnector', '../services/nativeShippingSuggestionService',
   '../services/shippingLabelService', '../services/itemChannelStatusService', '../utils/actingOrganizer',
-  '../services/itemCsvImport',
+  '../services/itemCsvImport', '../services/itemDeletionService', '../services/ebaySaleReopenService', // eBay sync hardening (2026-10-01): new itemController imports
 ].forEach((p) => jest.mock(p, () => ({})));
 
 // Required AFTER the mocks above (imports are hoisted, so a plain import would load the real modules first).

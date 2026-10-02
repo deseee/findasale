@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
+import { fetchLiveEbayListings, itemIdFromFasSku, lookupOfferIdForSku } from '../services/ebayLiveListingsService'; // eBay sync hardening (2026-10-01): relist adoption + live ActiveList
 import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
 // Re-export the OAuth helpers so existing external importers of these from './ebayController' keep resolving (Phase 1 relocation).
 export { getEbayAccessToken, refreshEbayAccessToken } from '../services/ebayHttp';
@@ -5820,13 +5821,71 @@ function getCategoryLabel(categoryId: string): string {
 }
 
 /**
+ * End a live eBay listing through the legacy Trading API (EndFixedPriceItem). Used when there is no
+ * Inventory API offer to withdraw (legacy / unmanaged listing) or when the offer withdraw failed
+ * (e.g. the offer is UNPUBLISHED while the relisted eBay listing is still live). Returns true when
+ * the listing is ended (or eBay says it was already closed), false otherwise. Never throws.
+ */
+async function endListingViaTradingApi(accessToken: string, ebayListingId: string, itemId: string): Promise<boolean> {
+  try {
+    const requestXml = `<?xml version="1.0" encoding="utf-8"?>
+<EndFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${ebayListingId}</ItemID>
+  <EndingReason>NotAvailable</EndingReason>
+</EndFixedPriceItemRequest>`;
+
+    const tradingResponse = await fetch(ebayProxyUrl('/ws/api.dll'), {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'EndFixedPriceItem',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+        'X-EBAY-API-IAF-TOKEN': accessToken,
+        'Content-Type': 'text/xml',
+        ...ebayProxyHeaders(),
+      },
+      body: requestXml,
+    });
+    trackEbayCall();
+
+    const tradingText = await tradingResponse.text();
+    const ack = xmlVal(tradingText, 'Ack');
+    if (ack === 'Success' || ack === 'Warning') {
+      console.log(`[eBay] Successfully ended Trading-API listing ${ebayListingId} for item ${itemId}`);
+      return true;
+    }
+    const errMsg = xmlVal(tradingText, 'LongMessage') || xmlVal(tradingText, 'ShortMessage') || 'Unknown error';
+    const errCode = xmlVal(tradingText, 'ErrorCode');
+    // 1047 = "auction closed / listing already ended": the listing is not live, which is the goal.
+    if (errCode === '1047' || /already (been )?(ended|closed)/i.test(errMsg)) {
+      console.log(`[eBay] Listing ${ebayListingId} for item ${itemId} was already ended on eBay (${errMsg})`);
+      return true;
+    }
+    console.warn(
+      `[eBay] Trading API EndFixedPriceItem failed for item ${itemId} (eBay ItemID ${ebayListingId}): ${ack} — ${errMsg}`
+    );
+    return false;
+  } catch (tradingErr) {
+    console.warn(`[eBay] Trading API end-listing error for item ${itemId}:`, tradingErr);
+    return false;
+  }
+}
+
+/**
  * Withdraw an eBay offer when the item sells on FindA.Sale, or when it's deleted
  * (P3 cleanup 2026-09-28: added the `reason` param so the success log and the
  * renewal-forecast-clear race below can tell the two apart -- see that comment).
  * Fire-and-forget: logs errors but does not throw
  * Prevents double-sell risk (item stays active on eBay after FindA.Sale sale)
+ *
+ * eBay sync hardening (2026-10-01): now resolves the organizer from the sale OR the item's own
+ * organizerId (imported inventory items have saleId null and were silently skipped before), falls
+ * back to the Trading API end call when the Inventory offer withdraw fails, and RETURNS an outcome so
+ * callers can log it: true = listing ended/withdrawn, false = an attempt was made and failed,
+ * null = nothing to end (never listed on eBay). Existing callers ignore the value.
  */
-export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'delete' = 'sold'): Promise<void> {
+export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'delete' = 'sold'): Promise<boolean | null> {
   try {
     // Query the item for offer and listing IDs
     const item = await prisma.item.findUnique({
@@ -5835,6 +5894,7 @@ export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'd
         ebayOfferId: true,
         ebayListingId: true,
         saleId: true,
+        organizerId: true,
         createdAt: true,
         costBasis: true,
         roomTag: true,
@@ -5843,8 +5903,20 @@ export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'd
 
     if (!item) {
       console.warn(`[eBay] Item ${itemId} not found`);
-      return;
+      return null;
     }
+
+    // Resolve the owning organizer: via the sale when there is one, else the item's own
+    // (denormalized) organizerId -- inventory items imported from eBay have saleId = null.
+    let resolvedOrganizerId: string | null = null;
+    if (item.saleId) {
+      const saleForOrganizer = await prisma.sale.findUnique({
+        where: { id: item.saleId },
+        select: { organizerId: true },
+      });
+      resolvedOrganizerId = saleForOrganizer?.organizerId ?? null;
+    }
+    if (!resolvedOrganizerId) resolvedOrganizerId = item.organizerId ?? null;
 
     // S1157 fix: ebayOfferId can go stale (cleared by the stale-category
     // delete+recreate path above without a follow-up republish landing) while
@@ -5855,20 +5927,14 @@ export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'd
     // giving up. Self-heals the DB so future calls don't need to re-resolve it.
     let offerId: string | null = item.ebayOfferId;
 
-    if (!offerId && item.ebayListingId && item.saleId) {
-      const saleForOrganizer = await prisma.sale.findUnique({
-        where: { id: item.saleId },
-        select: { organizerId: true },
+    if (!offerId && item.ebayListingId && resolvedOrganizerId) {
+      const organizerForSku = await prisma.organizer.findUnique({
+        where: { id: resolvedOrganizerId },
+        select: { skuAppendDate: true, skuAppendCost: true, skuAppendLocation: true },
       });
-      const organizerForSku = saleForOrganizer
-        ? await prisma.organizer.findUnique({
-            where: { id: saleForOrganizer.organizerId },
-            select: { skuAppendDate: true, skuAppendCost: true, skuAppendLocation: true },
-          })
-        : null;
 
-      if (saleForOrganizer && organizerForSku) {
-        const accessTokenForLookup = await refreshEbayAccessToken(saleForOrganizer.organizerId);
+      if (organizerForSku) {
+        const accessTokenForLookup = await refreshEbayAccessToken(resolvedOrganizerId);
         if (accessTokenForLookup) {
           const sku = buildCustomLabel(itemId, organizerForSku, item);
           try {
@@ -5904,100 +5970,47 @@ export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'd
     // regardless of which API created the listing (same value GetItem/EndedSync
     // already use elsewhere in this file) -- fall back to ending it directly via
     // the legacy Trading API's EndFixedPriceItem call before giving up entirely.
-    if (!offerId && item.ebayListingId && item.saleId) {
-      const saleForTradingApi = await prisma.sale.findUnique({
-        where: { id: item.saleId },
-        select: { organizerId: true },
-      });
-      const accessTokenForTradingApi = saleForTradingApi
-        ? await refreshEbayAccessToken(saleForTradingApi.organizerId)
-        : null;
-
-      if (accessTokenForTradingApi) {
-        try {
-          const requestXml = `<?xml version="1.0" encoding="utf-8"?>
-<EndFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <ItemID>${item.ebayListingId}</ItemID>
-  <EndingReason>NotAvailable</EndingReason>
-</EndFixedPriceItemRequest>`;
-
-          const tradingResponse = await fetch(ebayProxyUrl('/ws/api.dll'), {
-            method: 'POST',
-            headers: {
-              'X-EBAY-API-CALL-NAME': 'EndFixedPriceItem',
-              'X-EBAY-API-SITEID': '0',
-              'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-              'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
-              'X-EBAY-API-IAF-TOKEN': accessTokenForTradingApi,
-              'Content-Type': 'text/xml',
-              ...ebayProxyHeaders(),
-            },
-            body: requestXml,
-          });
-          trackEbayCall();
-
-          const tradingText = await tradingResponse.text();
-          const ack = xmlVal(tradingText, 'Ack');
-          if (ack === 'Success' || ack === 'Warning') {
-            console.log(
-              `[eBay] Successfully ended legacy Trading-API listing ${item.ebayListingId} for item ${itemId} (no Inventory API offer existed)`
-            );
-          } else {
-            const errMsg = xmlVal(tradingText, 'LongMessage') || xmlVal(tradingText, 'ShortMessage') || 'Unknown error';
-            console.warn(
-              `[eBay] Trading API EndFixedPriceItem failed for item ${itemId} (eBay ItemID ${item.ebayListingId}): ${ack} — ${errMsg}`
-            );
-          }
-        } catch (tradingErr) {
-          console.warn(`[eBay] Trading API end-listing error for item ${itemId}:`, tradingErr);
-        }
-      } else {
-        console.warn(`[eBay] Could not get access token for Trading API fallback on item ${itemId}`);
+    // (2026-10-01: no longer requires item.saleId -- imported inventory items qualify.)
+    if (!offerId && item.ebayListingId) {
+      if (!resolvedOrganizerId) {
+        console.warn(`[eBay] Cannot end listing ${item.ebayListingId} for item ${itemId}: no organizer resolvable (no sale, no organizerId)`);
+        return false;
       }
-
-      // Whether the Trading API call above succeeded, failed, or couldn't get a
-      // token, there is no Inventory API offerId to withdraw for this item.
-      return;
+      const accessTokenForTradingApi = await refreshEbayAccessToken(resolvedOrganizerId);
+      if (!accessTokenForTradingApi) {
+        console.warn(`[eBay] Could not get access token for Trading API fallback on item ${itemId}`);
+        return false;
+      }
+      // Whether the Trading API call succeeds or fails, there is no Inventory API offerId to withdraw.
+      return await endListingViaTradingApi(accessTokenForTradingApi, item.ebayListingId, itemId);
     }
 
     // If still no offer ID and no ebayListingId either, item was never pushed to
     // eBay (or is genuinely unresolvable) -- nothing to withdraw.
     if (!offerId) {
-      return;
+      return null;
     }
 
-    // Feature #300: eBay item may have null saleId (inventory item) — skip sale lookup
-    if (!item.saleId) {
-      console.warn(`eBay item ${itemId} has no saleId — skipping sale lookup`);
-      return;
-    }
-
-    // Get organizer's eBay connection via the sale
-    const sale = await prisma.sale.findUnique({
-      where: { id: item.saleId },
-      select: { organizerId: true },
-    });
-
-    if (!sale) {
-      console.warn(`[eBay] Sale ${item.saleId} not found for item ${itemId}`);
-      return;
+    if (!resolvedOrganizerId) {
+      console.warn(`[eBay] No organizer resolvable for item ${itemId} (no sale, no organizerId) -- cannot withdraw offer ${offerId}`);
+      return false;
     }
 
     const organizer = await prisma.organizer.findUnique({
-      where: { id: sale.organizerId },
+      where: { id: resolvedOrganizerId },
       select: { ebayConnection: true },
     });
 
     if (!organizer?.ebayConnection) {
       console.warn(`[eBay] No eBay connection for organizer of item ${itemId}`);
-      return;
+      return false;
     }
 
     // Refresh access token if needed
     const accessToken = await refreshEbayAccessToken(organizer.ebayConnection.organizerId);
     if (!accessToken) {
       console.error(`[eBay] Could not refresh token to withdraw offer for item ${itemId}`);
-      return;
+      return false;
     }
 
     // Call eBay API to withdraw the offer
@@ -6018,7 +6031,13 @@ export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'd
       console.error(
         `[eBay] Failed to withdraw offer ${offerId} for item ${itemId}: ${response.status} ${errorData}`
       );
-      return;
+      // The offer can be UNPUBLISHED while the (relisted) eBay listing is still live and unmanaged;
+      // withdraw then fails but the listing keeps selling. End the live listing directly instead.
+      if (item.ebayListingId) {
+        console.warn(`[eBay] Falling back to Trading API end for item ${itemId} (eBay ItemID ${item.ebayListingId})`);
+        return await endListingViaTradingApi(accessToken, item.ebayListingId, itemId);
+      }
+      return false;
     }
 
     console.log(
@@ -6049,9 +6068,11 @@ export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'd
         console.warn(`[eBay] Failed to clear renewal-forecast fields for item ${itemId} after withdraw (non-fatal):`, (clearErr as Error).message);
       }
     }
+    return true;
   } catch (error) {
     console.error(`[eBay] Error withdrawing eBay listing for item ${itemId}:`, error);
     // Fire-and-forget: don't throw
+    return false;
   }
 }
 
@@ -6105,6 +6126,56 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
     // --- Title reconciliation helper (links classic / non-FAS eBay listings to existing items) ---
     const normTitleForMatch = (v: string | null | undefined): string =>
       (v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    // eBay sync hardening (2026-10-01): listings this run could NOT tie to an existing FindA item with
+    // confidence. Returned in the response and logged so duplicates / orphans are visible, not silent.
+    const unreconciled: Array<{ ebayListingId: string; sku: string | null; title: string; reason: string }> = [];
+
+    // Lazily-fetched set of ItemIDs live right now (null = fetch incomplete, so staleness is unprovable).
+    let liveIdsPromise: Promise<Set<string> | null> | null = null;
+    const getLiveIds = (): Promise<Set<string> | null> =>
+      (liveIdsPromise ??= fetchLiveEbayListings(accessToken).then((r) =>
+        r.complete ? new Set(r.listings.map((l) => l.itemId)) : null
+      ));
+
+    // Adopt an existing item by SKU prefix "FAS-<itemId>[ date...]" (relisted listings carry a new ItemID
+    // and a date-suffixed SKU, so exact-id matching never found them). Only touches an item of THIS
+    // organizer whose link is null or provably stale (points at a listing that is not live). Returns true
+    // when the listing is accounted for (adopted, already linked, or deliberately left alone), so the
+    // caller must not create a duplicate inventory item.
+    const tryAdoptBySkuPrefix = async (sku: string | null, listingId: string, title: string): Promise<boolean> => {
+      const fasId = itemIdFromFasSku(sku);
+      if (!fasId || !listingId) return false;
+      const candidate = await prisma.item.findFirst({
+        where: { id: fasId, OR: [{ organizerId: organizer.id }, { sale: { organizerId: organizer.id } }] },
+        select: { id: true, ebayListingId: true, draftStatus: true, listedOnEbayAt: true },
+      });
+      if (!candidate) return false;
+      if (candidate.ebayListingId === listingId) return true;
+      const linkedElsewhere = await prisma.item.findFirst({
+        where: { ebayListingId: listingId, id: { not: candidate.id } },
+        select: { id: true },
+      });
+      if (linkedElsewhere) return false; // listing already owned by another item; let the normal dedupe path handle it
+      if (candidate.ebayListingId) {
+        const liveIds = await getLiveIds();
+        if (liveIds === null || liveIds.has(candidate.ebayListingId)) {
+          unreconciled.push({ ebayListingId: listingId, sku, title, reason: `fas_sku_item_${candidate.id}_linked_to_other_live_listing_${candidate.ebayListingId}` });
+          console.warn(`[eBay Import] SKU ${sku} -> item ${candidate.id} already linked to listing ${candidate.ebayListingId} (live or unverifiable); NOT adopting ${listingId}`);
+          return true;
+        }
+      }
+      await prisma.item.update({
+        where: { id: candidate.id },
+        data: {
+          ebayListingId: listingId,
+          listedOnEbayAt: candidate.listedOnEbayAt ?? new Date(),
+          ...(candidate.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+        },
+      });
+      console.log(`[eBay Import] ADOPTED by SKU prefix: listing ${listingId} (sku="${sku}") -> item ${candidate.id} (was ${candidate.ebayListingId ?? 'unlinked'})`);
+      return true;
+    };
+
     // Returns true if an existing organizer item was backfilled with this listing —
     // caller must then skip creating a duplicate inventory item.
     const tryReconcileByTitle = async (
@@ -6137,6 +6208,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       if (hits.length === 0) return false;
       if (hits.length > 1) {
         console.warn(`[eBay Import] Title tie — ${hits.length} existing items match "${target}" for organizer ${organizer.id}; skipping reconciliation, creating inventory item.`);
+        unreconciled.push({ ebayListingId: listingId, sku: null, title: rawTitle, reason: `title_tie_${hits.length}_candidates` });
         return false;
       }
       const hit = hits[0];
@@ -6206,7 +6278,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
         if (sku.startsWith('FAS-')) {
           // Extract FindA.Sale itemId from SKU
-          const itemId = sku.slice(4); // Remove 'FAS-' prefix
+          // 2026-10-01: relisted items carry a date-suffixed SKU ("FAS-<id> 2026-07-16"); take the id only.
+          const itemId = itemIdFromFasSku(sku) || sku.slice(4);
           existing = await prisma.item.findUnique({
             where: { id: itemId }
           });
@@ -6349,6 +6422,11 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         // Reconcile this classic/non-FAS listing with an existing item by normalized title before creating a duplicate
         if (await tryReconcileByTitle(title, ebayListingIdToStore, null, null)) { skipped++; continue; }
 
+        // Multi-quantity listing (2026-10-01): carry the unit count so the sold sync's stock pool is right.
+        const invQtyRaw = Number(ebayItem.availability?.shipToLocationAvailability?.quantity);
+        const invQty = Number.isFinite(invQtyRaw) && invQtyRaw > 1 ? Math.floor(invQtyRaw) : null;
+        unreconciled.push({ ebayListingId: ebayListingIdToStore, sku, title, reason: 'created_new_inventory_item_no_match' });
+
         await prisma.item.create({
           data: {
             title: title.slice(0, 255),
@@ -6360,6 +6438,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             organizerId: organizer.id,
             saleId: null,          // Feature #300: inventory items need no sale container
             ebayListingId: ebayListingIdToStore, // numeric listingId if offer fetch succeeded; sku as fallback
+            ...(invQty ? { stockTotal: invQty, ebayQuantityAvailable: invQty } : {}),
             // Imported item is live on eBay — publish it on FindA.Sale immediately
             // rather than landing it on the "review & publish" queue.
             draftStatus: 'PUBLISHED',
@@ -6401,7 +6480,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       while (tradingPage <= tradingTotalPages) {
         // OAuth tokens use X-EBAY-API-IAF-TOKEN header — NOT <eBayAuthToken> (that's legacy Auth'n'Auth only)
         // OutputSelector replaces GranularityLevel (mutually exclusive); use OutputSelector to get specific fields
-        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><OutputSelector>ActiveList.ItemArray.Item.ItemID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SKU</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.Title</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SellingStatus</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.BuyItNowPrice</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PictureDetails</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.ConditionID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PrimaryCategory</OutputSelector><OutputSelector>ActiveList.PaginationResult</OutputSelector><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
+        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><OutputSelector>ActiveList.ItemArray.Item.ItemID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SKU</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.Title</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SellingStatus</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.Quantity</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.QuantityAvailable</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.BuyItNowPrice</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PictureDetails</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.ConditionID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PrimaryCategory</OutputSelector><OutputSelector>ActiveList.PaginationResult</OutputSelector><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
 
         const tradingResp = await fetch(ebayProxyUrl('/ws/api.dll'), {
           method: 'POST',
@@ -6460,6 +6539,10 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           });
 
           const titleRaw = xmlVal(itemBlock, 'Title') || ebayItemId;
+          // Listing quantity (2026-10-01): total units = max(Quantity, QuantityAvailable + QuantitySold) so it is
+          // right whether eBay reports Quantity as the original total or as the remaining count.
+          const qtyNum = (t: string): number => { const n = parseInt(xmlVal(itemBlock, t) || '', 10); return Number.isFinite(n) ? n : 0; };
+          const listingQty = Math.max(qtyNum('Quantity'), qtyNum('QuantityAvailable') + qtyNum('QuantitySold'));
           const priceRaw = xmlVal(itemBlock, 'CurrentPrice') || xmlVal(itemBlock, 'BuyItNowPrice');
           const price = priceRaw ? parseFloat(priceRaw) : null;
           // OutputSelector includes PictureDetails with multiple PictureURL tags; GalleryURL is fallback
@@ -6529,8 +6612,17 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             continue;
           }
 
+          // 2026-10-01: adopt by SKU prefix FAS-<itemId> (relisted / date-suffixed SKU) BEFORE falling back to title.
+          if (await tryAdoptBySkuPrefix(sku, ebayItemId, titleRaw)) { skipped++; continue; }
+
           // Reconcile this classic listing with an existing item by normalized title before creating a duplicate
           if (await tryReconcileByTitle(titleRaw, ebayItemId, ebayCategoryIdFromImport ?? null, ebayCategory ?? null)) { skipped++; continue; }
+          unreconciled.push({
+            ebayListingId: ebayItemId,
+            sku,
+            title: titleRaw,
+            reason: itemIdFromFasSku(sku) ? 'fas_sku_no_matching_item_for_organizer_created_new_inventory_item' : 'created_new_inventory_item_no_match',
+          });
 
           await prisma.item.create({
             data: {
@@ -6545,6 +6637,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               organizerId: organizer.id,
               saleId: null,          // Feature #300: inventory items need no sale container
               ebayListingId: ebayItemId,  // always store numeric eBay ItemID, not SKU
+              ...(listingQty > 1 ? { stockTotal: listingQty, ebayQuantityAvailable: listingQty } : {}),
               // Imported item is live on eBay — publish it on FindA.Sale immediately.
               draftStatus: 'PUBLISHED',
               conditionGrade,
@@ -6572,6 +6665,13 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       data: { lastEbayInventorySyncAt: new Date() }
     });
 
+    // eBay sync hardening (2026-10-01): surface listings that could not be tied to an existing item.
+    console.log(
+      `[eBay Import] SUMMARY organizer=${organizer.id} imported=${imported} skipped=${skipped} unreconciled=${unreconciled.length} ` +
+        JSON.stringify(unreconciled.slice(0, 200).map((u) => ({ id: u.ebayListingId, sku: u.sku, reason: u.reason })))
+    );
+    const unreconciledPayload = { unreconciledCount: unreconciled.length, unreconciled: unreconciled.slice(0, 200) };
+
     // If truly found no eBay listings at all (imported 0, skipped 0)
     if (imported === 0 && skipped === 0) {
       const username = ebayConn.ebayUserId && ebayConn.ebayUserId !== 'unknown' ? ebayConn.ebayUserId : null;
@@ -6580,6 +6680,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         imported: 0,
         skipped: 0,
         total: 0,
+        ...unreconciledPayload,
         message: username
           ? `No active listings found for eBay seller "${username}". If you have listings, they may be in a different seller account or all items are already imported.`
           : 'No items found. eBay account username could not be resolved: try disconnecting and reconnecting your eBay account, then sync again.'
@@ -6592,6 +6693,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       imported,
       skipped,
       total: imported + skipped,
+      ...unreconciledPayload,
       message: `Imported ${imported} item${imported !== 1 ? 's' : ''} from eBay${skipped > 0 ? ` (${skipped} already existed)` : ''}. Syncing photos and details in the background…`
     });
 
@@ -7299,14 +7401,30 @@ export const getUnconfirmedWeightListings = async (req: AuthRequest, res: Respon
  * Uses Trading API GetItem (individual calls, still supported, no OAuth required).
  * Maintains batch structure of 20 for rate limiting.
  *
- * Returns: { checked: number, ended: number, itemsEnded: Array<{id, title, ebayListingId}> }
+ * Returns: { checked, ended, itemsEnded, adopted, itemsAdopted } -- adopted = relisted ItemIDs adopted (2026-10-01).
  */
 export async function syncEndedListingsForOrganizer(organizerId: string): Promise<{
   checked: number;
   ended: number;
   itemsEnded: Array<{ id: string; title: string; ebayListingId: string }>;
+  adopted: number;
+  itemsAdopted: Array<{ id: string; title: string; oldListingId: string; newListingId: string }>;
 }> {
-  const result = { checked: 0, ended: 0, itemsEnded: [] as Array<{ id: string; title: string; ebayListingId: string }> };
+  const result = {
+    checked: 0,
+    ended: 0,
+    itemsEnded: [] as Array<{ id: string; title: string; ebayListingId: string }>,
+    adopted: 0,
+    itemsAdopted: [] as Array<{ id: string; title: string; oldListingId: string; newListingId: string }>,
+  };
+  // eBay sync hardening (2026-10-01): per-run diagnostics, logged as one structured line at the end.
+  const diag = {
+    adopted: [] as string[],
+    cleared: [] as string[],
+    completedKeptSold: [] as string[],
+    skippedLiveFetchIncomplete: [] as string[],
+    adoptConflicts: [] as string[],
+  };
 
   try {
     // Get organizer's eBay connection
@@ -7330,12 +7448,15 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
       return result;
     }
 
-    // Fetch all AVAILABLE items with ebayListingId for this organizer
+    // Fetch all AVAILABLE items with ebayListingId for this organizer.
+    // 2026-10-01: includes saleId-null inventory items (imported from eBay) via the item's own
+    // organizerId -- same OR pattern as tryReconcileByTitle / ebaySoldSyncCron. Ownership through
+    // the sale alone silently skipped every imported item.
     const activeListings = await prisma.item.findMany({
       where: {
         ebayListingId: { not: null },
         status: 'AVAILABLE',
-        sale: { organizerId },
+        OR: [{ sale: { organizerId } }, { organizerId }],
       },
       select: {
         id: true,
@@ -7354,12 +7475,17 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
       `[eBay EndedSync] Organizer ${organizerId}: checking ${activeListings.length} active listings`
     );
 
-    // Get organizer's OAuth access token for Trading API
-    const accessToken = connection.accessToken;
+    // Get organizer's OAuth access token for Trading API (refresh when expired, fall back to the stored one)
+    const accessToken = (await refreshEbayAccessToken(organizerId)) || connection.accessToken;
     if (!accessToken) {
       console.error(`[eBay EndedSync] Organizer ${organizerId}: no OAuth access token found`);
       return result;
     }
+
+    // Live listings (ActiveList), fetched lazily at most once per run and only when some stored
+    // listing turns out Ended/Completed -- used to adopt a relisted ItemID (SKU prefix FAS-<itemId>).
+    let liveFetch: Promise<Awaited<ReturnType<typeof fetchLiveEbayListings>>> | null = null;
+    const getLive = () => (liveFetch ??= fetchLiveEbayListings(accessToken));
 
     // Phase 3 optimization: Batch GetItem calls in concurrent requests (groups of 20)
     // Instead of sequential API calls, fire all GetItem requests in parallel per batch
@@ -7397,7 +7523,7 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
             console.warn(
               `[eBay EndedSync] Trading API HTTP error ${ebayResponse.status} for item ${item.ebayListingId}`
             );
-            return { item, status: null, error: `HTTP ${ebayResponse.status}` };
+            return { item, status: null, quantitySold: null as number | null, error: `HTTP ${ebayResponse.status}` };
           }
 
           const ebayText = await ebayResponse.text();
@@ -7407,20 +7533,25 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
           if (ack && ack !== 'Success' && ack !== 'Warning') {
             const errMsg = xmlVal(ebayText, 'LongMessage') || xmlVal(ebayText, 'ShortMessage') || 'Unknown error';
             console.warn(`[eBay EndedSync] GetItem ${item.ebayListingId}: ${ack} — ${errMsg}`);
-            return { item, status: null, error: `${ack}: ${errMsg}` };
+            return { item, status: null, quantitySold: null as number | null, error: `${ack}: ${errMsg}` };
           }
 
           // Extract ListingStatus from XML response (eBay Trading API returns XML)
           const status = xmlVal(ebayText, 'ListingStatus') || '';
           if (!status) {
             console.warn(`[eBay EndedSync] No ListingStatus in response for ${item.ebayListingId}`);
-            return { item, status: null, error: 'No ListingStatus in response' };
+            return { item, status: null, quantitySold: null as number | null, error: 'No ListingStatus in response' };
           }
 
-          return { item, status, error: null };
+          // SellingStatus.QuantitySold: how many units sold on this listing (null when absent/unparseable)
+          const qsRaw = xmlVal(ebayText, 'QuantitySold');
+          const qsParsed = qsRaw !== null ? parseInt(qsRaw, 10) : NaN;
+          const quantitySold = Number.isFinite(qsParsed) ? qsParsed : null;
+
+          return { item, status, quantitySold, error: null };
         } catch (error) {
           console.error(`[eBay EndedSync] Error checking item ${item.ebayListingId}:`, error);
-          return { item, status: null, error: String(error) };
+          return { item, status: null, quantitySold: null as number | null, error: String(error) };
         }
       });
 
@@ -7428,7 +7559,7 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
       const batchResults = await Promise.all(getItemPromises);
 
       // Process results and update DB for ended listings
-      for (const { item, status, error } of batchResults) {
+      for (const { item, status, quantitySold, error } of batchResults) {
         if (error) {
           continue; // Skip items with errors
         }
@@ -7439,60 +7570,129 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
 
         result.checked++;
 
-        // eBay status semantics — `Completed` and `Ended` are NOT the same:
-        //   Completed = the listing SOLD (closed by a buyer).
-        //   Ended     = the seller pulled the listing while it was still unsold.
-        // SOLD (Completed): do NOT clear the eBay fields and do NOT tell the organizer to
-        // re-push. Leave the item fully linked so ebaySoldSyncCron can match the eBay order
-        // (by ebayListingId) and mark it SOLD with the correct "Item sold on eBay" alert.
-        // Clearing here would flip a sold item back to "Push to eBay" AND destroy the match
-        // key the sold-sync needs (the sold alert would then never fire).
-        if (status === 'Completed') {
-          console.log(
-            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing Completed (SOLD) — leaving linked for sold-sync to reconcile`
-          );
-          continue;
+        if (status !== 'Ended' && status !== 'Completed') {
+          continue; // Active (or any other live-ish state): nothing to do
         }
 
-        // UNSOLD (Ended): clear the eBay link and invite a re-push.
-        if (status === 'Ended') {
-          console.log(
-            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing Ended (unsold) — clearing eBay link`
-          );
-
-          // Clear eBay fields
+        // --- Relist adoption (2026-10-01) ---
+        // After an eBay cancel / seller relist, the same FindA item is live under a NEW ItemID with
+        // a (possibly date-suffixed) SKU "FAS-<itemId> ...". Clearing the link here made the item
+        // look unlisted while the listing kept selling. Look for a live listing carrying this
+        // item's SKU prefix and adopt its ItemID instead of clearing.
+        const live = await getLive();
+        const relisted = live.listings.find(
+          (l) => itemIdFromFasSku(l.sku) === item.id && l.itemId !== item.ebayListingId
+        );
+        if (relisted) {
+          const conflict = await prisma.item.findFirst({
+            where: { ebayListingId: relisted.itemId, id: { not: item.id } },
+            select: { id: true },
+          });
+          if (conflict) {
+            diag.adoptConflicts.push(`${item.id}->${relisted.itemId} (already linked to ${conflict.id})`);
+            console.warn(
+              `[eBay EndedSync] Item ${item.id}: relisted ItemID ${relisted.itemId} already linked to item ${conflict.id} — not adopting`
+            );
+            continue;
+          }
+          const newOfferId = relisted.sku
+            ? await lookupOfferIdForSku(accessToken, relisted.sku, relisted.itemId)
+            : null;
           await prisma.item.update({
             where: { id: item.id },
             data: {
-              ebayListingId: null,
-              listedOnEbayAt: null,
-              ebayOfferId: null,
-              // ADR ebay-renewal-forecasting (2026-09-15): item's eBay presence has
-              // ended (unsold, seller-pulled) — no future GTC renewal is coming.
-              ebayRenewalAnchorAt: null,
-              ebayNextRenewalAt: null,
+              ebayListingId: relisted.itemId,
+              // The old offer belongs to the old listing; keep only an offer verified for the new one.
+              ebayOfferId: newOfferId,
+              ebayRenewalAnchorAt: new Date(), // a NEW ebayListingId starts a new GTC renewal cycle
+              ebayNextRenewalAt: null, // recomputed by ebayRenewalForecastCron
             },
           });
-
-          // Create notification
-          await prisma.notification.create({
-            data: {
-              userId: organizer.userId,
-              type: 'SALE_UPDATE',
-              title: 'eBay listing ended',
-              body: `"${item.title}" listing ended on eBay. You can re-push this item.`,
-              link: `/organizer/sales/${item.saleId}`,
-              notificationChannel: 'IN_APP',
-            },
-          });
-
-          result.ended++;
-          result.itemsEnded.push({
+          console.log(
+            `[eBay EndedSync] ADOPTED relist: item ${item.id} ("${item.title}") ${item.ebayListingId} (${status}) -> ${relisted.itemId} (sku="${relisted.sku}", offer=${newOfferId ?? 'none readable'})`
+          );
+          diag.adopted.push(item.id);
+          result.adopted++;
+          result.itemsAdopted.push({
             id: item.id,
             title: item.title,
-            ebayListingId: item.ebayListingId || '',
+            oldListingId: item.ebayListingId || '',
+            newListingId: relisted.itemId,
           });
+          continue;
         }
+
+        // 'Completed' vs 'Ended' (corrected 2026-10-01). eBay's Trading API uses both:
+        //   Ended     = the seller (or eBay) ended the listing before it closed.
+        //   Completed = the listing closed on its own: it sold out (QuantitySold > 0) OR its duration
+        //               ran out / it closed with nothing sold (QuantitySold = 0).
+        // Completed with units sold: leave the item fully linked so ebaySoldSyncCron can match the
+        // eBay order by ebayListingId and mark it SOLD with the correct alert; clearing would destroy
+        // the match key and flip a sold item back to "Push to eBay".
+        // Completed with ZERO sold: nothing will ever sell on that listing and no order is coming, so
+        // it is the unsold case exactly like 'Ended' -- clear the link and notify so the organizer
+        // can relist. Previously these stayed linked forever (stale "live" listing id on an AVAILABLE
+        // item that is not actually for sale). When QuantitySold could not be read (null) we keep the
+        // old conservative behavior and leave the link.
+        if (status === 'Completed' && (quantitySold === null || quantitySold > 0)) {
+          console.log(
+            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing Completed (quantitySold=${quantitySold ?? 'unknown'}) — leaving linked for sold-sync to reconcile`
+          );
+          diag.completedKeptSold.push(item.id);
+          continue;
+        }
+
+        // No relist found. If the live-listing fetch itself failed we cannot tell "relisted" from
+        // "gone"; retry next cycle rather than clearing a link that may be about to be adopted.
+        if (!live.complete) {
+          console.warn(
+            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing ${status} but live-listing fetch was incomplete — skipping this cycle`
+          );
+          diag.skippedLiveFetchIncomplete.push(item.id);
+          continue;
+        }
+
+        // UNSOLD (Ended, or Completed with 0 sold): clear the eBay link and invite a re-push.
+        console.log(
+          `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing ${status} (unsold) — clearing eBay link`
+        );
+
+        // Clear eBay fields
+        await prisma.item.update({
+          where: { id: item.id },
+          data: {
+            ebayListingId: null,
+            listedOnEbayAt: null,
+            ebayOfferId: null,
+            // ADR ebay-renewal-forecasting (2026-09-15): item's eBay presence has
+            // ended (unsold, seller-pulled) — no future GTC renewal is coming.
+            ebayRenewalAnchorAt: null,
+            ebayNextRenewalAt: null,
+          },
+        });
+
+        // Create notification
+        await prisma.notification.create({
+          data: {
+            userId: organizer.userId,
+            type: 'SALE_UPDATE',
+            title: 'eBay listing ended',
+            body:
+              status === 'Completed'
+                ? `"${item.title}" listing closed on eBay without selling. You can re-push this item.`
+                : `"${item.title}" listing ended on eBay. You can re-push this item.`,
+            link: item.saleId ? `/organizer/sales/${item.saleId}` : '/organizer/inventory',
+            notificationChannel: 'IN_APP',
+          },
+        });
+
+        diag.cleared.push(item.id);
+        result.ended++;
+        result.itemsEnded.push({
+          id: item.id,
+          title: item.title,
+          ebayListingId: item.ebayListingId || '',
+        });
       }
 
       console.log(`[eBay EndedSync] Batch of ${batch.length} items processed, ${batchResults.filter(r => r.status).length} API calls succeeded`);
@@ -7504,7 +7704,18 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
     }
 
     console.log(
-      `[eBay EndedSync] Organizer ${organizerId}: checked ${result.checked} listings, found ${result.ended} ended`
+      `[eBay EndedSync] Organizer ${organizerId}: checked ${result.checked} listings, found ${result.ended} ended, adopted ${result.adopted} relists`
+    );
+    console.log(
+      `[eBay EndedSync] SUMMARY ${JSON.stringify({
+        organizerId,
+        checked: result.checked,
+        adopted: diag.adopted,
+        cleared: diag.cleared,
+        completedKeptForSoldSync: diag.completedKeptSold,
+        skippedLiveFetchIncomplete: diag.skippedLiveFetchIncomplete,
+        adoptConflicts: diag.adoptConflicts,
+      })}`
     );
   } catch (error) {
     console.error(`[eBay EndedSync ERROR] organizerId ${organizerId}:`, error);

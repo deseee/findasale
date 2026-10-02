@@ -21,22 +21,11 @@ import { syncEndedListingsForOrganizer } from '../controllers/ebayController';
  */
 async function ebayEndedListingsSync(): Promise<void> {
   try {
-    // Find all organizers that have both an eBay connection AND AVAILABLE items pushed to eBay
+    // All eBay-connected organizers. 2026-10-01: no longer filtered on "has a SALE item with an
+    // ebayListingId" -- imported inventory items (saleId = null) were invisible to that filter, so
+    // organizers with only imported listings were never checked. syncEndedListingsForOrganizer
+    // returns cheaply (one query) when an organizer has no AVAILABLE items with a listing id.
     const connections = await prisma.ebayConnection.findMany({
-      where: {
-        organizer: {
-          sales: {
-            some: {
-              items: {
-                some: {
-                  ebayListingId: { not: null },
-                  status: 'AVAILABLE',
-                },
-              },
-            },
-          },
-        },
-      },
       select: { organizerId: true },
     });
 

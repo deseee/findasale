@@ -36,7 +36,7 @@ import { awardXp, applyHuntPassMultiplier, XP_AWARDS, spendXp, getSpendableXp, c
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 import { enqueueMarketplacePostJob } from '../services/marketplace/marketplacePosterService'; // ADR-083
-import { fetchEbayPriceComps, endEbayListingIfExists, computeEffectivePackageWeight } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid; endEbayListingIfExists: P2 S1122 withdraw-on-SOLD; computeEffectivePackageWeight: package-estimation isolation ADR 2026-08-05
+import { fetchEbayPriceComps, endEbayListingIfExists, computeEffectivePackageWeight, refreshEbayAccessToken } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid; endEbayListingIfExists: P2 S1122 withdraw-on-SOLD; computeEffectivePackageWeight: package-estimation isolation ADR 2026-08-05
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
@@ -46,6 +46,8 @@ import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutG
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD, mirrors endEbayListingIfExists/markShopifyItemSold
+import { prepareItemForDeletion, recordItemDeletion } from '../services/itemDeletionService'; // eBay sync hardening (2026-10-01): shared withdraw+snapshot+audit for every hard delete
+import { reopenEbayCancelledSale as reopenEbayCancelledSaleService } from '../services/ebaySaleReopenService'; // eBay sync hardening (2026-10-01): reopen an item whose eBay sale was cancelled/refunded
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
 import { getShippingRates } from '../services/shippingLabelService'; // ADR-115 Phase 3: live Shippo rate-check preview on the edit-item page (Finding 2, order-fulfillment-and-shipping-price-validation-2026-09-05.md)
@@ -2953,6 +2955,84 @@ export const undoItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
 };
 
 /**
+ * POST /api/items/:id/reopen-ebay-cancelled-sale
+ *
+ * eBay sync hardening (2026-10-01). An item marked SOLD by the eBay sold sync (lastSoldVia 'EBAY')
+ * whose eBay order was later CANCELED or FULLY_REFUNDED is stuck SOLD: commitItemSale blocks every
+ * transition away from SOLD and undoItemSoldOffPlatform only allows OFF_PLATFORM_MANUAL. This is the
+ * narrow door for the eBay case. Auth/ownership mirror undoItemSoldOffPlatform (organizer role, sale
+ * organizer's userId) plus the item's own organizerId for sale-less inventory items imported from eBay.
+ *
+ * Allowed only when lastSoldVia is 'EBAY' AND every recorded eBay order for the item is verifiably
+ * cancelled / refunded per eBay (read live from eBay, not trusted from our DB) AND the item's eBay
+ * listing (or a relisted live one under its FAS-<itemId> SKU) is live. Otherwise 409 with the reason.
+ * The EbaySoldEvent ledger rows are kept, no sold notification is fired. See ebaySaleReopenService.ts.
+ */
+export const reopenEbayCancelledSale = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    const hasOrganizerRole = req.user.roles?.includes('ORGANIZER') || req.user.role === 'ORGANIZER';
+    if (!hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        organizerId: true,
+        sale: { select: { organizerId: true, organizer: { select: { userId: true } } } },
+      },
+    });
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    let ownerOrganizerId: string | null = null;
+    if (item.sale) {
+      if (item.sale.organizer.userId !== req.user.id) {
+        return res.status(403).json({ message: 'Access denied. Not your item.' });
+      }
+      ownerOrganizerId = item.sale.organizerId;
+    } else {
+      const callerOrganizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+      if (!callerOrganizer || !item.organizerId || callerOrganizer.id !== item.organizerId) {
+        return res.status(403).json({ message: 'Access denied. Not your item.' });
+      }
+      ownerOrganizerId = callerOrganizer.id;
+    }
+
+    const accessToken = await refreshEbayAccessToken(ownerOrganizerId);
+    if (!accessToken) {
+      return res.status(409).json({
+        message: 'Your eBay account is not connected or its connection expired, so the cancelled sale cannot be verified. Reconnect eBay and try again.',
+      });
+    }
+
+    const result = await reopenEbayCancelledSaleService(id, {
+      source: 'organizer',
+      organizerId: ownerOrganizerId,
+      actorUserId: req.user.id,
+      accessToken,
+    });
+
+    if (!result.ok) {
+      const status = result.code === 'NOT_FOUND' ? 404 : 409;
+      return res.status(status).json({ message: result.message, code: result.code });
+    }
+
+    return res.json({ ok: true, itemId: result.itemId, adoptedListingId: result.adoptedListingId });
+  } catch (error) {
+    console.error('Error reopening eBay-cancelled sale:', error);
+    res.status(500).json({ message: 'Server error while reopening this item' });
+  }
+};
+
+/**
  * POST /api/items/:id/description/append
  *
  * Item Description Authoring Contract (architect-locked 2026-05-12).
@@ -3139,60 +3219,26 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale!.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    // Ownership: via the sale when there is one. Inventory items imported from eBay have saleId = null
+    // (previously `item.sale!` threw on them and the delete 500'd) -- those are owned via item.organizerId.
+    let ownerOrganizerId: string | null = item.sale?.organizer.id ?? null;
+    if (!item.sale || item.sale.organizer.userId !== req.user.id) {
+      const callerOrganizer =
+        !item.sale && item.organizerId
+          ? await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } })
+          : null;
+      if (!callerOrganizer || callerOrganizer.id !== item.organizerId) {
+        return res.status(403).json({ message: 'Access denied. Not your sale.' });
+      }
+      ownerOrganizerId = callerOrganizer.id;
     }
 
-    // ADR item-delete-cross-marketplace-removal (2026-09-28): deleting an item previously
-    // left every live cross-listing behind -- Patrick's question ("what happens if i just
-    // delete an item that's already been pushed to ebay and other marketplaces") surfaced
-    // that eBay listings became permanently orphaned (endEbayListingIfExists needs the Item
-    // row it's about to lose) and every other marketplace was never even attempted. Fixed by
-    // mirroring soldFanOutService.ts's fanOutItemSoldWithdrawals -- same three real-API
-    // withdraw calls (eBay/Discogs/Reverb), run here instead since a delete is not a sale
-    // (Shopify's own removeItemFromShopify call two lines below already handles that one
-    // correctly and is unchanged). All three self-guard to a no-op when the item was never
-    // on that channel, and never throw -- fire-and-forget, same posture as every other call
-    // site of these three functions.
-    endEbayListingIfExists(id, 'delete').catch((err: any) =>
-      console.warn(`[eBay] withdraw-on-delete failed for item ${id}:`, err?.message)
-    );
-    withdrawDiscogsListingIfExists(id).catch((err: any) =>
-      console.warn(`[Discogs] withdraw-on-delete failed for item ${id}:`, err?.message)
-    );
-    withdrawReverbListingIfExists(id).catch((err: any) =>
-      console.warn(`[Reverb] withdraw-on-delete failed for item ${id}:`, err?.message)
-    );
-
-    // The extension-driven platforms (Facebook/Vinted/Mercari/Poshmark/Grailed/Craigslist/
-    // Gumtree AU) have no removal API -- the only way to take a live listing down on any of
-    // them is the browser extension polling GET /extension/pending-removals and acting on
-    // the real site, which needs an Item row to query. Since this Item row is about to be
-    // hard-deleted, snapshot any still-live extension-platform listing into
-    // PendingListingRemoval (no FK to Item -- it exists specifically to survive this delete)
-    // BEFORE the delete, so getPendingRemovals can still find and queue it afterward.
-    const listingJobs = await prisma.marketplaceListingJob.findMany({
-      where: { itemId: id },
-      select: { platform: true, status: true, action: true, remoteListingId: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    const latestJobByPlatform = new Map<string, (typeof listingJobs)[number]>();
-    for (const job of listingJobs) {
-      if (!latestJobByPlatform.has(job.platform)) latestJobByPlatform.set(job.platform, job);
-    }
-    const stillLivePlatforms = [...latestJobByPlatform.values()].filter(
-      (job) => job.action === 'POST' && job.status === 'POSTED'
-    );
-    if (stillLivePlatforms.length > 0) {
-      await prisma.pendingListingRemoval.createMany({
-        data: stillLivePlatforms.map((job) => ({
-          organizerId: item.sale!.organizer.id,
-          itemTitle: item.title,
-          platform: job.platform,
-          remoteListingId: job.remoteListingId,
-        })),
-      });
-    }
+    // ADR item-delete-cross-marketplace-removal (2026-09-28) + eBay sync hardening (2026-10-01):
+    // withdraw the item from eBay / Discogs / Reverb (self-guarding no-ops when never listed) and
+    // snapshot still-live extension-platform listings into PendingListingRemoval BEFORE the Item row
+    // is hard-deleted. This logic now lives in services/itemDeletionService.ts so the bulk delete and
+    // the stale-draft cleanup run the exact same path. Never throws.
+    const deletionSnapshot = await prepareItemForDeletion(id, { organizerId: ownerOrganizerId });
 
     // Cleanup Cloudinary images before deleting item from DB
     if (item.photoUrls && item.photoUrls.length > 0) {
@@ -3230,6 +3276,9 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
     await prisma.item.delete({
       where: { id }
     });
+
+    // Audit row (never throws into the delete path).
+    await recordItemDeletion(deletionSnapshot, 'single_delete', req.user.id);
 
     res.json({ message: 'Item deleted successfully' });
 

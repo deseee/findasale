@@ -9,6 +9,7 @@ import {
   updateItem,
   markItemSoldOffPlatform,
   undoItemSoldOffPlatform,
+  reopenEbayCancelledSale, // eBay sync hardening (2026-10-01)
   appendDescription,
   deleteItem,
   getBids,
@@ -47,6 +48,7 @@ import {
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
+import { prepareItemForDeletion, recordItemDeletion, type ItemDeletionSnapshot } from '../services/itemDeletionService'; // eBay sync hardening (2026-10-01): shared withdraw+snapshot+audit for bulk delete
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
@@ -201,7 +203,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         // symmetry/debuggability (not currently branched on).
         consignorId: true,
         vendorBoothId: true,
-        sale: { select: { organizer: { select: { userId: true } } } },
+        sale: { select: { organizer: { select: { id: true, userId: true } } } },
       },
     });
 
@@ -495,9 +497,25 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
 
     // Actual mutations
     switch (operation) {
-      case 'delete':
+      case 'delete': {
+        // eBay sync hardening (2026-10-01): bulk delete used to deleteMany with NO marketplace withdraw,
+        // orphaning live eBay listings. Run the same per-item withdraw + PendingListingRemoval snapshot
+        // the single delete uses (services/itemDeletionService.ts), in small parallel chunks, then
+        // write one ItemDeletionLog row per item. Response shape is unchanged.
+        const deletionSnapshots: ItemDeletionSnapshot[] = [];
+        const DELETE_PREP_CHUNK = 5;
+        for (let i = 0; i < confirmedItems.length; i += DELETE_PREP_CHUNK) {
+          const chunk = confirmedItems.slice(i, i + DELETE_PREP_CHUNK);
+          const chunkSnapshots = await Promise.all(
+            chunk.map((it) => prepareItemForDeletion(it.id, { organizerId: it.sale?.organizer.id ?? null }))
+          );
+          deletionSnapshots.push(...chunkSnapshots);
+        }
         succeeded.push(...confirmedIds);
         await prisma.item.deleteMany({ where: { id: { in: confirmedIds } } });
+        for (const snap of deletionSnapshots) {
+          await recordItemDeletion(snap, 'bulk_delete', authReq.user.id);
+        }
         const deleteStatus = failed.length > 0 ? 207 : 200;
         return res.status(deleteStatus).json({
           message: `Deleted ${confirmedIds.length} item(s).`,
@@ -505,6 +523,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           failed,
           operation: 'delete',
         });
+      }
 
       case 'status': {
         const allowed = ['AVAILABLE', 'SOLD', 'RESERVED'];
@@ -943,6 +962,7 @@ router.get('/', getItemsBySaleId);
 router.post('/', authenticate, uploadImages.array('images', 5), createItem);
 router.put('/:id', authenticate, updateItem);
 router.post('/:id/mark-sold-off-platform', authenticate, markItemSoldOffPlatform); // BYOR (2026-09-06): mark a plain AVAILABLE item sold using the organizer's own payment method
+router.post('/:id/reopen-ebay-cancelled-sale', authenticate, reopenEbayCancelledSale); // eBay sync hardening (2026-10-01): reopen an item whose eBay sale was cancelled/refunded (verified against eBay; 409 otherwise)
 router.post('/:id/undo-sold-off-platform', authenticate, undoItemSoldOffPlatform); // BYOR (2026-09-07): undo a mark-sold-off-platform action, scoped to un-invoiced OFF_PLATFORM_MANUAL items only
 // Item Description Authoring Contract (2026-05-12): voice + auto append with merge
 router.post('/:id/description/append', authenticate, appendDescription);

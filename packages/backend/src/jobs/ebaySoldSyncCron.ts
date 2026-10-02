@@ -24,6 +24,9 @@ import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsL
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { createNotification } from '../lib/notificationService';
+import { classifyEbayOrderLine, type EbayOrderShape } from '../services/ebayOrderState'; // 2026-10-01: cancel / payment / refund awareness
+import { reopenEbayCancelledSale } from '../services/ebaySaleReopenService'; // 2026-10-01: explicit logged reopen (ledger rows kept)
+import { fetchLiveEbayListings } from '../services/ebayLiveListingsService';
 
 interface EbayItem {
   id: string;
@@ -42,6 +45,73 @@ interface SyncResult {
     title: string;
     ebayOrderId: string;
   }>;
+  /** 2026-10-01: items reopened because their eBay order was cancelled / refunded and the listing is live again. */
+  itemsReopened?: string[];
+}
+
+/**
+ * Reverse reconcile (2026-10-01): an item is SOLD (lastSoldVia 'EBAY') from an order that eBay now
+ * reports CANCELED / FULLY_REFUNDED. Reopen it ONLY when its eBay listing (or a relisted live one under
+ * the FAS-<itemId> SKU prefix) is live; otherwise leave it SOLD and log it. Uses only the orders already
+ * fetched this run (no extra eBay calls unless a candidate exists). The ledger rows are never touched.
+ */
+async function reverseReconcileCancelledSales(
+  organizerId: string,
+  accessToken: string,
+  ordersById: Map<string, EbayOrderShape>
+): Promise<{ reopened: string[]; leftSold: Array<{ itemId: string; code: string }> }> {
+  const out = { reopened: [] as string[], leftSold: [] as Array<{ itemId: string; code: string }> };
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  const recent = await prisma.ebaySoldEvent.findMany({
+    where: {
+      createdAt: { gte: since },
+      item: { status: 'SOLD', lastSoldVia: 'EBAY', OR: [{ sale: { organizerId } }, { organizerId }] },
+    },
+    select: { itemId: true },
+  });
+  const candidateIds = [...new Set(recent.map((e) => e.itemId))];
+  if (!candidateIds.length) return out;
+
+  const allEvents = await prisma.ebaySoldEvent.findMany({
+    where: { itemId: { in: candidateIds } },
+    select: { itemId: true, ebayOrderId: true, ebayLineItemId: true },
+  });
+
+  // An item is a reopen candidate only if EVERY one of its eBay orders is visible in this run's order
+  // list and is cancelled / fully refunded (an unseen or still-valid order means a real sale may stand).
+  const reopenable: string[] = [];
+  for (const itemId of candidateIds) {
+    const evs = allEvents.filter((e) => e.itemId === itemId);
+    const allDead = evs.length > 0 && evs.every((e) => {
+      const order = ordersById.get(e.ebayOrderId);
+      if (!order) return false;
+      const line = (order.lineItems || []).find((l) => l.lineItemId === e.ebayLineItemId);
+      const v = classifyEbayOrderLine(order, line);
+      return !v.counts && (v.kind === 'CANCELLED' || v.kind === 'REFUNDED');
+    });
+    if (allDead) reopenable.push(itemId);
+  }
+  if (!reopenable.length) return out;
+
+  console.log(`[eBay Sync] Organizer ${organizerId}: ${reopenable.length} SOLD item(s) whose eBay order was cancelled/refunded: ${reopenable.join(', ')}`);
+  const live = await fetchLiveEbayListings(accessToken);
+  for (const itemId of reopenable) {
+    const r = await reopenEbayCancelledSale(itemId, {
+      source: 'cron',
+      organizerId,
+      accessToken,
+      prefetchedOrders: ordersById,
+      prefetchedLive: live,
+    });
+    if (r.ok) {
+      out.reopened.push(itemId);
+    } else {
+      out.leftSold.push({ itemId, code: r.code });
+      console.warn(`[eBay Sync] Item ${itemId} left SOLD after cancelled eBay order: ${r.code} -- ${r.message}`);
+    }
+  }
+  return out;
 }
 
 /**
@@ -49,7 +119,18 @@ interface SyncResult {
  * Called by both the cron job and the manual trigger endpoint (GET /api/ebay/sync-sold).
  */
 export async function syncSoldItemsForOrganizer(organizerId: string): Promise<SyncResult> {
-  const result: SyncResult = { synced: 0, itemsMarkedSold: [] };
+  const result: SyncResult = { synced: 0, itemsMarkedSold: [], itemsReopened: [] };
+  // 2026-10-01: structured per-run diagnostics (logged as one SUMMARY line at the end of the run).
+  const diag = {
+    ordersSeen: 0,
+    linesSeen: 0,
+    matched: 0,
+    unmatched: 0,
+    alreadyRecorded: 0,
+    noLineItemId: 0,
+    skipped: { CANCELLED: [] as string[], CANCEL_PENDING: [] as string[], REFUNDED: [] as string[], UNPAID: [] as string[] },
+    soldApplied: 0,
+  };
 
   try {
     // Get the organizer's eBay connection
@@ -146,11 +227,10 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
       return result;
     }
 
-    const ebayData = (await ebayResponse.json()) as { orders?: Array<{
-      orderId: string;
-      lineItems?: Array<{ sku?: string; legacyItemId?: string; title?: string; lineItemId?: string; quantity?: number }>;
-    }> };
+    const ebayData = (await ebayResponse.json()) as { orders?: EbayOrderShape[] };
     const orders = ebayData.orders || [];
+    const ordersById = new Map<string, EbayOrderShape>(orders.map((o) => [o.orderId, o]));
+    diag.ordersSeen = orders.length;
 
     console.log(
       `[eBay Sync] Organizer ${organizerId}: ${orders.length} orders (90-day window) from eBay, ${availableItems.length} local items to check`
@@ -163,6 +243,22 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
       for (const lineItem of lineItems) {
         const sku = lineItem.sku || '';
         const legacyItemId = lineItem.legacyItemId || '';
+        diag.linesSeen++;
+
+        // Cancel / payment / refund awareness (2026-10-01). A cancelled, unpaid or fully refunded order
+        // is not a sale: marking the item SOLD ended the live listing and stranded a relisted item.
+        // Checked BEFORE matching so the title-match backfill below can never link a listing id from an
+        // order we are not going to count. No ledger row is written for a skipped line, so a pending /
+        // unpaid order is picked up on a later run once it becomes PAID.
+        const verdict = classifyEbayOrderLine(order, lineItem);
+        if (!verdict.counts) {
+          const bucket = diag.skipped[verdict.kind];
+          if (!bucket.includes(order.orderId)) {
+            bucket.push(order.orderId);
+            console.log(`[eBay Sync] SKIP order ${order.orderId}: ${verdict.kind} (${verdict.reason}) -- not treated as a sale`);
+          }
+          continue;
+        }
 
         // Match by SKU first (format: FAS-{itemId})
         let matchedItem: EbayItem | undefined;
@@ -208,8 +304,10 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         }
 
         if (!matchedItem) {
+          diag.unmatched++;
           continue; // Not our item — belongs to a different organizer or untracked listing
         }
+        diag.matched++;
 
         // --- Idempotent ledger (ADR ebay-multiquantity) ---
         // One EbaySoldEvent per (ebayOrderId, ebayLineItemId). The unique constraint is the
@@ -219,6 +317,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         const unitQty =
           typeof lineItem.quantity === 'number' && lineItem.quantity > 0 ? lineItem.quantity : 1;
         if (!lineItemId) {
+          diag.noLineItemId++;
           console.warn(
             `[eBay Sync] Order ${order.orderId} line for item ${matchedItem.id} has no lineItemId — skipping (cannot dedupe)`
           );
@@ -238,6 +337,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         } catch (err: any) {
           // P2002 = unique (orderId+lineItemId) already processed → idempotent no-op
           if (err?.code === 'P2002') {
+            diag.alreadyRecorded++;
             continue;
           }
           throw err;
@@ -336,6 +436,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         );
 
         result.synced++;
+        diag.soldApplied++;
         result.itemsMarkedSold.push({
           itemId: matchedItem.id,
           title: matchedItem.title,
@@ -343,6 +444,36 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         });
       }
     }
+
+    // Reverse reconcile (2026-10-01): reopen SOLD-via-eBay items whose order was later cancelled / refunded
+    // while their listing is live again. Never fails the sync cycle.
+    try {
+      const rev = await reverseReconcileCancelledSales(organizerId, accessToken, ordersById);
+      result.itemsReopened = rev.reopened;
+    } catch (revErr: any) {
+      console.error(`[eBay Sync] Reverse reconcile failed for organizer ${organizerId}:`, revErr?.message ?? revErr);
+    }
+
+    console.log(
+      `[eBay Sync] SUMMARY ${JSON.stringify({
+        organizerId,
+        ordersSeen: diag.ordersSeen,
+        linesSeen: diag.linesSeen,
+        matched: diag.matched,
+        unmatched: diag.unmatched,
+        alreadyRecorded: diag.alreadyRecorded,
+        noLineItemId: diag.noLineItemId,
+        skippedCounts: {
+          CANCELLED: diag.skipped.CANCELLED.length,
+          CANCEL_PENDING: diag.skipped.CANCEL_PENDING.length,
+          REFUNDED: diag.skipped.REFUNDED.length,
+          UNPAID: diag.skipped.UNPAID.length,
+        },
+        skippedOrderIds: diag.skipped,
+        soldApplied: diag.soldApplied,
+        reopened: result.itemsReopened,
+      })}`
+    );
 
     // Update lastEbaySoldSyncAt for deduplication on next run
     await prisma.ebayConnection.update({
