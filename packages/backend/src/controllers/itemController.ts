@@ -57,6 +57,7 @@ import { decodeHtmlEntities } from '../utils/htmlEntities'; // 2026-09-29: singl
 import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // 2026-09-29: sale window, rate limits, radius, impossible-speed guard shared by every location-gated XP path
 import { parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey } from '../utils/qrScanGuards'; // 2026-09-29: strict scan coordinates + advisory-lock key for the QR-scan dedupe
 import { IMPORT_FIELD_KEYS, IMPORT_MAX_ROWS, buildImportItem, detectImportColumnMapping, importPhotoCapForTier, RawImportRow, ImportRowContext } from '../services/itemCsvImport'; // 2026-09-29: one shared, hardened row validator for bulk-import + legacy import-items
+import { organizerEditStamp, organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, stamped only by organizer request handlers
 
 /**
  * Bug #469: Live-listing edit propagation.
@@ -1031,7 +1032,7 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
     // blank, because the reverse dollars-to-percent calc always saw undefined amounts.
     const item = await prisma.item.findUnique({
       where: { id },
-      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true }
+      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true, lastEditedAt: true }
     });
 
     if (!item) {
@@ -1661,9 +1662,21 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale!.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    // Inventory items (saleId = null) have no sale, so ownership resolves through the denormalized
+    // Item.organizerId instead, same as getItemForEdit. Anyone who is not the owning organizer is denied.
+    let ownerOrganizerRow = item.sale?.organizer ?? null;
+    if (!ownerOrganizerRow && !item.saleId && item.organizerId) {
+      ownerOrganizerRow = await prisma.organizer.findFirst({
+        where: { id: item.organizerId, userId: req.user.id },
+        select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true },
+      });
     }
+
+    if (!ownerOrganizerRow || ownerOrganizerRow.userId !== req.user.id) {
+      return res.status(403).json({ message: item.saleId ? 'Access denied. Not your sale.' : 'Access denied. Not your item.' });
+    }
+    // Sale-derived organizer when present, else the inventory organizer: id/tier/lat/lng for the code below.
+    const ownerOrganizer = ownerOrganizerRow;
 
     // ADR-087 P1 (D1): stockTotal can never drop below units already sold. stockSold is
     // server-owned -- it is intentionally NOT in the updateItem whitelist above, so a
@@ -1693,13 +1706,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       if (consignorId === null) {
         updateData.consignorId = null;
       } else {
-        if (item.sale!.organizer.subscriptionTier !== 'TEAMS') {
+        if (ownerOrganizer.subscriptionTier !== 'TEAMS') {
           return res.status(403).json({ message: 'TEAMS subscription required to attach a consignor.' });
         }
         if (item.vendorBoothId) {
           return res.status(409).json({ message: 'This item is attributed to a vendor booth and cannot also be attached to a consignor. Clear the vendor booth attribution first.' });
         }
-        const consignorWorkspace = await prisma.organizerWorkspace.findFirst({ where: { ownerId: item.sale!.organizer.id } });
+        const consignorWorkspace = await prisma.organizerWorkspace.findFirst({ where: { ownerId: ownerOrganizer.id } });
         const matchedConsignor = consignorWorkspace
           ? await prisma.consignor.findFirst({ where: { id: consignorId, workspaceId: consignorWorkspace.id } })
           : null;
@@ -1719,7 +1732,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (effectiveConsignorId && price !== undefined && price !== null && price !== '') {
       const consignorPrice = parseFloat(price);
       if (!isNaN(consignorPrice)) {
-        const floorCents = await getConsignmentMinimumPriceCents(item.sale!.organizer.id);
+        const floorCents = await getConsignmentMinimumPriceCents(ownerOrganizer.id);
         if (Math.round(consignorPrice * 100) < floorCents) {
           const floorDisplay = (floorCents / 100).toFixed(2);
           return res.status(400).json({ message: `Consigned items must be priced at $${floorDisplay} or more. Items under $${floorDisplay} should be donated or declined per policy.` });
@@ -1736,20 +1749,33 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       updateData.description = description;
       fieldsBeingEdited.push('description');
     }
+    // Price-changed guard: a resave that sends the unchanged price must not reset priceUpdatedAt,
+    // originalPrice, the markdown anchor or the eBay sync state. Number(item.price) is Prisma Decimal safe.
+    let priceChanged = false;
+    if (price !== undefined) {
+      const nextPriceNum = price ? parseFloat(price) : null;
+      const currentPriceNum = item.price != null ? Number(item.price) : null;
+      priceChanged = nextPriceNum === null || currentPriceNum === null
+        ? nextPriceNum !== currentPriceNum
+        : Math.abs(nextPriceNum - currentPriceNum) >= 0.005;
+    }
     if (price !== undefined) {
       updateData.price = price ? parseFloat(price) : null;
       // ADR markdown-cycle-ebay-price-sync (2026-09-15), Dev Instructions step 8: stamp
       // whenever the organizer's own manual edit writes Item.price, same as the markdown
       // cron does -- this is what extends the ebayListingSyncCron.ts push-first/pull-sync
       // clobber guard to manual price edits, not just markdown-driven ones.
-      updateData.priceUpdatedAt = new Date();
+      if (priceChanged) updateData.priceUpdatedAt = new Date();
       // ADR-128 (2026-09-19, ported 2026-09-23): a new organizer-chosen price re-opens the
       // eBay sync. Without this, an item parked in FAILED_TERMINAL would be skipped by
       // ebayListingSyncCron.ts forever, so the organizer's manual fix (e.g. a price above
       // eBay's floor) would never be pushed. PENDING puts it back on the push-first path.
       // Gated on the same eBay-live condition as markdownPricePropagationService.ts's
       // buildHandlers(), so a non-eBay item is never marked PENDING.
-      if (item.ebayOfferId || item.ebayListingId) {
+      // An unchanged price only re-opens the sync when the item is parked in a failed state (organizer
+      // resave-to-retry); a same-price resave on a healthy item leaves ebaySyncState alone.
+      if ((item.ebayOfferId || item.ebayListingId) &&
+          (priceChanged || item.ebaySyncState === 'FAILED_RETRYABLE' || item.ebaySyncState === 'FAILED_TERMINAL')) {
         updateData.ebaySyncState = 'PENDING';
         updateData.ebaySyncAttempts = 0; // a new organizer price gets a fresh set of push attempts
       }
@@ -1795,7 +1821,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       // and Item.originalPrice's schema comment, which explicitly calls
       // priceBeforeMarkdown "markdown-cron-owned... NEVER touched by either markdown
       // cron[via manual edit], by design".
-      if (newPrice && newPrice > 0 && !item.markdownApplied) {
+      if (priceChanged && newPrice && newPrice > 0 && !item.markdownApplied) {
         updateData.priceBeforeMarkdown = newPrice;
         updateData.markdownApplied = false;
       }
@@ -1806,7 +1832,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       // one and only "deliberate re-listing" signal the cashier-discretion cap anchors
       // on (see Item.originalPrice's own schema comment). A null/zero newPrice clears it
       // back to null rather than anchoring a discretion cap on a delisted/unpriced item.
-      updateData.originalPrice = newPrice && newPrice > 0 ? newPrice : null;
+      // Anchor when the price changed OR the item has never been anchored (published drafts and other non-createItem rows
+      // can have originalPrice null; skipping would leave the cashier-discretion cap at zero forever).
+      if (priceChanged || item.originalPrice == null) updateData.originalPrice = newPrice && newPrice > 0 ? newPrice : null;
     }
     if (auctionStartPrice !== undefined) updateData.auctionStartPrice = auctionStartPrice ? parseFloat(auctionStartPrice) : null;
     if (auctionReservePrice !== undefined) updateData.auctionReservePrice = auctionReservePrice ? parseFloat(auctionReservePrice) : null;
@@ -2062,7 +2090,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       // this item via updateItem, not only on a request that literally changes weight.
       const neverAutoPricedYet = priorShippingSource == null && item.shippingPrice == null;
 
-      const hasOrigin = item.sale != null && (item.sale.zip != null || (item.sale.organizer.lat != null && item.sale.organizer.lng != null));
+      const hasOrigin = (item.sale?.zip != null) || (ownerOrganizer.lat != null && ownerOrganizer.lng != null); // inventory items (no sale) fall back to the organizer's lat/lng
 
       const shouldAttemptAutoSuggest =
         !priorShippingConfirmed &&
@@ -2078,11 +2106,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           dims: { length: effLengthIn, width: effWidthIn, height: effHeightIn },
           packageType: effPackageType,
           origin: {
-            zip: item.sale!.zip,
-            lat: item.sale!.organizer.lat,
-            lng: item.sale!.organizer.lng,
+            zip: item.sale?.zip ?? null,
+            lat: ownerOrganizer.lat,
+            lng: ownerOrganizer.lng,
           },
-          subscriptionTier: item.sale!.organizer.subscriptionTier,
+          subscriptionTier: ownerOrganizer.subscriptionTier,
           categoryId: effEbayCategoryId ?? null,
           category: effCategory ?? null,
           priceUsd: effPrice ?? null,
@@ -2099,9 +2127,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       updateData.userEditedFields = mergedEdited;
     }
 
+    // Item.lastEditedAt: stamp only when a user-visible field in updateData differs from the stored row.
+    // lastEditedAt is never read from req.body.
     const updatedItem = await prisma.item.update({
       where: { id },
-      data: updateData
+      data: { ...updateData, ...organizerEditStamp(item, updateData) }
     });
 
     // Tell anyone who favorited this item that its price just dropped. Was previously
@@ -3172,6 +3202,7 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
           description: compose.description,
           userEditedFields: nextUserEdited,
           ...dimensionUpdate,
+          ...organizerEditStampAlways(),
         },
       });
 
@@ -3800,7 +3831,7 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
 
     const updated = await prisma.item.update({
       where: { id },
-      data: { photoUrls: [...item.photoUrls, url] },
+      data: { photoUrls: [...item.photoUrls, url], ...organizerEditStampAlways() },
     });
     // #319/#325/#328: Sync Photo table — fire-and-forget
     prisma.photo.create({
@@ -3840,7 +3871,7 @@ export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
     const removedUrl = item.photoUrls[idx];
     const updated = await prisma.item.update({
       where: { id },
-      data: { photoUrls: item.photoUrls.filter((_, i) => i !== idx) },
+      data: { photoUrls: item.photoUrls.filter((_, i) => i !== idx), ...organizerEditStampAlways() },
     });
     // #319/#325/#328: Sync Photo table — delete the removed record, re-index remaining
     const remainingUrls = updated.photoUrls;
@@ -3883,7 +3914,7 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
     }
     const updated = await prisma.item.update({
       where: { id },
-      data: { photoUrls },
+      data: { photoUrls, ...organizerEditStampAlways() },
     });
     // #319/#325/#328: Sync Photo table — update orderIndex and isPrimary to match new order
     Promise.all(
@@ -4044,7 +4075,7 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     // Update item with new state
     const updatedItem = await prisma.item.update({
       where: { id: itemId },
-      data: updateData,
+      data: { ...updateData, ...organizerEditStampAlways() },
       select: {
         id: true,
         saleId: true,
@@ -4256,6 +4287,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         autoEnhanced: true,
         createdAt: true,
         updatedAt: true,
+        lastEditedAt: true, // 2026-10-04: organizer-edit stamp (organizer-only endpoint)
         // Sprint 1: Listing Health Score + AI tag suggestions
         tags: true,
         // Status chip data — distinguish Draft / Published / On eBay

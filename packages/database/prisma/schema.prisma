@@ -1807,6 +1807,8 @@ model Item {
   messages                        Message[]
   createdAt                       DateTime                @default(now())
   updatedAt                       DateTime                @updatedAt
+  // Organizer-edit stamp (2026-10-04): last time an ORGANIZER changed something user-visible. Stamped only by organizer request handlers via utils/organizerEdit.ts; crons, jobs and sync must never write it (updatedAt is bumped by ~189 writer sites). Null = no organizer edit recorded.
+  lastEditedAt                    DateTime?
   // consignmentUnclaimedItemsJob.ts (2026-09-25): set once the "this item is unclaimed" organizer
   // notification has fired for it (createdAt older than its Consignor.returnPeriodDays, still
   // AVAILABLE), so the daily sweep never re-notifies for the same item. Null = not yet notified,

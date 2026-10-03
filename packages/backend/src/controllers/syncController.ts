@@ -8,6 +8,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { processCashSaleCore, CashSaleError } from './cashPaymentController'; // #561 offline cash-checkout replay
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
+import { organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, organizer-driven offline replay only
 
 interface SyncOperation {
   type: 'CREATE_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'UPLOAD_PHOTO' | 'CHECKOUT_CASH';
@@ -264,7 +265,9 @@ async function handleUpdateItem(operation: SyncOperation) {
       where: { id: itemId },
     });
 
-    if (!currentItem) {
+    // Cross-tenant guard: batchSync only verified that operation.saleId belongs to this organizer, so the item
+    // itself must live in that same sale (else any PRO organizer could edit another organizer's item by id).
+    if (!currentItem || currentItem.saleId !== operation.saleId) {
       return { message: { message: 'Item not found',
           retryable: false,
         },
@@ -320,6 +323,7 @@ async function handleUpdateItem(operation: SyncOperation) {
           Array.isArray(payload.tags) ? payload.tags : currentItem.tags,
         ),
         updatedAt: new Date(),
+        ...organizerEditStampAlways(), // replay of the organizer's offline edit
       },
     });
 
@@ -358,7 +362,8 @@ async function handleDeleteItem(operation: SyncOperation) {
       where: { id: itemId },
     });
 
-    if (!item) {
+    // Cross-tenant guard: the item must live in the sale batchSync already verified as owned (see handleUpdateItem).
+    if (!item || item.saleId !== operation.saleId) {
       return { message: { message: 'Item not found',
           retryable: false,
         },
@@ -368,7 +373,7 @@ async function handleDeleteItem(operation: SyncOperation) {
     // Soft delete: set isActive to false
     const deleted = await prisma.item.update({
       where: { id: itemId },
-      data: { isActive: false },
+      data: { isActive: false, ...organizerEditStampAlways() }, // replay of the organizer's offline delete
     });
 
     return {
