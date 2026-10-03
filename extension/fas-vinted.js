@@ -722,7 +722,13 @@
   // a console.warn) whenever the "Cotton" default was actually used for this run.
   let lastMaterialFallbackUsed = false;
   async function pickFromPanel(fieldId, labelText, value) {
-    const opener = openerByLabel(labelText) || document.getElementById(fieldId);
+    // FIX 2026-10-02 (Patrick live: "Color panel did not open on attempt 1/3, 2/3, 3/3" on an item that
+    // HAS a color -- three identical failures = a wrong opener, not a timing race). Vinted's field is
+    // now labelled "Colors" (plural), so openerByLabel('Color') no longer hits the exact-label branch
+    // and can fall through to some other element that merely contains the word. Live-confirmed the
+    // real control is the readonly <input id="color" data-testid="color-select-dropdown-input">, and a
+    // plain click on it opens color-select-dropdown-content. Use it directly for Color.
+    const opener = (fieldId === 'color' && document.getElementById('color')) || openerByLabel(labelText) || document.getElementById(fieldId);
     console.log('[FAS Vinted DIAG] ' + fieldId + ': opener resolved to tag=' + (opener ? opener.tagName : null) + ' id=' + (opener ? opener.id : null) + ' testid=' + (opener ? opener.getAttribute('data-testid') : null) + ' text="' + (opener ? opener.textContent.trim().slice(0, 40) : '') + '"');
     if (!opener) return false;
     // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P0, live-Chrome-confirmed): pickCategory() calls
@@ -1132,7 +1138,7 @@
   }
 
   async function acceptSuggestedColor(labelText, inferFromText) {
-    const opener = openerByLabel(labelText) || document.getElementById('color');
+    const opener = document.getElementById('color') || openerByLabel(labelText);
     if (!opener) return false;
     let panel = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -2926,6 +2932,23 @@
       }
     }
     fasMarkStep('postLanguage:brandCheckDone');
+    await sleep(250 + Math.floor(Math.random() * 450));
+    // FIX 2026-10-02: Color was the one required field this post-Language sweep never re-checked, yet
+    // Vinted resets it along with Brand/Size/Material (Patrick: Color "keeps items from posting, not
+    // all the time but often enough"). Same empty-check + same fill path as the first pass.
+    {
+      const colorInputAfterLanguage = document.getElementById('color');
+      const colorStillSet = colorInputAfterLanguage && String(colorInputAfterLanguage.value || '').trim();
+      if (colorInputAfterLanguage && !colorStillSet) {
+        console.warn('[FAS Vinted] Color missing after the Language step -- Vinted reset it, re-filling.');
+        if (item.color === undefined || item.color === null || item.color === '') {
+          try { await acceptSuggestedColor('Color', (item.title || '') + ' ' + (item.description || '')); } catch (e) { console.warn('[FAS Vinted] Color re-fill (suggested) after Language step threw:', e && e.message); }
+        } else {
+          await tryFill('Color', item.color, (v) => fillSelectLike('Color', v), warnings);
+        }
+      }
+    }
+    fasMarkStep('postLanguage:colorCheckDone');
     await sleep(250 + Math.floor(Math.random() * 450));
     if (item.size) {
       const sizeFieldAfterLanguage = fieldByLabel('Size');
