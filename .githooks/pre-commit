@@ -24,6 +24,10 @@ fi
 PLACEHOLDER_RE='(example|sample|placeholder|your-|your_|dummy|localhost|127\.0\.0\.1|REDACTED|redacted|xxxx|XXXX|<[A-Za-z_ -]+>|CHANGEME|changeme|test_key|fake)'
 
 # Pattern table: one "NAME|ERE" per line. Blank lines ignored.
+# Hardcoded-sensitive-value (added 2026-10-03, GitGuardian incident 37759183):
+# catches a raw secret literal assigned to ANY *_SECRET/*_KEY/*_TOKEN/*_PASSWORD-style
+# variable name, regardless of vendor. This is the gap that let a hand-typed JWT_SECRET
+# value through — it had no vendor prefix so none of the patterns below matched it.
 SECRET_PATTERNS='DB-connection-string|(postgres(ql)?|mysql|mongodb(\+srv)?|redis|rediss)://[^ '"'"'"@/]+:[^ '"'"'"@/]+@
 PGPASSWORD|PGPASSWORD[[:space:]]*=[[:space:]]*[^[:space:]'"'"'"]+
 GitHub-PAT-classic|ghp_[A-Za-z0-9]{20,}
@@ -45,7 +49,8 @@ Stripe-live-restricted|rk_live_[A-Za-z0-9]{10,}
 Stripe-webhook-secret|whsec_[A-Za-z0-9]{20,}
 Twilio-account-sid|AC[0-9a-f]{32}
 Private-key-block|-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----
-Generic-JWT|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+Generic-JWT|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}
+Hardcoded-sensitive-value|[A-Z][A-Z0-9]*_(SECRET|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_TOKEN|AUTH_TOKEN|REFRESH_TOKEN|PASSWORD|CLIENT_SECRET)[[:space:]]*[:=][[:space:]]*.{0,2}[A-Za-z0-9+/_.=-]{24,}'
 
 HIT_FILE="${TMPDIR:-/tmp}/.findasale_secret_hit.$$"
 rm -f "$HIT_FILE"
