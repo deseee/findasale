@@ -42,6 +42,12 @@ import { ShippingNetPreview } from '../../../components/ShippingNetPreview';
 import { EbayFeeCheckBadge } from '../../../components/EbayFeeCheckBadge';
 import { EbayMonthlyQuotaCounter } from '../../../components/EbayMonthlyQuotaCounter';
 import { Mic } from 'lucide-react';
+import ItemFormSection from '../../../components/itemForm/ItemFormSection';
+import {
+  getApparelDetailsDisclosure,
+  getProductIdsDisclosure,
+  hasAnyValue,
+} from '../../../lib/itemFieldRelevance';
 
 // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
 // fix): item.auctionEndTime is stored as a UTC ISO timestamp. Previously this page did
@@ -60,6 +66,23 @@ function toDatetimeLocalValue(iso: string): string {
   const mi = String(d.getMinutes()).padStart(2, '0');
   return `${y}-${mo}-${day}T${h}:${mi}`;
 }
+
+/** JSON.stringify with sorted object keys, so two snapshots compare by value, not key order. */
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.keys(v as Record<string, unknown>)
+          .sort()
+          .reduce((acc: Record<string, unknown>, k) => {
+            acc[k] = (v as Record<string, unknown>)[k];
+            return acc;
+          }, {})
+      : v
+  );
+}
+
+/** Same clamp the quantity and units inputs apply on blur: a whole number, minimum 1. */
+const parseCount = (text: string): number => Math.max(1, parseInt(text, 10) || 1);
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -279,6 +302,37 @@ const EditItemPage = () => {
   // resend consignorId and the backend would treat '' as an attempted (invalid) attach.
   const [consignorTouched, setConsignorTouched] = useState(false);
 
+  // ---- Edit Item redesign state ----
+  // Dirty tracking: a snapshot of the form (plus the touched flags above) is taken after the
+  // item loads and after each successful save. Save is enabled only when the live snapshot
+  // differs from it. Photos, voice and Organizer Special persist themselves and are not part
+  // of the snapshot.
+  type SaveSnapshot = { f: typeof formData; w: boolean; s: boolean; c: boolean };
+  const [baseline, setBaseline] = useState<SaveSnapshot | null>(null);
+  const [baselinePending, setBaselinePending] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [impactExpanded, setImpactExpanded] = useState(false);
+  const [showAllFields, setShowAllFields] = useState(false);
+  const [whereListedSignal, setWhereListedSignal] = useState(0);
+  const pageRootRef = useRef<HTMLDivElement>(null);
+  const latestSnapshotRef = useRef<string>('');
+  const isDirtyRef = useRef(false);
+  const loadedItemIdRef = useRef<string | null>(null);
+
+  // Snapshot of what Save would send. quantity/stockTotal use the clamped text inputs, so a value
+  // typed but not yet blurred still counts as a change (and is what actually gets saved).
+  const makeCurrentSnapshot = (): SaveSnapshot => ({
+    f: { ...formData, quantity: parseCount(quantityText), stockTotal: parseCount(stockTotalText) },
+    w: weightTouched,
+    s: shippingTouched,
+    c: consignorTouched,
+  });
+  const currentSnapshotKey = stableStringify(makeCurrentSnapshot());
+  latestSnapshotRef.current = currentSnapshotKey;
+  const isDirty = baseline !== null && currentSnapshotKey !== stableStringify(baseline);
+  isDirtyRef.current = isDirty;
+
   // ADR-ai-package-estimation-isolation-2026-08-05, corrected S-QA-2026-08-06: explicit,
   // opt-in fetch of the AI/estimate-cascade weight+dims guess. Only fills the editable
   // fields: never auto-confirms. Does NOT set weightTouched itself: a click here alone
@@ -497,27 +551,32 @@ const EditItemPage = () => {
     },
   });
 
-  // Builds the save payload and PUTs the current form state to the backend.
-  // Shared by handlePushToEbay and handlePublishNow so both persist edits (incl. Brand/MPN/UPC) before any eBay action.
-  const saveFormState = async () => {
+  // ONE payload builder shared by the Save button and the pre-push saves (eBay / Discogs / Reverb),
+  // so saving before a push writes exactly what the Save button writes (shippingTouched gating,
+  // crosslisterFreeShipping, auctionEndTime UTC conversion, best-offer percent to dollar
+  // conversion, weight confirmation). Previously the pre-push path built its own, different payload.
+  const buildSavePayload = () => {
+    // Coerce numeric shipping fields from string → number|null (backend zod requires Int)
     const toIntOrNull = (v: string) => {
       const n = parseInt(String(v).trim(), 10);
       return Number.isFinite(n) && n > 0 ? n : null;
     };
-    const pushPrice = parseFloat(String(formData.price)) || 0;
-    const pushAcceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
-    const pushDeclinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
-    const savePayload = {
+    const price = parseFloat(String(formData.price)) || 0;
+    const acceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
+    const declinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
+    const payload = {
       ...formData,
+      // Same clamp the inputs apply on blur: a value typed but not yet blurred (Enter key, quick
+      // tap on Save) must still be saved.
+      quantity: parseCount(quantityText),
+      stockTotal: parseCount(stockTotalText),
       // Package weight is gated behind weightTouched (2026-09-14, same ADR-106
       // pattern as shippingAvailable/shippingPrice below): an unreviewed estimate
       // sitting in formData must not silently overwrite this column on an unrelated
       // save. Omitted entirely when untouched (JSON.stringify drops `undefined`),
       // overriding the raw un-converted string from the ...formData spread above.
       packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,
-      // Organizer typed a real weight on this page: record it as confirmed so eBay
-      // publish stops treating it as an estimate. Never sent when the box was left
-      // untouched (see weightTouched).
+      // Same confirm-on-real-edit rule: only when the organizer actually edited the weight.
       ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
         ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
         : {}),
@@ -526,22 +585,79 @@ const EditItemPage = () => {
       packageWidthIn: weightTouched ? toIntOrNull(formData.packageWidthIn) : undefined,
       packageHeightIn: weightTouched ? toIntOrNull(formData.packageHeightIn) : undefined,
       allowBestOffer: formData.allowBestOffer,
-      bestOfferAutoAcceptAmt: formData.allowBestOffer && pushAcceptPct !== null && pushPrice > 0
-        ? parseFloat((pushPrice * (1 - pushAcceptPct / 100)).toFixed(2))
+      bestOfferAutoAcceptAmt: formData.allowBestOffer && acceptPct !== null && price > 0
+        ? parseFloat((price * (1 - acceptPct / 100)).toFixed(2))
         : null,
-      bestOfferMinimumAmt: formData.allowBestOffer && pushDeclinePct !== null && pushPrice > 0
-        ? parseFloat((pushPrice * (1 - pushDeclinePct / 100)).toFixed(2))
+      bestOfferMinimumAmt: formData.allowBestOffer && declinePct !== null && price > 0
+        ? parseFloat((price * (1 - declinePct / 100)).toFixed(2))
         : null,
       excludeFromMarkdown: formData.excludeFromMarkdown,
       ebayShippingOverride: formData.ebayShippingOverride || null,
       ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
+      // ADR-106 (2026-08-15): only send shippingAvailable/shippingPrice as an
+      // explicit organizer edit when the organizer actually touched the shipping
+      // checkbox/price input this session (shippingTouched) -- otherwise omit both
+      // keys entirely (JSON.stringify drops `undefined` values) so a save of an
+      // unrelated field never gets mistaken by the backend for a real shipping edit
+      // and never locks shippingPriceConfirmedByOrganizer. Backend auto-suggest keeps
+      // pricing this item off the package weight until the organizer really does edit it.
+      shippingAvailable: shippingTouched ? formData.shippingAvailable : undefined,
+      shippingPrice: shippingTouched
+        ? (formData.shippingPrice ? parseFloat(formData.shippingPrice) : null)
+        : undefined,
+      // Crosslister shipping-payer toggle (2026-08-27) -- always sent as an explicit value
+      // (unlike shippingAvailable/shippingPrice above, there's no auto-suggest logic here to
+      // protect against overwriting, so no "touched" gate is needed).
+      crosslisterFreeShipping: formData.crosslisterFreeShipping,
+      // Bug fix (2026-08-08, P1 data corruption): same naive-local-string bug as
+      // add-items.tsx / create-sale.tsx -- formData.auctionEndTime comes from
+      // <input type="datetime-local"> as a naive local string with no timezone info.
+      // Sending it unconverted meant the backend (Node, running in UTC) parsed it via
+      // `new Date(str)` AS IF it were already UTC, closing auctions hours early.
+      // Convert to a proper UTC ISO string before sending.
+      auctionEndTime: formData.auctionEndTime ? new Date(formData.auctionEndTime).toISOString() : null,
+      // strip UI-only percentage fields
       bestOfferAcceptPct: undefined,
       bestOfferDeclinePct: undefined,
-      // formData.consignorId is '' for an item with no consignor; the backend reads '' as an
-      // attempted attach and 404s "Consignor not found". Same touched-gate as the normal save.
+      // Feature #309/#70 follow-up (2026-09-24): only sent when the organizer actually
+      // touched the consignor picker this session (consignorTouched) -- same contract as
+      // shippingAvailable/shippingPrice above. '' means "clear the attribution" -> null.
       consignorId: consignorTouched ? (formData.consignorId || null) : undefined,
     };
-    await api.put(`/items/${id}`, savePayload);
+    return payload;
+  };
+
+  // PUT the current form state. Returns the snapshot that was saved.
+  const commitSave = async (): Promise<SaveSnapshot> => {
+    const snapshot = makeCurrentSnapshot();
+    await api.put(`/items/${id}`, buildSavePayload());
+    return snapshot;
+  };
+
+  // After a successful save: stay on the page, re-baseline dirty tracking, refresh the item.
+  const markSaved = (snapshot: SaveSnapshot) => {
+    // Touched flags describe edits not yet persisted. Reset them after a save, unless the
+    // organizer kept editing while the request was in flight (then keep them so those edits save).
+    const noEditsSince = latestSnapshotRef.current === stableStringify(snapshot);
+    if (noEditsSince) {
+      setWeightTouched(false);
+      setShippingTouched(false);
+      setConsignorTouched(false);
+      setBaseline({ ...snapshot, w: false, s: false, c: false });
+    } else {
+      setBaseline(snapshot);
+    }
+    setSavedAt(Date.now());
+    setSaveError(null);
+    queryClient.invalidateQueries({ queryKey: ['item', id] });
+    if (item?.saleId) queryClient.invalidateQueries({ queryKey: ['items', item.saleId] });
+  };
+
+  // Persists current form state before any marketplace push (shared by handlePushToEbay,
+  // handlePublishNow, handlePushToDiscogs, handlePushToReverb).
+  const saveFormState = async () => {
+    const snapshot = await commitSave();
+    markSaved(snapshot);
   };
 
   const handlePushToEbay = async () => {
@@ -560,7 +676,7 @@ const EditItemPage = () => {
     setEbayPushPending(true);
     try {
       // Auto-save current form state first so eBay push uses the latest values (not stale DB state).
-      // Inline PUT (not updateMutation): updateMutation.onSuccess navigates to /dashboard which would abort the push.
+      // Uses saveFormState (the shared Save payload) rather than updateMutation so the push is not tied to the Save button's UI state.
       await saveFormState();
     } catch (err: any) {
       setEbayPushPending(false);
@@ -884,6 +1000,10 @@ const EditItemPage = () => {
 
   useEffect(() => {
     if (item) {
+      // A background refresh of the SAME item (after a save, a photo upload, a marketplace push)
+      // must not overwrite edits the organizer has not saved yet. A different item always loads.
+      if (loadedItemIdRef.current === item.id && isDirtyRef.current) return;
+      loadedItemIdRef.current = item.id;
       // Normalize category to Title Case (e.g. "tools" → "Tools") so the
       // select value matches the option values defined in the form.
       // If category is missing, use empty string (will show placeholder)
@@ -980,6 +1100,11 @@ const EditItemPage = () => {
         // Feature #309/#70 follow-up (2026-09-24)
         consignorId: item.consignorId || '',
       });
+      // Keep the raw-text mirrors in step so the dirty baseline below is taken from consistent values.
+      setQuantityText(String(item.quantity ?? 1));
+      setStockTotalText(String(item.stockTotal ?? 1));
+      // Re-baseline dirty tracking once these values have rendered.
+      setBaselinePending(true);
     }
   }, [item]);
 
@@ -1007,7 +1132,54 @@ const EditItemPage = () => {
           organizerDefaults.defaultBestOfferDeclinePct != null ? organizerDefaults.defaultBestOfferDeclinePct : prev.bestOfferDeclinePct,
       };
     });
+    // These percentages are a prefill, not an organizer edit: keep the dirty baseline in step.
+    setBaseline((b) =>
+      b && b.f.bestOfferAcceptPct === '' && b.f.bestOfferDeclinePct === ''
+        ? {
+            ...b,
+            f: {
+              ...b.f,
+              bestOfferAcceptPct:
+                organizerDefaults.defaultBestOfferAcceptPct != null ? organizerDefaults.defaultBestOfferAcceptPct : b.f.bestOfferAcceptPct,
+              bestOfferDeclinePct:
+                organizerDefaults.defaultBestOfferDeclinePct != null ? organizerDefaults.defaultBestOfferDeclinePct : b.f.bestOfferDeclinePct,
+            },
+          }
+        : b
+    );
   }, [item, organizerDefaults, id]);
+
+  // Take the dirty baseline once the load effect's values have rendered (see baselinePending).
+  useEffect(() => {
+    if (!baselinePending) return;
+    setBaseline(makeCurrentSnapshot());
+    setBaselinePending(false);
+  });
+
+  // The app layout clips horizontal overflow with overflow-x:hidden, which turns an ancestor into a
+  // scroll container and stops position:sticky from working. While this page is mounted, switch
+  // that ancestor to overflow-x:clip (same visual clipping, no scroll container) and restore it on
+  // unmount. If the browser does not support clip the value is ignored and the sticky header and
+  // action bar simply scroll with the page.
+  const hasItemForSticky = !!item;
+  useEffect(() => {
+    const root = pageRootRef.current;
+    if (!root || typeof window === 'undefined') return;
+    const changed: Array<{ el: HTMLElement; prev: string }> = [];
+    let el: HTMLElement | null = root.parentElement;
+    while (el && el !== document.body && el !== document.documentElement) {
+      if (window.getComputedStyle(el).overflowX === 'hidden') {
+        changed.push({ el, prev: el.style.overflowX });
+        el.style.overflowX = 'clip';
+      }
+      el = el.parentElement;
+    }
+    return () => {
+      changed.forEach(({ el: node, prev }) => {
+        node.style.overflowX = prev;
+      });
+    };
+  }, [authLoading, isLoading, hasItemForSticky]);
 
   // Smart local pickup detection: nudge when description/notes mention local pickup
   useEffect(() => {
@@ -1048,80 +1220,17 @@ const EditItemPage = () => {
 
   const updateMutation = useMutation({
     mutationFn: async () => {
-      // Coerce numeric shipping fields from string → number|null (backend zod requires Int)
-      const toIntOrNull = (v: string) => {
-        const n = parseInt(String(v).trim(), 10);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      };
-      const price = parseFloat(String(formData.price)) || 0;
-      const acceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
-      const declinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
-      const payload = {
-        ...formData,
-        // Package weight is gated behind weightTouched (2026-09-14, same ADR-106
-        // pattern as shippingAvailable/shippingPrice below): an unreviewed estimate
-        // sitting in formData must not silently overwrite this column on an unrelated
-        // save. Omitted entirely when untouched (JSON.stringify drops `undefined`),
-        // overriding the raw un-converted string from the ...formData spread above.
-        packageWeightOz: weightTouched ? toIntOrNull(formData.packageWeightOz) : undefined,
-        // Same confirm-on-real-edit rule as saveFormState above.
-        ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
-          ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
-          : {}),
-        // Same weightTouched gating as packageWeightOz above.
-        packageLengthIn: weightTouched ? toIntOrNull(formData.packageLengthIn) : undefined,
-        packageWidthIn: weightTouched ? toIntOrNull(formData.packageWidthIn) : undefined,
-        packageHeightIn: weightTouched ? toIntOrNull(formData.packageHeightIn) : undefined,
-        allowBestOffer: formData.allowBestOffer,
-        bestOfferAutoAcceptAmt: formData.allowBestOffer && acceptPct !== null && price > 0
-          ? parseFloat((price * (1 - acceptPct / 100)).toFixed(2))
-          : null,
-        bestOfferMinimumAmt: formData.allowBestOffer && declinePct !== null && price > 0
-          ? parseFloat((price * (1 - declinePct / 100)).toFixed(2))
-          : null,
-        excludeFromMarkdown: formData.excludeFromMarkdown,
-        ebayShippingOverride: formData.ebayShippingOverride || null,
-        ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
-        // ADR-106 (2026-08-15): only send shippingAvailable/shippingPrice as an
-        // explicit organizer edit when the organizer actually touched the shipping
-        // checkbox/price input this session (shippingTouched) -- otherwise omit both
-        // keys entirely (JSON.stringify drops `undefined` values) so a save of an
-        // unrelated field never gets mistaken by the backend for a real shipping edit
-        // and never locks shippingPriceConfirmedByOrganizer. Backend auto-suggest keeps
-        // pricing this item off the package weight until the organizer really does edit it.
-        shippingAvailable: shippingTouched ? formData.shippingAvailable : undefined,
-        shippingPrice: shippingTouched
-          ? (formData.shippingPrice ? parseFloat(formData.shippingPrice) : null)
-          : undefined,
-        // Crosslister shipping-payer toggle (2026-08-27) -- always sent as an explicit value
-        // (unlike shippingAvailable/shippingPrice above, there's no auto-suggest logic here to
-        // protect against overwriting, so no "touched" gate is needed).
-        crosslisterFreeShipping: formData.crosslisterFreeShipping,
-        // Bug fix (2026-08-08, P1 data corruption): same naive-local-string bug as
-        // add-items.tsx / create-sale.tsx -- formData.auctionEndTime comes from
-        // <input type="datetime-local"> as a naive local string with no timezone info.
-        // Sending it unconverted meant the backend (Node, running in UTC) parsed it via
-        // `new Date(str)` AS IF it were already UTC, closing auctions hours early.
-        // Convert to a proper UTC ISO string before sending.
-        auctionEndTime: formData.auctionEndTime ? new Date(formData.auctionEndTime).toISOString() : null,
-        // strip UI-only percentage fields
-        bestOfferAcceptPct: undefined,
-        bestOfferDeclinePct: undefined,
-        // Feature #309/#70 follow-up (2026-09-24): only sent when the organizer actually
-        // touched the consignor picker this session (consignorTouched) -- same contract as
-        // shippingAvailable/shippingPrice above. '' means "clear the attribution" -> null.
-        consignorId: consignorTouched ? (formData.consignorId || null) : undefined,
-      };
-      return await api.put(`/items/${id}`, payload);
+      // Same payload as the pre-push saves: see buildSavePayload.
+      return await commitSave();
     },
-    onSuccess: () => {
+    onMutate: () => {
+      setSaveError(null);
+    },
+    onSuccess: (snapshot: SaveSnapshot) => {
       showToast('Item updated', 'success');
-      const saleId = item?.saleId;
-      if (saleId) {
-        router.push(`/organizer/add-items/${saleId}`);
-      } else {
-        router.push('/organizer/dashboard');
-      }
+      // Stay on the page (no redirect). The result strip above the action bar shows "Saved" and
+      // links back to the sale's items.
+      markSaved(snapshot);
     },
     onError: (error: any) => {
       const status = error.response?.status;
@@ -1137,6 +1246,7 @@ const EditItemPage = () => {
       } else {
         message = error.response?.data?.message || message;
       }
+      setSaveError(message);
       showToast(message, 'error');
     },
   });
@@ -1274,12 +1384,135 @@ const EditItemPage = () => {
   };
 
 
+  // ---- Edit Item redesign: derived display values (from the loaded item and the form) ----
+  const headerThumb: string | null =
+    Array.isArray(item.photoUrls) && item.photoUrls.length > 0 ? item.photoUrls[0] : null;
+  const headerTitle: string = formData.title.trim() || item.title || 'Untitled item';
+
+  // One merged status chip. Sold / unavailable states win over publish state.
+  const statusChip: { label: string; className: string } = (() => {
+    const green = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200';
+    const amber = 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
+    const gray = 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
+    const itemStatus = String(item.status || 'AVAILABLE').toUpperCase();
+    if (itemStatus === 'SOLD') return { label: 'Sold', className: gray };
+    if (itemStatus === 'UNAVAILABLE') return { label: 'Unavailable', className: gray };
+    if (itemStatus !== 'AVAILABLE') {
+      const words = itemStatus.toLowerCase().replace(/_/g, ' ');
+      return { label: words.charAt(0).toUpperCase() + words.slice(1), className: gray };
+    }
+    if (item.draftStatus === 'DRAFT') return { label: 'Draft', className: amber };
+    if (item.draftStatus === 'PENDING_REVIEW') return { label: 'Needs review', className: amber };
+    return { label: 'Live', className: green };
+  })();
+
+  // Where this is listed: chips come ONLY from data already on the item object.
+  const listingChips: Array<{ key: string; label: string; className: string }> = [];
+  if (item.ebayListingId) {
+    listingChips.push({ key: 'ebay', label: 'eBay live', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200' });
+  } else if (item.ebayOfferId) {
+    listingChips.push({ key: 'ebay', label: 'eBay pending', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200' });
+  }
+  if (item.discogsListingId) {
+    listingChips.push({ key: 'discogs', label: 'Discogs live', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200' });
+  }
+  // Reserved for a later change (see the LAST EDITED SLOT comment in the header). Always null today.
+  const lastEditedLabel = null as string | null;
+
+  const goToWhereListed = () => {
+    setWhereListedSignal((n) => n + 1);
+    window.setTimeout(() => {
+      document.getElementById('where-listed')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
+  // Progressive disclosure (see lib/itemFieldRelevance.ts). Values always win over relevance.
+  const productIdsDisclosure = getProductIdsDisclosure({
+    category: formData.category,
+    ebayCategoryName: formData.ebayCategoryName,
+    mpn: formData.mpn,
+    upc: formData.upc,
+    isbn: formData.isbn,
+    showAll: showAllFields,
+  });
+  const apparelDisclosure = getApparelDetailsDisclosure({
+    category: formData.category,
+    ebayCategoryName: formData.ebayCategoryName,
+    size: formData.size,
+    color: formData.color,
+    material: formData.material,
+    showAll: showAllFields,
+  });
+
+  const hasShippingValue =
+    formData.shippingAvailable ||
+    formData.crosslisterFreeShipping ||
+    !!formData.ebayShippingOverride ||
+    !!formData.ebayFulfillmentPolicyOverrideId ||
+    hasAnyValue(
+      formData.packageWeightOz,
+      formData.packageLengthIn,
+      formData.packageWidthIn,
+      formData.packageHeightIn,
+      formData.packageType
+    );
+  const shippingSummary = [
+    formData.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' ? 'Local pickup only' : null,
+    formData.shippingAvailable ? 'Shipping on' : null,
+    formData.packageWeightOz ? `${formData.packageWeightOz} oz` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const moreOptionsHasValue =
+    hasAnyValue(formData.tagColor, formData.roomTag) || formData.isLegendary || !formData.qrEmbedEnabled;
+  const legendarySuggested = parseFloat(formData.price) >= 75 && !formData.isLegendary;
+
+  // Nothing renders inside Where this is listed for a SIMPLE organizer with no Discogs/Reverb connection.
+  const whereListedEmpty = tier === 'SIMPLE' && !discogsConnected && !reverbConnected;
+
+  // Where "Back" goes. The old save redirect target (the sale's items) is the default; a
+  // ?returnTo= value is honored only when it is an organizer page.
+  const rawReturnTo = typeof router.query.returnTo === 'string' ? router.query.returnTo : '';
+  const returnToSafe = rawReturnTo.startsWith('/organizer/') ? rawReturnTo : '';
+  const backHref =
+    returnToSafe || (item.saleId ? `/organizer/add-items/${item.saleId}` : '/organizer/dashboard');
+  const backLabel = returnToSafe ? 'Back' : item.saleId ? 'Back to sale items' : 'Back to dashboard';
+
+  // What Save does for this item. Worded from itemController.updateItem: when the item has an eBay
+  // offer, Save pushes price, title, description and condition (then republishes); it does not push
+  // photos, category, quantity or best-offer settings. Discogs and Reverb are never updated by Save.
+  // Facebook, Mercari, Vinted and Shopify are not described: the edit read does not expose them.
+  const saveImpactParts: string[] = [];
+  if (item.ebayListingId) {
+    saveImpactParts.push(
+      'This item is on eBay. Saving also sends price, title, description and condition to eBay, and eBay can take a minute to update. Photos, category, quantity and best-offer settings are not sent by Save; use Re-push to eBay.'
+    );
+  } else if (item.ebayOfferId) {
+    saveImpactParts.push(
+      'This item has an eBay listing that is not live yet. Saving also sends price, title, description and condition to eBay and can publish it live, and eBay can take a minute to update. Photos, category, quantity and best-offer settings are not sent by Save; use Publish to eBay now.'
+    );
+  }
+  const onDiscogsListing = !!item.discogsListingId;
+  const onReverbListing = !!reverbPushedListing;
+  if (onDiscogsListing || onReverbListing) {
+    saveImpactParts.push(
+      onDiscogsListing && onReverbListing
+        ? 'Discogs and Reverb are not updated by Save. Use their update buttons in Where this is listed.'
+        : `${onDiscogsListing ? 'Discogs' : 'Reverb'} is not updated by Save. Use its update button in Where this is listed.`
+    );
+  }
+  if (saveImpactParts.length === 0) {
+    saveImpactParts.push('Nothing is listed on eBay, Discogs or Reverb for this item. Saving only changes FindA.Sale.');
+  }
+  const saveImpactText = saveImpactParts.join(' ');
+
   return (
     <>
       <Head>
         <title>Edit Item - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-white dark:bg-gray-800">
+      <div className="min-h-screen bg-white dark:bg-gray-800" ref={pageRootRef}>
         <div className="max-w-2xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-8">
             <Link href="/organizer/dashboard" className="text-amber-600 hover:underline text-sm font-medium inline-block">
@@ -1338,1198 +1571,776 @@ const EditItemPage = () => {
             </div>
           </div>
 
-          <form onSubmit={(e) => {
+          {/* Sticky item header: thumbnail, title, one merged status chip and a compact
+              "where this is listed" strip. Every value comes from data already on the loaded
+              item. Chips jump to the Where this is listed section. */}
+          <div
+            className="sticky top-[92px] md:top-16 z-30 -mx-4 px-4 py-2 mb-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-warm-200 dark:border-gray-700"
+            data-testid="edit-item-sticky-header"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {headerThumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={headerThumb}
+                  alt=""
+                  className="w-10 h-10 rounded-md object-cover flex-shrink-0 bg-warm-100 dark:bg-gray-700"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-md flex-shrink-0 bg-warm-100 dark:bg-gray-700" aria-hidden="true" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-warm-900 dark:text-warm-100">{headerTitle}</p>
+                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                  {listingChips.length > 0 ? (
+                    listingChips.map((chip) => (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        onClick={goToWhereListed}
+                        title="Jump to Where this is listed"
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${chip.className}`}
+                      >
+                        {chip.label}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="text-[11px] text-warm-500 dark:text-warm-400">Not listed on eBay or Discogs</span>
+                  )}
+                  {/* LAST EDITED SLOT (reserved, renders nothing today). A later change fills
+                      lastEditedLabel once the backend exposes an organizer-safe value. Do NOT
+                      derive it from item.updatedAt here: whether updatedAt is organizer-only is
+                      still being checked. */}
+                  {lastEditedLabel ? (
+                    <span className="text-[11px] text-warm-500 dark:text-warm-400">{lastEditedLabel}</span>
+                  ) : null}
+                </div>
+              </div>
+              <span
+                className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ${statusChip.className}`}
+                data-testid="edit-item-status-chip"
+              >
+                {statusChip.label}
+              </span>
+            </div>
+          </div>
+
+          <form id="edit-item-form" onSubmit={(e) => {
             e.preventDefault();
             if (!formData.title.trim()) {
               showToast('Title is required', 'error');
               return;
             }
             updateMutation.mutate();
-          }} className="space-y-6">
-            <div>
-              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">Title</label>
-                <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBarcodeScannerOpen(true)}
-                  disabled={barcodeLoading}
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-lg transition-colors disabled:opacity-50"
-                  title="Scan a barcode to prefill product details"
-                >
-                  {barcodeLoading ? (
-                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <rect x="2" y="5" width="2" height="14" rx="0.5" />
-                      <rect x="6" y="5" width="1" height="14" rx="0.5" />
-                      <rect x="9" y="5" width="2" height="14" rx="0.5" />
-                      <rect x="13" y="5" width="1" height="14" rx="0.5" />
-                      <rect x="16" y="5" width="2" height="14" rx="0.5" />
-                      <rect x="20" y="5" width="2" height="14" rx="0.5" />
-                    </svg>
-                  )}
-                  {barcodeLoading ? 'Looking up…' : 'Scan barcode'}
-                </button>
-                {(item?.photoUrls?.length ?? 0) > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => requestReanalyzeItem(false)}
-                      disabled={reanalyzing}
-                      title="Re-run Smart tagging on this item's photos"
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {reanalyzing ? 'Working…' : 'Re-analyze'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => requestReanalyzeItem(true)}
-                      disabled={reanalyzing}
-                      title="Look up this item's exact identity from its photos and markings"
-                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#C8552B] dark:text-[#E08A5F] border border-[#C8552B]/30 dark:border-[#C8552B]/40 rounded-md hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Identify precisely
-                    </button>
-                  </div>
-                )}
-                </div>
-              </div>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-
-            <VoiceDescriptionInput
-              value={formData.description}
-              onChange={(description) => setFormData((prev) => ({ ...prev, description }))}
-              itemId={typeof router.query.id === 'string' ? router.query.id : undefined}
-              onAppendPersisted={(description) => {
-                // S724 Branch B fix: sync react-query cache so the line 276 useEffect
-                // (which resets formData when `item` ref changes) doesn't clobber the
-                // new description on a subsequent refetch or manual invalidation.
-                queryClient.setQueryData(['item', id], (old: any) =>
-                  old ? { ...old, description } : old
-                );
-              }}
-              onFieldUpdate={(fields) => {
-                setFormData((prev) => {
-                  const updates: any = { description: fields.description };
-                  if (fields.title && !prev.title) updates.title = fields.title;
-                  if (fields.category && !prev.category) updates.category = fields.category;
-                  if (fields.price && !prev.price) updates.price = fields.price;
-                  if (fields.packageWeightOz && !prev.packageWeightOz) updates.packageWeightOz = fields.packageWeightOz;
-                  if (fields.packageLengthIn && !prev.packageLengthIn) updates.packageLengthIn = fields.packageLengthIn;
-                  if (fields.packageWidthIn && !prev.packageWidthIn) updates.packageWidthIn = fields.packageWidthIn;
-                  if (fields.packageHeightIn && !prev.packageHeightIn) updates.packageHeightIn = fields.packageHeightIn;
-                  if (fields.roomTag !== undefined) updates.roomTag = fields.roomTag;
-                  if (fields.tags && fields.tags.length > 0) {
-                    const newTags = fields.tags.filter((tag: string) => !prev.tags.includes(tag));
-                    if (newTags.length > 0) {
-                      updates.tags = [...prev.tags, ...newTags];
+          }} className="space-y-4">
+            <ItemFormSection id="section-basics" title="Photos & basics" defaultOpen>
+                          {/* Phase 16: Photo management */}
+              {item && (
+                <div>
+                  {/* Hidden file input for upload-files button */}
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={(e) => handlePhotoUpload(e.target.files, 'upload')}
+                  />
+                  <ItemPhotoManager
+                    itemId={String(id)}
+                    initialPhotos={item.photoUrls || []}
+                    headerActions={
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          title="Upload files"
+                          onClick={() => uploadInputRef.current?.click()}
+                          className="w-8 h-8 flex items-center justify-center bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-800 text-base"
+                        >
+                          📁
+                        </button>
+                        <button
+                          type="button"
+                          title="Camera"
+                          onClick={() => {
+                            setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
+                            setInlineCaptureMode('regular');
+                            setInlineCameraOpen(true);
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 text-base"
+                        >
+                          📷
+                        </button>
+                        <button
+                          type="button"
+                          title="Rapidfire"
+                          onClick={() => {
+                            setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
+                            setInlineCaptureMode('rapidfire');
+                            setInlineCameraOpen(true);
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 text-base"
+                        >
+                          ⚡
+                        </button>
+                      </div>
                     }
-                  }
-                  return { ...prev, ...updates };
-                });
-              }}
-              existingFields={{
-                title: formData.title,
-                category: formData.category,
-                tags: formData.tags,
-                price: formData.price,
-                packageWeightOz: formData.packageWeightOz,
-                packageLengthIn: formData.packageLengthIn,
-                packageWidthIn: formData.packageWidthIn,
-                packageHeightIn: formData.packageHeightIn,
-                roomTag: formData.roomTag,
-              }}
-            />
+                  />
+                </div>
+              )}
 
-            <EbayCategoryPicker
-              value={formData.category}
-              ebayCategoryName={formData.ebayCategoryName}
-              onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) =>
-                setFormData({
-                  ...formData,
-                  category: l1CategoryName,
-                  ebayCategoryId: leafCategoryId,
-                  ebayCategoryName: leafCategoryName,
-                })
-              }
-              label="Category"
-              placeholder="Search and select an eBay category..."
-            />
-
-            {/* Feature #311: Multi-Location Inventory View */}
-            <LocationSelector
-              value={formData.locationId}
-              onChange={(locationId) => setFormData({ ...formData, locationId })}
-              label="Location"
-              placeholder="Select a location (optional)"
-            />
-
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Condition
-              </label>
-              <select
-                value={formData.condition}
-                onChange={(e) =>
-                  setFormData({ ...formData, condition: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="">Select condition</option>
-                <option value="NEW">New</option>
-                <option value="USED">Used</option>
-                <option value="REFURBISHED">Refurbished</option>
-                <option value="PARTS_OR_REPAIR">Parts or Repair</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Brand
-              </label>
-              <input
-                type="text"
-                value={formData.brand}
-                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                placeholder="e.g. Danner, Sony, Pyrex. Leave blank if unbranded"
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-              <div className="text-xs text-gray-400 mt-0.5">
-                Required by eBay for many categories. Your value is always used exactly as entered.
-              </div>
-            </div>
-
-            {tier === 'TEAMS' && consignorOptions && consignorOptions.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Consignor (optional)
-                </label>
-                <select
-                  value={formData.consignorId}
-                  onChange={(e) => {
-                    setConsignorTouched(true);
-                    setFormData({ ...formData, consignorId: e.target.value });
-                  }}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value="">Not consigned</option>
-                  {consignorOptions.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Size <span className="text-warm-400 font-normal">(optional)</span>
-                </label>
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">Title</label>
+                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBarcodeScannerOpen(true)}
+                    disabled={barcodeLoading}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-lg transition-colors disabled:opacity-50"
+                    title="Scan a barcode to prefill product details"
+                  >
+                    {barcodeLoading ? (
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <rect x="2" y="5" width="2" height="14" rx="0.5" />
+                        <rect x="6" y="5" width="1" height="14" rx="0.5" />
+                        <rect x="9" y="5" width="2" height="14" rx="0.5" />
+                        <rect x="13" y="5" width="1" height="14" rx="0.5" />
+                        <rect x="16" y="5" width="2" height="14" rx="0.5" />
+                        <rect x="20" y="5" width="2" height="14" rx="0.5" />
+                      </svg>
+                    )}
+                    {barcodeLoading ? 'Looking up…' : 'Scan barcode'}
+                  </button>
+                  {(item?.photoUrls?.length ?? 0) > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => requestReanalyzeItem(false)}
+                        disabled={reanalyzing}
+                        title="Re-run Smart tagging on this item's photos"
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {reanalyzing ? 'Working…' : 'Re-analyze'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => requestReanalyzeItem(true)}
+                        disabled={reanalyzing}
+                        title="Look up this item's exact identity from its photos and markings"
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#C8552B] dark:text-[#E08A5F] border border-[#C8552B]/30 dark:border-[#C8552B]/40 rounded-md hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Identify precisely
+                      </button>
+                    </div>
+                  )}
+                  </div>
+                </div>
                 <input
                   type="text"
-                  value={formData.size}
-                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
-                  placeholder="e.g. Medium, 10, 32x34"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Color <span className="text-warm-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.color}
-                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                  placeholder="e.g. Navy Blue"
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Material <span className="text-warm-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.material}
-                  onChange={(e) => setFormData({ ...formData, material: e.target.value })}
-                  placeholder="e.g. Cotton, Leather"
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-            </div>
-            <div className="text-xs text-gray-400 -mt-1">
-              Used by clothing/apparel-style marketplace listings (Poshmark, Mercari, Vinted, Grailed) and eBay item specifics. Leave blank if not applicable.
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  MPN <span className="text-warm-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.mpn}
-                  onChange={(e) => setFormData({ ...formData, mpn: e.target.value })}
-                  placeholder="Manufacturer part #"
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  UPC <span className="text-warm-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.upc}
-                  onChange={(e) => setFormData({ ...formData, upc: e.target.value })}
-                  placeholder="Barcode number"
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  ISBN <span className="text-warm-400 font-normal">(books/comics only)</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.isbn}
-                  onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
-                  placeholder="Book/comic ISBN"
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-                {formData.isbn && ![10, 13].includes(formData.isbn.replace(/[-\s]/g, '').length) && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">ISBN is typically 10 or 13 characters</p>
-                )}
-              </div>
-            </div>
-
-            {/* Catalog enrichment suggestions: additive, renders only when present.
-                Accepting fills the form field; existing Save flow persists it. */}
-            {item?.catalogSuggestions && (
-              <CatalogSuggestionPanel
-                suggestions={item.catalogSuggestions}
-                onAccept={(field, value) =>
-                  setFormData((prev) => ({ ...prev, [field]: value }))
-                }
-              />
-            )}
-
-            {/* #64: Condition Grade Picker */}
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Condition Grade
-              </label>
-              <div className="flex gap-2">
-                {(['S','A','B','C','D'] as const).map(grade => {
-                  const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
-                  return (
-                    <button
-                      key={grade}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, conditionGrade: grade })}
-                      className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${formData.conditionGrade === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-indigo-400'}`}
-                      title={labels[grade]}
-                    >
-                      {grade}
-                    </button>
+              <VoiceDescriptionInput
+                value={formData.description}
+                onChange={(description) => setFormData((prev) => ({ ...prev, description }))}
+                itemId={typeof router.query.id === 'string' ? router.query.id : undefined}
+                onAppendPersisted={(description) => {
+                  // S724 Branch B fix: sync react-query cache so the line 276 useEffect
+                  // (which resets formData when `item` ref changes) doesn't clobber the
+                  // new description on a subsequent refetch or manual invalidation.
+                  queryClient.setQueryData(['item', id], (old: any) =>
+                    old ? { ...old, description } : old
                   );
-                })}
-              </div>
-              <div className="text-xs text-gray-400 mt-0.5">
-                {(['S','A','B','C','D'] as const).map(g => {
-                  const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
-                  return `${g}=${labels[g]}`;
-                }).join(' · ')}
-              </div>
-            </div>
-
-            {/* Sprint 1: Tag Picker */}
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
-
-              {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
-              {/* Custom tag input */}
-              <div className="mb-2">
-                <input
-                  type="text"
-                  placeholder="Add a custom tag..."
-                  className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  aria-label="Add a custom tag..." onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const value = (e.target as HTMLInputElement).value.trim();
-                      if (value && !formData.tags.includes(value)) {
-                        setFormData({ ...formData, tags: [...formData.tags, value] });
-                        (e.target as HTMLInputElement).value = '';
+                }}
+                onFieldUpdate={(fields) => {
+                  setFormData((prev) => {
+                    const updates: any = { description: fields.description };
+                    if (fields.title && !prev.title) updates.title = fields.title;
+                    if (fields.category && !prev.category) updates.category = fields.category;
+                    if (fields.price && !prev.price) updates.price = fields.price;
+                    if (fields.packageWeightOz && !prev.packageWeightOz) updates.packageWeightOz = fields.packageWeightOz;
+                    if (fields.packageLengthIn && !prev.packageLengthIn) updates.packageLengthIn = fields.packageLengthIn;
+                    if (fields.packageWidthIn && !prev.packageWidthIn) updates.packageWidthIn = fields.packageWidthIn;
+                    if (fields.packageHeightIn && !prev.packageHeightIn) updates.packageHeightIn = fields.packageHeightIn;
+                    if (fields.roomTag !== undefined) updates.roomTag = fields.roomTag;
+                    if (fields.tags && fields.tags.length > 0) {
+                      const newTags = fields.tags.filter((tag: string) => !prev.tags.includes(tag));
+                      if (newTags.length > 0) {
+                        updates.tags = [...prev.tags, ...newTags];
                       }
                     }
-                  }}
-                />
-              </div>
-
-              {/* Current tags display */}
-              <div className="flex flex-wrap gap-1">
-                {formData.tags.map(tag => (
-                  <span key={tag} className="inline-flex items-center bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 text-xs px-2 py-0.5 rounded-full">
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) })}
-                      className="ml-1 text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-bold"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Feature #310: Tag Color for discount rules */}
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Tag Color
-              </label>
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={formData.tagColor}
-                    onChange={(e) =>
-                      setFormData({ ...formData, tagColor: e.target.value })
-                    }
-                    placeholder="e.g., #EF4444 or red"
-                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                   aria-label="e.g., #EF4444 or red" />
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                    Used for color-coded discount rules
-                  </p>
-                </div>
-                {formData.tagColor && (
-                  <div
-                    className="w-10 h-10 rounded-lg border-2 border-warm-300 dark:border-gray-500 flex-shrink-0"
-                    style={{ backgroundColor: formData.tagColor }}
-                    title="Color preview"
-                  />
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Price
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.price}
-                onChange={(e) =>
-                  setFormData({ ...formData, price: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-
-              {/* Smart Price Suggestion (multi-source pricing engine, 2026-08-24): manual
-                  re-trigger since descriptions/photos can change after the initial scan.
-                  Refresh-only — never auto-writes price, organizer must click Use $X. */}
-              <div className="mt-3 mb-1">
-                <PriceSuggestion
-                  itemId={id as string}
-                  title={formData.title}
-                  category={formData.category}
-                  condition={formData.condition}
-                  conditionGrade={formData.conditionGrade}
-                  photoUrls={item?.photoUrls}
-                  currentPrice={formData.price ? parseFloat(formData.price) : undefined}
-                  autoRefreshToken={priceRefreshToken}
-                  onApplyPrice={(price) => setFormData({ ...formData, price: String(price) })}
-                />
-              </div>
-
-              {/* Encyclopedia Inline Tip: price guidance from Encyclopedia */}
-              <EncyclopediaInlineTip
-                category={formData.category}
-                tags={formData.tags}
-                title={formData.title}
-              />
-              {/* eBay Comp Tiles: comparable sales reference */}
-              {id && <EbayCompTiles itemId={id as string} />}
-
-              {/* Feature #338: Multi-source pricing comp summary: auto-fetches on load */}
-              {id && <PricingCompSummary itemId={id as string} itemTitle={formData.title} />}
-
-              {/* Price Research Panel: consolidated pricing tools */}
-              <div className="mt-3">
-                {id && (
-                  <PriceResearchPanel
-                    itemId={id as string}
-                    itemTitle={formData.title}
-                    itemDescription={formData.description}
-                    category={formData.category}
-                    condition={formData.condition}
-                    currentPrice={formData.price ? parseFloat(formData.price) : undefined}
-                    photoUrls={item?.photoUrls}
-                    collapsed={false}
-                    onPriceSelect={(price) =>
-                      setFormData({
-                        ...formData,
-                        price: price.toString(),
-                      })
-                    }
-                  />
-                )}
-              </div>
-
-              {/* Price History Chart */}
-              {id && <ItemPriceHistoryChart itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
-
-              {/* Pricing Signals: Sleeper patterns & brand premiums */}
-              {id && <PricingSignalBanners itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
-            </div>
-
-            {/* Feature #407: Flip Tracker ROI: Cost Basis */}
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Cost Basis <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={formData.costBasis}
-                onChange={(e) => setFormData({ ...formData, costBasis: e.target.value })}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">What did you pay for this? Used to calculate ROI in Flip Report.</p>
-            </div>
-
-            {/* Feature #411: Dorm Dash: Room / Area Tag */}
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
-                  Room / Area Tag <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
-                </label>
-              </div>
-              <input
-                type="text"
-                placeholder="e.g. Bedroom, Garage, Study, Room 204"
-                value={formData.roomTag}
-                onChange={(e) => setFormData({ ...formData, roomTag: e.target.value })}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Helps shoppers find items by location at Dorm Dash or multi-room sales.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Lot / bundle size
-              </label>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={quantityText}
-                onChange={(e) => setQuantityText(e.target.value)}
-                onBlur={() => {
-                  const parsed = Math.max(1, parseInt(quantityText, 10) || 1);
-                  setQuantityText(String(parsed));
-                  setFormData({ ...formData, quantity: parsed });
+                    return { ...prev, ...updates };
+                  });
                 }}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              />
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many pieces are bundled together and sold as one lot (e.g. "set of 8" sold together). This is not your sellable stock count.</p>
-            </div>
-
-            {/* ADR-087 P1: "Units available" = the real independently-sellable stock pool (stockTotal). */}
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Units available
-              </label>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={stockTotalText}
-                onChange={(e) => setStockTotalText(e.target.value)}
-                onBlur={() => {
-                  const parsed = Math.max(1, parseInt(stockTotalText, 10) || 1);
-                  setStockTotalText(String(parsed));
-                  setFormData({ ...formData, stockTotal: parsed });
+                existingFields={{
+                  title: formData.title,
+                  category: formData.category,
+                  tags: formData.tags,
+                  price: formData.price,
+                  packageWeightOz: formData.packageWeightOz,
+                  packageLengthIn: formData.packageLengthIn,
+                  packageWidthIn: formData.packageWidthIn,
+                  packageHeightIn: formData.packageHeightIn,
+                  roomTag: formData.roomTag,
                 }}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many separate units of this item you have to sell. Each sale (in person, at POS, or on a connected marketplace) draws one unit from this pool, and the item stays listed until every unit is gone. Leave at 1 for a single item.</p>
-              {formData.quantity > 1 && (formData.stockTotal ?? 1) <= 1 && (
-                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-start gap-1">
-                  <span aria-hidden="true">&#9888;</span>
-                  <span>This item&apos;s stock pool isn&apos;t set. Shoppers and marketplaces will see only 1 available. Set &ldquo;Units available&rdquo; to your real number of units.</span>
-                </p>
-              )}
-            </div>
+            </ItemFormSection>
 
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Status
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
+            <ItemFormSection id="section-category" title="Category" defaultOpen summary={formData.ebayCategoryName || formData.category || undefined}>
+              <EbayCategoryPicker
+                value={formData.category}
+                ebayCategoryName={formData.ebayCategoryName}
+                onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) =>
+                  setFormData({
+                    ...formData,
+                    category: l1CategoryName,
+                    ebayCategoryId: leafCategoryId,
+                    ebayCategoryName: leafCategoryName,
+                  })
                 }
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="AVAILABLE">Available</option>
-                <option value="SOLD">Sold</option>
-                <option value="UNAVAILABLE">Unavailable</option>
-              </select>
-            </div>
+                label="Category"
+                placeholder="Search and select an eBay category..."
+              />
 
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Listing Type
-              </label>
-              <select
-                value={formData.listingType}
-                onChange={(e) =>
-                  setFormData({ ...formData, listingType: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="FIXED">Fixed Price</option>
-                <option value="AUCTION">Auction</option>
-                <option value="REVERSE_AUCTION">Reverse Auction</option>
-              </select>
-            </div>
+              {/* Feature #311: Multi-Location Inventory View */}
+              <LocationSelector
+                value={formData.locationId}
+                onChange={(locationId) => setFormData({ ...formData, locationId })}
+                label="Location"
+                placeholder="Select a location (optional)"
+              />
+            </ItemFormSection>
 
-            {/* Auction End Time - show only for auction items */}
-            {(formData.listingType === 'AUCTION' || formData.listingType === 'REVERSE_AUCTION') && (
+            <ItemFormSection id="section-condition" title="Condition & details" defaultOpen>
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Auction End Time
+                  Condition
+                </label>
+                <select
+                  value={formData.condition}
+                  onChange={(e) =>
+                    setFormData({ ...formData, condition: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">Select condition</option>
+                  <option value="NEW">New</option>
+                  <option value="USED">Used</option>
+                  <option value="REFURBISHED">Refurbished</option>
+                  <option value="PARTS_OR_REPAIR">Parts or Repair</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Brand
                 </label>
                 <input
-                  type="datetime-local"
-                  value={formData.auctionEndTime}
-                  onChange={(e) => setFormData({ ...formData, auctionEndTime: e.target.value })}
+                  type="text"
+                  value={formData.brand}
+                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  placeholder="e.g. Danner, Sony, Pyrex. Leave blank if unbranded"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 />
-                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                  Default: night before sale starts at 8:00 PM
-                </p>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  Required by eBay for many categories. Your value is always used exactly as entered.
+                </div>
               </div>
-            )}
 
-                        {/* Phase 16: Photo management */}
-            {item && (
+              {/* #64: Condition Grade Picker */}
               <div>
-                {/* Hidden file input for upload-files button */}
-                <input
-                  ref={uploadInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  hidden
-                  onChange={(e) => handlePhotoUpload(e.target.files, 'upload')}
-                />
-                <ItemPhotoManager
-                  itemId={String(id)}
-                  initialPhotos={item.photoUrls || []}
-                  headerActions={
-                    <div className="flex gap-1">
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Condition Grade
+                </label>
+                <div className="flex gap-2">
+                  {(['S','A','B','C','D'] as const).map(grade => {
+                    const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                    return (
                       <button
+                        key={grade}
                         type="button"
-                        title="Upload files"
-                        onClick={() => uploadInputRef.current?.click()}
-                        className="w-8 h-8 flex items-center justify-center bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-800 text-base"
+                        onClick={() => setFormData({ ...formData, conditionGrade: grade })}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${formData.conditionGrade === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-indigo-400'}`}
+                        title={labels[grade]}
                       >
-                        📁
+                        {grade}
                       </button>
-                      <button
-                        type="button"
-                        title="Camera"
-                        onClick={() => {
-                          setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
-                          setInlineCaptureMode('regular');
-                          setInlineCameraOpen(true);
-                        }}
-                        className="w-8 h-8 flex items-center justify-center bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 text-base"
-                      >
-                        📷
-                      </button>
-                      <button
-                        type="button"
-                        title="Rapidfire"
-                        onClick={() => {
-                          setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
-                          setInlineCaptureMode('rapidfire');
-                          setInlineCameraOpen(true);
-                        }}
-                        className="w-8 h-8 flex items-center justify-center bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 text-base"
-                      >
-                        ⚡
-                      </button>
-                    </div>
+                    );
+                  })}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {(['S','A','B','C','D'] as const).map(g => {
+                    const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                    return `${g}=${labels[g]}`;
+                  }).join(' · ')}
+                </div>
+              </div>
+
+              {tier === 'TEAMS' && consignorOptions && consignorOptions.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                    Consignor (optional)
+                  </label>
+                  <select
+                    value={formData.consignorId}
+                    onChange={(e) => {
+                      setConsignorTouched(true);
+                      setFormData({ ...formData, consignorId: e.target.value });
+                    }}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">Not consigned</option>
+                    {consignorOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Catalog enrichment suggestions: additive, renders only when present.
+                  Accepting fills the form field; existing Save flow persists it. */}
+              {item?.catalogSuggestions && (
+                <CatalogSuggestionPanel
+                  suggestions={item.catalogSuggestions}
+                  onAccept={(field, value) =>
+                    setFormData((prev) => ({ ...prev, [field]: value }))
                   }
                 />
-              </div>
-            )}
+              )}
 
-            {/* Feature #136: QR Code Auto-Embedding toggle */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="qrEmbedEnabled"
-                checked={formData.qrEmbedEnabled}
-                onChange={(e) => setFormData({ ...formData, qrEmbedEnabled: e.target.checked })}
-                className="w-4 h-4 text-amber-600 bg-white dark:bg-warm-700 border-warm-300 dark:border-warm-500 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
-              />
-              <label htmlFor="qrEmbedEnabled" className="text-sm font-medium text-warm-700 dark:text-warm-300 cursor-pointer">
-                Embed QR code in exported photos
-              </label>
-              <p className="text-xs text-warm-500 dark:text-warm-400">
-                QR codes link to this item&apos;s page on FindA.Sale
-              </p>
-            </div>
-
-            {/* Legendary suggestion banner (shows when price >= $75 and not already legendary) */}
-            {parseFloat(formData.price) >= 75 && !formData.isLegendary && (
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl flex-shrink-0">⭐</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                      This item is priced at ${parseFloat(formData.price).toFixed(2)}. Consider marking it Legendary to give Hunt Pass holders early access.
-                    </p>
+              <ItemFormSection title="Product IDs" variant="nested" defaultOpen={productIdsDisclosure.open} forceOpen={productIdsDisclosure.open}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                      MPN <span className="text-warm-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.mpn}
+                      onChange={(e) => setFormData({ ...formData, mpn: e.target.value })}
+                      placeholder="Manufacturer part #"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, isLegendary: true })}
-                    className="flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-bold py-1 px-3 rounded text-sm transition-colors"
-                  >
-                    Mark as Legendary
-                  </button>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                      UPC <span className="text-warm-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.upc}
+                      onChange={(e) => setFormData({ ...formData, upc: e.target.value })}
+                      placeholder="Barcode number"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                      ISBN <span className="text-warm-400 font-normal">(books/comics only)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.isbn}
+                      onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
+                      placeholder="Book/comic ISBN"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                    {formData.isbn && ![10, 13].includes(formData.isbn.replace(/[-\s]/g, '').length) && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">ISBN is typically 10 or 13 characters</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              </ItemFormSection>
 
-            {/* Mark as Legendary toggle */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="isLegendary"
-                  checked={formData.isLegendary}
-                  onChange={(e) => setFormData({ ...formData, isLegendary: e.target.checked })}
-                  className="w-4 h-4 text-amber-600 bg-white dark:bg-warm-700 border-warm-300 dark:border-warm-500 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer mt-1"
-                />
-                <div className="flex-1">
-                  <label htmlFor="isLegendary" className="text-sm font-bold text-amber-900 dark:text-amber-100 cursor-pointer block">
-                    Mark as Legendary
+              <ItemFormSection title="Size, color, material" variant="nested" defaultOpen={apparelDisclosure.open} forceOpen={apparelDisclosure.open}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                      Size <span className="text-warm-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.size}
+                      onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                      placeholder="e.g. Medium, 10, 32x34"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                      Color <span className="text-warm-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.color}
+                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                      placeholder="e.g. Navy Blue"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                      Material <span className="text-warm-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.material}
+                      onChange={(e) => setFormData({ ...formData, material: e.target.value })}
+                      placeholder="e.g. Cotton, Leather"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400 -mt-1">
+                  Used by clothing/apparel-style marketplace listings (Poshmark, Mercari, Vinted, Grailed) and eBay item specifics. Leave blank if not applicable.
+                </div>
+              </ItemFormSection>
+
+              {!showAllFields && (!productIdsDisclosure.open || !apparelDisclosure.open) && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllFields(true)}
+                  className="min-h-[44px] text-sm font-medium text-amber-700 dark:text-amber-400 hover:underline"
+                >
+                  Show all fields
+                </button>
+              )}
+            </ItemFormSection>
+
+            <ItemFormSection id="section-pricing" title="Pricing" defaultOpen summary={formData.price ? `$${formData.price}` : undefined}>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Listing Type
+                </label>
+                <select
+                  value={formData.listingType}
+                  onChange={(e) =>
+                    setFormData({ ...formData, listingType: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="FIXED">Fixed Price</option>
+                  <option value="AUCTION">Auction</option>
+                  <option value="REVERSE_AUCTION">Reverse Auction</option>
+                </select>
+              </div>
+
+              {/* Auction End Time - show only for auction items */}
+              {(formData.listingType === 'AUCTION' || formData.listingType === 'REVERSE_AUCTION') && (
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                    Auction End Time
                   </label>
-                  <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
-                    Legendary items are shown to Hunt Pass subscribers 6 hours before regular release.
+                  <input
+                    type="datetime-local"
+                    value={formData.auctionEndTime}
+                    onChange={(e) => setFormData({ ...formData, auctionEndTime: e.target.value })}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                    Default: night before sale starts at 8:00 PM
                   </p>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* D-XP-003: Organizer Special Section */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Organizer Special</h3>
-                {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
-                  <span className="inline-block bg-amber-600 text-white text-xs font-bold px-2 py-1 rounded">
-                    ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off
-                  </span>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Price
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e) =>
+                    setFormData({ ...formData, price: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+
+                {/* Smart Price Suggestion (multi-source pricing engine, 2026-08-24): manual
+                    re-trigger since descriptions/photos can change after the initial scan.
+                    Refresh-only — never auto-writes price, organizer must click Use $X. */}
+                <div className="mt-3 mb-1">
+                  <PriceSuggestion
+                    itemId={id as string}
+                    title={formData.title}
+                    category={formData.category}
+                    condition={formData.condition}
+                    conditionGrade={formData.conditionGrade}
+                    photoUrls={item?.photoUrls}
+                    currentPrice={formData.price ? parseFloat(formData.price) : undefined}
+                    autoRefreshToken={priceRefreshToken}
+                    onApplyPrice={(price) => setFormData({ ...formData, price: String(price) })}
+                  />
+                </div>
+
+                {/* Encyclopedia Inline Tip: price guidance from Encyclopedia */}
+                <EncyclopediaInlineTip
+                  category={formData.category}
+                  tags={formData.tags}
+                  title={formData.title}
+                />
+                {/* eBay Comp Tiles: comparable sales reference */}
+                {id && <EbayCompTiles itemId={id as string} />}
+
+                {/* Feature #338: Multi-source pricing comp summary: auto-fetches on load */}
+                {id && <PricingCompSummary itemId={id as string} itemTitle={formData.title} />}
+
+                {/* Price Research Panel: consolidated pricing tools */}
+                <div className="mt-3">
+                  {id && (
+                    <PriceResearchPanel
+                      itemId={id as string}
+                      itemTitle={formData.title}
+                      itemDescription={formData.description}
+                      category={formData.category}
+                      condition={formData.condition}
+                      currentPrice={formData.price ? parseFloat(formData.price) : undefined}
+                      photoUrls={item?.photoUrls}
+                      collapsed={true}
+                      onPriceSelect={(price) =>
+                        setFormData({
+                          ...formData,
+                          price: price.toString(),
+                        })
+                      }
+                    />
+                  )}
+                </div>
+
+                {/* Price History Chart */}
+                {id && <ItemPriceHistoryChart itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
+
+                {/* Pricing Signals: Sleeper patterns & brand premiums */}
+                {id && <PricingSignalBanners itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
+              </div>
+
+              {/* Feature #407: Flip Tracker ROI: Cost Basis */}
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Cost Basis <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={formData.costBasis}
+                  onChange={(e) => setFormData({ ...formData, costBasis: e.target.value })}
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">What did you pay for this? Used to calculate ROI in Flip Report.</p>
+              </div>
+
+              {/* D-XP-003: Organizer Special Section */}
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Organizer Special</h3>
+                  {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
+                    <span className="inline-block bg-amber-600 text-white text-xs font-bold px-2 py-1 rounded">
+                      ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-warm-500 dark:text-warm-400 -mt-1 mb-3">
+                  Applies right away, no need to save.
+                </p>
+
+                {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-warm-600 dark:text-warm-300">
+                      This item currently has an Organizer Special discount applied for ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => removeDiscountMutation.mutate()}
+                      disabled={removeDiscountMutation.isPending}
+                      className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      {removeDiscountMutation.isPending ? 'Removing...' : 'Remove Discount'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-warm-600 dark:text-warm-300">
+                      Spend XP to create a shopper-facing discount on this item. No stacking with shopper coupons.
+                    </p>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">
+                      Your XP Balance: <span className="font-semibold">{user?.guildXp || 0} XP</span>
+                    </p>
+
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
+                        Select Discount Amount
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openDiscountModal(200)}
+                          disabled={!user || (user.guildXp || 0) < 200}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          $2 off (200 XP)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDiscountModal(400)}
+                          disabled={!user || (user.guildXp || 0) < 400}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          $4 off (400 XP)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openDiscountModal(500)}
+                          disabled={!user || (user.guildXp || 0) < 500}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          $5 off (500 XP)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-warm-600 dark:text-warm-300">
-                    This item currently has an Organizer Special discount applied for ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => removeDiscountMutation.mutate()}
-                    disabled={removeDiscountMutation.isPending}
-                    className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
-                  >
-                    {removeDiscountMutation.isPending ? 'Removing...' : 'Remove Discount'}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-warm-600 dark:text-warm-300">
-                    Spend XP to create a shopper-facing discount on this item. No stacking with shopper coupons.
-                  </p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400">
-                    Your XP Balance: <span className="font-semibold">{user?.guildXp || 0} XP</span>
-                  </p>
-
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
-                      Select Discount Amount
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openDiscountModal(200)}
-                        disabled={!user || (user.guildXp || 0) < 200}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        $2 off (200 XP)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openDiscountModal(400)}
-                        disabled={!user || (user.guildXp || 0) < 400}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        $4 off (400 XP)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openDiscountModal(500)}
-                        disabled={!user || (user.guildXp || 0) < 500}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        $5 off (500 XP)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={updateMutation.isPending}
-                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50"
-              >
-                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-              </button>
-
-              <button
-                type="button"
-                disabled={publishMutation.isPending || unpublishMutation.isPending}
-                onClick={handlePublishItem}
-                className={`flex-1 font-bold py-2 px-4 rounded-lg disabled:opacity-50 ${
-                  item.draftStatus === 'PUBLISHED'
-                    ? 'bg-gray-500 hover:bg-gray-600 text-white'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
-              >
-                {publishMutation.isPending || unpublishMutation.isPending
-                  ? 'Updating...'
-                  : item.draftStatus === 'PUBLISHED'
-                    ? 'Unpublish'
-                    : 'Publish'}
-              </button>
-            </div>
-
-            {/* Native FindA.Sale checkout shipping (ADR-104 Sec3): independent of eBay/
-                tier: applies to every organizer's own Stripe checkout, not just PRO/TEAMS
-                eBay sellers. shippingAvailable/shippingPrice feed stripeController.ts
-                directly (Item.shippingPrice is charged to the buyer as-is at checkout). */}
-            <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping (FindA.Sale Checkout)</h3>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="shipping-available"
-                  checked={formData.shippingAvailable}
-                  onChange={(e) => {
-                    setShippingTouched(true);
-                    setFormData(prev => ({ ...prev, shippingAvailable: e.target.checked }));
-                  }}
-                  className="h-4 w-4 rounded border-gray-300 accent-blue-600"
-                />
-                <label htmlFor="shipping-available" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                  Offer shipping for this item
-                </label>
-              </div>
-              {/* ADR-106 (2026-08-15): the checkbox above already reflects the backend's
-                  auto-computed value on load (formData.shippingAvailable is seeded from
-                  item.shippingAvailable) -- this badge just discloses WHY it's pre-checked
-                  with a price already filled in, mirroring the "Estimated" provenance badge
-                  used for package weight below. Hidden the moment the organizer touches
-                  shipping themselves (shippingTouched) or has already confirmed it before. */}
-              {formData.shippingAvailable &&
-                item?.shippingPriceSource === 'AUTO' &&
-                item?.shippingPriceConfirmedByOrganizer !== true &&
-                !shippingTouched && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Auto-priced from an estimate based on typical rates for this size and weight. Edit the price below if you want to change it.
-                  </p>
-              )}
-              {formData.shippingAvailable && (
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-                    Shipping Price ($)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={formData.shippingPrice}
-                    onChange={(e) => {
-                      setShippingTouched(true);
-                      setFormData({ ...formData, shippingPrice: e.target.value });
-                    }}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                  />
-                  {/* ADR-104 Sec3: computed suggestion, real carrier rates grossed up for
-                      FindA.Sale's own platform fee (not eBay's FVF) -- shown only while the
-                      field is empty, never auto-filled. Fails silently (hint just doesn't
-                      appear) if the suggestion call errors -- must never block Save. */}
-                  {!formData.shippingPrice && shippingSuggestionLoading && (
-                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Getting a suggested price…</p>
-                  )}
-                  {!formData.shippingPrice && !shippingSuggestionLoading && shippingSuggestion && (
-                    <div className="mt-1 flex items-center gap-2 flex-wrap">
-                      <p className="text-xs text-warm-600 dark:text-warm-400">
-                        Estimated: {'$' + shippingSuggestion.suggestedPrice.toFixed(2)}, based on typical rates for this size and weight
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShippingTouched(true);
-                          setFormData((prev) => ({ ...prev, shippingPrice: shippingSuggestion.suggestedPrice.toFixed(2) }));
-                        }}
-                        className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        Use this
-                      </button>
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
-                    Charged to the buyer at checkout. Estimated prices already include our platform fee so you don&apos;t come up short. This is an estimate, not a live carrier quote. Actual cost depends on where the buyer lives.
-                  </p>
-                  {/* ADR-115 Phase 3, Part B: one genuine live Shippo quote to sanity-check the
-                      estimate above against. Not the actual future price (that depends on the
-                      real buyer's address, unknown until a sale happens) -- just a real number
-                      from a real carrier, which nothing on this page has ever shown before. */}
-                  {item?.id && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        disabled={liveRateCheckLoading}
-                        onClick={async () => {
-                          setLiveRateCheckLoading(true);
-                          setLiveRateCheckError(null);
-                          try {
-                            const res = await api.get(`/items/${item.id}/live-shipping-check`);
-                            setLiveRateCheck(res.data);
-                          } catch (err: any) {
-                            setLiveRateCheckError(err.response?.data?.message || 'Could not check a live rate right now.');
-                          } finally {
-                            setLiveRateCheckLoading(false);
-                          }
-                        }}
-                        className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
-                      >
-                        {liveRateCheckLoading ? 'Checking a real rate…' : 'Check a real rate'}
-                      </button>
-                      {liveRateCheck && !liveRateCheckLoading && (
-                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                          Live {liveRateCheck.carrier} quote to {liveRateCheck.destinationLabel} just now: {'$' + (liveRateCheck.amountCents / 100).toFixed(2)} ({liveRateCheck.serviceName})
-                        </p>
-                      )}
-                      {liveRateCheckError && !liveRateCheckLoading && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-1">{liveRateCheckError}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Crosslister shipping-payer toggle (2026-08-27): separate from the native-checkout
-                block above. Applies to marketplaces this item gets cross-listed to via the
-                browser extension (Mercari today; more later). Defaults unchecked (buyer pays) --
-                a real Mercari listing cost real money when this was left at Mercari's own
-                free-shipping default before this toggle existed. */}
-            <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping (Cross-listed Marketplaces)</h3>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="crosslister-free-shipping"
-                  checked={formData.crosslisterFreeShipping}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, crosslisterFreeShipping: e.target.checked }));
-                  }}
-                  className="h-4 w-4 rounded border-gray-300 accent-blue-600"
-                />
-                <label htmlFor="crosslister-free-shipping" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                  Offer free shipping when cross-listed to other marketplaces (Mercari, etc.)
-                </label>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Unchecked means the buyer pays shipping on Mercari and similar marketplaces. Checking this means you absorb the shipping cost there instead.
-              </p>
-            </div>
-
-            {/* Shipping Dimensions: shown for PRO/TEAMS (eBay shipping requires dimensions) */}
-            {tier !== 'SIMPLE' && (
-              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping Dimensions</h3>
-                <div className="space-y-3">
-                  {ebayFulfillmentPolicies.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-                        eBay Shipping Policy
+              {/* Best offers (eBay listings). Same tier gate as before; moved into Pricing. */}
+              {tier !== 'SIMPLE' && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Best offers (eBay listings)</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="allowBestOffer"
+                        checked={formData.allowBestOffer}
+                        onChange={(e) => setFormData(prev => ({ ...prev, allowBestOffer: e.target.checked }))}
+                        className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                      />
+                      <label htmlFor="allowBestOffer" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                        Accept Best Offers on eBay
                       </label>
-                      <select
-                        value={formData.ebayFulfillmentPolicyOverrideId || ''}
-                        onChange={(e) =>
-                          setFormData({ ...formData, ebayFulfillmentPolicyOverrideId: e.target.value || null })
-                        }
-                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      >
-                        <option value="">Auto (recommended)</option>
-                        {ebayFulfillmentPolicies.map((p) => (
-                          <option key={p.fulfillmentPolicyId} value={p.fulfillmentPolicyId}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Auto uses your eBay Settings default. Pick a specific policy to set shipping for just this item.
-                      </p>
-                      {/* 2026-09-01 (Patrick-directed): policies like the Golf Club / Guitar ones carry
-                          their real max weight/dimensions in eBay's own policy description (e.g. "Up to
-                          22 lb 4 oz, box 48 x 16 x 4 in") -- previously only visible by leaving FindA.Sale
-                          and checking eBay Seller Hub directly. Surface it here so an organizer can see
-                          at a glance whether the auto-picked policy still fits before switching manually. */}
-                      {formData.ebayFulfillmentPolicyOverrideId &&
-                        (() => {
-                          const selected = ebayFulfillmentPolicies.find(
-                            (p) => p.fulfillmentPolicyId === formData.ebayFulfillmentPolicyOverrideId
-                          );
-                          return selected?.description ? (
-                            <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{selected.description}</p>
-                          ) : null;
-                        })()}
                     </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-                      Package Type
-                    </label>
-                    <select
-                      value={formData.packageType}
-                      onChange={(e) => setFormData({ ...formData, packageType: e.target.value })}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="">Select package type</option>
-                      <option value="MAILING_BOX">Box (standard)</option>
-                      <option value="PARCEL_OR_PADDED_ENVELOPE">Parcel / Padded Envelope</option>
-                      <option value="PADDED_BAGS">Padded Bag</option>
-                      <option value="LARGE_ENVELOPE">Large Envelope</option>
-                      <option value="PACKAGE_THICK_ENVELOPE">Thick Envelope</option>
-                      <option value="LETTER">Letter</option>
-                      <option value="USPS_FLAT_RATE_ENVELOPE">USPS Flat Rate Envelope</option>
-                      <option value="USPS_LARGE_PACK">USPS Large Pack</option>
-                      <option value="UPS_LETTER">UPS Letter</option>
-                      <option value="ROLL">Roll / Tube</option>
-                      <option value="TOUGH_BAGS">Tough Bag</option>
-                      <option value="WINE_PRESENTATION_BOX">Wine Presentation Box</option>
-                      <option value="EXTRA_LARGE_PACK">Extra Large Pack</option>
-                      <option value="VERY_LARGE_PACK">Very Large Pack</option>
-                      <option value="BULKY_GOODS">Bulky Goods</option>
-                      <option value="FURNITURE">Furniture</option>
-                      <option value="ONE_WAY_PALLET">Pallet (one-way)</option>
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Soft-sided or padded packaging (Parcel/Padded Envelope, Padded Bag,
-                      Roll/Tube, Tough Bag), items over 50 lb, or boxes longer than 48in can
-                      add a carrier handling surcharge to the shipping cost.
-                    </p>
-                    {(() => {
-                      // ADR-103 Phase 5: organizer-facing guidance on what triggers a
-                      // carrier oversize/handling surcharge and how to avoid it. Mirrors
-                      // the AHS_PACKAGING_TYPES set and dimension thresholds in
-                      // ebayRateEstimateService.ts (backend) -- kept as a local literal
-                      // here per this project's "frontend never imports @findasale/shared"
-                      // rule, not computed from a live rate call.
-                      const AHS_PACKAGING_TYPES = new Set([
-                        'ROLL',
-                        'TOUGH_BAGS',
-                        'PARCEL_OR_PADDED_ENVELOPE',
-                        'PADDED_BAGS',
-                      ]);
-                      const lengthIn = parseFloat(formData.packageLengthIn || '') || 0;
-                      const widthIn = parseFloat(formData.packageWidthIn || '') || 0;
-                      const heightIn = parseFloat(formData.packageHeightIn || '') || 0;
-                      const weightLb = (parseFloat(formData.packageWeightOz || '') || 0) / 16;
-                      const dimsSorted = [lengthIn, widthIn, heightIn].sort((a, b) => b - a);
-                      const packagingTrigger = AHS_PACKAGING_TYPES.has(formData.packageType);
-                      const dimensionTrigger = dimsSorted[0] > 48 || dimsSorted[1] > 30;
-                      const weightTrigger = weightLb > 50;
-                      if (!packagingTrigger && !dimensionTrigger && !weightTrigger) return null;
+
+                    {formData.allowBestOffer && (() => {
+                      const currentPrice = parseFloat(String(formData.price)) || 0;
+                      const acceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
+                      const declinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
+                      const acceptDollar = acceptPct !== null && currentPrice > 0
+                        ? (currentPrice * (1 - acceptPct / 100)).toFixed(2)
+                        : null;
+                      const declineDollar = declinePct !== null && currentPrice > 0
+                        ? (currentPrice * (1 - declinePct / 100)).toFixed(2)
+                        : null;
+                      const thresholdError = acceptPct !== null && declinePct !== null && declinePct <= acceptPct
+                        ? 'Auto-decline threshold must be higher than auto-accept threshold.'
+                        : null;
                       return (
-                        <div className="mt-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-200">
-                          <p className="font-medium">This item will likely carry a carrier handling surcharge.</p>
-                          <p className="mt-1">
-                            {packagingTrigger &&
-                              'Soft-sided or padded packaging costs more to handle than a rigid box. '}
-                            {dimensionTrigger &&
-                              'A side longer than 48in (or a second side over 30in) triggers an oversize fee. '}
-                            {weightTrigger && 'Items over 50 lb trigger a weight handling fee. '}
-                            To avoid it, box the item in a rigid corrugated container sized to
-                            its actual dimensions (e.g. a golf bag or guitar case shipped bare
-                            triggers this: boxed, it often doesn&apos;t).
-                          </p>
+                        <div className="ml-6 space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                              Auto-accept offers above: <span className="font-normal">% of price</span>
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="1"
+                                max="99"
+                                step="1"
+                                placeholder="e.g. 10"
+                                value={formData.bestOfferAcceptPct === '' ? '' : formData.bestOfferAcceptPct}
+                                onChange={(e) => {
+                                  const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                                  setFormData(prev => ({ ...prev, bestOfferAcceptPct: v as number | '' }));
+                                }}
+                                className="w-24 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-500">%</span>
+                              {acceptDollar && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  → offers above <span className="font-semibold text-green-600 dark:text-green-400">${acceptDollar}</span> will be auto-accepted
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                              Auto-decline offers below: <span className="font-normal">% of price</span>
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="1"
+                                max="99"
+                                step="1"
+                                placeholder="e.g. 25"
+                                value={formData.bestOfferDeclinePct === '' ? '' : formData.bestOfferDeclinePct}
+                                onChange={(e) => {
+                                  const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                                  setFormData(prev => ({ ...prev, bestOfferDeclinePct: v as number | '' }));
+                                }}
+                                className="w-24 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-500">%</span>
+                              {declineDollar && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  → offers below <span className="font-semibold text-red-600 dark:text-red-400">${declineDollar}</span> will be auto-declined
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {thresholdError && (
+                            <p className="text-xs text-red-600 dark:text-red-400">{thresholdError}</p>
+                          )}
                         </div>
                       );
                     })()}
                   </div>
-                  {item?.packageConfirmedByOrganizer !== true && (
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={handleGetPackageEstimate}
-                        disabled={packageEstimateLoading}
-                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {packageEstimateLoading ? 'Getting estimate…' : 'Get Smart weight & size estimate'}
-                      </button>
-                      {/* S-QA-2026-08-06: root-caused live -- an organizer whose displayed weight/dims
-                          are ALREADY correct had no way to confirm them, because the only confirm path
-                          was "edit the Weight field" (weightTouched), and retyping the SAME number never
-                          fires React's onChange (no value delta = no input event = weightTouched stays
-                          false forever), silently blocking eBay publish on EBAY_WEIGHT_NOT_CONFIRMED with
-                          no way out short of a real value change. This button confirms directly, with no
-                          dummy edit required. */}
-                      {formData.packageWeightOz && (
-                        <button
-                          type="button"
-                          onClick={() => setWeightTouched(true)}
-                          className="text-sm font-medium text-green-600 dark:text-green-400 hover:underline"
-                        >
-                          {weightTouched ? '✓ Confirmed, will save' : 'This is correct as shown'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-                      Weight (oz)
-                    </label>
+                </div>
+              )}
+
+              {/* Keep this item out of automatic markdowns. Same tier gate as before; moved into Pricing. */}
+              {tier !== 'SIMPLE' && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  {/* ADR item-exclude-from-markdown (2026-09-28) */}
+                  <div className="flex items-center gap-2">
                     <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      placeholder="e.g. 16"
-                      value={formData.packageWeightOz}
-                      onChange={(e) => {
-                        setWeightTouched(true);
-                        setFormData({ ...formData, packageWeightOz: e.target.value });
-                      }}
-                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      type="checkbox"
+                      id="excludeFromMarkdown"
+                      checked={formData.excludeFromMarkdown}
+                      onChange={(e) => setFormData(prev => ({ ...prev, excludeFromMarkdown: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300 accent-blue-600"
                     />
-                    {/* ADR fb-package-weight-estimator (2026-07-22): packageWeightOz now gets
-                        auto-filled by resolvePublishPackageWeight (eBay publish + FB extension
-                        queue both persist an estimate here when the organizer hasn't). Surface
-                        that provenance instead of showing a bare number indistinguishable from
-                        one the organizer typed themselves. */}
-                    {formData.packageWeightOz && !item?.packageConfirmedByOrganizer && item?.packageEstimateSource && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                        Estimated
-                        {item.packageEstimateSource === 'KEYWORD' || item.packageEstimateSource === 'CATEGORY'
-                          ? ' (category default)'
-                          : item.packageEstimateSource === 'AI'
-                          ? ' (Auto guess from photo)'
-                          : item.packageEstimateSource === 'SEED'
-                          ? ' (generic default)'
-                          : ''}
-                        {'. Not your input. Edit this field to enter a real measurement.'}
-                      </p>
-                    )}
+                    <label htmlFor="excludeFromMarkdown" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                      Keep out of automatic markdowns
+                    </label>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-                        Length (in)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        placeholder="0.0"
-                        value={formData.packageLengthIn}
-                        onChange={(e) => setFormData({ ...formData, packageLengthIn: e.target.value })}
-                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-                        Width (in)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        placeholder="0.0"
-                        value={formData.packageWidthIn}
-                        onChange={(e) => setFormData({ ...formData, packageWidthIn: e.target.value })}
-                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-                        Height (in)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        placeholder="0.0"
-                        value={formData.packageHeightIn}
-                        onChange={(e) => setFormData({ ...formData, packageHeightIn: e.target.value })}
-                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                    This item's price will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down.
+                  </p>
+                </div>
+              )}
+            </ItemFormSection>
 
-                  {/* Shipping net preview: buyer cost + organizer net estimate */}
-                  {formData.packageWeightOz && (
-                    <div className="mt-3">
-                      <ShippingNetPreview
-                        itemId={id as string}
-                        itemPrice={formData.price ? parseFloat(formData.price) : undefined}
-                        weightOz={formData.packageWeightOz ? parseInt(formData.packageWeightOz, 10) : undefined}
-                        dims={{
-                          length: formData.packageLengthIn ? parseFloat(formData.packageLengthIn) : undefined,
-                          width: formData.packageWidthIn ? parseFloat(formData.packageWidthIn) : undefined,
-                          height: formData.packageHeightIn ? parseFloat(formData.packageHeightIn) : undefined,
-                        }}
-                        ebayCategoryId={formData.ebayCategoryId || null}
-                        onApplySuggestedPrice={(price) =>
-                          setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))
-                        }
-                      />
-                    </div>
-                  )}
-
+            <ItemFormSection id="section-shipping" title="Shipping & package" forceOpen={hasShippingValue} summary={shippingSummary || undefined}>
+              {/* eBay local pickup. Same PRO/TEAMS gate as before; moved to the top of Shipping & package.
+                              Checking it does NOT collapse or hide any other shipping field. */}
+              {tier !== 'SIMPLE' && (
+                <div>
                   {/* Local Pickup checkbox */}
-                  <div className="mt-3">
+                  <div>
                     <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
@@ -2565,405 +2376,911 @@ const EditItemPage = () => {
                     )}
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* eBay Best Offers Section */}
-            {tier !== 'SIMPLE' && (
+              {/* Native FindA.Sale checkout shipping (ADR-104 Sec3): independent of eBay/
+                  tier: applies to every organizer's own Stripe checkout, not just PRO/TEAMS
+                  eBay sellers. shippingAvailable/shippingPrice feed stripeController.ts
+                  directly (Item.shippingPrice is charged to the buyer as-is at checkout). */}
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Best Offers</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="allowBestOffer"
-                      checked={formData.allowBestOffer}
-                      onChange={(e) => setFormData(prev => ({ ...prev, allowBestOffer: e.target.checked }))}
-                      className="h-4 w-4 rounded border-gray-300 accent-blue-600"
-                    />
-                    <label htmlFor="allowBestOffer" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                      Accept Best Offers on eBay
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping (FindA.Sale Checkout)</h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="shipping-available"
+                    checked={formData.shippingAvailable}
+                    onChange={(e) => {
+                      setShippingTouched(true);
+                      setFormData(prev => ({ ...prev, shippingAvailable: e.target.checked }));
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                  />
+                  <label htmlFor="shipping-available" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                    Offer shipping for this item
+                  </label>
+                </div>
+                {/* ADR-106 (2026-08-15): the checkbox above already reflects the backend's
+                    auto-computed value on load (formData.shippingAvailable is seeded from
+                    item.shippingAvailable) -- this badge just discloses WHY it's pre-checked
+                    with a price already filled in, mirroring the "Estimated" provenance badge
+                    used for package weight below. Hidden the moment the organizer touches
+                    shipping themselves (shippingTouched) or has already confirmed it before. */}
+                {formData.shippingAvailable &&
+                  item?.shippingPriceSource === 'AUTO' &&
+                  item?.shippingPriceConfirmedByOrganizer !== true &&
+                  !shippingTouched && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      Auto-priced from an estimate based on typical rates for this size and weight. Edit the price below if you want to change it.
+                    </p>
+                )}
+                {formData.shippingAvailable && (
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                      Shipping Price ($)
                     </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.shippingPrice}
+                      onChange={(e) => {
+                        setShippingTouched(true);
+                        setFormData({ ...formData, shippingPrice: e.target.value });
+                      }}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                    {/* ADR-104 Sec3: computed suggestion, real carrier rates grossed up for
+                        FindA.Sale's own platform fee (not eBay's FVF) -- shown only while the
+                        field is empty, never auto-filled. Fails silently (hint just doesn't
+                        appear) if the suggestion call errors -- must never block Save. */}
+                    {!formData.shippingPrice && shippingSuggestionLoading && (
+                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Getting a suggested price…</p>
+                    )}
+                    {!formData.shippingPrice && !shippingSuggestionLoading && shippingSuggestion && (
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
+                        <p className="text-xs text-warm-600 dark:text-warm-400">
+                          Estimated: {'$' + shippingSuggestion.suggestedPrice.toFixed(2)}, based on typical rates for this size and weight
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShippingTouched(true);
+                            setFormData((prev) => ({ ...prev, shippingPrice: shippingSuggestion.suggestedPrice.toFixed(2) }));
+                          }}
+                          className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          Use this
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Charged to the buyer at checkout. Estimated prices already include our platform fee so you don&apos;t come up short. This is an estimate, not a live carrier quote. Actual cost depends on where the buyer lives.
+                    </p>
+                    {/* ADR-115 Phase 3, Part B: one genuine live Shippo quote to sanity-check the
+                        estimate above against. Not the actual future price (that depends on the
+                        real buyer's address, unknown until a sale happens) -- just a real number
+                        from a real carrier, which nothing on this page has ever shown before. */}
+                    {item?.id && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          disabled={liveRateCheckLoading}
+                          onClick={async () => {
+                            setLiveRateCheckLoading(true);
+                            setLiveRateCheckError(null);
+                            try {
+                              const res = await api.get(`/items/${item.id}/live-shipping-check`);
+                              setLiveRateCheck(res.data);
+                            } catch (err: any) {
+                              setLiveRateCheckError(err.response?.data?.message || 'Could not check a live rate right now.');
+                            } finally {
+                              setLiveRateCheckLoading(false);
+                            }
+                          }}
+                          className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                        >
+                          {liveRateCheckLoading ? 'Checking a real rate…' : 'Check a real rate'}
+                        </button>
+                        {liveRateCheck && !liveRateCheckLoading && (
+                          <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                            Live {liveRateCheck.carrier} quote to {liveRateCheck.destinationLabel} just now: {'$' + (liveRateCheck.amountCents / 100).toFixed(2)} ({liveRateCheck.serviceName})
+                          </p>
+                        )}
+                        {liveRateCheckError && !liveRateCheckLoading && (
+                          <p className="text-xs text-red-500 dark:text-red-400 mt-1">{liveRateCheckError}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
+                )}
+              </div>
 
-                  {/* ADR item-exclude-from-markdown (2026-09-28) */}
-                  <div className="flex items-center gap-2 pt-3 border-t border-warm-200 dark:border-gray-700">
-                    <input
-                      type="checkbox"
-                      id="excludeFromMarkdown"
-                      checked={formData.excludeFromMarkdown}
-                      onChange={(e) => setFormData(prev => ({ ...prev, excludeFromMarkdown: e.target.checked }))}
-                      className="h-4 w-4 rounded border-gray-300 accent-blue-600"
-                    />
-                    <label htmlFor="excludeFromMarkdown" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                      Exclude from auto-markdown
+              {/* Crosslister shipping-payer toggle (2026-08-27): separate from the native-checkout
+                  block above. Applies to marketplaces this item gets cross-listed to via the
+                  browser extension (Mercari today; more later). Defaults unchecked (buyer pays) --
+                  a real Mercari listing cost real money when this was left at Mercari's own
+                  free-shipping default before this toggle existed. */}
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping (Cross-listed Marketplaces)</h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="crosslister-free-shipping"
+                    checked={formData.crosslisterFreeShipping}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, crosslisterFreeShipping: e.target.checked }));
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                  />
+                  <label htmlFor="crosslister-free-shipping" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                    Offer free shipping when cross-listed to other marketplaces (Mercari, etc.)
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Unchecked means the buyer pays shipping on Mercari and similar marketplaces. Checking this means you absorb the shipping cost there instead.
+                </p>
+              </div>
+
+              {/* Shipping Dimensions: shown for PRO/TEAMS (eBay shipping requires dimensions) */}
+              {tier !== 'SIMPLE' && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping Dimensions</h3>
+                  <div className="space-y-3">
+                    {ebayFulfillmentPolicies.length > 0 && (
+                      <div>
+                        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                          eBay Shipping Policy
+                        </label>
+                        <select
+                          value={formData.ebayFulfillmentPolicyOverrideId || ''}
+                          onChange={(e) =>
+                            setFormData({ ...formData, ebayFulfillmentPolicyOverrideId: e.target.value || null })
+                          }
+                          className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        >
+                          <option value="">Auto (recommended)</option>
+                          {ebayFulfillmentPolicies.map((p) => (
+                            <option key={p.fulfillmentPolicyId} value={p.fulfillmentPolicyId}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Auto uses your eBay Settings default. Pick a specific policy to set shipping for just this item.
+                        </p>
+                        {/* 2026-09-01 (Patrick-directed): policies like the Golf Club / Guitar ones carry
+                            their real max weight/dimensions in eBay's own policy description (e.g. "Up to
+                            22 lb 4 oz, box 48 x 16 x 4 in") -- previously only visible by leaving FindA.Sale
+                            and checking eBay Seller Hub directly. Surface it here so an organizer can see
+                            at a glance whether the auto-picked policy still fits before switching manually. */}
+                        {formData.ebayFulfillmentPolicyOverrideId &&
+                          (() => {
+                            const selected = ebayFulfillmentPolicies.find(
+                              (p) => p.fulfillmentPolicyId === formData.ebayFulfillmentPolicyOverrideId
+                            );
+                            return selected?.description ? (
+                              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{selected.description}</p>
+                            ) : null;
+                          })()}
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                        Package Type
+                      </label>
+                      <select
+                        value={formData.packageType}
+                        onChange={(e) => setFormData({ ...formData, packageType: e.target.value })}
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="">Select package type</option>
+                        <option value="MAILING_BOX">Box (standard)</option>
+                        <option value="PARCEL_OR_PADDED_ENVELOPE">Parcel / Padded Envelope</option>
+                        <option value="PADDED_BAGS">Padded Bag</option>
+                        <option value="LARGE_ENVELOPE">Large Envelope</option>
+                        <option value="PACKAGE_THICK_ENVELOPE">Thick Envelope</option>
+                        <option value="LETTER">Letter</option>
+                        <option value="USPS_FLAT_RATE_ENVELOPE">USPS Flat Rate Envelope</option>
+                        <option value="USPS_LARGE_PACK">USPS Large Pack</option>
+                        <option value="UPS_LETTER">UPS Letter</option>
+                        <option value="ROLL">Roll / Tube</option>
+                        <option value="TOUGH_BAGS">Tough Bag</option>
+                        <option value="WINE_PRESENTATION_BOX">Wine Presentation Box</option>
+                        <option value="EXTRA_LARGE_PACK">Extra Large Pack</option>
+                        <option value="VERY_LARGE_PACK">Very Large Pack</option>
+                        <option value="BULKY_GOODS">Bulky Goods</option>
+                        <option value="FURNITURE">Furniture</option>
+                        <option value="ONE_WAY_PALLET">Pallet (one-way)</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Soft-sided or padded packaging (Parcel/Padded Envelope, Padded Bag,
+                        Roll/Tube, Tough Bag), items over 50 lb, or boxes longer than 48in can
+                        add a carrier handling surcharge to the shipping cost.
+                      </p>
+                      {(() => {
+                        // ADR-103 Phase 5: organizer-facing guidance on what triggers a
+                        // carrier oversize/handling surcharge and how to avoid it. Mirrors
+                        // the AHS_PACKAGING_TYPES set and dimension thresholds in
+                        // ebayRateEstimateService.ts (backend) -- kept as a local literal
+                        // here per this project's "frontend never imports @findasale/shared"
+                        // rule, not computed from a live rate call.
+                        const AHS_PACKAGING_TYPES = new Set([
+                          'ROLL',
+                          'TOUGH_BAGS',
+                          'PARCEL_OR_PADDED_ENVELOPE',
+                          'PADDED_BAGS',
+                        ]);
+                        const lengthIn = parseFloat(formData.packageLengthIn || '') || 0;
+                        const widthIn = parseFloat(formData.packageWidthIn || '') || 0;
+                        const heightIn = parseFloat(formData.packageHeightIn || '') || 0;
+                        const weightLb = (parseFloat(formData.packageWeightOz || '') || 0) / 16;
+                        const dimsSorted = [lengthIn, widthIn, heightIn].sort((a, b) => b - a);
+                        const packagingTrigger = AHS_PACKAGING_TYPES.has(formData.packageType);
+                        const dimensionTrigger = dimsSorted[0] > 48 || dimsSorted[1] > 30;
+                        const weightTrigger = weightLb > 50;
+                        if (!packagingTrigger && !dimensionTrigger && !weightTrigger) return null;
+                        return (
+                          <div className="mt-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-200">
+                            <p className="font-medium">This item will likely carry a carrier handling surcharge.</p>
+                            <p className="mt-1">
+                              {packagingTrigger &&
+                                'Soft-sided or padded packaging costs more to handle than a rigid box. '}
+                              {dimensionTrigger &&
+                                'A side longer than 48in (or a second side over 30in) triggers an oversize fee. '}
+                              {weightTrigger && 'Items over 50 lb trigger a weight handling fee. '}
+                              To avoid it, box the item in a rigid corrugated container sized to
+                              its actual dimensions (e.g. a golf bag or guitar case shipped bare
+                              triggers this: boxed, it often doesn&apos;t).
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {item?.packageConfirmedByOrganizer !== true && (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={handleGetPackageEstimate}
+                          disabled={packageEstimateLoading}
+                          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {packageEstimateLoading ? 'Getting estimate…' : 'Get Smart weight & size estimate'}
+                        </button>
+                        {/* S-QA-2026-08-06: root-caused live -- an organizer whose displayed weight/dims
+                            are ALREADY correct had no way to confirm them, because the only confirm path
+                            was "edit the Weight field" (weightTouched), and retyping the SAME number never
+                            fires React's onChange (no value delta = no input event = weightTouched stays
+                            false forever), silently blocking eBay publish on EBAY_WEIGHT_NOT_CONFIRMED with
+                            no way out short of a real value change. This button confirms directly, with no
+                            dummy edit required. */}
+                        {formData.packageWeightOz && (
+                          <button
+                            type="button"
+                            onClick={() => setWeightTouched(true)}
+                            className="text-sm font-medium text-green-600 dark:text-green-400 hover:underline"
+                          >
+                            {weightTouched ? '✓ Confirmed, will save' : 'This is correct as shown'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                        Weight (oz)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 16"
+                        value={formData.packageWeightOz}
+                        onChange={(e) => {
+                          setWeightTouched(true);
+                          setFormData({ ...formData, packageWeightOz: e.target.value });
+                        }}
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      />
+                      {/* ADR fb-package-weight-estimator (2026-07-22): packageWeightOz now gets
+                          auto-filled by resolvePublishPackageWeight (eBay publish + FB extension
+                          queue both persist an estimate here when the organizer hasn't). Surface
+                          that provenance instead of showing a bare number indistinguishable from
+                          one the organizer typed themselves. */}
+                      {formData.packageWeightOz && !item?.packageConfirmedByOrganizer && item?.packageEstimateSource && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                          Estimated
+                          {item.packageEstimateSource === 'KEYWORD' || item.packageEstimateSource === 'CATEGORY'
+                            ? ' (category default)'
+                            : item.packageEstimateSource === 'AI'
+                            ? ' (Auto guess from photo)'
+                            : item.packageEstimateSource === 'SEED'
+                            ? ' (generic default)'
+                            : ''}
+                          {'. Not your input. Edit this field to enter a real measurement.'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                          Length (in)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          placeholder="0.0"
+                          value={formData.packageLengthIn}
+                          onChange={(e) => setFormData({ ...formData, packageLengthIn: e.target.value })}
+                          className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                          Width (in)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          placeholder="0.0"
+                          value={formData.packageWidthIn}
+                          onChange={(e) => setFormData({ ...formData, packageWidthIn: e.target.value })}
+                          className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                          Height (in)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          placeholder="0.0"
+                          value={formData.packageHeightIn}
+                          onChange={(e) => setFormData({ ...formData, packageHeightIn: e.target.value })}
+                          className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Shipping net preview: buyer cost + organizer net estimate */}
+                    {formData.packageWeightOz && (
+                      <div className="mt-3">
+                        <ShippingNetPreview
+                          itemId={id as string}
+                          itemPrice={formData.price ? parseFloat(formData.price) : undefined}
+                          weightOz={formData.packageWeightOz ? parseInt(formData.packageWeightOz, 10) : undefined}
+                          dims={{
+                            length: formData.packageLengthIn ? parseFloat(formData.packageLengthIn) : undefined,
+                            width: formData.packageWidthIn ? parseFloat(formData.packageWidthIn) : undefined,
+                            height: formData.packageHeightIn ? parseFloat(formData.packageHeightIn) : undefined,
+                          }}
+                          ebayCategoryId={formData.ebayCategoryId || null}
+                          onApplySuggestedPrice={(price) =>
+                            setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </ItemFormSection>
+
+            <ItemFormSection id="section-setup" title="Quantity & setup" defaultOpen summary={`${formData.quantity} in lot, ${formData.stockTotal} for sale`}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                    Pieces in this lot
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quantityText}
+                    onChange={(e) => setQuantityText(e.target.value)}
+                    onBlur={() => {
+                      const parsed = Math.max(1, parseInt(quantityText, 10) || 1);
+                      setQuantityText(String(parsed));
+                      setFormData({ ...formData, quantity: parsed });
+                    }}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many pieces are bundled together and sold as one lot (e.g. "set of 8" sold together). This is not your sellable stock count.</p>
+                </div>
+
+                {/* ADR-087 P1: "Units available" = the real independently-sellable stock pool (stockTotal). */}
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                    How many you have for sale
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={stockTotalText}
+                    onChange={(e) => setStockTotalText(e.target.value)}
+                    onBlur={() => {
+                      const parsed = Math.max(1, parseInt(stockTotalText, 10) || 1);
+                      setStockTotalText(String(parsed));
+                      setFormData({ ...formData, stockTotal: parsed });
+                    }}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many separate units of this item you have to sell. Each sale (in person, at POS, or on a connected marketplace) draws one unit from this pool, and the item stays listed until every unit is gone. Leave at 1 for a single item.</p>
+                  {formData.quantity > 1 && (formData.stockTotal ?? 1) <= 1 && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-start gap-1">
+                      <span aria-hidden="true">&#9888;</span>
+                      <span>This item&apos;s stock pool isn&apos;t set. Shoppers and marketplaces will see only 1 available. Set &ldquo;How many you have for sale&rdquo; to your real number of units.</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Availability
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="AVAILABLE">Available</option>
+                  <option value="SOLD">Sold</option>
+                  <option value="UNAVAILABLE">Unavailable</option>
+                </select>
+              </div>
+
+              {/* Sprint 1: Tag Picker */}
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
+
+                {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
+                {/* Custom tag input */}
+                <div className="mb-2">
+                  <input
+                    type="text"
+                    placeholder="Add a custom tag..."
+                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    aria-label="Add a custom tag..." onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const value = (e.target as HTMLInputElement).value.trim();
+                        if (value && !formData.tags.includes(value)) {
+                          setFormData({ ...formData, tags: [...formData.tags, value] });
+                          (e.target as HTMLInputElement).value = '';
+                        }
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Current tags display */}
+                <div className="flex flex-wrap gap-1">
+                  {formData.tags.map(tag => (
+                    <span key={tag} className="inline-flex items-center bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 text-xs px-2 py-0.5 rounded-full">
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) })}
+                        className="ml-1 text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-bold"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <ItemFormSection title="More options" variant="nested" forceOpen={moreOptionsHasValue} summary={legendarySuggested ? 'Legendary suggestion available' : undefined}>
+                {/* Feature #310: Tag Color for discount rules */}
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                    Tag Color
+                  </label>
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={formData.tagColor}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tagColor: e.target.value })
+                        }
+                        placeholder="e.g., #EF4444 or red"
+                        className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                       aria-label="e.g., #EF4444 or red" />
+                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                        Used for color-coded discount rules
+                      </p>
+                    </div>
+                    {formData.tagColor && (
+                      <div
+                        className="w-10 h-10 rounded-lg border-2 border-warm-300 dark:border-gray-500 flex-shrink-0"
+                        style={{ backgroundColor: formData.tagColor }}
+                        title="Color preview"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Feature #411: Dorm Dash: Room / Area Tag */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
+                      Room / Area Tag <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
                     </label>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-                    This item's price will never be automatically reduced, even if the sale or a markdown cycle would otherwise mark it down.
+                  <input
+                    type="text"
+                    placeholder="e.g. Bedroom, Garage, Study, Room 204"
+                    value={formData.roomTag}
+                    onChange={(e) => setFormData({ ...formData, roomTag: e.target.value })}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Helps shoppers find items by location at Dorm Dash or multi-room sales.</p>
+                </div>
+
+                {/* Feature #136: QR Code Auto-Embedding toggle */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="qrEmbedEnabled"
+                    checked={formData.qrEmbedEnabled}
+                    onChange={(e) => setFormData({ ...formData, qrEmbedEnabled: e.target.checked })}
+                    className="w-4 h-4 text-amber-600 bg-white dark:bg-warm-700 border-warm-300 dark:border-warm-500 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                  />
+                  <label htmlFor="qrEmbedEnabled" className="text-sm font-medium text-warm-700 dark:text-warm-300 cursor-pointer">
+                    Embed QR code in exported photos
+                  </label>
+                  <p className="text-xs text-warm-500 dark:text-warm-400">
+                    QR codes link to this item&apos;s page on FindA.Sale
                   </p>
+                </div>
 
-                  {formData.allowBestOffer && (() => {
-                    const currentPrice = parseFloat(String(formData.price)) || 0;
-                    const acceptPct = typeof formData.bestOfferAcceptPct === 'number' ? formData.bestOfferAcceptPct : null;
-                    const declinePct = typeof formData.bestOfferDeclinePct === 'number' ? formData.bestOfferDeclinePct : null;
-                    const acceptDollar = acceptPct !== null && currentPrice > 0
-                      ? (currentPrice * (1 - acceptPct / 100)).toFixed(2)
-                      : null;
-                    const declineDollar = declinePct !== null && currentPrice > 0
-                      ? (currentPrice * (1 - declinePct / 100)).toFixed(2)
-                      : null;
-                    const thresholdError = acceptPct !== null && declinePct !== null && declinePct <= acceptPct
-                      ? 'Auto-decline threshold must be higher than auto-accept threshold.'
-                      : null;
+                {/* Legendary suggestion banner (shows when price >= $75 and not already legendary) */}
+                {parseFloat(formData.price) >= 75 && !formData.isLegendary && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl flex-shrink-0">⭐</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                          This item is priced at ${parseFloat(formData.price).toFixed(2)}. Consider marking it Legendary to give Hunt Pass holders early access.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, isLegendary: true })}
+                        className="flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-bold py-1 px-3 rounded text-sm transition-colors"
+                      >
+                        Mark as Legendary
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mark as Legendary toggle */}
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="isLegendary"
+                      checked={formData.isLegendary}
+                      onChange={(e) => setFormData({ ...formData, isLegendary: e.target.checked })}
+                      className="w-4 h-4 text-amber-600 bg-white dark:bg-warm-700 border-warm-300 dark:border-warm-500 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer mt-1"
+                    />
+                    <div className="flex-1">
+                      <label htmlFor="isLegendary" className="text-sm font-bold text-amber-900 dark:text-amber-100 cursor-pointer block">
+                        Mark as Legendary
+                      </label>
+                      <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+                        Legendary items are shown to Hunt Pass subscribers 6 hours before regular release.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </ItemFormSection>
+            </ItemFormSection>
+
+            <ItemFormSection id="where-listed" title="Where this is listed" defaultOpen openSignal={whereListedSignal}>
+              {/* eBay Push Section: S725 three states: Live / Pending Publish / Push */}
+              {tier !== 'SIMPLE' && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  {/* Pre-publish hint (2026-07-16): warn about eBay 25016 (sub-$0.99)
+                      and 25101 (shippable item with no weight) BEFORE the organizer
+                      clicks Push/Publish. Backend guard is authoritative; this mirrors
+                      it for a friendlier upfront nudge. */}
+                  {(() => {
+                    const priceNum = formData.price ? parseFloat(String(formData.price)) : NaN;
+                    const priceBelowMin = !Number.isNaN(priceNum) && priceNum > 0 && priceNum < 0.99;
+                    const weightNum = formData.packageWeightOz ? parseInt(String(formData.packageWeightOz), 10) : 0;
+                    const isLocalPickup = formData.ebayShippingOverride === 'LOCAL_PICKUP_ONLY';
+                    const missingWeight = !isLocalPickup && (!weightNum || weightNum <= 0);
+                    if (!priceBelowMin && !missingWeight) return null;
                     return (
-                      <div className="ml-6 space-y-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                            Auto-accept offers above: <span className="font-normal">% of price</span>
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="1"
-                              max="99"
-                              step="1"
-                              placeholder="e.g. 10"
-                              value={formData.bestOfferAcceptPct === '' ? '' : formData.bestOfferAcceptPct}
-                              onChange={(e) => {
-                                const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
-                                setFormData(prev => ({ ...prev, bestOfferAcceptPct: v as number | '' }));
-                              }}
-                              className="w-24 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-500">%</span>
-                            {acceptDollar && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                → offers above <span className="font-semibold text-green-600 dark:text-green-400">${acceptDollar}</span> will be auto-accepted
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                            Auto-decline offers below: <span className="font-normal">% of price</span>
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min="1"
-                              max="99"
-                              step="1"
-                              placeholder="e.g. 25"
-                              value={formData.bestOfferDeclinePct === '' ? '' : formData.bestOfferDeclinePct}
-                              onChange={(e) => {
-                                const v = e.target.value === '' ? '' : parseInt(e.target.value, 10);
-                                setFormData(prev => ({ ...prev, bestOfferDeclinePct: v as number | '' }));
-                              }}
-                              className="w-24 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-500">%</span>
-                            {declineDollar && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                → offers below <span className="font-semibold text-red-600 dark:text-red-400">${declineDollar}</span> will be auto-declined
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {thresholdError && (
-                          <p className="text-xs text-red-600 dark:text-red-400">{thresholdError}</p>
+                      <div className="mb-2 p-2 rounded bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                        {priceBelowMin && (
+                          <div>eBay requires a minimum listing price of $0.99. Raise this item&apos;s price to list it on eBay.</div>
+                        )}
+                        {missingWeight && (
+                          <div>No weight set. We&apos;ll auto-estimate shipping for you when you publish. To use your own weight instead, add one above or check &quot;Local pickup only&quot;.</div>
                         )}
                       </div>
                     );
                   })()}
-                </div>
-              </div>
-            )}
-
-            {/* eBay Push Section: S725 three states: Live / Pending Publish / Push */}
-            {tier !== 'SIMPLE' && (
-              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-                {/* Pre-publish hint (2026-07-16): warn about eBay 25016 (sub-$0.99)
-                    and 25101 (shippable item with no weight) BEFORE the organizer
-                    clicks Push/Publish. Backend guard is authoritative; this mirrors
-                    it for a friendlier upfront nudge. */}
-                {(() => {
-                  const priceNum = formData.price ? parseFloat(String(formData.price)) : NaN;
-                  const priceBelowMin = !Number.isNaN(priceNum) && priceNum > 0 && priceNum < 0.99;
-                  const weightNum = formData.packageWeightOz ? parseInt(String(formData.packageWeightOz), 10) : 0;
-                  const isLocalPickup = formData.ebayShippingOverride === 'LOCAL_PICKUP_ONLY';
-                  const missingWeight = !isLocalPickup && (!weightNum || weightNum <= 0);
-                  if (!priceBelowMin && !missingWeight) return null;
-                  return (
-                    <div className="mb-2 p-2 rounded bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-700 dark:text-amber-300 space-y-1">
-                      {priceBelowMin && (
-                        <div>eBay requires a minimum listing price of $0.99. Raise this item&apos;s price to list it on eBay.</div>
-                      )}
-                      {missingWeight && (
-                        <div>No weight set. We&apos;ll auto-estimate shipping for you when you publish. To use your own weight instead, add one above or check &quot;Local pickup only&quot;.</div>
-                      )}
+                  {item?.ebayListingId ? (
+                    <div className="space-y-2">
+                      <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
+                        Live on eBay
+                      </div>
+                      <div className="flex gap-2">
+                        <a
+                          href={`https://www.ebay.com/itm/${item.ebayListingId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                        >
+                          View on eBay
+                        </a>
+                        <button
+                          type="button"
+                          onClick={handlePushToEbay}
+                          disabled={ebayPushPending}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {ebayPushPending ? 'Pushing...' : 'Re-push to eBay'}
+                        </button>
+                      </div>
                     </div>
-                  );
-                })()}
-                {item?.ebayListingId ? (
-                  <div className="space-y-2">
-                    <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
-                      Live on eBay
-                    </div>
-                    <div className="flex gap-2">
-                      <a
-                        href={`https://www.ebay.com/itm/${item.ebayListingId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                  ) : item?.ebayOfferId ? (
+                    <div className="space-y-2">
+                      <div className="inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
+                        Pending Publish
+                      </div>
+                      <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
+                      <EbayMonthlyQuotaCounter enabled={ebayConnected} />
+                      <button
+                        type="button"
+                        onClick={handlePublishNow}
+                        disabled={ebayPushPending || !ebayConnected}
+                        title="Publish this draft offer live on eBay now"
+                        className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
+                          ebayConnected
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                        } disabled:opacity-50`}
                       >
-                        View on eBay
-                      </a>
+                        {ebayPushPending ? 'Publishing...' : 'Publish to eBay now'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
+                      <EbayMonthlyQuotaCounter enabled={ebayConnected} />
                       <button
                         type="button"
                         onClick={handlePushToEbay}
-                        disabled={ebayPushPending}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        disabled={ebayPushPending || !ebayConnected}
+                        title={!ebayConnected ? 'Connect eBay in Settings first' : 'Publish live to eBay immediately'}
+                        className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
+                          ebayConnected
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                        } disabled:opacity-50`}
                       >
-                        {ebayPushPending ? 'Pushing...' : 'Re-push to eBay'}
+                        {ebayPushPending ? 'Pushing...' : 'Push to eBay'}
                       </button>
                     </div>
-                  </div>
-                ) : item?.ebayOfferId ? (
-                  <div className="space-y-2">
-                    <div className="inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
-                      Pending Publish
-                    </div>
-                    <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
-                    <EbayMonthlyQuotaCounter enabled={ebayConnected} />
-                    <button
-                      type="button"
-                      onClick={handlePublishNow}
-                      disabled={ebayPushPending || !ebayConnected}
-                      title="Publish this draft offer live on eBay now"
-                      className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
-                        ebayConnected
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      } disabled:opacity-50`}
-                    >
-                      {ebayPushPending ? 'Publishing...' : 'Publish to eBay now'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <EbayFeeCheckBadge itemId={item.id} enabled={ebayConnected} />
-                    <EbayMonthlyQuotaCounter enabled={ebayConnected} />
-                    <button
-                      type="button"
-                      onClick={handlePushToEbay}
-                      disabled={ebayPushPending || !ebayConnected}
-                      title={!ebayConnected ? 'Connect eBay in Settings first' : 'Publish live to eBay immediately'}
-                      className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
-                        ebayConnected
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      } disabled:opacity-50`}
-                    >
-                      {ebayPushPending ? 'Pushing...' : 'Push to eBay'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
 
-            {/* Discogs Push Section (2026-08-27, category gate added 2026-09-24) -- gated on
-                connection status AND discogsCategoryEligible (see that constant's comment above).
-                Not connected: render nothing (avoids clutter on the ~95% of items/organizers this
-                never applies to). Connected but not a Music-category item: render a short
-                explanation only -- no match panel, no push buttons, no live Discogs API call
-                (mirrors the Reverb section's ineligible-category block just below). */}
-            {discogsConnected && !discogsCategoryEligible && (
-              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
-                <p className="text-sm text-warm-600 dark:text-gray-400">
-                  Discogs is for music media (vinyl records, CDs, tapes) only. This item&apos;s category
-                  {formData.category ? ` ("${formData.category}")` : ''} isn&apos;t eligible.
-                </p>
-              </div>
-            )}
-            {discogsConnected && discogsCategoryEligible && (
-              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
-                {/* 2026-09-03: Discogs's own "Allow offers" toggle (real, documented allow_offers
-                    API param). Read at push-time by handlePushToDiscogs -- applies to whichever
-                    button below is clicked (Push/Publish/Re-push all go through the same handler). */}
-                <label className="flex items-center gap-2 mb-2 text-sm text-warm-600 dark:text-gray-400">
-                  <input
-                    type="checkbox"
-                    checked={discogsAllowOffers}
-                    onChange={(e) => setDiscogsAllowOffers(e.target.checked)}
-                    className="rounded border-warm-300 dark:border-gray-600"
-                  />
-                  Allow buyers to make offers
-                </label>
-                {/* ADR-132: release card, picker, record details and mismatch banner. */}
-                {id && (
-                  <div className="mb-3">
-                    <DiscogsMatchPanel
-                      itemId={String(id)}
-                      match={discogsMatch}
-                      isLoading={discogsMatchLoading}
-                      error={discogsMatchError}
-                      onRetry={() => refetchDiscogsMatch()}
-                      onMatchUpdated={(m) => queryClient.setQueryData(discogsMatchKey, m)}
-                      onListingChanged={() => queryClient.invalidateQueries({ queryKey: ['item', id] })}
+              {/* Discogs Push Section (2026-08-27, category gate added 2026-09-24) -- gated on
+                  connection status AND discogsCategoryEligible (see that constant's comment above).
+                  Not connected: render nothing (avoids clutter on the ~95% of items/organizers this
+                  never applies to). Connected but not a Music-category item: render a short
+                  explanation only -- no match panel, no push buttons, no live Discogs API call
+                  (mirrors the Reverb section's ineligible-category block just below). */}
+              {discogsConnected && !discogsCategoryEligible && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
+                    Discogs is for music media (vinyl records, CDs, tapes) only. This item&apos;s category
+                    {formData.category ? ` ("${formData.category}")` : ''} isn&apos;t eligible.
+                  </p>
+                </div>
+              )}
+              {discogsConnected && discogsCategoryEligible && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Discogs</h3>
+                  {/* 2026-09-03: Discogs's own "Allow offers" toggle (real, documented allow_offers
+                      API param). Read at push-time by handlePushToDiscogs -- applies to whichever
+                      button below is clicked (Push/Publish/Re-push all go through the same handler). */}
+                  <label className="flex items-center gap-2 mb-2 text-sm text-warm-600 dark:text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={discogsAllowOffers}
+                      onChange={(e) => setDiscogsAllowOffers(e.target.checked)}
+                      className="rounded border-warm-300 dark:border-gray-600"
                     />
-                  </div>
-                )}
-                {item?.discogsListingId ? (
-                  <div className="space-y-2">
-                    <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
-                      Pushed to Discogs
+                    Allow buyers to make offers
+                  </label>
+                  {/* ADR-132: release card, picker, record details and mismatch banner. */}
+                  {id && (
+                    <div className="mb-3">
+                      <DiscogsMatchPanel
+                        itemId={String(id)}
+                        match={discogsMatch}
+                        isLoading={discogsMatchLoading}
+                        error={discogsMatchError}
+                        onRetry={() => refetchDiscogsMatch()}
+                        onMatchUpdated={(m) => queryClient.setQueryData(discogsMatchKey, m)}
+                        onListingChanged={() => queryClient.invalidateQueries({ queryKey: ['item', id] })}
+                      />
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <a
-                        href={`https://www.discogs.com/sell/item/${item.discogsListingId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                      >
-                        View listing
-                      </a>
-                      {discogsMatch?.status !== 'not_in_discogs' && (
-                        <button
-                          type="button"
-                          onClick={() => handlePushToDiscogs(true)}
-                          disabled={
-                            discogsPushPending || !discogsMatch?.canPush || !!discogsMatch?.listing.releaseMismatch
-                          }
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {discogsPushPending ? 'Updating...' : 'Update Discogs listing'}
-                        </button>
-                      )}
-                    </div>
-                    {discogsMatch && discogsMatch.status !== 'not_in_discogs' && (discogsMatch.listing.releaseMismatch || !discogsMatch.canPush) && (
-                      <p className="text-xs text-warm-500 dark:text-gray-400">
-                        {discogsMatch.listing.releaseMismatch
-                          ? 'Fix the release on your listing before updating it.'
-                          : 'Choose the matching Discogs release above before updating the listing.'}
-                      </p>
-                    )}
-                    {discogsMatch?.canPush && discogsMatch.draftOnly && !discogsMatch.listing.releaseMismatch && (
-                      <p className="text-xs text-amber-700 dark:text-amber-300">
-                        The listing stays a Draft on Discogs until you confirm the pressing.
-                      </p>
-                    )}
-                  </div>
-                ) : discogsMatch && discogsMatch.status !== 'not_in_discogs' ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handlePushToDiscogs(false)}
-                        disabled={discogsPushPending || !discogsMatch.canPush}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {discogsPushPending ? 'Pushing...' : 'Push to Discogs'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePushToDiscogs(true)}
-                        disabled={discogsPushPending || !discogsMatch.canPush}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {discogsPushPending
-                          ? 'Publishing...'
-                          : discogsMatch.draftOnly
-                            ? 'Push as Draft'
-                            : 'Publish to Discogs now'}
-                      </button>
-                    </div>
-                    {!discogsMatch.canPush ? (
-                      <p className="text-xs text-warm-500 dark:text-gray-400">
-                        Choose the matching Discogs release above to turn on pushing. Discogs listings are tied to one
-                        exact pressing, so we won&apos;t guess.
-                      </p>
-                    ) : discogsMatch.draftOnly ? (
-                      <p className="text-xs text-amber-700 dark:text-amber-300">
-                        This will be saved as a Draft on Discogs until you confirm the pressing.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            {/* Reverb Push Section (2026-09-01, category gate added 2026-09-02) -- gated on
-                connection status AND reverbCategoryEligible (see that constant's comment above).
-                Unlike Discogs' per-item catalog-release matching, Reverb's eligibility is just a
-                category check, so no backend round-trip is needed here -- a direct push/publish
-                choice once connected AND eligible. "Pushed" state is local-only for this page
-                session -- see the reverbPushedListing state comment above for why. */}
-            {reverbConnected && !reverbCategoryEligible && (
-              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
-                <p className="text-sm text-warm-600 dark:text-gray-400">
-                  Reverb is for musical instruments &amp; gear only. This item&apos;s category
-                  {formData.category ? ` ("${formData.category}")` : ''} isn&apos;t eligible.
-                </p>
-              </div>
-            )}
-            {reverbConnected && reverbCategoryEligible && (
-              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
-                <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
-                {reverbPushedListing ? (
-                  <div className="space-y-2">
-                    <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
-                      Pushed to Reverb
-                    </div>
-                    <div className="flex gap-2">
-                      {reverbPushedListing.url && (
+                  )}
+                  {item?.discogsListingId ? (
+                    <div className="space-y-2">
+                      <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
+                        Pushed to Discogs
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <a
-                          href={reverbPushedListing.url}
+                          href={`https://www.discogs.com/sell/item/${item.discogsListingId}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
                         >
                           View listing
                         </a>
+                        {discogsMatch?.status !== 'not_in_discogs' && (
+                          <button
+                            type="button"
+                            onClick={() => handlePushToDiscogs(true)}
+                            disabled={
+                              discogsPushPending || !discogsMatch?.canPush || !!discogsMatch?.listing.releaseMismatch
+                            }
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {discogsPushPending ? 'Updating...' : 'Update Discogs listing'}
+                          </button>
+                        )}
+                      </div>
+                      {discogsMatch && discogsMatch.status !== 'not_in_discogs' && (discogsMatch.listing.releaseMismatch || !discogsMatch.canPush) && (
+                        <p className="text-xs text-warm-500 dark:text-gray-400">
+                          {discogsMatch.listing.releaseMismatch
+                            ? 'Fix the release on your listing before updating it.'
+                            : 'Choose the matching Discogs release above before updating the listing.'}
+                        </p>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handlePushToReverb(true)}
-                        disabled={reverbPushPending}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {reverbPushPending ? 'Publishing...' : 'Re-push to Reverb'}
-                      </button>
+                      {discogsMatch?.canPush && discogsMatch.draftOnly && !discogsMatch.listing.releaseMismatch && (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          The listing stays a Draft on Discogs until you confirm the pressing.
+                        </p>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm text-warm-600 dark:text-gray-400">Push this item to Reverb as a draft, or publish it live now.</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handlePushToReverb(false)}
-                        disabled={reverbPushPending}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {reverbPushPending ? 'Pushing...' : 'Push to Reverb'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePushToReverb(true)}
-                        disabled={reverbPushPending}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {reverbPushPending ? 'Publishing...' : 'Publish to Reverb now'}
-                      </button>
+                  ) : discogsMatch && discogsMatch.status !== 'not_in_discogs' ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePushToDiscogs(false)}
+                          disabled={discogsPushPending || !discogsMatch.canPush}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {discogsPushPending ? 'Pushing...' : 'Push to Discogs'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePushToDiscogs(true)}
+                          disabled={discogsPushPending || !discogsMatch.canPush}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {discogsPushPending
+                            ? 'Publishing...'
+                            : discogsMatch.draftOnly
+                              ? 'Push as Draft'
+                              : 'Publish to Discogs now'}
+                        </button>
+                      </div>
+                      {!discogsMatch.canPush ? (
+                        <p className="text-xs text-warm-500 dark:text-gray-400">
+                          Choose the matching Discogs release above to turn on pushing. Discogs listings are tied to one
+                          exact pressing, so we won&apos;t guess.
+                        </p>
+                      ) : discogsMatch.draftOnly ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          This will be saved as a Draft on Discogs until you confirm the pressing.
+                        </p>
+                      ) : null}
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  ) : null}
+                </div>
+              )}
+
+              {/* Reverb Push Section (2026-09-01, category gate added 2026-09-02) -- gated on
+                  connection status AND reverbCategoryEligible (see that constant's comment above).
+                  Unlike Discogs' per-item catalog-release matching, Reverb's eligibility is just a
+                  category check, so no backend round-trip is needed here -- a direct push/publish
+                  choice once connected AND eligible. "Pushed" state is local-only for this page
+                  session -- see the reverbPushedListing state comment above for why. */}
+              {reverbConnected && !reverbCategoryEligible && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
+                    Reverb is for musical instruments &amp; gear only. This item&apos;s category
+                    {formData.category ? ` ("${formData.category}")` : ''} isn&apos;t eligible.
+                  </p>
+                </div>
+              )}
+              {reverbConnected && reverbCategoryEligible && (
+                <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                  <h3 className="text-sm font-semibold text-warm-700 dark:text-gray-300 mb-2">Reverb</h3>
+                  {reverbPushedListing ? (
+                    <div className="space-y-2">
+                      <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">
+                        Pushed to Reverb
+                      </div>
+                      <div className="flex gap-2">
+                        {reverbPushedListing.url && (
+                          <a
+                            href={reverbPushedListing.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                          >
+                            View listing
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handlePushToReverb(true)}
+                          disabled={reverbPushPending}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {reverbPushPending ? 'Publishing...' : 'Re-push to Reverb'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-warm-600 dark:text-gray-400">Push this item to Reverb as a draft, or publish it live now.</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePushToReverb(false)}
+                          disabled={reverbPushPending}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {reverbPushPending ? 'Pushing...' : 'Push to Reverb'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePushToReverb(true)}
+                          disabled={reverbPushPending}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {reverbPushPending ? 'Publishing...' : 'Publish to Reverb now'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {whereListedEmpty && (
+                <p className="text-sm text-warm-600 dark:text-warm-300">
+                  This item is not set up to list on eBay, Discogs or Reverb. Connect a marketplace in{' '}
+                  <Link href="/organizer/settings" className="text-amber-700 dark:text-amber-400 underline">
+                    Settings
+                  </Link>
+                  to list it there.
+                </p>
+              )}
+            </ItemFormSection>
 
             {/* Danger zone */}
             <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
@@ -2977,6 +3294,91 @@ const EditItemPage = () => {
               </button>
             </div>
           </form>
+
+          {/* Sticky bottom action bar: Save + Publish/Unpublish. Sits above the mobile bottom
+              tab bar (56px plus the device safe area) and at the viewport bottom on desktop.
+              Save submits the form above via the form attribute, so the required-title check
+              in the form's onSubmit still runs. */}
+          <div
+            className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-30 -mx-4 px-4 pt-2 pb-2 mt-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-warm-200 dark:border-gray-700"
+            data-testid="edit-item-action-bar"
+          >
+            <div className="flex items-center justify-between gap-3 min-h-[20px]">
+              <p
+                role="status"
+                aria-live="polite"
+                className={`text-xs font-medium ${
+                  saveError
+                    ? 'text-red-600 dark:text-red-400'
+                    : isDirty
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : savedAt
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-warm-500 dark:text-warm-400'
+                }`}
+                data-testid="edit-item-save-result"
+              >
+                {saveError
+                  ? `Not saved: ${saveError}`
+                  : isDirty
+                    ? 'You have unsaved changes'
+                    : savedAt
+                      ? `Saved at ${new Date(savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                      : ''}
+              </p>
+              <Link
+                href={backHref}
+                className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline whitespace-nowrap"
+              >
+                {backLabel}
+              </Link>
+            </div>
+            <p
+              id="save-impact"
+              className={`mt-1 text-xs text-warm-600 dark:text-warm-300 ${impactExpanded ? '' : 'line-clamp-2'}`}
+              data-testid="edit-item-save-impact"
+            >
+              {saveImpactText}
+            </p>
+            {saveImpactText.length > 110 && (
+              <button
+                type="button"
+                onClick={() => setImpactExpanded((prev) => !prev)}
+                aria-expanded={impactExpanded}
+                aria-controls="save-impact"
+                className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
+              >
+                {impactExpanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+            <div className="mt-2 flex gap-3">
+              <button
+                type="submit"
+                form="edit-item-form"
+                disabled={!isDirty || updateMutation.isPending}
+                className="flex-1 min-h-[44px] bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updateMutation.isPending ? 'Saving...' : isDirty ? 'Save Changes' : 'No changes'}
+              </button>
+
+              <button
+                type="button"
+                disabled={publishMutation.isPending || unpublishMutation.isPending}
+                onClick={handlePublishItem}
+                className={`flex-1 min-h-[44px] font-bold py-2 px-4 rounded-lg disabled:opacity-50 ${
+                  item.draftStatus === 'PUBLISHED'
+                    ? 'bg-gray-500 hover:bg-gray-600 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                {publishMutation.isPending || unpublishMutation.isPending
+                  ? 'Updating...'
+                  : item.draftStatus === 'PUBLISHED'
+                    ? 'Unpublish'
+                    : 'Publish'}
+              </button>
+            </div>
+          </div>
 
           {/* D-XP-003: Discount Confirmation Modal */}
           {discountModalOpen && pendingXpToSpend && (

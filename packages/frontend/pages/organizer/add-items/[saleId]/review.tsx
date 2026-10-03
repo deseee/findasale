@@ -7,6 +7,11 @@
  * KEY RULE: aiSuggestedPrice (sourced from ItemCompLookup via PriceSuggestion component)
  * is NEVER pre-filled into the price input. It is shown ONLY as placeholder text.
  * Organizer must type their own price. This prevents the recurring auto-fill bug.
+ *
+ * 2026-10-03: "tap to apply" (Patrick-approved) does NOT relax that rule. A suggestion is
+ * only ever applied when the organizer taps "Use $X" (PriceSuggestion card, or the
+ * suggestedPrices prompt under the price field after a Condition Grade click). Clicking
+ * a Condition Grade never writes the price; it only offers a suggestion.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -270,6 +275,12 @@ const ReviewPage = () => {
   const [removedTagCounts, setRemovedTagCounts] = useState<Map<string, number>>(new Map());
   // Condition-adjusted pricing: track which item is currently refreshing its price
   const [refreshingPriceItemId, setRefreshingPriceItemId] = useState<string | null>(null);
+  // 2026-10-03: a Condition Grade click only OFFERS a new price (dollars, per item). It is
+  // never written to the price field/editState; the organizer taps "Use $X" to apply it.
+  const [suggestedPrices, setSuggestedPrices] = useState<Map<string, number>>(new Map());
+  // Latest grade-click request id per item, so a slow response for an older grade
+  // can't surface a suggestion that describes the wrong grade.
+  const gradeSuggestRequestRef = useRef<Map<string, number>>(new Map());
   // Confirm dialog state
   const [confirmState, setConfirmState] = useState<{
     open: boolean;
@@ -1043,9 +1054,16 @@ const ReviewPage = () => {
     }
   };
 
-  // Condition-adjusted pricing: when grade changes, re-fetch a price suggestion silently
+  // Condition-adjusted pricing: when grade changes, re-fetch a price suggestion silently.
+  // 2026-10-03: this NEVER writes the price (organizer-set values always win). The result
+  // is stored in suggestedPrices and shown as a "Use $X" prompt under the price field.
   const handleConditionGradeChange = async (item: Item, grade: string) => {
     handleEditChange(item.id, 'conditionGrade', grade);
+
+    const reqId = (gradeSuggestRequestRef.current.get(item.id) ?? 0) + 1;
+    gradeSuggestRequestRef.current.set(item.id, reqId);
+    // A new grade makes any earlier suggestion stale (it described the previous grade).
+    clearSuggestedPrice(item.id);
 
     const editState = getEditState(item);
     const title = editState.title || item.title;
@@ -1059,8 +1077,8 @@ const ReviewPage = () => {
       const gradeLabels: Record<string, string> = { S: 'like new', A: 'excellent', B: 'good', C: 'fair', D: 'poor' };
       const gradeCondition = gradeLabels[grade] || condition;
       // 2026-08-24: repointed from the retired /items/ai/price-suggest route to the
-      // multi-source pricing engine. Amounts come back in cents; skip the silent auto-apply
-      // entirely on FLOOR confidence (no real comps) rather than writing a bare $0.49.
+      // multi-source pricing engine. Amounts come back in cents; skip FLOOR confidence
+      // (no real comps) entirely rather than offering a bare $0.49.
       const response = await api.post('/pricing/estimate', {
         itemId: item.id,
         title,
@@ -1070,7 +1088,12 @@ const ReviewPage = () => {
         photoUrls: item.photoUrls,
       });
       if (response.data?.confidence !== 'FLOOR' && response.data?.estimatedPrice) {
-        handleEditChange(item.id, 'price', response.data.estimatedPrice / 100);
+        const suggested = Math.round(Number(response.data.estimatedPrice)) / 100;
+        // Only the latest grade click may surface a suggestion. Whether it differs from
+        // the price field is checked at render time (against what the organizer has typed).
+        if (suggested > 0 && gradeSuggestRequestRef.current.get(item.id) === reqId) {
+          setSuggestedPrices((prev) => new Map(prev).set(item.id, suggested));
+        }
       }
     } catch {
       // Best-effort: silent failure, keep existing price
@@ -1096,6 +1119,24 @@ const ReviewPage = () => {
     if (value.trim()) {
       setPriceErrors(prev => { const next = new Set(prev); next.delete(itemId); return next; });
     }
+  };
+
+  /** Drop any pending "Use $X" suggestion for an item (dismiss, apply, or new grade click). */
+  const clearSuggestedPrice = (itemId: string) => {
+    setSuggestedPrices((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Map(prev);
+      next.delete(itemId);
+      return next;
+    });
+  };
+
+  /** Organizer tapped "Use $X": the ONLY place a grade-click suggestion reaches the price. */
+  const applySuggestedPrice = (item: Item, price: number) => {
+    setPriceInput(item.id, String(price));
+    handleEditChange(item.id, 'price', price); // keep editState in step with the field
+    clearSuggestedPrice(item.id);
+    showToast(`Price set to $${price.toFixed(2)}`, 'success');
   };
 
   /** Approve a single item. Blocks if price is empty. */
@@ -1534,6 +1575,12 @@ const ReviewPage = () => {
                 const editState = getEditState(item);
                 const priceStr = getPriceInput(item.id);
                 const hasError = priceErrors.has(item.id);
+                // Grade-click suggestion prompt: shown only while it differs from the price field.
+                const suggestedChipPrice = suggestedPrices.get(item.id);
+                const typedPriceVal = parseFloat(priceStr);
+                const showSuggestedChip =
+                  suggestedChipPrice != null &&
+                  (isNaN(typedPriceVal) || Math.abs(typedPriceVal - suggestedChipPrice) >= 0.005);
                 const currentTags = editState.tags || item.tags || [];
                 const rarityKey = item.rarity && rarityColors[item.rarity] ? item.rarity : 'COMMON';
                 const readiness = computeReadiness(item, editState, ebayConnected);
@@ -1905,6 +1952,32 @@ const ReviewPage = () => {
                                 style={{ fontFamily: 'Inter Tight, sans-serif' }}
                               />
                             </div>
+                            {showSuggestedChip && suggestedChipPrice != null && (
+                              <div
+                                role="status"
+                                className="mt-1.5 p-2.5 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 space-y-2"
+                              >
+                                <p className="text-xs text-amber-800 dark:text-amber-200">
+                                  {`New suggested price $${suggestedChipPrice.toFixed(2)}. Use it?`}
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => applySuggestedPrice(item, suggestedChipPrice)}
+                                    className="flex-1 min-h-[44px] px-3 rounded-lg bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-semibold transition-colors"
+                                  >
+                                    {`Use $${suggestedChipPrice.toFixed(2)}`}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => clearSuggestedPrice(item.id)}
+                                    className="min-h-[44px] px-3 rounded-lg bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-800 dark:text-warm-200 text-xs font-medium transition-colors"
+                                  >
+                                    Dismiss
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                             {hasError && (
                               <p className="mt-1 text-xs text-[#C04A2B] flex items-center gap-1">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -1915,7 +1988,7 @@ const ReviewPage = () => {
                             )}
                             {!priceStr && !hasError && (
                               <p className="mt-1 text-[11px] text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA] italic">
-                                Suggestion above is a reference. Type your price.
+                                Tap Use on a suggestion, or type your price.
                               </p>
                             )}
                           </div>
