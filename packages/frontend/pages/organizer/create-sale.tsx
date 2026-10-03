@@ -2811,7 +2811,7 @@ const CreateSalePage: React.FC = () => {
             saleId={publishedSaleId}
             onClose={() => {
               setShowProModal(false);
-              router.push(`/organizer/edit-sale/${publishedSaleId}`);
+              router.push(`/organizer/add-items/${publishedSaleId}`);
             }}
           />
         )}
@@ -2819,7 +2819,7 @@ const CreateSalePage: React.FC = () => {
           c={c}
           saleTitle={form.title}
           saleId={publishedSaleId}
-          onAddItems={() => router.push(`/organizer/edit-sale/${publishedSaleId}`)}
+          onAddItems={() => router.push(`/organizer/add-items/${publishedSaleId}`)}
         />
       </>
     );
@@ -2838,7 +2838,7 @@ const CreateSalePage: React.FC = () => {
           saleId={publishedSaleId}
           onClose={() => {
             setShowProModal(false);
-            router.push(`/organizer/edit-sale/${publishedSaleId}`);
+            router.push(`/organizer/add-items/${publishedSaleId}`);
           }}
         />
       )}
