@@ -20,7 +20,7 @@ export const LocalLegendBadge = ({ zip, awardedAt, size = 'md' }: LocalLegendBad
       title={awardedAt ? `Earned ${new Date(awardedAt).toLocaleDateString()}` : undefined}
     >
       <span aria-hidden="true">📍</span>
-      <span>Local Legend – {zip}</span>
+      <span>Local Legend: {zip}</span>
     </div>
   );
 };

@@ -638,7 +638,7 @@ const FAQPage = () => {
       <Head>
         <title>FAQ. FindA.Sale</title>
         <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale, the community resale marketplace." />
-        <meta property="og:title" content="FAQ \u2013 FindA.Sale" />
+        <meta property="og:title" content="FAQ. FindA.Sale" />
         <meta property="og:description" content="Frequently asked questions about buying and selling on FindA.Sale, the community resale marketplace." />
         <meta property="og:url" content="https://finda.sale/faq" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />

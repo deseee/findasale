@@ -159,7 +159,7 @@ const SaleQRCode: React.FC<SaleQRCodeProps> = ({
       <!DOCTYPE html>
       <html>
         <head>
-          <title>QR Code – ${printTitle}</title>
+          <title>QR Code: ${printTitle}</title>
           <style>
             body { font-family: sans-serif; text-align: center; padding: 40px; }
             img { width: 300px; height: 300px; margin: 20px auto; display: block; }

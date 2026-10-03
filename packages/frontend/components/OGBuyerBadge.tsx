@@ -20,7 +20,7 @@ export const OGBuyerBadge = ({ saleTitle, awardedAt, size = 'md' }: OGBuyerBadge
       title={awardedAt ? `Earned ${new Date(awardedAt).toLocaleDateString()}` : undefined}
     >
       <span aria-hidden="true">🏆</span>
-      <span>OG Buyer – {saleTitle}</span>
+      <span>OG Buyer: {saleTitle}</span>
     </div>
   );
 };
