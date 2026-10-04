@@ -6,7 +6,11 @@
 # to the frontend build (packages/backend/src, packages/backend's production
 # Dockerfile/jest config, packages/database/prisma, .github/,
 # scripts/, cloudflare/, services/, ai-config/, brand/, root *.sql files,
-# railway.toml, railway.staging.toml, push.ps1). NOTE: repo-root extension/ was
+# railway.toml, railway.staging.toml, push.ps1, .githooks/, .claude/, lighthouserc.json,
+# packages/backend/scripts and packages/backend/docs, and ROOT-LEVEL ONLY (glob, no
+# recursion) *.ps1/*.docx/*.pdf/*.skill/*.png/*.svg/*.jsx files -- added 2026-10-03,
+# Patrick-approved. Root-level only on purpose: packages/frontend/public holds real
+# images/PDFs that DO change the build output). NOTE: repo-root extension/ was
 # REMOVED from this list 2026-09-18 -- packages/frontend/scripts/zip-extension.mjs
 # reads it directly and packages it into public/downloads/ as part of THIS
 # frontend's own build output, so an extension-only change is NOT frontend-
@@ -104,7 +108,19 @@ changed_non_doc=$(git diff --name-only "$PREV" HEAD -- . \
   ":(exclude,top)*.sql" \
   ":(exclude,top)railway.toml" \
   ":(exclude,top)railway.staging.toml" \
-  ":(exclude,top)push.ps1")
+  ":(exclude,top)push.ps1" \
+  ":(exclude,top).githooks" \
+  ":(exclude,top).claude" \
+  ":(exclude,top)lighthouserc.json" \
+  ":(exclude,top)packages/backend/scripts" \
+  ":(exclude,top)packages/backend/docs" \
+  ":(exclude,top,glob)*.ps1" \
+  ":(exclude,top,glob)*.docx" \
+  ":(exclude,top,glob)*.pdf" \
+  ":(exclude,top,glob)*.skill" \
+  ":(exclude,top,glob)*.png" \
+  ":(exclude,top,glob)*.svg" \
+  ":(exclude,top,glob)*.jsx")
 
 if [ -z "$changed_non_doc" ]; then
   echo "vercel-ignore: only docs/markdown changed -> SKIP build"
