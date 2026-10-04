@@ -52,6 +52,7 @@
 
 import { prisma } from '../../lib/prisma';
 import { encryptToken, decryptToken } from '../../utils/tokenCrypto';
+import { normalizeCondition } from '../../utils/conditionMapping'; // U4: one condition vocabulary
 import type { Item, MarketplaceAccount, Prisma } from '@prisma/client';
 import { decodeHtmlEntities } from '../../lib/sanitize';
 // ADR-132: release matcher v2 + structured record identity.
@@ -460,8 +461,10 @@ const ITEM_CONDITION_TO_DISCOGS: Record<string, string> = {
 };
 const DEFAULT_DISCOGS_CONDITION = 'Good (G)';
 
-function resolveDiscogsCondition(itemCondition: string | null): string {
-  return (itemCondition && ITEM_CONDITION_TO_DISCOGS[itemCondition]) || DEFAULT_DISCOGS_CONDITION;
+export function resolveDiscogsCondition(itemCondition: string | null): string {
+  // U4: read the normalized condition (legacy values and casing fold onto the four canonical conditions).
+  const normalizedCondition = normalizeCondition(itemCondition).condition;
+  return (normalizedCondition && ITEM_CONDITION_TO_DISCOGS[normalizedCondition]) || DEFAULT_DISCOGS_CONDITION;
 }
 
 // ============================================================================

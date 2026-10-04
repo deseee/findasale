@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 import { isSaleLocked } from './rankService';
+import { normalizeCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
 
 // ─── Input Types ─────────────────────────────────────────────────────────────
 
@@ -205,15 +206,17 @@ function saleTypeToEventCategory(saleType: string): string {
   return map[saleType] || 'Sale';
 }
 
-function conditionToSchemaOrg(condition: string | null): string | undefined {
-  if (!condition) return undefined;
+export function conditionToSchemaOrg(condition: string | null): string | undefined {
+  // U4: read the normalized condition; unrecognized values still yield no itemCondition.
+  const normalizedCondition = normalizeCondition(condition).condition;
+  if (!normalizedCondition) return undefined;
   const map: Record<string, string> = {
     NEW: 'https://schema.org/NewCondition',
     USED: 'https://schema.org/UsedCondition',
     REFURBISHED: 'https://schema.org/RefurbishedCondition',
     PARTS_OR_REPAIR: 'https://schema.org/DamagedCondition',
   };
-  return map[condition];
+  return map[normalizedCondition];
 }
 
 function buildPriceRange(items: ItemForSyndication[]): { low: number; high: number; count: number } | null {

@@ -51,6 +51,7 @@
 
 import { prisma } from '../../lib/prisma';
 import { encryptToken, decryptToken } from '../../utils/tokenCrypto';
+import { normalizeCondition } from '../../utils/conditionMapping'; // U4: one condition vocabulary
 import type { Item, MarketplaceAccount } from '@prisma/client';
 
 // ── Endpoints ────────────────────────────────────────────────────────────────
@@ -228,8 +229,10 @@ const ITEM_CONDITION_TO_REVERB_NAME: Record<string, string> = {
 };
 const DEFAULT_REVERB_CONDITION_NAME = 'Good';
 
-async function resolveReverbConditionUuid(accessToken: string, itemCondition: string | null): Promise<string> {
-  const targetName = (itemCondition && ITEM_CONDITION_TO_REVERB_NAME[itemCondition]) || DEFAULT_REVERB_CONDITION_NAME;
+export async function resolveReverbConditionUuid(accessToken: string, itemCondition: string | null): Promise<string> {
+  // U4: read the normalized condition (legacy values and casing fold onto the four canonical conditions).
+  const normalizedCondition = normalizeCondition(itemCondition).condition;
+  const targetName = (normalizedCondition && ITEM_CONDITION_TO_REVERB_NAME[normalizedCondition]) || DEFAULT_REVERB_CONDITION_NAME;
   try {
     const resp = await fetch(`${REVERB_API_BASE}/listing_conditions`, { headers: reverbHeaders(accessToken) });
     if (resp.ok) {

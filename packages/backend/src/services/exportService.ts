@@ -1,6 +1,7 @@
 import { Item } from '@prisma/client';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR, ensureQrCodeAsset } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermarkPolicy';
+import { normalizeCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
 
 type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
@@ -38,29 +39,20 @@ export function escapeCsvField(value: any): string {
 }
 
 /**
- * Map condition grades to eBay Seller Hub bulk upload Condition strings
- * eBay Seller Hub CSV format requires human-readable condition values, NOT numeric IDs
- * FindA.Sale uses letter grades (A, B, C, D, etc.) and plain text conditions
+ * Map Item.condition to eBay Seller Hub bulk upload Condition strings
+ * eBay Seller Hub CSV format requires human-readable condition values, NOT numeric IDs.
+ * U4: reads the normalized condition (the four canonical values; legacy LIKE_NEW, GOOD, FAIR, POOR and casing
+ * variants are folded in by normalizeCondition). Anything missing or unrecognized is Used.
  */
-function mapConditionToEbayString(condition: string | null | undefined): string {
-  if (!condition) return 'Used'; // Default to Used
-
-  const conditionMap: Record<string, string> = {
-    'NEW': 'New',
-    'LIKE_NEW': 'Like New',
-    'A': 'Like New', // Like New
-    'GOOD': 'Very Good',
-    'USED': 'Used',
-    'B': 'Very Good', // Good
-    'REFURBISHED': 'Manufacturer refurbished',
-    'FAIR': 'Good',
-    'C': 'Good', // Fair
-    'POOR': 'For parts or not working',
-    'D': 'For parts or not working', // Poor
-    'PARTS_OR_REPAIR': 'For parts or not working',
-  };
-
-  return conditionMap[condition.toUpperCase()] || 'Used'; // Default to Used
+export function mapConditionToEbayString(condition: string | null | undefined): string {
+  switch (normalizeCondition(condition).condition) {
+    case 'NEW': return 'New';
+    case 'REFURBISHED': return 'Manufacturer refurbished';
+    case 'PARTS_OR_REPAIR': return 'For parts or not working';
+    case 'USED':
+    default:
+      return 'Used'; // Default to Used
+  }
 }
 
 /**
@@ -144,27 +136,18 @@ function formatEbayCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null
 }
 
 /**
- * Map condition to human-readable label for Amazon/Facebook exports
+ * Map Item.condition to a human-readable label for Amazon/Facebook CSV exports.
+ * U4: reads the normalized condition; missing or unrecognized is Used.
  */
-function mapConditionLabel(condition: string | null | undefined): string {
-  if (!condition) return 'Used';
-
-  const conditionMap: Record<string, string> = {
-    'NEW': 'New',
-    'LIKE_NEW': 'Like New',
-    'A': 'Like New',
-    'GOOD': 'Good',
-    'USED': 'Used',
-    'B': 'Good',
-    'REFURBISHED': 'Refurbished',
-    'FAIR': 'Fair',
-    'C': 'Fair',
-    'POOR': 'Poor',
-    'D': 'Poor',
-    'PARTS_OR_REPAIR': 'Parts or Not Working',
-  };
-
-  return conditionMap[condition.toUpperCase()] || 'Used';
+export function mapConditionLabel(condition: string | null | undefined): string {
+  switch (normalizeCondition(condition).condition) {
+    case 'NEW': return 'New';
+    case 'REFURBISHED': return 'Refurbished';
+    case 'PARTS_OR_REPAIR': return 'Parts or Not Working';
+    case 'USED':
+    default:
+      return 'Used';
+  }
 }
 
 /**

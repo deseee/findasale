@@ -75,6 +75,23 @@ export const bulkItemsLimiter = rateLimit({
 });
 
 /**
+ * eBay re-push limiter: 6 requests per minute per authenticated user (Wave 2 hacker pass).
+ * Each POST /api/items/:id/ebay-repush makes up to six calls against the organizer's eBay account (GET and PUT offer,
+ * GET and PUT inventory item, republish, shipping resync). Mounted AFTER authenticate so the key is the user id, not the
+ * IP. Redis-backed so the budget is shared across instances; falls back to in-memory like the others.
+ */
+export const ebayRepushLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 6,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: { message: 'Too many eBay update requests. Wait a minute and try again.' },
+  standardHeaders: false,
+  legacyHeaders: false,
+  store: createRateLimitStore('rl:ebayRepush:'),
+});
+
+/**
  * Feed limiter: 100 requests per minute per IP
  */
 export const feedLimiter = rateLimit({

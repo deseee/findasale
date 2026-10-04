@@ -145,6 +145,11 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       // 2026-09-23: consecutive-failure count -- a content 4xx only becomes FAILED_TERMINAL
       // once this reaches TERMINAL_AFTER_ATTEMPTS (resolveSyncStateAfterFailure).
       ebaySyncAttempts: true,
+      // U2 (2026-10-04): the organizer's local edits win over this pull. A held item ("Save without updating
+      // marketplaces") is skipped entirely; a dirty item (a local title/description/condition edit that eBay has not
+      // confirmed) keeps its content fields and still syncs price. Untouched items behave exactly as before.
+      ebaySyncHeldAt: true,
+      ebayContentDirtyAt: true,
     },
   });
 
@@ -226,6 +231,15 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
 
   for (const item of items) {
     try {
+      // --- U2 (2026-10-04): a held item is skipped entirely ---
+      // The organizer chose "Save without updating marketplaces". No price push-first, no pull, no eBay call and
+      // no notification for this item this cycle. The hold persists until an explicit "Update eBay now" or
+      // "Resume syncing" (it never expires on its own). Do not compare against lastEditedAt.
+      if (item.ebaySyncHeldAt) {
+        console.log(`[eBay PullSync] item ${item.id}: eBay sync is on hold (since ${item.ebaySyncHeldAt.toISOString()}) -- skipping price push and pull`);
+        continue;
+      }
+
       // --- ADR-128 (2026-09-19): a terminal failure is never retried ---
       // FAILED_TERMINAL means the last push failed for a reason no retry can fix: eBay
       // evaluated the write and rejected the listing's content (bad aspect value, missing
@@ -375,7 +389,13 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       // SKU = skip (see root-cause note above; replaces the old `FAS-${item.id}`
       // guess entirely). ---
       const sku = offerObject ? (offerObject.sku as string | undefined) : undefined;
-      if (sku) {
+      // U2 (2026-10-04): a local title/description/condition edit that eBay has not confirmed yet must not be
+      // overwritten by eBay's older value, so the inventory-item pull (title, description, condition) is skipped
+      // while ebayContentDirtyAt is set. Price (from the offer fetch above) is unaffected.
+      if (sku && item.ebayContentDirtyAt) {
+        console.log(`[eBay PullSync] item ${item.id}: local content edit pending (since ${item.ebayContentDirtyAt.toISOString()}) -- not pulling title/description/condition`);
+      }
+      if (sku && !item.ebayContentDirtyAt) {
         const inventoryPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         const inventoryRes = await fetch(
           `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(inventoryPath)}`,

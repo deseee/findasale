@@ -10,17 +10,10 @@ import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
+import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 
-// Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
-// exportController.ts (kept in sync; trivial pure map — not worth a shared import).
-function toFacebookCondition(condition: string | null | undefined): string {
-  switch ((condition || '').toUpperCase()) {
-    case 'NEW': return 'New';
-    case 'REFURBISHED': return 'Used - Like New';
-    case 'PARTS_OR_REPAIR': return 'Used - Fair';
-    default: return 'Used - Good'; // USED and unknown
-  }
-}
+// Facebook Marketplace condition values: toFacebookCondition is now the shared facebookMarketplaceCondition
+// helper (utils/marketplaceCondition.ts), imported above, so the extension and the XLSX export cannot drift.
 
 // 2026-10-01 (Patrick: "drop the backlink if against each site's TOS"): the finda.sale backlink (ADR-084)
 // is NO LONGER part of `description`. Vinted (Catalogue Rules / T&Cs s.6), eBay (Links Policy), Depop

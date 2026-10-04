@@ -4,6 +4,10 @@ import { z } from 'zod';
 import {
   getItemById,
   getItemForEdit,
+  getItemMarketplaceStatusHandler, // 2026-10-04 (U3)
+  acknowledgeItemMarketplacePush, // 2026-10-04 (U1)
+  repushItemToEbay, // 2026-10-04 (U1)
+  releaseEbayHold, // 2026-10-04 (U2)
   getItemsBySaleId,
   createItem,
   updateItem,
@@ -60,7 +64,7 @@ import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for
 import { requireRetagAccess } from '../utils/actingOrganizer'; // 2026-09-29: Markdown Re-tag routes serve owner (any tier) + TEAMS staff
 import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account age gate
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
-import { itemEndpointLimiter, bulkItemsLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting, P0-S3: Bulk operations rate limiting
+import { itemEndpointLimiter, bulkItemsLimiter, ebayRepushLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting, P0-S3: Bulk operations rate limiting
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { reanalyzeItemForOrganizer } from '../controllers/reanalyzeController'; // Re-analyze: re-run Smart tagging on stored photos
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
@@ -1154,6 +1158,15 @@ router.get('/:id/label', authenticate, getSingleItemLabel);
 // Must stay separate from the generic GET /:id below (which is intentionally public/
 // permissive for the shopper-facing item page) — see getItemForEdit for full rationale.
 router.get('/:id/edit', authenticate, getItemForEdit);
+
+// Item editor unification Wave 2 (2026-10-04): marketplace status and eBay push controls. Each is a two-segment path
+// (/:id/<name>), so none can be shadowed by the single-segment GET/PUT '/:id' routes below; they sit here, beside
+// /:id/edit and before them, to keep every item-scoped route in one place. Owner-resolved inside the handlers
+// (404 for a missing or not-yours item), inventory items included.
+router.get('/:id/marketplace-status', authenticate, getItemMarketplaceStatusHandler); // U3: per-platform listing status + last eBay push outcome
+router.post('/:id/marketplace-push/ack', authenticate, acknowledgeItemMarketplacePush); // U1: dismiss the caller's own failed eBay push rows (clears the list badge)
+router.post('/:id/ebay-repush', authenticate, ebayRepushLimiter, repushItemToEbay); // U1/U2: explicit "Update eBay now" (REPUSH) or retry ({ retry: true })
+router.post('/:id/ebay-hold/release', authenticate, releaseEbayHold); // U2: "Resume syncing", clears the eBay hold without pushing
 
 // Physical Markdown Alert List (2026-09-25): must be registered BEFORE the generic
 // GET '/:id' route immediately below, or Express would treat "markdown-retag-queue" as

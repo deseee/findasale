@@ -7,6 +7,7 @@ import archiver from 'archiver';
 import ExcelJS from 'exceljs';
 import { checkExportRateLimit, formatNextExportDate } from '../services/exportRateLimitService';
 import { organizerHasTier } from '../utils/tierAccess';
+import { facebookMarketplaceCondition, facebookCommerceCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary
 import { csvCell } from '../utils/csvSafe'; // formula-injection-safe cell writer (leading = + - @, tab, CR, LF)
 
 /**
@@ -761,18 +762,8 @@ function formatDateISO(date: Date | null | undefined): string {
 /**
  * Map FindA.Sale item condition to Facebook Marketplace condition string
  */
-function mapConditionForFacebook(condition: string | null | undefined): string {
-  switch (condition) {
-    case 'NEW':
-      return 'New';
-    case 'REFURBISHED':
-      return 'Used - Like New';
-    case 'PARTS_OR_REPAIR':
-      return 'Used - Fair';
-    case 'USED':
-    default:
-      return 'Used - Good';
-  }
+export function mapConditionForFacebook(condition: string | null | undefined): string {
+  return facebookMarketplaceCondition(condition); // U4: reads the normalized condition
 }
 
 /**
@@ -943,19 +934,8 @@ function stripHtml(html: string | null | undefined): string {
  * Map FindA.Sale item condition to Facebook Commerce Manager catalog condition enum
  * FB accepted values: new, refurbished, used_like_new, used_good, used_fair, used_poor
  */
-function mapConditionForCommerceManager(condition: string | null | undefined): string {
-  switch (condition) {
-    case 'NEW':
-      return 'new';
-    case 'REFURBISHED':
-      return 'used_like_new';
-    case 'USED':
-      return 'used_good';
-    case 'PARTS_OR_REPAIR':
-      return 'used_fair';
-    default:
-      return 'used';
-  }
+export function mapConditionForCommerceManager(condition: string | null | undefined): string {
+  return facebookCommerceCondition(condition); // U4: reads the normalized condition
 }
 
 /**

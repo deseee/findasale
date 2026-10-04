@@ -41,7 +41,7 @@ import { composeDescription, stripShippingPhrases, DescriptionSource } from '../
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 import { sendItemSoldAlert } from '../services/saleAlertEmailService'; // P1 fix (2026-09-08): off-platform BYOR sold handler had zero organizer notification; reuse the same "item sold" email alert Stripe checkout already sends (stripeController.ts ~2144)
-import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCategory } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
+import { republishEbayOffer } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
@@ -61,6 +61,9 @@ import { CARD_PUBLIC_SELECT, CARD_EDIT_SELECT, parseCardInput, buildCardCreateDa
 import { organizerEditStamp, organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, stamped only by organizer request handlers
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // 2026-10-04 (B1): default-deny owner resolution for sale items and inventory items (saleId null)
 import { getPinnedCardCategory } from '../config/cardEbayCategories'; // ADR-134 5.4 (W4): pinned eBay category for a card record (pure module, no env or network)
+import { normalizeCondition, normalizeGrade, type ConditionGrade } from '../utils/conditionMapping'; // 2026-10-04 (U4): one condition vocabulary; coerces legacy values, never 400s on them
+import { pushItemToEbay, computeEbayPushFields, buildEbayPlan, buildExtensionPlan, EBAY_CONTENT_FIELDS, EBAY_PUSH_FIELDS, type EbayPushField, type MarketplacePlan } from '../services/ebayItemPushService'; // 2026-10-04 (U1/U2): structured, recorded eBay push extracted from updateItem
+import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
 
 /**
  * Bug #469: Live-listing edit propagation.
@@ -1079,7 +1082,9 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
     const item = await prisma.item.findUnique({
       where: { id },
       // ADR-134 #640 (B2): the owner's edit read adds lockedFields + catalogPrintingId to the card block (never dedupKey/organizerId).
-      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true, lastEditedAt: true, card: { select: CARD_EDIT_SELECT } }
+      // 2026-10-04 (U3): reverbListingId (so the Edit page can show the Reverb chip) and the eBay hold state (U2: the
+      // "eBay sync paused" chip) are owner-only reads, added to THIS extra select only, never to the shared ITEM_DETAIL_SELECT.
+      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true, lastEditedAt: true, reverbListingId: true, ebaySyncHeldAt: true, ebayHeldFields: true, ebayContentDirtyAt: true, card: { select: CARD_EDIT_SELECT } }
     });
 
     if (!item) {
@@ -1143,6 +1148,192 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error fetching item for edit:', error);
     res.status(500).json({ message: 'Server error while fetching item' });
+  }
+};
+
+// ---------------------------------------------------------------------------------------------------------
+// Marketplace status and eBay push controls (item editor unification, Wave 2: U1, U2, U3).
+// Every handler resolves the owner through resolveItemOwnerOrganizer (default deny, inventory safe). A caller who is
+// not the owner, and a missing item, get the SAME 404 { message: 'Item not found' } so existence never leaks.
+// ---------------------------------------------------------------------------------------------------------
+
+const MARKETPLACE_ITEM_OWNER_SELECT = {
+  saleId: true,
+  organizerId: true,
+  sale: { select: { organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } },
+} as const;
+
+/**
+ * Shared prelude: organizer role, item lookup, owner resolution. Sends the 403/404 itself and returns null when the
+ * request must stop; otherwise returns the item row (with `extraSelect` fields) and the resolved owner.
+ */
+async function loadOwnedItemForMarketplace<S extends Record<string, unknown>>(
+  req: AuthRequest,
+  res: Response,
+  extraSelect: S
+) {
+  const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+  if (!req.user || !hasOrganizerRole) {
+    res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    return null;
+  }
+  const { id } = req.params;
+  const item = await prisma.item.findUnique({
+    where: { id },
+    select: { id: true, ...MARKETPLACE_ITEM_OWNER_SELECT, ...extraSelect } as any,
+  });
+  if (!item) {
+    res.status(404).json({ message: 'Item not found' });
+    return null;
+  }
+  const owner = await resolveItemOwnerOrganizer(item as any, req.user.id);
+  if (!owner) {
+    res.status(404).json({ message: 'Item not found' });
+    return null;
+  }
+  return { item: item as any, owner };
+}
+
+// GET /api/items/:id/marketplace-status
+export const getItemMarketplaceStatusHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const loaded = await loadOwnedItemForMarketplace(req, res, ITEM_STATUS_SELECT);
+    if (!loaded) return;
+    const status = await getItemMarketplaceStatus({ item: loaded.item, ownerOrganizerId: loaded.owner.id });
+    res.json(status);
+  } catch (error) {
+    console.error('Error fetching item marketplace status:', error);
+    res.status(500).json({ message: 'Server error while fetching marketplace status' });
+  }
+};
+
+// POST /api/items/:id/marketplace-push/ack: dismisses this organizer's own FAILED or PARTIAL eBay push rows for the item.
+export const acknowledgeItemMarketplacePush = async (req: AuthRequest, res: Response) => {
+  try {
+    const loaded = await loadOwnedItemForMarketplace(req, res, {});
+    if (!loaded) return;
+    // organizerId is the RESOLVED owner, never anything from the request, so another organizer's rows are untouchable.
+    const result = await prisma.itemMarketplacePush.updateMany({
+      where: {
+        itemId: loaded.item.id,
+        organizerId: loaded.owner.id,
+        platform: 'EBAY',
+        status: { in: ['FAILED', 'PARTIAL'] },
+        acknowledgedAt: null,
+      },
+      data: { acknowledgedAt: new Date() },
+    });
+    res.json({ acknowledged: result.count });
+  } catch (error) {
+    console.error('Error acknowledging marketplace push:', error);
+    res.status(500).json({ message: 'Server error while acknowledging the update' });
+  }
+};
+
+const HOLD_SELECT = { ebaySyncHeldAt: true, ebayHeldFields: true, ebayContentDirtyAt: true } as const;
+const holdView = (row: { ebaySyncHeldAt?: Date | null; ebayHeldFields?: string[] | null; ebayContentDirtyAt?: Date | null } | null) => ({
+  heldAt: row?.ebaySyncHeldAt ?? null,
+  heldFields: row?.ebayHeldFields ?? [],
+  contentDirtyAt: row?.ebayContentDirtyAt ?? null,
+});
+
+// Item ids with an "Update eBay now" or retry in flight on THIS process. A second click (or a scripted burst) for the same
+// item gets 409 instead of a second GET, PUT and republish round trip against the organizer's eBay account. The route's
+// per-user limiter (ebayRepushLimiter, Redis-backed) bounds the rate across instances; this bounds concurrency per item.
+const repushInFlight = new Set<string>();
+
+// POST /api/items/:id/ebay-repush: the explicit "Update eBay now". Body { retry: true } retries the newest failed push.
+export const repushItemToEbay = async (req: AuthRequest, res: Response) => {
+  let guardedItemId: string | null = null;
+  try {
+    const loaded = await loadOwnedItemForMarketplace(req, res, { ebayOfferId: true, ebayListingId: true, ...HOLD_SELECT });
+    if (!loaded) return;
+    const { item, owner } = loaded;
+
+    // Default (Patrick D8): pushing a saleless inventory item to eBay is not built yet. Message only, no eBay call.
+    if (!item.saleId) {
+      return res.json({
+        outcome: null,
+        ebayHold: holdView(item),
+        message: 'Updating eBay from here is not available for inventory items yet. Edit the listing on eBay, or add the item to a sale first.',
+      });
+    }
+
+    // Check and add are adjacent with no await between them, so two concurrent requests cannot both pass.
+    if (repushInFlight.has(item.id)) {
+      return res.status(409).json({ message: 'An eBay update for this item is already running. Give it a moment, then check the status.' });
+    }
+    repushInFlight.add(item.id);
+    guardedItemId = item.id;
+
+    const retry = (req.body as { retry?: unknown } | undefined)?.retry === true;
+    let trigger: 'REPUSH' | 'RETRY' = 'REPUSH';
+    let fields: EbayPushField[] | null = null;
+
+    if (retry) {
+      const failed = await prisma.itemMarketplacePush.findFirst({
+        where: { itemId: item.id, organizerId: owner.id, platform: 'EBAY', status: { in: ['FAILED', 'PARTIAL'] } },
+        orderBy: { createdAt: 'desc' },
+        select: { fieldsAttempted: true, fieldsPushed: true },
+      });
+      if (failed) {
+        const left = failed.fieldsAttempted.filter((f: string) => !failed.fieldsPushed.includes(f));
+        const valid = (left.length > 0 ? left : failed.fieldsAttempted).filter((f: string): f is EbayPushField =>
+          (EBAY_PUSH_FIELDS as readonly string[]).includes(f)
+        );
+        if (valid.length > 0) {
+          trigger = 'RETRY';
+          fields = valid;
+        }
+      }
+    }
+
+    if (!fields) {
+      // Held fields plus, when the item is dirty or nothing is recorded as held, the three content fields. With nothing
+      // held and nothing dirty this is a full sync of title, description, condition and price.
+      const held = ((item.ebayHeldFields ?? []) as string[]).filter((f) => (EBAY_PUSH_FIELDS as readonly string[]).includes(f)) as EbayPushField[];
+      const set = new Set<EbayPushField>(held);
+      if (item.ebayContentDirtyAt || set.size === 0) EBAY_CONTENT_FIELDS.forEach((f) => set.add(f));
+      if (!item.ebayContentDirtyAt && held.length === 0) set.add('price');
+      fields = Array.from(set);
+    }
+
+    const outcome = await pushItemToEbay({ itemId: item.id, organizerId: owner.id, trigger, fields });
+    const after = await prisma.item.findUnique({ where: { id: item.id }, select: HOLD_SELECT });
+
+    const message =
+      outcome.status === 'SUCCESS'
+        ? 'eBay is up to date.'
+        : outcome.status === 'PARTIAL'
+          ? 'eBay was only partly updated.'
+          : outcome.status === 'SKIPPED_NOT_LISTED'
+            ? outcome.errorCode === 'ITEM_NOT_ACTIVE'
+              ? 'This item is no longer for sale, so eBay was not changed.'
+              : 'This item is not listed on eBay.'
+            : 'eBay could not be updated.';
+    res.json({ outcome, ebayHold: holdView(after), message });
+  } catch (error) {
+    console.error('Error re-pushing item to eBay:', error);
+    res.status(500).json({ message: 'Server error while updating eBay' });
+  } finally {
+    if (guardedItemId) repushInFlight.delete(guardedItemId);
+  }
+};
+
+// POST /api/items/:id/ebay-hold/release: "Resume syncing". Clears the hold WITHOUT pushing, so the next pull-sync
+// cycle takes eBay's current values again.
+export const releaseEbayHold = async (req: AuthRequest, res: Response) => {
+  try {
+    const loaded = await loadOwnedItemForMarketplace(req, res, {});
+    if (!loaded) return;
+    await prisma.item.update({
+      where: { id: loaded.item.id },
+      data: { ebaySyncHeldAt: null, ebayHeldFields: [], ebayContentDirtyAt: null },
+    });
+    res.json({ released: true, ebayHold: holdView(null) });
+  } catch (error) {
+    console.error('Error releasing eBay hold:', error);
+    res.status(500).json({ message: 'Server error while resuming syncing' });
   }
 };
 
@@ -1342,6 +1533,35 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * U4 (2026-10-04): one condition vocabulary. Coerces a submitted condition to the canonical four
+ * (NEW, USED, REFURBISHED, PARTS_OR_REPAIR) through normalizeCondition. It never rejects: the current frontend
+ * still sends legacy values such as LIKE_NEW and GOOD, and those coerce (LIKE_NEW to USED with hint grade A).
+ *   empty or null  -> write null (clears the field)
+ *   recognized     -> write the canonical value (plus an optional hint grade)
+ *   unknown        -> logged, and NOT written: the stored value stays as it is (null on create)
+ */
+function coerceConditionInput(raw: unknown, ctx: string): { write: boolean; value: string | null; hintGrade?: ConditionGrade } {
+  if (raw === null || (typeof raw === 'string' && raw.trim() === '')) return { write: true, value: null };
+  const normalized = normalizeCondition(raw);
+  if (normalized.condition === null) {
+    console.warn(`[${ctx}] unrecognized condition ${JSON.stringify(typeof raw === 'string' ? raw.slice(0, 40) : typeof raw)} ignored (existing value kept)`);
+    return { write: false, value: null };
+  }
+  return { write: true, value: normalized.condition, ...(normalized.hintGrade ? { hintGrade: normalized.hintGrade } : {}) };
+}
+
+/** Grade counterpart of coerceConditionInput: empty clears, a valid S to D grade is kept (trimmed, uppercased), anything else is ignored with a log. */
+function coerceGradeInput(raw: unknown, ctx: string): { write: boolean; value: ConditionGrade | null } {
+  if (raw === null || (typeof raw === 'string' && raw.trim() === '')) return { write: true, value: null };
+  const grade = normalizeGrade(raw);
+  if (grade === null) {
+    console.warn(`[${ctx}] unrecognized conditionGrade ${JSON.stringify(typeof raw === 'string' ? raw.slice(0, 40) : typeof raw)} ignored (existing value kept)`);
+    return { write: false, value: null };
+  }
+  return { write: true, value: grade };
+}
+
 export const createItem = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -1349,7 +1569,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence, consignorId, card } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence, consignorId, card } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // #102: Validate price >= 0
@@ -1487,6 +1707,13 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     const parsedPrice = price ? parseFloat(price) : null;
     const assignedRarity = assignRarity(parsedPrice);
 
+    // U4 (2026-10-04): condition and grade are coerced to the canonical vocabulary (legacy values such as LIKE_NEW or
+    // GOOD coerce and are never a 400). A legacy LIKE_NEW or EXCELLENT carries a hint grade of A, used only when the
+    // request sends no grade of its own.
+    const conditionCoerced = coerceConditionInput(condition, 'createItem');
+    const gradeCoerced = conditionGrade !== undefined ? coerceGradeInput(conditionGrade, 'createItem') : { write: false, value: null as ConditionGrade | null };
+    const createGrade: ConditionGrade | null = gradeCoerced.write && gradeCoerced.value ? gradeCoerced.value : (conditionCoerced.hintGrade ?? null);
+
     // Create the item in database
     const item = await prisma.item.create({
       data: {
@@ -1503,7 +1730,8 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : null,
         status: status || 'AVAILABLE',
         category: category || null,
-        condition: condition || null,
+        condition: conditionCoerced.write ? conditionCoerced.value : null,
+        ...(createGrade ? { conditionGrade: createGrade } : {}),
         // Feature #309/#70 follow-up (2026-09-24): optional consignor attribution, resolved
         // and validated above. null when not provided -- same default the column already had.
         consignorId: resolvedConsignorId,
@@ -1662,6 +1890,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
+    // U2 (2026-10-04): "Save without updating marketplaces". Accepted ONLY as the boolean true (strict ===): the strings
+    // "true", 1 and every other truthy value are ignored. The hold columns (ebaySyncHeldAt, ebayHeldFields,
+    // ebayContentDirtyAt) are never read from the request body at all: this handler picks its fields explicitly.
+    const skipMarketplaceSyncRequested = (req.body as { skipMarketplaceSync?: unknown } | undefined)?.skipMarketplaceSync === true;
     const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
 
     // #102: Validate price >= 0
@@ -1889,9 +2121,21 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       updateData.category = category || null;
       if (fieldValueChanged(item.category, category || null)) fieldsBeingEdited.push('category');
     }
+    // U4 (2026-10-04): condition is coerced to the canonical vocabulary (never a 400 on a legacy value). A recognized
+    // value that already means the same thing as the stored one is left untouched, so a resave of an unedited legacy row
+    // is not mistaken for an edit. LIKE_NEW and EXCELLENT carry a hint grade (A), applied below only when the row and
+    // the request have no grade.
+    let conditionHintGrade: ConditionGrade | null = null;
     if (condition !== undefined) {
-      updateData.condition = condition || null;
-      if (fieldValueChanged(item.condition, condition || null)) fieldsBeingEdited.push('condition');
+      const coerced = coerceConditionInput(condition, 'updateItem');
+      if (coerced.write) {
+        const sameMeaning = coerced.value !== null && normalizeCondition(item.condition).condition === coerced.value;
+        if (!sameMeaning) {
+          updateData.condition = coerced.value;
+          if (fieldValueChanged(item.condition, coerced.value)) fieldsBeingEdited.push('condition');
+        }
+        conditionHintGrade = coerced.hintGrade ?? null;
+      }
     }
     if (brand !== undefined) {
       // brand is also set later in the eBay parity block — skip here to avoid conflict
@@ -2017,7 +2261,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
     if (ebayCategoryId !== undefined) updateData.ebayCategoryId = ebayCategoryId || null;
     if (ebayCategoryName !== undefined) updateData.ebayCategoryName = ebayCategoryName || null;
-    if (conditionGrade !== undefined) updateData.conditionGrade = conditionGrade || null; // #145: Persist condition grade
+    // #145: Persist condition grade. U4 (2026-10-04): validated to S, A, B, C, D (case-insensitive); an unrecognized value is
+    // logged and ignored (existing grade kept) rather than rejected.
+    let gradeFromBody: ConditionGrade | null = null;
+    if (conditionGrade !== undefined) {
+      const gradeCoerced = coerceGradeInput(conditionGrade, 'updateItem');
+      if (gradeCoerced.write) {
+        updateData.conditionGrade = gradeCoerced.value;
+        gradeFromBody = gradeCoerced.value;
+      }
+    } else if (conditionHintGrade && !item.conditionGrade) {
+      updateData.conditionGrade = conditionHintGrade;
+    }
     if (tags !== undefined) updateData.tags = tags; // #145: Persist tags from review page
     // P0 fix: keep ebayShippingClassification in sync whenever this endpoint changes
     // category and/or tags (classifyEbayShipping was previously only ever computed
@@ -2263,6 +2518,48 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // U1/U2 (2026-10-04): which marketplace-relevant fields REALLY changed (stored row vs what this save writes), not
+    // which keys were present in the body. This drives the push, the held-fields union, the dirty flag and the plan.
+    const numOrNull = (v: any): number | null =>
+      v === undefined || v === null || v === '' ? null : Number(v);
+    // ADR Part B: did this save change a shipping-determining package input vs. the pre-update item? Triggers a
+    // live-offer shipping-policy re-sync. Compare normalized numbers so Decimal/number/null shapes line up.
+    const shippingInputsChanged =
+      (packageWeightOz !== undefined && numOrNull(updateData.packageWeightOz) !== numOrNull(item.packageWeightOz)) ||
+      (packageLengthIn !== undefined && numOrNull(updateData.packageLengthIn) !== numOrNull(item.packageLengthIn)) ||
+      (packageWidthIn !== undefined && numOrNull(updateData.packageWidthIn) !== numOrNull(item.packageWidthIn)) ||
+      (packageHeightIn !== undefined && numOrNull(updateData.packageHeightIn) !== numOrNull(item.packageHeightIn)) ||
+      (packageType !== undefined && (updateData.packageType ?? null) !== (item.packageType ?? null));
+    const ebayListedBeforeSave = !!(item.ebayOfferId || item.ebayListingId);
+    // Resaving an unchanged price on an item whose price sync is parked in a failed state re-opens the sync (see the
+    // ebaySyncState = PENDING branch above), and the old push re-sent the price in that case, so it stays an attempted field.
+    const priceReopen =
+      price !== undefined && !priceChanged && ebayListedBeforeSave &&
+      (item.ebaySyncState === 'FAILED_RETRYABLE' || item.ebaySyncState === 'FAILED_TERMINAL');
+    const changedMarketplaceFields: EbayPushField[] = computeEbayPushFields(
+      item,
+      {
+        title: updateData.title,
+        description: updateData.description,
+        condition: updateData.condition,
+        conditionGrade: updateData.conditionGrade,
+        price: updateData.price,
+      },
+      { priceReopen, shippingInputsChanged }
+    );
+    // Hold: "Save without updating marketplaces" on an eBay-listed item, or an item that is already held (the hold
+    // persists until an explicit "Update eBay now" or "Resume syncing"; a normal save never releases it).
+    const heldThisSave = ebayListedBeforeSave && (skipMarketplaceSyncRequested || item.ebaySyncHeldAt != null);
+    if (heldThisSave) {
+      updateData.ebaySyncHeldAt = item.ebaySyncHeldAt ?? new Date();
+      updateData.ebayHeldFields = Array.from(new Set([...(item.ebayHeldFields ?? []), ...changedMarketplaceFields]));
+    }
+    // Dirty: a real title/description/condition change on an eBay-listed item keeps the pull-sync cron from overwriting
+    // it with eBay's older value until a push confirms (cleared by pushItemToEbay on success).
+    if (ebayListedBeforeSave && changedMarketplaceFields.some((f) => (EBAY_CONTENT_FIELDS as readonly string[]).includes(f))) {
+      updateData.ebayContentDirtyAt = new Date();
+    }
+
     // Item.lastEditedAt: a card patch is always an organizer edit; otherwise stamp only when a user-visible
     // field in updateData differs from the stored row. lastEditedAt is never read from req.body.
     const updatedItem = await prisma.item.update({
@@ -2327,7 +2624,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // organizer's first manual save. The pointsTransaction lookup below is the
     // authoritative "once per item" guard, so the in-memory check is unnecessary
     // and was suppressing the legitimate award.
-    if (conditionGrade !== undefined && conditionGrade) {
+    if (gradeFromBody) {
       try {
         // Check if this item has already earned CONDITION_RATING XP
         const existingConditionXp = await prisma.pointsTransaction.findFirst({
@@ -2418,20 +2715,40 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // ADR Part B: detect whether this save changed any shipping-determining
-    // package input vs. the pre-update item. Used below to trigger a live-offer
-    // shipping-policy re-sync. Compare normalized numbers so Decimal/number/null
-    // shapes line up (e.g. Prisma Decimal vs. request number).
-    const numOrNull = (v: any): number | null =>
-      v === undefined || v === null || v === '' ? null : Number(v);
-    const shippingInputsChanged =
-      (packageWeightOz !== undefined && numOrNull(updatedItem.packageWeightOz) !== numOrNull(item.packageWeightOz)) ||
-      (packageLengthIn !== undefined && numOrNull(updatedItem.packageLengthIn) !== numOrNull(item.packageLengthIn)) ||
-      (packageWidthIn !== undefined && numOrNull(updatedItem.packageWidthIn) !== numOrNull(item.packageWidthIn)) ||
-      (packageHeightIn !== undefined && numOrNull(updatedItem.packageHeightIn) !== numOrNull(item.packageHeightIn)) ||
-      (packageType !== undefined && (updatedItem.packageType ?? null) !== (item.packageType ?? null));
+    // U1 (2026-10-04): what this save will push, computed from the real diff. eBay is pushed through
+    // pushItemToEbay; extension marketplaces (Facebook, Vinted, ...) stay prompt-only. Best effort: a failure here only
+    // omits the plan, it never fails the save.
+    let marketplacePlan: MarketplacePlan | undefined;
+    try {
+      let extensionPlan: MarketplacePlan['extension'] = [];
+      if (changedMarketplaceFields.length > 0) {
+        try {
+          const jobRows = await prisma.marketplaceListingJob.findMany({
+            where: { itemId: id, platform: { in: [...EXTENSION_PLATFORMS] } },
+            select: { itemId: true, platform: true, action: true, status: true, createdAt: true },
+          });
+          extensionPlan = buildExtensionPlan(listedExtensionPlatformsByItemId(jobRows).get(id) ?? [], changedMarketplaceFields);
+        } catch (planErr) {
+          console.warn(`[updateItem] marketplace plan: extension listing lookup failed for item ${id}:`, (planErr as Error).message);
+        }
+      }
+      marketplacePlan = {
+        ebay: buildEbayPlan({
+          ebayOfferId: updatedItem.ebayOfferId,
+          ebayListingId: updatedItem.ebayListingId,
+          held: heldThisSave,
+          changedFields: changedMarketplaceFields,
+        }),
+        extension: extensionPlan,
+      };
+    } catch (planErr) {
+      console.warn(`[updateItem] marketplace plan failed for item ${id}:`, (planErr as Error).message);
+    }
 
-    res.json(cardPatch !== undefined ? { ...updatedItem, card: updatedCard ?? null } : updatedItem);
+    res.json({
+      ...(cardPatch !== undefined ? { ...updatedItem, card: updatedCard ?? null } : updatedItem),
+      ...(marketplacePlan ? { marketplacePlan } : {}),
+    });
 
     // Bug #461: FB nudge on single-item status → SOLD transition
     if (status === 'SOLD' && item.status !== 'SOLD' && item.fbExportedAt) {
@@ -2490,259 +2807,23 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       console.warn('Failed to invalidate command center cache:', err)
     );
 
-    // Feature #244 Phase 4: Push-on-save eBay sync (fire-and-forget, non-blocking)
-    // Only fires if this item is currently live on eBay (has an offer ID)
-    if (updatedItem.ebayOfferId) {
-      const ebayOfferId = updatedItem.ebayOfferId;
-      (async () => {
-        try {
-          const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-          const proxySecret = process.env.EBAY_PROXY_SECRET;
-          const proxyHeaders: Record<string, string> = {
-            'Content-Type': 'application/json',
-            'Content-Language': 'en-US',
-            'Accept-Language': 'en-US',
-            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-          };
-
-          // Refresh access token for this organizer
-          const { refreshEbayAccessToken } = await import('../controllers/ebayController');
-          const organizer = await prisma.organizer.findUnique({
-            where: { userId: req.user!.id },
-            select: {
-              id: true,
-              ebayPolicyMapping: { select: { defaultDescriptionHtml: true } },
-            },
-          });
-          if (!organizer) return;
-
-          const accessToken = await refreshEbayAccessToken(organizer.id);
-          if (!accessToken) {
-            console.warn(`[eBay PushSync] Could not refresh token for organizer ${organizer.id}`);
-            return;
-          }
-
-          const authHeaders = { ...proxyHeaders, Authorization: `Bearer ${accessToken}` };
-
-          // eBay PUT endpoints are full REPLACE (not partial-merge). Sending a partial
-          // body causes HTTP 400. So we always GET the full object, mutate the changed
-          // field(s), then PUT the complete object back. We also fetch the offer first
-          // to recover the REAL SKU (which carries a date suffix) — `FAS-${id}` is wrong.
-          const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(ebayOfferId)}`;
-          let offerObject: Record<string, unknown> | null = null;
-          try {
-            const offerGetRes = await fetch(
-              `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(offerPath)}`,
-              { method: 'GET', headers: authHeaders }
-            );
-            if (offerGetRes.ok) {
-              offerObject = (await offerGetRes.json()) as Record<string, unknown>;
-            } else {
-              console.warn(`[eBay PushSync] offer GET failed for item ${id}: HTTP ${offerGetRes.status}`);
-            }
-          } catch (offerGetErr) {
-            console.warn(`[eBay PushSync] offer GET failed for item ${id}:`, (offerGetErr as Error).message);
-          }
-
-          // Push price if updated — GET-merge-PUT the FULL offer object
-          if (offerObject && price !== undefined && updatedItem.price !== null) {
-            const pricingSummary = (offerObject.pricingSummary as Record<string, unknown> | undefined) ?? {};
-            const priceObj = (pricingSummary.price as Record<string, unknown> | undefined) ?? {};
-            offerObject.pricingSummary = {
-              ...pricingSummary,
-              price: { ...priceObj, value: String(updatedItem.price), currency: (priceObj.currency as string) ?? 'USD' },
-            };
-            const offerRes = await fetch(
-              `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(offerPath)}`,
-              { method: 'PUT', headers: authHeaders, body: JSON.stringify(offerObject) }
-            );
-            if (!offerRes.ok && offerRes.status !== 204) {
-              console.warn(`[eBay PushSync] Offer price push failed for item ${id}: HTTP ${offerRes.status}`);
-            }
-          }
-
-          // Push inventory item fields (title, description, condition) if any were updated
-          const inventoryUpdates: Record<string, unknown> = {};
-          if (title !== undefined && updatedItem.title) {
-            inventoryUpdates['product.title'] = updatedItem.title;
-          }
-          if (description !== undefined && updatedItem.description !== undefined) {
-            // Apply organizer's eBay description template if configured.
-            // Bug #424: use split/join to replace ALL occurrences of {{DESCRIPTION}} —
-            // String.replace() with a string argument only replaces the first match.
-            const templateHtml = organizer.ebayPolicyMapping?.defaultDescriptionHtml ?? null;
-            const rawDesc = updatedItem.description ?? '';
-            let finalDesc = rawDesc;
-            if (templateHtml) {
-              if (templateHtml.includes('{{DESCRIPTION}}')) {
-                finalDesc = templateHtml.split('{{DESCRIPTION}}').join(rawDesc);
-              } else {
-                finalDesc = rawDesc ? `${rawDesc}\n\n${templateHtml}` : templateHtml;
-              }
-            }
-            if (finalDesc) {
-              inventoryUpdates['product.description'] = finalDesc;
-            }
-          }
-          if (condition !== undefined && updatedItem.condition) {
-            // Map FindA.Sale condition → eBay Inventory API condition enum.
-            // Then remap to a condition the item's eBay category actually accepts —
-            // flat USED_GOOD is rejected (25021) by categories that only accept
-            // USED_EXCELLENT (conditionId 3000), e.g. GPS category 156955.
-            // ensureConditionValidForCategory() calls eBay's Metadata API and walks
-            // the accepted-conditions list to find the closest valid match.
-            const condMap: Record<string, string> = {
-              NEW: 'NEW',
-              USED: 'USED_GOOD',
-              REFURBISHED: 'SELLER_REFURBISHED',
-              PARTS_OR_REPAIR: 'FOR_PARTS_OR_NOT_WORKING',
-            };
-            const rawCondition = condMap[updatedItem.condition] ?? 'USED_GOOD';
-            // Use the updated ebayCategoryId if the organizer just changed it,
-            // otherwise fall back to the pre-update value from item (also selected above).
-            const categoryIdForCond = (updatedItem as any).ebayCategoryId ?? item.ebayCategoryId ?? null;
-            let finalCondition = rawCondition;
-            if (categoryIdForCond) {
-              try {
-                finalCondition = await ensureConditionValidForCategory(rawCondition, categoryIdForCond);
-              } catch (condErr) {
-                console.warn(`[eBay PushSync] ensureConditionValidForCategory failed (non-fatal): ${(condErr as Error).message}`);
-              }
-            }
-            inventoryUpdates['condition'] = finalCondition;
-          }
-
-          // Use the REAL SKU from the offer object (carries a date suffix) — not `FAS-${id}`.
-          const sku = offerObject ? (offerObject.sku as string | undefined) : undefined;
-          if (Object.keys(inventoryUpdates).length > 0 && sku) {
-            const invPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-            // GET the full inventory item, MERGE changed fields, PUT the FULL object back.
-            // This preserves valid existing fields (imageUrls/aspects/brand/mpn,
-            // packageWeightAndSize) so we don't trigger packageType/partial-body 400s.
-            let invObject: Record<string, unknown> | null = null;
-            try {
-              const invGetRes = await fetch(
-                `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
-                { method: 'GET', headers: authHeaders }
-              );
-              if (invGetRes.ok) {
-                invObject = (await invGetRes.json()) as Record<string, unknown>;
-              } else {
-                console.warn(`[eBay PushSync] inventory item GET failed for SKU ${sku}: HTTP ${invGetRes.status}`);
-              }
-            } catch (invGetErr) {
-              console.warn(`[eBay PushSync] inventory item GET failed for SKU ${sku}:`, (invGetErr as Error).message);
-            }
-
-            if (invObject) {
-              if ('product.title' in inventoryUpdates || 'product.description' in inventoryUpdates) {
-                const existingProduct = (invObject.product as Record<string, unknown> | undefined) ?? {};
-                invObject.product = {
-                  ...existingProduct,
-                  ...(inventoryUpdates['product.title'] ? { title: inventoryUpdates['product.title'] } : {}),
-                  ...(inventoryUpdates['product.description'] ? { description: inventoryUpdates['product.description'] } : {}),
-                };
-              }
-              if ('condition' in inventoryUpdates) {
-                invObject.condition = inventoryUpdates['condition'];
-              }
-
-              // Ensure product.brand is set — missing product.brand causes 25002 BrandMPN
-              // on republish (confirmed 2026-06-30). Mirror from aspects if item.brand is null.
-              // This heals items that were originally pushed before Fix A was deployed.
-              const invProduct = invObject.product as Record<string, unknown> | undefined;
-              if (invProduct && !invProduct.brand) {
-                const invAspects = invProduct.aspects as Record<string, string[]> | undefined;
-                const aspectBrand = invAspects
-                  ? Object.entries(invAspects).find(([k]) => k.toLowerCase() === 'brand')?.[1]?.[0]
-                  : null;
-                if (aspectBrand && aspectBrand.toLowerCase() !== 'unbranded') {
-                  invProduct.brand = aspectBrand;
-                }
-              }
-
-              const invRes = await fetch(
-                `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
-                { method: 'PUT', headers: authHeaders, body: JSON.stringify(invObject) }
-              );
-              if (!invRes.ok && invRes.status !== 204) {
-                console.warn(`[eBay PushSync] Inventory item push failed for SKU ${sku}: HTTP ${invRes.status}`);
-              }
-            }
-          }
-
-          const pushedFields = [
-            price !== undefined ? 'price' : null,
-            title !== undefined ? 'title' : null,
-            description !== undefined ? 'description' : null,
-            condition !== undefined ? 'condition' : null,
-          ].filter(Boolean);
-
-          // Bug #469: Republish the offer so the LIVE listing reflects the pushed
-          // inventory/offer changes. Updating the inventory item / offer alone does
-          // NOT update what shoppers see — only a (re)publish does.
-          // Phase 3 (ADR 2026-06-30): route the on-save republish through the
-          // consolidated self-heal loop instead of a bare POST. A live-item edit that
-          // trips 25101/25021/25002/25005 on republish now self-heals reactively
-          // instead of silently failing (the organizer edits a live item and would
-          // otherwise see nothing). isUsedFamily is derived from DB item.condition
-          // inside the loop; a 25005 heal recreates the offer and persists it.
-          if (pushedFields.length > 0 && updatedItem.ebayOfferId) {
-            console.log(`[eBay PushSync] Item ${id}: pushed ${pushedFields.join('/')} to eBay`);
-            // ADR-134 B5b: the self-heal needs the card record so a graded card keeps its grader, grade and cert
-            // descriptors (without it a card falls to the coin logic and could be rewritten as ungraded). null for a
-            // non-card item, which leaves the heal exactly as it was. Select matches EbayCardInput.
-            const healCard = await prisma.itemCard.findUnique({
-              where: { itemId: updatedItem.id },
-              select: { game: true, productType: true, cardName: true, setCode: true, setName: true, collectorNumber: true, language: true, finish: true, rarity: true, conditionCode: true, grader: true, grade: true, certNumber: true },
-            });
-            const healResult = await ebayPublishWithSelfHeal({
-              item: {
-                id: updatedItem.id,
-                title: updatedItem.title,
-                condition: updatedItem.condition,
-                brand: updatedItem.brand,
-                mpn: updatedItem.mpn,
-                ebayCategoryId: updatedItem.ebayCategoryId,
-                ebayCategoryName: updatedItem.ebayCategoryName,
-                ebayOfferId: updatedItem.ebayOfferId,
-                category: updatedItem.category,
-                tags: updatedItem.tags,
-                description: updatedItem.description,
-                card: healCard,
-              },
-              accessToken,
-            });
-            if (!healResult.published) {
-              console.warn(
-                `[eBay PushSync] Item ${id}: republish did not publish (lastErrorId=${healResult.lastErrorId ?? 'none'}) reason=${healResult.lastErrorMessage ?? 'unknown'}`
-              );
-            }
-          }
-
-          // ADR Part B: if the organizer changed a shipping-determining input
-          // (weight/dims/packageType) on a LIVE listing, re-resolve and re-apply
-          // the eBay fulfillment policy so the live buyer is charged the correct
-          // shipping. resyncItemShippingPolicy internally guards on ebayListingId
-          // + ebayOfferId + the rate limiter and never throws.
-          if (shippingInputsChanged && updatedItem.ebayListingId) {
-            try {
-              const { resyncItemShippingPolicy } = await import('../controllers/ebayController');
-              const resync = await resyncItemShippingPolicy(id);
-              console.log(
-                `[eBay PushSync] Item ${id}: shipping resync changed=${resync.changed} reason=${resync.reason}`
-              );
-            } catch (resyncErr) {
-              console.warn(
-                `[eBay PushSync] Item ${id}: shipping resync failed (non-fatal):`,
-                (resyncErr as Error).message
-              );
-            }
-          }
-        } catch (err) {
-          console.warn(`[eBay PushSync] Non-fatal error pushing item ${id} to eBay:`, (err as Error).message);
-        }
-      })().catch(err => console.warn(`[eBay PushSync] Unhandled error for item ${id}:`, err));
+    // Feature #244 Phase 4: Push-on-save eBay sync (fire-and-forget, non-blocking), now in
+    // services/ebayItemPushService.ts (U1, 2026-10-04). It pushes only the fields that REALLY changed, returns a
+    // structured outcome and records one ItemMarketplacePush row per attempt. A held item (U2) records SKIPPED_HELD and
+    // makes no eBay call. Only fires if this item is live on eBay (has an offer ID); never awaited, never throws.
+    if (changedMarketplaceFields.length > 0 && (updatedItem.ebayOfferId || updatedItem.ebayListingId)) {
+      if (heldThisSave) {
+        pushItemToEbay({ itemId: id, organizerId: ownerOrganizer.id, trigger: 'SAVE', fields: changedMarketplaceFields, hold: true })
+          .catch(err => console.warn(`[eBay PushSync] Unhandled error recording held save for item ${id}:`, err));
+      } else if (updatedItem.ebayOfferId) {
+        pushItemToEbay({
+          itemId: id,
+          organizerId: ownerOrganizer.id,
+          trigger: 'SAVE',
+          fields: changedMarketplaceFields,
+          dirtyBefore: item.ebayContentDirtyAt ?? null,
+        }).catch(err => console.warn(`[eBay PushSync] Unhandled error for item ${id}:`, err));
+      }
     }
 
     // Shopify companion sync (ADR-086): propagate price/quantity edits to an
@@ -4244,7 +4325,12 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     // P0 fix: keep ebayShippingClassification in sync when category changes at publish time
     // (tags aren't part of this endpoint's body, so reuse the item's current tags).
     if (category !== undefined) { updateData.ebayShippingClassification = classifyEbayShipping(category, item.tags); }
-    if (condition !== undefined) { updateData.condition = condition; publishEditedFields.push('condition'); }
+    if (condition !== undefined) {
+      // Same vocabulary rule as createItem and updateItem: a recognized value is stored canonical, an empty value clears
+      // it, and anything else is ignored (never stored verbatim, never a 400).
+      const publishCondition = coerceConditionInput(condition, 'publishItem');
+      if (publishCondition.write) { updateData.condition = publishCondition.value; publishEditedFields.push('condition'); }
+    }
     if (publishEditedFields.length > 0) {
       // Fetch current userEditedFields to merge (item was re-fetched above as fullItem — but we need userEditedFields)
       const existingEdited = (await prisma.item.findUnique({ where: { id: itemId }, select: { userEditedFields: true } }))?.userEditedFields ?? [];
@@ -4595,7 +4681,6 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     });
 
     const itemIds = items.map(i => i.id);
-    const EXTENSION_PLATFORMS = ['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU', 'GRAILED', 'POSHMARK', 'MERCARI', 'VINTED'] as const;
 
     // Organizer-wide: which extension platforms has this organizer EVER posted to
     // (any status) -- used only to decide whether to show a dot for that channel
@@ -4626,23 +4711,9 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       where: { itemId: { in: itemIds }, platform: { in: [...EXTENSION_PLATFORMS] } },
       select: { itemId: true, platform: true, action: true, status: true, createdAt: true },
     });
-    const latestPageJobByItemPlatform = new Map<string, { itemId: string; platform: string; action: string; status: string; createdAt: Date }>();
-    for (const job of pagePostedJobs) {
-      if (job.action === 'REMOVE' && job.status === 'SKIPPED') continue;
-      const key = `${job.itemId}:${job.platform}`;
-      const existing = latestPageJobByItemPlatform.get(key);
-      if (!existing || job.createdAt > existing.createdAt) {
-        latestPageJobByItemPlatform.set(key, job);
-      }
-    }
-    const publishedExtensionPlatformsByItemId: PublishedExtensionPlatformsByItemId = new Map();
-    for (const job of latestPageJobByItemPlatform.values()) {
-      if (job.action !== 'POST' || job.status !== 'POSTED') continue;
-      if (!publishedExtensionPlatformsByItemId.has(job.itemId)) {
-        publishedExtensionPlatformsByItemId.set(job.itemId, new Set());
-      }
-      publishedExtensionPlatformsByItemId.get(job.itemId)!.add(job.platform as any);
-    }
+    // U3 (2026-10-04): the newest-row-wins rule now lives in itemMarketplaceStatusService, shared with
+    // GET /items/:id/marketplace-status. Same rule, same result as the inline code it replaced.
+    const publishedExtensionPlatformsByItemId: PublishedExtensionPlatformsByItemId = listedExtensionPlatformsByItemId(pagePostedJobs);
 
     // ADR-135 D4.6: Etsy dot inputs. Only when this organizer has an active Etsy account (everyone else keeps exactly the
     // queries and inputs they had before). ONE organizer-scoped EtsyListing query for the page's item ids, plus one
@@ -4695,6 +4766,10 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         )
       : {};
 
+    // U1 (2026-10-04): ONE batched query for the whole page (never per item): unacknowledged FAILED or PARTIAL eBay
+    // pushes per item, scoped to this sale's organizer. Drives the warning badge on the list row.
+    const failedPushCounts = await getFailedPushCountsByItemId(itemIds, sale.organizerId);
+
     // Sprint 1: Compute health score for each item
     const itemsWithHealth = items.map(item => ({
       ...item,
@@ -4712,6 +4787,8 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       tagColor: item.tagColor ?? null,
       // Add Items collapsed-row multi-channel status (2026-09-14)
       channelStatus: channelStatusByItemId[item.id] ?? null,
+      // U1 (2026-10-04): failed, unacknowledged eBay push attempts for this item (0 = no badge).
+      marketplacePushFailedCount: failedPushCounts.get(item.id) ?? 0,
     }));
 
     res.json(itemsWithHealth);

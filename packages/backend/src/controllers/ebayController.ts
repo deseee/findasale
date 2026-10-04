@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
+import { desiredEbayCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary (first push and edit-sync share one table)
 import { fetchLiveEbayListings, itemIdFromFasSku, lookupOfferIdForSku } from '../services/ebayLiveListingsService'; // eBay sync hardening (2026-10-01): relist adoption + live ActiveList
 import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
 // Re-export the OAuth helpers so existing external importers of these from './ebayController' keep resolving (Phase 1 relocation).
@@ -524,22 +525,26 @@ export const getComps = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * Map condition grade to eBay Condition ID
+ * Map (condition, grade) to a universal eBay Condition ID for the CSV export and the preview.
+ *
+ * U4 (one condition vocabulary): goes through desiredEbayCondition (utils/conditionMapping.ts), the same
+ * table first push and edit-sync use, so a USED grade A item exports as Used, never New. Only the universal
+ * numeric ids are produced (2000/4000/5000/6000 are category-specific and rejected when the category is
+ * unknown), so the three used tiers share 3000. Unknown or empty input falls back to 3000 (Used), as before.
  */
-function mapConditionGradeToEbayId(grade: string | null | undefined): string {
-  if (!grade) return '3000'; // Default to Used
-
-  // Universal eBay condition IDs — valid across all categories
-  // (2000/4000/5000/6000 are category-specific and rejected when category is unknown)
-  const gradeMap: Record<string, string> = {
-    'S': '1000', // New
-    'A': '1000', // Like New → New (safest universal for eBay)
-    'B': '3000', // Good → Used
-    'C': '3000', // Fair → Used
-    'D': '7000', // Poor → For parts or not working
+export function mapConditionGradeToEbayId(
+  condition: string | null | undefined,
+  grade: string | null | undefined,
+): string {
+  const idByEnum: Record<string, string> = {
+    NEW: '1000',
+    SELLER_REFURBISHED: '2500',
+    USED_VERY_GOOD: '3000',
+    USED_GOOD: '3000',
+    USED_ACCEPTABLE: '3000',
+    FOR_PARTS_OR_NOT_WORKING: '7000',
   };
-
-  return gradeMap[grade.toUpperCase()] || '3000'; // Default to Used
+  return idByEnum[desiredEbayCondition(condition, grade)] || '3000'; // Default to Used
 }
 
 /**
@@ -553,6 +558,7 @@ function generateEbayCsv(
     description: string | null;
     price: number | null;
     category: string | null;
+    condition?: string | null;
     conditionGrade: string | null;
     ebayCategoryId: string | null;
     photoUrls: string[];
@@ -617,7 +623,7 @@ function generateEbayCsv(
     }
 
     // Get condition ID mapping
-    const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
+    const conditionId = mapConditionGradeToEbayId(item.condition, item.conditionGrade);
 
     // Use stored ebayCategoryId if available; otherwise use '99' (fallback)
     const ebayCategoryId = item.ebayCategoryId || '99';
@@ -678,6 +684,7 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
             description: true,
             price: true,
             category: true,
+            condition: true,
             conditionGrade: true,
             ebayCategoryId: true,
             photoUrls: true,
@@ -1831,6 +1838,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
         id: true,
         title: true,
         description: true,
+        condition: true,
         conditionGrade: true,
         category: true,
         photoUrls: true,
@@ -1873,7 +1881,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
 
     // Build preview payload
     const sku = buildCustomLabel(item.id, organizer, item);
-    const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
+    const conditionId = mapConditionGradeToEbayId(item.condition, item.conditionGrade);
     // Resolve categoryId: stored → Taxonomy API suggestion → static map fallback
     // (same cascade as pushSaleToEbay). Requires an active user access token
     // for the Taxonomy API call; refresh lazily only when we need to suggest.
@@ -5833,26 +5841,12 @@ function mapConditionIdToEbayCondition(conditionId: string): string {
  * doesn't accept the default gets remapped by ensureConditionValidForCategory()
  * via eBay's getItemConditionPolicies.
  *
- * Fix: If organizer explicitly set condition to 'USED' or 'REFURBISHED' and
- * grade is 'S', return 'USED_EXCELLENT' (honors explicit condition over grade).
+ * U4 (one condition vocabulary): this is now a thin wrapper over desiredEbayCondition(condition, grade) in
+ * utils/conditionMapping.ts, the same table the edit-sync path uses. Signature and callers are unchanged.
+ * The enum is computed BEFORE ensureConditionValidForCategory, which still remaps category-restricted values.
  */
-function mapGradeToInventoryCondition(grade: string | null | undefined, condition?: string | null): string {
-  const gradeUpper = (grade || '').toUpperCase();
-
-  // If organizer explicitly set condition to USED/REFURBISHED and grade is S,
-  // respect the explicit condition instead of mapping S → NEW
-  if (gradeUpper === 'S' && (condition === 'USED' || condition === 'REFURBISHED')) {
-    return 'USED_EXCELLENT';
-  }
-
-  switch (gradeUpper) {
-    case 'S': return 'NEW';               // universal
-    case 'A': return 'USED_VERY_GOOD';    // was LIKE_NEW (media-only — rejected everywhere else)
-    case 'B': return 'USED_VERY_GOOD';    // universal
-    case 'C': return 'USED_GOOD';         // universal
-    case 'D': return 'FOR_PARTS_OR_NOT_WORKING'; // universal
-    default:  return 'USED_GOOD';         // universal
-  }
+export function mapGradeToInventoryCondition(grade: string | null | undefined, condition?: string | null): string {
+  return desiredEbayCondition(condition, grade);
 }
 
 // ── Category/condition/aspect helpers moved to services/ebayPublishService.ts ──

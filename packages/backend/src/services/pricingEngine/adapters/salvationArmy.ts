@@ -5,6 +5,7 @@
 
 import { PricingAdapter } from './base';
 import { PricingRequest, SourceResult } from '../types';
+import { normalizeCondition } from '../../../utils/conditionMapping'; // U4: one condition vocabulary
 
 const SALVATION_ARMY_FMV: Record<string, Record<string, number>> = {
   Furniture: { NEW: 500000, USED: 150000, REFURBISHED: 250000, PARTS_OR_REPAIR: 5000 },
@@ -32,7 +33,11 @@ export class SalvationArmyAdapter implements PricingAdapter {
 
   async fetch(request: PricingRequest): Promise<SourceResult[]> {
     const category = request.category || 'Other';
-    const condition = request.condition || 'USED';
+    // U4: legacy values and casing fold onto the canonical four; an unrecognized value keeps its old behavior
+    // (no table row, so the absolute floor below). A missing condition is USED, as before.
+    const condition = request.condition
+      ? (normalizeCondition(request.condition).condition ?? request.condition)
+      : 'USED';
 
     const fmv = SALVATION_ARMY_FMV[category]?.[condition];
 

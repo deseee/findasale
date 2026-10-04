@@ -27,6 +27,7 @@ import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
 import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './modelBakeoffService';
 import { resolveGroundedIdentityInline } from './groundedIdentityService';
+import { desiredEbayCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 
 export type ReanalyzeErrorCode =
@@ -359,13 +360,10 @@ export async function reanalyzeItem(
   let ebayCategoryLocked: { changed: boolean; from: string | null; to: string | null } | undefined;
   if (apply && syncEbay && item.ebayOfferId) {
     try {
-      const condMap: Record<string, string> = {
-        NEW: 'NEW',
-        USED: 'USED_GOOD',
-        REFURBISHED: 'SELLER_REFURBISHED',
-        PARTS_OR_REPAIR: 'FOR_PARTS_OR_NOT_WORKING',
-      };
-      const conditionEnum = result.condition ? (condMap[result.condition] ?? 'USED_GOOD') : null;
+      // U4: same table as first push and edit-sync. The grade is the one just applied (suggested) or the stored one.
+      const conditionEnum = result.condition
+        ? desiredEbayCondition(result.condition, result.suggestedConditionGrade ?? item.conditionGrade)
+        : null;
       const syncResult = await syncListedItemFieldsToEbay({
         organizerId: item.sale!.organizerId,
         ebayOfferId: item.ebayOfferId,

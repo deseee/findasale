@@ -14,6 +14,7 @@
  */
 
 import { isSafePublicUrlSyntax } from '../utils/safeFetchPublicUrl';
+import { normalizeCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
 
 export const IMPORT_MAX_ROWS = 200;
 export const IMPORT_MAX_PHOTO_URLS = 10;
@@ -198,7 +199,9 @@ export function buildImportItem(raw: RawImportRow, ctx: ImportRowContext): Impor
   const rawCondition = clean(raw.condition).toUpperCase();
   let condition: string | null = null;
   if (rawCondition) {
-    if (IMPORT_VALID_CONDITIONS.includes(rawCondition)) condition = rawCondition;
+    // U4: the canonical four pass through unchanged; legacy words (Like New, Good, Fair, Poor, ...) fold onto them.
+    const normalizedCondition = normalizeCondition(rawCondition).condition;
+    if (normalizedCondition && IMPORT_VALID_CONDITIONS.includes(normalizedCondition)) condition = normalizedCondition;
     else warnings.push(`condition "${clean(raw.condition)}" is not recognised (use ${IMPORT_VALID_CONDITIONS.join(', ')}); left blank`);
   }
 

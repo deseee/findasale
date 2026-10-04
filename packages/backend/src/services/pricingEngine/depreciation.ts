@@ -6,6 +6,7 @@
 import { SourceResult } from './types';
 import { prisma } from '../../lib/prisma';
 import { extractL1 } from '../../config/ebayCategories';
+import { normalizeCondition, CanonicalCondition } from '../../utils/conditionMapping';
 
 export interface DepreciationCurve {
   category: string;
@@ -142,15 +143,16 @@ export function applyConditionFactor(
 ): number {
   if (!condition) return price;
 
-  const factors: Record<string, number> = {
+  // U4: resolve through normalizeCondition first, so legacy or mixed-case values (LIKE_NEW, FAIR, "Used",
+  // SELLER_REFURBISHED, POOR ...) land on the canonical condition's factor. Unknown values keep the 0.70 fallback.
+  const factors: Record<CanonicalCondition, number> = {
     NEW: 1.0,
-    'LIKE_NEW': 0.95,
     REFURBISHED: 0.85,
     USED: 0.70,
-    'FAIR': 0.50,
-    'PARTS_OR_REPAIR': 0.30,
+    PARTS_OR_REPAIR: 0.30,
   };
 
-  const factor = factors[condition.toUpperCase()] ?? 0.70;
+  const canonical = normalizeCondition(condition).condition;
+  const factor = canonical ? factors[canonical] : 0.70;
   return Math.round(price * factor);
 }

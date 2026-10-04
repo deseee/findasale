@@ -29,6 +29,7 @@
  */
 
 import { getEtsyWhenMade, ETSY_WHO_MADE_DEFAULT } from '../../config/etsyWhenMade';
+import { normalizeCondition } from '../../utils/conditionMapping'; // U4: one condition vocabulary
 
 // ---------------------------------------------------------------------------------------------
 // Constants the spec does NOT settle. All UNVERIFIED pending live test T4 (ADR-135 section 12).
@@ -238,7 +239,9 @@ export interface EtsyDescriptionItemInput {
 export function buildEtsyConditionLine(item: EtsyDescriptionItemInput): string {
   const parts: string[] = [];
 
-  const conditionLabel = item.condition ? ETSY_CONDITION_LABELS[String(item.condition).trim().toUpperCase()] : undefined;
+  // U4: read the normalized condition (legacy LIKE_NEW, GOOD, FAIR, POOR and casing fold onto the canonical four).
+  const normalizedCondition = normalizeCondition(item.condition).condition;
+  const conditionLabel = normalizedCondition ? ETSY_CONDITION_LABELS[normalizedCondition] : undefined;
   if (conditionLabel) parts.push(`Condition: ${conditionLabel}.`);
 
   const gradeRaw = item.conditionGrade ? String(item.conditionGrade).trim() : '';
