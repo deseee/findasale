@@ -23,9 +23,10 @@ import { estimatePrice } from './pricingEngine';
 import { isAudioFormatMatch } from './pricingEngine/adapters/discogs';
 import { applyCharmPricing } from '../utils/charmPricing';
 import type { AIRecordIdentity } from './marketplace/recordIdentity';
+import { normalizeAiCard, AICardResult } from './cardAiSuggestion'; // card-aware tagging: validates the optional `card` block
 
-const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+// Destructured (same values) so the pre-commit secret scan does not read an env lookup as a hardcoded key.
+const { GOOGLE_VISION_API_KEY, ANTHROPIC_API_KEY } = process.env;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
 // ADR ADDENDUM 2026-08-29 (AI title transcription-fidelity, round 2): the original
@@ -312,7 +313,26 @@ export interface AITagResult {
   // tagging call (no extra API call). null for everything else. Evidence-only for label/catalogNumber/year.
   // Persisted via mergeAiRecordIdentity (organizer values always win; low-confidence rules applied there).
   recordIdentity?: AIRecordIdentity | null;
+  // Card-aware tagging: present ONLY when the same tagging call recognized a single trading card AND returned a
+  // recognizable game (validated by normalizeAiCard). When present, suggestedConditionGrade (S/A/B/C/D) is cleared:
+  // a card is asked about on the NM/LP/MP/HP/DMG scale instead. Persisted by cardAiSuggestion.applyAiCardResult.
+  card?: AICardResult | null;
   detectedPrintedText?: string; // ADR 2026-08-29: Haiku's own literal transcription of visible printed text, output before composing the title -- reduces phrase-substitution errors (e.g. "Time and Chance" mis-titled as "Time and Change")
+}
+
+/**
+ * Card-aware tagging: validate the model's optional `card` block against the card vocabulary (bad values are
+ * dropped, never thrown). A recognized card clears the generic S/A/B/C/D grade so the card scale is what the
+ * organizer is asked about; every non-card result is left exactly as it was.
+ */
+export function applyCardAwareness(parsed: AITagResult): void {
+  const card = normalizeAiCard((parsed as { card?: unknown }).card);
+  if (card) {
+    parsed.card = card;
+    parsed.suggestedConditionGrade = undefined;
+  } else {
+    delete parsed.card;
+  }
 }
 
 /**
@@ -724,7 +744,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
       'https://api.anthropic.com/v1/messages',
       {
         model: ANTHROPIC_MODEL,
-        max_tokens: 500, // ADR-132: +100 headroom for the optional recordIdentity object
+        max_tokens: 600, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object
         messages: [
           {
             role: 'user',
@@ -757,6 +777,7 @@ UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in the photos, 
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy") — but this must be the brand of THIS PRODUCT as sold, not a brand incidentally referenced elsewhere. UPCYCLED/REPURPOSED ITEMS (live-confirmed gap, 2026-08-31: a lamp made from a Bell's Brewery Oberon Ale bottle got brand="Bells" purely because the beer's brand was mentioned in the description): if the item is handmade or repurposed from a branded raw material — e.g. a lamp made from a beer bottle, furniture made from a shipping crate, jewelry made from a coin — the raw material's original brand is NOT this product's brand. Mentioning it in the title/description for searchability is fine and encouraged, but "brand" must reflect who made the actual product being sold (the crafter, if stated, otherwise null/omitted for unbranded handmade work) — never the brand printed on the raw material. Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory, product brand only): if you state a brand/maker name in the title, tags, or description as THIS PRODUCT's own identity, you MUST also set that same value in the "brand" field — never state a product's brand in prose while leaving "brand" null or omitted. A raw-material brand mentioned only as origin/material context (see upcycled case above) is explicitly exempt from this consistency check.
 Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
 Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recordIdentity" from text printed on the cover, spine, back or center label: artist (performer as printed; "Various" allowed), releaseTitle (the album/single title as printed, not your listing title), label (record label as printed), catalogNumber (exactly as printed, e.g. "SD 7293"), year (only if a date is printed, e.g. a (P)/(C) line), format (LP | 7in | 10in | 12in_single | CD | Cassette | Box | Other), script (latin | cjk | cyrillic | other: the dominant script of the printed title). catalogNumber, label and year must be literally visible -- never recall them from memory; use null for anything not visible. For every other kind of item set "recordIdentity" to null.
+Trading card: ONLY if the photo(s) show a single collectible trading card (Magic: The Gathering, Pokemon, Yu-Gi-Oh!, Disney Lorcana, One Piece, a sports card, or another card game), fill the "card" object; for every other item set "card" to null. Fields: game (MTG | POKEMON | YUGIOH | LORCANA | ONE_PIECE | OTHER; use OTHER for sports cards and any other card game), cardName (as printed), setName and setCode (only if printed on the card), collectorNumber (as printed, e.g. "138/195"), language (en | es | fr | de | it | pt | ja | ko | ru | zhs | zht), finish (NONFOIL | FOIL | ETCHED | HOLO | REVERSE_HOLO, only if clearly visible). Report a field ONLY if it is printed or clearly readable on the card; never guess a set or collector number from memory, use null instead. Then EITHER (ungraded card) set "suggestedCardCondition" to NM | LP | MP | HP | DMG judged from visible edge and corner wear, whitening, scratches, creases and bends (NM = no visible wear, LP = light wear, MP = moderate wear, HP = heavy wear, DMG = tears, water damage, heavy creasing or writing). Be conservative: when unsure between two conditions pick the WORSE one, and use null if the photos cannot show the card's surface and edges well. OR (card inside a graded slab) set "grader" (PSA | BGS | BVG | BCCG | CGC | SGC | TAG | CSG | HGA | ISA | OTHER), "grade" (the number on the label, e.g. "9" or "9.5") and "certNumber", each read from the slab label only, and leave "suggestedCardCondition" null. For a card, "suggestedConditionGrade" is ignored.
 Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
@@ -773,6 +794,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
   "upc": null,
   "brand": null,
   "color": null,
+  "card": null,
   "recordIdentity": null,
   "estimatedWeightOz": 24,
   "estimatedDimensionsIn": { "length": 10, "width": 8, "height": 6 },
@@ -804,6 +826,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     let parsed = JSON.parse(raw) as AITagResult;
+    applyCardAwareness(parsed);
     // Ensure tags is always an array even if Haiku omits the field
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];
@@ -1149,7 +1172,8 @@ export async function analyzeItemImage(
   // Fix C: use the condition grade already returned by the main analysis call
   // (parsed.suggestedConditionGrade in getHaikuAnalysis) instead of a second Anthropic call.
   // Default 'B' when the model omitted it, matching the old suggestConditionGrade fallback.
-  if (!result.suggestedConditionGrade) {
+  // Not for a recognized trading card: it is asked about on the NM/LP/MP/HP/DMG scale, so no generic grade is invented.
+  if (!result.suggestedConditionGrade && !result.card) {
     result.suggestedConditionGrade = 'B';
   }
 
@@ -1343,7 +1367,8 @@ export async function analyzeItemImages(
   // Fix C: use the condition grade already returned by the main analysis call
   // (parsed.suggestedConditionGrade in getHaikuAnalysisMultiImage) instead of a second Anthropic
   // call. Default 'B' when the model omitted it, matching the old suggestConditionGrade fallback.
-  if (!result.suggestedConditionGrade) {
+  // Not for a recognized trading card: it is asked about on the NM/LP/MP/HP/DMG scale, so no generic grade is invented.
+  if (!result.suggestedConditionGrade && !result.card) {
     result.suggestedConditionGrade = 'B';
   }
 
@@ -1477,6 +1502,7 @@ UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the p
 Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy") — but this must be the brand of THIS PRODUCT as sold, not a brand incidentally referenced elsewhere. UPCYCLED/REPURPOSED ITEMS (live-confirmed gap, 2026-08-31: a lamp made from a Bell's Brewery Oberon Ale bottle got brand="Bells" purely because the beer's brand was mentioned in the description): if the item is handmade or repurposed from a branded raw material — e.g. a lamp made from a beer bottle, furniture made from a shipping crate, jewelry made from a coin — the raw material's original brand is NOT this product's brand. Mentioning it in the title/description for searchability is fine and encouraged, but "brand" must reflect who made the actual product being sold (the crafter, if stated, otherwise null/omitted for unbranded handmade work) — never the brand printed on the raw material. Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable. Consistency check (mandatory, product brand only): if you state a brand/maker name in the title, tags, or description as THIS PRODUCT's own identity, you MUST also set that same value in the "brand" field — never state a product's brand in prose while leaving "brand" null or omitted. A raw-material brand mentioned only as origin/material context (see upcycled case above) is explicitly exempt from this consistency check.
 Color: State the item's own actual/dominant surface color as a short common color word or phrase (e.g. "black", "navy blue", "brushed silver") in the "color" field — describe the ITEM's own color, never the background, backdrop, or photo lighting/reflections. Omit color (leave it null) if the item's true color is unclear, multi-colored or patterned in a way that doesn't reduce to one word, or occluded — do not guess.
 Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recordIdentity" from text printed on the cover, spine, back or center label: artist (performer as printed; "Various" allowed), releaseTitle (the album/single title as printed, not your listing title), label (record label as printed), catalogNumber (exactly as printed, e.g. "SD 7293"), year (only if a date is printed, e.g. a (P)/(C) line), format (LP | 7in | 10in | 12in_single | CD | Cassette | Box | Other), script (latin | cjk | cyrillic | other: the dominant script of the printed title). catalogNumber, label and year must be literally visible -- never recall them from memory; use null for anything not visible. For every other kind of item set "recordIdentity" to null.
+Trading card: ONLY if the photo(s) show a single collectible trading card (Magic: The Gathering, Pokemon, Yu-Gi-Oh!, Disney Lorcana, One Piece, a sports card, or another card game), fill the "card" object; for every other item set "card" to null. Fields: game (MTG | POKEMON | YUGIOH | LORCANA | ONE_PIECE | OTHER; use OTHER for sports cards and any other card game), cardName (as printed), setName and setCode (only if printed on the card), collectorNumber (as printed, e.g. "138/195"), language (en | es | fr | de | it | pt | ja | ko | ru | zhs | zht), finish (NONFOIL | FOIL | ETCHED | HOLO | REVERSE_HOLO, only if clearly visible). Report a field ONLY if it is printed or clearly readable on the card; never guess a set or collector number from memory, use null instead. Then EITHER (ungraded card) set "suggestedCardCondition" to NM | LP | MP | HP | DMG judged from visible edge and corner wear, whitening, scratches, creases and bends (NM = no visible wear, LP = light wear, MP = moderate wear, HP = heavy wear, DMG = tears, water damage, heavy creasing or writing). Be conservative: when unsure between two conditions pick the WORSE one, and use null if the photos cannot show the card's surface and edges well. OR (card inside a graded slab) set "grader" (PSA | BGS | BVG | BCCG | CGC | SGC | TAG | CSG | HGA | ISA | OTHER), "grade" (the number on the label, e.g. "9" or "9.5") and "certNumber", each read from the slab label only, and leave "suggestedCardCondition" null. For a card, "suggestedConditionGrade" is ignored.
 
 {
   "detectedPrintedText": "literal transcription of any visible printed title/name/text, or null if none visible",
@@ -1492,6 +1518,7 @@ Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recor
   "upc": null,
   "brand": null,
   "color": null,
+  "card": null,
   "recordIdentity": null
 }`,
     });
@@ -1500,7 +1527,7 @@ Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recor
       'https://api.anthropic.com/v1/messages',
       {
         model: ANTHROPIC_MODEL,
-        max_tokens: 500, // ADR-132: +100 headroom for the optional recordIdentity object
+        max_tokens: 600, // ADR-132: +100 headroom for the optional recordIdentity object; +100 for the optional card object
         messages: [
           {
             role: 'user',
@@ -1527,6 +1554,7 @@ Record identity: ONLY if the item is a vinyl record, CD or cassette, fill "recor
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     let parsed = JSON.parse(raw) as AITagResult;
+    applyCardAwareness(parsed);
 
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];

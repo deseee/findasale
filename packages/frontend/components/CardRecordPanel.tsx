@@ -25,6 +25,7 @@ import api from '../lib/api';
 import { useToast } from './ToastContext';
 import Skeleton from './Skeleton';
 import CardSearchBox from './cardRecord/CardSearchBox';
+import CardConditionConfirm from './cardRecord/CardConditionConfirm';
 import SuggestedPriceBox from './cardRecord/SuggestedPriceBox';
 import {
   CARD_PANEL_COPY,
@@ -429,6 +430,9 @@ const CardRecordPanel: React.FC<CardRecordPanelProps> = ({ itemId, currentPrice,
           <p className="text-xs text-amber-800 dark:text-amber-300">{CARD_PANEL_COPY.needsPriceHint}</p>
         </div>
       )}
+
+      {/* One-tap confirmation of the condition the photo tagging pass suggested. Shows only while the card has no condition. */}
+      <CardConditionConfirm itemId={itemId} onSaved={takeServerCard} hideWhenConfirmed disabled={disabled} />
 
       <div id={bodyId} hidden={!isOpen} className="min-w-0 space-y-5">
         {isOpen && (

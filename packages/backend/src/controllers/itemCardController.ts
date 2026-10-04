@@ -28,6 +28,7 @@ import {
   isCardValidationError,
   upsertItemCardTx,
 } from '../services/cardRecordService';
+import { readCardConditionSuggestion } from '../services/cardAiSuggestion'; // pure: validates the stored suggestion, no network
 
 /** Database surface used here: the card writer's surface plus the item ownership lookup. */
 export interface ItemCardDb extends CardDb {
@@ -39,6 +40,8 @@ export interface ItemCardDb extends CardDb {
 interface OwnedItem {
   id: string;
   organizerId: string | null;
+  /** Item.catalogSuggestions JSON, read only to surface the suggested card condition on GET. */
+  catalogSuggestions?: unknown;
 }
 
 function isOrganizer(req: AuthRequest): boolean {
@@ -58,6 +61,7 @@ export function createItemCardHandlers(db: ItemCardDb) {
         id: true,
         organizerId: true,
         saleId: true,
+        catalogSuggestions: true,
         sale: { select: { organizerId: true, organizer: { select: { userId: true } } } },
       },
     });
@@ -72,7 +76,7 @@ export function createItemCardHandlers(db: ItemCardDb) {
       owned = !!inventoryOrganizer;
     }
     if (!owned) return null;
-    return { id: item.id, organizerId: item.organizerId ?? item.sale?.organizerId ?? null };
+    return { id: item.id, organizerId: item.organizerId ?? item.sale?.organizerId ?? null, catalogSuggestions: item.catalogSuggestions };
   }
 
   function fail(res: Response, err: unknown, what: string) {
@@ -105,7 +109,11 @@ export function createItemCardHandlers(db: ItemCardDb) {
       const owned = await guard(req, res);
       if (!owned) return;
       const card = await db.itemCard.findUnique({ where: { itemId: owned.id }, select: CARD_EDIT_SELECT });
-      return res.json({ success: true, data: card ?? null });
+      // Suggested (not confirmed) card condition from the photo tagging pass. Only offered while the card still has
+      // no condition and no grader or grade; once the organizer saves one, the suggestion is no longer returned.
+      const unconfirmed = !!card && !card.conditionCode && !card.grader && !card.grade;
+      const suggestion = unconfirmed ? readCardConditionSuggestion(owned.catalogSuggestions) : null;
+      return res.json({ success: true, data: card ?? null, ...(suggestion ? { suggestion } : {}) });
     } catch (err) {
       return fail(res, err, 'read');
     }

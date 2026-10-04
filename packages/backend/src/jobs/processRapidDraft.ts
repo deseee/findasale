@@ -16,6 +16,7 @@ import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 import axios from 'axios';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 import { mergeAiRecordIdentity } from '../services/marketplace/recordIdentity'; // ADR-132
+import { applyAiCardResult, AiCardDb } from '../services/cardAiSuggestion'; // card-aware tagging (same Haiku call, no extra API call)
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
@@ -488,7 +489,9 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         // aiResult.mpn is evidence-only (Vision reads it from visible labels — never inferred).
         // Barcode enrichment below still wins if it provides a more authoritative mpn.
         mpn: !userEdited.includes('mpn') ? (aiResult.mpn || item.mpn) : item.mpn,
-        conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
+        // A recognized trading card is asked about on the NM/LP/MP/HP/DMG scale (ItemCard), so the generic S/A/B/C/D
+        // grade is left exactly as it was for it. Non-card items are unchanged.
+        conditionGrade: aiResult.card ? item.conditionGrade : (aiResult.suggestedConditionGrade || item.conditionGrade),
         price: !userEdited.includes('price') ? (refinedPrice ?? item.price) : item.price,
         tags: finalTags,
         ebayShippingClassification: classifyEbayShipping(finalCategory, finalTags),
@@ -595,6 +598,20 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         }
       } else {
         console.log(`[rapidfire] Item ${itemId} processed successfully. Status: PENDING_REVIEW`);
+      }
+
+      // Card-aware tagging: when the SAME Haiku call recognized a single trading card, create/fill its ItemCard
+      // (identity fields only; organizer-set and locked fields always win) and store the suggested NM/LP/MP/HP/DMG
+      // condition (or slab grader/grade) as a suggestion on Item.catalogSuggestions.cardSuggestion. conditionCode,
+      // grader and grade stay null until the organizer confirms, so the eBay push keeps refusing the card
+      // (CARD_CONDITION_UNRESOLVED). Never throws into the job: a card problem must not fail tagging.
+      if (aiResult.card) {
+        const cardOutcome = await applyAiCardResult(
+          prisma as unknown as AiCardDb,
+          { itemId, organizerId: item.organizerId ?? organizer?.id ?? null },
+          aiResult.card
+        );
+        console.log(`[rapidfire] Card record for item ${itemId}: ${cardOutcome.status}${'reason' in cardOutcome && cardOutcome.reason ? ` (${cardOutcome.reason})` : ''}`);
       }
 
       // ADR-package-profile-autoconfirm-2026-08-31: best-effort, non-blocking attempt to

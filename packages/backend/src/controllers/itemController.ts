@@ -4632,6 +4632,9 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         groundedIdentity: true,
         groundedConfidence: true,
         groundedSource: true,
+        // Trading card record (null for non-cards): lets the review screen ask the card condition scale
+        // (NM/LP/MP/HP/DMG) instead of the generic S/A/B/C/D grade. Condition fields only, no lockedFields/dedupKey.
+        card: { select: { game: true, conditionCode: true, grader: true, grade: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
