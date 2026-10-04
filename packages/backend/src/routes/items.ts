@@ -69,6 +69,7 @@ import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { reanalyzeItemForOrganizer } from '../controllers/reanalyzeController'; // Re-analyze: re-run Smart tagging on stored photos
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
+import { normalizeBulkCategoryValue } from '../utils/bulkCategory';
 
 // Bulk operations validation schemas
 const bulkItemsSchema = z.object({
@@ -423,12 +424,13 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         }
 
         case 'category': {
-          if (typeof value !== 'string' || !value.trim()) {
-            return res.status(400).json({ message: 'category value must be a non-empty string.' });
+          const checkedCategory = normalizeBulkCategoryValue(value);
+          if (!checkedCategory.ok) {
+            return res.status(400).json({ message: checkedCategory.message });
           }
           for (const item of confirmedItems) {
             oldValues[item.id] = item.status; // dry-run shows what field would change
-            newValues[item.id] = value as string;
+            newValues[item.id] = checkedCategory.value;
           }
           return res.json({
             message: 'Dry run: no changes applied',
@@ -694,21 +696,12 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
       }
 
       case 'category': {
-        if (typeof value !== 'string' || !value.trim()) {
-          return res.status(400).json({ message: 'category value must be a non-empty string.' });
+        // Accepts legacy lowercase names (canonicalized) and eBay L1 names from the Review picker (casing kept).
+        const checkedCategory = normalizeBulkCategoryValue(value);
+        if (!checkedCategory.ok) {
+          return res.status(400).json({ message: checkedCategory.message });
         }
-        // P1 Bug 5: Validate category against whitelist
-        const ALLOWED_CATEGORIES = [
-          'furniture', 'decor', 'vintage', 'textiles', 'collectibles',
-          'art', 'antiques', 'jewelry', 'books', 'tools',
-          'electronics', 'clothing', 'home', 'other'
-        ];
-        const category = (value as string).trim().toLowerCase();
-        if (!ALLOWED_CATEGORIES.includes(category)) {
-          return res.status(400).json({
-            message: `Invalid category. Allowed values: ${ALLOWED_CATEGORIES.join(', ')}`
-          });
-        }
+        const category = checkedCategory.value;
         succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
