@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Zap } from 'lucide-react';
+import api from '../lib/api';
 
 interface PricingSignal {
   sleeper: SleeperAlert | null;
@@ -51,13 +52,20 @@ export const PricingSignalBanners: React.FC<PricingSignalBannersProps> = ({
   }, [itemId]);
 
   // Fetch pricing signals for this item
-  const { data: signals, isLoading } = useQuery<PricingSignal>({
+  // Uses the shared axios client (baseURL /api, cookies, 401 refresh). Failures are silent:
+  // the query resolves to null and no banner renders, instead of an error or retry storm.
+  const { data: signals, isLoading } = useQuery<PricingSignal | null>({
     queryKey: ['pricing-signals', itemId],
     queryFn: async () => {
-      const res = await fetch(`/api/items/${itemId}/pricing-signals`);
-      if (!res.ok) throw new Error('Failed to fetch pricing signals');
-      return res.json();
+      try {
+        const res = await api.get(`/items/${itemId}/pricing-signals`);
+        const body = res.data;
+        return body && typeof body === 'object' ? (body as PricingSignal) : null;
+      } catch {
+        return null;
+      }
     },
+    retry: false,
   });
 
   const handleDismissSleeper = () => {

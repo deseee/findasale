@@ -8079,6 +8079,46 @@ function makeFulfillmentPolicyFetcher(organizerId: string): () => Promise<EbayFu
   };
 }
 
+/** Hard cap on the best-effort custom-policy name lookup in the shipping preview. */
+const CUSTOM_POLICY_LOOKUP_TIMEOUT_MS = 3000;
+
+/**
+ * Best-effort name/description lookup for the custom eBay fulfillment policy an item is routed
+ * to, for the shipping preview's custom-override response. Reads ONLY from the organizer's own
+ * live policy list (the caller builds the fetcher from the owner-resolved organizer id), so a
+ * policy id that does not belong to that organizer's eBay account simply is not found.
+ * Never throws and never retries: a short timeout, any rejection, an empty list or an unknown
+ * id all yield nulls. Returns only the policy name and description -- never tokens or the
+ * raw eBay payload.
+ */
+async function lookupCustomPolicyDetails(
+  fetchPolicies: () => Promise<EbayFulfillmentPolicySummary[]>,
+  policyId: string
+): Promise<{ name: string | null; description: string | null }> {
+  const none = { name: null, description: null };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const policies = await Promise.race([
+      fetchPolicies(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), CUSTOM_POLICY_LOOKUP_TIMEOUT_MS);
+      }),
+    ]);
+    if (!Array.isArray(policies)) return none;
+    const match = policies.find((p) => p && String(p.fulfillmentPolicyId) === policyId);
+    if (!match) return none;
+    return {
+      name: typeof match.name === 'string' && match.name ? match.name : null,
+      description: typeof match.description === 'string' && match.description ? match.description : null,
+    };
+  } catch (err: any) {
+    console.warn(`[eBay] custom policy name lookup failed: ${err?.message || err}`);
+    return none;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 type PreviewShippingResult = {
   buyerShipping: number;
   labelCost: number;
@@ -8315,6 +8355,13 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     // is set by that eBay policy, not our calculated/flat model. Be honest: do not
     // fabricate a buyer-shipping number or a net-margin dollar calc.
     if (resolved.source === 'custom-override') {
+      // Best-effort friendly name for the policy (additive fields only; the message above stays
+      // as-is for old clients). Only when the item carries an explicit override id, and only from
+      // THIS organizer's own eBay policy list (organizer is owner-resolved from req.user above).
+      const customPolicyId = fulfillmentOverrideId || null;
+      const customPolicyDetails = customPolicyId
+        ? await lookupCustomPolicyDetails(makeFulfillmentPolicyFetcher(organizer.id), customPolicyId)
+        : { name: null, description: null };
       return res.json({
         buyerShipping: null,
         net: null,
@@ -8322,6 +8369,9 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         shippingMode: ship.shippingMode,
         flatPolicy: null,
         customPolicy: true,
+        customPolicyId,
+        customPolicyName: customPolicyDetails.name,
+        customPolicyDescription: customPolicyDetails.description,
         message: 'Custom eBay policy selected. Buyer shipping is set by your eBay policy.',
         shippingEstimate: {
           rate: ship.cheapestRate,

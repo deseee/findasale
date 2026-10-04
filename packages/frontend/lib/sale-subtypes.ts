@@ -14,7 +14,7 @@ export const SALE_SUBTYPES: Record<string, SaleSubtypeOption[]> = {
     { value: 'liquidation', label: 'Liquidation Sale' },
   ],
   YARD: [
-    { value: 'yard', label: 'Yard / Garage Sale' },
+    { value: 'yard', label: 'Yard Sale' },
     { value: 'moving', label: 'Moving Sale' },
   ],
   AUCTION: [

@@ -65,7 +65,7 @@ interface PageProps {
 
 const SALE_TYPE_LABELS: Record<string, string> = {
   ESTATE: 'Estate Sales',
-  YARD: 'Yard / Garage Sales',
+  YARD: 'Yard Sales',
   AUCTION: 'Auctions',
   FLEA_MARKET: 'Flea Markets',
   RETAIL: 'Retail / Consignment',

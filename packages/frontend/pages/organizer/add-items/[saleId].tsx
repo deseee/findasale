@@ -58,6 +58,17 @@ import BulkConsignorModal from '../../../components/BulkConsignorModal';
 import BulkStatusModal, { OffPlatformFields } from '../../../components/BulkStatusModal';
 import { useOffPlatformUsage, markItemSoldOffPlatform, MarkSoldOffPlatformPayload } from '../../../hooks/useOffPlatformSales';
 import BulkPriceModal from '../../../components/BulkPriceModal';
+import { ItemFormSheet } from '../../../components/itemForm/ItemFormSheet';
+import { CANONICAL_CONDITIONS, CANONICAL_CONDITION_LABELS } from '../../../lib/conditionModel';
+import {
+  EBAY_FAILED_BADGE_ARIA_LABEL,
+  EBAY_FAILED_BADGE_TEXT,
+  buildConditionPutFields,
+  buildRowConditionState,
+  rowGradeOptions,
+  showEbayFailedBadge,
+  showRowGradePicker,
+} from '../../../lib/addItemsRow';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
 import ValuationWidget from '../../../components/ValuationWidget';
 import { decodeHtmlEntities } from '../../../utils/textUtils';
@@ -287,6 +298,8 @@ interface RapidItem {
   photoUrls?: string[];
   autoEnhanced?: boolean;
   ebayListingId?: string;
+  // GET /items/drafts?saleId= returns this per item (failed, unseen marketplace pushes; 0 when none).
+  marketplacePushFailedCount?: number;
 }
 
 // Add Items collapsed-row multi-channel status (2026-09-14) -- see
@@ -379,20 +392,11 @@ const CATEGORIES = [
   'Other',
 ];
 
-// Canonical condition enum values (S406 standardization)
-const CONDITIONS = ['NEW', 'LIKE_NEW', 'USED', 'GOOD', 'FAIR', 'POOR', 'REFURBISHED', 'PARTS_OR_REPAIR'];
-
-// Display labels for conditions
-const CONDITION_LABELS: Record<string, string> = {
-  'NEW': 'New',
-  'LIKE_NEW': 'Like New',
-  'USED': 'Used',
-  'GOOD': 'Good',
-  'FAIR': 'Fair',
-  'POOR': 'Poor',
-  'REFURBISHED': 'Refurbished',
-  'PARTS_OR_REPAIR': 'For Parts or Repair',
-};
+// Canonical conditions (NEW, USED, REFURBISHED, PARTS_OR_REPAIR) and their labels come from lib/conditionModel.ts.
+// Used goods also get a grade A to D (the grade picker below). Legacy stored values (LIKE_NEW, GOOD, FAIR, POOR)
+// display normalized in the row editor and are not re-saved unless the organizer changes them (lib/addItemsRow.ts).
+const CONDITIONS: string[] = [...CANONICAL_CONDITIONS];
+const CONDITION_LABELS: Record<string, string> = CANONICAL_CONDITION_LABELS;
 
 const normalizeToArray = (value: string | undefined, arr: string[]): string => {
   if (!value) return '';
@@ -464,6 +468,7 @@ const emptyForm = {
   description: '',
   category: '',
   condition: '',
+  conditionGrade: '',
   price: '',
   listingType: 'FIXED',
   startingBid: '',
@@ -684,7 +689,7 @@ const AddItemsDetailPage = () => {
 
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string; lotNumber: string; stockTotal: string; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; conditionGrade: string; conditionInitial: string; conditionGradeInitial: string; description: string; lotNumber: string; stockTotal: string; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
   // Tracks which items had their Weight (oz) field directly edited in this card's inline
   // eBay & Shipping panel, so handleInlineItemSave knows to send packageConfirmedByOrganizer.
   // Mirrors review.tsx's weightTouched pattern exactly (scoped per-item id, only the weight
@@ -700,7 +705,7 @@ const AddItemsDetailPage = () => {
       title: item.title || '',
       price: item.price != null ? item.price.toString() : '',
       category: item.category || '',
-      condition: item.condition || '',
+      ...buildRowConditionState(item),
       description: item.description || '',
       lotNumber: item.lotNumber || '',
       stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
@@ -721,7 +726,8 @@ const AddItemsDetailPage = () => {
         title: state.title,
         price: state.price ? parseFloat(state.price) : undefined,
         category: state.category,
-        condition: state.condition,
+        // Only condition / grade the organizer actually changed (a legacy value shown normalized is never re-saved).
+        ...buildConditionPutFields(state),
         description: state.description,
         lotNumber: state.lotNumber || null,
         stockTotal: Math.max(1, parseInt(state.stockTotal, 10) || 1),
@@ -858,6 +864,53 @@ const AddItemsDetailPage = () => {
     },
     enabled: !!saleId && !inMutationFlight.current,
   });
+
+  // "All details" slide-up sheet (shared item form). One item id at a time; null = closed. Never auto-opened.
+  const [sheetItemId, setSheetItemId] = useState<string | null>(null);
+  // Rows whose quick-edit state may now be older than what the sheet saved. Once the refreshed drafts list arrives, any
+  // open quick editor for those rows is re-seeded from it, so a later quick "Save" cannot write the old values back.
+  const staleEditIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const stale = staleEditIdsRef.current;
+    if (stale.size === 0) return;
+    const fresh = (items as any[]).filter((it: any) => it && stale.has(it.id));
+    if (fresh.length === 0) return;
+    setItemEditState((prev) => {
+      const next = { ...prev };
+      for (const item of fresh) {
+        if (!next[item.id]) continue;
+        next[item.id] = {
+          title: item.title || '',
+          price: item.price != null ? item.price.toString() : '',
+          category: item.category || '',
+          ...buildRowConditionState(item),
+          description: item.description || '',
+          lotNumber: item.lotNumber || '',
+          stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
+          ebayCategoryId: item.ebayCategoryId || '',
+          ebayCategoryName: item.ebayCategoryName || '',
+          packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
+          packageLengthIn: item.packageLengthIn != null ? item.packageLengthIn.toString() : '',
+          packageWidthIn: item.packageWidthIn != null ? item.packageWidthIn.toString() : '',
+          packageHeightIn: item.packageHeightIn != null ? item.packageHeightIn.toString() : '',
+        };
+      }
+      return next;
+    });
+    setInlineWeightTouched((prev) => {
+      if (!fresh.some((it: any) => prev.has(it.id))) return prev;
+      const next = new Set(prev);
+      fresh.forEach((it: any) => next.delete(it.id));
+      return next;
+    });
+    fresh.forEach((it: any) => stale.delete(it.id));
+  }, [items]);
+
+  // Sheet saved or closed: refresh the drafts list (title, price, "Saved ...", failed-push badge) and mark the row stale.
+  const refreshAfterSheet = useCallback((itemId: string) => {
+    staleEditIdsRef.current.add(itemId);
+    queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+  }, [queryClient, saleId]);
 
   // Client-side filtered view of the saved-items list (search by name/category/tag,
   // composed with the All/Active/Sold status filter). When the query is empty and the
@@ -1117,6 +1170,8 @@ const AddItemsDetailPage = () => {
       // -- this page has no shipping control to touch, so it must never send them.
       delete submitData.shippingAvailable;
       delete submitData.shippingPrice;
+      // Grade is optional and applies to used goods only; never POST an empty or stale one.
+      if (!submitData.conditionGrade || !showRowGradePicker(submitData.condition)) delete submitData.conditionGrade;
       if (submitData.listingType === 'AUCTION') {
         submitData = {
           ...submitData,
@@ -2151,6 +2206,8 @@ const AddItemsDetailPage = () => {
     setFormData((prev) => ({
       ...prev,
       condition: normalizeToArray(newCondition, CONDITIONS),
+      // A grade only applies to used goods; a new item has no stored grade to preserve.
+      conditionGrade: showRowGradePicker(newCondition) ? prev.conditionGrade : '',
     }));
   };
 
@@ -2547,6 +2604,19 @@ const AddItemsDetailPage = () => {
                           <option key={cond} value={cond}>{CONDITION_LABELS[cond]}</option>
                         ))}
                       </select>
+                      {showRowGradePicker(formData.condition) && (
+                        <select
+                          value={formData.conditionGrade}
+                          onChange={(e) => setFormData({ ...formData, conditionGrade: e.target.value })}
+                          aria-label="Condition grade"
+                          className="mt-1 w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                        >
+                          <option value="">Grade (optional)</option>
+                          {rowGradeOptions('', formData.conditionGrade).map((g) => (
+                            <option key={g.value} value={g.value}>{g.label}</option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Listing Type</label>
@@ -3180,7 +3250,7 @@ const AddItemsDetailPage = () => {
                               title: item.title || '',
                               price: item.price != null ? item.price.toString() : '',
                               category: item.category || '',
-                              condition: item.condition || '',
+                              ...buildRowConditionState(item),
                               description: item.description || '',
                               lotNumber: item.lotNumber || '',
                               stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
@@ -3245,6 +3315,21 @@ const AddItemsDetailPage = () => {
                               </p>
                             ) : null;
                           })()}
+                          {/* Failed eBay push (2026-10-04): the drafts list reports marketplacePushFailedCount per item.
+                              Opens the same Edit page the row's "Full Edit" button opens, where the failure details are shown. */}
+                          {showEbayFailedBadge(item) && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); router.push(`/organizer/edit-item/${item.id}`); }}
+                              aria-label={EBAY_FAILED_BADGE_ARIA_LABEL}
+                              className="relative mt-1 inline-flex max-w-full items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-[''] dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                            >
+                              <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 flex-shrink-0">
+                                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                              </svg>
+                              <span className="truncate">{EBAY_FAILED_BADGE_TEXT}</span>
+                            </button>
+                          )}
                         </div>
                         {/* Status badge + delete stacked vertically */}
                         <div className="flex-shrink-0 flex flex-col items-center gap-1">
@@ -3323,14 +3408,29 @@ const AddItemsDetailPage = () => {
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
-                              <select
-                                value={editState.condition}
-                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, condition: e.target.value } }))}
-                                className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
-                              >
-                                <option value="">Select condition</option>
-                                {CONDITIONS.map((c) => <option key={c} value={c}>{CONDITION_LABELS[c]}</option>)}
-                              </select>
+                              <div className="flex gap-2">
+                                <select
+                                  value={editState.condition}
+                                  onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, condition: e.target.value } }))}
+                                  className="flex-1 min-w-0 min-h-[44px] sm:min-h-0 px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                >
+                                  <option value="">Select condition</option>
+                                  {CONDITIONS.map((c) => <option key={c} value={c}>{CONDITION_LABELS[c]}</option>)}
+                                </select>
+                                {showRowGradePicker(editState.condition) && (
+                                  <select
+                                    value={editState.conditionGrade}
+                                    onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, conditionGrade: e.target.value } }))}
+                                    aria-label="Condition grade"
+                                    className="w-36 flex-shrink-0 min-h-[44px] sm:min-h-0 px-2 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                  >
+                                    <option value="">Grade</option>
+                                    {rowGradeOptions(editState.conditionGradeInitial, editState.conditionGrade).map((g) => (
+                                      <option key={g.value} value={g.value}>{g.label}</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div>
@@ -3466,7 +3566,7 @@ const AddItemsDetailPage = () => {
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
                               onClick={() => handleInlineItemSave(item.id)}
@@ -3493,6 +3593,14 @@ const AddItemsDetailPage = () => {
                               className="px-4 py-1.5 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-sm font-semibold rounded transition-colors"
                             >
                               ⚡ Rapidfire
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setSheetItemId(item.id); }}
+                              aria-haspopup="dialog"
+                              className="px-4 py-1.5 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 text-sm font-semibold rounded hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              All details
                             </button>
                             <button
                               type="button"
@@ -4164,6 +4272,17 @@ const AddItemsDetailPage = () => {
         itemId={matchingItemId || ''}
         itemTitle={matchingItemTitle}
         onClose={() => setBountyMatchOpen(false)}
+      />
+
+      {/* Full item form in a slide-up sheet (opened from a row's "All details"). Stays open after Save. */}
+      <ItemFormSheet
+        open={sheetItemId !== null}
+        itemId={sheetItemId ?? ''}
+        onSaved={() => { if (sheetItemId) refreshAfterSheet(sheetItemId); }}
+        onClose={() => {
+          if (sheetItemId) refreshAfterSheet(sheetItemId);
+          setSheetItemId(null);
+        }}
       />
 
       <ConfirmDialog

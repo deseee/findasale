@@ -36,6 +36,40 @@ import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../../components/EbayCategoryPicker';
 import { CATEGORIES, CONDITIONS, CONDITION_LABELS, CONDITION_MAP, formatCondition } from '../../../../lib/itemConstants';
 import { decodeHtmlEntities } from '../../../../utils/textUtils';
+import { computeItemReadiness } from '../../../../lib/itemReadiness';
+import { normalizeCondition as normalizeConditionValue } from '../../../../lib/conditionModel';
+import ItemFormSheet from '../../../../components/itemForm/ItemFormSheet';
+import {
+  createAutosaveController,
+  buildAutosavePayload,
+  autosaveStatusText,
+  isAutosaveField,
+  type AutosaveController,
+  type AutosaveStatus,
+} from '../../../../lib/reviewAutosave';
+import {
+  mergeEditStateFromServer,
+  typedPriceDiffersFromSaved,
+} from '../../../../lib/reviewSheetSync';
+import { gradePickerFor } from '../../../../lib/reviewGradePicker';
+import {
+  buildGradeEstimateBody,
+  parseGradeEstimate,
+  gradeSuggestionLine,
+  type GradeSuggestion,
+} from '../../../../lib/gradeSuggestion';
+import {
+  reseedPriceInputs,
+  bulkPriceWrittenIds,
+  bulkPriceSkippedMessage,
+  typedPriceForReadiness,
+} from '../../../../lib/reviewPriceInputs';
+import {
+  planBulkCategoryOps,
+  bulkCategoryFailureMessage,
+  bulkCategoryPartialItemsMessage,
+  type BulkCategoryOperation,
+} from '../../../../lib/reviewBulkCategory';
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
@@ -207,21 +241,6 @@ function groupTagsByType(tags: string[]): { group: string; tags: string[] }[] {
   return result;
 }
 
-function computeReadiness(item: Item, editState: ItemEditState, ebayConnected: boolean): 'red' | 'yellow' | 'green' | 'blue' {
-  const title = editState.title || item.title || '';
-  const price = editState.price || item.price || 0;
-  const hasPhoto = (item.photoUrls?.length ?? 0) > 0;
-  const category = editState.category || item.category || '';
-  const condition = editState.condition || item.condition || '';
-  const description = editState.description || item.description || '';
-  const hasWeight = !!(editState.packageWeightOz || item.packageWeightOz);
-
-  if (!title.trim() || price <= 0 || !hasPhoto) return 'red';
-  if (!category || !condition || !description.trim()) return 'yellow';
-  if (hasWeight && ebayConnected) return 'blue';
-  return 'green';
-}
-
 function confidenceBorderClass(score: number | null | undefined, isAiTagged?: boolean): string {
   if (!isAiTagged || score == null) return 'border-l-4 border-warm-200';
   if (score >= 0.8) return 'border-l-4 border-green-500';
@@ -234,6 +253,46 @@ function confidenceLabel(score: number | null | undefined, isAiTagged?: boolean)
   if (score >= 0.8) return { text: 'Good', color: 'text-green-600' };
   if (score >= 0.55) return { text: 'Review', color: 'text-amber-600' };
   return { text: 'Low', color: 'text-red-600' };
+}
+
+/**
+ * The card's initial edit state for an item. Used when a card is first shown and again after the All details
+ * sheet saves (merged with any unsaved card edits, see lib/reviewSheetSync.ts).
+ * Condition is read through lib/conditionModel.ts (NEW, USED, REFURBISHED, PARTS_OR_REPAIR; a legacy value such
+ * as LIKE_NEW or GOOD reads as USED; blank when unrecognized). The stored grade is kept as is, including a legacy S.
+ */
+function buildEditStateFromItem(item: Item): ItemEditState {
+  return {
+    title: item.title,
+    description: item.description ?? '',
+    price: item.price ?? 0,
+    // Use category as-is from eBay (already normalized from API)
+    category: item.category ?? '',
+    ebayCategoryId: item.ebayCategoryId ?? undefined,
+    ebayCategoryName: item.ebayCategoryName ?? undefined,
+    condition: normalizeConditionValue(item.condition).condition ?? '',
+    conditionGrade: item.conditionGrade ?? undefined, // #64
+    quantity: item.quantity ?? 1,
+    listingType: item.listingType ?? 'FIXED',
+    reverseDailyDrop: item.reverseDailyDrop ?? undefined,
+    reverseFloorPrice: item.reverseFloorPrice ?? undefined,
+    aspectRatio: '4:3',
+    brightness: 50,
+    contrast: 50,
+    backgroundRemoved: item.backgroundRemoved,
+    autoEnhanced: item.autoEnhanced,
+    tags: item.tags || [], // BUG 1 FIX: Initialize tags to preserve them on save
+    // Bug 6: seed eBay shipping fields from DB
+    packageWeightOz: item.packageWeightOz ?? undefined,
+    packageLengthIn: item.packageLengthIn ?? undefined,
+    packageWidthIn: item.packageWidthIn ?? undefined,
+    packageHeightIn: item.packageHeightIn ?? undefined,
+    ebayShippingOverride: item.ebayShippingOverride ?? null,
+    // eBay product identifiers: seed from DB (default to '')
+    brand: item.brand ?? '',
+    mpn: item.mpn ?? '',
+    upc: item.upc ?? '',
+  };
 }
 
 const ReviewPage = () => {
@@ -277,10 +336,47 @@ const ReviewPage = () => {
   const [refreshingPriceItemId, setRefreshingPriceItemId] = useState<string | null>(null);
   // 2026-10-03: a Condition Grade click only OFFERS a new price (dollars, per item). It is
   // never written to the price field/editState; the organizer taps "Use $X" to apply it.
-  const [suggestedPrices, setSuggestedPrices] = useState<Map<string, number>>(new Map());
+  // Wave 3 (B3): the entry also carries the estimate's range and the grade-factor disclosure line.
+  const [suggestedPrices, setSuggestedPrices] = useState<Map<string, GradeSuggestion>>(new Map());
   // Latest grade-click request id per item, so a slow response for an older grade
   // can't surface a suggestion that describes the wrong grade.
   const gradeSuggestRequestRef = useRef<Map<string, number>>(new Map());
+  // Guards handleBulkCategory: its operations run one after another, so a second run must not start
+  // while the first is still sending.
+  const bulkCategoryInFlightRef = useRef(false);
+  // "All details" sheet host: the item whose shared form sheet is open (null = closed).
+  const [sheetItemId, setSheetItemId] = useState<string | null>(null);
+  // Draft autosave (Wave 3 round 2). Latest-value refs let the controller's save read current state without
+  // being recreated; the controller itself is created once.
+  const editStatesRef = useRef(editStates);
+  editStatesRef.current = editStates;
+  const weightTouchedRef = useRef(weightTouched);
+  weightTouchedRef.current = weightTouched;
+  const [autosaveStatuses, setAutosaveStatuses] = useState<Map<string, AutosaveStatus>>(new Map());
+  const autosaveRef = useRef<AutosaveController | null>(null);
+  if (autosaveRef.current === null) {
+    autosaveRef.current = createAutosaveController({
+      // Draft save only: PUT /items/:id with the dirty card fields. buildAutosavePayload never includes price,
+      // draftStatus, status or skipMarketplaceSync, so this can neither publish nor change the price.
+      save: async (itemId, keys) => {
+        const st = editStatesRef.current.get(itemId);
+        if (!st) return;
+        const payload = buildAutosavePayload(st, keys, weightTouchedRef.current.has(itemId));
+        if (Object.keys(payload).length === 0) return;
+        await api.put(`/items/${itemId}`, payload);
+      },
+      onStatus: (itemId, status) =>
+        setAutosaveStatuses((prev) => {
+          const next = new Map(prev);
+          if (status === 'idle') next.delete(itemId);
+          else next.set(itemId, status);
+          return next;
+        }),
+    });
+  }
+  const autosave = autosaveRef.current;
+  // Unmount: drop every pending autosave timer and edit.
+  useEffect(() => () => autosave.cancelAll(), [autosave]);
   // Confirm dialog state
   const [confirmState, setConfirmState] = useState<{
     open: boolean;
@@ -291,6 +387,8 @@ const ReviewPage = () => {
 
   // Smart Review Queue UI state
   const [priceInputs, setPriceInputs] = useState<Map<string, string>>(new Map());
+  const priceInputsRef = useRef(priceInputs);
+  priceInputsRef.current = priceInputs;
   const [priceErrors, setPriceErrors] = useState<Set<string>>(new Set());
   const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
   const [showApproveAllModal, setShowApproveAllModal] = useState(false);
@@ -469,6 +567,8 @@ const ReviewPage = () => {
 
   const deleteMutation = useMutation({
     mutationFn: async (itemIds: string[]) => {
+      // A deleted item must not be autosaved afterwards (it would 404 and retry).
+      itemIds.forEach((id) => autosave.hold(id));
       return await Promise.all(itemIds.map((id) => api.delete(`/items/${id}`)));
     },
     onSuccess: (_data, itemIds) => {
@@ -477,7 +577,10 @@ const ReviewPage = () => {
       if (itemIds.length === 1 && expandedItemId === itemIds[0]) setExpandedItemId(null);
       showToast(`${itemIds.length} item${itemIds.length !== 1 ? 's' : ''} deleted`, 'success');
     },
-    onError: () => showToast('Failed to delete item(s)', 'error'),
+    onError: (_error, itemIds) => {
+      itemIds.forEach((id) => autosave.release(id));
+      showToast('Failed to delete item(s)', 'error');
+    },
   });
 
   // eBay push mutation
@@ -665,54 +768,7 @@ const ReviewPage = () => {
 
   const getEditState = (item: Item): ItemEditState => {
     if (!editStates.has(item.id)) {
-      // Use category as-is from eBay (already normalized from API)
-      const normalizedCategory = item.category ?? '';
-
-      // Normalize condition to match standard values: NEW, USED, REFURBISHED, PARTS_OR_REPAIR
-      let normalizedCondition = '';
-      if (item.condition) {
-        const condUpper = item.condition.toUpperCase().trim().replace(/\s+/g, '_');
-        const validConditions = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
-        if (validConditions.includes(condUpper)) {
-          normalizedCondition = condUpper;
-        } else {
-          // Map legacy values
-          const legacyMap: Record<string, string> = {
-            LIKE_NEW: 'NEW', EXCELLENT: 'NEW',
-            GOOD: 'USED', FAIR: 'USED', POOR: 'PARTS_OR_REPAIR',
-          };
-          normalizedCondition = legacyMap[condUpper] || '';
-        }
-      }
-
-      editStates.set(item.id, {
-        title: item.title,
-        description: item.description ?? '',
-        price: item.price ?? 0,
-        category: normalizedCategory,
-        condition: normalizedCondition,
-        conditionGrade: item.conditionGrade ?? undefined, // #64
-        quantity: item.quantity ?? 1,
-        listingType: item.listingType ?? 'FIXED',
-        reverseDailyDrop: item.reverseDailyDrop ?? undefined,
-        reverseFloorPrice: item.reverseFloorPrice ?? undefined,
-        aspectRatio: '4:3',
-        brightness: 50,
-        contrast: 50,
-        backgroundRemoved: item.backgroundRemoved,
-        autoEnhanced: item.autoEnhanced,
-        tags: item.tags || [], // BUG 1 FIX: Initialize tags to preserve them on save
-        // Bug 6: seed eBay shipping fields from DB
-        packageWeightOz: item.packageWeightOz ?? undefined,
-        packageLengthIn: item.packageLengthIn ?? undefined,
-        packageWidthIn: item.packageWidthIn ?? undefined,
-        packageHeightIn: item.packageHeightIn ?? undefined,
-        ebayShippingOverride: item.ebayShippingOverride ?? null,
-        // eBay product identifiers: seed from DB (default to '')
-        brand: item.brand ?? '',
-        mpn: item.mpn ?? '',
-        upc: item.upc ?? '',
-      });
+      editStates.set(item.id, buildEditStateFromItem(item));
       setEditStates(new Map(editStates));
     }
     return editStates.get(item.id)!;
@@ -723,6 +779,8 @@ const ReviewPage = () => {
     const updated = { ...state, [field]: value };
     editStates.set(itemId, updated);
     setEditStates(new Map(editStates));
+    // Draft autosave: the fields the card edits (never price) are saved 800 ms after the last change.
+    if (isAutosaveField(field)) autosave.touch(itemId, field);
     // Organizer edited the weight field itself on this page: record it so the save
     // payloads below can send packageConfirmedByOrganizer. Never set for the other 3
     // package fields (length/width/height): only the weight box drives eBay's
@@ -803,14 +861,8 @@ const ReviewPage = () => {
       if (updated) {
         // Update the visible card fields in place from the fresh suggestions.
         const state = getEditState(item);
-        const normalizeCondition = (c: string | null | undefined): string => {
-          if (!c) return state.condition;
-          const up = c.toUpperCase().trim().replace(/\s+/g, '_');
-          const valid = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
-          if (valid.includes(up)) return up;
-          const legacy: Record<string, string> = { LIKE_NEW: 'NEW', EXCELLENT: 'NEW', GOOD: 'USED', FAIR: 'USED', POOR: 'PARTS_OR_REPAIR' };
-          return legacy[up] || state.condition;
-        };
+        const normalizeCondition = (c: string | null | undefined): string =>
+          normalizeConditionValue(c).condition ?? state.condition;
         const next: ItemEditState = {
           ...state,
           title: updated.title ?? state.title,
@@ -894,51 +946,6 @@ const ReviewPage = () => {
     });
   };
 
-  const handleSaveItem = async (item: Item) => {
-    const editState = getEditState(item);
-    await updateItemMutation.mutateAsync({
-      itemId: item.id,
-      updates: {
-        title: editState.title,
-        description: editState.description,
-        price: editState.price,
-        category: editState.category,
-        condition: editState.condition,
-        conditionGrade: editState.conditionGrade, // #64: Persist condition grade on save
-        quantity: editState.quantity,
-        listingType: editState.listingType,
-        reverseDailyDrop: editState.reverseDailyDrop,
-        reverseFloorPrice: editState.reverseFloorPrice,
-        backgroundRemoved: editState.backgroundRemoved,
-        tags: editState.tags, // Sprint 1: Save tags
-        // Bug 6: persist shipping dimensions
-        // Package weight/dims themselves are gated behind weightTouched (2026-09-14):
-        // an unreviewed AI/SEED suggestion sitting in editState must not silently persist
-        // to these organizer-facing columns on an unrelated save. Omitted entirely when
-        // untouched, so the backend leaves the existing DB values alone.
-        ...(weightTouched.has(item.id)
-          ? {
-              packageWeightOz: editState.packageWeightOz ?? null,
-              packageLengthIn: editState.packageLengthIn ?? null,
-              packageWidthIn: editState.packageWidthIn ?? null,
-              packageHeightIn: editState.packageHeightIn ?? null,
-            }
-          : {}),
-        // Organizer typed a real weight on this page: record it as confirmed so eBay
-        // publish stops treating it as an estimate. Never sent when the weight field
-        // was left untouched (see weightTouched above).
-        ...(weightTouched.has(item.id) && editState.packageWeightOz != null
-          ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
-          : {}),
-        // eBay product identifiers: send '' as null
-        brand: editState.brand?.trim() ? editState.brand.trim() : null,
-        mpn: editState.mpn?.trim() ? editState.mpn.trim() : null,
-        upc: editState.upc?.trim() ? editState.upc.trim() : null,
-      },
-    });
-    showToast('Item saved', 'success');
-  };
-
   const handlePublishItem = async (item: Item) => {
     try {
       if (item.draftStatus === 'PUBLISHED') {
@@ -949,7 +956,9 @@ const ReviewPage = () => {
         });
         showToast('Item unpublished', 'success');
       } else {
-        // Publish: use dedicated publish endpoint
+        // Publish: use dedicated publish endpoint. Finish any autosave first and freeze the card.
+        await autosave.flush(item.id);
+        autosave.hold(item.id);
         await api.post(`/items/${item.id}/publish`);
         queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
         showToast('Item published!', 'success');
@@ -971,6 +980,7 @@ const ReviewPage = () => {
         }
       }
     } catch (error: any) {
+      autosave.release(item.id);
       const message = error.response?.data?.message || 'Failed to update item';
       showToast(message, 'error');
     }
@@ -978,30 +988,104 @@ const ReviewPage = () => {
 
   const handleBulkPrice = () => {
     if (!bulkPrice) return;
-    bulkUpdateMutation.mutate({
-      itemIds: Array.from(selectedItems),
-      operation: 'price',
-      value: parseFloat(bulkPrice),
-    });
+    const itemIds = Array.from(selectedItems);
+    // Same rounding the backend applies (two decimals, never negative), so the re-seeded inputs match
+    // the saved price exactly.
+    const parsed = parseFloat(bulkPrice);
+    const finalPrice = Number.isFinite(parsed) ? Math.max(0, parseFloat(parsed.toFixed(2))) : NaN;
+    bulkUpdateMutation.mutate(
+      {
+        itemIds,
+        operation: 'price',
+        value: parseFloat(bulkPrice),
+      },
+      {
+        onSuccess: (response) => {
+          if (!Number.isFinite(finalPrice)) return;
+          // priceInputs is seeded once per item (handleItemsLoaded), so a refetch does not refresh it.
+          // Re-seed the items the backend really wrote, or a later Approve would send the old seeded
+          // price and overwrite this bulk price. Items the backend skipped (eBay minimum) keep theirs.
+          const writtenIds = bulkPriceWrittenIds(response?.data, response?.status, itemIds);
+          if (writtenIds.length > 0) {
+            setPriceInputs((prev) => reseedPriceInputs(prev, writtenIds, finalPrice));
+            setPriceErrors((prev) => {
+              const next = new Set(prev);
+              writtenIds.forEach((id) => next.delete(id));
+              return next;
+            });
+            // Keep the card's edit state in step (the research panel reads editState.price).
+            let editStatesChanged = false;
+            writtenIds.forEach((id) => {
+              const existing = editStates.get(id);
+              if (existing) {
+                editStates.set(id, { ...existing, price: finalPrice });
+                editStatesChanged = true;
+              }
+            });
+            if (editStatesChanged) setEditStates(new Map(editStates));
+          }
+          const skippedMessage = bulkPriceSkippedMessage(response?.data);
+          if (skippedMessage) showToast(skippedMessage, 'info');
+        },
+      }
+    );
   };
 
-  const handleBulkCategory = (payload: { l1CategoryName: string; leafCategoryId: string; leafCategoryName: string }) => {
-    bulkUpdateMutation.mutate({
-      itemIds: Array.from(selectedItems),
-      operation: 'category',
-      value: payload.l1CategoryName,
-    });
-    // Also update ebayCategoryId and ebayCategoryName for all selected items
-    bulkUpdateMutation.mutate({
-      itemIds: Array.from(selectedItems),
-      operation: 'ebayCategoryId',
-      value: payload.leafCategoryId,
-    });
-    bulkUpdateMutation.mutate({
-      itemIds: Array.from(selectedItems),
-      operation: 'ebayCategoryName',
-      value: payload.leafCategoryName,
-    });
+  /**
+   * Bulk category. The picker gives an eBay L1 name, a leaf id and a leaf name, which are three separate
+   * /items/bulk operations (the `category` operation alone never sets the eBay leaf id or name). They are
+   * sent one after another, never as concurrent mutate() calls on one mutation object, and the first
+   * failure stops the run and says exactly what was and was not applied.
+   * `category` goes first: its backend whitelist (short lowercase list) can reject an eBay L1 name such as
+   * "Home & Garden" before anything is written, which leaves every field untouched.
+   */
+  const handleBulkCategory = async (payload: { l1CategoryName: string; leafCategoryId: string; leafCategoryName: string }) => {
+    const itemIds = Array.from(selectedItems);
+    const ops = planBulkCategoryOps(payload);
+    if (itemIds.length === 0 || ops.length === 0) {
+      showToast('Select items and pick a category first.', 'error');
+      return;
+    }
+    if (bulkCategoryInFlightRef.current) return;
+    bulkCategoryInFlightRef.current = true;
+    const allOps: BulkCategoryOperation[] = ops.map((o) => o.operation);
+    const applied: BulkCategoryOperation[] = [];
+    let partialItemsMessage: string | null = null;
+    let updatedCount = itemIds.length;
+    try {
+      for (const op of ops) {
+        try {
+          const response = await api.post('/items/bulk', {
+            itemIds,
+            operation: op.operation,
+            value: op.value,
+          });
+          applied.push(op.operation);
+          if (op.operation === allOps[0]) {
+            const succeeded = response?.data?.succeeded;
+            if (Array.isArray(succeeded)) updatedCount = succeeded.length;
+            partialItemsMessage = bulkCategoryPartialItemsMessage(response?.data, updatedCount);
+          }
+        } catch (err: any) {
+          showToast(
+            bulkCategoryFailureMessage(op.operation, applied, allOps, err?.response?.data?.message),
+            'error'
+          );
+          return;
+        }
+      }
+      setSelectedItems(new Set());
+      setBulkCategory('');
+      if (partialItemsMessage) {
+        showToast(partialItemsMessage, 'info');
+      } else {
+        showToast(`Category updated for ${updatedCount} item${updatedCount !== 1 ? 's' : ''}.`, 'success');
+      }
+    } finally {
+      bulkCategoryInFlightRef.current = false;
+      // Refetch even after a failure: an earlier step may already have been written.
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+    }
   };
 
   const handleBulkBGRemoval = () => {
@@ -1073,27 +1157,27 @@ const ReviewPage = () => {
 
     try {
       setRefreshingPriceItemId(item.id);
-      // Map grade to human-readable condition for the prompt context
-      const gradeLabels: Record<string, string> = { S: 'like new', A: 'excellent', B: 'good', C: 'fair', D: 'poor' };
-      const gradeCondition = gradeLabels[grade] || condition;
-      // 2026-08-24: repointed from the retired /items/ai/price-suggest route to the
-      // multi-source pricing engine. Amounts come back in cents; skip FLOOR confidence
-      // (no real comps) entirely rather than offering a bare $0.49.
-      const response = await api.post('/pricing/estimate', {
-        itemId: item.id,
-        title,
-        category,
-        condition: gradeCondition,
-        conditionGrade: grade,
-        photoUrls: item.photoUrls,
-      });
-      if (response.data?.confidence !== 'FLOOR' && response.data?.estimatedPrice) {
-        const suggested = Math.round(Number(response.data.estimatedPrice)) / 100;
-        // Only the latest grade click may surface a suggestion. Whether it differs from
-        // the price field is checked at render time (against what the organizer has typed).
-        if (suggested > 0 && gradeSuggestRequestRef.current.get(item.id) === reqId) {
-          setSuggestedPrices((prev) => new Map(prev).set(item.id, suggested));
-        }
+      // Wave 3 (B3): send the item's REAL condition (normalized in lib/conditionModel.ts) and the clicked
+      // grade as conditionGrade. This used to send a grade label ("excellent", "fair") as the condition.
+      // persist:false makes this a what-if estimate: it must not overwrite the saved estimate, and nothing
+      // below writes the price either. Amounts come back in cents; FLOOR confidence (no real comps) yields
+      // no suggestion rather than a bare $0.49.
+      const response = await api.post(
+        '/pricing/estimate',
+        buildGradeEstimateBody({
+          itemId: item.id,
+          title,
+          category,
+          condition,
+          grade,
+          photoUrls: item.photoUrls,
+        })
+      );
+      const suggestion = parseGradeEstimate(response.data);
+      // Only the latest grade click may surface a suggestion. Whether it differs from the price field is
+      // checked at render time (against what the organizer has typed).
+      if (suggestion && gradeSuggestRequestRef.current.get(item.id) === reqId) {
+        setSuggestedPrices((prev) => new Map(prev).set(item.id, suggestion));
       }
     } catch {
       // Best-effort: silent failure, keep existing price
@@ -1139,6 +1223,60 @@ const ReviewPage = () => {
     showToast(`Price set to $${price.toFixed(2)}`, 'success');
   };
 
+  /**
+   * "All details": open the shared item form sheet for one card. Pending inline edits are saved first so the
+   * sheet loads the latest values.
+   */
+  const openItemSheet = async (item: Item) => {
+    await autosave.flush(item.id);
+    setSheetItemId(item.id);
+  };
+
+  /**
+   * After the sheet saved or closed: refetch the review items and refresh this card from the server item, without
+   * overwriting anything the organizer typed on the card and has not saved. Fields with unsaved inline edits
+   * keep their value; the typed price is replaced only when it still equals the previously saved price.
+   */
+  const syncCardFromServer = async (itemId: string) => {
+    const key = ['items', saleId, 'review'];
+    const before = (queryClient.getQueryData<Item[]>(key) ?? []).find((i) => i.id === itemId);
+    const typedBefore = priceInputsRef.current.get(itemId);
+    try {
+      await queryClient.refetchQueries({ queryKey: key });
+    } catch {
+      return; // the card keeps what it has; the next refetch picks the sheet's changes up
+    }
+    const fresh = (queryClient.getQueryData<Item[]>(key) ?? []).find((i) => i.id === itemId);
+    if (!fresh) return;
+    const dirty = autosave.dirtyKeys(itemId);
+    const merged = mergeEditStateFromServer(
+      buildEditStateFromItem(fresh),
+      editStatesRef.current.get(itemId),
+      dirty
+    );
+    editStatesRef.current.set(itemId, merged);
+    setEditStates(new Map(editStatesRef.current));
+    if (!dirty.includes('packageWeightOz')) {
+      setWeightTouched((prev) => {
+        if (!prev.has(itemId)) return prev;
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
+    // The saved price (typed price field) follows the server only when the organizer has not typed a different one.
+    if (!typedPriceDiffersFromSaved(typedBefore, before?.price)) {
+      setPriceInputs((prev) => reseedPriceInputs(prev, [itemId], Number(fresh.price ?? 0)));
+      setPriceErrors((prev) => {
+        if (!prev.has(itemId)) return prev;
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
+    clearSuggestedPrice(itemId);
+  };
+
   /** Approve a single item. Blocks if price is empty. */
   const handleApproveItem = async (item: Item) => {
     const priceStr = getPriceInput(item.id);
@@ -1147,7 +1285,11 @@ const ReviewPage = () => {
       setPriceErrors(prev => new Set(prev).add(item.id));
       return;
     }
-    // Save price + tags then publish
+    // Save price + tags then publish.
+    // An autosave may be in flight or waiting: let it finish (and save what is pending) first, then freeze the
+    // card so no autosave can fire once publishing has started.
+    await autosave.flush(item.id);
+    autosave.hold(item.id);
     const editState = getEditState(item);
     try {
       await updateItemMutation.mutateAsync({
@@ -1172,7 +1314,7 @@ const ReviewPage = () => {
                 packageHeightIn: editState.packageHeightIn ?? null,
               }
             : {}),
-          // Same confirm-on-real-edit rule as handleSaveItem above.
+          // Same confirm-on-real-edit rule as handleApproveItem.
           ...(weightTouched.has(item.id) && editState.packageWeightOz != null
             ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
             : {}),
@@ -1188,6 +1330,7 @@ const ReviewPage = () => {
         ebayPushMutation.mutate([item.id]);
       }
     } catch (err: any) {
+      autosave.release(item.id);
       showToast(err?.response?.data?.message || 'Failed to publish', 'error');
     }
   };
@@ -1219,6 +1362,9 @@ const ReviewPage = () => {
     for (const item of toApprove) {
       const priceStr = getPriceInput(item.id);
       const priceVal = parseFloat(priceStr);
+      // Same rule as handleApproveItem: finish any autosave first, then freeze this card.
+      await autosave.flush(item.id);
+      autosave.hold(item.id);
       const editState = getEditState(item);
       try {
         await updateItemMutation.mutateAsync({
@@ -1243,7 +1389,7 @@ const ReviewPage = () => {
                   packageHeightIn: editState.packageHeightIn ?? null,
                 }
               : {}),
-            // Same confirm-on-real-edit rule as handleSaveItem above.
+            // Same confirm-on-real-edit rule as handleApproveItem.
             ...(weightTouched.has(item.id) && editState.packageWeightOz != null
               ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
               : {}),
@@ -1254,6 +1400,7 @@ const ReviewPage = () => {
         setApprovedIds(prev => new Set(prev).add(item.id));
       } catch {
         // silent per-item: overall toast shown below
+        autosave.release(item.id);
       }
     }
     queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
@@ -1317,6 +1464,20 @@ const ReviewPage = () => {
       <Head>
         <title>Smart Review Queue - FindA.Sale</title>
       </Head>
+
+      {/* All details: shared item form sheet (stays open after Save; the card refreshes from the server) */}
+      <ItemFormSheet
+        open={sheetItemId !== null}
+        itemId={sheetItemId ?? ''}
+        onClose={() => {
+          const id = sheetItemId;
+          setSheetItemId(null);
+          if (id) void syncCardFromServer(id);
+        }}
+        onSaved={() => {
+          if (sheetItemId) void syncCardFromServer(sheetItemId);
+        }}
+      />
 
       {/* Photo zoom overlay */}
       {zoomedPhoto && (
@@ -1576,14 +1737,15 @@ const ReviewPage = () => {
                 const priceStr = getPriceInput(item.id);
                 const hasError = priceErrors.has(item.id);
                 // Grade-click suggestion prompt: shown only while it differs from the price field.
-                const suggestedChipPrice = suggestedPrices.get(item.id);
+                const gradeSuggestion = suggestedPrices.get(item.id);
+                const suggestedChipPrice = gradeSuggestion?.price;
                 const typedPriceVal = parseFloat(priceStr);
                 const showSuggestedChip =
                   suggestedChipPrice != null &&
                   (isNaN(typedPriceVal) || Math.abs(typedPriceVal - suggestedChipPrice) >= 0.005);
                 const currentTags = editState.tags || item.tags || [];
                 const rarityKey = item.rarity && rarityColors[item.rarity] ? item.rarity : 'COMMON';
-                const readiness = computeReadiness(item, editState, ebayConnected);
+                const readiness = computeItemReadiness(item, editState, typedPriceForReadiness(priceInputs, item.id), ebayConnected);
                 const readinessBorderColor = {
                   red: '#ef4444',
                   yellow: '#facc15',
@@ -1952,14 +2114,19 @@ const ReviewPage = () => {
                                 style={{ fontFamily: 'Inter Tight, sans-serif' }}
                               />
                             </div>
-                            {showSuggestedChip && suggestedChipPrice != null && (
+                            {showSuggestedChip && gradeSuggestion && suggestedChipPrice != null && (
                               <div
                                 role="status"
                                 className="mt-1.5 p-2.5 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 space-y-2"
                               >
                                 <p className="text-xs text-amber-800 dark:text-amber-200">
-                                  {`New suggested price $${suggestedChipPrice.toFixed(2)}. Use it?`}
+                                  {gradeSuggestionLine(gradeSuggestion)}
                                 </p>
+                                {gradeSuggestion.disclosure && (
+                                  <p className="text-[11px] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA]">
+                                    {gradeSuggestion.disclosure}
+                                  </p>
+                                )}
                                 <div className="flex gap-2">
                                   <button
                                     type="button"
@@ -2006,6 +2173,14 @@ const ReviewPage = () => {
                               </svg>
                               Approve
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => openItemSheet(item)}
+                              aria-haspopup="dialog"
+                              className="w-full min-h-[44px] py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[rgba(26,24,20,0.62)] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors"
+                            >
+                              All details
+                            </button>
                             <Link
                               href={`/organizer/edit-item/${item.id}`}
                               className="w-full py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-sm font-medium text-[rgba(26,24,20,0.62)] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] transition-colors text-center"
@@ -2030,6 +2205,14 @@ const ReviewPage = () => {
                             >
                               Discard
                             </button>
+                            {/* Draft autosave status: quiet, announced politely, no toasts */}
+                            <p
+                              role="status"
+                              aria-live="polite"
+                              className="min-h-[16px] text-[11px] text-center text-[rgba(26,24,20,0.5)] dark:text-[#B8B8BA]"
+                            >
+                              {autosaveStatusText(autosaveStatuses.get(item.id) ?? 'idle')}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -2160,28 +2343,35 @@ const ReviewPage = () => {
                               </div>
                             </div>
 
-                            {/* Condition grade */}
-                            <div>
-                              <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">
-                                Condition Grade
-                                {item.suggestedConditionGrade && (
-                                  <span className="ml-2 text-[#C8552B] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
-                                )}
-                              </label>
-                              <div className="flex gap-2">
-                                {(['S','A','B','C','D'] as const).map(grade => {
-                                  const gradeLabels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
-                                  const current = editState.conditionGrade ?? item.conditionGrade;
-                                  return (
-                                    <button key={grade} onClick={() => handleConditionGradeChange(item, grade)}
-                                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${current === grade ? 'bg-[#C8552B] text-white border-[#C8552B]' : 'bg-white dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] border-black/18 dark:border-[#3A3A3C] hover:border-[#C8552B]'}`}
-                                      title={gradeLabels[grade]}>
-                                      {grade}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                            {/* Condition grade: A to D for used goods only; S shows as "S (legacy)" only on an item that has it */}
+                            {(() => {
+                              const current = editState.conditionGrade ?? item.conditionGrade;
+                              const picker = gradePickerFor(editState.condition || item.condition, current);
+                              if (!picker.show) return null;
+                              return (
+                                <div>
+                                  <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">
+                                    Condition Grade
+                                    {item.suggestedConditionGrade && (
+                                      <span className="ml-2 text-[#C8552B] font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
+                                    )}
+                                  </label>
+                                  <div className="flex gap-2">
+                                    {picker.options.map((opt) => (
+                                      <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => handleConditionGradeChange(item, opt.value)}
+                                        className={`flex-1 min-h-[44px] py-1.5 px-1 text-xs font-bold rounded-lg border transition-colors ${current === opt.value ? 'bg-[#C8552B] text-white border-[#C8552B]' : 'bg-white dark:bg-[#3A3A3C] text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] border-black/18 dark:border-[#3A3A3C] hover:border-[#C8552B]'}`}
+                                        title={opt.title}
+                                      >
+                                        {opt.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
 
                             {/* Listing type */}
                             <div>

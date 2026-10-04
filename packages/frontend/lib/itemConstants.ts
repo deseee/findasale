@@ -3,19 +3,22 @@
  * Single source of truth for item metadata across the frontend
  */
 
+import { normalizeCondition } from './conditionModel';
+
 // ============================================================================
-// CONDITIONS — Match schema.prisma Item model exactly
+// CONDITIONS -- one vocabulary, shared with lib/conditionModel.ts
 // ============================================================================
-// Schema source: packages/database/prisma/schema.prisma
-// Comment: NEW | USED | REFURBISHED | PARTS_OR_REPAIR
-// These are the authoritative DB values; use CONDITION_LABELS for display
+// Canonical Item.condition values: NEW | USED | REFURBISHED | PARTS_OR_REPAIR (schema.prisma, backend
+// utils/conditionMapping.ts). Used goods also carry a grade A, B, C or D (grade S is retired). lib/conditionModel.ts
+// is the model (normalization, grade picker options, eBay preview); the exports below stay for the pages that
+// import them (PreviewModal, SmartInventoryUpload, review.tsx) and are kept consistent with it by
+// lib/__tests__/conditionModel.test.ts and lib/__tests__/itemConstants.test.ts.
 export const CONDITIONS = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'] as const;
 export type Condition = typeof CONDITIONS[number];
 
 /**
- * Display labels for conditions
- * Use this when rendering condition dropdowns or labels to users
- * Maps from DB values to human-readable labels
+ * Display labels for the canonical conditions (same strings as CANONICAL_CONDITION_LABELS in conditionModel.ts).
+ * Use this when rendering condition dropdowns or labels to users.
  */
 export const CONDITION_LABELS: Record<Condition, string> = {
   NEW: 'New',
@@ -25,38 +28,45 @@ export const CONDITION_LABELS: Record<Condition, string> = {
 };
 
 /**
- * Condition mappings for display
- * Handles both DB values and AI-suggested grades (S/A/B/C/D)
- * Used for backwards compatibility with existing DB records and condition grades
+ * LEGACY display map for values already stored in the database. Read-only display of old data: new code should use
+ * normalizeCondition / readConditionForForm from lib/conditionModel.ts. Every entry matches that model:
+ *   - canonical conditions use CONDITION_LABELS;
+ *   - grade letters use the approved grade wording (A and B Very good, C Good, D Acceptable; S is retired and is
+ *     read as A, so it is labelled "(legacy)");
+ *   - legacy condition words read the way the backend reads them: LIKE_NEW, EXCELLENT, GOOD and FAIR are Used,
+ *     POOR and FOR_PARTS are Parts / Repair.
  */
 export const CONDITION_MAP: Record<string, string> = {
   // Canonical DB values
-  'NEW': 'New',
-  'USED': 'Used',
-  'REFURBISHED': 'Refurbished',
-  'PARTS_OR_REPAIR': 'Parts or Repair',
-  // Grade letters (from conditionGrade field: S | A | B | C | D)
-  'S': 'Like New',
-  'A': 'Excellent',
-  'B': 'Good',
-  'C': 'Fair',
-  'D': 'Poor',
-  // Legacy mappings for backwards compatibility with older DB records
-  'LIKE_NEW': 'New',
-  'EXCELLENT': 'New',
-  'GOOD': 'Used',
-  'FAIR': 'Used',
-  'POOR': 'Parts or Repair',
-  'FOR_PARTS': 'For Parts / As-Is',
+  'NEW': CONDITION_LABELS.NEW,
+  'USED': CONDITION_LABELS.USED,
+  'REFURBISHED': CONDITION_LABELS.REFURBISHED,
+  'PARTS_OR_REPAIR': CONDITION_LABELS.PARTS_OR_REPAIR,
+  // Grade letters (conditionGrade field)
+  'S': 'Very good (legacy)',
+  'A': 'Very good',
+  'B': 'Very good',
+  'C': 'Good',
+  'D': 'Acceptable',
+  // Legacy condition values from older records
+  'LIKE_NEW': CONDITION_LABELS.USED,
+  'EXCELLENT': CONDITION_LABELS.USED,
+  'GOOD': CONDITION_LABELS.USED,
+  'FAIR': CONDITION_LABELS.USED,
+  'POOR': CONDITION_LABELS.PARTS_OR_REPAIR,
+  'FOR_PARTS': CONDITION_LABELS.PARTS_OR_REPAIR,
 };
 
 /**
- * Format a condition value to a human-readable label
- * Handles both DB values and legacy formats
+ * Format a condition value (or grade letter) to a human-readable label.
+ * Exact matches use CONDITION_MAP; other spellings ("Like New", "used_good") go through the condition model;
+ * anything unrecognized is returned as it was stored.
  */
 export function formatCondition(value: string | null | undefined): string {
   if (!value) return 'Not specified';
-  return CONDITION_MAP[value] || value;
+  if (CONDITION_MAP[value]) return CONDITION_MAP[value];
+  const normalized = normalizeCondition(value).condition;
+  return normalized ? CONDITION_LABELS[normalized] : value;
 }
 
 // ============================================================================
