@@ -76,6 +76,8 @@ import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42:
 import BountyMatchModal from '../../../components/BountyMatchModal';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 import { ShippingNetPreview } from '../../../components/ShippingNetPreview'; // ADR-103 Phase 5 (2026-09-03)
+import CardConditionConfirm from '../../../components/cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
+import { showCardCondition } from '../../../lib/cardConditionVisibility';
 
 // Feature flag: hides "Enhance All" button until backend endpoint exists.
 // Set NEXT_PUBLIC_ENABLE_ENHANCE_ALL=true to enable.
@@ -3417,7 +3419,7 @@ const AddItemsDetailPage = () => {
                                   <option value="">Select condition</option>
                                   {CONDITIONS.map((c) => <option key={c} value={c}>{CONDITION_LABELS[c]}</option>)}
                                 </select>
-                                {showRowGradePicker(editState.condition) && (
+                                {!showCardCondition(item) && showRowGradePicker(editState.condition) && (
                                   <select
                                     value={editState.conditionGrade}
                                     onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, conditionGrade: e.target.value } }))}
@@ -3431,6 +3433,12 @@ const AddItemsDetailPage = () => {
                                   </select>
                                 )}
                               </div>
+                              {/* A trading card (drafts list returns `card`) uses the card scale (NM/LP/MP/HP/DMG), not A-D. */}
+                              {showCardCondition(item) && (
+                                <div className="mt-2">
+                                  <CardConditionConfirm itemId={item.id} />
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div>
@@ -3513,6 +3521,7 @@ const AddItemsDetailPage = () => {
                             }}
                             itemPrice={editState.price ? parseFloat(editState.price) : undefined}
                             ebayCategoryId={editState.ebayCategoryId || null}
+                            changePolicyHref={`/organizer/edit-item/${item.id}`}
                           />
                           {item.listingType === 'AUCTION' && (
                             <div>

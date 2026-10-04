@@ -10,8 +10,18 @@
  * Calls POST /api/ebay/shipping-preview (debounced).
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useId } from 'react';
+import Link from 'next/link';
 import api from '../lib/api';
+import {
+  AUTO_POLICY_OPTION_LABEL,
+  CHANGE_POLICY_LINK_TEXT,
+  POLICY_UNSAVED_HINT,
+  SHIPPING_POLICY_SELECT_LABEL,
+  customPolicyNote,
+  parseCustomPolicyInfo,
+  policySelectionDiffersFromPreview,
+} from '../lib/shippingPolicyPreview';
 
 interface Breakdown {
   itemPrice: number;
@@ -35,6 +45,10 @@ interface PreviewResponse {
   /** True when the item uses a custom organizer-picked eBay fulfillment policy. */
   customPolicy?: boolean;
   message?: string | null;
+  /** Custom-override branch only (each may be null or absent on an older backend): the item's eBay policy. */
+  customPolicyId?: string | null;
+  customPolicyName?: string | null;
+  customPolicyDescription?: string | null;
   shippingMode?: 'FLAT_TIERS' | 'CALCULATED';
   flatPolicy?: { name: string; amount: number } | null;
   shippingEstimate: {
@@ -63,6 +77,16 @@ interface ShippingNetPreviewProps {
   fromZip?: string | null;
   /** Called when the organizer accepts the suggested floor price. */
   onApplySuggestedPrice?: (price: number) => void;
+  /** Fallbacks for the custom policy note when the preview response carries no name or description. */
+  policyName?: string | null;
+  policyDescription?: string | null;
+  /** The organizer's eBay fulfillment policies. With onPolicyChange, an inline "Shipping policy for this item" select shows. */
+  policyOptions?: Array<{ id: string; name: string }>;
+  /** Selected policy id; '' or null means Auto. Owned by the parent form (the same state as its own policy select). */
+  policyValue?: string | null;
+  onPolicyChange?: (policyId: string | null) => void;
+  /** When set, the custom policy note shows a small link to change the policy on the full edit page. */
+  changePolicyHref?: string;
 }
 
 const fmt = (n: number): string => {
@@ -86,7 +110,14 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
   ebayCategoryId,
   fromZip,
   onApplySuggestedPrice,
+  policyName,
+  policyDescription,
+  policyOptions,
+  policyValue,
+  onPolicyChange,
+  changePolicyHref,
 }) => {
+  const policySelectId = useId();
   const [data, setData] = useState<PreviewResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,13 +207,57 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
     );
   }
 
+  // Inline policy select (Edit page and sheets only): bound by the parent to the same state as its own
+  // "eBay Shipping Policy" select. The preview reads the SAVED item, so a changed selection is flagged until saved.
+  const previewPolicy = parseCustomPolicyInfo(data);
+  const showPolicySelect = !!onPolicyChange && !!policyOptions && policyOptions.length > 0;
+  const policySelect = showPolicySelect ? (
+    <div>
+      <label htmlFor={policySelectId} className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
+        {SHIPPING_POLICY_SELECT_LABEL}
+      </label>
+      <select
+        id={policySelectId}
+        value={policyValue || ''}
+        onChange={(e) => onPolicyChange?.(e.target.value || null)}
+        className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+      >
+        <option value="">{AUTO_POLICY_OPTION_LABEL}</option>
+        {(policyOptions ?? []).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      {!loading && data && policyValue !== undefined && policySelectionDiffersFromPreview(previewPolicy.id, policyValue) && (
+        <p className="text-[11px] text-warm-600 dark:text-warm-400 mt-1">{POLICY_UNSAVED_HINT}</p>
+      )}
+    </div>
+  ) : null;
+
   // Custom per-item eBay policy: buyer shipping is governed by the organizer's
   // chosen eBay policy, not our calculated/flat model. Show an honest note instead
-  // of a fabricated shipping/net number.
+  // of a fabricated shipping/net number. Names the policy when the response (or the parent) knows it.
   if (!loading && data && data.customPolicy) {
+    const noteName = previewPolicy.name ?? (policyName?.trim() || null);
+    const noteDescription = previewPolicy.description ?? (policyDescription?.trim() || null);
     return (
-      <div className="rounded-lg border border-warm-200 dark:border-gray-600 bg-warm-50 dark:bg-gray-800 p-3 text-sm text-warm-700 dark:text-warm-300">
-        {data.message || 'Custom eBay policy selected. Buyer shipping is set by your eBay policy.'}
+      <div className="rounded-lg border border-warm-200 dark:border-gray-600 bg-warm-50 dark:bg-gray-800 p-3 text-sm text-warm-700 dark:text-warm-300 space-y-2">
+        <div>
+          <p>{customPolicyNote(noteName, data.message)}</p>
+          {noteDescription && (
+            <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">{noteDescription}</p>
+          )}
+          {changePolicyHref && (
+            <Link
+              href={changePolicyHref}
+              className="inline-block text-xs text-amber-700 dark:text-amber-400 underline hover:no-underline mt-1"
+            >
+              {CHANGE_POLICY_LINK_TEXT}
+            </Link>
+          )}
+        </div>
+        {policySelect}
       </div>
     );
   }
@@ -347,6 +422,8 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
           )}
         </div>
       )}
+
+      {policySelect}
     </div>
   );
 };

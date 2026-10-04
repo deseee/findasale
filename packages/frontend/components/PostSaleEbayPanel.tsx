@@ -485,6 +485,7 @@ const EbayEditForm: React.FC<{
                 height: formData.packageHeightIn,
               }}
               ebayCategoryId={item.ebayCategoryId ?? null}
+              changePolicyHref={`/organizer/edit-item/${item.id}`}
             />
           </div>
         )}

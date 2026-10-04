@@ -45,6 +45,8 @@ import { EbayFeeCheckBadge } from '../EbayFeeCheckBadge';
 import { EbayMonthlyQuotaCounter } from '../EbayMonthlyQuotaCounter';
 import ItemFormSection from './ItemFormSection';
 import CardRecordPanel from '../CardRecordPanel'; // ADR-134 card details
+import CardConditionConfirm from '../cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
+import { showCardCondition } from '../../lib/cardConditionVisibility';
 import EtsyListingStatus from '../etsy/EtsyListingStatus'; // ADR-135 Etsy listing section
 import { useEtsyConnection } from '../../lib/useEtsyConnection';
 import {
@@ -1835,17 +1837,23 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                 </div>
               </div>
 
-              {/* #64: Condition Grade Picker: A-D, plus "S (legacy)" only when the item already has grade S */}
-              <ConditionGradePicker
-                condition={formData.condition}
-                grade={formData.conditionGrade}
-                showLegacyS={String(item.conditionGrade || '').trim().toUpperCase() === 'S' || formData.conditionGrade === 'S'}
-                ebayPreview={ebayListed ? eBayConditionPreview(formData.condition, formData.conditionGrade) : undefined}
-                onChange={(conditionGrade) => {
-                  setConditionTouched(true);
-                  setFormData((prev) => ({ ...prev, conditionGrade }));
-                }}
-              />
+              {/* #64: Condition Grade Picker: A-D, plus "S (legacy)" only when the item already has grade S.
+                  A trading card (item.card present) uses the card condition scale instead (NM/LP/MP/HP/DMG, one-tap
+                  confirm); the A-D picker is hidden for it, the New / Used / Refurbished / Parts select above stays. */}
+              {showCardCondition(item) ? (
+                <CardConditionConfirm itemId={String(id)} disabled={updateMutation.isPending} />
+              ) : (
+                <ConditionGradePicker
+                  condition={formData.condition}
+                  grade={formData.conditionGrade}
+                  showLegacyS={String(item.conditionGrade || '').trim().toUpperCase() === 'S' || formData.conditionGrade === 'S'}
+                  ebayPreview={ebayListed ? eBayConditionPreview(formData.condition, formData.conditionGrade) : undefined}
+                  onChange={(conditionGrade) => {
+                    setConditionTouched(true);
+                    setFormData((prev) => ({ ...prev, conditionGrade }));
+                  }}
+                />
+              )}
 
               {tier === 'TEAMS' && consignorOptions && consignorOptions.length > 0 && (
                 <div>
@@ -2760,6 +2768,13 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                           ebayCategoryId={formData.ebayCategoryId || null}
                           onApplySuggestedPrice={(price) =>
                             setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))
+                          }
+                          policyName={ebayFulfillmentPolicies.find((p) => p.fulfillmentPolicyId === item?.ebayFulfillmentPolicyOverrideId)?.name ?? null}
+                          policyDescription={ebayFulfillmentPolicies.find((p) => p.fulfillmentPolicyId === item?.ebayFulfillmentPolicyOverrideId)?.description ?? null}
+                          policyOptions={ebayFulfillmentPolicies.map((p) => ({ id: p.fulfillmentPolicyId, name: p.name }))}
+                          policyValue={formData.ebayFulfillmentPolicyOverrideId || ''}
+                          onPolicyChange={(policyId) =>
+                            setFormData({ ...formData, ebayFulfillmentPolicyOverrideId: policyId })
                           }
                         />
                       </div>
