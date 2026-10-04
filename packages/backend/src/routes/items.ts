@@ -53,6 +53,8 @@ import { withdrawReverbListingIfExists } from '../services/marketplace/reverbCon
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { organizerEditStampAlways } from '../utils/organizerEdit'; // item editor unification (B6): organizer bulk edits stamp Item.lastEditedAt
+import { resolveItemOwnerOrganizer, type ItemOwnerInput, type OrganizerLookupClient } from '../utils/itemOwner'; // item editor unification (B1): default-deny owner resolution that also covers saleless inventory items
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
 import { requireRetagAccess } from '../utils/actingOrganizer'; // 2026-09-29: Markdown Re-tag routes serve owner (any tier) + TEAMS staff
@@ -78,6 +80,76 @@ const bulkPhotosSchema = z.object({
   photoUrls: z.array(z.string()).min(1, 'photoUrls must be a non-empty array'),
   dryRun: z.boolean().optional(),
 });
+
+// Item editor unification (B1, 2026-10-04): default-deny per-item ownership for the bulk routes.
+// The old check was `i.sale!.organizer.userId !== userId`, which throws a TypeError (500) for a saleless
+// inventory item (sale is null) and so could never serve inventory items. This resolves every item through
+// resolveItemOwnerOrganizer (sale items: sale.organizer must be the caller; inventory items: Organizer
+// looked up by item.organizerId AND userId; anything unresolvable is NOT owned). Inventory lookups are cached
+// per organizerId so a large bulk request makes at most one lookup per distinct organizer. A database error
+// propagates to the route's catch block (500); it is never treated as ownership.
+async function findUnownedItems<T extends ItemOwnerInput>(
+  items: T[],
+  userId: string,
+  client: OrganizerLookupClient,
+): Promise<T[]> {
+  const inventoryOwnership = new Map<string, boolean>();
+  const unowned: T[] = [];
+  for (const item of items) {
+    const isInventoryItem = !item.sale && !item.saleId && typeof item.organizerId === 'string' && item.organizerId.length > 0;
+    if (isInventoryItem) {
+      const key = item.organizerId as string;
+      let owned = inventoryOwnership.get(key);
+      if (owned === undefined) {
+        owned = (await resolveItemOwnerOrganizer(item, userId, client)) !== null;
+        inventoryOwnership.set(key, owned);
+      }
+      if (!owned) unowned.push(item);
+      continue;
+    }
+    if ((await resolveItemOwnerOrganizer(item, userId, client)) === null) unowned.push(item);
+  }
+  return unowned;
+}
+
+// Bulk eBay category fields (review page sends category, ebayCategoryId and ebayCategoryName as three operations).
+// Trimmed, length-limited and character-limited strings; the id is a numeric eBay leaf category id (1 to 10 digits),
+// the name is free text without control characters.
+function validateEbayCategoryBulkValue(
+  operation: string,
+  value: unknown,
+): { ok: true; value: string } | { ok: false; message: string } {
+  if (typeof value !== 'string') {
+    return { ok: false, message: `${operation} value must be a non-empty string.` };
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: false, message: `${operation} value must be a non-empty string.` };
+  }
+  if (operation === 'ebayCategoryId') {
+    // eBay leaf category ids are numeric, so anything but 1 to 10 digits is rejected.
+    if (!/^\d{1,10}$/.test(trimmed)) {
+      return { ok: false, message: 'ebayCategoryId must be 1 to 10 digits.' };
+    }
+  } else {
+    // eslint-disable-next-line no-control-regex
+    if (trimmed.length > 200 || /[\u0000-\u001f\u007f]/.test(trimmed)) {
+      return { ok: false, message: 'ebayCategoryName must be 1 to 200 characters with no control characters.' };
+    }
+  }
+  return { ok: true, value: trimmed };
+}
+
+// eBay rejects listings priced under $0.99, so a bulk price write must never push an eBay-listed item below it.
+// Non-eBay items are unaffected. Callers pass the already-rounded new price.
+const EBAY_MIN_PRICE = 0.99;
+const EBAY_MIN_PRICE_REASON = 'eBay minimum price is $0.99';
+function belowEbayFloor(
+  item: { ebayOfferId?: string | null; ebayListingId?: string | null },
+  newPrice: number,
+): boolean {
+  return !!(item.ebayOfferId || item.ebayListingId) && newPrice < EBAY_MIN_PRICE;
+}
 
 const highValueSchema = z.object({
   isHighValue: z.boolean().optional(),
@@ -195,7 +267,6 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         category: true,
         tags: true,
         photoUrls: true,
-        ebayOfferId: true,
         saleId: true,
         // Feature #309/#70 follow-up (2026-09-24): bulk consignor-attribution operation needs
         // both -- vendorBoothId to skip items already attributed to a vendor booth (mutually
@@ -203,13 +274,17 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         // symmetry/debuggability (not currently branched on).
         consignorId: true,
         vendorBoothId: true,
-        sale: { select: { organizer: { select: { id: true, userId: true } } } },
+        // Item editor unification (B1/B6 knock-on): organizerId resolves inventory (saleless) ownership;
+        // ebayListingId/ebayOfferId pick the eBay-listed subset for bulk price writes.
+        organizerId: true,
+        ebayListingId: true,
+        ebayOfferId: true,
+        sale: { select: { organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } },
       },
     });
 
-    const unauthorised = items.filter(
-      (i) => i.sale!.organizer.userId !== authReq.user!.id
-    );
+    // Default-deny ownership for EVERY returned item, sale items and saleless inventory items alike.
+    const unauthorised = await findUnownedItems(items, authReq.user.id, prisma);
     if (unauthorised.length > 0) {
       // P0 Fix 1: Hide item existence — return 404 instead of 403 to prevent auth bypass
       return res.status(404).json({ message: 'One or more items not found.' });
@@ -230,6 +305,8 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
       delete: ['AVAILABLE', 'DRAFT'],
       status: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED'],
       category: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SOLD', 'RESERVED'],
+      ebayCategoryId: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SOLD', 'RESERVED'],
+      ebayCategoryName: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SOLD', 'RESERVED'],
       price: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED'],
       price_adjust: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED'],
       isActive: ['AVAILABLE', 'DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'SOLD', 'RESERVED'],
@@ -360,26 +437,55 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           });
         }
 
+        case 'ebayCategoryId':
+        case 'ebayCategoryName': {
+          const checked = validateEbayCategoryBulkValue(operation, value);
+          if (!checked.ok) {
+            return res.status(400).json({ message: checked.message });
+          }
+          for (const item of confirmedItems) {
+            newValues[item.id] = checked.value;
+          }
+          return res.json({
+            message: 'Dry run: no changes applied',
+            count: confirmedIds.length,
+            affectedIds: confirmedIds,
+            wouldChange: true,
+            operation,
+            oldValues,
+            newValues,
+          });
+        }
+
         case 'price_adjust': {
           const pct = typeof value === 'number' ? value : parseFloat(value as string);
           if (isNaN(pct) || pct === 0) {
             return res.status(400).json({ message: 'price_adjust value must be a non-zero number (percent).' });
           }
           const multiplier = 1 + pct / 100;
+          const dryAdjustSkipped: Array<{ itemId: string; reason: string }> = [];
           for (const item of confirmedItems) {
             if (item.price !== null) {
+              const dryNewPrice = Math.max(0, parseFloat((item.price * multiplier).toFixed(2)));
+              if (belowEbayFloor(item, dryNewPrice)) {
+                dryAdjustSkipped.push({ itemId: item.id, reason: EBAY_MIN_PRICE_REASON });
+                continue;
+              }
               oldValues[item.id] = item.price;
-              newValues[item.id] = Math.max(0, parseFloat((item.price * multiplier).toFixed(2)));
+              newValues[item.id] = dryNewPrice;
             }
           }
+          const dryAdjustSkippedIds = new Set(dryAdjustSkipped.map((s) => s.itemId));
+          const dryAdjustAffected = confirmedIds.filter((id) => !dryAdjustSkippedIds.has(id));
           return res.json({
             message: 'Dry run: no changes applied',
-            count: confirmedIds.length,
-            affectedIds: confirmedIds,
+            count: dryAdjustAffected.length,
+            affectedIds: dryAdjustAffected,
             wouldChange: Object.keys(oldValues).length > 0,
             operation: 'price_adjust',
             oldValues,
             newValues,
+            ...(dryAdjustSkipped.length > 0 && { skipped: dryAdjustSkipped }),
           });
         }
 
@@ -388,18 +494,27 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           if (isNaN(price) || price < 0) {
             return res.status(400).json({ message: 'price value must be a non-negative number.' });
           }
+          const dryFinalPrice = Math.max(0, parseFloat(price.toFixed(2)));
+          const dryPriceSkipped: Array<{ itemId: string; reason: string }> = [];
+          const dryPriceAffected: string[] = [];
           for (const item of confirmedItems) {
+            if (belowEbayFloor(item, dryFinalPrice)) {
+              dryPriceSkipped.push({ itemId: item.id, reason: EBAY_MIN_PRICE_REASON });
+              continue;
+            }
+            dryPriceAffected.push(item.id);
             oldValues[item.id] = item.price;
-            newValues[item.id] = Math.max(0, parseFloat(price.toFixed(2)));
+            newValues[item.id] = dryFinalPrice;
           }
           return res.json({
             message: 'Dry run: no changes applied',
-            count: confirmedIds.length,
-            affectedIds: confirmedIds,
-            wouldChange: true,
+            count: dryPriceAffected.length,
+            affectedIds: dryPriceAffected,
+            wouldChange: dryPriceAffected.length > 0,
             operation: 'price',
             oldValues,
             newValues,
+            ...(dryPriceSkipped.length > 0 && { skipped: dryPriceSkipped }),
           });
         }
 
@@ -507,7 +622,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         for (let i = 0; i < confirmedItems.length; i += DELETE_PREP_CHUNK) {
           const chunk = confirmedItems.slice(i, i + DELETE_PREP_CHUNK);
           const chunkSnapshots = await Promise.all(
-            chunk.map((it) => prepareItemForDeletion(it.id, { organizerId: it.sale?.organizer.id ?? null }))
+            chunk.map((it) => prepareItemForDeletion(it.id, { organizerId: it.sale?.organizer.id ?? it.organizerId ?? null }))
           );
           deletionSnapshots.push(...chunkSnapshots);
         }
@@ -537,7 +652,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         }
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
-          data: { status: value as string },
+          data: { status: value as string, ...organizerEditStampAlways() },
         });
 
         // Withdraw from eBay for any items that were AVAILABLE → SOLD and have an eBay offer (fire-and-forget)
@@ -593,7 +708,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
-          data: { category },
+          data: { category, ...organizerEditStampAlways() },
         });
         const catStatus = failed.length > 0 ? 207 : 200;
         return res.status(catStatus).json({
@@ -601,6 +716,32 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           succeeded,
           failed,
           operation: 'category',
+        });
+      }
+
+      // Item editor unification (review defect #3): the review page's bulk category picker also sends the
+      // chosen eBay leaf category as ebayCategoryId and ebayCategoryName operations. They were unhandled
+      // (400 Unknown operation). Authorized ids only (confirmedIds), validated, trimmed, stamped.
+      case 'ebayCategoryId':
+      case 'ebayCategoryName': {
+        const checked = validateEbayCategoryBulkValue(operation, value);
+        if (!checked.ok) {
+          return res.status(400).json({ message: checked.message });
+        }
+        succeeded.push(...confirmedIds);
+        await prisma.item.updateMany({
+          where: { id: { in: confirmedIds } },
+          data:
+            operation === 'ebayCategoryId'
+              ? { ebayCategoryId: checked.value, ...organizerEditStampAlways() }
+              : { ebayCategoryName: checked.value, ...organizerEditStampAlways() },
+        });
+        const ebayCatStatus = failed.length > 0 ? 207 : 200;
+        return res.status(ebayCatStatus).json({
+          message: `Updated ${operation === 'ebayCategoryId' ? 'eBay category' : 'eBay category name'} for ${confirmedIds.length} item(s).`,
+          succeeded,
+          failed,
+          operation,
         });
       }
 
@@ -617,7 +758,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         if (eligible.length > 0) {
           await prisma.item.updateMany({
             where: { id: { in: eligible.map((i) => i.id) } },
-            data: { consignorId: matchedConsignor!.id },
+            data: { consignorId: matchedConsignor!.id, ...organizerEditStampAlways() },
           });
         }
         const consignorStatus = (failed.length > 0 || skipped.length > 0) ? 207 : 200;
@@ -638,21 +779,50 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         const multiplier = 1 + pct / 100;
 
         const validItems = confirmedItems.filter((i) => i.price !== null);
-        const skipped = confirmedItems
+        const skipped: Array<{ itemId: string; reason: string }> = confirmedItems
           .filter((i) => i.price === null)
           .map((i) => ({ itemId: i.id, reason: 'price not set' }));
 
-        succeeded.push(...validItems.map(i => i.id));
-        const updates = validItems.map((i) => {
+        // eBay price floor: an eBay-listed item whose new price would be under $0.99 is not written, it is
+        // reported in `skipped` (the add-items page already toasts the first skip reason).
+        const adjustWritable: typeof validItems = [];
+        for (const i of validItems) {
+          const candidatePrice = Math.max(0, parseFloat((i.price! * multiplier).toFixed(2)));
+          if (belowEbayFloor(i, candidatePrice)) {
+            skipped.push({ itemId: i.id, reason: EBAY_MIN_PRICE_REASON });
+          } else {
+            adjustWritable.push(i);
+          }
+        }
+
+        succeeded.push(...adjustWritable.map(i => i.id));
+        // Item editor unification (B6 knock-on): a bulk price write must carry priceUpdatedAt (the provenance
+        // stamp ebayListingSyncCron's pull-sync clobber guard reads) and, for eBay-listed items whose price
+        // really changed, ebaySyncState PENDING, mirroring itemController.updateItem on a real price change.
+        const adjustNow = new Date();
+        const adjustChangedEbayIds: string[] = [];
+        const updates = adjustWritable.map((i) => {
           const newPrice = Math.max(0, parseFloat((i.price! * multiplier).toFixed(2)));
+          const priceChanged = Math.abs(newPrice - i.price!) >= 0.005;
+          if (priceChanged && (i.ebayOfferId || i.ebayListingId)) adjustChangedEbayIds.push(i.id);
           oldValues[i.id] = i.price;
           newValues[i.id] = newPrice;
           return prisma.item.update({
             where: { id: i.id },
-            data: { price: newPrice },
+            data: {
+              price: newPrice,
+              ...(priceChanged ? { priceUpdatedAt: adjustNow } : {}),
+              ...organizerEditStampAlways(adjustNow),
+            },
           });
         });
         await Promise.all(updates);
+        if (adjustChangedEbayIds.length > 0) {
+          await prisma.item.updateMany({
+            where: { id: { in: adjustChangedEbayIds } },
+            data: { ebaySyncState: 'PENDING', ebaySyncAttempts: 0, ebaySyncFailureReason: null },
+          });
+        }
         const adjStatus = (failed.length > 0 || skipped.length > 0) ? 207 : 200;
         return res.status(adjStatus).json({
           message: `Adjusted prices for ${updates.length} item(s) by ${pct}%.`,
@@ -668,7 +838,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
-          data: { isActive },
+          data: { isActive, ...organizerEditStampAlways() },
         });
         const action = isActive ? 'activated' : 'hidden';
         const activeStatus = failed.length > 0 ? 207 : 200;
@@ -686,21 +856,58 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           return res.status(400).json({ message: 'price value must be a non-negative number.' });
         }
         const finalPrice = Math.max(0, parseFloat(price.toFixed(2)));
-        succeeded.push(...confirmedIds);
-        for (const item of confirmedItems) {
+        // eBay price floor: eBay-listed items that would drop under $0.99 are not written, they are reported in
+        // `skipped`. Everything below works on the writable subset only.
+        const priceSkipped: Array<{ itemId: string; reason: string }> = [];
+        const priceWritable = confirmedItems.filter((i) => {
+          if (belowEbayFloor(i, finalPrice)) {
+            priceSkipped.push({ itemId: i.id, reason: EBAY_MIN_PRICE_REASON });
+            return false;
+          }
+          return true;
+        });
+        const priceWritableIds = priceWritable.map((i) => i.id);
+        succeeded.push(...priceWritableIds);
+        for (const item of priceWritable) {
           oldValues[item.id] = item.price;
           newValues[item.id] = finalPrice;
         }
-        await prisma.item.updateMany({
-          where: { id: { in: confirmedIds } },
-          data: { price: finalPrice },
-        });
-        const priceStatus = failed.length > 0 ? 207 : 200;
+        // Item editor unification (B6 knock-on): priceUpdatedAt only for items whose price really changes
+        // (a same-price bulk set must not reset the provenance stamp), PENDING only for the eBay-listed
+        // subset of those, via a second updateMany scoped to the already-authorized ids.
+        const priceNow = new Date();
+        const changedPriceIds = priceWritable
+          .filter((i) => i.price === null || Math.abs(i.price - finalPrice) >= 0.005)
+          .map((i) => i.id);
+        const unchangedPriceIds = priceWritableIds.filter((id) => !changedPriceIds.includes(id));
+        if (changedPriceIds.length > 0) {
+          await prisma.item.updateMany({
+            where: { id: { in: changedPriceIds } },
+            data: { price: finalPrice, priceUpdatedAt: priceNow, ...organizerEditStampAlways(priceNow) },
+          });
+        }
+        if (unchangedPriceIds.length > 0) {
+          await prisma.item.updateMany({
+            where: { id: { in: unchangedPriceIds } },
+            data: { price: finalPrice, ...organizerEditStampAlways(priceNow) },
+          });
+        }
+        const changedEbayPriceIds = priceWritable
+          .filter((i) => changedPriceIds.includes(i.id) && (i.ebayOfferId || i.ebayListingId))
+          .map((i) => i.id);
+        if (changedEbayPriceIds.length > 0) {
+          await prisma.item.updateMany({
+            where: { id: { in: changedEbayPriceIds } },
+            data: { ebaySyncState: 'PENDING', ebaySyncAttempts: 0, ebaySyncFailureReason: null },
+          });
+        }
+        const priceStatus = (failed.length > 0 || priceSkipped.length > 0) ? 207 : 200;
         return res.status(priceStatus).json({
-          message: `Updated price to $${finalPrice.toFixed(2)} for ${confirmedIds.length} item(s).`,
+          message: `Updated price to $${finalPrice.toFixed(2)} for ${priceWritableIds.length} item(s).`,
           succeeded,
           failed,
           operation: 'price',
+          ...(priceSkipped.length > 0 && { skipped: priceSkipped }),
         });
       }
 
@@ -709,7 +916,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
-          data: { backgroundRemoved: bgRemoved },
+          data: { backgroundRemoved: bgRemoved, ...organizerEditStampAlways() },
         });
         const action = bgRemoved ? 'applied background removal to' : 'removed background removal from';
         const bgStatus = failed.length > 0 ? 207 : 200;
@@ -729,7 +936,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         succeeded.push(...confirmedIds);
         await prisma.item.updateMany({
           where: { id: { in: confirmedIds } },
-          data: { draftStatus: value as string },
+          data: { draftStatus: value as string, ...organizerEditStampAlways() },
         });
         const dsStatus = failed.length > 0 ? 207 : 200;
         return res.status(dsStatus).json({
@@ -783,6 +990,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
               tags: updatedTags,
               // P0 fix: keep ebayShippingClassification in sync whenever bulk tag ops change tags.
               ebayShippingClassification: classifyEbayShipping(item.category, updatedTags),
+              ...organizerEditStampAlways(),
             },
           });
         }
@@ -840,13 +1048,14 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
       select: {
         id: true,
         photoUrls: true,
-        sale: { select: { organizer: { select: { userId: true } } } },
+        saleId: true,
+        organizerId: true,
+        sale: { select: { organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } },
       },
     });
 
-    const unauthorised = items.filter(
-      (i) => i.sale!.organizer.userId !== authReq.user!.id
-    );
+    // Default-deny ownership for every returned item (sale and saleless inventory items), see findUnownedItems.
+    const unauthorised = await findUnownedItems(items, authReq.user.id, prisma);
     if (unauthorised.length > 0) {
       // P0 Fix 1: Hide item existence — return 404 instead of 403 to prevent auth bypass
       return res.status(404).json({ message: 'One or more items not found.' });
@@ -888,6 +1097,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
             where: { id: item.id },
             data: {
               photoUrls: [...item.photoUrls, ...newPhotos],
+              ...organizerEditStampAlways(),
             },
           });
           confirmedIds.push(item.id);
@@ -912,6 +1122,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
             where: { id: item.id },
             data: {
               photoUrls: filtered,
+              ...organizerEditStampAlways(),
             },
           });
           confirmedIds.push(item.id);

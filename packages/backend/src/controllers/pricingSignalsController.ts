@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { authenticate, requireOrganizer } from '../middleware/auth';
+import { authenticate, requireOrganizer, AuthRequest } from '../middleware/auth';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
 import { extractL1 } from '../config/ebayCategories';
 
 /**
@@ -24,11 +25,26 @@ export const getPricingSignals = [
           brand: true,
           category: true,
           price: true,
+          // Owner resolution inputs: sale items resolve through sale.organizer, inventory items (saleId null)
+          // through Item.organizerId plus the caller's userId.
+          saleId: true,
+          organizerId: true,
+          sale: {
+            select: {
+              organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
+            },
+          },
         },
       });
 
       if (!item) {
         return res.status(404).json({ error: 'Item not found' });
+      }
+
+      // Owner only, for sale items and inventory items alike. Default deny: a null owner is a 403.
+      const owner = await resolveItemOwnerOrganizer(item, (req as AuthRequest).user?.id);
+      if (!owner) {
+        return res.status(403).json({ error: 'Access denied. Not your item.' });
       }
 
       // Check for sleeper pattern match

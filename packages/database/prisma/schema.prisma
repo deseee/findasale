@@ -1780,6 +1780,12 @@ model Item {
   ebaySyncState                   EbaySyncState? // ADR-128 (2026-09-19): SYNCED | PENDING | FAILED_RETRYABLE | FAILED_TERMINAL, classified at the propagation boundary by classifyPropagationFailure() (markdownPricePropagationService.ts). FAILED_TERMINAL means no retry can fix it, and ebayListingSyncCron.ts must stop spending eBay API calls on this item. null on every pre-ADR-128 row = not tracked by this mechanism, which falls through to the existing priceUpdatedAt/ebayPriceSyncedAt behavior.
   ebaySyncFailureReason           String? // ADR-128 (2026-09-19): the REAL eBay error text (e.g. "put-failed - HTTP 400 ...Size aspect value not supported..."), not a category -- this is what the one-time terminal-failure notification shows the organizer. Cleared to null on a confirmed sync.
   ebaySyncAttempts                Int                     @default(0) // ADR-128 (2026-09-19): consecutive failed eBay price-push attempts; reset to 0 on a confirmed sync. Never rolls Item.price back -- ADR-128 explicitly rejects rollback; this only counts how long the gap has persisted.
+  // Pull-sync hold (U2, 2026-10-04): set when the organizer saves with "Save without updating marketplaces". While set, ebayListingSyncCron.ts must skip the pull (and the price push-first) for this item. Persists until an explicit "Update eBay now" push succeeds or the organizer chooses "Resume syncing"; it never expires on its own. Null = not held.
+  ebaySyncHeldAt                  DateTime?
+  // Pull-sync hold (U2): the Item field names (title, description, condition, price) that changed locally while the hold was set. Empty array = nothing held. Cleared together with ebaySyncHeldAt.
+  ebayHeldFields                  String[]                @default([])
+  // Pull-sync guard (U2): stamped when title, description or condition REALLY change on an eBay-listed item; cleared when an eBay push confirms success. While set, the cron must not overwrite those content fields from eBay. Null = no unpushed local content edit.
+  ebayContentDirtyAt              DateTime?
   fbExportedAt                    DateTime?
   // ADR-085 Track B (2026-07-16): general, cross-channel stock pool. Distinct from
   // `quantity` above (photos bundled into one lot) AND from the eBay-specific
@@ -1794,6 +1800,8 @@ model Item {
   ebayQuantityAvailable           Int? // total units on the eBay listing (null/1 = single-unit)
   ebayQuantitySold                Int                     @default(0) // units sold via eBay, projected from EbaySoldEvent
   ebaySoldEvents                  EbaySoldEvent[]
+  // U1 (2026-10-04): per-save marketplace push outcomes (what was attempted, what landed, why it failed). Pruned to the last 20 rows per item on write.
+  marketplacePushes               ItemMarketplacePush[]
   // ADR-083: Marketplace Poster jobs (post/remove) for this item
   marketplaceJobs                 MarketplaceListingJob[]
   // Feature #602: AI Message-Reply Autosend decision log (monitoring/observability)
@@ -1883,6 +1891,31 @@ model EbaySoldEvent {
   @@unique([ebayOrderId, ebayLineItemId]) // IDEMPOTENCY KEY — one row per eBay sale line
   @@index([itemId])
   @@index([ebayListingId])
+}
+
+// U1 (2026-10-04): one row per marketplace push attempt triggered from the item editor (or a retry),
+// so the organizer can see what was pushed and why a push failed. Written by services/ebayItemPushService.ts,
+// pruned to the last 20 rows per item on write. organizerId is a plain column with no FK (matches EtsyListing).
+// platform/trigger/status are plain String columns on purpose (no Prisma enums, so no enum DDL).
+model ItemMarketplacePush {
+  id              String    @id @default(cuid())
+  itemId          String
+  item            Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  organizerId     String
+  platform        String // EBAY (extension platforms are prompt-only and never write rows)
+  trigger         String // SAVE | REPUSH | RETRY
+  fieldsAttempted String[] // Item field names the real diff said should be pushed
+  fieldsPushed    String[] // subset of fieldsAttempted that the marketplace confirmed
+  status          String // SUCCESS | PARTIAL | FAILED | SKIPPED_HELD | SKIPPED_NOT_LISTED
+  errorCode       String?
+  errorMessage    String? // sanitized, truncated to 500 chars by the writer; never raw payloads or tokens
+  startedAt       DateTime
+  finishedAt      DateTime?
+  acknowledgedAt  DateTime? // set when the organizer dismisses a FAILED row (clears the Add Items list badge)
+  createdAt       DateTime  @default(now())
+
+  @@index([itemId, createdAt(sort: Desc)])
+  @@index([organizerId, status, acknowledgedAt])
 }
 
 // ADR-069 Phase 2: Photo role taxonomy

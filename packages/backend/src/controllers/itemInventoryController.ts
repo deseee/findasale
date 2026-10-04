@@ -9,6 +9,33 @@ import {
   getPricingSuggestion,
   InventoryFilters,
 } from '../services/itemInventoryService';
+import { prisma } from '../lib/prisma';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
+
+/**
+ * Ownership gate for the handlers that take :itemId from the URL and hand it straight to a service that does
+ * not check the caller (remove, price-history, pricing-advice). Loads the item with what
+ * resolveItemOwnerOrganizer needs (organizerId, saleId and the sale's organizer) and returns true only when
+ * the caller owns it. A missing item and someone else's item both return false, so the caller answers the
+ * same 404 for both and never reveals that an item exists. A database error propagates to the handler's catch.
+ */
+async function callerOwnsItem(itemId: string, userId: string | undefined): Promise<boolean> {
+  const item = await prisma.item.findUnique({
+    where: { id: itemId },
+    select: {
+      id: true,
+      organizerId: true,
+      saleId: true,
+      sale: {
+        select: {
+          organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
+        },
+      },
+    },
+  });
+  if (!item) return false;
+  return (await resolveItemOwnerOrganizer(item, userId)) !== null;
+}
 
 /**
  * POST /api/item-inventory/add
@@ -50,6 +77,12 @@ export const removeItemFromInventory = async (req: AuthRequest, res: Response): 
     const { itemId } = req.params;
     if (!itemId) {
       res.status(400).json({ message: 'itemId is required' });
+      return;
+    }
+
+    // Same 404 body for a missing item and for someone else's item (no existence leak).
+    if (!(await callerOwnsItem(itemId, req.user.id))) {
+      res.status(404).json({ message: 'Item not found' });
       return;
     }
 
@@ -135,6 +168,12 @@ export const getItemPriceHistory = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
+    // Ownership first: the service reads by itemId alone. 404 (same body as a missing item) when not the owner.
+    if (!(await callerOwnsItem(itemId, req.user.id))) {
+      res.status(404).json({ message: 'Item not found' });
+      return;
+    }
+
     const history = await getPriceHistory(itemId);
     res.json({ history });
   } catch (error: any) {
@@ -160,6 +199,12 @@ export const getItemPricingAdvice = async (req: AuthRequest, res: Response): Pro
 
     if (!itemId || !saleId) {
       res.status(400).json({ message: 'itemId and saleId are required' });
+      return;
+    }
+
+    // Ownership first: the service reads by itemId alone. 404 (same body as a missing item) when not the owner.
+    if (!(await callerOwnsItem(itemId, req.user.id))) {
+      res.status(404).json({ message: 'Item not found' });
       return;
     }
 

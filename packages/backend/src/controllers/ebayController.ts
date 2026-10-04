@@ -68,6 +68,7 @@ import { estimatePackageProfile, isNeverShippableItem } from '../services/ebayPa
 import { modelTokenFrom } from '../services/ebayCatalogLookup';
 import { fetchAndCacheEbayStoreSubscription } from '../services/ebayStoreSubscriptionService';
 import { csvCell } from '../utils/csvSafe'; // CSV formula-injection-safe cell writer
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // B1: inventory-safe, default-deny item ownership
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -456,9 +457,13 @@ export const getComps = async (req: AuthRequest, res: Response) => {
         id: true,
         title: true,
         conditionGrade: true,
+        aiSuggestedPrice: true,
+        saleId: true,
+        organizerId: true,
         sale: {
           select: {
             organizerId: true,
+            organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
           },
         },
       },
@@ -468,12 +473,10 @@ export const getComps = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Verify organizer owns this item
-    // userId is User.id, but item.sale!.organizerId is Organizer.id, so we need to look up the organizer first
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId },
-    });
-    if (!organizer || item.sale!.organizerId !== organizer.id) {
+    // Verify the caller owns this item. Sale items resolve through sale.organizer; inventory items
+    // (no sale) resolve through item.organizerId + userId. Default deny (B1).
+    const owner = await resolveItemOwnerOrganizer(item, userId);
+    if (!owner) {
       return res.status(403).json({ message: 'Not authorized to access this item' });
     }
 
@@ -484,14 +487,23 @@ export const getComps = async (req: AuthRequest, res: Response) => {
       maxResults: 10
     });
 
-    // Update item with suggested price if available
+    // Update item with suggested price if available. B4: write only when the value actually changed
+    // (a no-op update still bumps Item.updatedAt, and this endpoint fires when the Edit page opens).
+    // This is an automated write, so it never stamps lastEditedAt.
     if (comps.count > 0) {
-      await prisma.item.update({
-        where: { id },
-        data: {
-          aiSuggestedPrice: comps.suggestedPrice,
-        },
-      });
+      const nextSuggested = Number(comps.suggestedPrice);
+      const currentSuggested = item.aiSuggestedPrice != null ? Number(item.aiSuggestedPrice) : null;
+      const suggestedChanged =
+        Number.isFinite(nextSuggested) &&
+        (currentSuggested == null || !Number.isFinite(currentSuggested) || Math.abs(currentSuggested - nextSuggested) >= 0.005);
+      if (suggestedChanged) {
+        await prisma.item.update({
+          where: { id },
+          data: {
+            aiSuggestedPrice: comps.suggestedPrice,
+          },
+        });
+      }
     }
 
     res.json(comps);
@@ -1832,9 +1844,12 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
         costBasis: true,
         roomTag: true,
         card: { select: { game: true, productType: true } },
+        saleId: true,
+        organizerId: true,
         sale: {
           select: {
             organizerId: true,
+            organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
           },
         },
       },
@@ -1844,12 +1859,15 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Verify organizer owns this item
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId },
-    });
+    // Verify the caller owns this item (sale items via sale.organizer, inventory items via
+    // item.organizerId + userId; default deny, B1). The full organizer row is still needed below
+    // for the SKU and watermark settings, and must be the same organizer the helper resolved.
+    const previewOwner = await resolveItemOwnerOrganizer(item, userId);
+    const organizer = previewOwner
+      ? await prisma.organizer.findUnique({ where: { userId } })
+      : null;
 
-    if (!organizer || item.sale!.organizerId !== organizer.id) {
+    if (!previewOwner || !organizer || organizer.id !== previewOwner.id) {
       return res.status(403).json({ message: 'Not authorized to preview this item' });
     }
 
@@ -2067,7 +2085,7 @@ export async function applyNeverShippableOverride(item: {
   category?: string | null;
   ebayShippingOverride?: string | null;
   packageConfirmedByOrganizer?: boolean | null;
-}): Promise<{ pickupOnlyForced: true } | null> {
+}, opts: { persist?: boolean } = {}): Promise<{ pickupOnlyForced: true } | null> {
   // Already LOCAL_PICKUP_ONLY (whether from a prior run of this function or an
   // organizer's own override) -- nothing to do.
   if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return null;
@@ -2077,17 +2095,21 @@ export async function applyNeverShippableOverride(item: {
     !item.ebayShippingOverride &&
     isNeverShippableItem(item.title, item.description, item.category)
   ) {
-    try {
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' },
-      });
-    } catch (e: any) {
-      console.warn(
-        '[eBay AutoWeight] failed to persist never-shippable pickup-only override for item',
-        item.id,
-        e?.message || e
-      );
+    // persist defaults to true (every existing caller). The fee check passes persist:false so it can
+    // classify in memory without writing the Item (B2).
+    if (opts.persist !== false) {
+      try {
+        await prisma.item.update({
+          where: { id: item.id },
+          data: { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' },
+        });
+      } catch (e: any) {
+        console.warn(
+          '[eBay AutoWeight] failed to persist never-shippable pickup-only override for item',
+          item.id,
+          e?.message || e
+        );
+      }
     }
     console.log(`[eBay AutoWeight] item=${item.id} matched never-shippable keyword — forced LOCAL_PICKUP_ONLY`);
     return { pickupOnlyForced: true };
@@ -2287,11 +2309,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       // the queueOnly branch below. Used internally by addToEbayQueue via
       // pushItemsToEbayQueueOnly(), never sent directly by the frontend.
       queueOnly?: boolean;
-      // Manual push panel pre-flight fee visibility (2026-09-15): when true,
-      // this per-item loop stops right after offer creation/update -- same
-      // spot as queueOnly -- but does NOT set ebayQueuedAt, so the item is
-      // never silently enrolled in ebayListingQueueCron.ts's automatic Phase A
-      // fill just because the organizer looked at the fee. Used internally by
+      // Manual push panel pre-flight fee visibility (2026-09-15, made read-only
+      // by B2): when true, the per-item loop takes a strictly read-only path at
+      // the top of the loop. It never creates or updates an eBay inventory item
+      // or offer, never writes an Item, and never sets ebayQueuedAt. It only
+      // asks eBay for the fee of an offer that already exists (item.ebayOfferId);
+      // items with no stored offer are reported as not ready. Used internally by
       // checkItemEbayFee via pushItemsToEbayFeeCheckOnly(), never sent
       // directly by the frontend.
       feeCheckOnly?: boolean;
@@ -2482,14 +2505,19 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       state: sale.state || '',
       zip: sale.zip || '',
     } : null;
-    const locationResult = await getOrCreateMerchantLocation(accessToken, saleAddressHint);
-    if ('error' in locationResult) {
-      return res.status(400).json({
-        error: 'MERCHANT_LOCATION_UNAVAILABLE',
-        message: 'Seller has no eBay inventory location and sale address is missing. Please add a pickup/warehouse address in eBay Seller Hub or set the sale address in FindA.Sale first.',
-      });
+    // B2: a fee check never builds an offer, and getOrCreateMerchantLocation can CREATE a location on
+    // the seller's eBay account, so it is skipped entirely for feeCheckOnly. Real pushes are unchanged.
+    let merchantLocationKey = '';
+    if (!feeCheckOnly) {
+      const locationResult = await getOrCreateMerchantLocation(accessToken, saleAddressHint);
+      if ('error' in locationResult) {
+        return res.status(400).json({
+          error: 'MERCHANT_LOCATION_UNAVAILABLE',
+          message: 'Seller has no eBay inventory location and sale address is missing. Please add a pickup/warehouse address in eBay Seller Hub or set the sale address in FindA.Sale first.',
+        });
+      }
+      merchantLocationKey = locationResult.merchantLocationKey;
     }
-    const merchantLocationKey = locationResult.merchantLocationKey;
 
     // S725: All pushes go LIVE. DRAFT mode removed — eBay Inventory API
     // unpublished offers can't be viewed/published from Seller Hub UI.
@@ -2548,6 +2576,135 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     for (const item of sale.items) {
       try {
+        // B2: FEE CHECK, strictly read-only. It must never write an Item, create or update an eBay
+        // inventory item or offer, create a policy or a location, or enqueue anything. Everything the real
+        // push below does that persists (never-shippable override, category cache, ISBN resolve, shipping
+        // policy provisioning, inventory item PUT, offer create/update/delete, ebayOfferId save) is
+        // skipped here. eBay can only quote a fee for an offer that already exists, so an item with no
+        // stored offer is reported as not ready instead of having one created.
+        if (feeCheckOnly) {
+          const feeSku = buildCustomLabel(item.id, organizer, item);
+
+          // Already live on eBay: eBay's get_listing_fees only works for unpublished offers, so a check
+          // would always come back unknown. Answer not ready without calling eBay at all.
+          if (item.ebayListingId) {
+            results.push({
+              itemId: item.id,
+              sku: feeSku,
+              status: 'error',
+              code: 'EBAY_ALREADY_LISTED',
+              message: 'This item is already listed on eBay. Fees are shown on your eBay listing.',
+            });
+            continue;
+          }
+
+          // Never-shippable classification in memory only (persist:false).
+          const feeOverride = await applyNeverShippableOverride(
+            {
+              id: item.id,
+              title: item.title,
+              description: item.description,
+              category: item.category,
+              ebayShippingOverride: item.ebayShippingOverride,
+              packageConfirmedByOrganizer: (item as any).packageConfirmedByOrganizer,
+            },
+            { persist: false }
+          );
+          const feeShippingOverride = feeOverride?.pickupOnlyForced ? 'LOCAL_PICKUP_ONLY' : item.ebayShippingOverride;
+
+          // Same card refusal as the real push, using the stored or pinned category only (no writes).
+          if (item.card) {
+            const feeCardCategoryId = item.ebayCategoryId || getPinnedCardCategory(item.card)?.id || null;
+            if (isPinnedCardCategoryId(feeCardCategoryId)) {
+              const feeCoin = await resolveCoinConditionOverride(feeCardCategoryId ?? '99', {
+                title: item.title,
+                description: item.description,
+                tags: item.tags,
+                card: item.card,
+              });
+              if (feeCoin.status === 'unresolved') {
+                results.push({
+                  itemId: item.id,
+                  sku: feeSku,
+                  status: 'error',
+                  code: 'CARD_CONDITION_UNRESOLVED',
+                  message: `This card was not sent to eBay: ${feeCoin.reason}. Fix the grader, grade or condition on the item and push again.`,
+                });
+                continue;
+              }
+            }
+          }
+
+          // Same price resolution as the real push (organizer price wins, null defaults to 0.99).
+          let feePrice = 0.99;
+          if (item.price && Number(item.price) > 0) {
+            feePrice = Number(item.price);
+          } else if (item.aiSuggestedPrice) {
+            feePrice = Number(item.aiSuggestedPrice);
+          } else if (item.estimatedValue) {
+            feePrice = Number(item.estimatedValue);
+          }
+
+          // Books: look the ISBN up for the guard below, but keep it in memory only (no Item write).
+          const feeIsBook =
+            item.ebayCategoryId === '261186' ||
+            (typeof item.ebayCategoryName === 'string' && /book/i.test(item.ebayCategoryName));
+          let feeIsbn: string | null = item.isbn;
+          if (feeIsBook && (feeIsbn == null || String(feeIsbn).trim() === '')) {
+            try {
+              const feeResolved = await resolveBookIsbn({ title: item.title, brand: item.brand, isbn: item.isbn, tags: item.tags });
+              if (feeResolved?.isbn) feeIsbn = feeResolved.isbn;
+            } catch (e: any) {
+              console.warn('[eBay FeeCheck] ISBN lookup failed for item', item.id, e?.message || e);
+            }
+          }
+
+          const feeGuardError = validateItemForEbayPublish({
+            price: feePrice,
+            packageWeightOz: item.packageWeightOz,
+            aiPackageWeightOz: item.aiPackageWeightOz,
+            packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+            packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+            packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+            packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+            ebayShippingOverride: feeShippingOverride,
+            isbn: feeIsbn,
+            isBookCategory: feeIsBook,
+          });
+          if (feeGuardError) {
+            results.push({
+              itemId: item.id,
+              sku: feeSku,
+              status: 'error',
+              code: feeGuardError.code,
+              message: feeGuardError.message,
+            });
+            continue;
+          }
+
+          if (!item.ebayOfferId) {
+            results.push({
+              itemId: item.id,
+              sku: feeSku,
+              status: 'error',
+              code: 'EBAY_OFFER_NOT_CREATED',
+              message:
+                'eBay fees cannot be shown yet because this item has not been prepared for eBay. The fee check never creates a listing.',
+            });
+            continue;
+          }
+
+          const feeQuote = await checkEbayListingFee(item.ebayOfferId, accessToken);
+          results.push({
+            itemId: item.id,
+            sku: feeSku,
+            ebayListingId: null,
+            status: 'fee_checked',
+            feeCheck: feeQuote,
+          });
+          continue;
+        }
+
         const sku = buildCustomLabel(item.id, organizer, item);
 
         // Never-shippable structural classification (tankless water heater, RO/whole-
@@ -3212,16 +3369,10 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // publish) picks it up on its own schedule. This closes the "manually-
         // queued items have no ebayOfferId and can never publish" gap (ADR-115
         // Dev Handoff, 2026-09-11).
-        // Manual push panel pre-flight fee check (2026-09-15): stops here, right
-        // after the offer is created/updated and ebayOfferId is persisted -- same
-        // point as the queueOnly branch just below -- but deliberately does NOT
-        // set ebayQueuedAt. This lets PostSaleEbayPanel.tsx show the organizer
-        // whether pushing this item live would incur a real eBay insertion fee
-        // BEFORE they click the actual "push live" action, without silently
-        // enrolling the item in ebayListingQueueCron.ts's automatic Phase A fill
-        // (which queueOnly deliberately does do). offerId is guaranteed non-null
-        // here by the create/update branches above; the fallback mirrors the
-        // same explicit guard used for manualFeeCheck further down.
+        // Manual push panel pre-flight fee check: handled entirely by the read-only block at the top of this
+        // loop, which never reaches this point. The branch below is a defensive guard only (a future
+        // refactor must not be able to turn a fee check into a push). It deliberately does NOT set
+        // ebayQueuedAt, so a fee check can never enroll an item in ebayListingQueueCron.ts's Phase A fill.
         if (feeCheckOnly) {
           const feeCheck = offerId
             ? await checkEbayListingFee(offerId, accessToken)
@@ -3496,12 +3647,11 @@ export async function pushItemsToEbayQueueOnly(
 
 // ─── Internal invocation wrapper for the manual push panel's pre-flight fee
 // check ─────────────────────────
-// Same rationale as pushItemsToEbayQueueOnly directly above: pushSaleToEbay's
-// per-item pipeline (weight/dims guard, category resolution, shipping policy,
-// merchant location, offer creation) is the only place in the codebase that
-// knows how to build a valid eBay offer, so a single-item fee check reuses it
-// via the feeCheckOnly flag instead of duplicating it. Only ever called with
-// one itemId by checkItemEbayFee below.
+// Same rationale as pushItemsToEbayQueueOnly directly above: pushSaleToEbay already owns the tier
+// gate, eBay connection check, token refresh and the pre-publish guards (weight/dims, price, ISBN,
+// card condition), so a single-item fee check reuses them via the feeCheckOnly flag instead of
+// duplicating them. With feeCheckOnly the per-item path is read-only: it builds no offer. Only ever
+// called with one itemId by checkItemEbayFee below.
 export async function pushItemsToEbayFeeCheckOnly(
   userId: string,
   saleId: string,
@@ -3531,6 +3681,24 @@ export async function pushItemsToEbayFeeCheckOnly(
   return { statusCode, body };
 }
 
+// Plain-words messages for the expected "not ready" outcomes of the fee check (B2). Keyed by the
+// per-item result code from pushSaleToEbay (feeCheckOnly). Unknown codes fall back to the result's own message.
+const FEE_CHECK_NOT_READY_MESSAGES: Record<string, string> = {
+  EBAY_NO_PACKAGE_WEIGHT: 'Add a package weight to see eBay fees',
+  EBAY_WEIGHT_NOT_CONFIRMED: 'Confirm the package weight to see eBay fees',
+  EBAY_PACKAGE_DIMS_NOT_CONFIRMED: 'Confirm the package size to see eBay fees',
+  EBAY_PRICE_BELOW_MIN: 'Raise the price to at least $0.99 to see eBay fees',
+  EBAY_BOOK_NO_ISBN: 'Add the ISBN to see eBay fees',
+  CARD_CONDITION_UNRESOLVED: 'Fix the card grader, grade or condition to see eBay fees',
+  EBAY_ALREADY_LISTED: 'This item is already listed on eBay. Fees are shown on your eBay listing.',
+};
+
+// Fixed client-facing texts. Raw eBay error text and internal error messages are logged server-side and
+// never returned to the browser.
+const FEE_CHECK_UNKNOWN_MESSAGE = 'eBay fees could not be confirmed right now';
+const FEE_CHECK_SERVER_ERROR_MESSAGE = 'Could not check eBay fees right now';
+const FEE_CHECK_BUSY_MESSAGE = 'eBay is busy right now. Try again in a few minutes.';
+
 /**
  * POST /api/ebay/organizer/items/:itemId/ebay-fee-check
  *
@@ -3539,11 +3707,15 @@ export async function pushItemsToEbayFeeCheckOnly(
  * would cost a real eBay insertion fee until AFTER it was already published
  * (pushSaleToEbay / publishItemOffer both compute manualFeeCheck but only
  * surface it in the response of the push that already happened). This
- * endpoint lets the frontend ask BEFORE that click: ensures the item has (or
- * creates, via pushSaleToEbay's real offer-creation pipeline in feeCheckOnly
- * mode) an ebayOfferId, then calls checkEbayListingFee against eBay's live
- * get_listing_fees API and returns the result. Never publishes and never
- * queues the item for ebayListingQueueCron.ts's automatic fill.
+ * endpoint lets the frontend ask BEFORE that click. It is strictly read-only
+ * (B2): if the item already has a stored eBay offer (ebayOfferId) it calls
+ * checkEbayListingFee against eBay's live get_listing_fees API and returns the
+ * result; if there is no stored offer it answers ready:false
+ * (EBAY_OFFER_NOT_CREATED) and never creates one. Items already listed live
+ * answer ready:false (EBAY_ALREADY_LISTED) without calling eBay. It never
+ * publishes, never writes an Item and never queues the item for
+ * ebayListingQueueCron.ts's automatic fill. Raw eBay error text is logged
+ * server-side only; the response carries fixed plain-language messages.
  */
 export const checkItemEbayFee = async (req: AuthRequest, res: Response) => {
   try {
@@ -3554,36 +3726,66 @@ export const checkItemEbayFee = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // Load the item + its sale's organizerId for ownership check (mirrors
-    // publishItemOffer's ownership pattern).
+    // Load the item for the ownership check. Sale items resolve through sale.organizer; inventory
+    // items (no sale) resolve through item.organizerId + userId (B1 helper, default deny).
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       select: {
         id: true,
+        status: true,
         saleId: true,
-        sale: { select: { organizerId: true } },
+        organizerId: true,
+        sale: {
+          select: {
+            organizerId: true,
+            organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
+          },
+        },
       },
     });
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
-    if (!item.sale || !item.saleId) {
-      return res.status(400).json({ message: 'Item is not attached to a sale' });
-    }
 
-    const organizer = await prisma.organizer.findUnique({ where: { userId } });
-    if (!organizer || item.sale.organizerId !== organizer.id) {
+    const owner = await resolveItemOwnerOrganizer(item, userId);
+    if (!owner) {
       return res.status(403).json({ message: 'Not authorized to check this item' });
     }
 
-    // Tier gate, eBay-connection check, quota check, rate-limit check, and the
-    // actual offer-creation pipeline all live inside pushSaleToEbay itself --
-    // reused here rather than duplicated.
+    // Expected "not ready" outcomes answer HTTP 200 with { ready: false, reasons } so the page can
+    // show a specific message. 4xx/5xx stay reserved for real auth, validation and server errors.
+    const notReady = (code: string, message: string) =>
+      res.json({ ready: false, reasons: [{ code, message }] });
+
+    if (!item.sale || !item.saleId) {
+      return notReady('ITEM_NOT_IN_SALE', 'Add this item to a sale to see eBay fees');
+    }
+    if (item.status !== 'AVAILABLE') {
+      return notReady('ITEM_NOT_AVAILABLE', 'Only items that are still available can be checked for eBay fees');
+    }
+
+    // Tier gate, eBay-connection check, quota check and rate-limit check live inside pushSaleToEbay
+    // itself (reused here rather than duplicated). With feeCheckOnly it is read-only: it writes no
+    // Item and creates no eBay inventory item, offer, policy or location.
     const { statusCode, body } = await pushItemsToEbayFeeCheckOnly(userId, item.saleId, itemId);
 
     if (statusCode !== 200 || !body) {
+      // A fee check consumes no push quota, so a quota or daily rate-limit refusal from the shared
+      // pipeline is reported as "not ready, try later" (200) instead of a 429.
+      if (statusCode === 429) {
+        console.warn(`[eBay FeeCheck] itemId=${itemId} temporarily unavailable code=${String(body?.code || '')}`);
+        return notReady('EBAY_TEMPORARILY_UNAVAILABLE', FEE_CHECK_BUSY_MESSAGE);
+      }
       const message = body && typeof body.message === 'string' ? body.message : 'Failed to check eBay listing fee';
+      if (statusCode === 400 && body) {
+        if (body.error === 'EBAY_NOT_CONNECTED' || message === 'eBay account not connected') {
+          return notReady('EBAY_NOT_CONNECTED', 'Connect your eBay account to see eBay fees');
+        }
+        if (message === 'No available items to push') {
+          return notReady('ITEM_NOT_AVAILABLE', 'Only items that are still available can be checked for eBay fees');
+        }
+      }
       return res.status(statusCode !== 200 ? statusCode : 502).json({ message, code: body?.code });
     }
 
@@ -3592,18 +3794,35 @@ export const checkItemEbayFee = async (req: AuthRequest, res: Response) => {
       return res.status(502).json({ message: 'eBay fee check returned no result' });
     }
     if (result.status === 'error') {
-      return res.status(400).json({
-        code: result.code || result.error || 'FEE_CHECK_FAILED',
-        message: result.message || 'Failed to check eBay listing fee',
-      });
+      const reasonCode = String(result.code || result.error || 'FEE_CHECK_FAILED');
+      if (result.error === 'INTERNAL_ERROR') {
+        console.warn(
+          `[eBay FeeCheck] itemId=${itemId} internal error: ${String(result.message || '').slice(0, 200)}`
+        );
+        return res.status(500).json({
+          code: reasonCode,
+          message: FEE_CHECK_SERVER_ERROR_MESSAGE,
+        });
+      }
+      return notReady(
+        reasonCode,
+        FEE_CHECK_NOT_READY_MESSAGES[reasonCode] || result.message || 'eBay fees are not available for this item yet'
+      );
     }
 
-    return res.json({ itemId, feeCheck: result.feeCheck });
+    // Success shape is unchanged ({ itemId, feeCheck }); ready:true is additive. The reason on an unknown
+    // quote can carry raw eBay error text, so it is logged here and replaced with a fixed message.
+    let feeCheck = result.feeCheck;
+    if (feeCheck && feeCheck.status === 'unknown') {
+      console.warn(`[eBay FeeCheck] itemId=${itemId} fee unknown: ${String(feeCheck.reason || '').slice(0, 200)}`);
+      feeCheck = { status: 'unknown', reason: FEE_CHECK_UNKNOWN_MESSAGE };
+    }
+    return res.json({ ready: true, itemId, feeCheck });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[eBay FeeCheck Failed] itemId=${req.params.itemId} reason=${msg}`);
     if (!res.headersSent) {
-      return res.status(500).json({ message: 'Failed to check eBay listing fee', error: msg.slice(0, 200) });
+      return res.status(500).json({ message: 'Failed to check eBay listing fee' });
     }
   }
 };
@@ -7290,8 +7509,12 @@ export const setEbayShippingOverride = async (req: AuthRequest, res: Response) =
         id: true,
         title: true,
         saleId: true,
+        organizerId: true,
         sale: {
-          select: { organizerId: true },
+          select: {
+            organizerId: true,
+            organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
+          },
         },
       },
     });
@@ -7300,7 +7523,10 @@ export const setEbayShippingOverride = async (req: AuthRequest, res: Response) =
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale!.organizerId !== organizer.id) {
+    // B1: sale items resolve through sale.organizer, inventory items through item.organizerId + userId.
+    // Default deny. The override itself needs no sale, so an inventory owner can set it.
+    const overrideOwner = await resolveItemOwnerOrganizer(item, userId);
+    if (!overrideOwner || overrideOwner.id !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to modify this item' });
     }
 

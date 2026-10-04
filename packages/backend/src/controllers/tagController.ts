@@ -96,7 +96,7 @@ export const getItemsByTag = async (req: Request, res: Response) => {
     const normalizedSlug = slug.toLowerCase().trim();
 
     // Fetch paginated items with this tag
-    const [items, totalCount] = await Promise.all([
+    const [rawItems, totalCount] = await Promise.all([
       prisma.item.findMany({
         where: {
           tags: { has: normalizedSlug },
@@ -138,17 +138,21 @@ export const getItemsByTag = async (req: Request, res: Response) => {
       }),
     ]);
 
+    // The where clause above already requires a published sale, so every row has one. This only narrows the
+    // type (and would skip a saleless row rather than crash) instead of asserting with a non-null `!`.
+    const items = rawItems.flatMap((row) => (row.sale ? [{ ...row, sale: row.sale }] : []));
+
     // Extract unique sales for summary
     const saleMap = new Map<string, any>();
     for (const item of items) {
-      if (!saleMap.has(item.sale!.id)) {
-        saleMap.set(item.sale!.id, {
-          id: item.sale!.id,
-          title: item.sale!.title,
-          city: item.sale!.city,
-          state: item.sale!.state,
-          startDate: item.sale!.startDate,
-          endDate: item.sale!.endDate,
+      if (!saleMap.has(item.sale.id)) {
+        saleMap.set(item.sale.id, {
+          id: item.sale.id,
+          title: item.sale.title,
+          city: item.sale.city,
+          state: item.sale.state,
+          startDate: item.sale.startDate,
+          endDate: item.sale.endDate,
         });
       }
     }
@@ -162,10 +166,10 @@ export const getItemsByTag = async (req: Request, res: Response) => {
       condition: item.condition,
       thumbnailUrl: item.photoUrls?.[0] || null,
       tags: item.tags,
-      saleId: item.sale!.id,
-      saleTitle: item.sale!.title,
-      city: item.sale!.city,
-      state: item.sale!.state,
+      saleId: item.sale.id,
+      saleTitle: item.sale.title,
+      city: item.sale.city,
+      state: item.sale.state,
       createdAt: item.createdAt,
     }));
 

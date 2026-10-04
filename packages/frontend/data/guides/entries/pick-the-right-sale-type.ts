@@ -26,7 +26,7 @@ Most estate sales run two to three days.
 
 ---
 
-## Yard / Garage Sale
+## Yard Sale
 
 A yard sale is an outdoor or driveway event with mixed household items.
 Prices tend to be low, turnover is fast, and setup is minimal.
@@ -97,7 +97,7 @@ No shopper data or item data is lost when you unpublish.
 | Sale type | Bidding | Consignor portal | Vendor management | Shop Mode eligible |
 |---|---|---|---|---|
 | Estate Sale | No | No | No | No |
-| Yard/Garage Sale | No | No | No | No |
+| Yard Sale | No | No | No | No |
 | Auction | Yes | No | No | No |
 | Flea Market | No | No | Yes | No |
 | Consignment | No | Yes | No | No |

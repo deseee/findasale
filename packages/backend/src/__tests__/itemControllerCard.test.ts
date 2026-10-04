@@ -19,6 +19,8 @@ const mockPrisma: any = {
 };
 
 jest.mock('../index', () => ({ prisma: mockPrisma }));
+// itemController now imports utils/itemOwner, which imports lib/prisma; point it at the same stand-in so no real client is built.
+jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 jest.mock('axios', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn().mockRejectedValue(new Error('no embedding service in tests')) },

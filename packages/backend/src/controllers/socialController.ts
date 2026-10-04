@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
 
 /**
  * Social Template Controller — Sprint 2
@@ -147,6 +148,8 @@ export const getSocialTemplate = async (req: AuthRequest, res: Response) => {
         condition: true,
         tags: true,
         photoUrls: true,
+        saleId: true,
+        organizerId: true, // inventory items (saleId null) resolve their owner through this plus the caller's userId
         sale: {
           select: {
             title: true,
@@ -155,7 +158,7 @@ export const getSocialTemplate = async (req: AuthRequest, res: Response) => {
             startDate: true,
             endDate: true,
             organizer: {
-              select: { userId: true },
+              select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true },
             },
           },
         },
@@ -166,13 +169,21 @@ export const getSocialTemplate = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Verify organizer ownership
-    if (item.sale!.organizer.userId !== req.user.id) {
+    // Verify organizer ownership (default deny): the sale's organizer, or the inventory organizer for a saleless item.
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Not your item' });
     }
 
-    const city = item.sale!.city || 'your area';
-    const saleDates = formatSaleDates(item.sale!.startDate, item.sale!.endDate);
+    // The post text names the sale, its dates and its city, so it only makes sense for an item in a sale.
+    // Ownership is already verified above; an inventory item gets a clean 400 instead of a crash.
+    const sale = item.sale;
+    if (!sale) {
+      return res.status(400).json({ message: 'Social posts are written for items in a sale. Add this item to a sale first.' });
+    }
+
+    const city = sale.city || 'your area';
+    const saleDates = formatSaleDates(sale.startDate, sale.endDate);
     const price = formatPrice(item.price);
 
     // Generate post text
@@ -189,7 +200,7 @@ export const getSocialTemplate = async (req: AuthRequest, res: Response) => {
     const hashtags = generateHashtags(
       item.tags || [],
       item.category,
-      item.sale!.city,
+      sale.city,
       platform,
     );
 

@@ -59,6 +59,7 @@ import { parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey 
 import { IMPORT_FIELD_KEYS, IMPORT_MAX_ROWS, buildImportItem, detectImportColumnMapping, importPhotoCapForTier, RawImportRow, ImportRowContext } from '../services/itemCsvImport'; // 2026-09-29: one shared, hardened row validator for bulk-import + legacy import-items
 import { CARD_PUBLIC_SELECT, CARD_EDIT_SELECT, parseCardInput, buildCardCreateData, buildCardNestedUpsert, isCardValidationError, cardValidationBody } from '../services/cardRecordService'; // ADR-134 #640 (B2): card record, the only ItemCard writer
 import { organizerEditStamp, organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, stamped only by organizer request handlers
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // 2026-10-04 (B1): default-deny owner resolution for sale items and inventory items (saleId null)
 import { getPinnedCardCategory } from '../config/cardEbayCategories'; // ADR-134 5.4 (W4): pinned eBay category for a card record (pure module, no env or network)
 
 /**
@@ -283,6 +284,45 @@ const assignRarity = (price: number | undefined | null): ItemRarity => {
   if (price >= 500) return ItemRarity.LEGENDARY;
   if (price >= 75) return ItemRarity.RARE;
   return ItemRarity.UNCOMMON;
+};
+
+// B1 (2026-10-04): the organizer columns every ownership check needs. Handlers that call
+// resolveItemOwnerOrganizer() load the item with `sale: { include: { organizer: { select: OWNER_ORGANIZER_SELECT } } }`
+// (or the equivalent select) so a legitimate sale owner resolves without an extra query. Inventory items (saleId null)
+// resolve through Item.organizerId plus the caller's userId inside the helper.
+const OWNER_ORGANIZER_SELECT = { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } as const;
+
+// U7 (2026-10-04): true only when a submitted field value really differs from the stored one. Blank values
+// (undefined, null, empty string) all mean "no value"; numbers compare numerically; arrays compare element by
+// element; dates compare as instants. Used so userEditedFields (D-006) only records fields that actually changed.
+const fieldValueChanged = (existing: unknown, next: unknown): boolean => {
+  const norm = (v: unknown): unknown => (v === undefined || v === '' ? null : v);
+  const a = norm(existing);
+  const b = norm(next);
+  if (a === null || b === null) return a !== b;
+  if (a instanceof Date || b instanceof Date) {
+    const ta = a instanceof Date ? a.getTime() : new Date(a as string | number).getTime();
+    const tb = b instanceof Date ? b.getTime() : new Date(b as string | number).getTime();
+    return !Object.is(ta, tb);
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return true;
+    return a.some((v: unknown, i: number) => fieldValueChanged(v, b[i]));
+  }
+  if (typeof a === 'number' || typeof b === 'number') {
+    const na = Number(a);
+    const nb = Number(b);
+    if (!Number.isNaN(na) && !Number.isNaN(nb)) return Math.abs(na - nb) >= 1e-9;
+    return String(a) !== String(b);
+  }
+  if (typeof a === 'object' || typeof b === 'object') {
+    try {
+      return JSON.stringify(a) !== JSON.stringify(b);
+    } catch {
+      return true;
+    }
+  }
+  return a !== b;
 };
 
 // Configurable Consignment Intake Floor (2026-09-25, Patrick): the intake-time minimum
@@ -1783,7 +1823,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         }
         updateData.consignorId = matchedConsignor.id;
       }
-      fieldsBeingEdited.push('consignorId');
+      if (fieldValueChanged(item.consignorId, updateData.consignorId)) fieldsBeingEdited.push('consignorId');
     }
 
     // Patrick's intake rule (2026-09-25, made organizer-configurable same day): mirrors
@@ -1805,11 +1845,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Only update fields that are explicitly provided
     if (title !== undefined) {
       updateData.title = title;
-      fieldsBeingEdited.push('title');
+      if (fieldValueChanged(item.title, title)) fieldsBeingEdited.push('title');
     }
     if (description !== undefined) {
       updateData.description = description;
-      fieldsBeingEdited.push('description');
+      if (fieldValueChanged(item.description, description)) fieldsBeingEdited.push('description');
     }
     // Price-changed guard: a resave that sends the unchanged price must not reset priceUpdatedAt,
     // originalPrice, the markdown anchor or the eBay sync state. Number(item.price) is Prisma Decimal safe.
@@ -1841,28 +1881,36 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         updateData.ebaySyncState = 'PENDING';
         updateData.ebaySyncAttempts = 0; // a new organizer price gets a fresh set of push attempts
       }
-      fieldsBeingEdited.push('price');
+      if (priceChanged) fieldsBeingEdited.push('price');
     }
+    // U7 (2026-10-04): the edit page sends every key on every save, so a field is recorded in userEditedFields (D-006)
+    // only when its value really differs from the stored row. Genuinely edited fields keep the overwrite guard.
     if (category !== undefined) {
       updateData.category = category || null;
-      fieldsBeingEdited.push('category');
+      if (fieldValueChanged(item.category, category || null)) fieldsBeingEdited.push('category');
     }
     if (condition !== undefined) {
       updateData.condition = condition || null;
-      fieldsBeingEdited.push('condition');
+      if (fieldValueChanged(item.condition, condition || null)) fieldsBeingEdited.push('condition');
     }
     if (brand !== undefined) {
       // brand is also set later in the eBay parity block — skip here to avoid conflict
-      fieldsBeingEdited.push('brand');
+      if (fieldValueChanged(item.brand, brand || null)) fieldsBeingEdited.push('brand');
     }
-    if (size !== undefined) fieldsBeingEdited.push('size');
-    if (color !== undefined) fieldsBeingEdited.push('color');
-    if (material !== undefined) fieldsBeingEdited.push('material');
+    if (size !== undefined && fieldValueChanged(item.size, size || null)) fieldsBeingEdited.push('size');
+    if (color !== undefined && fieldValueChanged(item.color, color || null)) fieldsBeingEdited.push('color');
+    if (material !== undefined && fieldValueChanged(item.material, material || null)) fieldsBeingEdited.push('material');
 
     // Feature #57: Rarity is always auto-assigned from price — organizers cannot override it
     if (price !== undefined) {
       const newPrice = price ? parseFloat(price) : null;
-      updateData.rarity = assignRarity(newPrice);
+      // B5 (2026-10-04): recompute only when the price really changed, or when the row still carries the
+      // unassigned schema default (COMMON, set by the draft path) and a price now exists. A same-price resave
+      // leaves rarity untouched, so a save never changes rarity the organizer did not touch.
+      const nextRarity = assignRarity(newPrice);
+      if (nextRarity !== item.rarity && (priceChanged || item.rarity === ItemRarity.COMMON)) {
+        updateData.rarity = nextRarity;
+      }
 
       // Anchor fix (corrected 2026-09-28 -- see STATE.md P0 pricing-audit entry under
       // ## Blocked Queue for the full root-cause writeup). priceBeforeMarkdown must only
@@ -1911,6 +1959,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // another request already won the race. All other status values keep the existing
     // plain-write path -- flagged as a P2 follow-up in ADR-098 Section 5 (can an
     // organizer revert SOLD -> AVAILABLE and re-sell?), not fixed in this pass.
+    // B6 (2026-10-04): commitItemSale writes the SOLD status on its own, so updateData never carries `status` and the
+    // generic stamp below would miss it. Remember that the organizer-driven SOLD transition ran.
+    let soldTransitionCommitted = false;
     if (status !== undefined && status === 'SOLD' && item.status !== 'SOLD') {
       // S1179 fix: include RESERVED so an organizer manually finalizing a previously-held
       // item as SOLD via this generic edit page (a very common "sold outside POS" case) doesn't
@@ -1936,6 +1987,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         : null;
 
       await commitItemSale(id, 'SOLD', ['AVAILABLE', 'RESERVED']);
+      soldTransitionCommitted = true;
 
       if (supersededHold) {
         try {
@@ -2217,7 +2269,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       where: { id },
       data: {
         ...updateData,
-        ...(cardPatch !== undefined ? organizerEditStampAlways() : organizerEditStamp(item, updateData)),
+        ...(cardPatch !== undefined || soldTransitionCommitted ? organizerEditStampAlways() : organizerEditStamp(item, updateData)),
       }
     });
 
@@ -2229,20 +2281,21 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Tell anyone who favorited this item that its price just dropped. Was previously
     // dead code -- notifyPriceDropAlerts was imported above but never called from any
     // code path in this file (or anywhere else that edits Item.price).
-    if (price !== undefined) {
+    // U7 (2026-10-04): only when the price really changed (numeric compare via priceChanged), not on every resave.
+    if (price !== undefined && priceChanged) {
       notifyPriceDropAlerts(id, item.price, updatedItem.price).catch(err =>
         console.warn(`[priceDrop] price drop alert failed for item ${id}:`, err)
       );
     }
 
     // Feature #314: Log price overrides (fire-and-forget, don't block update if logging fails)
-    if (price !== undefined && item.saleId) {
+    if (priceChanged && item.saleId) {
       try {
         const newPrice = price ? parseFloat(price) : null;
         const oldAiSuggested = item.aiSuggestedPrice ? parseFloat(item.aiSuggestedPrice.toString()) : null;
 
         // Only log if price changed and is non-null
-        if (newPrice !== null && newPrice !== (item.price || null)) {
+        if (newPrice !== null && priceChanged) {
           const sale = await prisma.sale.findUnique({
             where: { id: item.saleId },
             select: { organizerId: true }
@@ -2318,7 +2371,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     // Feature #372: Wire auto high-value flagging after AI analysis
     // If aiConfidence or estimatedValue was just updated, re-evaluate auto-flagging
-    if ((aiConfidence !== undefined || estimatedValue !== undefined || price !== undefined) && !updatedItem.isHighValueLocked) {
+    if ((aiConfidence !== undefined || estimatedValue !== undefined || (price !== undefined && priceChanged)) && !updatedItem.isHighValueLocked) {
       try {
         const sale = updatedItem.saleId ? await prisma.sale.findUnique({
           where: { id: updatedItem.saleId },
@@ -2888,7 +2941,7 @@ export const markItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
       },
     });
 
-    await prisma.item.update({ where: { id }, data: { lastSoldVia: 'OFF_PLATFORM_MANUAL' } });
+    await prisma.item.update({ where: { id }, data: { lastSoldVia: 'OFF_PLATFORM_MANUAL', ...organizerEditStampAlways() } }); // B6: organizer action
 
     // P1 fix (2026-09-08, Patrick-reported): this off-platform (BYOR) sold handler is the ONLY
     // code path that records a sale for every extension-only marketplace (Vinted, Poshmark,
@@ -3068,7 +3121,7 @@ export const undoItemSoldOffPlatform = async (req: AuthRequest, res: Response) =
     const updatedItem = await prisma.$transaction(async (tx) => {
       const updated = await tx.item.update({
         where: { id },
-        data: { status: 'AVAILABLE', lastSoldVia: null },
+        data: { status: 'AVAILABLE', lastSoldVia: null, ...organizerEditStampAlways() }, // B6: organizer undo of their own sold mark
         select: { id: true, status: true },
       });
       if (offPlatformSale) {
@@ -3275,7 +3328,11 @@ export const appendDescription = async (req: AuthRequest, res: Response) => {
       if (!compose.appended) {
         // Description unchanged — but still apply any dimension patch
         if (Object.keys(dimensionUpdate).length > 0) {
-          await tx.item.update({ where: { id: item.id }, data: dimensionUpdate });
+          // B6: a dimension-only fill from a VOICE capture is an organizer action and stamps; AUTO never stamps.
+          await tx.item.update({
+            where: { id: item.id },
+            data: { ...dimensionUpdate, ...(source === 'VOICE' ? organizerEditStampAlways() : {}) },
+          });
         }
         return {
           status: 200 as const,
@@ -3430,14 +3487,22 @@ export const getBids = async (req: AuthRequest, res: Response) => {
     // Get the item to check if requester is the organizer
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+      include: { sale: { include: { organizer: { select: OWNER_ORGANIZER_SELECT } } } }
     });
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    const isOrganizer = req.user?.id === item.sale!.organizer.userId;
+    // B1: default-deny owner resolution (works for inventory items with no sale). Bidder names are revealed only
+    // when the requester resolves as the owner; everyone else, including anonymous callers, gets anonymized labels.
+    const isOrganizer = (await resolveItemOwnerOrganizer(item, req.user?.id)) !== null;
+
+    // Saleless (inventory) items are private to their owner: bids are never listed for anyone else, anonymized or not.
+    // Same 404 as a missing item so nothing reveals that the item exists. Sale items keep the public anonymized list.
+    if (!item.sale && !isOrganizer) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
 
     // Fetch all bids, ordered by amount DESC (most recent winning first)
     const bids = await prisma.bid.findMany({
@@ -3560,11 +3625,17 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+    // B1 (shopper path): bidding only exists on sale items. An inventory item (saleId null) has no sale to bid in.
+    const sale = item.sale;
+    if (!sale) {
+      return res.status(404).json({ message: 'This item is not available for bidding.' });
+    }
+
     // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
     try {
       await assertCheckoutAllowed({
         buyerUserId: req.user.id,
-        saleId: item.sale!.id,
+        saleId: sale.id,
         itemId: item.id,
         prisma,
         context: 'placeBid',
@@ -3577,7 +3648,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     }
 
     // Security: reject bids on items whose parent sale is not published
-    if (item.sale!.status !== 'PUBLISHED') {
+    if (sale.status !== 'PUBLISHED') {
       return res.status(403).json({ message: 'This sale is not currently available for bidding.' });
     }
 
@@ -3731,10 +3802,10 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Fire webhooks for bid placed (item.saleId! — auction items always have saleId by domain invariant)
-    fireWebhooks(item.sale!.organizer.userId, 'bid.placed', {
+    // Fire webhooks for bid placed (a sale is guaranteed here: the no-sale case returned 404 above)
+    fireWebhooks(sale.organizer.userId, 'bid.placed', {
       itemId: item.id,
-      saleId: item.saleId!,
+      saleId: sale.id,
       bidAmount: actualBidAmount,
       bidderId: req.user.id,
     }).catch(err => console.error('Webhook fire error:', err));
@@ -3752,7 +3823,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
 
     // Notify organizer: "New bid of $[amount] on [item name]"
     createNotification(
-      item.sale!.organizer.userId,
+      sale.organizer.userId,
       'NEW_BID',
       'New Bid Received',
       `New bid of $${actualBidAmount.toFixed(2)} on ${item.title}`,
@@ -3796,7 +3867,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { select: { sourceName: true, organizer: { select: { isUnmanagedListing: true, userId: true, id: true, subscriptionTier: true } } } } }
+      include: { sale: { select: { sourceName: true, organizer: { select: { isUnmanagedListing: true, ...OWNER_ORGANIZER_SELECT } } } } }
     });
 
     if (!item) {
@@ -3811,7 +3882,9 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    if (item.sale!.organizer.userId !== req.user.id) {
+    // B1: default-deny owner resolution; the quota below is charged to the resolved organizer (sale or inventory).
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
     }
 
@@ -3821,8 +3894,8 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
     }
 
     // Security: AI Tags Quota Enforcement (P0)
-    const organizerId = item.sale!.organizer.id;
-    const tier = item.sale!.organizer.subscriptionTier || 'SIMPLE';
+    const organizerId = owner.id;
+    const tier = owner.subscriptionTier || 'SIMPLE';
     const quotaStatus = await checkAiTagQuota(organizerId, tier);
 
     if (quotaStatus.exceeded) {
@@ -3878,14 +3951,17 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
 
 // Phase 16: Photo management
 
+// B1: returns the item plus the resolved owner organizer, or null when the item is missing or the caller is not
+// its owner (default deny; works for sale items and for inventory items with no sale).
 const getItemForOrganizer = async (id: string, userId: string) => {
   const item = await prisma.item.findUnique({
     where: { id },
-    include: { sale: { include: { organizer: { select: { userId: true } } } } },
+    include: { sale: { include: { organizer: { select: OWNER_ORGANIZER_SELECT } } } },
   });
   if (!item) return null;
-  if (item.sale!.organizer.userId !== userId) return null;
-  return item;
+  const owner = await resolveItemOwnerOrganizer(item, userId);
+  if (!owner) return null;
+  return { item, owner };
 };
 
 export const addItemPhoto = async (req: AuthRequest, res: Response) => {
@@ -3899,22 +3975,15 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ message: 'url is required' });
     }
-    const item = await getItemForOrganizer(id, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    const found = await getItemForOrganizer(id, req.user.id);
+    if (!found) return res.status(404).json({ message: 'Item not found or access denied' });
+    const { item, owner } = found;
 
-    // Feature #75: Check photo limit before adding (item.saleId! — photo upload only runs for sale items)
-    const sale = await prisma.sale.findUnique({
-      where: { id: item.saleId! },
-      include: { organizer: { select: { subscriptionTier: true } } }
-    });
-
-    if (!sale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
-
+    // Feature #75: Check photo limit before adding. The tier comes from the resolved owner organizer, so sale items
+    // and inventory items (no sale) are both handled without a separate sale lookup.
     // Determine tier: use PRO tier limits for ala carte sales even if organizer is SIMPLE
-    let effectiveTier = sale.organizer.subscriptionTier;
-    if (sale.purchaseModel === 'ALA_CARTE') {
+    let effectiveTier = owner.subscriptionTier;
+    if (item.sale?.purchaseModel === 'ALA_CARTE') {
       effectiveTier = 'PRO';
     }
 
@@ -3963,8 +4032,9 @@ export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
     const { id, photoIndex } = req.params;
     const idx = parseInt(photoIndex, 10);
     if (isNaN(idx)) return res.status(400).json({ message: 'Invalid photoIndex' });
-    const item = await getItemForOrganizer(id, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    const found = await getItemForOrganizer(id, req.user.id);
+    if (!found) return res.status(404).json({ message: 'Item not found or access denied' });
+    const { item } = found;
     if (idx < 0 || idx >= item.photoUrls.length) {
       return res.status(400).json({ message: 'Photo index out of range' });
     }
@@ -4005,8 +4075,9 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
     if (!Array.isArray(photoUrls)) {
       return res.status(400).json({ message: 'photoUrls must be an array' });
     }
-    const item = await getItemForOrganizer(id, req.user.id);
-    if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+    const found = await getItemForOrganizer(id, req.user.id);
+    if (!found) return res.status(404).json({ message: 'Item not found or access denied' });
+    const { item } = found;
     const existing = new Set(item.photoUrls);
     const allValid = photoUrls.every((u: any) => typeof u === 'string' && existing.has(u));
     if (!allValid || photoUrls.length !== item.photoUrls.length) {
@@ -4047,10 +4118,11 @@ export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
         aiErrorLog: true,
         title: true,
         photoUrls: true,
+        organizerId: true,
         sale: {
           select: {
             organizer: {
-              select: { userId: true }
+              select: OWNER_ORGANIZER_SELECT
             }
           }
         }
@@ -4062,8 +4134,8 @@ export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
     }
 
     // Auth: only the organizer who owns the sale can poll this item's draft status
-    const isOwner = req.user?.id === item.sale!.organizer.userId;
-    if (!isOwner) {
+    const owner = await resolveItemOwnerOrganizer(item, req.user?.id);
+    if (!owner) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -4104,10 +4176,11 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
         tags: true,
         price: true, // ADR-134 D3 (B2): needed for the card no-price guard below
         card: { select: { id: true } }, // ADR-134 D3 (B2): marks a card item
+        organizerId: true, // B1: inventory items (saleId null) resolve their owner through this
         sale: {
           select: {
             organizer: {
-              select: { userId: true }
+              select: OWNER_ORGANIZER_SELECT
             }
           }
         }
@@ -4118,9 +4191,10 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Auth: only the organizer who owns the sale can publish items
-    if (item.sale!.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    // Auth: only the organizer who owns the item can publish it (sale owner, or inventory owner when there is no sale)
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
+      return res.status(403).json({ message: item.saleId ? 'Access denied. Not your sale.' : 'Access denied. Not your item.' });
     }
 
     // B2 blocker: reject if already published or in an unexpected state
@@ -4184,7 +4258,22 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
       select: { rarity: true, createdAt: true }
     });
 
-    if (fullItem && fullItem.rarity === 'LEGENDARY') {
+    // B5 (2026-10-04): a draft-born row still carries the schema default rarity (COMMON) because the draft path never
+    // assigned one. Assign it from the effective price now, BEFORE the LEGENDARY early-access check below. Rows that
+    // already hold an assigned rarity are left alone (no bulk repair).
+    let effectiveRarity: ItemRarity | undefined = fullItem?.rarity;
+    if (fullItem && fullItem.rarity === ItemRarity.COMMON) {
+      const publishPrice = price !== undefined
+        ? (price !== null && price !== '' ? parseFloat(price) : null)
+        : (item.price !== null && item.price !== undefined ? Number(item.price) : null);
+      const assignedRarity = assignRarity(publishPrice !== null && !Number.isNaN(publishPrice) ? publishPrice : null);
+      if (assignedRarity !== fullItem.rarity) {
+        updateData.rarity = assignedRarity;
+        effectiveRarity = assignedRarity;
+      }
+    }
+
+    if (fullItem && effectiveRarity === ItemRarity.LEGENDARY) {
       const now = new Date();
       const sixHoursLater = new Date(now.getTime() + 6 * 60 * 60 * 1000); // 6 hours in ms
       updateData.earlyAccessUntil = sixHoursLater;
@@ -4276,10 +4365,12 @@ export const holdAnalysis = async (req: AuthRequest, res: Response) => {
       select: {
         id: true,
         draftStatus: true,
+        saleId: true,
+        organizerId: true,
         sale: {
           select: {
             organizer: {
-              select: { userId: true }
+              select: OWNER_ORGANIZER_SELECT
             }
           }
         }
@@ -4290,8 +4381,9 @@ export const holdAnalysis = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Auth: only the organizer who owns the sale can hold analysis
-    if (item.sale!.organizer.userId !== req.user.id) {
+    // Auth: only the item's owner can hold analysis (B1: sale owner or inventory owner, default deny)
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
@@ -4328,10 +4420,11 @@ export const releaseAnalysis = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const item = await prisma.item.findUnique({
       where: { id },
-      select: { id: true, draftStatus: true, sale: { select: { organizer: { select: { userId: true } } } } }
+      select: { id: true, draftStatus: true, saleId: true, organizerId: true, sale: { select: { organizer: { select: OWNER_ORGANIZER_SELECT } } } }
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
-    if (item.sale!.organizer.userId !== req.user.id) return res.status(403).json({ message: 'Access denied.' });
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id); // B1: default deny, sale or inventory owner
+    if (!owner) return res.status(403).json({ message: 'Access denied.' });
     if (item.draftStatus !== 'DRAFT') return res.status(400).json({ message: 'Item is not in DRAFT status.' });
 
     // Remove from held set so that resetRapidDraftDebounce will work normally
@@ -4974,15 +5067,21 @@ export const closeAuctionEndpoint = async (req: AuthRequest, res: Response) => {
     // Verify ownership
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+      include: { sale: { include: { organizer: { select: OWNER_ORGANIZER_SELECT } } } }
     });
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale!.organizer.userId !== req.user.id) {
+    // B1: default-deny owner resolution first, then the sale-bound check (auctions only exist inside a sale)
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    if (!item.saleId) {
+      return res.status(400).json({ message: 'Auctions are only available for items in a sale.' });
     }
 
     if (item.listingType !== 'AUCTION') {
@@ -5174,10 +5273,17 @@ export const applyOrganizerDiscount = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Verify organizer ownership
-    if (item.sale!.organizer.userId !== authReq.user.id) {
+    // Verify organizer ownership (B1: default-deny owner resolution; works for inventory items too)
+    const owner = await resolveItemOwnerOrganizer(item, authReq.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'You do not own this item' });
     }
+
+    // Organizer Special spends XP against a sale, so an inventory item (no sale) cannot take one.
+    if (!item.saleId) {
+      return res.status(400).json({ message: 'Organizer Special needs a sale. Add this item to a sale first.' });
+    }
+    const discountSaleId: string = item.saleId;
 
     // Check spendable XP (accounts for holds)
     const spendable = await getSpendableXp(authReq.user.id);
@@ -5191,9 +5297,9 @@ export const applyOrganizerDiscount = async (req: Request, res: Response) => {
     const discountAmount = (xpToSpend / 200) * 2;
 
     // Spend XP (creates transaction record, deducts from guildXp)
-    // item.saleId! — organizer discount path always operates on a sale item
+    // The no-sale case returned 400 above, so discountSaleId is always a real sale id here
     const spendSuccess = await spendXp(authReq.user.id, xpToSpend, 'ORGANIZER_ITEM_DISCOUNT', {
-      saleId: item.saleId!,
+      saleId: discountSaleId,
       description: `Organizer discount on item "${item.title}"`,
     });
 
@@ -5207,6 +5313,7 @@ export const applyOrganizerDiscount = async (req: Request, res: Response) => {
       data: {
         organizerDiscountXp: xpToSpend,
         organizerDiscountAmount: new Decimal(discountAmount.toFixed(2)),
+        ...organizerEditStampAlways(), // B6: organizer action
       },
       include: { sale: { select: { id: true, title: true } } },
     });
@@ -5242,15 +5349,16 @@ export const removeOrganizerDiscount = async (req: Request, res: Response) => {
     // Fetch item with sale and organizer details
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+      include: { sale: { include: { organizer: { select: OWNER_ORGANIZER_SELECT } } } },
     });
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Verify organizer ownership
-    if (item.sale!.organizer.userId !== authReq.user.id) {
+    // Verify organizer ownership (B1: default-deny owner resolution; works for inventory items too)
+    const owner = await resolveItemOwnerOrganizer(item, authReq.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'You do not own this item' });
     }
 
@@ -5265,6 +5373,7 @@ export const removeOrganizerDiscount = async (req: Request, res: Response) => {
       data: {
         organizerDiscountXp: null,
         organizerDiscountAmount: null,
+        ...organizerEditStampAlways(), // B6: organizer action
       },
       include: { sale: { select: { id: true, title: true } } },
     });
@@ -5301,15 +5410,16 @@ export const getCompSummary = async (req: Request, res: Response) => {
     // Fetch item with sale and organizer details
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+      include: { sale: { include: { organizer: { select: OWNER_ORGANIZER_SELECT } } } },
     });
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Verify organizer ownership
-    if (item.sale!.organizer.userId !== authReq.user.id) {
+    // Verify organizer ownership (B1: default-deny owner resolution; works for inventory items too)
+    const owner = await resolveItemOwnerOrganizer(item, authReq.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'You do not own this item' });
     }
 
@@ -5471,13 +5581,15 @@ export const getPackageEstimateHandler = async (req: AuthRequest, res: Response)
     // Ownership pattern mirrors updateItem/reanalyzeItemForOrganizer.
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+      include: { sale: { include: { organizer: { select: OWNER_ORGANIZER_SELECT } } } },
     });
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
-    if (!item.sale || item.sale.organizer.userId !== req.user.id) {
+    // B1: default-deny owner resolution; inventory owners (no sale) now succeed instead of getting a 403.
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
     }
 
@@ -5652,11 +5764,13 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
         ebayCategoryId: true,
         category: true,
         price: true,
+        saleId: true,
+        organizerId: true,
         sale: {
           select: {
             zip: true,
             organizer: {
-              select: { userId: true, subscriptionTier: true, lat: true, lng: true },
+              select: OWNER_ORGANIZER_SELECT,
             },
           },
         },
@@ -5666,8 +5780,17 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
-    if (!item.sale || item.sale.organizer.userId !== req.user.id) {
+    // B1: default-deny owner resolution; inventory owners (no sale) now succeed instead of getting a 403.
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+    // An inventory item has no sale zip, so its origin is the owner's saved location. Without one there is nothing to price from.
+    if (!item.sale && (owner.lat == null || owner.lng == null)) {
+      return res.status(400).json({
+        code: 'NEEDS_ORIGIN',
+        message: 'A saved business location is needed to suggest a shipping price for an item that is not in a sale.',
+      });
     }
 
     const q = req.query as Record<string, string | undefined>;
@@ -5722,11 +5845,11 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
         dims: { length: lengthIn, width: widthIn, height: heightIn },
         packageType,
         origin: {
-          zip: item.sale.zip,
-          lat: item.sale.organizer.lat,
-          lng: item.sale.organizer.lng,
+          zip: item.sale?.zip ?? null,
+          lat: owner.lat,
+          lng: owner.lng,
         },
-        subscriptionTier: item.sale.organizer.subscriptionTier as any,
+        subscriptionTier: owner.subscriptionTier as any,
         categoryId: categoryIdOverride ?? item.ebayCategoryId ?? null,
         // No query-param override for category name exists yet (the edit-item form
         // never sends one -- only categoryId changes independently of it), so this
@@ -5789,13 +5912,15 @@ export const getLiveShippingRateCheckHandler = async (req: AuthRequest, res: Res
         packageLengthIn: true,
         packageWidthIn: true,
         packageHeightIn: true,
+        saleId: true,
+        organizerId: true,
         sale: {
           select: {
             address: true,
             city: true,
             state: true,
             zip: true,
-            organizer: { select: { userId: true, businessName: true } },
+            organizer: { select: { ...OWNER_ORGANIZER_SELECT, businessName: true } },
           },
         },
       },
@@ -5804,8 +5929,14 @@ export const getLiveShippingRateCheckHandler = async (req: AuthRequest, res: Res
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
     }
-    if (!item.sale || item.sale.organizer.userId !== req.user.id) {
+    // B1: default-deny owner resolution first (an inventory owner is authorised, not rejected as a stranger).
+    const owner = await resolveItemOwnerOrganizer(item, req.user.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+    // The ship-from address comes from the sale. An inventory item has no sale, so there is no address to rate from.
+    if (!item.sale) {
+      return res.status(400).json({ message: 'Live rate checks need a sale address. This item is not part of a sale.' });
     }
     if (!item.sale.address || !item.sale.city || !item.sale.state || !item.sale.zip) {
       return res.status(400).json({ message: 'Your sale needs a full address before checking a real rate.' });

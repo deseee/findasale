@@ -10,7 +10,8 @@ import {
   SourceResult,
 } from './types';
 import { analyzeItem } from './signals';
-import { applyWeighting, calculateWeightedMedian, calculateConfidence } from './weighting';
+import { applyWeighting, calculateWeightedMedianFromPairs, calculateConfidence } from './weighting';
+import { gradeFactorFor, applyGradeFactor } from './gradeFactor';
 import { getDepreciationCurve, applyDepreciation } from './depreciation';
 import { adapterRegistry } from './adapters/registry';
 import { prisma } from '../../lib/prisma';
@@ -138,9 +139,11 @@ async function finalizeResult(
 ): Promise<PricingResult> {
   if (results.length === 0) {
     // Return FLOOR confidence with minimum price
+    const floorEstimate = applyCharmPricingCents(50); // charm-priced floor (~$0.49)
     return {
-      estimatedPrice: applyCharmPricingCents(50), // charm-priced floor (~$0.49)
-      priceRange: { low: 50, high: 50 },
+      estimatedPrice: floorEstimate,
+      // B3: keep low <= estimate <= high (the charm-priced floor is 49 cents, one cent under the raw 50)
+      priceRange: { low: Math.min(50, floorEstimate), high: Math.max(50, floorEstimate) },
       confidence: 'FLOOR',
       tier: 3,
       sourcesConsulted: [],
@@ -165,10 +168,15 @@ async function finalizeResult(
     pricedComps = applyDepreciation(weighted, request.saleDate || new Date(), request.category, depreciationCurve);
   }
 
-  // 9. Calculate weighted median
-  const prices = pricedComps.map(p => p.price).sort((a, b) => a - b);
-  const weights = pricedComps.map(p => p.finalWeight || 1.0);
-  const median = calculateWeightedMedian(prices, weights);
+  // 9. Calculate weighted median.
+  // B3 fix (2026-10-04): each weight must stay paired with its own price. This block used to sort `prices`
+  // alone and pass the still-unsorted `weights`, so the median accumulated the wrong weights. The (price,
+  // weight) pairs are now built together and sorted together inside calculateWeightedMedianFromPairs.
+  const compPairs = pricedComps.map(p => ({ price: p.price, weight: p.finalWeight || 1.0 }));
+  const median = calculateWeightedMedianFromPairs(compPairs);
+  const compPrices = compPairs.map(p => p.price);
+  const compLow = Math.min(...compPrices);
+  const compHigh = Math.max(...compPrices);
 
   // 10. Apply trend multiplier
   let estimatedPrice = median;
@@ -181,19 +189,35 @@ async function finalizeResult(
     estimatedPrice = Math.round(estimatedPrice * signals.sleeperMultiplier);
   }
 
+  // 11b. Condition grade factor (B3, Patrick D1 default A). Applied AFTER the trend and sleeper multipliers
+  // and scaled onto the comp range with the same factor. applyGradeFactor also widens the range so it
+  // contains the (trend-adjusted) estimate: the trend multiplier used to move estimatedPrice while the range
+  // stayed on the raw comps, which is how an estimate landed below its own low.
+  const gradeFactor = gradeFactorFor(request.condition, request.conditionGrade);
+  const graded = applyGradeFactor(
+    estimatedPrice,
+    { low: compLow, high: compHigh },
+    gradeFactor.factor
+  );
+  estimatedPrice = graded.estimate;
+
   // 12. Calculate confidence
   const confidence = calculateConfidence(weighted, tier, signals);
 
   // Charm-price the final estimate so every pricing path ends in .49/.99
   estimatedPrice = applyCharmPricingCents(estimatedPrice);
 
+  // Final invariant: low <= estimate <= high. Charm rounding can move the estimate a few cents past a bound,
+  // so re-assert after it. The RANGE is widened; the estimate is never moved.
+  const priceRange = {
+    low: Math.min(graded.range.low, estimatedPrice),
+    high: Math.max(graded.range.high, estimatedPrice),
+  };
+
   // 13. Build result
   const result: PricingResult = {
     estimatedPrice,
-    priceRange: {
-      low: Math.min(...prices),
-      high: Math.max(...prices),
-    },
+    priceRange,
     confidence,
     tier,
     sourcesConsulted: weighted.map(w => {
@@ -214,19 +238,22 @@ async function finalizeResult(
       isSleeperDetected: signals.isSleeperDetected,
       sleeperCategory: signals.sleeperCategory,
       isAppreciating: signals.isAppreciating,
+      gradeFactorApplied: gradeFactor.applied,
+      gradeFactor: gradeFactor.factor,
+      ...(gradeFactor.grade ? { gradeFactorGrade: gradeFactor.grade } : {}),
     },
     deprecationCurveApplied: request.category,
     compsFound: weighted.length,
     dataFreshness: new Date(),
   };
 
-  // 14. Cache result
+  // 14. Cache result (skipped when the caller sent persist:false: an ephemeral estimate writes nothing keyed to itemId)
   // 2026-08-24: the manual re-trigger (PriceSuggestion.tsx -> POST /pricing/estimate) makes
   // this a second live writer to ItemCompLookup alongside jobs/fetchEbayComps.ts's bespoke
   // blend. `source` previously was only ever set by fetchEbayComps.ts ("ebay"|"pricecharting"
   // |"blended") — set it here too so the field never goes stale relative to estimatedPrice/
   // priceConfidence when the orchestrator is the one that last wrote the row.
-  if (request.itemId) {
+  if (request.itemId && request.persist !== false) {
     await prisma.itemCompLookup.upsert({
       where: { itemId: request.itemId },
       update: {

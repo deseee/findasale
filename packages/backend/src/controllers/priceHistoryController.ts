@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
 
 // GET /api/items/:id/price-history
 export const getPriceHistory = async (req: AuthRequest, res: Response) => {
@@ -12,12 +13,14 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
       where: { id },
       select: {
         saleId: true,
+        organizerId: true, // inventory items (saleId null): ownership resolves through Item.organizerId plus the caller's userId
         draftStatus: true,
         sale: {
           select: {
             status: true,
             organizerId: true,
-            organizer: { select: { userId: true } }, // needed to compare against req.user.id
+            // Full owner shape that resolveItemOwnerOrganizer expects (compared against req.user.id)
+            organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
           }
         }
       }
@@ -30,12 +33,21 @@ export const getPriceHistory = async (req: AuthRequest, res: Response) => {
     // Organizers can always see price history for their own items (including ENDED sales)
     // Note: sale.organizerId is Organizer.id (not User.id) — must compare via organizer.userId
     const requestingUserId = req.user?.id;
-    const isOwner = requestingUserId && item.sale!.organizer?.userId === requestingUserId;
+    // Default deny: null unless the caller owns the item (the sale's organizer, or for an inventory item the
+    // organizer whose userId matches). Anonymous callers never resolve and trigger no lookup.
+    const owner = requestingUserId ? await resolveItemOwnerOrganizer(item, requestingUserId) : null;
+    const isOwner = owner !== null;
     const isAdmin = req.user?.role === 'ADMIN';
 
-    if (!isOwner && !isAdmin) {
+    if (!item.sale) {
+      // Inventory item (no sale): price history is private to its owner. Everyone else, including anonymous
+      // callers and admins, gets the same 404 as a missing item so existence is not revealed. Fail closed.
+      if (!isOwner) {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+    } else if (!isOwner && !isAdmin) {
       // Return 404 if sale is not published (don't leak resource existence via 403)
-      if (item.sale!.status !== 'PUBLISHED') {
+      if (item.sale.status !== 'PUBLISHED') {
         return res.status(404).json({ message: 'Item not found' });
       }
 

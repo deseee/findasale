@@ -4,25 +4,110 @@
  */
 
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
 import { estimatePrice, PricingRequest, PricingResult } from '../services/pricingEngine';
 import { prisma } from '../lib/prisma';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
+
+const CONDITION_GRADES: ReadonlySet<string> = new Set(['S', 'A', 'B', 'C', 'D']);
+const MAX_CONDITION_LENGTH = 100;
+
+/** A trimmed, non-empty string within `max` characters, else undefined (ignored). */
+function cleanString(value: unknown, max: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.length <= max ? trimmed : undefined;
+}
+
+/** A condition grade letter (S/A/B/C/D, any case), else undefined (ignored). */
+function cleanGrade(value: unknown): string | undefined {
+  const trimmed = cleanString(value, 5);
+  if (trimmed === undefined) return undefined;
+  const upper = trimmed.toUpperCase();
+  return CONDITION_GRADES.has(upper) ? upper : undefined;
+}
 
 /**
  * POST /api/pricing/estimate
  * Estimate price for an item based on metadata
+ *
+ * Body: { title, category, condition?, conditionGrade?, brand?, photoUrls?, originalPrice?, saleDate?,
+ *         itemId?, persist? }
+ *  - itemId: when present the caller must own that item (sale items: the sale's organizer; inventory items:
+ *    the organizer in item.organizerId). Missing item -> 404, not the owner -> 403 (default deny).
+ *  - persist: strict boolean. Omitted or true keeps the historical behavior (the result is cached in
+ *    ItemCompLookup when itemId is set). false = ephemeral estimate, nothing is written for the item.
+ *  - conditionGrade: S/A/B/C/D (any case) or ignored. It drives the disclosed grade factor for used goods.
  */
 export async function estimatePriceController(req: Request, res: Response): Promise<void> {
   try {
+    const body: any = req.body ?? {};
+
+    // itemId: absent (undefined, null or empty string) or a string. Anything else is a client error.
+    let itemId: string | undefined;
+    if (body.itemId !== undefined && body.itemId !== null && body.itemId !== '') {
+      if (typeof body.itemId !== 'string') {
+        res.status(400).json({ error: 'itemId must be a string' });
+        return;
+      }
+      itemId = body.itemId;
+    }
+
+    // persist: strict boolean when sent.
+    let persist: boolean | undefined;
+    if (body.persist !== undefined) {
+      if (typeof body.persist !== 'boolean') {
+        res.status(400).json({ error: 'persist must be a boolean' });
+        return;
+      }
+      persist = body.persist;
+    }
+
+    // Ownership gate (B3 security): the orchestrator writes ItemCompLookup keyed by itemId, so an itemId the
+    // caller does not own must never reach it. resolveItemOwnerOrganizer is default deny.
+    if (itemId !== undefined) {
+      const userId = (req as AuthRequest).user?.id;
+      if (typeof userId !== 'string' || userId.length === 0) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+      const item = await prisma.item.findUnique({
+        where: { id: itemId },
+        select: {
+          id: true,
+          saleId: true,
+          organizerId: true,
+          sale: {
+            select: {
+              organizer: {
+                select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true },
+              },
+            },
+          },
+        },
+      });
+      if (!item) {
+        res.status(404).json({ error: 'Item not found' });
+        return;
+      }
+      const owner = await resolveItemOwnerOrganizer(item, userId);
+      if (!owner) {
+        res.status(403).json({ error: 'You do not have access to this item' });
+        return;
+      }
+    }
+
     const request: PricingRequest = {
-      itemId: req.body.itemId,
-      title: req.body.title,
-      category: req.body.category,
-      condition: req.body.condition,
-      conditionGrade: req.body.conditionGrade,
-      brand: req.body.brand,
-      photoUrls: req.body.photoUrls,
-      originalPrice: req.body.originalPrice,
-      saleDate: req.body.saleDate ? new Date(req.body.saleDate) : undefined,
+      itemId,
+      title: body.title,
+      category: body.category,
+      condition: cleanString(body.condition, MAX_CONDITION_LENGTH),
+      conditionGrade: cleanGrade(body.conditionGrade),
+      brand: body.brand,
+      photoUrls: body.photoUrls,
+      originalPrice: body.originalPrice,
+      saleDate: body.saleDate ? new Date(body.saleDate) : undefined,
+      ...(persist !== undefined ? { persist } : {}),
     };
 
     const result: PricingResult = await estimatePrice(request);

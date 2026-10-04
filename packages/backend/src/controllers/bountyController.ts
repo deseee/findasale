@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
 import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
 import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator'; // Fee-precedence bug fix (2026-08-24): this file had its OWN local getPlatformFeeRate; inclusive-fee migration (2026-09-24, Patrick ruling) -- bounty Square purchase is buyer-initiated online checkout
 // shadow (hardcoded 0.10 for PRO/TEAMS too) that was never touched by the 2026-08-22 fee-precedence
@@ -369,11 +370,18 @@ export const submitBountySubmission = async (req: AuthRequest, res: Response) =>
     // Fetch item
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+      include: { sale: { include: { organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } } },
     });
     if (!item) return res.status(404).json({ message: 'Item not found.' });
-    if (item.sale!.organizer?.userId !== organizerId) {
+    // Default deny: only the item's owner may submit it (the sale's organizer, or the inventory organizer for a saleless item).
+    const itemOwner = await resolveItemOwnerOrganizer(item, organizerId);
+    if (!itemOwner) {
       return res.status(403).json({ message: 'Item does not belong to you.' });
+    }
+    // A bounty purchase settles through the item's sale (payment eligibility, fees, payout), so an inventory item
+    // with no sale cannot fulfil one. Ownership is verified above; this is a clean 400, not a crash.
+    if (!item.sale) {
+      return res.status(400).json({ message: 'Only items that are part of a sale can be submitted to a bounty.' });
     }
     if (item.status === 'DRAFT') {
       return res.status(400).json({ message: 'Item must be published.' });
@@ -630,11 +638,18 @@ export const matchItemToBounties = async (req: AuthRequest, res: Response) => {
     // Fetch item with full details
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: { select: { id: true, lat: true, lng: true, organizerId: true, organizer: { select: { userId: true } } } } },
+      include: { sale: { select: { id: true, lat: true, lng: true, organizerId: true, organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } } },
     });
     if (!item) return res.status(404).json({ message: 'Item not found.' });
-    if (!item.sale || item.sale.organizer?.userId !== organizerId) {
+    // Default deny: only the item's owner (sale organizer, or inventory organizer for a saleless item) may match it.
+    const itemOwner = await resolveItemOwnerOrganizer(item, organizerId);
+    if (!itemOwner) {
       return res.status(403).json({ message: 'Item does not belong to you.' });
+    }
+    // Matching is location based on the sale, and a match can only be fulfilled through a sale item, so an owned
+    // inventory item with no sale gets a clean 400 (it used to be a 403 that wrongly implied it was not theirs).
+    if (!item.sale) {
+      return res.status(400).json({ message: 'Only items that are part of a sale can be matched to bounties.' });
     }
 
     const itemLat = item.sale.lat;
@@ -840,6 +855,11 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     if (!submission) return res.status(404).json({ message: 'Submission not found.' });
     if (submission.bounty.userId !== userId) {
       return res.status(403).json({ message: 'Not your bounty.' });
+    }
+    // The purchase settles through the item's sale. Submissions are only created for sale items, so a saleless
+    // item here is legacy or corrupt data: answer 400 instead of crashing on the sale dereferences below.
+    if (!submission.item.sale) {
+      return res.status(400).json({ message: 'This submission is not linked to a sale.' });
     }
     if (!['PENDING_REVIEW', 'APPROVED'].includes(submission.status)) {
       return res.status(400).json({ message: 'Submission cannot be purchased.' });

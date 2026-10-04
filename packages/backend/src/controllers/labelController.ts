@@ -4,9 +4,44 @@
 
 import { Response } from 'express';
 import QRCode from 'qrcode';
+import type { Page } from 'puppeteer';
 import { buildItemQrUrl, QR_SOURCE_ITEM_LABEL } from '../utils/qrUrl';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { resolveItemOwnerOrganizer } from '../utils/itemOwner';
+
+/**
+ * HTML-escape a value before it is interpolated into the label HTML. Item titles, sale titles, categories and
+ * conditions are organizer-typed (or imported) free text, and the HTML is rendered by headless Chrome, so
+ * every interpolated string goes through this. Escapes & < > " ' ; apply it AFTER any decode step so decoded
+ * entities (e.g. &lt;) are escaped again instead of becoming markup.
+ */
+const esc = (value: unknown): string =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+/**
+ * Defense in depth for the label renderer (Chrome runs with --no-sandbox): no page script can run, and the
+ * only requests allowed are data: URLs (the inline QR PNGs) and about:blank. Anything else (an injected
+ * <img src="http://..."> or <link>) is aborted, so even a missed escape cannot exfiltrate or fetch.
+ * Must be called before page.setContent.
+ */
+async function lockDownLabelPage(page: Page): Promise<void> {
+  await page.setJavaScriptEnabled(false);
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    const url = request.url();
+    if (url.startsWith('data:') || url === 'about:blank') {
+      void Promise.resolve(request.continue()).catch(() => undefined);
+    } else {
+      void Promise.resolve(request.abort()).catch(() => undefined);
+    }
+  });
+}
 
 /**
  * GET /api/items/:id/label
@@ -18,12 +53,21 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { select: { title: true, organizer: { select: { userId: true } } } } },
+      include: {
+        sale: {
+          select: {
+            title: true,
+            organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } },
+          },
+        },
+      },
     });
     if (!item) return res.status(404).json({ message: 'Item not found.' });
 
-    // Only organizer who owns the sale
-    if (item.sale!.organizer.userId !== req.user.id) {
+    // Only the owner: the sale's organizer for a sale item, or the inventory organizer for a saleless item.
+    // Default deny (a null owner is a 403). Inventory items are labelled too, just without a sale line.
+    const owner = await resolveItemOwnerOrganizer(item, req.user?.id);
+    if (!owner) {
       return res.status(403).json({ message: 'Not your item.' });
     }
 
@@ -45,7 +89,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
       const parts = decoded.split(':').map(s => s.trim()).filter(Boolean);
       return parts.length > 2 ? parts.slice(-2).join(': ') : decoded;
     };
-    const chips = [decodeCategory(item.category), item.condition].filter(Boolean).join('  ·  ');
+    const chips = [decodeCategory(item.category), item.condition].filter(Boolean).map(esc).join('  ·  ');
 
     // Build HTML for single label (4"×3")
     const labelHtml = `<!DOCTYPE html>
@@ -94,15 +138,15 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
   <div class="avery-note">Avery&#174; 5164 &middot; 4&#34; &times; 3&#8531;&#34; &middot; 6 per sheet</div>
   <div class="label-container">
     <div class="label-text">
-      <div class="label-sale">${item.sale!.title}</div>
-      <div class="label-title">${item.title}</div>
+      ${item.sale ? `<div class="label-sale">${esc(item.sale.title)}</div>` : ''}
+      <div class="label-title">${esc(item.title)}</div>
       <div class="label-price">$${item.price != null ? item.price.toFixed(2) : 'POA'}</div>
       ${chips ? `<div class="label-chips">${chips}</div>` : ''}
-      <div class="label-id">ID: ${id}</div>
+      <div class="label-id">ID: ${esc(id)}</div>
     </div>
     <div>
       <div class="label-qr">
-        <img src="${qrDataUrl}" alt="QR">
+        <img src="${esc(qrDataUrl)}" alt="QR">
       </div>
       <div class="label-scan">Scan</div>
     </div>
@@ -118,6 +162,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
 
     try {
       const page = await browser.newPage();
+      await lockDownLabelPage(page);
       await page.setContent(labelHtml, { waitUntil: 'load' });
       const pdfBuffer = await page.pdf({
         width: '4in',
@@ -258,21 +303,21 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
 
       for (let i = pageStart; i < pageEnd; i++) {
         const item = sale.items[i];
-        const chips = [decodeCategory(item.category), item.condition].filter(Boolean).join('  ·  ');
+        const chips = [decodeCategory(item.category), item.condition].filter(Boolean).map(esc).join('  ·  ');
         const qrDataUrl = qrDataUrls[i];
 
         labelsHtml += `
           <div class="label">
             <div class="label-text">
-              <div class="label-sale">${sale.title}</div>
-              <div class="label-title">${item.title}</div>
+              <div class="label-sale">${esc(sale.title)}</div>
+              <div class="label-title">${esc(item.title)}</div>
               <div class="label-price">$${item.price != null ? item.price.toFixed(2) : 'POA'}</div>
               ${chips ? `<div class="label-chips">${chips}</div>` : ''}
-              <div class="label-id">ID: ${item.id}</div>
+              <div class="label-id">ID: ${esc(item.id)}</div>
             </div>
             <div>
               <div class="label-qr">
-                <img src="${qrDataUrl}" alt="QR">
+                <img src="${esc(qrDataUrl)}" alt="QR">
               </div>
               <div class="label-scan">Scan</div>
             </div>
@@ -298,6 +343,7 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
 
     try {
       const page = await browser.newPage();
+      await lockDownLabelPage(page);
       await page.setContent(labelsHtml, { waitUntil: 'load' });
       const pdfBuffer = await page.pdf({
         format: 'Letter',

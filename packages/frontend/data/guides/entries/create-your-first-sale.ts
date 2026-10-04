@@ -24,14 +24,14 @@ The create-sale form opens.
 ## Step 2: Name your sale
 
 Type a name in the **Sale Name** field.
-Be specific. "Johnson Family Estate Sale" or "Riverside Garage Sale: Moving" works better than "Big Sale."
+Be specific. "Johnson Family Estate Sale" or "Riverside Yard Sale: Moving" works better than "Big Sale."
 Shoppers search by keywords, and your sale name is indexed.
 
 ---
 
 ## Step 3: Pick a sale type
 
-Tap **Sale Type** and choose from the list: Estate Sale, Yard/Garage Sale, Auction, Flea Market, Consignment, or Pop-Up/Retail.
+Tap **Sale Type** and choose from the list: Estate Sale, Yard Sale, Auction, Flea Market, Consignment, or Pop-Up/Retail.
 
 Not sure which to pick? See [Pick the right sale type](pick-the-right-sale-type.md).
 

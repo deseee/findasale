@@ -53,7 +53,7 @@ How far in advance should you publish before your start date?
 | Sale type | Recommended lead time |
 |---|---|
 | Estate Sale | 10–14 days |
-| Yard / Garage Sale | 3–5 days |
+| Yard Sale | 3–5 days |
 | Auction (timed, online) | 7–14 days |
 | Auction (live, in-person) | 7–10 days |
 | Flea Market | 5–7 days |
@@ -78,7 +78,7 @@ Example: Your estate sale starts Saturday the 15th. With a 7-day window, it appe
 - Any event where pre-sale browsing is part of the draw
 
 **When to use 3–5 days:**
-- One-day yard sales or garage sales
+- One-day yard sales or moving sales
 - Last-minute pop-ups or consignment drops
 - Events where the inventory isn't listed ahead of time
 

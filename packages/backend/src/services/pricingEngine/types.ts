@@ -13,6 +13,9 @@ export interface PricingRequest {
   photoUrls?: string[]; // for sleeper detection
   originalPrice?: number; // if known, for depreciation curve calibration (cents)
   saleDate?: Date; // when item was acquired/entered estate
+  // B3 (2026-10-04): when false, the estimate is ephemeral and the orchestrator writes NOTHING keyed to itemId
+  // (no ItemCompLookup upsert). Omitted or true keeps the historical behavior (persist when itemId is set).
+  persist?: boolean;
 }
 
 export interface PricingResult {
@@ -32,6 +35,11 @@ export interface PricingResult {
     isSleeperDetected: boolean;
     sleeperCategory?: string;
     isAppreciating: boolean;
+    // B3 (2026-10-04), additive and optional so existing readers are unaffected. The disclosed condition grade
+    // factor (A 1.10, B 1.00, C 0.85, D 0.65) multiplied into estimatedPrice and priceRange for used goods.
+    gradeFactorApplied?: boolean; // true when a grade of a used item was recognized (grade B is applied with factor 1)
+    gradeFactor?: number; // multiplier actually applied (1 when not applied)
+    gradeFactorGrade?: 'A' | 'B' | 'C' | 'D'; // effective grade the factor came from (S counts as A); only when applied
   };
   deprecationCurveApplied?: string; // category name
   compsFound: number;

@@ -61,18 +61,21 @@ export function applyWeighting(
 }
 
 /**
- * Calculate weighted median
- * Sorts by price, accumulates weights, returns price at 50% weight threshold
+ * Weighted median of (price, weight) pairs.
+ * Sorts the PAIRS together by price (so each weight stays attached to its own price), accumulates weights,
+ * and returns the price at the 50% weight threshold (linear interpolation across the crossing point).
+ * Does not mutate its input. A weight that is missing, zero or not a finite number counts as 1.0.
  */
-export function calculateWeightedMedian(
-  prices: number[],
-  weights: number[]
+export function calculateWeightedMedianFromPairs(
+  input: ReadonlyArray<{ price: number; weight: number }>
 ): number {
-  if (prices.length === 0) return 0;
-  if (prices.length === 1) return prices[0];
+  if (input.length === 0) return 0;
+  if (input.length === 1) return input[0].price;
 
-  // Pair prices with weights and sort by price
-  const pairs = prices.map((price, i) => ({ price, weight: weights[i] || 1.0 }));
+  const pairs = input.map(p => ({
+    price: p.price,
+    weight: typeof p.weight === 'number' && Number.isFinite(p.weight) && p.weight > 0 ? p.weight : 1.0,
+  }));
   pairs.sort((a, b) => a.price - b.price);
 
   // Calculate total weight
@@ -99,6 +102,21 @@ export function calculateWeightedMedian(
   }
 
   return pairs[pairs.length - 1].price;
+}
+
+/**
+ * Calculate weighted median from two PARALLEL arrays: weights[i] belongs to prices[i], in whatever order the
+ * caller holds them (they do not need to be sorted). Sort one array and not the other and the pairing is
+ * destroyed, which is the bug the orchestrator had before 2026-10-04 (B3); prefer
+ * calculateWeightedMedianFromPairs for new code.
+ */
+export function calculateWeightedMedian(
+  prices: number[],
+  weights: number[]
+): number {
+  return calculateWeightedMedianFromPairs(
+    prices.map((price, i) => ({ price, weight: weights[i] }))
+  );
 }
 
 /**

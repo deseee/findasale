@@ -19,6 +19,8 @@ const mockRetrieveSession = jest.fn();
 const mockIncrement = jest.fn();
 
 jest.mock('../index', () => ({ prisma: mockPrisma }));
+// itemController now imports utils/itemOwner, which imports lib/prisma; point it at the same stand-in so no real client is built.
+jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
 jest.mock('axios', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockAxiosGet(...a) } }));
 jest.mock('../services/cloudAIService', () => ({
   analyzeItemImage: (...a: unknown[]) => mockAnalyze(...a),
