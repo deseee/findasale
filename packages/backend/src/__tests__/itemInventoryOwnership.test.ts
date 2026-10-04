@@ -43,7 +43,7 @@ const mkRes = () => {
   return res;
 };
 
-const mkReq = (query: Record<string, unknown> = {}, userId: string | undefined = CALLER, itemId = 'item_1') =>
+const mkReq = (query: Record<string, unknown> = {}, userId: string | null = CALLER, itemId = 'item_1') =>
   ({
     params: { itemId },
     query,
@@ -161,7 +161,7 @@ describe.each([
 describe('input guards are unchanged', () => {
   it('price-history without an organizer profile is 401 and nothing is loaded', async () => {
     const res = mkRes();
-    await getItemPriceHistory(mkReq({}, undefined), res);
+    await getItemPriceHistory(mkReq({}, null), res);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(mockItemFindUnique).not.toHaveBeenCalled();
   });

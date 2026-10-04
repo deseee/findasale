@@ -51,7 +51,7 @@ jest.mock('../utils/qrUrl', () => ({
   buildItemQrUrl: (base: string, id: string, src: string) => `${base}/items/${id}?utm_source=${src}`,
   QR_SOURCE_ITEM_LABEL: 'qr_item_label',
 }));
-jest.mock('puppeteer', () => ({ __esModule: true, default: { launch: (...a: any[]) => mockLaunch(...a) } }), { virtual: true });
+jest.mock('puppeteer', () => ({ __esModule: true, default: { launch: (...a: any[]) => mockLaunch(...a) } }));
 
 // bounty: everything the controller imports besides prisma and the owner helper
 jest.mock('../services/notificationService', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
@@ -150,7 +150,13 @@ beforeEach(() => {
       : null,
   );
   mockLaunch.mockResolvedValue({
-    newPage: async () => ({ setContent: mockSetContent, pdf: async () => Buffer.from('pdf') }),
+    newPage: async () => ({
+      setJavaScriptEnabled: async () => undefined,
+      setRequestInterception: async () => undefined,
+      on: () => undefined,
+      setContent: mockSetContent,
+      pdf: async () => Buffer.from('pdf'),
+    }),
     close: async () => undefined,
   });
 });

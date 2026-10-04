@@ -406,6 +406,49 @@ const formatCategory = (category: string | null | undefined): string => {
   return decodeHtmlEntities(category);
 };
 
+// Saved-time line for the Add Items row preview (2026-10-04). Pure helper, evaluated at render time (refreshes on refetch).
+// lastEditedAt is the organizer-edit stamp (Item.lastEditedAt); when it is null we fall back to "Added <date>" from createdAt.
+// Returns null when neither value is usable, so nothing is rendered.
+const formatSavedStamp = (
+  lastEditedAt: string | null | undefined,
+  createdAt: string | null | undefined
+): { text: string; title: string } | null => {
+  const parse = (v: string | null | undefined): Date | null => {
+    if (!v) return null;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const shortDate = (d: Date): string => {
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString(undefined, sameYear
+      ? { month: 'short', day: 'numeric' }
+      : { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  const edited = parse(lastEditedAt);
+  if (edited) {
+    const now = new Date();
+    const mins = Math.floor((now.getTime() - edited.getTime()) / 60000);
+    let text: string;
+    if (mins < 1) {
+      text = 'Saved just now';
+    } else if (mins < 60) {
+      text = `Saved ${mins} min ago`;
+    } else if (mins < 60 * 24 && edited.toDateString() === now.toDateString()) {
+      const hrs = Math.floor(mins / 60);
+      text = `Saved ${hrs} ${hrs === 1 ? 'hour' : 'hours'} ago`;
+    } else {
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      text = edited.toDateString() === yesterday.toDateString() ? 'Saved yesterday' : `Saved ${shortDate(edited)}`;
+    }
+    return { text, title: `Last saved ${edited.toLocaleString()}` };
+  }
+  const created = parse(createdAt);
+  if (created) {
+    return { text: `Added ${shortDate(created)}`, title: `Added ${created.toLocaleString()}` };
+  }
+  return null;
+};
+
 const computeDraftStatus = (item: any): 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' => {
   // Use draftStatus from database as source of truth
   // This field is now returned from GET /api/items?saleId=...
@@ -3193,6 +3236,15 @@ const AddItemsDetailPage = () => {
                           <p className="text-xs text-warm-500 dark:text-warm-400 truncate">
                             {item.price != null ? `$${item.price}` : 'No price'} · {formatCategory(item.category) || 'Uncategorized'}
                           </p>
+                          {(() => {
+                            // Saved time (2026-10-04): organizer-edit stamp, falls back to the added date.
+                            const savedStamp = formatSavedStamp(item.lastEditedAt, item.createdAt);
+                            return savedStamp ? (
+                              <p className="text-[11px] text-warm-500 dark:text-warm-400 truncate" title={savedStamp.title}>
+                                {savedStamp.text}
+                              </p>
+                            ) : null;
+                          })()}
                         </div>
                         {/* Status badge + delete stacked vertically */}
                         <div className="flex-shrink-0 flex flex-col items-center gap-1">

@@ -317,6 +317,8 @@ const EditItemPage = () => {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [impactExpanded, setImpactExpanded] = useState(false);
+  // Phone-width only: the long save-impact text sits behind a "What will update?" toggle.
+  const [impactMobileOpen, setImpactMobileOpen] = useState(false);
   const [showAllFields, setShowAllFields] = useState(false);
   const [whereListedSignal, setWhereListedSignal] = useState(0);
   const pageRootRef = useRef<HTMLDivElement>(null);
@@ -1420,8 +1422,38 @@ const EditItemPage = () => {
   if (item.discogsListingId) {
     listingChips.push({ key: 'discogs', label: 'Discogs live', className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200' });
   }
-  // Reserved for a later change (see the LAST EDITED SLOT comment in the header). Always null today.
-  const lastEditedLabel = null as string | null;
+  // Header "last edited" text. lastEditedAt is the organizer's own edits only (D-012 item 8);
+  // when it is missing (older items) fall back to when the item was added. updatedAt is not used.
+  const describeWhen = (iso: unknown): { date: Date; title: string } | null => {
+    if (typeof iso !== 'string' || !iso) return null;
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    return { date, title: date.toLocaleString() };
+  };
+  const formatRelativeWhen = (date: Date): string => {
+    const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+    if (hours < 48) return 'yesterday';
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  const lastEditedWhen = describeWhen(item.lastEditedAt);
+  const addedWhen = describeWhen(item.createdAt);
+  const lastEditedLabel: string | null = lastEditedWhen
+    ? `Last edited ${formatRelativeWhen(lastEditedWhen.date)}`
+    : addedWhen
+      ? `Added ${addedWhen.date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : null;
+  const lastEditedTitle: string | undefined = (lastEditedWhen || addedWhen)?.title;
+
+  // Organizer Special state (Pricing > Discounts & coupons).
+  const organizerDiscountValue = parseFloat(String(item.organizerDiscountAmount ?? 0));
+  const hasOrganizerDiscount = Number.isFinite(organizerDiscountValue) && organizerDiscountValue > 0;
+  const organizerSpecialSummary = hasOrganizerDiscount
+    ? `Organizer Special: $${organizerDiscountValue.toFixed(2)} off applied`
+    : 'Organizer Special';
 
   const goToWhereListed = () => {
     setWhereListedSignal((n) => n + 1);
@@ -1613,12 +1645,8 @@ const EditItemPage = () => {
                   ) : (
                     <span className="text-[11px] text-warm-500 dark:text-warm-400">Not listed on eBay or Discogs</span>
                   )}
-                  {/* LAST EDITED SLOT (reserved, renders nothing today). A later change fills
-                      lastEditedLabel once the backend exposes an organizer-safe value. Do NOT
-                      derive it from item.updatedAt here: whether updatedAt is organizer-only is
-                      still being checked. */}
                   {lastEditedLabel ? (
-                    <span className="text-[11px] text-warm-500 dark:text-warm-400">{lastEditedLabel}</span>
+                    <span className="text-[11px] text-warm-500 dark:text-warm-400" title={lastEditedTitle}>{lastEditedLabel}</span>
                   ) : null}
                 </div>
               </div>
@@ -1639,6 +1667,9 @@ const EditItemPage = () => {
             }
             updateMutation.mutate();
           }} className="space-y-4">
+            {/* Section order (D-012): Photos & basics, Category, Condition & details, Trading card details,
+                Pricing (listing type, cost basis, price, best offers, keep out of automatic markdowns,
+                Discounts & coupons), Shipping & package, Quantity & setup, Where this is listed, Danger zone. */}
             <ItemFormSection id="section-basics" title="Photos & basics" defaultOpen>
                           {/* Phase 16: Photo management */}
               {item && (
@@ -1825,16 +1856,6 @@ const EditItemPage = () => {
                 placeholder="Select a location (optional)"
               />
             </ItemFormSection>
-
-            {/* ADR-134: trading card record. Shown for every item; the panel itself stays collapsed until the
-                organizer opens it (it loads the stored card, if any, only to fill its own form). */}
-            <CardRecordPanel
-              itemId={String(id)}
-              currentPrice={formData.price}
-              onApplyPrice={(price) => setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))}
-              onApplyTitle={(title) => setFormData((prev) => ({ ...prev, title }))}
-              disabled={updateMutation.isPending}
-            />
 
             <ItemFormSection id="section-condition" title="Condition & details" defaultOpen>
               <div>
@@ -2034,6 +2055,16 @@ const EditItemPage = () => {
               )}
             </ItemFormSection>
 
+            {/* ADR-134: trading card record. Shown for every item; the panel itself stays collapsed until the
+                organizer opens it (it loads the stored card, if any, only to fill its own form). */}
+            <CardRecordPanel
+              itemId={String(id)}
+              currentPrice={formData.price}
+              onApplyPrice={(price) => setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))}
+              onApplyTitle={(title) => setFormData((prev) => ({ ...prev, title }))}
+              disabled={updateMutation.isPending}
+            />
+
             <ItemFormSection id="section-pricing" title="Pricing" defaultOpen summary={formData.price ? `$${formData.price}` : undefined}>
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
@@ -2050,6 +2081,23 @@ const EditItemPage = () => {
                   <option value="AUCTION">Auction</option>
                   <option value="REVERSE_AUCTION">Reverse Auction</option>
                 </select>
+              </div>
+
+              {/* Feature #407: Flip Tracker ROI: Cost Basis */}
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Cost Basis <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={formData.costBasis}
+                  onChange={(e) => setFormData({ ...formData, costBasis: e.target.value })}
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">What did you pay for this? Used to calculate ROI in Flip Report.</p>
               </div>
 
               {/* Auction End Time - show only for auction items */}
@@ -2140,96 +2188,6 @@ const EditItemPage = () => {
 
                 {/* Pricing Signals: Sleeper patterns & brand premiums */}
                 {id && <PricingSignalBanners itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
-              </div>
-
-              {/* Feature #407: Flip Tracker ROI: Cost Basis */}
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                  Cost Basis <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={formData.costBasis}
-                  onChange={(e) => setFormData({ ...formData, costBasis: e.target.value })}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">What did you pay for this? Used to calculate ROI in Flip Report.</p>
-              </div>
-
-              {/* D-XP-003: Organizer Special Section */}
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Organizer Special</h3>
-                  {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
-                    <span className="inline-block bg-amber-600 text-white text-xs font-bold px-2 py-1 rounded">
-                      ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off
-                    </span>
-                  )}
-                </div>
-
-                <p className="text-xs text-warm-500 dark:text-warm-400 -mt-1 mb-3">
-                  Applies right away, no need to save.
-                </p>
-
-                {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-warm-600 dark:text-warm-300">
-                      This item currently has an Organizer Special discount applied for ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => removeDiscountMutation.mutate()}
-                      disabled={removeDiscountMutation.isPending}
-                      className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
-                    >
-                      {removeDiscountMutation.isPending ? 'Removing...' : 'Remove Discount'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-sm text-warm-600 dark:text-warm-300">
-                      Spend XP to create a shopper-facing discount on this item. No stacking with shopper coupons.
-                    </p>
-                    <p className="text-xs text-warm-500 dark:text-warm-400">
-                      Your XP Balance: <span className="font-semibold">{user?.guildXp || 0} XP</span>
-                    </p>
-
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
-                        Select Discount Amount
-                      </label>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openDiscountModal(200)}
-                          disabled={!user || (user.guildXp || 0) < 200}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          $2 off (200 XP)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openDiscountModal(400)}
-                          disabled={!user || (user.guildXp || 0) < 400}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          $4 off (400 XP)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openDiscountModal(500)}
-                          disabled={!user || (user.guildXp || 0) < 500}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          $5 off (500 XP)
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Best offers (eBay listings). Same tier gate as before; moved into Pricing. */}
@@ -2348,6 +2306,93 @@ const EditItemPage = () => {
                   </p>
                 </div>
               )}
+
+              {/* Discounts & coupons: Organizer Special (D-XP-003). Collapsed unless one is applied.
+                  The confirm modal stays at the bottom of the page. */}
+              <ItemFormSection
+                title="Discounts & coupons"
+                variant="nested"
+                defaultOpen={false}
+                forceOpen={hasOrganizerDiscount}
+                summary={organizerSpecialSummary}
+              >
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Organizer Special (shopper discount)</h3>
+                    {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
+                      <span className="inline-block bg-amber-600 text-white text-xs font-bold px-2 py-1 rounded">
+                        ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-warm-500 dark:text-warm-400 -mt-1 mb-3">
+                    Applies right away, no need to save.
+                  </p>
+
+                  {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-warm-600 dark:text-warm-300">
+                        This item currently has an Organizer Special discount applied for ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => removeDiscountMutation.mutate()}
+                        disabled={removeDiscountMutation.isPending}
+                        className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
+                      >
+                        {removeDiscountMutation.isPending ? 'Removing...' : 'Remove Discount'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-warm-600 dark:text-warm-300">
+                        Spend XP to create a shopper-facing discount on this item. No stacking with shopper coupons.
+                      </p>
+                      <p className="text-xs text-warm-500 dark:text-warm-400">
+                        Your XP Balance: <span className="font-semibold">{user?.guildXp || 0} XP</span>
+                      </p>
+                      {!item.saleId && (
+                        <p className="text-xs text-warm-600 dark:text-warm-300" data-testid="organizer-special-needs-sale">
+                          Add this item to a sale to use Organizer Special.
+                        </p>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
+                          Select Discount Amount
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openDiscountModal(200)}
+                            disabled={!item.saleId || !user || (user.guildXp || 0) < 200}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            $2 off (200 XP)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDiscountModal(400)}
+                            disabled={!item.saleId || !user || (user.guildXp || 0) < 400}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            $4 off (400 XP)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDiscountModal(500)}
+                            disabled={!item.saleId || !user || (user.guildXp || 0) < 500}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            $5 off (500 XP)
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </ItemFormSection>
             </ItemFormSection>
 
             <ItemFormSection id="section-shipping" title="Shipping & package" forceOpen={hasShippingValue} summary={shippingSummary || undefined}>
@@ -3318,6 +3363,7 @@ const EditItemPage = () => {
 
             {/* Danger zone */}
             <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-red-700 dark:text-red-400 mb-3">Danger zone</h3>
               <button
                 type="button"
                 disabled={deleteMutation.isPending}
@@ -3337,7 +3383,7 @@ const EditItemPage = () => {
             className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-30 -mx-4 px-4 pt-2 pb-2 mt-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-warm-200 dark:border-gray-700"
             data-testid="edit-item-action-bar"
           >
-            <div className="flex items-center justify-between gap-3 min-h-[20px]">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 min-h-[20px]">
               <p
                 role="status"
                 aria-live="polite"
@@ -3360,13 +3406,26 @@ const EditItemPage = () => {
                       ? `Saved at ${new Date(savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
                       : ''}
               </p>
-              <Link
-                href={backHref}
-                className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline whitespace-nowrap"
-              >
-                {backLabel}
-              </Link>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setImpactMobileOpen((prev) => !prev)}
+                  aria-expanded={impactMobileOpen}
+                  aria-controls="save-impact"
+                  className="sm:hidden text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline whitespace-nowrap"
+                  data-testid="edit-item-save-impact-toggle"
+                >
+                  What will update?
+                </button>
+                <Link
+                  href={backHref}
+                  className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline whitespace-nowrap"
+                >
+                  {backLabel}
+                </Link>
+              </div>
             </div>
+            <div className={impactMobileOpen ? '' : 'hidden sm:block'}>
             <p
               id="save-impact"
               className={`mt-1 text-xs text-warm-600 dark:text-warm-300 ${impactExpanded ? '' : 'line-clamp-2'}`}
@@ -3385,6 +3444,7 @@ const EditItemPage = () => {
                 {impactExpanded ? 'Show less' : 'Show more'}
               </button>
             )}
+            </div>
             <div className="mt-2 flex gap-3">
               <button
                 type="submit"

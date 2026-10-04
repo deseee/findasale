@@ -57,8 +57,8 @@ const saleItem = (ownerUserId: string) => ({
 
 const inventoryItem = { id: 'item-2', saleId: null, organizerId: 'org-2', sale: null };
 
-const userReq = (body: any, userId: string | undefined = 'user-1') =>
-  ({ body, user: userId === undefined ? undefined : { id: userId } } as any);
+const userReq = (body: any, userId: string | null = 'user-1') =>
+  ({ body, user: userId === null ? undefined : { id: userId } } as any);
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -124,7 +124,7 @@ describe('itemId ownership gate', () => {
 
   it('401 when an itemId is sent without an authenticated user id', async () => {
     const res = makeRes();
-    await estimatePriceController(userReq({ itemId: 'item-1', title: 'Lamp', category: 'Decor' }, undefined), res);
+    await estimatePriceController(userReq({ itemId: 'item-1', title: 'Lamp', category: 'Decor' }, null), res);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(mockPrisma.item.findUnique).not.toHaveBeenCalled();
     expect(mockEstimate).not.toHaveBeenCalled();

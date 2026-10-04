@@ -223,7 +223,7 @@ function arrangeFeeCheck(opts: { item?: any; pipeline?: any; organizer?: any; sa
   });
 }
 
-const runFeeCheck = async (userId: string | undefined = USER) => {
+const runFeeCheck = async (userId: string | null = USER) => {
   const res = makeRes();
   await checkItemEbayFee({ params: { itemId: 'item_1' }, user: userId ? { id: userId } : undefined } as any, res);
   return res;
@@ -261,7 +261,7 @@ afterEach(() => {
 
 describe('checkItemEbayFee: ownership (B1)', () => {
   it('401 when unauthenticated', async () => {
-    const res = await runFeeCheck(undefined);
+    const res = await runFeeCheck(null);
     expect(res.statusCode).toBe(401);
   });
 
