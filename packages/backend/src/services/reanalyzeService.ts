@@ -13,6 +13,9 @@
  *   - price is NEVER overwritten (organizer pricing always wins).
  *   - identifier/dims fields are only auto-filled into EMPTY columns and never over
  *     any field listed in item.userEditedFields (handled by planEnrichmentApply).
+ *   - card-aware: a recognized trading card gets its ItemCard identity filled and a condition SUGGESTION stored (never the
+ *     condition itself, never over organizer-set or locked fields), no generic conditionGrade is written, and a pending
+ *     catalogSuggestions.cardSuggestion survives the enrichment suggestion write (see cardAiSuggestion.ts).
  *   NOTE: title/description/category/condition/tags ARE overwritten by re-analysis
  *   when apply=true — the caller decides whether to guard organizer edits to those
  *   (see reanalyzeItemForOrganizer, which surfaces this as a client confirm).
@@ -29,6 +32,7 @@ import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './m
 import { resolveGroundedIdentityInline } from './groundedIdentityService';
 import { desiredEbayCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
+import { applyAiCardResult, readCardConditionSuggestion, AiCardDb } from './cardAiSuggestion'; // card-aware re-analyze (same result, no extra API call)
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -94,6 +98,19 @@ export interface ReanalyzeResult {
 }
 
 /**
+ * The enrichment suggestion write REPLACES Item.catalogSuggestions (an object, or null to clear a stale low-confidence
+ * suggestion). A stored cardSuggestion (the seller's pending "suggested, please confirm" card condition or slab read) lives
+ * in the same JSON, so it is carried over: the re-validated cardSuggestion is added to the new value (or becomes the only key
+ * when the write is null). When there is no usable cardSuggestion the write is returned unchanged.
+ */
+function withPreservedCardSuggestion(existing: unknown, write: any): any {
+  const kept = readCardConditionSuggestion(existing);
+  if (!kept) return write;
+  const base = write !== null && typeof write === 'object' && !Array.isArray(write) ? write : {};
+  return { ...base, cardSuggestion: kept };
+}
+
+/**
  * Re-run the Smart tagging pipeline on an item's already-stored photoUrls.
  *
  * @param itemId - the DRAFT/PENDING_REVIEW item id.
@@ -154,6 +171,8 @@ export async function reanalyzeItem(
       packageConfirmedByOrganizer: true,
       userEditedFields: true,
       ebayOfferId: true,
+      catalogSuggestions: true, // read so a pending cardSuggestion can be carried across the enrichment suggestion write
+      organizerId: true,
       sale: { select: { id: true, organizerId: true } },
     },
   });
@@ -273,7 +292,8 @@ export async function reanalyzeItem(
   if (result.description) appliedData.description = result.description;
   if (result.category) appliedData.category = result.category;
   if (result.condition) appliedData.condition = result.condition;
-  if (result.suggestedConditionGrade) appliedData.conditionGrade = result.suggestedConditionGrade;
+  // Not for a recognized trading card: it is asked about on the card scale (NM/LP/MP/HP/DMG), so the existing generic grade is kept.
+  if (result.suggestedConditionGrade && !result.card) appliedData.conditionGrade = result.suggestedConditionGrade;
   // Color (S-COLOR-EXTRACTION follow-up): a plain AI-suggested attribute, same tier as
   // title/description/category/condition above -- NOT a catalog identifier like brand/mpn/upc,
   // so it does not go through the enrichItem/planEnrichmentApply cascade below. Never overwrites
@@ -310,7 +330,7 @@ export async function reanalyzeItem(
     description: result.description ?? null,
     category: result.category ?? null,
     condition: result.condition ?? null,
-    conditionGrade: result.suggestedConditionGrade ?? null,
+    conditionGrade: result.card ? item.conditionGrade ?? null : result.suggestedConditionGrade ?? null,
     suggestedPrice: result.suggestedPrice ?? null,
     tags: nextTags,
     ebayCategoryId: cat?.categoryId ?? null,
@@ -338,7 +358,9 @@ export async function reanalyzeItem(
 
   if (apply) {
     const data: Record<string, any> = { ...appliedData };
-    if (catalogSuggestionWrite !== undefined) data.catalogSuggestions = catalogSuggestionWrite;
+    if (catalogSuggestionWrite !== undefined) {
+      data.catalogSuggestions = withPreservedCardSuggestion(item.catalogSuggestions, catalogSuggestionWrite);
+    }
     // P0 fix: keep ebayShippingClassification in sync whenever reanalysis actually
     // changes category and/or tags (classifyEbayShipping was previously only ever
     // computed ephemeral for API display in ebayController.ts — never persisted).
@@ -350,6 +372,21 @@ export async function reanalyzeItem(
     }
     if (Object.keys(data).length > 0) {
       await prisma.item.update({ where: { id: itemId }, data });
+    }
+    // Card-aware (same Haiku result, no extra API call): create/fill the ItemCard identity and store the condition suggestion.
+    // Runs AFTER the item update so the suggestion store re-reads the final catalogSuggestions. Never writes the card condition,
+    // never overwrites organizer-set or locked fields, never re-suggests over a confirmed condition, and never fails the re-analyze.
+    if (result.card) {
+      try {
+        const cardOutcome = await applyAiCardResult(
+          prisma as unknown as AiCardDb,
+          { itemId, organizerId: item.organizerId ?? item.sale?.organizerId ?? null },
+          result.card,
+        );
+        console.log(`[Reanalyze] Card record for item ${itemId}: ${cardOutcome.status}${'reason' in cardOutcome && cardOutcome.reason ? ` (${cardOutcome.reason})` : ''}`);
+      } catch (cardErr: any) {
+        console.warn(`[Reanalyze] card record write failed (non-fatal) for item ${itemId}:`, cardErr?.message || cardErr);
+      }
     }
   }
 
