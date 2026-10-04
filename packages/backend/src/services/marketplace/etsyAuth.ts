@@ -201,14 +201,17 @@ export interface EtsyShopIdentity {
 export async function resolveEtsyShop(
   etsyUserId: string,
   organizerId: string,
-  deps: EtsyAuthDeps = {}
+  deps: EtsyAuthDeps = {},
+  accessToken?: string
 ): Promise<EtsyShopIdentity | null> {
+  // Etsy answers 403 "No user was provided as part of the bearer token" without the seller's bearer
+  // token (confirmed in production logs 2026-10-04), so the lookup is an authenticated (shops_r) call.
   const res = await requestFn(deps)({
     method: 'GET',
     path: `/v3/application/users/${encodeURIComponent(etsyUserId)}/shops`,
     priority: 'URGENT',
     organizerId,
-    endpointClass: 'public',
+    ...(accessToken ? { accessToken, endpointClass: 'oauth' as const } : { endpointClass: 'public' as const }),
   });
   if (res.status === 404) return null;
   if (!res.ok) {
@@ -278,7 +281,7 @@ export async function completeEtsyConnect(
     throw new EtsyError('ETSY_TOKEN_EXCHANGE_FAILED', 'Etsy token exchange failed', { status: tokenRes.status });
   }
 
-  const shop = await resolveEtsyShop(etsyUserId, args.organizerId, deps);
+  const shop = await resolveEtsyShop(etsyUserId, args.organizerId, deps, tokens.accessToken);
   if (!shop) throw new EtsyError('ETSY_NO_SHOP', 'No Etsy shop found for this Etsy account');
 
   const otherOwner = await db.etsyShopSettings.findFirst({
