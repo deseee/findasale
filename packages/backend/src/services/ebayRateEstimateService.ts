@@ -2255,6 +2255,8 @@ export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS: readonly string[] = [
   '40605',
   // Trading Cards -- eBay splits into Sports Trading Cards (212) and Non-Sport Trading Cards (182982)
   '212', '182982',
+  // CCG Individual Cards leaf (ADR-134 D5; eBay's help page lists collectible card games as eligible)
+  '183454',
   // Coins & Paper Money (eBay's current name; this list previously used the stale/older
   // "Coins & Currency" name in EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES -- fixed 2026-08-15).
   // '11116' is the L1 PARENT id. Real coin listings resolve to a CHILD leaf id (e.g. '11981'
@@ -2280,6 +2282,10 @@ export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS: readonly string[] = [
  */
 export const EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS: Readonly<Record<string, readonly string[]>> = {
   '11116': ['11981'], // Coins & Paper Money -> Eisenhower (1971-78) dollars
+  // ADR-134 D5 (V5 confirmed 2026-10-04 from eBay's Standard Envelope help page: trading cards incl. collectible card
+  // games qualify; $20 cap and 3 oz cap are already enforced in evaluateStandardEnvelope; eBay excludes graded cards from the envelope; this estimator has no graded signal, so the 3 oz weight gate is the only screen).
+  '182982': ['183050'], // Non-Sport Trading Cards -> Trading Card Singles
+  '212': ['261328'], // Sports Trading Cards -> Trading Card Singles
 };
 
 /** Lineage-aware membership check against EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS --
