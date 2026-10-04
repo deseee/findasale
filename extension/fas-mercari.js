@@ -2597,23 +2597,281 @@
     });
   }
 
-  async function deleteMercariListingOnDetailPage() {
-    const menuBtn = qa('button, [role="button"]').find((el) => {
-      const label = (el.getAttribute('aria-label') || '').toLowerCase();
-      return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...';
+  // S-EXT-MERCARI-DELETE-ON-EDIT-PAGE (2026-10-03). The old flow here (item page -> "More" menu ->
+  // "Delete listing" -> confirm) was built on an assumption that is wrong for Mercari today, and was
+  // why every Mercari removal ended in 'no_menu_button'. LIVE-CONFIRMED 2026-10-03 (read-only
+  // inspection of Patrick's signed-in Chrome on an ACTIVE listing, https://www.mercari.com/us/item/
+  // m27828362838/ and its edit page):
+  //   1. The item page's "More" control is <button data-testid="MoreItemOptions"> with NO aria-label
+  //      and textContent exactly "More" -- the old matcher (aria-label contains more/option, or
+  //      textContent '...') could never match it.
+  //   2. Even when opened, that More menu holds ONLY "Sell similar item". There is NO delete there.
+  //   3. The real delete control lives on the EDIT page, https://www.mercari.com/sell/edit/<itemId>/
+  //      (the item page links to it: <a> "Edit item", href /sell/edit/<itemId>/). That page renders
+  //      button[data-testid="ActivateDeactivateButton"] "Deactivate", button[data-testid=
+  //      "DeleteButton"] "Delete" and button[data-testid="ListButton"] "Update".
+  // UNVERIFIED (cannot be inspected without really deleting a listing): the markup of the Delete
+  // CONFIRMATION dialog. So the edit-page flow FAILS CLOSED: after clicking DeleteButton it only
+  // clicks a confirm button that sits inside a NEW dialog/modal, whose own text starts with
+  // delete/yes/confirm, that is not the page-level DeleteButton, and only when exactly one such
+  // candidate exists; otherwise it clicks nothing further and returns a specific reason. 'deleted' is
+  // returned only after Mercari is observed to have left the edit page (see
+  // mercRemConfirmEditPageGone) -- never on a click alone (the 2026-09-04 honesty rule above).
+  //
+  // Two-page flow: this item-page step (title + target-id already verified by the caller) only
+  // records a short-lived sessionStorage marker and navigates to the edit page; the delete itself is
+  // done by deleteMercariListingOnEditPage() on that page after RE-verifying the listing there.
+  const MERC_REM_EDIT_MARKER_KEY = 'fasMercDeleteEditMarker';
+  const MERC_REM_EDIT_MARKER_TTL_MS = 2 * 60 * 1000;
+
+  function mercRemEditPageItemId() {
+    const m = /^\/sell\/edit\/(m\d+)(?:\/|$)/i.exec(location.pathname);
+    return m ? m[1].toLowerCase() : null;
+  }
+  function mercRemReadMarker() {
+    let m = null;
+    try { m = JSON.parse(sessionStorage.getItem(MERC_REM_EDIT_MARKER_KEY) || 'null'); } catch (e) { m = null; }
+    if (!m || typeof m !== 'object') return null;
+    if (typeof m.mercId !== 'string' || typeof m.fasItemId !== 'string' || typeof m.title !== 'string') return null;
+    if (m.phase !== 'navigated' && m.phase !== 'delete_clicked') return null;
+    const age = Date.now() - m.at;
+    if (!Number.isFinite(m.at) || age < 0 || age > MERC_REM_EDIT_MARKER_TTL_MS) return null;
+    return m;
+  }
+  function mercRemWriteMarker(m) {
+    try { sessionStorage.setItem(MERC_REM_EDIT_MARKER_KEY, JSON.stringify(m)); return true; } catch (e) { return false; }
+  }
+  function mercRemClearMarker() { try { sessionStorage.removeItem(MERC_REM_EDIT_MARKER_KEY); } catch (e) { /* non-fatal */ } }
+
+  function mercRemVisible(el) {
+    if (!el || !el.isConnected) return false;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    const cs = window.getComputedStyle(el);
+    return cs.visibility !== 'hidden' && cs.display !== 'none';
+  }
+  async function mercRemWaitFor(fn, ms, stepMs) {
+    const end = Date.now() + ms;
+    for (;;) {
+      const v = fn();
+      if (v) return v;
+      if (Date.now() >= end) return null;
+      await sleep(stepMs || 250);
+    }
+  }
+
+  async function deleteMercariListingOnDetailPage(item) {
+    const mercId = mercRemItemIdFromHref(location.pathname);
+    if (!mercId) return 'no_item_id';
+    // A sold listing has no Delete at all (Archive/Hide only) -- permanent skip, same as before.
+    if (mercRemPageIndicatesSold()) return 'blocked_sold_mercari';
+    // Loop guard: we already sent this tab to the edit page for this exact item and ended up back
+    // on the item page (Mercari redirected the edit page away). Do not bounce again.
+    const prior = mercRemReadMarker();
+    if (prior && prior.phase === 'navigated' && prior.mercId === mercId && prior.fasItemId === String(item.id)) {
+      mercRemClearMarker();
+      return 'edit_page_unreachable';
+    }
+    let editUrl = null;
+    for (const a of qa('a[href*="/sell/edit/"]')) {
+      try {
+        const u = new URL(a.getAttribute('href') || a.href, location.href);
+        if (u.origin === location.origin && u.pathname.toLowerCase().replace(/\/+$/, '') === '/sell/edit/' + mercId) { editUrl = u.origin + u.pathname; break; }
+      } catch (e) { /* ignore malformed href */ }
+    }
+    if (!editUrl) editUrl = location.origin + '/sell/edit/' + mercId + '/';
+    const ok = mercRemWriteMarker({ mercId: mercId, fasItemId: String(item.id), title: String(item.title == null ? '' : item.title), at: Date.now(), phase: 'navigated' });
+    if (!ok) return 'marker_write_failed';
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Mercari edit page for <b>' + escapeHtml(item.title) + '</b> to remove it…</div>');
+    location.href = editUrl;
+    return 'navigating'; // the edit page load re-invokes maybeRunMercariRemoval() against the same queued item
+  }
+
+  const MERC_REM_DIALOG_SEL = '[role="dialog"], [role="alertdialog"], dialog[open], [aria-modal="true"]';
+  const MERC_REM_BTN_SEL = 'button, [role="button"]';
+  function mercRemEditTitleInput() {
+    let el = document.querySelector('input[data-testid="Title"], textarea[data-testid="Title"]');
+    if (!el) {
+      const f = fieldByLabel('Title');
+      if (f && /^(input|textarea)$/i.test(f.tagName)) el = f;
+    }
+    return el || null;
+  }
+  function mercRemSnapshotModalState() {
+    return {
+      dialogs: new Set(qa(MERC_REM_DIALOG_SEL).filter(mercRemVisible)),
+      bodyKids: new Set(Array.from(document.body.children)),
+      buttons: new Set(qa(MERC_REM_BTN_SEL).filter(mercRemVisible))
+    };
+  }
+  // Roots of anything that appeared since the snapshot: a new visible dialog-role element, or a new
+  // direct child of <body> (portal-style modal) that contains a button.
+  function mercRemNewModalRoots(snap) {
+    const roots = [];
+    qa(MERC_REM_DIALOG_SEL).forEach((el) => { if (mercRemVisible(el) && !snap.dialogs.has(el)) roots.push(el); });
+    Array.from(document.body.children).forEach((el) => {
+      if (snap.bodyKids.has(el) || /^(script|style|link|noscript)$/i.test(el.tagName)) return;
+      if (mercRemVisible(el) && el.querySelector(MERC_REM_BTN_SEL)) roots.push(el);
     });
-    if (!menuBtn) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'no_menu_button';
-    await realClick(menuBtn);
-    await sleep(400);
-    const deleteBtn = mercRemFindButtonByText('Delete listing') || mercRemFindButtonByText('Delete') || mercRemFindButtonByText('Remove listing');
-    if (!deleteBtn) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'no_delete_action';
-    await realClick(deleteBtn);
-    await sleep(400);
-    const confirmBtn = mercRemFindButtonByText('Yes') || mercRemFindButtonByText('Confirm') || mercRemFindButtonByText('Delete');
-    if (!confirmBtn) return 'no_confirm_button';
-    await realClick(confirmBtn);
-    await sleep(600);
-    return 'deleted';
+    return roots;
+  }
+  function mercRemConfirmCandidates(roots, deleteBtn, snap) {
+    const seen = new Set();
+    const out = [];
+    roots.forEach((root) => {
+      root.querySelectorAll(MERC_REM_BTN_SEL).forEach((b) => {
+        if (seen.has(b)) return;
+        seen.add(b);
+        if (!mercRemVisible(b) || b === deleteBtn || snap.buttons.has(b) || b.contains(deleteBtn) || deleteBtn.contains(b)) return;
+        const t = String(b.innerText || b.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!/^\s*(delete|yes|confirm)/i.test(t)) return;
+        if (/cancel|keep|nevermind|never mind|go back|\bno\b/i.test(t)) return;
+        out.push(b);
+      });
+    });
+    return out;
+  }
+  // true only after Mercari has visibly left the edit page: the URL is no longer /sell/edit/<id>/, OR
+  // the edit form (Title field + every DeleteButton) and every dialog are gone on two consecutive
+  // checks ~700ms apart, inside the budget.
+  async function mercRemConfirmEditPageGone(editId, budgetMs) {
+    const end = Date.now() + budgetMs;
+    let goneChecks = 0;
+    for (;;) {
+      if (mercRemEditPageItemId() !== editId) return true;
+      const titleNow = mercRemEditTitleInput();
+      const formPresent = qa('button[data-testid="DeleteButton"]').some(mercRemVisible)
+        || (!!titleNow && mercRemVisible(titleNow))
+        || qa(MERC_REM_DIALOG_SEL).some(mercRemVisible);
+      goneChecks = formPresent ? 0 : goneChecks + 1;
+      if (goneChecks >= 2) return true;
+      if (Date.now() >= end) return false;
+      await sleep(700);
+    }
+  }
+
+  async function deleteMercariListingOnEditPage(item, editId) {
+    const marker = mercRemReadMarker();
+    // Reloaded on the edit page of the same item after a Delete click: it was not deleted.
+    if (marker && marker.phase === 'delete_clicked' && marker.mercId === editId && marker.fasItemId === String(item.id)) {
+      mercRemClearMarker();
+      return 'delete_not_confirmed';
+    }
+    if (item.reason === 'RESYNC_VERIFY' || !marker || marker.phase !== 'navigated') { mercRemClearMarker(); return 'edit_page_without_marker'; }
+    if (marker.mercId !== editId || marker.fasItemId !== String(item.id) || marker.title !== String(item.title == null ? '' : item.title)) {
+      mercRemClearMarker();
+      return 'edit_page_marker_mismatch';
+    }
+    try {
+      // Re-verify the listing ON the edit page: the title field's value must exactly match.
+      const titleEl = await mercRemWaitFor(() => { const el = mercRemEditTitleInput(); return el && String(el.value || '').trim() ? el : null; }, 12000);
+      if (!titleEl) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'edit_title_unreadable';
+      if (!mercRemTitleMatches(titleEl.value, item.title)) return 'edit_page_title_mismatch';
+      const deleteBtns = (await mercRemWaitFor(() => { const l = qa('button[data-testid="DeleteButton"]').filter(mercRemVisible); return l.length ? l : null; }, 5000)) || [];
+      if (deleteBtns.length === 0) return mercRemPageIndicatesSold() ? 'blocked_sold_mercari' : 'no_delete_button';
+      if (deleteBtns.length > 1) return 'ambiguous_delete_button';
+      const deleteBtn = deleteBtns[0];
+      if (mercRemNorm(deleteBtn.textContent) !== 'delete') return 'no_delete_button';
+
+      const snap = mercRemSnapshotModalState();
+      // Persisted BEFORE the click so that, if Mercari reloads/navigates the tab and kills this
+      // script, the next page can tell a delete was attempted (mercRemResumeAfterDeleteClick).
+      mercRemWriteMarker({ mercId: marker.mercId, fasItemId: marker.fasItemId, title: marker.title, at: Date.now(), phase: 'delete_clicked' });
+      await realClick(deleteBtn);
+
+      let roots = [];
+      const dlgEnd = Date.now() + 3000;
+      while (Date.now() < dlgEnd) {
+        if (mercRemEditPageItemId() !== editId) return 'deleted'; // Mercari deleted with no dialog and left the page
+        roots = mercRemNewModalRoots(snap);
+        if (roots.length) break;
+        await sleep(250);
+      }
+      if (!roots.length) return (await mercRemConfirmEditPageGone(editId, 3000)) ? 'deleted' : 'no_confirm_dialog';
+      await sleep(400); // let the dialog's buttons finish rendering
+      const candidates = mercRemConfirmCandidates(mercRemNewModalRoots(snap), deleteBtn, snap);
+      if (candidates.length === 0) return 'no_confirm_button';
+      if (candidates.length > 1) return 'ambiguous_confirm_button';
+      await realClick(candidates[0]);
+      return (await mercRemConfirmEditPageGone(editId, 15000)) ? 'deleted' : 'delete_not_confirmed';
+    } finally {
+      // Reached on every in-page outcome. If Mercari navigated away and killed this script instead,
+      // the 'delete_clicked' marker deliberately survives (TTL 2 min) for the resume check.
+      mercRemClearMarker();
+    }
+  }
+
+  // Full-page-load case only: Mercari reloaded the tab after our Delete click, so the script that
+  // clicked is gone. Counts as deleted ONLY on the active-listings page, once cards have rendered
+  // and the exact-title scan finds zero matches among OTHER rendered listings (count 0, never -1).
+  async function mercRemResumeAfterDeleteClick(item) {
+    mercRemClearMarker();
+    if (!/^\/mypage\/listings(\/|$)/i.test(location.pathname)) return 'delete_not_confirmed';
+    await mercRemWaitFor(() => document.querySelector('a[data-testid="ItemLink"], a[href*="/item/"]'), 8000);
+    const link = findMercariListingLinkByTitle(item.title);
+    return (!link && mercRemLastMatchCount === 0) ? 'deleted' : 'delete_not_confirmed';
+  }
+
+  // Overlay copy per failure reason. No em dashes; every non-permanent reason is retried by
+  // background.js (FAS_REMOVAL_MAX_ATTEMPTS), and nothing here ever reports a removal.
+  function mercRemFailureCopy(result, title) {
+    const t = escapeHtml(title);
+    const retry = ' FindA.Sale will try this item again rather than marking it removed.';
+    switch (result) {
+      case 'edit_page_without_marker':
+        return 'This Mercari edit page was not opened by FindA.Sale for "' + t + '", so nothing was deleted. Please remove the listing yourself if you want it gone.' + retry;
+      case 'edit_page_marker_mismatch':
+        return 'This Mercari edit page does not match the listing FindA.Sale was removing ("' + t + '"), so nothing was deleted. Please remove it yourself.' + retry;
+      case 'edit_title_unreadable':
+        return 'Could not read the title on the Mercari edit page for "' + t + '", so nothing was deleted. Please remove it yourself.' + retry;
+      case 'edit_page_title_mismatch':
+        return 'The title on the Mercari edit page does not exactly match "' + t + '", so nothing was deleted. Please remove it yourself.' + retry;
+      case 'edit_page_unreachable':
+        return 'Mercari would not open the edit page for "' + t + '", so it could not be deleted automatically. Please remove it yourself.' + retry;
+      case 'no_delete_button':
+      case 'ambiguous_delete_button':
+        return 'Found the Mercari edit page for "' + t + '" but could not find a single Delete button, so nothing was deleted. Please remove it yourself.' + retry;
+      case 'no_confirm_dialog':
+        return 'Clicked Delete on Mercari for "' + t + '" but no confirmation dialog appeared and the listing is still there. Please check it and remove it yourself.' + retry;
+      case 'no_confirm_button':
+      case 'ambiguous_confirm_button':
+        return 'Clicked Delete on Mercari for "' + t + '" but could not tell which button confirms it, so nothing more was clicked. Please finish the delete yourself.' + retry;
+      case 'delete_not_confirmed':
+        return 'Confirmed the delete on Mercari for "' + t + '" but could not see Mercari remove it. Please check your listings and remove it yourself if it is still there.' + retry;
+      case 'marker_write_failed':
+        return 'Could not prepare the Mercari edit page step for "' + t + '", so nothing was deleted. Please remove it yourself.' + retry;
+      case 'delete_error':
+        return 'Something went wrong while deleting "' + t + '" on Mercari. Please check it and remove it yourself.' + retry;
+      default:
+        return 'Found the listing but couldn\'t confirm the delete action (' + escapeHtml(result) + ') -- please remove it yourself.' + retry;
+    }
+  }
+
+  // Shared outcome handling for both the item-page and edit-page steps. Moved verbatim (copy
+  // changes aside) out of runMercariRemovalQueue so the edit-page step reports identically.
+  function mercRemReportResult(item, result) {
+    if (result === 'deleted') {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Mercari.</div>');
+      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'MERCARI', itemId: item.id, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      return;
+    }
+    if (result === 'blocked_sold_mercari') {
+      // GAP FIX 2026-09-26 (S-EXT-MERCARI-SOLD-PERMANENT-SKIP): PERMANENT, non-retriable --
+      // Mercari never allows deleting a sold listing (Archive/Hide only), so retrying this can
+      // never succeed. crossPlatformRemovalSkipped (not crossPlatformRemovalAttemptFailed)
+      // reports it and moves the queue on immediately, the same permanent-skip mechanism
+      // fas-poshmark.js already reuses for its own already-sold case (reason
+      // 'already_sold_on_poshmark_permanent') rather than inventing a new one here.
+      overlayWarn('This item shows as sold on Mercari -- Mercari never allows deleting a sold listing (Archive/Hide only), so this can\'t be automated. Please review it yourself.' + button('fas-merc-close', 'Close', false));
+      try {
+        chrome.runtime.sendMessage({
+          type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'already_sold_on_mercari_archive_only', continueUrl: MERCARI_REMOVAL_CONTINUE_URL
+        });
+      } catch (e) {}
+      return;
+    }
+    overlayWarn(mercRemFailureCopy(result, item.title) + button('fas-merc-close', 'Close', false));
+    try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'MERCARI', itemId: item.id, reason: result, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
   }
 
   // Retained for reference/back-compat only. As of the 2026-09-04 fix below, background.js owns
@@ -2756,6 +3014,25 @@
 
   async function runMercariRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    // S-EXT-MERCARI-DELETE-ON-EDIT-PAGE (2026-10-03): the actual delete happens on /sell/edit/<id>/.
+    // On that page mercRemItemIdFromHref (which only knows /item/<id>) returns null, so this MUST be
+    // dispatched before the listings-page scan below -- otherwise the scan finds no cards and would
+    // report a permanent 'listing_not_found' skip for a listing that is still live.
+    const editPageId = mercRemEditPageItemId();
+    if (editPageId) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Checking the Mercari edit page for <b>' + escapeHtml(item.title) + '</b> before deleting…</div>');
+      let editResult;
+      try { editResult = await deleteMercariListingOnEditPage(item, editPageId); } catch (e) { mercRemClearMarker(); editResult = 'delete_error'; }
+      mercRemReportResult(item, editResult);
+      return;
+    }
+    const pendingMarker = mercRemReadMarker();
+    if (pendingMarker && pendingMarker.phase === 'delete_clicked' && pendingMarker.fasItemId === String(item.id)) {
+      let resumeResult;
+      try { resumeResult = await mercRemResumeAfterDeleteClick(item); } catch (e) { mercRemClearMarker(); resumeResult = 'delete_not_confirmed'; }
+      mercRemReportResult(item, resumeResult);
+      return;
+    }
     // 2026-09-23: on an item page, wait (250ms polls, up to ~8s) for the <h1> to hydrate, then
     // require an EXACT folded title match (was: containment, which accepted a longer different
     // title) AND, when this queue entry picked a specific item id on the listings page, that the URL
@@ -2783,29 +3060,9 @@
     }
     if (onListingDetailPage) {
       try { sessionStorage.removeItem('fasMercDeleteTargetId'); } catch (e) {}
-      const result = await deleteMercariListingOnDetailPage();
-      if (result === 'deleted') {
-        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Mercari.</div>');
-        try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalDeleted', platform: 'MERCARI', itemId: item.id, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
-        return;
-      }
-      if (result === 'blocked_sold_mercari') {
-        // GAP FIX 2026-09-26 (S-EXT-MERCARI-SOLD-PERMANENT-SKIP): PERMANENT, non-retriable --
-        // Mercari never allows deleting a sold listing (Archive/Hide only), so retrying this can
-        // never succeed. crossPlatformRemovalSkipped (not crossPlatformRemovalAttemptFailed)
-        // reports it and moves the queue on immediately, the same permanent-skip mechanism
-        // fas-poshmark.js already reuses for its own already-sold case (reason
-        // 'already_sold_on_poshmark_permanent') rather than inventing a new one here.
-        overlayWarn('This item shows as sold on Mercari -- Mercari never allows deleting a sold listing (Archive/Hide only), so this can\'t be automated. Please review it yourself.' + button('fas-merc-close', 'Close', false));
-        try {
-          chrome.runtime.sendMessage({
-            type: 'crossPlatformRemovalSkipped', platform: 'MERCARI', itemId: item.id, reason: 'already_sold_on_mercari_archive_only', continueUrl: MERCARI_REMOVAL_CONTINUE_URL
-          });
-        } catch (e) {}
-        return;
-      }
-      overlayWarn('Found the listing but couldn\'t confirm the delete action (' + escapeHtml(result) + ') -- please remove it yourself. FindA.Sale will try this item again rather than marking it removed.' + button('fas-merc-close', 'Close', false));
-      try { chrome.runtime.sendMessage({ type: 'crossPlatformRemovalAttemptFailed', platform: 'MERCARI', itemId: item.id, reason: result, continueUrl: MERCARI_REMOVAL_CONTINUE_URL }); } catch (e) {}
+      const result = await deleteMercariListingOnDetailPage(item);
+      if (result === 'navigating') return; // edit-page load re-invokes the removal queue (see above)
+      mercRemReportResult(item, result);
       return;
     }
     // ADR-mercari-remote-listing-id-capture-2026-09-24: we ARE on a real item detail page
