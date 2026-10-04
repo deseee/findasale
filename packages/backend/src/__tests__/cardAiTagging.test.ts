@@ -186,6 +186,7 @@ describe('(3) non-card output is unchanged', () => {
     const job = fs.readFileSync(path.join(__dirname, '../jobs/processRapidDraft.ts'), 'utf8');
     expect(job).toContain('conditionGrade: aiResult.card ? item.conditionGrade : (aiResult.suggestedConditionGrade || item.conditionGrade),');
     expect(job).toContain('applyAiCardResult(');
+    expect(job).toContain('withPreservedCardSuggestion(item.catalogSuggestions, rapidCatalogSuggestion)');
   });
 
   it('the card module makes no network or AI import', () => {

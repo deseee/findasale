@@ -16,7 +16,7 @@ import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 import axios from 'axios';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 import { mergeAiRecordIdentity } from '../services/marketplace/recordIdentity'; // ADR-132
-import { applyAiCardResult, AiCardDb } from '../services/cardAiSuggestion'; // card-aware tagging (same Haiku call, no extra API call)
+import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from '../services/cardAiSuggestion'; // card-aware tagging (same Haiku call, no extra API call)
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
@@ -530,7 +530,8 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         // visible-barcode read was extracted every rapidfire pass and silently discarded.
         ...(!rapidCatalogApply.upc && !userEdited.includes('upc') && !item.upc && aiResult?.upc
           ? { upc: aiResult.upc } : {}),
-        ...(rapidCatalogSuggestion !== undefined ? { catalogSuggestions: rapidCatalogSuggestion } : {}),
+        // A pending card condition suggestion lives in the same JSON, so a re-run keeps it (see cardAiSuggestion.ts).
+        ...(rapidCatalogSuggestion !== undefined ? { catalogSuggestions: withPreservedCardSuggestion(item.catalogSuggestions, rapidCatalogSuggestion) } : {}),
         // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
         // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
         ...(aiResult?.estimatedWeightOz != null && aiResult?.packageConfidence != null ? {

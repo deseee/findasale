@@ -32,7 +32,7 @@ import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './m
 import { resolveGroundedIdentityInline } from './groundedIdentityService';
 import { desiredEbayCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
-import { applyAiCardResult, readCardConditionSuggestion, AiCardDb } from './cardAiSuggestion'; // card-aware re-analyze (same result, no extra API call)
+import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from './cardAiSuggestion'; // card-aware re-analyze (same result, no extra API call)
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -95,19 +95,6 @@ export interface ReanalyzeResult {
   ebaySynced: boolean;
   ebaySyncReason?: string;
   ebayCategoryLocked?: { changed: boolean; from: string | null; to: string | null };
-}
-
-/**
- * The enrichment suggestion write REPLACES Item.catalogSuggestions (an object, or null to clear a stale low-confidence
- * suggestion). A stored cardSuggestion (the seller's pending "suggested, please confirm" card condition or slab read) lives
- * in the same JSON, so it is carried over: the re-validated cardSuggestion is added to the new value (or becomes the only key
- * when the write is null). When there is no usable cardSuggestion the write is returned unchanged.
- */
-function withPreservedCardSuggestion(existing: unknown, write: any): any {
-  const kept = readCardConditionSuggestion(existing);
-  if (!kept) return write;
-  const base = write !== null && typeof write === 'object' && !Array.isArray(write) ? write : {};
-  return { ...base, cardSuggestion: kept };
 }
 
 /**

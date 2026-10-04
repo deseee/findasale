@@ -287,6 +287,18 @@ export function mergeCardSuggestionIntoCatalogSuggestions(existing: unknown, sug
   return { ...base, cardSuggestion: suggestion };
 }
 
+/**
+ * Carry a stored cardSuggestion across a write that REPLACES Item.catalogSuggestions (an object, or null to clear a stale
+ * low-confidence suggestion). The stored suggestion is re-validated; when usable it is added to the new value (or becomes the
+ * only key when the write is null). With no usable cardSuggestion the write is returned unchanged.
+ */
+export function withPreservedCardSuggestion(existing: unknown, write: any): any {
+  const kept = readCardConditionSuggestion(existing);
+  if (!kept) return write;
+  const base = write !== null && typeof write === 'object' && !Array.isArray(write) ? write : {};
+  return { ...base, cardSuggestion: kept };
+}
+
 // ---------------------------------------------------------------------------
 // Persisting (identity only) and storing the suggestion
 // ---------------------------------------------------------------------------

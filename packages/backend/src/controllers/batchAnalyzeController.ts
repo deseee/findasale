@@ -34,6 +34,7 @@ import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled } f
 import { getEbayImageMatch, buildEbayMatchContext } from '../services/ebayImageSearchService';
 import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
+import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from '../services/cardAiSuggestion'; // card-aware tagging (same Haiku call, no extra API call)
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -340,6 +341,8 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           }
 
           let analysis: any = null;
+          // Validated card block from the cloud AI result only (the Ollama fallback JSON is unvalidated and never carries one).
+          let cloudCard: any = null;
 
           // Organizer-intent gate: skip AI pipeline when all core fields are already
           // set by the organizer (mirrors processRapidDraft.ts lines 113–130).
@@ -385,6 +388,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               const mimeTypes = clusterImages.map(img => img.mimeType);
               // Phase 2: Pass clusterPhotos for role-context analysis
               analysis = await analyzeItemImages(imageBuffers, mimeTypes, undefined, clusterPhotosForAnalysis);
+              cloudCard = analysis?.card ?? null;
             } catch (err: any) {
               console.error(`Cloud AI error for item ${itemId}:`, err.message);
             }
@@ -493,6 +497,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 brand: true, mpn: true, upc: true, ean: true, isbn: true,
                 packageWeightOz: true, packageLengthIn: true, packageWidthIn: true,
                 packageHeightIn: true, packageConfirmedByOrganizer: true,
+                catalogSuggestions: true, // read so a pending cardSuggestion survives the catalogSuggestions write below
               },
             });
             const userEdited = existing?.userEditedFields ?? [];
@@ -637,7 +642,8 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 // extracted every batch-tag pass and silently discarded every time.
                 ...(!catalogApply.upc && !userEdited.includes('upc') && !(existing as any)?.upc && analysis?.upc
                   ? { upc: analysis.upc } : {}),
-                ...(catalogSuggestionWrite !== undefined ? { catalogSuggestions: catalogSuggestionWrite } : {}),
+                // The write REPLACES the whole JSON, so a stored cardSuggestion (pending seller-confirm card condition or slab read) is carried over.
+                ...(catalogSuggestionWrite !== undefined ? { catalogSuggestions: withPreservedCardSuggestion(existing?.catalogSuggestions, catalogSuggestionWrite) } : {}),
                 // AI package estimate persistence — feeds estimatePackageProfile step-4 AI path.
                 // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
                 ...(analysis?.estimatedWeightOz != null && analysis?.packageConfidence != null ? {
@@ -647,6 +653,24 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 } : {}),
               },
             });
+
+            // Card-aware tagging (same Haiku result, no extra API call): create/fill the ItemCard identity and store the suggested
+            // condition (or slab read) on Item.catalogSuggestions.cardSuggestion. Runs AFTER the item update so the suggestion store
+            // re-reads the final catalogSuggestions. Never writes the card condition, never overwrites organizer-set or locked
+            // fields, never re-suggests over a confirmed condition, and never fails the batch item. No generic conditionGrade is
+            // written on this path at all (cloudAIService also clears its generic grade suggestion for cards).
+            if (cloudCard) {
+              try {
+                const cardOutcome = await applyAiCardResult(
+                  prisma as unknown as AiCardDb,
+                  { itemId, organizerId: sale.organizerId },
+                  cloudCard,
+                );
+                console.log(`[batchAnalyze] Card record for item ${itemId}: ${cardOutcome.status}${'reason' in cardOutcome && cardOutcome.reason ? ` (${cardOutcome.reason})` : ''}`);
+              } catch (cardErr: any) {
+                console.warn(`[batchAnalyze] card record write failed (non-fatal) for item ${itemId}:`, cardErr?.message || cardErr);
+              }
+            }
           } catch (err) {
             console.error(`Failed to update Item ${itemId}:`, err);
           }
