@@ -39,6 +39,7 @@ import { decodeHtmlEntities } from '../../../../utils/textUtils';
 import { computeItemReadiness } from '../../../../lib/itemReadiness';
 import { normalizeCondition as normalizeConditionValue } from '../../../../lib/conditionModel';
 import ItemFormSheet from '../../../../components/itemForm/ItemFormSheet';
+import CardConditionConfirm from '../../../../components/cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
 import {
   createAutosaveController,
   buildAutosavePayload,
@@ -130,6 +131,7 @@ interface Item {
   ebayCategoryName?: string | null;
   condition: string | null;
   conditionGrade?: string | null; // #64: S | A | B | C | D
+  card?: { game?: string | null; conditionCode?: string | null; grader?: string | null; grade?: string | null } | null; // trading card record (null for non-cards)
   quantity: number;
   listingType?: string; // FIXED | AUCTION | REVERSE_AUCTION
   reverseDailyDrop?: number | null; // cents per day for REVERSE_AUCTION
@@ -2347,6 +2349,8 @@ const ReviewPage = () => {
                             {(() => {
                               const current = editState.conditionGrade ?? item.conditionGrade;
                               const picker = gradePickerFor(editState.condition || item.condition, current);
+                              // A trading card is graded on the card scale (NM/LP/MP/HP/DMG), not A to D.
+                              if (item.card) return <CardConditionConfirm itemId={item.id} />;
                               if (!picker.show) return null;
                               return (
                                 <div>
