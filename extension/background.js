@@ -42,8 +42,16 @@ async function refreshAccessToken() {
   try { cookie = await chrome.cookies.get({ url: CFG.COOKIE_URL, name: CFG.REFRESH_COOKIE_NAME }); } catch (e) { fasLastRefreshFailure = 'cookie_read_threw:' + (e && e.message); return null; }
   if (!cookie || !cookie.value) { fasLastRefreshFailure = 'no_refreshToken_cookie_visible_to_extension'; return null; }
   try {
+    // FIX 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE, refresh_http_403:ORIGIN_NOT_ALLOWED): the
+    // extension has host_permissions for https://finda.sale/*, so without an explicit credentials
+    // mode Chrome can attach the finda.sale cookies (refreshToken / accessToken) to this
+    // service-worker request. Backend requireSameSiteOrigin (2026-09-30, by design) refuses any
+    // chrome-extension:// origin request that carries a session cookie and accepts only the
+    // X-Refresh-Token header. 'omit' guarantees no cookie rides along. Verified against the live
+    // backend 2026-10-04: same request with the header and no cookie reaches the handler.
     const res = await fetch(CFG.API_BASE + '/auth/refresh', {
       method: 'POST',
+      credentials: 'omit',
       headers: { 'X-Refresh-Token': cookie.value }
     });
     if (!res.ok) {
@@ -79,8 +87,14 @@ async function apiFetch(path, opts = {}, _retried = false, _token = null) {
     if (fresh) return apiFetch(path, opts, true, fresh);
   }
   if (!token) return { ok: false, status: 401, error: 'not_signed_in', detail: fasLastRefreshFailure || 'no_accessToken_cookie_and_no_refresh_attempted' };
+  // FIX 2026-10-04: this call authenticates with the Bearer header only, so ambient finda.sale
+  // cookies are never wanted. Backend csrf.ts skips the double-submit check for a Bearer request
+  // ONLY when no accessToken/refreshToken cookie is present; if Chrome attached the refreshToken
+  // cookie (host_permissions), every POST (e.g. /extension/items/:id/listed) would 403 on CSRF
+  // right after a successful refresh. 'omit' keeps the request Bearer-only.
   const res = await fetch(CFG.API_BASE + path, {
     method: opts.method || 'GET',
+    credentials: 'omit',
     headers: Object.assign(
       { 'Authorization': 'Bearer ' + token },
       opts.body ? { 'Content-Type': 'application/json' } : {}

@@ -721,7 +721,10 @@
   // Material tryFill() call in fillListing(), to surface a visible review-overlay warning (not just
   // a console.warn) whenever the "Cotton" default was actually used for this run.
   let lastMaterialFallbackUsed = false;
-  async function pickFromPanel(fieldId, labelText, value) {
+  // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE): optional 4th param `chooser(leaves, resolvedValue)` replaces
+  // the default bestScoringOption() pick. Only the Category fallback uses it (a strict, unambiguous-only
+  // chooser); every other caller omits it and behaves exactly as before.
+  async function pickFromPanel(fieldId, labelText, value, chooser) {
     // FIX 2026-10-02 (Patrick live: "Color panel did not open on attempt 1/3, 2/3, 3/3" on an item that
     // HAS a color -- three identical failures = a wrong opener, not a timing race). Vinted's field is
     // now labelled "Colors" (plural), so openerByLabel('Color') no longer hits the exact-label branch
@@ -855,7 +858,7 @@
     // BUG FIX 2026-08-20 (S-EXT-BATCH, P0): resolve common non-Vinted words to a real option
     // before scoring -- see SIZE_ABBREVIATIONS/COLOR_SYNONYMS/MATERIAL_SYNONYMS comment above.
     const resolvedValue = resolveSynonym(fieldId, value);
-    let opt = bestScoringOption(leaves, resolvedValue);
+    let opt = (typeof chooser === 'function') ? chooser(leaves, resolvedValue) : bestScoringOption(leaves, resolvedValue);
     console.log('[FAS Vinted DIAG] ' + fieldId + ': scoring "' + resolvedValue + '" against ' + leaves.length + ' leaves -> ' + (opt ? ('"' + opt.textContent.trim() + '"') : 'NO MATCH'));
     // BUG FIX 2026-08-21 (S-EXT-BATCH, P1, Patrick-directed -- "give me a real default, not a
     // skip message, I don't know what override makes sense either"): live-confirmed Vinted's real
@@ -1298,6 +1301,18 @@
     } catch (e) { /* best-effort, never throw from a diagnostic */ }
   }
 
+  // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE): warnings array that ignores exact duplicate lines. The first
+  // pass and the post-Language sweep both call tryFill, so Category / Brand / Color warnings used to show
+  // twice on the review overlay.
+  function fasNewWarnings() {
+    const w = [];
+    const origPush = w.push.bind(w);
+    w.push = function () {
+      for (let i = 0; i < arguments.length; i++) { if (w.indexOf(arguments[i]) === -1) origPush(arguments[i]); }
+      return w.length;
+    };
+    return w;
+  }
   async function tryFill(fieldLabel, value, fillFn, warnings) {
     fasMarkStep('tryFill:' + fieldLabel);
     // BUG FIX 2026-08-29 (S-EXT-ROUND-9, P1): this guard used to skip completely silently when the
@@ -1412,6 +1427,105 @@
     return false;
   }
 
+  // ================================================================================================
+  // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE) -- summary of the live findings behind the Category
+  // fallback, the deferred fill and the Brand/sweep message fixes below (read-only inspection of
+  // Patrick's real signed-in vinted.com/items/new, plus a backend probe):
+  //  F1. With NO Category chosen, the form shows ONLY Photos, Title, Description, Category, Price.
+  //      There is no Brand, Condition, Size, Color, Material or Package size control in the DOM
+  //      until a Category is chosen. A Category miss therefore cascades: every later field "fails"
+  //      only because its control does not exist yet. Condition and Package size click logic was
+  //      NOT changed (their failure here is a cascade, nothing more is verified); the deferred
+  //      fill (fillVintedWithoutCategory / fasVintedStartDeferredWatch) lets them run once the
+  //      controls exist.
+  //  F2. Vinted's category search is word based: the literal "Hockey-NHL" returns "No items found",
+  //      "hockey" returns Ice hockey pucks / nets / pads leaves (Sports > Winter sports > Ice
+  //      hockey), "collectible" returns Hobbies & collectibles leaves.
+  //  F3. item.category is eBay's ebayCategoryName passed verbatim ("Hockey-NHL"), and the item's
+  //      brand "BCW" was wrong source data (a card-supplies brand on a rubber duck). That is a data
+  //      problem and is deliberately NOT worked around in this file.
+  //  F4. Backend: POST /api/auth/refresh from a chrome-extension:// origin with X-Refresh-Token and
+  //      NO cookie is accepted; the same request with any session cookie gets 403 ORIGIN_NOT_ALLOWED
+  //      (requireSameSiteOrigin, 2026-09-30, by design). Fixed in background.js with
+  //      credentials: 'omit'; unrelated to this file but it is why markListed failed.
+  // The fallback below accepts a leaf ONLY when it is the single, unambiguous match; a wrong
+  // category silently published is worse than a blank one.
+  // ================================================================================================
+  // Reads the real Category control. #category is the readonly input observed live (F1); falls back
+  // to the label lookup used elsewhere in this file. '' when unset or still showing the placeholder.
+  function vintedCategoryValue() {
+    try {
+      const el = document.getElementById('category') || fieldByLabel('Category');
+      const t = el && typeof el.value === 'string' ? norm(el.value) : '';
+      return (t && t !== norm('Select a category')) ? t : '';
+    } catch (e) { return ''; }
+  }
+  // Category-specific tokenizer (deliberately NOT splitWords(): that one feeds bestScoringOption for
+  // Brand/Color/Size/Condition too, where splitting on '-' could create false whole-word matches
+  // such as a hyphenated brand matching an unrelated brand that shares one half). Splits on any
+  // non-alphanumeric run, so "Hockey-NHL" becomes ["hockey", "nhl"].
+  function vintedCatWordList(s) {
+    const STOP = ['and', 'the', 'for', 'with', 'from', 'other', 'others', 'misc', 'item', 'items', 'lot', 'lots', 'new', 'used', 'vintage', 'original', 'reproduction', 'set', 'sets', 'pre', 'now'];
+    return norm(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^\d+$/.test(w) && STOP.indexOf(w) === -1);
+  }
+  function vintedStem(w) {
+    w = norm(w);
+    if (w.length > 4 && /ies$/.test(w)) return w.slice(0, -3) + 'y';
+    if (/(ches|shes|sses|xes|zes)$/.test(w)) return w.slice(0, -2);
+    if (w.length > 3 && /[^s]s$/.test(w)) return w.slice(0, -1);
+    return w;
+  }
+  // Strict chooser for the fallback queries. Accepts a leaf only when (a) exactly ONE distinct leaf
+  // text contains the query word (several different leaves, e.g. pucks / nets / pads, means we would
+  // be guessing) and (b) every substantive word of that leaf is supported by the item's own category
+  // or title words (so "Ice hockey pucks" is never picked for a rubber duck). Otherwise returns null
+  // and Category is left blank for the organizer.
+  function vintedSafeCategoryChooser(item, categoryText) {
+    return function (leaves, query) {
+      const q = vintedStem(query);
+      const texts = [];
+      const cands = [];
+      for (const el of leaves) {
+        const t = norm(el.textContent);
+        if (!t || t.indexOf('>') !== -1 || /no items? found|no results/.test(t)) continue;
+        if (!vintedCatWordList(t).some((w) => vintedStem(w) === q)) continue;
+        if (texts.indexOf(t) === -1) { texts.push(t); cands.push(el); }
+      }
+      if (cands.length !== 1) {
+        console.warn('[FAS Vinted] Category fallback query "' + query + '": ' + (cands.length ? 'ambiguous (' + cands.length + ' different leaves: ' + texts.slice(0, 5).join(' | ') + ')' : 'no leaf contains it') + ' -- not guessing.');
+        return null;
+      }
+      const support = vintedCatWordList(String(categoryText || '') + ' ' + String((item && item.title) || '')).map(vintedStem);
+      const unsupported = vintedCatWordList(texts[0]).filter((w) => support.indexOf(vintedStem(w)) === -1);
+      if (unsupported.length) {
+        console.warn('[FAS Vinted] Category fallback query "' + query + '": only leaf "' + texts[0] + '" has words not found in this item\'s category/title (' + unsupported.join(', ') + ') -- not guessing.');
+        return null;
+      }
+      console.log('[FAS Vinted] Category fallback query "' + query + '": single unambiguous leaf "' + texts[0] + '" -- accepting.');
+      return cands[0];
+    };
+  }
+  // Fallback search words: the category string's own words (hyphens split, most specific segment first,
+  // max 2) then distinctive words from the item title (max 2, brand and noise words removed). Capped so
+  // a run of no-result searches cannot freeze the tab (see pickCategory's 2026-08-19 note).
+  function vintedCategoryFallbackQueries(categoryText, item, tried) {
+    const out = [];
+    const add = (w) => { if (w && tried.indexOf(w) === -1 && out.indexOf(w) === -1) out.push(w); };
+    const catWords = [];
+    String(categoryText || '').split(':').map((x) => x.trim()).filter(Boolean).reverse().forEach((seg) => {
+      vintedCatWordList(seg).forEach((w) => { if (catWords.indexOf(w) === -1) catWords.push(w); });
+    });
+    catWords.slice(0, 2).forEach(add);
+    const brandWords = vintedCatWordList(item && item.brand);
+    const TITLE_STOP = ['signed', 'rare', 'mint', 'near', 'excellent', 'good', 'condition', 'free', 'shipping', 'black', 'white', 'red', 'blue', 'green', 'yellow', 'large', 'small', 'medium', 'pack', 'boxed', 'inch', 'piece', 'pieces', 'style', 'collection', 'edition', 'authentic', 'genuine', 'bundle', 'description', 'with'];
+    const titleWords = [];
+    vintedCatWordList(item && item.title).forEach((w) => {
+      if (w.length >= 4 && TITLE_STOP.indexOf(w) === -1 && brandWords.indexOf(w) === -1 && titleWords.indexOf(w) === -1) titleWords.push(w);
+    });
+    titleWords.slice(-2).forEach(add);
+    return out.slice(0, 4);
+  }
+
   // Category: 3-4 level tree-based picker. Same fuzzy best-effort click-through pattern as the
   // other three new scripts -- FindA.Sale's item.category is a single flat string, not Vinted's
   // real taxonomy tree, so this clicks the closest text match at each level and stops once a
@@ -1488,6 +1602,25 @@
       if (await pickFromPanel('catalog', 'Category', seg)) return true;
       await sleep(300); // settle before trying the next candidate -- avoid overlapping search requests
     }
+    // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE): the literal queries all failed (e.g. "Hockey-NHL" ->
+    // "No items found", F2). Try single words from the category string and the item title, accepting a
+    // leaf ONLY through the strict unambiguous chooser (see vintedSafeCategoryChooser). On any doubt
+    // this returns to the old behavior: Category left blank and the deferred fill takes over.
+    {
+      const triedQueries = quickCandidates.map((q) => norm(q));
+      const fallbackQueries = vintedCategoryFallbackQueries(categoryText, item, triedQueries);
+      if (fallbackQueries.length) {
+        console.log('[FAS Vinted] Category literal queries failed; trying single-word fallback queries: ' + fallbackQueries.join(', '));
+        const safeChooser = vintedSafeCategoryChooser(item, categoryText);
+        for (const q of fallbackQueries) {
+          await sleep(400); // settle between searches (freeze guard)
+          if (await pickFromPanel('catalog', 'Category', q, safeChooser)) {
+            console.log('[FAS Vinted] Category set through fallback query "' + q + '".');
+            return true;
+          }
+        }
+      }
+    }
     const opener = openerByLabel('Category');
     if (!opener) return false;
     opener.click();
@@ -1553,8 +1686,11 @@
     // front means there is genuinely nothing here to set, so this returns success instead of
     // running the noisy fallback chain and warning.
     if (!document.getElementById('brand')) {
+      // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE): return a distinct 'absent' state (truthy, so tryFill
+      // treats it as "nothing to do" and adds no warning) instead of plain true, so callers can no longer
+      // claim a selection was made when no Brand control existed at all.
       console.log('[FAS Vinted] Brand field is not present on this category\'s form -- nothing to fill.');
-      return true;
+      return 'absent';
     }
     // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the old version typed directly
     // into #brand -- but #brand is `readonly` (confirmed live) and only ever reflects the CONFIRMED
@@ -2363,7 +2499,24 @@
     if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  function showReviewOverlay(item, index, total, photosOk, warnings) {
+  function vintedWarningsBlockHtml(warnings) {
+    return (warnings && warnings.length)
+      ? '<div style="margin-top:8px;padding:8px 10px;background:#3a2a1a;border:1px solid #a06b2a;border-radius:8px;font-size:12px;color:#ffcf7a">' +
+        '<b>Needs a manual check:</b><ul style="margin:4px 0 0;padding-left:18px">' +
+        warnings.map((w) => '<li>' + escapeHtml(w) + '</li>').join('') + '</ul></div>'
+      : '';
+  }
+  // Status note for the deferred (category-first) fill. No em dashes, no mention of AI.
+  function vintedDeferredNoteHtml(state) {
+    const box = (bg, border, color, text) => '<div style="margin-top:8px;padding:8px 10px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;font-size:12px;color:' + color + '">' + text + '</div>';
+    if (state === 'waiting') return box('#1f3a2a', '#3c8c5a', '#cfe3d6', '<b>Category not set.</b> Pick a category and FindA.Sale will fill brand, condition, size, color, material and package size for you.');
+    if (state === 'done') return box('#1f3a2a', '#3c8c5a', '#cfe3d6', 'Filled the remaining fields after your category pick. Check them before you upload.');
+    if (state === 'timeout') return box('#3a2a1a', '#a06b2a', '#ffcf7a', 'FindA.Sale stopped waiting for a category. Please set the category, brand, condition, size, color, material and package size yourself.');
+    if (state === 'error') return box('#3a2a1a', '#a06b2a', '#ffcf7a', 'Filling the remaining fields hit a problem. Please check brand, condition, size, color, material and package size yourself.');
+    return '';
+  }
+
+  function showReviewOverlay(item, index, total, photosOk, warnings, deferred) {
     const more = (index + 1) < total;
     // S-EXT-VINTED-REMOTE-LISTING-ID: remember (per tab, 15 min) that this item was just filled, so
     // the organizer's own post-publish page can be tied back to it (see vintCapMaybeCapture).
@@ -2372,14 +2525,11 @@
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): render every collected fillListing() warning
     // (Category miss chief among them) persistently on this screen -- see tryFill's comment above
     // for why a mid-flow overlayWarn() call alone doesn't work (this function replaces it).
-    const warningsHtml = (warnings && warnings.length)
-      ? '<div style="margin-top:8px;padding:8px 10px;background:#3a2a1a;border:1px solid #a06b2a;border-radius:8px;font-size:12px;color:#ffcf7a">' +
-        '<b>Needs a manual check:</b><ul style="margin:4px 0 0;padding-left:18px">' +
-        warnings.map((w) => '<li>' + escapeHtml(w) + '</li>').join('') + '</ul></div>'
-      : '';
+    const warningsHtml = vintedWarningsBlockHtml(warnings);
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/material/package size are UNVERIFIED guesses), then click Vinted\'s own <b>Upload</b> yourself -- this extension never publishes for you and never reposts a listing automatically.</div>' +
-      warningsHtml +
+      '<div id="fas-vin-warnings">' + warningsHtml + '</div>' +
+      '<div id="fas-vin-deferred">' + (deferred ? vintedDeferredNoteHtml('waiting') : '') + '</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-vin-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-vin-close', 'Close', false) +
@@ -2509,17 +2659,201 @@
 
   async function fillListing(item) {
     fasCurrentDiagItem = item;
+    fasVintedDeferredToken++; // cancels any deferred category watch left over from an earlier fill
     fasMarkStep('fillListing:start');
     overlay('<b>FindA.Sale</b> - filling the Vinted listing form...');
     fasVintedPaceSuggestion().then((h) => { if (h && bar) bar.insertAdjacentHTML('beforeend', h); }).catch(() => {});
-    const warnings = [];
+    const warnings = fasNewWarnings();
     await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
     await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
     // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the
     // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up
     // persistently on the review screen below instead of vanishing.
-    await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
+    const categoryFilled = await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
+    // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE, F1): with no Category chosen, Vinted's form has no Brand,
+    // Condition, Size, Color, Material or Package size control at all. Running those fills would only
+    // produce a cascade of false "could not be filled" failures. Finish what exists (photos, price) and
+    // wait for the organizer to pick a category; fasVintedStartDeferredWatch (started from run()) then
+    // runs the dependent fills once, through the same functions as the normal path.
+    if (!categoryFilled && !vintedCategoryValue()) {
+      return await fillVintedWithoutCategory(item, warnings);
+    }
+    return await fillVintedCategoryDependent(item, warnings, null);
+  }
+
+  // Photos + Price only (the controls that exist before a Category is chosen), then hand back a
+  // `deferred` result. Title/Description/Category were already attempted by fillListing().
+  async function fillVintedWithoutCategory(item, warnings) {
+    fasMarkStep('fillListing:categoryDeferred');
+    console.warn('[FAS Vinted] Category is not set -- skipping Brand/Size/Color/Material/Condition/Package size for now (their controls do not exist until a Category is chosen). Waiting for the organizer to pick one.');
+    const photosOk = await injectPhotos(item.photoUrls);
+    if (!photosOk) console.warn('[FAS Vinted] Photos did not attach (deferred path).');
+    await humanPause(400, 800);
+    const priceToUse = (item.vintedPrice != null && isFinite(Number(item.vintedPrice))) ? item.vintedPrice : item.price;
+    if (priceToUse != null && isFinite(Number(priceToUse))) {
+      let priceVal = Math.round(Number(priceToUse));
+      if (priceVal < VINTED_MIN_PRICE) priceVal = VINTED_MIN_PRICE;
+      await tryFill('Price', priceVal, (v) => fillVintedPrice(String(v)), warnings);
+      if (item.vintedShippingNote) warnings.push(item.vintedShippingNote);
+    }
+    return { photosOk, warnings, deferred: true };
+  }
+
+  // Runs ONCE per item (token + `finished` guards): waits, bounded to 15 minutes, for the organizer to
+  // choose a Category, then runs the unchanged dependent-field fills. Stops for good when the organizer
+  // clicks Vinted's Upload, advances/closes the review overlay, leaves /items/new, or another fill starts.
+  let fasVintedDeferredToken = 0;
+  function fasVintedStartDeferredWatch(item, firstPassWarnings, photosOk) {
+    const token = ++fasVintedDeferredToken;
+    const startedAt = Date.now();
+    const MAX_MS = 15 * 60 * 1000;
+    const MIN_START_MS = 6000; // let the review overlay's button arming (3.5s) finish before touching the overlay
+    const POLL_MS = 1500;
+    let finished = false;
+    let uploadClicked = false;
+    let categorySince = 0;
+    const onClick = (evt) => {
+      const b = evt.target && evt.target.closest && evt.target.closest('button');
+      if (b && norm(b.textContent) === 'upload') uploadClicked = true;
+    };
+    document.addEventListener('click', onClick, true);
+    const setNote = (state) => { const el = document.getElementById('fas-vin-deferred'); if (el) el.innerHTML = vintedDeferredNoteHtml(state); };
+    const finish = (why) => {
+      if (finished) return;
+      finished = true;
+      document.removeEventListener('click', onClick, true);
+      console.log('[FAS Vinted] deferred category watch ended: ' + why);
+      fasMarkStep('deferred:end');
+    };
+    const overlayStillUp = () => {
+      const n = document.getElementById('fas-vin-next');
+      return !!(bar && bar.isConnected && n && n.textContent !== 'Please wait\u2026');
+    };
+    const runFill = async () => {
+      fasMarkStep('deferred:fillStart');
+      // Park the review overlay's nodes (handlers intact): fillPackageSize and friends call overlayWarn(),
+      // which replaces the bar's contents. They are put back afterwards.
+      const saved = document.createDocumentFragment();
+      while (bar && bar.firstChild) saved.appendChild(bar.firstChild);
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Category chosen. Filling brand, condition, size, color, material and package size now...</div>');
+      const warnings = fasNewWarnings();
+      firstPassWarnings.filter((w) => !/^Category /.test(w)).forEach((w) => warnings.push(w));
+      let ok = true;
+      try {
+        await fillVintedCategoryDependent(item, warnings, { photosOk, deferred: true });
+      } catch (e) {
+        ok = false;
+        console.warn('[FAS Vinted] deferred dependent fill threw:', e && e.message);
+        warnings.push('Filling the remaining fields hit an error -- please check brand, condition, size, color, material and package size.');
+      }
+      if (bar) { bar.innerHTML = ''; bar.appendChild(saved); }
+      const wEl = document.getElementById('fas-vin-warnings');
+      if (wEl) wEl.innerHTML = vintedWarningsBlockHtml(warnings);
+      setNote(ok ? 'done' : 'error');
+      fasMarkStep('deferred:fillDone');
+    };
+    const tick = () => {
+      if (finished) return;
+      try {
+        if (token !== fasVintedDeferredToken) return finish('superseded by a newer fill');
+        if (uploadClicked) return finish('organizer clicked Upload');
+        if (!overlayStillUp()) return finish('review overlay closed or advanced');
+        if (location.pathname.indexOf('/items/new') === -1) return finish('left the sell page');
+        if (Date.now() - startedAt > MAX_MS) { setNote('timeout'); return finish('15 minute limit'); }
+        if (Date.now() - startedAt >= MIN_START_MS && vintedCategoryValue()) {
+          if (!categorySince) categorySince = Date.now();
+          const dependentsPresent = !!(document.getElementById('brand') || document.getElementById('color') || fieldByLabel('Condition'));
+          const settled = Date.now() - categorySince >= 2500;
+          const waitedLong = Date.now() - categorySince >= 12000;
+          if (settled && !findOpenPanel('catalog', true) && (dependentsPresent || waitedLong)) {
+            finish('category chosen, running dependent fills once');
+            runFill();
+            return;
+          }
+        } else {
+          categorySince = 0; // category not set (or cleared again): start the settle clock over
+        }
+      } catch (e) { console.warn('[FAS Vinted] deferred category watch tick error:', e && e.message); }
+      setTimeout(tick, POLL_MS);
+    };
+    setTimeout(tick, POLL_MS);
+  }
+
+  // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE): deferred-mode only. Returns a short description of the value
+  // the organizer (or Vinted) already put in a field, or '' when it is empty or cannot be read. Lookups use
+  // element ids first, then an EXACT label match (so "Size" can never resolve to the "Package size" label,
+  // the 2026-08-21 collision). Only input/textarea/select values are trusted; an unreadable control counts
+  // as "not set" so the normal fill still runs for it.
+  function fasDeferredFieldValue(key) {
+    const exactLabelControl = (labels) => {
+      for (const lab of qa('label')) {
+        const t = norm(lab.getAttribute('aria-label') || lab.textContent);
+        if (labels.indexOf(t) === -1) continue;
+        const forId = lab.getAttribute('for');
+        const el = forId ? document.getElementById(forId) : lab.querySelector('input, textarea, select');
+        if (el) return el;
+      }
+      return null;
+    };
+    const spec = {
+      brand: { ids: ['brand'], labels: ['brand'] },
+      color: { ids: ['color'], labels: ['color', 'colors'] },
+      size: { ids: ['size'], labels: ['size'] },
+      material: { ids: ['material'], labels: ['material', 'materials'] },
+      condition: { ids: ['condition', 'status'], labels: ['condition'] },
+      isbn: { ids: ['isbn'], labels: ['isbn'] }
+    };
+    try {
+      if (key === 'package') {
+        const dims = ['A: Height (in)', 'B: Width (in)', 'C: Length (in)'].map((l) => openerByLabel(l));
+        if (dims.every(Boolean) && dims.every((d) => typeof d.value === 'string' && d.value.trim())) return 'height/width/length entered';
+        if (document.querySelector('[data-testid*="package-size"] input[type="radio"]:checked, [data-testid*="package-size"][aria-checked="true"], [data-testid*="package-size"] [aria-checked="true"]')) return 'a package size is selected';
+        return '';
+      }
+      const sp = spec[key];
+      if (!sp) return '';
+      let el = null;
+      for (const id of sp.ids) { el = document.getElementById(id); if (el) break; }
+      if (!el) el = exactLabelControl(sp.labels);
+      return (el && typeof el.value === 'string' && el.value.trim()) ? el.value.trim() : '';
+    } catch (e) { return ''; }
+  }
+
+  // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE): the post-Language sweep used to log "Vinted reset it" for any
+  // empty field, even when the Language step never ran (it is gated on looksLikeVintedBookOrComicItem) or the
+  // field was already empty before it. Snapshot what had a value just before the Language step and word the
+  // message accordingly.
+  function fasSnapshotVintedFields() {
+    const has = (el) => !!(el && typeof el.value === 'string' && el.value.trim());
+    return {
+      title: has(fieldByLabel('Title')), description: has(fieldByLabel('Description')), category: !!vintedCategoryValue(),
+      brand: has(fieldByLabel('Brand')), color: has(document.getElementById('color')), size: has(fieldByLabel('Size')),
+      material: has(fieldByLabel('Material')), condition: has(fieldByLabel('Condition')), isbn: has(fieldByLabel('ISBN')),
+      photos: fasCountVintedPhotoThumbs() > 0
+    };
+  }
+  function fasMissingAfterLanguageMsg(label, key, languageRan, snap) {
+    if (languageRan && snap && snap[key]) return '[FAS Vinted] ' + label + ' missing after the Language step -- Vinted reset it, re-filling.';
+    return '[FAS Vinted] ' + label + ' is empty' + (languageRan ? ' (it was already empty before the Language step, so this is not a Vinted reset)' : ' (the Language step did not run for this item, so this is not a Vinted reset)') + ' -- retrying once.';
+  }
+
+  // Everything that depends on a Category being set: ISBN, photos (unless already attached), Brand, Size,
+  // Color, Material, Condition, Price, Package size, Language and the post-Language sweep. Unchanged logic;
+  // only moved out of fillListing so the deferred watcher can call it once Category exists.
+  // preset = { photosOk } when photos were already injected on the deferred path (never inject twice).
+  async function fillVintedCategoryDependent(item, warnings, preset) {
+    fasMarkStep('fillListing:dependentStart');
+    // Deferred mode (watcher, organizer picked the category by hand): never overwrite a field the organizer
+    // already set. The normal first pass (preset null) is unchanged and skips nothing.
+    const deferredMode = !!(preset && preset.deferred);
+    const fasSkipIfSet = (key, label) => {
+      if (!deferredMode) return false;
+      const v = fasDeferredFieldValue(key);
+      if (!v) return false;
+      console.log('[FAS Vinted] deferred fill: ' + label + ' is already set ("' + String(v).slice(0, 40) + '") -- not overwriting it.');
+      return true;
+    };
     // BUG FIX 2026-09-03 (Patrick live-reported, root cause found live via javascript_tool on
     // his actual open tab: ISBN kept failing to stick no matter how it was typed): moved this
     // whole ISBN block to AFTER Category on purpose. Confirmed live -- Vinted's ISBN/Author/
@@ -2542,7 +2876,7 @@
     // leaving the field empty. STILL never invents a value: only ever a real isbn/upc/ean already
     // on file for the item (see productEnrichment.ts's own "evidence-only, never invented" rule
     // for how upc/isbn get there in the first place).
-    if (looksLikeVintedBookOrComicItem(item)) {
+    if (looksLikeVintedBookOrComicItem(item) && !fasSkipIfSet('isbn', 'ISBN')) {
       // BUG FIX 2026-09-03 (Patrick live-reported: the "filled placeholder 0000000000000" warning
       // showed on the review screen but the ISBN field itself was left empty): ISBN runs live,
       // per-keystroke validation the same way Price does (Vinted shows a "checking.../this ISBN is
@@ -2607,7 +2941,7 @@
     // right after Category and before Brand/Size/Color, so Vinted has real wall-clock time (the DOM
     // interactions + sleeps for Brand and Size below) to actually analyze the photos before Color's
     // suggested-swatch check runs.
-    let photosOk = await injectPhotos(item.photoUrls);
+    let photosOk = (preset && preset.photosOk !== undefined) ? preset.photosOk : await injectPhotos(item.photoUrls);
     if (!photosOk) console.warn('[FAS Vinted] Photos did not attach -- Color\'s suggested-swatch check below will very likely find nothing to accept, since Vinted has no photos to analyze from.');
     await humanPause(400, 800);
     // 2026-08-18: brand/size/color/material now exist on Item (single string each, not an
@@ -2636,12 +2970,19 @@
     // versus the SAME run type visibly working (down to the "No Label"/"no suggestion" DIAG lines)
     // hours earlier. Wrapped in try/catch matching tryFill's own error-handling shape so a future
     // failure here is always visible and can never take the rest of the form down with it again.
-    if (item.brand === undefined || item.brand === null || item.brand === '') {
+    if (fasSkipIfSet('brand', 'Brand')) {
+      // organizer already chose a brand -- left alone
+    } else if (item.brand === undefined || item.brand === null || item.brand === '') {
       try {
         const usedNoBrand = await fillBrand('Brand', '');
-        warnings.push(usedNoBrand
-          ? 'Brand was not set on this item -- selected Vinted\'s own "No brand" option, please verify.'
-          : 'Brand has no value set on this item -- please set it manually before publishing.');
+        if (usedNoBrand === 'absent') {
+          // 2026-10-04: no Brand control exists on this form, so nothing was selected and nothing is claimed.
+          console.log('[FAS Vinted] Brand control is not on this form -- nothing to select, no warning added.');
+        } else {
+          warnings.push(usedNoBrand
+            ? 'Brand was not set on this item -- selected Vinted\'s own "No brand" option, please verify.'
+            : 'Brand has no value set on this item -- please set it manually before publishing.');
+        }
       } catch (e) {
         console.warn('[FAS Vinted] Brand fallback threw an error, skipped:', e && e.message);
         warnings.push('Brand fallback hit an error while filling -- please set it manually before publishing.');
@@ -2649,12 +2990,14 @@
     } else {
       await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v), warnings);
     }
-    await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
+    if (!fasSkipIfSet('size', 'Size')) await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
     // ROUND 10: same pattern as Brand above, for Color -- see acceptSuggestedColor()'s own comment
     // for why this reuses pickFromPanel's opener/findOpenPanel/closePanel building blocks instead of
     // its full search-and-score flow. Wrapped in try/catch for the same reason as Brand's direct call
     // above -- see that comment for the full explanation.
-    if (item.color === undefined || item.color === null || item.color === '') {
+    if (fasSkipIfSet('color', 'Color')) {
+      // organizer already chose a color -- left alone
+    } else if (item.color === undefined || item.color === null || item.color === '') {
       try {
         const acceptedSuggestion = await acceptSuggestedColor('Color', (item.title || '') + ' ' + (item.description || ''));
         warnings.push(acceptedSuggestion
@@ -2668,12 +3011,12 @@
       await tryFill('Color', item.color, (v) => fillSelectLike('Color', v), warnings);
     }
     lastMaterialFallbackUsed = false;
-    await tryFill('Material', item.material, (v) => fillSelectLike('Material', v), warnings);
+    if (!fasSkipIfSet('material', 'Material')) await tryFill('Material', item.material, (v) => fillSelectLike('Material', v), warnings);
     if (lastMaterialFallbackUsed) {
       warnings.push('Material was set to "Cotton" as a best-guess default (item said "' + item.material + '", which has no specific fiber Vinted recognizes) -- please correct if inaccurate.');
     }
     const conditionLabel = mapVintedCondition(item.condition);
-    await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
+    if (!fasSkipIfSet('condition', 'Condition')) await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
     // FEATURE 2026-09-17 (ADR: eBay freight & Vinted shipping-cap pricing): vintedPrice is item.price
     // plus any bump computed backend-side (extensionController.ts) to cover real shipping cost that
     // exceeds Vinted's $100 shipping cap. Falls back to item.price when no bump was computed. When a
@@ -2682,20 +3025,41 @@
     // warning was the original bug this whole feature exists to fix -- see the VINTED_MAX_PRICE removal
     // earlier in this file.)
     const priceToUse = (item.vintedPrice != null && isFinite(Number(item.vintedPrice))) ? item.vintedPrice : item.price;
+    // Deferred mode: Price was filled before the category pick. If the organizer has since typed a DIFFERENT
+    // price, leave it (and skip the later re-commits); a value equal to ours is still re-committed as usual.
+    const priceLocked = (() => {
+      if (!deferredMode || !(priceToUse != null && isFinite(Number(priceToUse)))) return false;
+      const pe = fieldByLabel('Price');
+      const cur = parseFloat(String((pe && pe.value) || '').replace(/[^0-9.]/g, ''));
+      const want = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
+      if (!isFinite(cur) || Math.abs(cur - want) < 0.005) return false;
+      console.log('[FAS Vinted] deferred fill: Price already shows ' + cur + ' (not the ' + want + ' FindA.Sale set) -- not overwriting it.');
+      return true;
+    })();
     if (priceToUse != null && isFinite(Number(priceToUse))) {
       let priceVal = Math.round(Number(priceToUse));
       if (priceVal < VINTED_MIN_PRICE) {
         console.warn('[FAS Vinted] Price $' + priceVal + ' is below Vinted\'s $' + VINTED_MIN_PRICE + ' minimum -- clamping up rather than submitting an invalid value.');
         priceVal = VINTED_MIN_PRICE;
       }
-      await tryFill('Price', priceVal, (v) => fillVintedPrice(String(v)), warnings);
+      if (!priceLocked) await tryFill('Price', priceVal, (v) => fillVintedPrice(String(v)), warnings);
       if (item.vintedShippingNote) {
         warnings.push(item.vintedShippingNote);
       }
     }
-    const packageSizeOk = await fillPackageSize(item, warnings);
+    let packageSizeOk = true;
+    if (!fasSkipIfSet('package', 'Package size')) {
+      packageSizeOk = await fillPackageSize(item, warnings);
+    }
     if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
-    await fillDomesticShippingPrice(item, warnings);
+    {
+      const domesticEl = deferredMode ? openerByLabel('Domestic shipping') : null;
+      if (domesticEl && typeof domesticEl.value === 'string' && domesticEl.value.trim()) {
+        console.log('[FAS Vinted] deferred fill: Domestic shipping price is already set ("' + domesticEl.value.trim().slice(0, 20) + '") -- not overwriting it.');
+      } else {
+        await fillDomesticShippingPrice(item, warnings);
+      }
+    }
     // BUG FIX 2026-08-30 (round 10, Patrick live-reported "price input didn't take this time" +
     // live-confirmed on his actual open tab): the field's real value was correct ($10.00) and had
     // already been cleanly set earlier in this function via fillVintedPrice's clear+retype fix, but
@@ -2722,7 +3086,7 @@
       // short wait before checking -- lets that debounce settle BEFORE this looks, instead of only
       // ever reacting after the fact once the error is already visible to the organizer.
       await sleep(600);
-      if (vintedErrorStillShown()) {
+      if (!priceLocked && vintedErrorStillShown()) {
         console.warn('[FAS Vinted] Price -- stale validation error reappeared after a later field (likely Package Size) touched the page -- re-clearing.');
         const rePriceVal = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
         await fillVintedPrice(String(rePriceVal));
@@ -2753,6 +3117,8 @@
     // so nothing later in this function can touch the page and reset it again. Same precedent as
     // Price's own fix: re-verify the real DOM value at the very end rather than trusting an
     // earlier-in-the-run snapshot for a field proven to get reset by later interactions.
+    const fasPreLangSnap = fasSnapshotVintedFields();
+    let languageStepRan = false;
     if (looksLikeVintedBookOrComicItem(item)) {
       await sleep(300);
       const languageInput = document.getElementById('language_book');
@@ -2761,6 +3127,7 @@
       if (langAlreadySet) {
         console.log('[FAS Vinted] Language already shows "' + languageInput.value.trim() + '" -- leaving it untouched.');
       } else {
+        languageStepRan = true;
         fasMarkStep('language:aboutToOpenModal');
         let langOk = await pickFromPanel('language', 'Language', 'English');
         fasMarkStep('language:modalResolved');
@@ -2848,7 +3215,7 @@
     if (photosOk && vintedThumbs > 0) {
       console.log('[FAS Vinted] Photos already attached (' + vintedThumbs + ' thumbnail(s) on the form) -- not re-attaching.');
     } else if (!photosOk || !(photoInput() && photoInput().files && photoInput().files.length)) {
-      console.warn('[FAS Vinted] Photos missing after the Language step -- Vinted reset them, re-attaching.');
+      console.warn(fasMissingAfterLanguageMsg('Photos', 'photos', languageStepRan, fasPreLangSnap).replace('re-filling', 're-attaching'));
       const rePhotosOk = await injectPhotos(item.photoUrls);
       if (rePhotosOk) photosOk = true;
       else if (!photosOk) console.warn('[FAS Vinted] Photos still did not attach after re-attempting post-Language.');
@@ -2859,7 +3226,7 @@
     const categoryTextAfterLanguage = categoryFieldAfterLanguage ? norm(categoryFieldAfterLanguage.value) : '';
     const categoryStillSet = categoryTextAfterLanguage && categoryTextAfterLanguage !== norm('Select a category');
     if (!categoryStillSet) {
-      console.warn('[FAS Vinted] Category missing after the Language step -- Vinted reset it, re-selecting.');
+      console.warn(fasMissingAfterLanguageMsg('Category', 'category', languageStepRan, fasPreLangSnap).replace('re-filling', 're-selecting'));
       await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
     }
     // BUG FIX 2026-09-27 ROUND 3 (Patrick-directed: "look at the magazines... figure out why
@@ -2881,7 +3248,7 @@
       const isbnFieldAfterLanguage = fieldByLabel('ISBN');
       const isbnStillSet = isbnFieldAfterLanguage && String(isbnFieldAfterLanguage.value || '').trim();
       if (!isbnStillSet) {
-        console.warn('[FAS Vinted] ISBN missing after the Language step -- Vinted reset it (this item is Books & Media -- likely a magazine -- and Vinted hard-blocks submission without it), re-filling.');
+        console.warn(fasMissingAfterLanguageMsg('ISBN', 'isbn', languageStepRan, fasPreLangSnap) + ' (Books & Media: Vinted hard-blocks submission without it.)');
         const reIsbnValue = item.isbn || item.upc || item.ean || '0000000000000';
         const reIsbnEl = fieldByLabel('ISBN');
         if (reIsbnEl) {
@@ -2889,9 +3256,9 @@
           const reIsbnStuck = () => String(reIsbnEl.value || '').trim() === reIsbnWant;
           await vintedTypeLikePrice(reIsbnEl, reIsbnValue);
           if (!reIsbnStuck()) await vintedTypeLikePrice(reIsbnEl, reIsbnValue);
-          if (!reIsbnStuck()) warnings.push('ISBN was reset by the Language step and could not be re-filled automatically -- Vinted will block publishing until you enter one manually.');
+          if (!reIsbnStuck()) warnings.push((languageStepRan ? 'ISBN was reset by the Language step and ' : 'ISBN is still empty and ') + 'could not be re-filled automatically -- Vinted will block publishing until you enter one manually.');
         } else {
-          warnings.push('ISBN was reset by the Language step and the field could not be found to re-fill -- Vinted will block publishing until you enter one manually.');
+          warnings.push((languageStepRan ? 'ISBN was reset by the Language step and ' : 'ISBN is still empty and ') + 'the field could not be found to re-fill -- Vinted will block publishing until you enter one manually.');
         }
       }
     }
@@ -2901,7 +3268,7 @@
       const titleFieldAfterLanguage = fieldByLabel('Title');
       const titleStillSet = titleFieldAfterLanguage && String(titleFieldAfterLanguage.value || '').trim();
       if (!titleStillSet) {
-        console.warn('[FAS Vinted] Title missing after the Language step -- Vinted reset it, re-filling.');
+        console.warn(fasMissingAfterLanguageMsg('Title', 'title', languageStepRan, fasPreLangSnap));
         await tryFill('Title', item.title, (v) => fillText('Title', normalizeVintedTitleCaps(v)), warnings);
       }
     }
@@ -2911,7 +3278,7 @@
       const descFieldAfterLanguage = fieldByLabel('Description');
       const descStillSet = descFieldAfterLanguage && String(descFieldAfterLanguage.value || '').trim();
       if (!descStillSet) {
-        console.warn('[FAS Vinted] Description missing after the Language step -- Vinted reset it, re-filling.');
+        console.warn(fasMissingAfterLanguageMsg('Description', 'description', languageStepRan, fasPreLangSnap));
         await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
       }
     }
@@ -2919,8 +3286,8 @@
     await sleep(250 + Math.floor(Math.random() * 450));
     const brandFieldAfterLanguage = fieldByLabel('Brand');
     const brandStillSet = brandFieldAfterLanguage && String(brandFieldAfterLanguage.value || '').trim();
-    if (!brandStillSet) {
-      console.warn('[FAS Vinted] Brand missing after the Language step -- Vinted reset it, re-filling.');
+    if (!brandStillSet && document.getElementById('brand')) { // 2026-10-04: no #brand control = nothing to re-fill
+      console.warn(fasMissingAfterLanguageMsg('Brand', 'brand', languageStepRan, fasPreLangSnap));
       if (item.brand === undefined || item.brand === null || item.brand === '') {
         try {
           await fillBrand('Brand', '');
@@ -2940,7 +3307,7 @@
       const colorInputAfterLanguage = document.getElementById('color');
       const colorStillSet = colorInputAfterLanguage && String(colorInputAfterLanguage.value || '').trim();
       if (colorInputAfterLanguage && !colorStillSet) {
-        console.warn('[FAS Vinted] Color missing after the Language step -- Vinted reset it, re-filling.');
+        console.warn(fasMissingAfterLanguageMsg('Color', 'color', languageStepRan, fasPreLangSnap));
         if (item.color === undefined || item.color === null || item.color === '') {
           try { await acceptSuggestedColor('Color', (item.title || '') + ' ' + (item.description || '')); } catch (e) { console.warn('[FAS Vinted] Color re-fill (suggested) after Language step threw:', e && e.message); }
         } else {
@@ -2954,7 +3321,7 @@
       const sizeFieldAfterLanguage = fieldByLabel('Size');
       const sizeStillSet = sizeFieldAfterLanguage && String(sizeFieldAfterLanguage.value || '').trim();
       if (!sizeStillSet) {
-        console.warn('[FAS Vinted] Size missing after the Language step -- Vinted reset it, re-filling.');
+        console.warn(fasMissingAfterLanguageMsg('Size', 'size', languageStepRan, fasPreLangSnap));
         await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
       }
     }
@@ -2964,7 +3331,7 @@
       const materialFieldAfterLanguage = fieldByLabel('Material');
       const materialStillSet = materialFieldAfterLanguage && String(materialFieldAfterLanguage.value || '').trim();
       if (!materialStillSet) {
-        console.warn('[FAS Vinted] Material missing after the Language step -- Vinted reset it, re-filling.');
+        console.warn(fasMissingAfterLanguageMsg('Material', 'material', languageStepRan, fasPreLangSnap));
         lastMaterialFallbackUsed = false;
         await tryFill('Material', item.material, (v) => fillSelectLike('Material', v), warnings);
       }
@@ -2975,7 +3342,7 @@
       const conditionFieldAfterLanguage = fieldByLabel('Condition');
       const conditionStillSet = conditionFieldAfterLanguage && String(conditionFieldAfterLanguage.value || '').trim();
       if (!conditionStillSet) {
-        console.warn('[FAS Vinted] Condition missing after the Language step -- Vinted reset it, re-filling.');
+        console.warn(fasMissingAfterLanguageMsg('Condition', 'condition', languageStepRan, fasPreLangSnap));
         await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
       }
     }
@@ -2999,7 +3366,7 @@
     // displays. Scoped to Price only -- the only field this session has direct evidence of this
     // failure mode for; Title/Description were independently confirmed correct on this same live
     // run, so widening this to every field here would be an unevidenced guess, not a fix.
-    if (priceToUse != null && isFinite(Number(priceToUse))) {
+    if (!priceLocked && priceToUse != null && isFinite(Number(priceToUse))) {
       const rePriceValAfterLanguage = Math.max(VINTED_MIN_PRICE, Math.round(Number(priceToUse)));
       console.warn('[FAS Vinted] Price -- unconditionally re-committing after the Language step (a non-empty displayed value has been proven not to guarantee Vinted\'s real internal state matches it).');
       await tryFill('Price', rePriceValAfterLanguage, (v) => fillVintedPrice(String(v)), warnings);
@@ -3105,7 +3472,8 @@
       await chrome.storage.local.set({ [FAS_VINTED_REACHED_REVIEW_KEY]: reachedStore });
     } catch (e) { console.warn('[FAS Vinted] could not record reached-review marker (non-fatal):', e && e.message); }
     fasMarkStep('fillListing:reachedReview');
-    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.warnings);
+    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.warnings, !!fillResult.deferred);
+    if (fillResult.deferred) fasVintedStartDeferredWatch(item, fillResult.warnings, fillResult.photosOk);
   }
 
   // ================================================================================================
