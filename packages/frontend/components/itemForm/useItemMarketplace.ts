@@ -16,16 +16,13 @@ import {
   describePushOutcome,
   planExtensionLines,
   pollForNewPush,
+  reduceSaveOutcome,
+  selectVisibleOutcome,
 } from '../../lib/marketplaceImpact';
-import type { OutcomeView, PlanLike } from '../../lib/marketplaceImpact';
+import type { OutcomeView, PlanLike, SaveOutcomeState } from '../../lib/marketplaceImpact';
 
-export interface SaveOutcome {
-  /** 'pending' while the eBay push is still being waited for, 'settled' once the row is in or nothing was planned. */
-  phase: 'pending' | 'settled' | 'timeout';
-  view: OutcomeView | null;
-  /** "Needs manual update on Vinted." style sentences from the plan. */
-  extensionLines: string[];
-}
+/** The one save-outcome row. Any newer result (save, repush, release) replaces or clears it: see reduceSaveOutcome. */
+export type SaveOutcome = SaveOutcomeState;
 
 export interface HoldActionResult {
   tone: OutcomeView['tone'];
@@ -174,13 +171,19 @@ export function useItemMarketplace(itemId: string, itemHold?: { heldAt?: string 
     onSuccess: (res, variables) => {
       setHeldInCache(res.ebayHold);
       let result: HoldActionResult;
-      if (res.outcome) {
-        const view = describePushOutcome(res.outcome);
+      // A newer result than any save: stop waiting on that save's push so it cannot overwrite this one later.
+      pollGen.current += 1;
+      const pushView = res.outcome ? describePushOutcome(res.outcome) : null;
+      setOutcome((prev) =>
+        reduceSaveOutcome(prev, {
+          type: 'repush',
+          view: pushView,
+          retry: !!variables && variables.retry === true,
+        })
+      );
+      if (res.outcome && pushView) {
+        const view = pushView;
         result = { tone: view.tone, lines: uniqueLines([view.text, res.message]) };
-        // A retry from the save result row replaces that row's text with the new outcome.
-        if (variables && variables.retry === true) {
-          setOutcome({ phase: 'settled', view, extensionLines: [] });
-        }
       } else {
         // A saleless inventory item returns a message only: show it as returned.
         result = { tone: 'info', lines: [res.message || 'Done.'] };
@@ -201,6 +204,9 @@ export function useItemMarketplace(itemId: string, itemHold?: { heldAt?: string 
     },
     onSuccess: (res) => {
       setHeldInCache(res.ebayHold);
+      // The hold is gone, so a "sync paused" row from an earlier save is no longer true.
+      pollGen.current += 1;
+      setOutcome((prev) => reduceSaveOutcome(prev, { type: 'release' }));
       setHoldResult({ tone: 'success', lines: ['Syncing is back on for eBay.'] });
       queryClient.invalidateQueries({ queryKey: statusKey });
       queryClient.invalidateQueries({ queryKey: ['item', itemId] });
@@ -217,7 +223,7 @@ export function useItemMarketplace(itemId: string, itemHold?: { heldAt?: string 
     status,
     statusLoaded: !!status,
     hold,
-    outcome,
+    outcome: selectVisibleOutcome(outcome, hold, !!status),
     holdResult,
     actionBusy,
     trackSave,

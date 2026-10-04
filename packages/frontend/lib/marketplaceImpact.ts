@@ -210,6 +210,9 @@ export interface OutcomeView {
   canRetry: boolean;
 }
 
+/** The one text for "the eBay hold is on". Shared so a release can recognise (and drop) a stale paused row. */
+export const SYNC_PAUSED_TEXT = 'eBay not changed (sync paused)';
+
 export interface PlanLike {
   ebay?: { willPush?: boolean; fields?: string[]; held?: boolean; reason?: string };
   /** The backend sends `extension`; the brief called it `extensions`. Both are read. */
@@ -230,7 +233,7 @@ export function describePlan(plan: PlanLike | null | undefined): OutcomeView | n
   if (ebay.willPush) {
     return { tone: 'pending', text: `Updating eBay: ${fieldList(ebay.fields || [])}.`, canRetry: false };
   }
-  if (ebay.reason === 'held') return { tone: 'info', text: 'eBay not changed (sync paused)', canRetry: false };
+  if (ebay.reason === 'held') return { tone: 'info', text: SYNC_PAUSED_TEXT, canRetry: false };
   if (ebay.reason === 'no_changes' || ebay.reason === 'no_offer_id') {
     return { tone: 'info', text: 'eBay not changed', canRetry: false };
   }
@@ -268,7 +271,7 @@ export function describePushOutcome(row: OutcomeRowLike): OutcomeView {
         canRetry: true,
       };
     case 'SKIPPED_HELD':
-      return { tone: 'info', text: 'eBay not changed (sync paused)', canRetry: false };
+      return { tone: 'info', text: SYNC_PAUSED_TEXT, canRetry: false };
     case 'SKIPPED_NOT_LISTED':
       return { tone: 'info', text: 'eBay not changed (this item is not listed on eBay)', canRetry: false };
     default:
@@ -349,4 +352,71 @@ export async function pollForNewPush<T extends PushRowLike>(
     }
   }
   return { row: null, attempts, cancelled: false };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// The single save-outcome row next to Save: a newer result always replaces the older one
+// ---------------------------------------------------------------------------------------------------------
+
+export interface SaveOutcomeState {
+  /** 'pending' while the eBay push is still being waited for, 'settled' once the row is in or nothing was planned. */
+  phase: 'pending' | 'settled' | 'timeout';
+  view: OutcomeView | null;
+  /** "Needs manual update on Vinted." style sentences from the plan. */
+  extensionLines: string[];
+}
+
+/** True when the view is the "sync paused" message, which stops being true once the hold is released. */
+export function isSyncPausedView(view: OutcomeView | null | undefined): boolean {
+  return !!view && view.text === SYNC_PAUSED_TEXT;
+}
+
+export type OutcomeEvent =
+  /** "Update eBay now" (or Retry) came back. `view` is the push outcome, or null for a message-only answer. */
+  | { type: 'repush'; view: OutcomeView | null; retry: boolean }
+  /** "Resume syncing" succeeded: the hold is gone. */
+  | { type: 'release' };
+
+/** Keep only the extension prompts (they are about other marketplaces and stay true); null when none are left. */
+function extensionsOnly(prev: SaveOutcomeState | null): SaveOutcomeState | null {
+  if (!prev || prev.extensionLines.length === 0) return null;
+  return { phase: 'settled', view: null, extensionLines: prev.extensionLines };
+}
+
+/**
+ * The next outcome row after a hold action. A repush result replaces the older eBay message (a Retry also drops the
+ * extension prompts, as before). A message-only repush or a release removes an eBay message that can no longer be
+ * true: any pending or paused text after a repush, the paused text after a release.
+ */
+export function reduceSaveOutcome(prev: SaveOutcomeState | null, event: OutcomeEvent): SaveOutcomeState | null {
+  if (event.type === 'repush') {
+    if (event.view) {
+      return {
+        phase: 'settled',
+        view: event.view,
+        extensionLines: event.retry ? [] : prev ? prev.extensionLines : [],
+      };
+    }
+    // Message-only answer: nothing was pushed, so an older "updating" or "paused" row is out of date.
+    if (!prev || !prev.view) return prev;
+    if (isSyncPausedView(prev.view) || prev.view.tone === 'pending') return extensionsOnly(prev);
+    return prev;
+  }
+  if (!prev) return null;
+  if (isSyncPausedView(prev.view)) return extensionsOnly(prev);
+  return prev;
+}
+
+/**
+ * What the footer should show. A "sync paused" row is hidden whenever the loaded status says nothing is held, so a
+ * hold released anywhere (this page, another tab, a refetch) never leaves it behind.
+ */
+export function selectVisibleOutcome(
+  outcome: SaveOutcomeState | null,
+  hold: { heldAt?: string | null },
+  statusLoaded: boolean
+): SaveOutcomeState | null {
+  if (!outcome) return null;
+  if (statusLoaded && !hold.heldAt && isSyncPausedView(outcome.view)) return extensionsOnly(outcome);
+  return outcome;
 }
