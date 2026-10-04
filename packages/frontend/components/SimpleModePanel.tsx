@@ -110,7 +110,7 @@ const SimpleModePanel: React.FC<SimpleModeViewProps> = ({ onExitSimpleMode }) =>
           <SimpleModeButton
             icon={icons.plus}
             label="Create a Sale"
-            subtext="Start a new estate or garage sale"
+            subtext="Start a new sale"
             href="/organizer/create-sale"
           />
           <SimpleModeButton

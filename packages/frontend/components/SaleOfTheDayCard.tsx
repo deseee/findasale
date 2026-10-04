@@ -32,7 +32,7 @@ interface SaleOfTheDayResponse {
 const SALE_TYPE_LABEL: Record<string, string> = {
   ESTATE: 'Estate Sale',
   YARD: 'Yard Sale',
-  GARAGE: 'Garage Sale',
+  GARAGE: 'Yard Sale',
   AUCTION: 'Auction',
   FLEA_MARKET: 'Flea Market',
   CONSIGNMENT: 'Consignment',

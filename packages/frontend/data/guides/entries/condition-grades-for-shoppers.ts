@@ -8,54 +8,52 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['holds-for-shoppers', 'bidding-on-auctions'],
   videoUrl: undefined,
-  body: `Every item on FindA.Sale gets a condition grade (S, A, B, C, or D) assigned by the organizer before the sale goes live. A person looked at the item and made a call. It was not assigned by an automated system.
+  body: `Every item on FindA.Sale lists a condition, set by the organizer before the sale goes live. The app may suggest a condition from the photo, but the organizer looked at the item and confirmed or changed it.
 
-The grade tells you what to expect when you arrive. An A-grade lamp should look close to new. A C-grade dresser will have visible wear you can live with. A D-grade item is sold as-is, no surprises.
+The condition tells you what to expect when you arrive. Search results have a Condition filter if you only want certain quality levels, and the item page shows the organizer's exact condition.
 
-Grades get assigned when the organizer photographs and lists each item, usually one or two days before a sale opens. You can filter search results by condition if you're only looking for certain quality levels.
+## The four conditions
 
----
+**New**: Never used. Unopened, or with its original tags or packaging.
 
-## Full grade breakdown
+**Used**: Owned and used. The organizer also grades how much wear it shows, from A to D (below).
 
-For the complete S/A/B/C/D scale with photos and examples for each grade, go here:
+**Refurbished**: Restored to working order.
 
-**[Full condition guide → finda.sale/condition-guide](/condition-guide)**
+**Parts / Repair**: Doesn't work, is incomplete, or is untested. Sold as is, for parts or repair. Look closely at the photos before you drive out.
 
-That page has side-by-side examples across common item types: furniture, clothing, electronics, tools, collectibles.
+## How used items are graded
 
----
+**A and B (Very good)**: A looks close to new. B shows light, normal wear. Both work fully.
 
-## If the grade looks wrong
+**C (Good)**: Noticeable wear, fading, or surface marks. It works, and it looks its age.
+
+**D (Acceptable)**: Heavy wear or damage, but still usable.
+
+When an organizer also lists an item on eBay, buyers there see these as Used - Very good, Used - Good, or Used - Acceptable.
+
+## Trading cards
+
+Trading cards are graded on the card scale instead: NM (Near Mint), LP (Lightly Played), MP (Moderately Played), HP (Heavily Played) and DMG (Damaged).
+
+## If the condition looks wrong
 
 Message the organizer through the item page before you drive out. Ask for an extra photo or clarification. Organizers are usually happy to send one. It saves both of you a trip.
 
-Don't assume the grade was set maliciously. Condition is subjective. A quick message resolves most disagreements.
-
----
+Don't assume the condition was set maliciously. Condition is subjective. A quick message resolves most disagreements.
 
 ## Common questions
 
-**Who assigns the grade?**
-The organizer: the person running the estate sale, yard sale, flea market booth, or consignment shop. They grade based on what they see at the item.
+**Who sets the condition?**
+The organizer: the person running the yard sale, estate sale, flea market booth, or consignment shop. They set it based on what they see in the item.
 
-**Can I search by condition grade?**
+**Can I search by condition?**
 Yes. Use the Condition filter on any search results page or sale browse page.
 
-**What if I receive an item that doesn't match its grade?**
+**What if I receive an item that doesn't match its condition?**
 Contact the organizer first. If you can't reach them, use the Report button on the item page.
 
----
-
-## Related guides
-
-- [Holds: reserve an item before you get there](/guides/holds-for-shoppers)
-- [Bidding on auction items](/guides/bidding-on-auctions)
-- [Pay requests: how organizers bill you](/guides/pay-requests)
-
----
-
-*Last updated: 2026-05-16*`,
+Last updated: 2026-10-04`,
 };
 
 export default entry;

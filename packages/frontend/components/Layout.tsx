@@ -1470,7 +1470,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <div>
               <h3 className="text-lg font-bold mb-4">FindA.Sale</h3>
               <p className="text-warm-400 mb-4">
-                Helping you find the best yard sales, garage sales, flea markets, auctions, and more near you.
+                Helping you find the best yard sales, flea markets, auctions, and more near you.
               </p>
               <div className="bg-warm-700 rounded-lg p-4">
                 <p className="text-xs text-warm-300 font-semibold mb-2">Need Help?</p>

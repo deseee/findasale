@@ -8,146 +8,127 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['pricing-items', 'categories-and-tags', 'edit-live-listing'],
   videoUrl: undefined,
-  body: `Every item you photograph lands in the review queue before it goes live. Nothing goes to shoppers until you say so. The queue is your chance to check prices, fix categories, and approve, or spend 30 seconds on the ones that need it and move on.
+  body: `Every item you photograph lands in the review queue before it goes live. Nothing reaches shoppers until you approve it. The queue is where you check titles, fix categories and conditions, set prices, and publish.
 
-This guide walks you through what each field means, how to move through the queue efficiently, and what happens when you tap Publish All.
-
----
+This guide walks you through each card, what saves on its own, and what happens when you tap Approve.
 
 ## Step 1: Get to the review queue
 
-From your organizer dashboard, tap **Review** on any sale card. You'll land on the queue for that sale: a list of every item that's been photographed but not yet published.
+From your organizer dashboard, tap **Review** on any sale card. You land on the queue for that sale: every item that has been photographed but not yet published.
 
-Each item card shows:
-- A thumbnail of the photo you captured
-- The auto-tagged title and category
-- The suggested price
-- The condition grade
-- Tags (keywords that help shoppers find the item in search)
+Each card shows:
+- The photo
+- The title and category the app filled in
+- The condition (New, Used, Refurb or Parts)
+- Brand, part number and barcode, when known
+- Tags, which are keywords that help shoppers find the item in search
+- Your price field, Suggest Price, and the Approve button
 
-Items stay in the queue until you approve them individually or publish the whole batch.
+The left edge of each card is colored by how ready the item is. Red means it is missing a title, a price or a photo. Yellow means it is missing a category, condition or description. Green means it is complete. Blue means it is complete, has a package weight, and is ready for eBay.
 
----
+## Step 2: Check the fields
 
-## Step 2: Understand the columns and fields
+**Title**: Filled in from the photo. Edit it if it's vague ("brown box") or wrong.
 
-**Title**: Auto-filled from photo recognition. Usually accurate enough to publish as-is. Edit it if it's vague ("brown box") or wrong.
+**Category**: Tap to change it. The picker uses eBay category names, so the item is ready for eBay if you list it there.
 
-**Category**: The shopper-facing filter the item will appear under (Furniture, Tools, Clothing, etc.). Tap to change it from a dropdown.
+**Condition**: New, Used, Refurb or Parts. See the condition guide for what each means. The app suggests one. You confirm or change it.
 
-**Tags**: Free-text keywords that power search. The app pre-fills 3–5 based on the photo. You can add more or remove ones that don't fit.
+**Tags**: The app pre-fills a few based on the photo. Add more or remove ones that don't fit.
 
-**Suggested price**: Pulled from comparable-sale data: recent sold prices for similar items in similar condition. See [Pricing an item](pricing-items) for how to read the comp tiles and when to override.
+## Step 3: Set the price
 
-**Condition**: Graded S through D. See [Picking the right condition grade](condition-grades) for what each grade means. The app suggests one; you confirm or change it.
+The price is never filled in for you. Your price field starts empty, and an item can't be approved without one.
 
-**Status badge**: Every item in the queue is in **Draft** status. It becomes **Live** after you publish.
+Tap **Suggest Price** to see a suggestion. It shows a suggested amount with a **Use $X** button. Tap Use to put it in your price field, or Dismiss to ignore it. For used items the suggestion is adjusted by grade, and it says so, for example "Adjusted for grade C (x0.85)." See the pricing guide for how to read it.
 
----
+Tapping a different grade under More details shows a new suggestion the same way. Nothing changes until you tap Use.
 
-## Step 3: Move through items (two modes)
+## Step 4: Your edits save on their own
 
-**Approve as-is:** If the title, price, condition, and tags all look right, tap the checkmark. The item is marked ready and stays in the queue until you publish the batch. Most items in a yard sale or flea market lot will clear this way in under 3 seconds each.
+Edits to the title, category, condition, tags and the other card fields autosave as drafts a moment after you stop typing. A status line under each card says "Saved just now" when it's done, or tells you if it could not save and will retry.
 
-**Edit then approve:** Tap the item card to open the detail view. Change whatever needs changing: price, category, description, condition, tags. Tap Save, then tap the checkmark. You're done with that item.
+Your price is the one exception. It is saved when you tap Approve.
 
-There's no penalty for going back to an item after you've approved it. Tap it again to reopen and edit before you publish.
+## Step 5: Approve publishes the item
 
----
+Tap **Approve** on a card. The item is saved with your price and goes live right away. There is no separate publish step. If the card has no price, Approve stops and the card says "Set a price before publishing."
 
-## Step 4: Draft vs. Live, what the difference means
+If eBay is connected, you can tick **Also push to eBay** under More details. The push starts after the item is published.
 
-**Draft** items are invisible to shoppers. They exist in your queue, they have all their data, but no one can see them on the public listing page or in search results.
+**Approve all**, at the top of the queue, publishes every item that has a price after you confirm. Items without a price are skipped so you can come back to them.
+
+## More details, All details and Edit more
+
+**More details** opens extra fields on the card: photos, description, package weight and size, condition grade, listing type, price research, and the eBay options.
+
+The grade picker (A to D) lives here, and it only appears when the condition is Used. A trading card shows the card condition confirm (NM, LP, MP, HP, DMG) instead.
+
+**All details** opens the same item form as the Edit Item page, in a slide-up sheet, without leaving the queue. Your pending card edits are saved first. The sheet stays open after you save, and the card updates behind it. **Edit more** opens the full Edit Item page.
+
+## Draft vs. Live
+
+**Draft** items are invisible to shoppers. They have all their data, but no one can see them on the public listing page or in search results.
 
 **Live** items are visible to anyone browsing the sale. Shoppers can favorite them, request holds, and add them to a cart if checkout is enabled.
 
-The transition happens when you tap Publish: either on a single item or on the whole batch.
+An item moves from Draft to Live when you tap Approve.
 
----
+## After approving
 
-## Step 5: Publish one item vs. Publish All
-
-**Publish single:** In the detail view, tap **Publish this item**. That one item goes live immediately. Useful when you're photographing during the sale and want items visible right away.
-
-**Publish All:** On the queue screen, tap **Publish All** (bottom of the list). Every approved item in the queue goes live at once. Unapproved items (no checkmark) stay in Draft.
-
-You can run as many Publish All batches as you want. Photograph a new batch, review it, publish it: the queue clears down to whatever is still in Draft.
-
----
-
-## Step 6: After publishing
-
-Once items are live, you can still edit them. Price changes, description updates, and condition corrections all take effect immediately. See [Editing a listing after it's already live](edit-live-listing) for the full list of what you can change and what shoppers with active holds will see.
-
----
+Once items are live, you can still edit them. See the guide on editing a live listing for what you can change and what the form tells you before it updates eBay.
 
 ## Common questions
 
-**What if I publish something by accident?**
-You can unpublish it. Open the item, tap **More**, and select **Move to Draft**. It disappears from the public listing immediately.
+**What if I approve something by accident?**
+Open the item and tap **Unpublish** next to Save. It goes back to Draft and disappears from the public listing.
 
 **Can I approve items in bulk without reviewing each one?**
-Yes. Tap **Approve All** to mark everything in the queue as ready, then review spot-check a few before tapping Publish All. Use this when you've done a quick photo session and the items are straightforward.
+Yes. **Approve all** publishes every item that has a price. Spot-check a few first, because approving publishes. Use it when you've done a quick photo session and the items are straightforward.
 
-**Why is an item stuck in the queue with a warning icon?**
-A warning means the item is missing something required: usually a category or a price. Tap the item to see what's flagged. Fix it, save, and it will clear.
+**Why does a card say "Set a price before publishing"?**
+The price field is empty. Type a price or tap Suggest Price and then Use. Approve works once there is a price.
 
 **Can my assistant or co-organizer review the queue?**
-Yes, if you've added them to the sale as a team member. They'll see the same queue you do and can approve or edit items. Final publish is available to anyone with editor access.
+Yes, if you've added them to the sale as a team member with editor access. They see the same queue you do and can edit and approve items.
 
 **Does the order of items in the queue matter?**
 No. Shoppers see items sorted by their own preferences (price, recency, category). The queue order is just the sequence items were photographed.
 
 **Can I review the queue on my phone?**
-Yes, the queue is fully functional on mobile. Swipe through items, tap to edit, tap the checkmark to approve. The Publish All button is at the bottom of the screen.
-
----
+Yes. Scroll through the cards, edit what needs it, set a price, and tap Approve.
 
 ## Video script
 
-*[90-second screen-capture VO: cut to match actual screen recording]*
-
----
+[90-second screen-capture VO: cut to match actual screen recording]
 
 **[0:00: Queue overview shot]**
 
-"After you finish photographing, every item lands here: in the review queue. Nothing is live yet. This is your chance to check prices, fix anything that got mis-tagged, and publish when you're ready."
+"After you finish photographing, every item lands here, in the review queue. Nothing is live yet. This is your chance to check titles, fix categories, set prices, and publish when you're ready."
 
 **[0:10: Scroll through queue cards]**
 
-"Each card shows the photo, the auto-tagged title, the suggested price, condition grade, and the category it'll show up under in search. Most items will look right straight out of the camera."
+"Each card shows the photo, the title, the category, the condition, and your price field. The colored edge tells you how ready each item is."
 
-**[0:22: Tap checkmark on a clear item]**
+**[0:22: Edit a title, show the Saved just now line]**
 
-"For anything that looks good, just tap the checkmark. That marks it ready. You can go through a whole batch in under a minute."
+"Change something and it saves on its own. You'll see Saved just now under the card."
 
-**[0:30: Tap item to open detail view]**
+**[0:35: Tap Suggest Price, then Use]**
 
-"If something needs a fix (wrong title, price feels off, condition is wrong), tap the card to open it. Make your changes, hit Save, then approve."
+"The price is never filled in for you. Tap Suggest Price to see a suggestion based on what similar items sold for, then tap Use to apply it. Or just type your own. Your price always wins."
 
-**[0:42: Show suggested price with comp tiles]**
+**[0:50: Tap Approve]**
 
-"The suggested price comes from comparable-sale data: what similar items have actually sold for recently, in similar condition. You can tap any comp tile to see the details. If your price is different, just type it in. Your price always wins."
+"When the card looks right, tap Approve. That saves your price and publishes the item. It's live right away."
 
-**[0:55: Show Publish All button]**
+**[1:05: Show All details sheet]**
 
-"When you're done reviewing, tap Publish All. Every approved item goes live at once. Anything you haven't checked yet stays in Draft: invisible to shoppers until you come back to it."
-
-**[1:05: Show live item on sale page]**
-
-"That's it. Items are now visible to anyone browsing the sale. You can still edit them after publishing: price, description, photos, all of it updates in real time."
+"Need every field? Tap All details to open the full item form in a sheet, without leaving the queue."
 
 **[1:15: Closing]**
 
-"Review queue, approve what's ready, publish when you're done. Next up: how prices are suggested and when to override them."
-
----
-
-## Related guides
-
-- [Pricing an item: suggested price, comparable sales, and your override](pricing-items)
-- [Categories, tags, and why they affect searchability](categories-and-tags)
-- [Editing a listing after it's already live](edit-live-listing)`,
+"Check the card, set a price, approve. Next up: how prices are suggested and when to override them."`,
 };
 
 export default entry;

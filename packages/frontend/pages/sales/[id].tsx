@@ -69,7 +69,7 @@ import ReviewsSection from '../../components/ReviewsSection';
 // M-005: Sale-type display labels (shared by badge + meta copy): audit 2026-05-30
 const SALE_TYPE_LABELS: Record<string, string> = {
   ESTATE: 'Estate Sale', ESTATE_SALE: 'Estate Sale', YARD: 'Yard Sale', YARD_SALE: 'Yard Sale',
-  GARAGE: 'Garage Sale', MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',
+  GARAGE: 'Yard Sale', MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',
   FLEA_MARKET: 'Flea Market', SWAP_MEET: 'Swap Meet', POPUP: 'Pop-Up Sale',
   LIQUIDATION: 'Liquidation Sale', CHARITY: 'Charity Sale', RETAIL: 'Retail Store',
   ONLINE: 'Online Sale', CONSIGNMENT: 'Consignment Sale', BOOTH: 'Vendor Booth',

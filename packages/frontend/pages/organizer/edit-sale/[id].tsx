@@ -848,7 +848,7 @@ const EditSalePage = () => {
                 <option value="AUCTION">Auction</option>
                 <option value="FLEA_MARKET">Flea Market</option>
                 <option value="CONSIGNMENT">Consignment</option>
-                <option value="GARAGE">Garage Sale</option>
+                <option value="GARAGE">Yard Sale (legacy)</option>
                 <option value="MOVING">Moving Sale</option>
                 <option value="DOWNSIZING">Downsizing Sale</option>
                 <option value="SWAP_MEET">Swap Meet</option>

@@ -657,7 +657,7 @@ function Step1({ c, form, setForm, vendorBooths, vendorBoothsLoading }: Step1Pro
 
   const titleSuggestions: Record<SaleTypeKey, string[]> = {
     ESTATE: ['Smith Family Estate Sale', 'Walden Estate · Main St', '3-Day Estate Sale'],
-    YARD: ['Weekend Yard Sale', 'Spring Garage Sale', 'Moving Sale. All Must Go'],
+    YARD: ['Weekend Yard Sale', 'Spring Yard Sale', 'Moving Sale. All Must Go'],
     AUCTION: ['Walden Estate Auction', 'Antiques & Collectibles Auction', 'Live Auction Event'],
     FLEA_MARKET: ['Riverside Flea Market', 'Monthly Pop-Up Market', 'Vintage Vendor Market'],
     RETAIL: ['Antique & Vintage Shop', 'Estate Finds Store', 'Consignment Boutique'],

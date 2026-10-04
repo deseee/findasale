@@ -101,7 +101,7 @@ Establish a clear signal: you say "next" or tap their arm when you're ready. Don
 If both people have accounts and are both members of the sale, yes, each can run their own rapidfire session independently and the photos will merge in the review queue. This works well for very large sales or auctions where one room per person is a reasonable split. Make sure you agree in advance on which person is covering which area so you don't double-photograph items.
 
 **What if the helper photographs something I wanted to skip?**
-Delete it in review. Tap the item, tap the trash icon. It won't go live unless it's approved.
+Delete it in review. Tap **Discard** on its card. It won't go live unless it's approved.
 
 **How do I handle it if the helper makes a mistake during the session, like photographing something blurry or cut off?**
 The retake decision happens in review, not in the session. Note it and move on; you'll see it in the queue and can decide whether to reshoot then. Stopping the session to re-do individual shots slows everyone down unless the photo is genuinely unusable.

@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['review-queue', 'condition-grades', 'edit-live-listing'],
   videoUrl: undefined,
-  body: `When you photograph an item, the app looks up what similar things have actually sold for recently and suggests a price. You don't have to use it. Your price always wins. But understanding where the suggestion comes from (and how to read the supporting data) makes it easier to decide when to trust it and when to set your own number.
+  body: `When you ask for one, the app looks up what similar things have actually sold for recently and suggests a price. You don't have to use it, and the app never fills your price in for you. Your price always wins. But understanding where the suggestion comes from (and how to read the supporting data) makes it easier to decide when to trust it and when to set your own number.
 
 This guide covers how the suggested price works, how to read the comp tiles, and what happens when you override.
 
@@ -16,21 +16,29 @@ This guide covers how the suggested price works, how to read the comp tiles, and
 
 ## Step 1: Where the suggested price comes from
 
-When an item goes through photo recognition, the app identifies what the item is (category, brand when visible, approximate age, material). It then runs a comparable-sale lookup: recent sold prices for similar items in similar condition across secondary sale sources.
+Tap **Suggest Price** under the price field. The app uses what it knows about the item (category, brand when visible, approximate age, material, condition) to run a comparable-sale lookup: recent sold prices for similar items in similar condition across secondary sale sources.
 
-The result is a suggested price (a single number, not a range) based on where comparable items have been clearing. It's a starting point, not a directive.
+The result is a suggested price based on where comparable items have been clearing, sometimes with a range. It's a starting point, not a directive. To apply it, tap **Use $X**. Nothing is filled in until you do.
 
-You'll see the suggested price in two places:
-- On the item card in the review queue
-- In the item detail view, just below the photo
+You'll find Suggest Price in two places:
+- On each item card in the review queue, next to your price
+- In the Pricing section of the item form (the Edit Item page, or the slide-up sheet from All details)
 
-Tap the info icon next to the price to open the comp tiles.
+The lookups run only when you tap a button, such as Suggest Price or **Look up comparable prices**. They don't run on their own when you open an item.
+
+---
+
+## How the grade adjusts the suggestion
+
+For used items, the suggestion is adjusted by condition grade: A x1.10, B x1.00, C x0.85, D x0.65. When an adjustment applies, the suggestion says so, for example "Adjusted for grade C (x0.85)."
+
+In the review queue, tapping a different grade under More details shows a new suggested price the same way, and you tap **Use $X** to apply it. New, Refurbished and Parts / Repair items are not adjusted.
 
 ---
 
 ## Step 2: How to read the comp tiles
 
-Comp tiles are the comparable sales that informed the suggested price. Each tile shows:
+Comp tiles are the comparable sales that informed the suggested price. In the Pricing section, **Look up comparable prices** shows the price range and how many comparable sales were found, and the collapsed Price Research panel holds the other tools. Each tile shows:
 
 - **Item description**: what the comparable item was
 - **Sold price**: what it actually sold for (not listed price, sold)
@@ -42,7 +50,7 @@ Read them left to right. The tile closest to your item in condition and recency 
 
 **What to look for:**
 - Are the comps actually similar, or just in the same category? A mid-century credenza and a flat-pack dresser are both "Furniture" but shouldn't share a price.
-- Are the condition grades consistent with yours? If your item is a B (Good) but the comps are all A (Excellent), the suggested price may be high.
+- Are the condition grades consistent with yours? If your item is a C (Good) but the comps are all A or B (Very good), the suggested price may be high.
 - How old are the comps? Recent sales (30 days) are more reliable than 90-day-old data.
 
 If the comps look accurate, the suggested price is probably a solid starting point. If they don't look like your item, set your own price.
@@ -69,13 +77,11 @@ For estate sales and consignment, you likely know your items well enough to have
 
 ## Step 4: Setting your own price
 
-In the review queue, tap the price field on any item card. Type your number. Tap Save (or tap the next field to move on).
+In the review queue, tap the price field on any item card and type your number. Your price is saved when you tap **Approve**. The other card edits save on their own as drafts.
 
-In the detail view, tap the price to edit it inline.
+In the item form, type your number in the Pricing section and tap **Save Changes**. If the item is on eBay, the line above Save tells you whether the new price will be sent there.
 
-Your price immediately replaces the suggestion. The comp tiles remain visible for reference, but the suggested price is no longer shown once you've overridden it.
-
-There's no "revert to suggested" button. If you want to go back to the original suggestion after overriding, tap the info icon to see the comps and recalculate manually.
+Your price is what shoppers see. The comp data stays for your reference. If you want the suggestion back after typing your own number, tap **Suggest Price** again and then **Use $X**.
 
 ---
 
@@ -125,13 +131,13 @@ Not in the review queue. Each item is priced individually. For bulk pricing (e.g
 
 ---
 
-**[0:00: Item card in review queue, suggested price visible]**
+**[0:00: Item card in review queue, price field empty]**
 
-"When you photograph something, the app looks up what similar items have actually sold for recently and suggests a price. You'll see it right here on the item card."
+"When you want a suggestion, tap Suggest Price. The app looks up what similar items have actually sold for recently and suggests a price. Nothing is filled in until you tap Use."
 
-**[0:10: Tap info icon, comp tiles open]**
+**[0:10: Comparable sales open]**
 
-"Tap the info icon to see the comparable sales behind it. Each tile shows what a similar item sold for, in what condition, and how recently. This is sold data: not what someone listed, what it actually cleared for."
+"Tap Look up comparable prices to see the sales behind it. Each tile shows what a similar item sold for, in what condition, and how recently. This is sold data: not what someone listed, what it actually cleared for."
 
 **[0:22: Point to condition column and recency]**
 
@@ -139,7 +145,7 @@ Not in the review queue. Each item is priced individually. For bulk pricing (e.g
 
 **[0:35: Type an override price]**
 
-"If the comps look off, or you know what this item is worth: just type your price. Your number replaces the suggestion immediately. There's nothing to toggle, nothing to confirm. You type it, it saves."
+"If the comps look off, or you know what this item is worth: just type your price. Your number is the price. It saves when you approve the item."
 
 **[0:45: Show the item card updated with new price]**
 
@@ -154,7 +160,7 @@ Not in the review queue. Each item is priced individually. For bulk pricing (e.g
 ## Related guides
 
 - [The review queue: from photo to live listing](review-queue)
-- [Picking the right condition grade (with examples)](condition-grades)
+- [Picking the right condition and grade](condition-grades)
 - [Editing a listing after it's already live](edit-live-listing)`,
 };
 

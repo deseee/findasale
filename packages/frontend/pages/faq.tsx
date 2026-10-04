@@ -68,15 +68,15 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Condition Rating?',
     answer: (
       <>
-        Every item on FindA.Sale has a condition grade from S to D so you know what to expect before you visit:
+        Every item on FindA.Sale lists a condition so you know what to expect before you visit:
         <ul className="mt-2 ml-4 space-y-1">
-          <li><strong>S. Like New</strong> (80–100% of retail). No signs of wear. May still have original packaging or tags. Examples: new-in-box items, rarely used vintage collectibles, display pieces.</li>
-          <li><strong>A. Excellent</strong> (60–80% of retail). Light cosmetic wear only. Fully functional, looks great. Examples: lightly used kitchenware, gently worn clothing, well-maintained electronics.</li>
-          <li><strong>B. Good</strong> (40–60% of retail). Visible signs of use but fully functional. Minor cosmetic imperfections that don't affect use. Examples: gently used furniture, dishes without chips, working electronics.</li>
-          <li><strong>C. Fair</strong> (25–40% of retail). Noticeable wear, scratches, or patina. Fully functional. Great finds for budget shoppers, collectors, and people restoring or upcycling items.</li>
-          <li><strong>D. Poor</strong> (10–25% of retail). Heavy wear, damage, or missing parts. May need repair. Best for restoration or upcycling projects.</li>
+          <li><strong>New</strong>. Never used. Unopened, or with its original tags or packaging.</li>
+          <li><strong>Used</strong>. Owned and used. The organizer also grades the wear from A to D. <strong>A and B</strong> are very good (A looks close to new, B shows light, normal wear). <strong>C</strong> is good (noticeable wear, still works). <strong>D</strong> is acceptable (heavy wear or damage, but still usable).</li>
+          <li><strong>Refurbished</strong>. Restored to working order.</li>
+          <li><strong>Parts / Repair</strong>. Doesn't work, is incomplete, or is untested. Sold as is, for parts or repair. Inspect carefully before you buy.</li>
         </ul>
-        <p className="mt-2"><strong>As-Is</strong> is a separate flag the organizer can apply to any item, regardless of grade. It means the item is sold in its current condition without warranty. Buyers should inspect before purchasing. As-Is items are often the lowest-priced and most negotiable.</p>
+        <p className="mt-2">Trading cards use the card scale instead: NM (Near Mint), LP (Lightly Played), MP (Moderately Played), HP (Heavily Played) and DMG (Damaged).</p>
+        <p className="mt-2">If an item is also listed on eBay, buyers there see Used items as Used - Very good, Used - Good or Used - Acceptable.</p>
       </>
     ),
   },

@@ -71,9 +71,9 @@ When you're done photographing, tap **Review Items** (or it may prompt you autom
 The review queue shows every item you photographed. For each one:
 
 1. **Check the title.** The app suggests a title based on what it sees in the photo. If it's wrong, tap to correct it.
-2. **Review the price.** A suggested price appears based on comparable sales. Tap it to adjust. Your price always wins: the suggestion is just a starting point.
+2. **Set the price.** Your price field starts empty: the app never fills it in for you. Tap **Suggest Price** to see a suggestion based on comparable sales, then tap **Use $X** to apply it, or type your own. Your price always wins: the suggestion is just a starting point.
 3. **Check the condition.** The app picks a default. Change it if needed.
-4. **Mark it ready.** Tap **Save** or **Approve** to move it to your active listing.
+4. **Approve it.** Tap **Approve** to publish the item to your active listing. Your other edits save on their own as drafts, and a line under the card says "Saved just now".
 
 The orange **Retake** nudge appears on any photo where the image quality may affect how well buyers can see the item. You can skip the retake and publish anyway: it's a suggestion, not a blocker. See [Why some photos need a retake](#) for what triggers it and when it matters.
 
@@ -87,7 +87,7 @@ The orange **Retake** nudge appears on any photo where the image quality may aff
 For a typical yard sale or estate sale room (20–30 items), most organizers finish photographing in about 15–20 minutes. Review adds time on top: budget a few minutes per 10 items if you're checking prices carefully.
 
 **What if I photographed an item twice?**
-Delete the duplicate in review. Tap the item, then tap the trash icon. Only approved items get listed.
+Delete the duplicate in review. Tap **Discard** on its card. Only approved items get listed.
 
 **Can I use rapidfire mode for just part of a sale?**
 Yes. You can start a rapidfire session, photograph one room or one table, stop, and come back later. Each session adds to the same review queue.
@@ -145,7 +145,7 @@ You'll come back and fix anything blurry or cut off. Right now, just get through
 
 When you're done, tap Review Items.
 
-The app suggests a title and a price for each photo. Check them, adjust what's wrong, tap Save.
+The app suggests a title for each photo. Check it, set your price (tap Suggest Price, then Use, or type your own), and tap Approve.
 
 The orange Retake nudge means a photo might be hard for buyers to read. You can reshoot, or skip it and publish anyway.
 

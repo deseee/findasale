@@ -123,7 +123,7 @@ export default function SaleOGMeta({
   const SALE_TYPE_LABELS: Record<string, string> = {
     ESTATE: 'Estate Sale',
     YARD: 'Yard Sale',
-    GARAGE: 'Garage Sale',
+    GARAGE: 'Yard Sale',
     MOVING: 'Moving Sale',
     DOWNSIZING: 'Downsizing Sale',
     AUCTION: 'Auction',

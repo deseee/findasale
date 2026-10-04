@@ -54,8 +54,8 @@ export const SALE_TYPE_CONFIGS: Record<string, SaleTypeEntry> = {
     subtypes: {
       yard: {
         visibleWidgets: [...BASE_WIDGETS, 'PostSaleMomentum'],
-        primaryCTA: 'Manage Garage Sale',
-        greeting: 'Your garage sale dashboard',
+        primaryCTA: 'Manage Yard Sale',
+        greeting: 'Your yard sale dashboard',
         settlementType: 'SIMPLE_CARD',
         clientLabel: 'Your earnings',
       },
