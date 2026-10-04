@@ -202,6 +202,12 @@ import guestInvoiceRoutes from './routes/guestInvoices';       // Guest/no-accou
 import ebayRoutes from './routes/ebay';                       // eBay Marketplace Account Deletion
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
 import reverbRoutes from './routes/reverb';                   // Universal Crosslister -- Reverb Official-API Tier
+import cardCatalogRoutes from './routes/cardCatalog';         // ADR-134 B3: card catalog lookup (kill switch CARD_CATALOG_ENABLED inside the router)
+import itemCardRoutes from './routes/itemCard';               // ADR-134 B2: per-item card record
+import cardIntakeRoutes from './routes/cardIntake';           // ADR-134 B4: spreadsheet-first card intake
+import etsyRoutes from './routes/etsy';                       // ADR-135 B1: Etsy connect, callback, connection, shop setup (kill switch per route)
+import etsyListingRoutes from './routes/etsyListings';        // ADR-135 B3: Etsy item eligibility, draft, publish, end (kill switch per route)
+import etsyWebhookRoutes from './routes/etsyWebhook';         // ADR-135 B4: Etsy webhook (public, raw body, signature verified in the handler)
 import discogsRoutes from './routes/discogs';                 // Universal Crosslister -- Discogs Official-API Tier
 import liveAuctioneersExportRoutes from './routes/liveAuctioneersExport'; // LiveAuctioneers lot-upload spreadsheet export (organizer's own account, no automation touches liveauctioneers.com)
 import barcodeRoutes from './routes/barcode';                  // Barcode scan -> eBay Catalog product enrichment
@@ -283,6 +289,10 @@ import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jo
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
 import { startDiscogsSoldSyncCron } from './jobs/discogsSoldSyncCron'; // 2026-09-23: Discogs seller-order poll -> SOLD + fan-out
 import { startReverbSoldSyncCron } from './jobs/reverbSoldSyncCron'; // 2026-09-23: Reverb seller-order poll -> SOLD + fan-out
+import { scheduleCardCatalogScryfallRefresh, scheduleCardCatalogTcgcsvRefresh } from './jobs/cardCatalogRefreshCron'; // ADR-134 B3: daily card catalog refresh (inert unless CARD_CATALOG_ENABLED is true)
+import { startEtsySoldSyncCron } from './jobs/etsySoldSyncCron'; // ADR-135 B4: Etsy receipt poll + stale-listing sweep (inert unless ETSY_CONNECTOR_ENABLED is true)
+import { startEtsyHousekeepingCron } from './jobs/etsyHousekeepingCron'; // ADR-135 B1: Etsy token keepalive, prune, taxonomy refresh (inert unless ETSY_CONNECTOR_ENABLED is true)
+import { refreshEtsyTaxonomyCache } from './services/marketplace/etsyTaxonomy'; // ADR-135 B3: handed to the Etsy housekeeping cron
 import { bounceSuppressService_runReclassifyBackfillIfNeeded } from './services/bounceSuppressService'; // S1065: self-limiting boot backfill for historical bounce reclassification
 import { startEbayListingQueueCron } from './jobs/ebayListingQueueCron'; // eBay Queue Mode engine
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
@@ -587,6 +597,9 @@ app.use('/api/billing/webhook', stripeUnavailableGuard);
 app.use('/api/square/webhook', express.raw({ type: 'application/json' })); // Square migration Wave 1 #5: HMAC signature check needs the exact raw body
 app.use('/api/ebay/account-deletion', express.raw({ type: '*/*' }));
 app.use('/api/ebay/notifications', express.raw({ type: '*/*' }));
+// ADR-135 D6.2: Etsy webhook signature = HMAC over the exact raw bytes, so the handler needs the raw Buffer
+// before express.json below consumes the stream (same reason as the Square and eBay lines above).
+app.use('/api/etsy/webhook', express.raw({ type: '*/*' }));
 // Resend webhook: svix signature verification needs the raw body, so capture it
 // before the global json parser consumes the stream (same pattern as Stripe above).
 app.use('/api/outreach/resend-webhook', express.raw({ type: 'application/json' }));
@@ -733,6 +746,11 @@ app.use('/api/extension', extensionRoutes); // ADR-084: Marketplace Autofill bro
 // enrichment). Excluded from the global timeout in requestTimeout.ts; given its
 // own longer timeout here, same pattern as /api/upload/batch-analyze below.
 app.post('/api/items/:id/reanalyze', requestTimeout(90000));
+// ADR-134 B4: card intake preview (file parse + catalog resolve) and confirm (NDJSON progress, one item per row)
+// routinely run past the global 30s budget. Excluded from the global timeout in requestTimeout.ts; given a
+// longer route-level timeout here, same pattern as the reanalyze line above.
+app.post('/api/card-intake/:saleId/preview', requestTimeout(180000));
+app.post('/api/card-intake/:saleId/confirm', requestTimeout(180000));
 app.use('/api/items', itemRoutes);
 app.use('/api/items', pricingSignalsRoutes);            // Pricing signals: sleeper patterns & brand premiums
 app.use('/api/pricing', pricingRoutes);                 // Phase S574: Multi-source pricing engine
@@ -878,6 +896,15 @@ app.use('/api/ebay', ebayRoutes);                                          // eB
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
 app.use('/api/reverb', reverbRoutes);                                       // Universal Crosslister -- Reverb Official-API Tier
 app.use('/api/discogs', discogsRoutes);                                     // Universal Crosslister -- Discogs Official-API Tier
+// ADR-134 (cards): every router answers its own disabled state; no router.use kill switches, so nothing here shadows other routes.
+app.use('/api/cards', cardCatalogRoutes);                                   // ADR-134 B3: card catalog (GET /status answers 200 catalogReady:false while the catalog is off)
+app.use('/api/item-cards', itemCardRoutes);                                 // ADR-134 B2: per-item card record
+app.use('/api/card-intake', cardIntakeRoutes);                              // ADR-134 B4: spreadsheet-first card intake
+// ADR-135 (Etsy): the webhook router mounts FIRST (no auth, no kill switch: the handler answers 200 and ignores
+// when the connector is off), then the two organizer routers, each with the kill switch applied per route.
+app.use('/api/etsy/webhook', etsyWebhookRoutes);                            // ADR-135 B4: public, raw body, signature verified in the handler
+app.use('/api/etsy', etsyRoutes);                                           // ADR-135 B1: connect, callback, connection, shop-setup
+app.use('/api/etsy', etsyListingRoutes);                                    // ADR-135 B3: /items/:id/... and /taxonomy/...
 app.use('/api/liveauctioneers', liveAuctioneersExportRoutes);                // LiveAuctioneers lot-upload spreadsheet export
 app.use('/api/barcode', barcodeRoutes);                                    // Barcode scan -> eBay Catalog product enrichment
 app.use('/api/shopify', shopifyRoutes);                              // Feature: Shopify Cross-Listing
@@ -1030,6 +1057,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // V1: Listen on the HTTP server (not app.listen) so Socket.io shares the same port
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`FindA.Sale backend running on port ${PORT} (HTTP + Socket.io)`);
+  console.log('[boot] Card + Etsy mounts: /api/cards, /api/item-cards, /api/card-intake, /api/etsy/webhook, /api/etsy (connect + listings); both stay inert until CARD_CATALOG_ENABLED / ETSY_CONNECTOR_ENABLED are true');
 
   // S1065: one-time (self-limiting) reclassify-bounces backfill check -- no-op once caught up
   bounceSuppressService_runReclassifyBackfillIfNeeded();
@@ -1112,6 +1140,16 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // 2026-09-23: Reverb sold sync (every 15 minutes, seller orders -> SOLD + fan-out)
   startReverbSoldSyncCron();
+
+  // ADR-135: Etsy receipt poll (every 15 minutes at :13/:28/:43/:58) + stale-listing sweep. Exits early unless ETSY_CONNECTOR_ENABLED is true.
+  startEtsySoldSyncCron();
+
+  // ADR-135: Etsy daily housekeeping (04:23 UTC): token keepalive, prune, taxonomy refresh when stale. Exits early unless ETSY_CONNECTOR_ENABLED is true.
+  startEtsyHousekeepingCron({ refreshTaxonomy: () => refreshEtsyTaxonomyCache() });
+
+  // ADR-134: daily card catalog refresh (Scryfall 06:23 UTC, TCGCSV 21:10 UTC). Both exit immediately unless CARD_CATALOG_ENABLED is true.
+  scheduleCardCatalogScryfallRefresh();
+  scheduleCardCatalogTcgcsvRefresh();
 
   // eBay Queue Mode engine — auto-manage listing slots (every 30 minutes)
   startEbayListingQueueCron();

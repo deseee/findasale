@@ -5,7 +5,7 @@
  * 'delete' in routes/items.ts and jobs/cleanupStaleDrafts.ts. Before this existed the withdraw +
  * snapshot logic lived only in deleteItem, so bulk delete orphaned live eBay listings.
  *
- *   prepareItemForDeletion(): withdraw the item from eBay / Discogs / Reverb (self-guarding, never
+ *   prepareItemForDeletion(): withdraw the item from eBay / Discogs / Reverb / Etsy (self-guarding, never
  *     throws) and snapshot still-live extension-platform listings into PendingListingRemoval (no FK
  *     to Item, so they survive the delete). Withdraws are started together and awaited with a bounded
  *     timeout: the Item row must still exist while they read it, and the eBay outcome is what
@@ -19,6 +19,7 @@ import { prisma } from '../lib/prisma';
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { withdrawDiscogsListingIfExists } from './marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
+import { withdrawEtsyListingIfExists } from './marketplace/etsyConnector';
 
 export type ItemDeletionSource = 'single_delete' | 'bulk_delete' | 'cleanup_stale_drafts' | (string & {});
 
@@ -78,8 +79,8 @@ export async function prepareItemForDeletion(
     console.warn(`[ItemDeletion] snapshot read failed for item ${itemId}:`, err?.message);
   }
 
-  // ADR item-delete-cross-marketplace-removal (2026-09-28): eBay / Discogs / Reverb withdraw. All three
-  // self-guard to a no-op when the item was never on that channel and never throw.
+  // ADR item-delete-cross-marketplace-removal (2026-09-28): eBay / Discogs / Reverb withdraw. ADR-135 (2026-10-03) adds
+  // Etsy. All four self-guard to a no-op when the item was never on that channel and never throw.
   const ebayPromise = endEbayListingIfExists(itemId, 'delete').catch((err: any) => {
     console.warn(`[eBay] withdraw-on-delete failed for item ${itemId}:`, err?.message);
     return false as boolean | null;
@@ -90,10 +91,15 @@ export async function prepareItemForDeletion(
   const reverbPromise = withdrawReverbListingIfExists(itemId).catch((err: any) =>
     console.warn(`[Reverb] withdraw-on-delete failed for item ${itemId}:`, err?.message)
   );
+  // withdrawEtsyListingIfExists returns 'skipped' quickly when there is no EtsyListing row (or the connector is off).
+  const etsyPromise = withdrawEtsyListingIfExists(itemId).catch((err: any) =>
+    console.warn(`[Etsy] withdraw-on-delete failed for item ${itemId}:`, err?.message)
+  );
   const [ebayOutcome] = await Promise.all([
     withTimeout<boolean | null | void>(ebayPromise, null, WITHDRAW_TIMEOUT_MS),
     withTimeout<unknown>(discogsPromise, null, WITHDRAW_TIMEOUT_MS),
     withTimeout<unknown>(reverbPromise, null, WITHDRAW_TIMEOUT_MS),
+    withTimeout<unknown>(etsyPromise, null, WITHDRAW_TIMEOUT_MS),
   ]);
   snapshot.withdrawSucceeded = typeof ebayOutcome === 'boolean' ? ebayOutcome : null;
 

@@ -23,6 +23,11 @@
  * Item.reverbListingId field (mirrors discogsListingId), populated by
  * reverbMarketplaceController.ts on a successful push and cleared on
  * delete/end-listing.
+ *
+ * Etsy (ADR-135 D4.6, 2026-10-03): PUBLISHED when the item's EtsyListing state is ACTIVE (PUBLISHED_INELIGIBLE if the
+ * live registry re-check now fails, same stale-dot protection as Reverb), ELIGIBLE when the organizer has an active
+ * Etsy account and the registry's ETSY age rule passes (DRAFT_* and other states show ELIGIBLE too), else null.
+ * Every Etsy input is OPTIONAL, so a caller that supplies none gets `etsy: null` and every other key unchanged.
  */
 
 import { checkEligibility, EligibilityCheckItem } from './marketplaceEligibilityRules';
@@ -41,6 +46,7 @@ export interface ItemChannelStatus {
   vinted: ChannelStatusValue;
   discogs: ChannelStatusValue;
   reverb: ChannelStatusValue;
+  etsy: ChannelStatusValue;
 }
 
 /** Minimal item shape this service needs. Matches fields already selected by
@@ -51,6 +57,9 @@ export interface ChannelStatusItemInput extends EligibilityCheckItem {
   discogsListingId: string | null | undefined;
   reverbListingId: string | null | undefined;
   shopifyListing: { id: string } | null | undefined;
+  /** EtsyListing.state for this item, loaded by the caller in one batched query (ADR-135 D4.6). Omitted = no Etsy row.
+   * The Etsy eligibility inputs (etsyWhenMade, etsyIsCraftSupply, releaseYear, asOfYear) come from EligibilityCheckItem. */
+  etsyListingState?: string | null;
 }
 
 /** Minimal organizer shape this service needs -- caller fetches these fields
@@ -62,6 +71,8 @@ export interface ChannelStatusOrganizerInput {
   subscriptionTier: string; // 'SIMPLE' | 'PRO' | 'TEAMS'
   hasActiveDiscogsAccount: boolean;
   hasActiveReverbAccount: boolean;
+  /** ADR-135 D4.6. Optional so existing callers still type-check; omitted = not connected (no Etsy dot). */
+  hasActiveEtsyAccount?: boolean;
 }
 
 /** Which extension-based (no official API/OAuth) platforms this organizer has
@@ -158,6 +169,17 @@ export function computeChannelStatusForItems(
         : item.reverbListingId
           ? (checkEligibility('REVERB', item).eligible ? 'PUBLISHED' : 'PUBLISHED_INELIGIBLE')
           : checkEligibility('REVERB', item).eligible
+            ? 'ELIGIBLE'
+            : null,
+
+      // Etsy (ADR-135 D4.6): null unless the organizer has an active Etsy account. ACTIVE listing = PUBLISHED, re-checked
+      // against the live rule (PUBLISHED_INELIGIBLE if it now fails). Otherwise ELIGIBLE only when the age rule passes
+      // (allowlist posture: no era data and no card year means no dot).
+      etsy: !organizer.hasActiveEtsyAccount
+        ? null
+        : item.etsyListingState === 'ACTIVE'
+          ? (checkEligibility('ETSY', item).eligible ? 'PUBLISHED' : 'PUBLISHED_INELIGIBLE')
+          : checkEligibility('ETSY', item).eligible
             ? 'ELIGIBLE'
             : null,
 

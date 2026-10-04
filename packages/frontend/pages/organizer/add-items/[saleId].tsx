@@ -313,6 +313,7 @@ const CHANNEL_DOT_CONFIG: Array<{ key: string; label: string; color: string; bor
   { key: 'vinted', label: 'Vinted', color: 'bg-teal-600', border: 'border-teal-600', tint: 'bg-teal-600/25' },
   { key: 'discogs', label: 'Discogs', color: 'bg-amber-600', border: 'border-amber-600', tint: 'bg-amber-600/25' },
   { key: 'reverb', label: 'Reverb', color: 'bg-orange-600', border: 'border-orange-600', tint: 'bg-orange-600/25' },
+  { key: 'etsy', label: 'Etsy', color: 'bg-lime-600', border: 'border-lime-600', tint: 'bg-lime-600/25' },
 ];
 /** Small per-connected-channel dot cluster for the collapsed Add Items row.
  * Filled dot = published. Outlined/tinted dot = eligible, not yet published.
@@ -2343,6 +2344,14 @@ const AddItemsDetailPage = () => {
             >
               CSV Import
             </button>
+            {typeof saleId === 'string' && saleId !== '' && (
+              <Link
+                href={`/organizer/card-intake/${encodeURIComponent(saleId)}`}
+                className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"
+              >
+                Import cards from a spreadsheet
+              </Link>
+            )}
           </div>
 
           {/* Manual Entry Tab */}

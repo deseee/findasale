@@ -43,7 +43,7 @@ jest.mock('../utils/expireCheckoutSession', () => ({
   '../services/descriptionMerger', '../services/achievementService', '../services/facebookNudgeService',
   '../services/saleAlertEmailService', '../services/ebayPublishService', '../services/checkoutGuard',
   '../services/itemSaleGuard', '../services/shopifyService', '../services/marketplace/discogsListingConnector',
-  '../services/marketplace/reverbConnector', '../services/nativeShippingSuggestionService',
+  '../services/marketplace/reverbConnector', '../services/marketplace/etsyConnector', '../services/nativeShippingSuggestionService',
   '../services/shippingLabelService', '../services/itemChannelStatusService', '../utils/actingOrganizer',
   '../services/itemCsvImport', '../services/itemDeletionService', '../services/ebaySaleReopenService', // eBay sync hardening (2026-10-01): new itemController imports
 ].forEach((p) => jest.mock(p, () => ({})));

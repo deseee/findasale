@@ -38,6 +38,7 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken } from '../services/ebayHttp';
 import { ebayPublishWithSelfHeal } from '../services/ebayPublishService';
+import type { EbayCardInput } from '../config/cardEbayCategories'; // ADR-134 #643 (B5)
 import { isEbayRateLimited } from '../lib/ebayRateLimiter';
 
 const EBAY_API_DELAY_MS = 250;
@@ -77,6 +78,9 @@ interface StuckItem {
   ebayShippingOverride: string | null;
   tags: string[];
   description: string | null; // needed by heal25064's graded-coin detection (2026-09-05)
+  // ADR-134 #643 (B5): the item's card record. Without it heal25064 would re-resolve a graded slab from
+  // title text alone and could overwrite correct graded descriptors with ungraded ones.
+  card: EbayCardInput | null;
 }
 
 async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<boolean> {
@@ -124,6 +128,7 @@ async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<bo
         isbn: item.isbn,
         tags: item.tags,
         description: item.description,
+        card: item.card,
       },
       accessToken,
     });
@@ -210,6 +215,23 @@ async function runEbayStuckOfferRetryCron(): Promise<void> {
       tags: true,
       ebayShippingOverride: true,
       description: true,
+      card: {
+        select: {
+          game: true,
+          productType: true,
+          cardName: true,
+          setCode: true,
+          setName: true,
+          collectorNumber: true,
+          language: true,
+          finish: true,
+          rarity: true,
+          conditionCode: true,
+          grader: true,
+          grade: true,
+          certNumber: true,
+        },
+      },
     },
     take: MAX_ITEMS_PER_RUN,
   });

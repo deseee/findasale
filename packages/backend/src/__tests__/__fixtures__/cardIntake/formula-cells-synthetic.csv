@@ -1,0 +1,4 @@
+Name,Quantity,Condition,Notes
+=CMD(1),0,Near Mint,+SUM(A1)
+@bad,abc,Near Mint,-2+3
+Plain Card,1,Near Mint,fine

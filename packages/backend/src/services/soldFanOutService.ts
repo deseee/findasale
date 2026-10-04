@@ -4,7 +4,7 @@
  *
  * Same four fire-and-forget calls every other SOLD call site already makes inline (Stripe, POS,
  * cash, reservations, vendor-booth cart, holds, bounties, eBay cron, bulk + single item edit):
- * eBay withdraw, Shopify mark-sold, Discogs withdraw, Reverb withdraw (2026-09-23), Facebook nudge / REMOVE enqueue. Added for
+ * eBay withdraw, Shopify mark-sold, Discogs withdraw, Reverb withdraw (2026-09-23), Etsy withdraw (ADR-135, 2026-10-03), Facebook nudge / REMOVE enqueue. Added for
  * the call sites that were missing it (Square single + cart payment, native auction close). The
  * extension-driven platforms (Facebook, Poshmark, Mercari, Craigslist, Vinted) need nothing here:
  * getPendingRemovals picks up any SOLD item with a still-POSTED job row.
@@ -16,6 +16,7 @@ import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from './shopifyService';
 import { withdrawDiscogsListingIfExists } from './marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
+import { withdrawEtsyListingIfExists } from './marketplace/etsyConnector';
 import { notifyFacebookExportedItemSold } from './facebookNudgeService';
 
 export function fanOutItemSoldWithdrawals(itemId: string, source: string): void {
@@ -30,6 +31,10 @@ export function fanOutItemSoldWithdrawals(itemId: string, source: string): void 
   );
   withdrawReverbListingIfExists(itemId).catch((err: any) =>
     console.warn(`[Reverb] withdraw-on-SOLD (${source}) failed for item ${itemId}:`, err?.message)
+  );
+  // ADR-135 D6.1: self-guarding ('skipped' unless the connector is on and a withdrawable EtsyListing exists); never throws.
+  withdrawEtsyListingIfExists(itemId).catch((err: any) =>
+    console.warn(`[Etsy] withdraw-on-SOLD (${source}) failed for item ${itemId}:`, err?.message)
   );
   notifyFacebookExportedItemSold(itemId).catch((err: any) =>
     console.warn(`[FB Nudge] (${source}) failed for item ${itemId}:`, err?.message)

@@ -17,6 +17,7 @@ jest.mock('../../controllers/ebayController', () => ({ endEbayListingIfExists: j
 jest.mock('../shopifyService', () => ({ markShopifyItemSold: jest.fn(async () => undefined) }));
 jest.mock('../marketplace/discogsListingConnector', () => ({ withdrawDiscogsListingIfExists: jest.fn(async () => undefined) }));
 jest.mock('../marketplace/reverbConnector', () => ({ withdrawReverbListingIfExists: jest.fn(async () => undefined) }));
+jest.mock('../marketplace/etsyConnector', () => ({ withdrawEtsyListingIfExists: jest.fn(async () => 'skipped') }));
 
 import { commitFacebookNativeSale } from '../facebookNativeSaleService';
 import { prisma } from '../../lib/prisma';
@@ -25,12 +26,13 @@ import { endEbayListingIfExists } from '../../controllers/ebayController';
 import { markShopifyItemSold } from '../shopifyService';
 import { withdrawDiscogsListingIfExists } from '../marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from '../marketplace/reverbConnector';
+import { withdrawEtsyListingIfExists } from '../marketplace/etsyConnector';
 import { sellItemUnits } from '../itemStockService';
 import { syncMarketplaceStock } from '../marketplaceStockSyncService';
 
 beforeEach(() => { jest.clearAllMocks(); mockTx.$queryRaw.mockReset(); mockTx.marketplaceListingJob.findFirst.mockReset(); });
 
-it('withdraws from eBay, Shopify, Discogs and Reverb and tags lastSoldVia by default', async () => {
+it('withdraws from eBay, Shopify, Discogs, Reverb and Etsy and tags lastSoldVia by default', async () => {
   const r = await commitFacebookNativeSale('item_1', 'MERCARI');
   expect(r).toEqual({ ok: true, alreadyCommitted: false });
   expect(commitItemSale).toHaveBeenCalledWith('item_1', 'SOLD', ['AVAILABLE']);
@@ -39,6 +41,7 @@ it('withdraws from eBay, Shopify, Discogs and Reverb and tags lastSoldVia by def
   expect(markShopifyItemSold).toHaveBeenCalledWith('item_1');
   expect(withdrawDiscogsListingIfExists).toHaveBeenCalledWith('item_1');
   expect(withdrawReverbListingIfExists).toHaveBeenCalledWith('item_1');
+  expect(withdrawEtsyListingIfExists).toHaveBeenCalledWith('item_1');
 });
 
 it("skipWithdraw ['DISCOGS'] leaves the Discogs listing alone", async () => {
@@ -57,12 +60,39 @@ it("skipWithdraw ['REVERB'] leaves the Reverb listing alone but pulls the rest",
   expect(withdrawReverbListingIfExists).not.toHaveBeenCalled();
 });
 
+it("skipWithdraw ['ETSY'] leaves the Etsy listing alone but pulls the rest", async () => {
+  await commitFacebookNativeSale('item_5', 'ETSY', { skipWithdraw: ['ETSY'] });
+  expect(endEbayListingIfExists).toHaveBeenCalledWith('item_5');
+  expect(markShopifyItemSold).toHaveBeenCalledWith('item_5');
+  expect(withdrawDiscogsListingIfExists).toHaveBeenCalledWith('item_5');
+  expect(withdrawReverbListingIfExists).toHaveBeenCalledWith('item_5');
+  expect(withdrawEtsyListingIfExists).not.toHaveBeenCalled();
+});
+
+it("the Discogs and Reverb polls (skipWithdraw ['DISCOGS'] / ['REVERB']) still withdraw Etsy", async () => {
+  await commitFacebookNativeSale('item_6', 'DISCOGS', { skipWithdraw: ['DISCOGS'] });
+  await commitFacebookNativeSale('item_7', 'REVERB', { skipWithdraw: ['REVERB'] });
+  expect(withdrawEtsyListingIfExists).toHaveBeenCalledWith('item_6');
+  expect(withdrawEtsyListingIfExists).toHaveBeenCalledWith('item_7');
+});
+
+it('a rejected Etsy withdraw is only warned about and never fails the sale commit', async () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  (withdrawEtsyListingIfExists as jest.Mock).mockRejectedValueOnce(new Error('etsy down'));
+  const r = await commitFacebookNativeSale('item_8', 'MERCARI');
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(r).toEqual({ ok: true, alreadyCommitted: false });
+  expect(warn).toHaveBeenCalledWith('[Etsy] withdraw-on-SOLD (MERCARI) failed for item item_8:', 'etsy down');
+  warn.mockRestore();
+});
+
 it('an already-SOLD item is an idempotent no-op with no fan-out', async () => {
   (commitItemSale as jest.Mock).mockRejectedValueOnce(new (ItemAlreadyCommittedError as any)('x'));
   const r = await commitFacebookNativeSale('item_3', 'EBAY');
   expect(r).toEqual({ ok: true, alreadyCommitted: true });
   expect(endEbayListingIfExists).not.toHaveBeenCalled();
   expect(withdrawReverbListingIfExists).not.toHaveBeenCalled();
+  expect(withdrawEtsyListingIfExists).not.toHaveBeenCalled();
 });
 
 
@@ -87,6 +117,7 @@ describe('soldOnPlatform unit sale (multi-quantity items)', () => {
     expect((prisma as any).item.update).not.toHaveBeenCalled();
     expect(endEbayListingIfExists).not.toHaveBeenCalled();
     expect(markShopifyItemSold).not.toHaveBeenCalled();
+    expect(withdrawEtsyListingIfExists).not.toHaveBeenCalled();
   });
 
   it('last unit: runs the full sold cascade', async () => {
@@ -96,6 +127,7 @@ describe('soldOnPlatform unit sale (multi-quantity items)', () => {
     expect(r).toEqual({ ok: true, alreadyCommitted: false });
     expect((prisma as any).item.update).toHaveBeenCalledWith({ where: { id: 'bcw' }, data: { lastSoldVia: 'VINTED' } });
     expect(endEbayListingIfExists).toHaveBeenCalledWith('bcw');
+    expect(withdrawEtsyListingIfExists).toHaveBeenCalledWith('bcw');
     expect(syncMarketplaceStock).not.toHaveBeenCalled();
   });
 

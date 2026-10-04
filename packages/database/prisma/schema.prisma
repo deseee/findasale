@@ -1839,6 +1839,9 @@ model Item {
   // Unsupported() so Prisma stops treating it as drift; it is NEVER written by the client.
   searchVector                    Unsupported("tsvector")?
 
+  // ADR-134 (2026-10-03): 1:1 card record. Relation only, no new Item column.
+  card                            ItemCard?
+
   @@index([draftStatus])
   @@index([saleId, draftStatus])
   @@index([libraryId])
@@ -6860,6 +6863,118 @@ model ItemDeletionLog {
   @@index([createdAt])
 }
 
+// ============================================================================
+// ADR-134 (2026-10-03): Card seller base buildout. ItemCard, CardPrinting, CardPrice,
+// CardDataSource, CardIntakeBatch. Additive. See migrations 20261003180000 and 20261003190000.
+// ============================================================================
+model ItemCard {
+  id                 String        @id @default(cuid())
+  itemId             String        @unique
+  organizerId        String?       // denormalized from Item at write time, no FK (same precedent as Item.organizerId)
+  game               String
+  productType        String        @default("SINGLE")
+  cardName           String?
+  setCode            String?
+  setName            String?
+  collectorNumber    String?
+  language           String?
+  finish             String?
+  rarity             String?
+  conditionCode      String?
+  grader             String?
+  grade              String?
+  certNumber         String?       @db.VarChar(30)
+  releaseYear        Int?          // Etsy contract, section 2.6
+  scryfallId         String?
+  tcgplayerProductId Int?
+  cardmarketId       Int?
+  catalogPrintingId  String?
+  dedupKey           String
+  lockedFields       String[]      @default([])
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  item               Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  catalogPrinting    CardPrinting? @relation(fields: [catalogPrintingId], references: [id], onDelete: SetNull)
+
+  @@index([organizerId, dedupKey])
+  @@index([game, setCode, collectorNumber])
+  @@index([scryfallId])
+  @@index([tcgplayerProductId])
+  @@index([catalogPrintingId])
+}
+
+model CardPrinting {
+  id                 String     @id            // 'SCRYFALL:<uuid>' or 'TCGCSV:<productId>' (no separate sourceId column)
+  source             String
+  game               String
+  name               String
+  nameNorm           String
+  setCode            String
+  setName            String?
+  collectorNumber    String?
+  language           String?
+  rarity             String?
+  releaseYear        Int?
+  finishes           String[]   @default([])
+  scryfallId         String?
+  tcgplayerProductId Int?
+  cardmarketId       Int?
+  imageSmallUrl      String?
+  imageNormalUrl     String?
+  updatedAt          DateTime   @default(now())
+  price              CardPrice?
+  itemCards          ItemCard[]
+
+  // NOTE: migration 2 also creates a raw index "CardPrinting_game_nameNorm_pattern_idx"
+  // ON ("game","nameNorm" text_pattern_ops). Prisma cannot express an operator class, so it lives only in SQL.
+  @@index([game, nameNorm])
+  @@index([game, setCode, collectorNumber])
+  @@index([tcgplayerProductId])
+}
+
+model CardPrice {
+  printingId String       @id
+  usd        Decimal?     @db.Decimal(10, 2)
+  usdFoil    Decimal?     @db.Decimal(10, 2)
+  usdEtched  Decimal?     @db.Decimal(10, 2)
+  usdReverse Decimal?     @db.Decimal(10, 2)
+  asOf       DateTime
+  printing   CardPrinting @relation(fields: [printingId], references: [id], onDelete: Cascade)
+}
+
+model CardDataSource {
+  source              String    @id            // 'SCRYFALL' | 'TCGCSV'
+  lastAttemptAt       DateTime?
+  lastSuccessAt       DateTime?
+  lastStatus          String?                   // 'OK' | 'FAILED' | 'SKIPPED_UNCHANGED' | 'SKIPPED_DB_SPACE'
+  lastError           String?   @db.VarChar(500)
+  sourceVersion       String?
+  rowsUpserted        Int       @default(0)
+  consecutiveFailures Int       @default(0)
+}
+
+model CardIntakeBatch {
+  id                 String   @id @default(cuid())
+  organizerId        String
+  saleId             String
+  fileSha256         String
+  fileName           String?
+  mode               String                      // 'ADD' | 'REPLACE'
+  status             String   @default("RUNNING") // RUNNING | COMPLETED | CANCELLED | FAILED
+  rowsTotal          Int      @default(0)
+  committedThroughRow Int     @default(0)
+  createdCount       Int      @default(0)
+  mergedCount        Int      @default(0)
+  skippedCount       Int      @default(0)
+  errorCount         Int      @default(0)
+  errorSample        Json?                       // bounded to 200 entries by the service
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([organizerId, saleId, fileSha256, mode])
+  @@index([saleId])
+}
+
 // Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability.
 // Decision log for every buyer message the extension ran through the price/availability
 // autosend engine (messageAutosendService.ts), whether or not it actually autosent.
@@ -7890,6 +8005,7 @@ model UspsZoneChartEntry {
 enum MarketplaceConnectionPlatform {
   REVERB
   DISCOGS
+  ETSY // ADR-135
 }
 
 enum MarketplaceConnectionStatus {
@@ -7927,9 +8043,139 @@ model MarketplaceAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ADR-135 (2026-10-03): Etsy connector columns, all nullable and additive.
+  externalShopId        String?   // Etsy shop_id (numeric, stored as text)
+  grantedScopes         String?   // space-separated scopes granted at consent
+  refreshTokenExpiresAt DateTime? // conservative estimate (token response time + 90 days)
+  refreshLeaseUntil     DateTime? // single-flight lease for token refresh
+  etsyShopSettings      EtsyShopSettings?
+
   @@unique([organizerId, platform])
   @@index([organizerId])
   @@index([platform, status])
+}
+
+// ============================================================================
+// ADR-135 (2026-10-03): Etsy connector tables. Additive. EtsyListing.itemId and
+// EtsySoldEvent.itemId are plain strings with NO FK to Item on purpose.
+// ============================================================================
+model EtsyShopSettings {
+  id                       String             @id @default(cuid())
+  organizerId              String             @unique
+  marketplaceAccountId     String             @unique
+  marketplaceAccount       MarketplaceAccount @relation(fields: [marketplaceAccountId], references: [id], onDelete: Cascade)
+  shopId                   String
+  shopName                 String?
+  shopCurrency             String?
+  defaultShippingProfileId String?
+  defaultReturnPolicyId    String?
+  defaultReadinessStateId  String?
+  receiptCursor            DateTime?          // min_last_modified for the next receipts poll
+  lastReceiptPollAt        DateTime?
+  lastWebhookAt            DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([shopId])
+}
+
+model EtsyOAuthState {
+  id              String    @id @default(cuid())
+  stateHash       String    @unique   // sha256(state); the raw state value is never stored
+  organizerId     String
+  userId          String
+  codeVerifierEnc String              // encryptToken(verifier)
+  requestedScopes String
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([organizerId])
+  @@index([expiresAt])
+}
+
+model EtsyListing {
+  id                String    @id @default(cuid())
+  itemId            String    @unique   // NO FK on purpose (section 3, rule 1)
+  organizerId       String
+  shopId            String
+  etsyListingId     String?
+  state             String    @default("PREPARING") // PREPARING | DRAFT_PENDING | DRAFT_READY | PUBLISHING | ACTIVE | ENDED | SOLD | FAILED | ORPHANED
+  failedStep        String?   // CREATE | IMAGES | PUBLISH | UPDATE | DELETE
+  lastErrorMessage  String?
+  lastErrorAt       DateTime?
+  whenMade          String    // Etsy when_made value attested by the organizer
+  whoMade           String    @default("someone_else")
+  isSupply          Boolean   @default(false)
+  taxonomyId        Int?
+  shippingProfileId String?
+  returnPolicyId    String?
+  readinessStateId  String?
+  imagesUploaded    Int       @default(0)
+  syncedQuantity    Int?
+  syncedPrice       Float?
+  attestedAt        DateTime?
+  attestedByUserId  String?
+  publishedAt       DateTime?
+  expiresAt         DateTime?
+  endedAt           DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizerId, state])
+  @@index([state, updatedAt])
+  @@index([etsyListingId])
+  @@index([shopId])
+}
+
+model EtsySoldEvent {
+  id            String   @id @default(cuid())
+  transactionId String   @unique   // Etsy transaction_id: idempotency key (no buyer data stored)
+  receiptId     String
+  etsyListingId String
+  itemId        String?
+  quantity      Int
+  soldAt        DateTime
+  source        String             // WEBHOOK | POLL
+  createdAt     DateTime @default(now())
+
+  @@index([itemId])
+  @@index([etsyListingId])
+}
+
+model EtsyApiCall {
+  id          Int      @id @default(autoincrement())
+  at          DateTime @default(now())
+  priority    String             // URGENT | INTERACTIVE | BACKGROUND
+  endpoint    String             // short label, never a full URL or id
+  organizerId String?
+  status      Int?
+
+  @@index([at])
+}
+
+model EtsyApiState {
+  id             String    @id @default("global")
+  limitPerDay    Int?
+  remainingToday Int?
+  limitPerSecond Int?
+  observedAt     DateTime?
+  blockedUntil   DateTime?
+  blockedReason  String?   // QPS | QPD
+  lastAlertAt    DateTime?
+  updatedAt      DateTime  @updatedAt
+}
+
+model EtsyTaxonomyNode {
+  id        Int      @id          // Etsy node id; code guards ids above 2147483647 (spec type is int64, real range UNVERIFIED, T4)
+  parentId  Int?
+  name      String
+  level     Int
+  isLeaf    Boolean
+  fullPath  String
+  fetchedAt DateTime @default(now())
+
+  @@index([parentId])
 }
 
 model AdminImpersonationLog {

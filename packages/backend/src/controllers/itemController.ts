@@ -57,7 +57,9 @@ import { decodeHtmlEntities } from '../utils/htmlEntities'; // 2026-09-29: singl
 import { checkQrScan, qrScanRejectionBody } from '../services/qrScanGuardService'; // 2026-09-29: sale window, rate limits, radius, impossible-speed guard shared by every location-gated XP path
 import { parseLatitude, parseLongitude, parseAccuracyMeters, buildQrScanLockKey } from '../utils/qrScanGuards'; // 2026-09-29: strict scan coordinates + advisory-lock key for the QR-scan dedupe
 import { IMPORT_FIELD_KEYS, IMPORT_MAX_ROWS, buildImportItem, detectImportColumnMapping, importPhotoCapForTier, RawImportRow, ImportRowContext } from '../services/itemCsvImport'; // 2026-09-29: one shared, hardened row validator for bulk-import + legacy import-items
+import { CARD_PUBLIC_SELECT, CARD_EDIT_SELECT, parseCardInput, buildCardCreateData, buildCardNestedUpsert, isCardValidationError, cardValidationBody } from '../services/cardRecordService'; // ADR-134 #640 (B2): card record, the only ItemCard writer
 import { organizerEditStamp, organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, stamped only by organizer request handlers
+import { getPinnedCardCategory } from '../config/cardEbayCategories'; // ADR-134 5.4 (W4): pinned eBay category for a card record (pure module, no env or network)
 
 /**
  * Bug #469: Live-listing edit propagation.
@@ -735,6 +737,10 @@ const ITEM_DETAIL_SELECT = {
         organizerDiscountXp: true,
         createdAt: true,
         updatedAt: true,
+        // ADR-134 #640 (B2): optional 1:1 card record (null for non-card items). PUBLIC select: never
+        // lockedFields, dedupKey, organizerId or catalogPrintingId. getItemForEdit overrides this key
+        // with CARD_EDIT_SELECT (owner-only). Item.organizerId above is pre-existing and unchanged.
+        card: { select: CARD_PUBLIC_SELECT },
         // embedding intentionally excluded — crashes serialization
         sale: {
           select: {
@@ -1032,7 +1038,8 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
     // blank, because the reverse dollars-to-percent calc always saw undefined amounts.
     const item = await prisma.item.findUnique({
       where: { id },
-      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true, lastEditedAt: true }
+      // ADR-134 #640 (B2): the owner's edit read adds lockedFields + catalogPrintingId to the card block (never dedupKey/organizerId).
+      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true, lastEditedAt: true, card: { select: CARD_EDIT_SELECT } }
     });
 
     if (!item) {
@@ -1302,7 +1309,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
-    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence, consignorId } = req.body;
+    const { saleId, title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, aiConfidence, consignorId, card } = req.body;
     const files = req.files as Express.Multer.File[];
 
     // #102: Validate price >= 0
@@ -1333,6 +1340,19 @@ export const createItem = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         message: `Invalid listing type "${listingType}". Must be one of: ${VALID_LISTING_TYPES.join(', ')}`
       });
+    }
+
+    // ADR-134 #640 (B2): optional card record. Validated up front (unknown key or bad value -> 400
+    // CARD_VALIDATION) so nothing is written for a bad card. Multipart bodies send `card` as a JSON string.
+    // organizerId is filled in below from the sale; it is never taken from the request.
+    let cardCreateBase: ReturnType<typeof buildCardCreateData> | undefined;
+    if (card !== undefined && card !== null && card !== '') {
+      try {
+        cardCreateBase = buildCardCreateData(card, null);
+      } catch (cardErr) {
+        if (isCardValidationError(cardErr)) return res.status(400).json(cardValidationBody(cardErr));
+        throw cardErr;
+      }
     }
 
     // Check if sale exists and belongs to organizer
@@ -1479,8 +1499,18 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         // Phase 1A: regular item creation is a deliberate organizer action — publish immediately
         // (Only Rapidfire/uploadRapidfire creates DRAFT items intentionally)
         draftStatus: 'PUBLISHED',
+        // ADR-134 #640 (B2): card record created in the same nested write (atomic with the Item).
+        // Built by cardRecordService from a whitelisted, strictly validated object; the request body is never spread.
+        ...(cardCreateBase ? { card: { create: { ...cardCreateBase, organizerId: sale.organizerId ?? null } } } : {}),
+        // ADR-134 5.4 (1): a pinned-game card starts with its pinned eBay category (createItem never takes one from the body).
+        ...(cardCreateBase ? pinnedCardCategoryFields(cardCreateBase, null, null) : {}),
       }
     });
+
+    // ADR-134 #640 (B2): read the stored card back in its owner shape (includes lockedFields). Card path only.
+    const createdCard = cardCreateBase
+      ? await prisma.itemCard.findUnique({ where: { itemId: item.id }, select: CARD_EDIT_SELECT })
+      : undefined;
 
     // #319/#325/#328: Sync Photo table — fire-and-forget, never blocks item creation response
     if (photoUrls.length > 0) {
@@ -1497,6 +1527,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     // Return item with suggested tags (could be used by frontend to pre-fill fields)
     res.status(201).json({
       ...item,
+      ...(cardCreateBase ? { card: createdCard ?? null } : {}),
       suggestedTags, // optional
     });
 
@@ -1564,6 +1595,25 @@ async function computeAutoShippingPatch(input: {
   }
 }
 
+/**
+ * ADR-134 5.4 item (1) (W4 wiring): a card record in a pinned game (productType SINGLE) gives the item its pinned eBay
+ * category, but ONLY while the item has no category yet. A non-null value is never overwritten. The name is added only
+ * when the pin has a verified name and the item has none. Returns {} when there is nothing to set (non-card, unpinned
+ * game or product type, or a category already present), so non-card items are untouched.
+ */
+function pinnedCardCategoryFields(
+  card: { game: string; productType: string } | null | undefined,
+  currentCategoryId: string | null | undefined,
+  currentCategoryName: string | null | undefined
+): { ebayCategoryId?: string; ebayCategoryName?: string } {
+  if (currentCategoryId) return {};
+  const pinned = getPinnedCardCategory(card);
+  if (!pinned) return {};
+  const fields: { ebayCategoryId?: string; ebayCategoryName?: string } = { ebayCategoryId: pinned.id };
+  if (pinned.name && !currentCategoryName) fields.ebayCategoryName = pinned.name;
+  return fields;
+}
+
 export const updateItem = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -1572,7 +1622,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, crosslisterFreeShipping, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag, consignorId, excludeFromMarkdown, card } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -1609,6 +1659,18 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       const lotStr = String(lotNumber).trim();
       if (lotStr.length > 20) {
         return res.status(400).json({ message: 'Lot number must be 20 characters or less' });
+      }
+    }
+
+    // ADR-134 #640 (B2): optional card patch. Parsed with the strict whitelist before anything is written
+    // (unknown key or bad value -> 400 CARD_VALIDATION). `card: null`/absent leaves the card untouched.
+    let cardPatch: ReturnType<typeof parseCardInput> | undefined;
+    if (card !== undefined && card !== null) {
+      try {
+        cardPatch = parseCardInput(card);
+      } catch (cardErr) {
+        if (isCardValidationError(cardErr)) return res.status(400).json(cardValidationBody(cardErr));
+        throw cardErr;
       }
     }
 
@@ -2127,12 +2189,42 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       updateData.userEditedFields = mergedEdited;
     }
 
-    // Item.lastEditedAt: stamp only when a user-visible field in updateData differs from the stored row.
-    // lastEditedAt is never read from req.body.
+    // ADR-134 #640 (B2): card patch applied as a nested upsert inside the same Item update (atomic).
+    // lockedFields/dedupKey are computed by cardRecordService from the stored row; never from the body.
+    if (cardPatch !== undefined) {
+      try {
+        const existingCard = await prisma.itemCard.findUnique({ where: { itemId: id } });
+        updateData.card = { upsert: buildCardNestedUpsert(existingCard, cardPatch, item.organizerId ?? item.sale?.organizerId ?? ownerOrganizer.id) };
+        // ADR-134 5.4 (1): set the pinned eBay category from the merged card, only while the effective category is null
+        // (the stored value, or what this same request is setting). Never overwrites a non-null category.
+        Object.assign(
+          updateData,
+          pinnedCardCategoryFields(
+            updateData.card.upsert.create,
+            updateData.ebayCategoryId !== undefined ? updateData.ebayCategoryId : item.ebayCategoryId,
+            updateData.ebayCategoryName !== undefined ? updateData.ebayCategoryName : item.ebayCategoryName
+          )
+        );
+      } catch (cardErr) {
+        if (isCardValidationError(cardErr)) return res.status(400).json(cardValidationBody(cardErr));
+        throw cardErr;
+      }
+    }
+
+    // Item.lastEditedAt: a card patch is always an organizer edit; otherwise stamp only when a user-visible
+    // field in updateData differs from the stored row. lastEditedAt is never read from req.body.
     const updatedItem = await prisma.item.update({
       where: { id },
-      data: { ...updateData, ...organizerEditStamp(item, updateData) }
+      data: {
+        ...updateData,
+        ...(cardPatch !== undefined ? organizerEditStampAlways() : organizerEditStamp(item, updateData)),
+      }
     });
+
+    // ADR-134 #640 (B2): owner-shaped card block for the response (card path only).
+    const updatedCard = cardPatch !== undefined
+      ? await prisma.itemCard.findUnique({ where: { itemId: id }, select: CARD_EDIT_SELECT })
+      : undefined;
 
     // Tell anyone who favorited this item that its price just dropped. Was previously
     // dead code -- notifyPriceDropAlerts was imported above but never called from any
@@ -2286,7 +2378,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       (packageHeightIn !== undefined && numOrNull(updatedItem.packageHeightIn) !== numOrNull(item.packageHeightIn)) ||
       (packageType !== undefined && (updatedItem.packageType ?? null) !== (item.packageType ?? null));
 
-    res.json(updatedItem);
+    res.json(cardPatch !== undefined ? { ...updatedItem, card: updatedCard ?? null } : updatedItem);
 
     // Bug #461: FB nudge on single-item status → SOLD transition
     if (status === 'SOLD' && item.status !== 'SOLD' && item.fbExportedAt) {
@@ -2544,6 +2636,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           // inside the loop; a 25005 heal recreates the offer and persists it.
           if (pushedFields.length > 0 && updatedItem.ebayOfferId) {
             console.log(`[eBay PushSync] Item ${id}: pushed ${pushedFields.join('/')} to eBay`);
+            // ADR-134 B5b: the self-heal needs the card record so a graded card keeps its grader, grade and cert
+            // descriptors (without it a card falls to the coin logic and could be rewritten as ungraded). null for a
+            // non-card item, which leaves the heal exactly as it was. Select matches EbayCardInput.
+            const healCard = await prisma.itemCard.findUnique({
+              where: { itemId: updatedItem.id },
+              select: { game: true, productType: true, cardName: true, setCode: true, setName: true, collectorNumber: true, language: true, finish: true, rarity: true, conditionCode: true, grader: true, grade: true, certNumber: true },
+            });
             const healResult = await ebayPublishWithSelfHeal({
               item: {
                 id: updatedItem.id,
@@ -2557,6 +2656,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
                 category: updatedItem.category,
                 tags: updatedItem.tags,
                 description: updatedItem.description,
+                card: healCard,
               },
               accessToken,
             });
@@ -4002,6 +4102,8 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
         optimisticLockVersion: true,
         category: true,
         tags: true,
+        price: true, // ADR-134 D3 (B2): needed for the card no-price guard below
+        card: { select: { id: true } }, // ADR-134 D3 (B2): marks a card item
         sale: {
           select: {
             organizer: {
@@ -4028,6 +4130,22 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
           ? 'Item is already published.'
           : 'Item not ready. Smart tagging still in progress.'
       });
+    }
+
+    // ADR-134 D3 FIX (B2, orchestrator decision 2026-10-03): refuse to publish a CARD item (one with an
+    // ItemCard row) that has no price. The eBay push path defaults a missing price to $0.99
+    // (ebayController.ts), so a priceless card could otherwise go live at a price the seller never chose.
+    // Effective price = the price in this request when one is sent, else the stored price.
+    if (item.card) {
+      const effectivePrice = price !== undefined
+        ? (price !== null && price !== '' ? parseFloat(price) : null)
+        : (item.price !== null && item.price !== undefined ? Number(item.price) : null);
+      if (effectivePrice === null || Number.isNaN(effectivePrice)) {
+        return res.status(400).json({
+          message: 'Add a price before publishing this card.',
+          code: 'CARD_PRICE_REQUIRED'
+        });
+      }
     }
 
     // B5 blocker: optimistic lock check — prevent concurrent edits
@@ -4375,9 +4493,9 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         // ADDENDUM 2026-09-14: widened from DISCOGS-only to both official-API-tier platforms --
         // Prisma can't select the same relation key (marketplaceAccounts) twice under one
         // parent select with two different `where` filters, so both flags are derived below
-        // from this single combined query instead.
+        // from this single combined query instead. ADR-135 D4.6 (2026-10-03): ETSY joins the same query.
         marketplaceAccounts: {
-          where: { platform: { in: ['DISCOGS', 'REVERB'] }, status: 'ACTIVE' },
+          where: { platform: { in: ['DISCOGS', 'REVERB', 'ETSY'] }, status: 'ACTIVE' },
           select: { id: true, platform: true },
         },
       },
@@ -4433,15 +4551,51 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
       publishedExtensionPlatformsByItemId.get(job.itemId)!.add(job.platform as any);
     }
 
+    // ADR-135 D4.6: Etsy dot inputs. Only when this organizer has an active Etsy account (everyone else keeps exactly the
+    // queries and inputs they had before). ONE organizer-scoped EtsyListing query for the page's item ids, plus one
+    // ItemCard query for the release year (the card's own year decides Etsy age eligibility). Best-effort: a failure here
+    // only hides the Etsy dot, it never fails the Add Items list.
+    const hasActiveEtsyAccount = channelStatusOrganizer?.marketplaceAccounts.some(a => a.platform === 'ETSY') ?? false;
+    let channelStatusItems: unknown[] = items;
+    if (hasActiveEtsyAccount && itemIds.length > 0) {
+      try {
+        const [etsyRows, cardRows] = await Promise.all([
+          prisma.etsyListing.findMany({
+            where: { itemId: { in: itemIds }, organizerId: sale.organizerId },
+            select: { itemId: true, state: true, whenMade: true, isSupply: true },
+          }),
+          prisma.itemCard.findMany({
+            where: { itemId: { in: itemIds } },
+            select: { itemId: true, releaseYear: true },
+          }),
+        ]);
+        const etsyByItemId = new Map(etsyRows.map(r => [r.itemId, r] as const));
+        const releaseYearByItemId = new Map(cardRows.map(r => [r.itemId, r.releaseYear] as const));
+        channelStatusItems = items.map(i => {
+          const etsyRow = etsyByItemId.get(i.id);
+          return {
+            ...i,
+            etsyListingState: etsyRow?.state ?? null,
+            etsyWhenMade: etsyRow?.whenMade ?? null,
+            etsyIsCraftSupply: etsyRow ? etsyRow.isSupply : null,
+            releaseYear: releaseYearByItemId.get(i.id) ?? null,
+          };
+        });
+      } catch (etsyErr) {
+        console.warn('[Add Items] Etsy channel status inputs failed to load (Etsy dot hidden for this page):', (etsyErr as Error).message);
+      }
+    }
+
     const channelStatusByItemId = channelStatusOrganizer
       ? computeChannelStatusForItems(
-          items as unknown as ChannelStatusItemInput[],
+          channelStatusItems as unknown as ChannelStatusItemInput[],
           {
             hasEbayConnection: channelStatusOrganizer.ebayConnection != null,
             shopifyEnabled: channelStatusOrganizer.shopifyEnabled,
             subscriptionTier: channelStatusOrganizer.subscriptionTier,
             hasActiveDiscogsAccount: channelStatusOrganizer.marketplaceAccounts.some(a => a.platform === 'DISCOGS'),
             hasActiveReverbAccount: channelStatusOrganizer.marketplaceAccounts.some(a => a.platform === 'REVERB'),
+            hasActiveEtsyAccount,
           },
           extensionPlatformsUsed,
           publishedExtensionPlatformsByItemId

@@ -20,7 +20,16 @@
  * than being re-implemented at every call site — matches the ADR's constraint that every
  * new eBay call added under this work must respect the existing soft-cap guard.
  */
-import { ebayFetch, getRequiredAspectsForCategory, parseMissingRequiredAspectNames, pickSafeAspectDefault, resolveCoinConditionOverride } from './ebayPublishService';
+import {
+  ebayFetch,
+  getRequiredAspectsForCategory,
+  parseMissingRequiredAspectNames,
+  pickSafeAspectDefault,
+  resolveCoinConditionOverride,
+  toConditionDescriptorPayload,
+  buildTradingConditionDescriptorsXml,
+  type EbayConditionDescriptorPayload,
+} from './ebayPublishService';
 import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
 import { ebayProxyUrl, ebayProxyHeaders } from './ebayHttp';
 import { reanalyzeItem } from './reanalyzeService';
@@ -701,15 +710,36 @@ function xmlVal(block: string, tag: string): string | null {
  */
 async function resolveLegacyConditionDescriptors(
   itemId: string | undefined
-): Promise<Array<{ name: string; values: string[] }> | null> {
+): Promise<EbayConditionDescriptorPayload[] | null> {
   if (!itemId) return null;
+  // ADR-134 #643: `card` is selected so a graded card revised through this path gets its grader, grade and
+  // certification number (or an unresolved result and NO descriptors), never the coin or ungraded fallback.
   const item = await prisma.item.findUnique({
     where: { id: itemId },
-    select: { title: true, description: true, tags: true, ebayCategoryId: true },
+    select: {
+      title: true,
+      description: true,
+      tags: true,
+      ebayCategoryId: true,
+      card: {
+        select: {
+          game: true,
+          productType: true,
+          conditionCode: true,
+          grader: true,
+          grade: true,
+          certNumber: true,
+        },
+      },
+    },
   });
   if (!item?.ebayCategoryId) return null;
   const resolution = await resolveCoinConditionOverride(item.ebayCategoryId, item);
-  return resolution.status === 'resolved' ? resolution.conditionDescriptors : null;
+  if (resolution.status === 'resolved') return toConditionDescriptorPayload(resolution);
+  if (resolution.status === 'unresolved' && item.card) {
+    console.warn(`[eBay PriceRevision] item=${itemId}: card condition unresolved, no descriptors sent (${resolution.reason})`);
+  }
+  return null;
 }
 
 async function reviseLegacyListingPrice(
@@ -747,7 +777,7 @@ async function reviseLegacyListingPrice(
   // resolveCoinConditionOverride already resolves for the Inventory-API path.
   const buildReviseXml = (
     bestOffer?: { accept: number; minimum: number },
-    conditionDescriptors?: Array<{ name: string; values: string[] }>
+    conditionDescriptors?: EbayConditionDescriptorPayload[]
   ): string => `<?xml version="1.0" encoding="utf-8"?>
 <ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <Item>
@@ -759,13 +789,7 @@ async function reviseLegacyListingPrice(
     <ListingDetails>
       <BestOfferAutoAcceptPrice currencyID="USD">${bestOffer.accept.toFixed(2)}</BestOfferAutoAcceptPrice>
       <MinimumBestOfferPrice currencyID="USD">${bestOffer.minimum.toFixed(2)}</MinimumBestOfferPrice>
-    </ListingDetails>` : ''}${conditionDescriptors && conditionDescriptors.length > 0 ? `
-    <ConditionDescriptors>${conditionDescriptors.map((d) => `
-      <ConditionDescriptor>
-        <Name>${d.name}</Name>
-        <Value>${d.values[0]}</Value>
-      </ConditionDescriptor>`).join('')}
-    </ConditionDescriptors>` : ''}
+    </ListingDetails>` : ''}${buildTradingConditionDescriptorsXml(conditionDescriptors)}
   </Item>
 </ReviseItemRequest>`;
 

@@ -122,6 +122,7 @@ const CSRF_EXEMPT_EXACT_PATHS: ReadonlySet<string> = new Set([
   '/api/notifications/sms-webhook', // inbound SMS (Twilio signature)
   '/api/ebay/account-deletion',
   '/api/ebay/notifications',
+  '/api/etsy/webhook', // Etsy webhook-signature HMAC over the raw body (verified in the handler, ADR-135 D6.2)
   // Machine-to-machine triggers with their own shared secret
   '/api/crawler-log',
   '/api/video/footage-ingest', // x-ingest-secret

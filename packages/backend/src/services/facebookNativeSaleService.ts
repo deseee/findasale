@@ -21,6 +21,8 @@
  *    'FB_EMAIL_ORDER' title fallback (2026-09-23).
  *  - jobs/discogsSoldSyncCron.ts -- soldVia='DISCOGS', skipWithdraw ['DISCOGS'] (2026-09-23).
  *  - jobs/reverbSoldSyncCron.ts -- soldVia='REVERB', skipWithdraw ['REVERB'] (2026-09-23).
+ *  - ADR-135 (2026-10-03): the default (skipWithdraw omitted) now also withdraws the item's Etsy listing;
+ *    a future Etsy-driven caller passes skipWithdraw ['ETSY'] (etsySoldService does its own SOLD path today).
  *  - services/vintedSoldDetectionService.ts processVintedSoldReport -- soldVia='VINTED'
  *    (2026-09-23, extension wardrobe sold-detection; closes the item's VINTED listing record
  *    itself before calling this, since this helper touches no MarketplaceListingJob rows).
@@ -42,6 +44,7 @@ import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from './shopifyService';
 import { withdrawDiscogsListingIfExists } from './marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
+import { withdrawEtsyListingIfExists } from './marketplace/etsyConnector';
 import { sellItemUnits } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService';
 
@@ -84,8 +87,8 @@ export interface CommitFacebookNativeSaleOptions {
   /** Server-side withdrawals to skip because the sale happened ON that channel (its listing
    * already closed there). 2026-09-23: the Discogs order poll passes ['DISCOGS'] so it never
    * tries to DELETE the Discogs listing that just sold; the Reverb order poll passes ['REVERB'] for the
-   * same reason. Omitted = withdraw from all four. */
-  skipWithdraw?: Array<'EBAY' | 'SHOPIFY' | 'DISCOGS' | 'REVERB'>;
+   * same reason. ADR-135: 'ETSY' skips the Etsy withdraw. Omitted = withdraw from all five. */
+  skipWithdraw?: Array<'EBAY' | 'SHOPIFY' | 'DISCOGS' | 'REVERB' | 'ETSY'>;
   /** The per-listing marketplace the sale happened on (2026-09-30, S-MULTI-QTY-SOLD-ELSEWHERE).
    * When set AND the item holds more than one unit (stockTotal > 1), the sale is a UNIT sale: one
    * unit comes off stock, only THIS platform's listing row is closed, and the item stays AVAILABLE
@@ -119,6 +122,11 @@ function fanOutWithdrawals(itemId: string, soldVia: string, skip: Set<string>): 
   if (!skip.has('REVERB')) {
     withdrawReverbListingIfExists(itemId).catch((err: any) =>
       console.warn(`[Reverb] withdraw-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
+    );
+  }
+  if (!skip.has('ETSY')) {
+    withdrawEtsyListingIfExists(itemId).catch((err: any) =>
+      console.warn(`[Etsy] withdraw-on-SOLD (${soldVia}) failed for item ${itemId}:`, err.message)
     );
   }
 }

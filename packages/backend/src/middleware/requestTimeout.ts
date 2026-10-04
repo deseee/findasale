@@ -23,7 +23,11 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
       // Vision/Haiku + eBay category resolve + catalog enrichment) routinely exceeds
       // 30s. Excluded here; given its own longer timeout at the route registration
       // in index.ts (mirrors the batch-analyze pattern above).
-      /^\/api\/items\/[^/]+\/reanalyze$/.test(req.path)
+      /^\/api\/items\/[^/]+\/reanalyze$/.test(req.path) ||
+      // ADR-134 B4: card intake preview (parse + catalog resolve) and confirm (one item per row, NDJSON
+      // progress) exceed 30s on real spreadsheets. Excluded here; given requestTimeout(180000) at the route
+      // registration in index.ts, same pattern as the reanalyze line above.
+      /^\/api\/card-intake\/[^/]+\/(preview|confirm)$/.test(req.path)
     ) {
       return next();
     }

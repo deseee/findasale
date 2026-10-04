@@ -27,8 +27,9 @@
  */
 
 import { EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS } from './ebayRateEstimateService';
+import { etsyWhenMadeQualifies } from '../config/etsyWhenMade';
 
-export type EligibilityPlatform = 'FACEBOOK' | 'CRAIGSLIST' | 'GUMTREE_AU' | 'GRAILED' | 'POSHMARK' | 'MERCARI' | 'VINTED' | 'REVERB';
+export type EligibilityPlatform = 'FACEBOOK' | 'CRAIGSLIST' | 'GUMTREE_AU' | 'GRAILED' | 'POSHMARK' | 'MERCARI' | 'VINTED' | 'REVERB' | 'ETSY';
 
 export interface EligibilityCheckItem {
   category: string | null | undefined;
@@ -68,6 +69,25 @@ export interface EligibilityCheckItem {
   packageLengthIn?: number | null;
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
+
+  /**
+   * ETSY (ATTRIBUTE_AGE_ALLOWLIST, ADR-135 D4.2, batch E-B2). All optional; no other platform reads
+   * any of these four fields, so omitting them changes nothing for existing platforms.
+   *
+   * etsyWhenMade: organizer-attested Etsy era value (a `when_made` enum string, see
+   *   config/etsyWhenMade.ts). Unknown values are treated as missing data.
+   * etsyIsCraftSupply: organizer ticked "This is a craft or party supply". Passes the rule when no
+   *   releaseYear is present. It can NEVER rescue an item whose releaseYear is too recent.
+   * releaseYear: four-digit release year from the card record (Item.card.releaseYear, ADR-134).
+   *   When a number, it decides alone.
+   * asOfYear: test injection for the year the age is measured against. Defaults to
+   *   new Date().getFullYear(), the ONLY clock read in this file (done inside the ETSY handler at
+   *   call time, never at import), so the registry stays deterministic under test.
+   */
+  etsyWhenMade?: string | null;
+  etsyIsCraftSupply?: boolean | null;
+  releaseYear?: number | null;
+  asOfYear?: number;
 }
 
 export interface EligibilityResult {
@@ -100,12 +120,15 @@ interface CategoryAllowlistRule {
   reason: string;
 }
 
-// Reserved for future work (not used by any rule in this batch -- Etsy/Discogs connectors,
-// per the 2026-08-18 Architect memo). Declared here so the registry's TYPE surface matches the
-// full 4-shape design even though only 2 shapes have real rules today.
+// ATTRIBUTE_AGE_ALLOWLIST (ADR-135 D4.2, batch E-B2): the first real rule of this shape, used by
+// ETSY. Allowlist posture like CATEGORY_ALLOWLIST: an item is eligible only when its age can be
+// confirmed to be at least minAgeYears. Only the ETSY rule below uses it; PREREQUISITE_LOOKUP is
+// still a reserved stub (Discogs connector, per the 2026-08-18 Architect memo).
 interface AttributeAgeAllowlistRule {
   type: 'ATTRIBUTE_AGE_ALLOWLIST';
   platform: EligibilityPlatform;
+  /** Minimum age in years; the cutoff year is computed as asOfYear - minAgeYears, never hard-coded. */
+  minAgeYears: number;
   reason: string;
 }
 interface PrerequisiteLookupRule {
@@ -1092,6 +1115,22 @@ const RULES: EligibilityRule[] = [
     maxLongestSideIn: 34, // 34"x20" box ceiling, same two official pages.
     reason: 'Over Mercari\'s 50lb / 34"x20" shipping ceiling -- beyond this Mercari requires shipping outside its own label flow, which this extension can\'t drive.',
   },
+
+  // ---- ETSY (ADR-135 D4, batch E-B2) -- Etsy's Creativity Standards only allow items made or
+  // designed by the seller, handpicked vintage (20+ years old), and craft or party supplies
+  // (https://www.etsy.com/legal/creativity); the API Terms, Section 5 (Prohibited Behavior), bind the
+  // APPLICATION not to support listings that violate them (https://www.etsy.com/legal/api).
+  // v1 only lists vintage and craft supplies (who_made is always someone_else), so the rule is an
+  // age allowlist: eligible only if the age can be confirmed, hidden otherwise, no organizer
+  // override. Cutoff = asOfYear - minAgeYears (2006 in 2026), computed each call.
+  // Decision order inside the handler (see checkEligibility): releaseYear decides alone when
+  // present; else craft supply passes; else the attested era must be old enough; else no data fails.
+  {
+    type: 'ATTRIBUTE_AGE_ALLOWLIST',
+    platform: 'ETSY',
+    minAgeYears: 20,
+    reason: 'Etsy only accepts items that are 20 or more years old, items you made or designed, or craft and party supplies.',
+  },
 ];
 
 function normText(text: string | null | undefined): string {
@@ -1208,8 +1247,26 @@ export function checkEligibility(platform: EligibilityPlatform, item: Eligibilit
       // permissive missing-data posture as CATEGORY_BLOCKLIST above.
     }
 
-    // ATTRIBUTE_AGE_ALLOWLIST / PREREQUISITE_LOOKUP: reserved, no rules of these shapes exist yet
-    // -- no-op, neither blocks nor requires anything.
+    if (rule.type === 'ATTRIBUTE_AGE_ALLOWLIST') {
+      // ADR-135 D4.2. The only clock read in this file; item.asOfYear overrides it for tests.
+      const asOfYear = item.asOfYear ?? new Date().getFullYear();
+      const cutoffYear = asOfYear - rule.minAgeYears;
+      // (1) A card record's own release year decides alone. A craft-supply tick cannot override it.
+      if (typeof item.releaseYear === 'number' && isFinite(item.releaseYear)) {
+        if (item.releaseYear <= cutoffYear) continue;
+        return { eligible: false, reason: rule.reason };
+      }
+      // (2) Organizer says it is a craft or party supply.
+      if (item.etsyIsCraftSupply === true) continue;
+      // (3) Attested era must be a known Etsy era whose whole range is old enough.
+      if (etsyWhenMadeQualifies(item.etsyWhenMade, asOfYear, rule.minAgeYears)) continue;
+      // (4) No usable data (or too recent): ineligible. Allowlist posture, same asymmetry as
+      // CATEGORY_ALLOWLIST: if the age cannot be confirmed, the item is hidden.
+      return { eligible: false, reason: rule.reason };
+    }
+
+    // PREREQUISITE_LOOKUP: reserved, no rules of this shape exist yet -- no-op, neither blocks nor
+    // requires anything.
   }
 
   return { eligible: true, reason: null };

@@ -43,6 +43,9 @@ import { EbayFeeCheckBadge } from '../../../components/EbayFeeCheckBadge';
 import { EbayMonthlyQuotaCounter } from '../../../components/EbayMonthlyQuotaCounter';
 import { Mic } from 'lucide-react';
 import ItemFormSection from '../../../components/itemForm/ItemFormSection';
+import CardRecordPanel from '../../../components/CardRecordPanel'; // ADR-134 card details
+import EtsyListingStatus from '../../../components/etsy/EtsyListingStatus'; // ADR-135 Etsy listing section
+import { useEtsyConnection } from '../../../lib/useEtsyConnection';
 import {
   getApparelDetailsDisclosure,
   getProductIdsDisclosure,
@@ -94,6 +97,7 @@ const EditItemPage = () => {
   const { isConnected: discogsConnected } = useDiscogsConnection();
   const { isConnected: reverbConnected } = useReverbConnection();
   const { tier } = useOrganizerTier();
+  const { connection: etsyConnection } = useEtsyConnection();
 
   const [formData, setFormData] = useState({
     title: '',
@@ -1468,8 +1472,10 @@ const EditItemPage = () => {
     hasAnyValue(formData.tagColor, formData.roomTag) || formData.isLegendary || !formData.qrEmbedEnabled;
   const legendarySuggested = parseFloat(formData.price) >= 75 && !formData.isLegendary;
 
-  // Nothing renders inside Where this is listed for a SIMPLE organizer with no Discogs/Reverb connection.
-  const whereListedEmpty = tier === 'SIMPLE' && !discogsConnected && !reverbConnected;
+  // Nothing renders inside Where this is listed for a SIMPLE organizer with no Discogs/Reverb connection
+  // and no usable Etsy connection (same availability test the Etsy section itself uses).
+  const etsyAvailable = Boolean(etsyConnection && etsyConnection.enabled && etsyConnection.hasAccount && etsyConnection.allowed);
+  const whereListedEmpty = tier === 'SIMPLE' && !discogsConnected && !reverbConnected && !etsyAvailable;
 
   // Where "Back" goes. The old save redirect target (the sale's items) is the default; a
   // ?returnTo= value is honored only when it is an organizer page.
@@ -1819,6 +1825,16 @@ const EditItemPage = () => {
                 placeholder="Select a location (optional)"
               />
             </ItemFormSection>
+
+            {/* ADR-134: trading card record. Shown for every item; the panel itself stays collapsed until the
+                organizer opens it (it loads the stored card, if any, only to fill its own form). */}
+            <CardRecordPanel
+              itemId={String(id)}
+              currentPrice={formData.price}
+              onApplyPrice={(price) => setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))}
+              onApplyTitle={(title) => setFormData((prev) => ({ ...prev, title }))}
+              disabled={updateMutation.isPending}
+            />
 
             <ItemFormSection id="section-condition" title="Condition & details" defaultOpen>
               <div>
@@ -3271,9 +3287,27 @@ const EditItemPage = () => {
                 </div>
               )}
 
+              {/* ADR-135: Etsy listing status and draft review. Renders its own state (not connected, not eligible,
+                  draft, live) and does nothing when the Etsy connector is off. */}
+              <EtsyListingStatus
+                item={{
+                  id: String(id),
+                  title: item.title,
+                  description: item.description,
+                  price: item.price,
+                  tags: item.tags,
+                  condition: item.condition,
+                  conditionGrade: item.conditionGrade,
+                  photoUrls: item.photoUrls,
+                  stockTotal: item.stockTotal,
+                  stockSold: item.stockSold,
+                  releaseYear: item.card?.releaseYear ?? null,
+                }}
+              />
+
               {whereListedEmpty && (
                 <p className="text-sm text-warm-600 dark:text-warm-300">
-                  This item is not set up to list on eBay, Discogs or Reverb. Connect a marketplace in{' '}
+                  This item is not set up to list on eBay, Discogs, Reverb or Etsy. Connect a marketplace in{' '}
                   <Link href="/organizer/settings" className="text-amber-700 dark:text-amber-400 underline">
                     Settings
                   </Link>

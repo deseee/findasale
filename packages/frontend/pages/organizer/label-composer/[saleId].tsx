@@ -5,6 +5,10 @@
  *   1. Preset chips: tap a cheat-sheet price, set qty, add to batch
  *   2. Pull from catalog: search priced items, select, add to batch
  *
+ * Label styles: Standard (price tags) and Card (set, number, condition or grade, price). Card style
+ * is offered only when the sale has at least one item with a card record. Card text and prices are
+ * read by the server from the item records; this page only sends item ids and label counts.
+ *
  * Output: PDF labels with real QR codes, formatted for Avery 5160 (3×10 = 30/page)
  */
 
@@ -27,13 +31,32 @@ interface Sale {
   endDate: string;
 }
 
+// Server-built lines for a card label (services/cardLabelText.ts). Display only.
+interface CardLabelText {
+  price: string;
+  priceMissing: boolean;
+  name: string;
+  setLine: string;
+  conditionLine: string;
+}
+
+type LabelStyle = 'standard' | 'card';
+
 interface BatchItem {
   id: string;
   price: number;
   qty: number;
   source:
     | { kind: 'preset' }
-    | { kind: 'item'; itemId: string; itemCode: string; itemName: string; room?: string | null };
+    | {
+        kind: 'item';
+        itemId: string;
+        itemCode: string;
+        itemName: string;
+        room?: string | null;
+        priceMissing?: boolean;
+        labelText?: CardLabelText | null;
+      };
 }
 
 interface BatchState {
@@ -48,10 +71,19 @@ interface CatalogItem {
   id: string;
   code: string;
   name: string;
-  price: number;
+  price: number | null;
+  priceMissing?: boolean;
   category: string | null;
   room: string | null;
   needsTag: boolean;
+  labelText?: CardLabelText | null;
+  defaultQty?: number;
+}
+
+interface CatalogResponse {
+  items: CatalogItem[];
+  nextCursor: string | null;
+  saleHasCards?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +118,17 @@ function formatPrice(p: number): string {
   return `$${p.toFixed(2)}`;
 }
 
+// Price text for a batch row. An item with no price prints PRICE? on the label, so the page shows the same.
+function rowPriceText(item: BatchItem): string {
+  if (item.source.kind === 'item' && item.source.priceMissing) return 'PRICE?';
+  return formatPrice(item.price);
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  const message = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+  return typeof message === 'string' && message.length > 0 ? message : fallback;
+}
+
 function generateId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 14);
 }
@@ -99,7 +142,7 @@ type Action =
   | { type: 'ADD_QTY'; delta: number }
   | { type: 'ADD_TO_BATCH' }
   | { type: 'FILL_REST' }
-  | { type: 'ADD_ITEMS'; items: Array<{ itemId: string; code: string; name: string; price: number; qty: number; room?: string | null }> }
+  | { type: 'ADD_ITEMS'; items: Array<{ itemId: string; code: string; name: string; price: number; qty: number; room?: string | null; priceMissing?: boolean; labelText?: CardLabelText | null }> }
   | { type: 'REMOVE_ROW'; id: string }
   | { type: 'UPDATE_ROW_QTY'; id: string; delta: number }
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
@@ -199,7 +242,15 @@ function batchReducer(state: BatchState, action: Action): BatchState {
             id: generateId(),
             price: item.price,
             qty: item.qty,
-            source: { kind: 'item', itemId: item.itemId, itemCode: item.code, itemName: item.name, room: item.room ?? null },
+            source: {
+              kind: 'item',
+              itemId: item.itemId,
+              itemCode: item.code,
+              itemName: item.name,
+              room: item.room ?? null,
+              priceMissing: item.priceMissing ?? false,
+              labelText: item.labelText ?? null,
+            },
           });
         }
       }
@@ -307,6 +358,10 @@ export default function LabelComposerPage() {
   const [startPosExpanded, setStartPosExpanded] = useState(false);
   // Custom fill-in price for items that don't match any preset chip.
   const [customPrice, setCustomPrice] = useState('');
+  // Label style. Card is only honored when the sale has card records (see effectiveStyle below).
+  const [labelStyle, setLabelStyle] = useState<LabelStyle>('standard');
+  // Last failed print or export, shown inline so the selection and the message stay on screen.
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Refresh saved batches list from localStorage
   const refreshSavedBatches = useCallback(() => {
@@ -351,31 +406,55 @@ export default function LabelComposerPage() {
 
   const prices = cheatsheetData?.prices || [];
 
-  // Catalog search
-  const { data: catalogData } = useQuery<{ items: CatalogItem[]; nextCursor: string | null }>({
-    queryKey: ['items-for-labels', saleId, searchQuery],
+  // Does this sale have any item with a card record? Decides whether the Card style is offered.
+  const {
+    data: cardProbe,
+    isLoading: cardProbeLoading,
+  } = useQuery<CatalogResponse>({
+    queryKey: ['label-card-probe', saleId],
+    queryFn: async () => {
+      const res = await api.get(`/organizers/${saleId}/items-for-labels`, { params: { limit: 1 } });
+      return res.data;
+    },
+    enabled: !!saleId && typeof saleId === 'string',
+    staleTime: 60 * 1000,
+  });
+  const saleHasCards = cardProbe?.saleHasCards === true;
+  const effectiveStyle: LabelStyle = saleHasCards ? labelStyle : 'standard';
+  const cardMode = effectiveStyle === 'card';
+
+  // Catalog search. Card style lists the sale's card items right away; standard style waits for a search.
+  const {
+    data: catalogData,
+    isLoading: catalogLoading,
+    isError: catalogError,
+    error: catalogErr,
+    refetch: refetchCatalog,
+  } = useQuery<CatalogResponse>({
+    queryKey: ['items-for-labels', saleId, effectiveStyle, searchQuery],
     queryFn: async () => {
       const res = await api.get(`/organizers/${saleId}/items-for-labels`, {
-        params: { q: searchQuery, limit: 20 },
+        params: cardMode ? { q: searchQuery, limit: 50, style: 'card' } : { q: searchQuery, limit: 20 },
       });
       return res.data;
     },
-    enabled: !!saleId && typeof saleId === 'string' && searchQuery.length > 0,
+    enabled: !!saleId && typeof saleId === 'string' && (searchQuery.length > 0 || cardMode),
   });
 
   // Batch creation mutation
   const createBatchMutation = useMutation({
     mutationFn: async () => {
+      // Item rows send the item id and a count only: the server reads price, name, room and card
+      // details from the database. Preset rows have no database row, so they carry their price.
       const res = await api.post(`/organizers/${saleId}/label-batch`, {
-        items: state.items.map(i => ({
-          price: i.price,
-          qty: i.qty,
-          source: i.source.kind === 'item'
-            ? { kind: 'item', itemId: (i.source as any).itemId }
-            : { kind: 'preset' },
-        })),
+        items: state.items.map(i =>
+          i.source.kind === 'item'
+            ? { qty: i.qty, source: { kind: 'item', itemId: i.source.itemId } }
+            : { price: i.price, qty: i.qty, source: { kind: 'preset' } }
+        ),
         leftoverFill: state.leftoverFill,
         startPosition,
+        labelStyle: effectiveStyle,
       });
       return res.data;
     },
@@ -429,15 +508,16 @@ export default function LabelComposerPage() {
   const totalPages = Math.max(1, Math.ceil((totalLabels + (startPosition - 1)) / LABELS_PER_PAGE));
   const currentPageLabels = useMemo(() => {
     // Flatten batch into individual label entries in insertion order
-    const flat: Array<{ price: number; source: BatchItem['source']; room: string | null; name: string | null } | null> = [];
+    const flat: Array<{ price: number; priceMissing: boolean; source: BatchItem['source']; room: string | null; name: string | null } | null> = [];
     // Leading skip-slots so the preview starts on the chosen start position (mirrors the PDF).
     const skip = Math.max(1, Math.min(startPosition, LABELS_PER_PAGE)) - 1;
     for (let i = 0; i < skip; i++) flat.push(null);
     for (const item of state.items) {
       const room = item.source.kind === 'item' ? (item.source.room ?? null) : null;
       const name = item.source.kind === 'item' ? (item.source.itemName ?? null) : null;
+      const priceMissing = item.source.kind === 'item' && item.source.priceMissing === true;
       for (let i = 0; i < item.qty; i++) {
-        flat.push({ price: item.price, source: item.source, room, name });
+        flat.push({ price: item.price, priceMissing, source: item.source, room, name });
       }
     }
     const start = state.currentPage * LABELS_PER_PAGE;
@@ -470,6 +550,7 @@ export default function LabelComposerPage() {
       showToast('Add labels to the batch first', 'error');
       return;
     }
+    setActionError(null);
     try {
       const result = await createBatchMutation.mutateAsync();
       const response = await api.get(`/organizers/batches/${result.batchId}/print`, {
@@ -479,7 +560,10 @@ export default function LabelComposerPage() {
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
     } catch (err) {
-      showToast('Failed to generate labels', 'error');
+      // The selection stays as it is; the server's message (for example an item no longer in this sale) is shown.
+      const message = getErrorMessage(err, 'Failed to generate labels');
+      setActionError(message);
+      showToast(message, 'error');
     }
   };
 
@@ -488,6 +572,7 @@ export default function LabelComposerPage() {
       showToast('Add labels to the batch first', 'error');
       return;
     }
+    setActionError(null);
     try {
       const result = await createBatchMutation.mutateAsync();
       const response = await api.get(`/organizers/batches/${result.batchId}/print`, {
@@ -504,7 +589,9 @@ export default function LabelComposerPage() {
       URL.revokeObjectURL(url);
       showToast('PDF downloaded', 'success');
     } catch (err) {
-      showToast('Failed to export PDF', 'error');
+      const message = getErrorMessage(err, 'Failed to export PDF');
+      setActionError(message);
+      showToast(message, 'error');
     }
   };
 
@@ -555,6 +642,9 @@ export default function LabelComposerPage() {
     }
   };
 
+  // Card style starts each row at the remaining stock (server-computed); standard style starts at 1.
+  const defaultQtyFor = (item: CatalogItem): number => (cardMode ? Math.max(1, item.defaultQty ?? 1) : 1);
+
   const handleAddSelectedCatalogItems = () => {
     if (!catalogData) return;
     const toAdd = catalogData.items
@@ -563,9 +653,11 @@ export default function LabelComposerPage() {
         itemId: i.id,
         code: i.code,
         name: i.name,
-        price: i.price,
+        price: i.price ?? 0,
+        priceMissing: i.priceMissing === true || i.price == null,
+        labelText: i.labelText ?? null,
         room: i.room ?? null,
-        qty: catalogQtys[i.id] || 1,
+        qty: catalogQtys[i.id] || defaultQtyFor(i),
       }));
     if (toAdd.length === 0) return;
     dispatch({ type: 'ADD_ITEMS', items: toAdd });
@@ -601,8 +693,8 @@ export default function LabelComposerPage() {
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
               <Link href={`/organizer/print-kit/${saleId}`}>
                 <span className="text-warm-500 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-200 cursor-pointer">
                   ← Back to Print Kit
@@ -619,7 +711,7 @@ export default function LabelComposerPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-warm-400 dark:text-gray-500 font-mono">
+              <span className="hidden sm:inline text-xs text-warm-400 dark:text-gray-500 font-mono">
                 Ctrl+P print · Ctrl+S save
               </span>
             </div>
@@ -629,7 +721,52 @@ export default function LabelComposerPage() {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-6">
             {/* ==================== LEFT: Tag Mixer ==================== */}
-            <div className="space-y-5">
+            <div className="space-y-5 min-w-0">
+              {/* Label style: Card is offered only when the sale has at least one item with a card record */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
+                <h2 className="text-sm font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+                  Label style
+                </h2>
+                {cardProbeLoading ? (
+                  <div className="flex gap-2" aria-busy="true" aria-label="Loading label styles">
+                    <div className="h-11 w-28 rounded-lg bg-warm-100 dark:bg-gray-700 animate-pulse" />
+                    <div className="h-11 w-24 rounded-lg bg-warm-100 dark:bg-gray-700 animate-pulse" />
+                  </div>
+                ) : (
+                  <div role="radiogroup" aria-label="Label style" className="flex flex-wrap gap-2">
+                    {([
+                      { value: 'standard', label: 'Standard' },
+                      ...(saleHasCards ? [{ value: 'card', label: 'Card' }] : []),
+                    ] as Array<{ value: LabelStyle; label: string }>).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={effectiveStyle === opt.value}
+                        onClick={() => setLabelStyle(opt.value)}
+                        className={`min-h-[44px] px-5 rounded-lg border text-sm font-semibold transition-colors ${
+                          effectiveStyle === opt.value
+                            ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
+                            : 'bg-white dark:bg-gray-700 text-warm-800 dark:text-gray-200 border-warm-300 dark:border-gray-600 hover:border-warm-400 dark:hover:border-gray-500'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!cardProbeLoading && !saleHasCards && (
+                  <p className="text-xs text-warm-400 dark:text-gray-500 mt-2">
+                    Add card details to items to use card labels
+                  </p>
+                )}
+                {cardMode && (
+                  <p className="text-xs text-warm-500 dark:text-gray-400 mt-2">
+                    Card labels print the set, number, condition or grade, and the price saved on each item. Items without card details print as standard labels.
+                  </p>
+                )}
+              </div>
+
               {/* Price Presets */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
                 <h2 className="text-sm font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-3">
@@ -640,7 +777,7 @@ export default function LabelComposerPage() {
                     <button
                       key={p}
                       onClick={() => dispatch({ type: 'SELECT_PRICE', price: p })}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-semibold border transition-colors ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 min-h-[44px] sm:min-h-0 rounded-full text-sm font-semibold border transition-colors ${
                         state.selectedPrice === p
                           ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
                           : 'bg-white dark:bg-gray-700 text-warm-800 dark:text-gray-200 border-warm-300 dark:border-gray-600 hover:border-warm-400 dark:hover:border-gray-500'
@@ -654,7 +791,7 @@ export default function LabelComposerPage() {
                       Dispatches the exact same SELECT_PRICE action the presets use, so it flows
                       through Add to batch / Fill rest / PDF generation with no other changes. */}
                   <div
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold border transition-colors bg-white dark:bg-gray-700 text-warm-800 dark:text-gray-200 ${
+                    className={`inline-flex items-center gap-1 px-2 py-1 min-h-[44px] sm:min-h-0 rounded-full text-sm font-semibold border transition-colors bg-white dark:bg-gray-700 text-warm-800 dark:text-gray-200 ${
                       state.selectedPrice !== null && !prices.includes(state.selectedPrice)
                         ? 'border-gray-900 dark:border-white'
                         : 'border-warm-300 dark:border-gray-600 border-dashed hover:border-warm-400 dark:hover:border-gray-500'
@@ -685,7 +822,7 @@ export default function LabelComposerPage() {
                           dispatch({ type: 'SELECT_PRICE', price: parsed });
                         }
                       }}
-                      className="text-xs font-semibold text-warm-500 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-200 px-0.5"
+                      className="text-xs font-semibold text-warm-500 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-200 px-2 min-h-[44px] sm:min-h-0"
                     >
                       Use
                     </button>
@@ -706,14 +843,14 @@ export default function LabelComposerPage() {
                     <button
                       key={n}
                       onClick={() => dispatch({ type: 'ADD_QTY', delta: n })}
-                      className="px-3 py-2 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-800 dark:text-gray-200 font-semibold text-sm hover:bg-warm-50 dark:hover:bg-gray-600 transition-colors"
+                      className="px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-800 dark:text-gray-200 font-semibold text-sm hover:bg-warm-50 dark:hover:bg-gray-600 transition-colors"
                     >
                       +{n}
                     </button>
                   ))}
                   <button
                     onClick={() => dispatch({ type: 'SET_QTY', qty: 0 })}
-                    className="px-3 py-2 rounded-lg border border-warm-200 dark:border-gray-700 text-warm-400 dark:text-gray-500 text-sm hover:text-warm-600 dark:hover:text-gray-300 transition-colors"
+                    className="px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg border border-warm-200 dark:border-gray-700 text-warm-400 dark:text-gray-500 text-sm hover:text-warm-600 dark:hover:text-gray-300 transition-colors"
                   >
                     clear
                   </button>
@@ -723,14 +860,14 @@ export default function LabelComposerPage() {
                   <button
                     onClick={() => dispatch({ type: 'ADD_TO_BATCH' })}
                     disabled={state.selectedPrice === null || state.qty <= 0}
-                    className="flex-1 py-2.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                    className="flex-1 py-2.5 min-h-[44px] rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
                   >
                     Add to batch →
                   </button>
                   <button
                     onClick={() => dispatch({ type: 'FILL_REST' })}
                     disabled={state.selectedPrice === null}
-                    className="px-4 py-2.5 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 text-sm font-semibold hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2.5 min-h-[44px] rounded-lg border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 text-sm font-semibold hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Fill rest w/ selected
                   </button>
@@ -759,13 +896,13 @@ export default function LabelComposerPage() {
                         onDragStart={() => handleDragStart(idx)}
                         onDragOver={e => handleDragOver(e, idx)}
                         onDragEnd={handleDragEnd}
-                        className={`flex items-center gap-3 py-2 px-1 cursor-grab active:cursor-grabbing ${
+                        className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-2 px-1 cursor-grab active:cursor-grabbing ${
                           dragIdx === idx ? 'opacity-50' : ''
                         }`}
                       >
                         <span className={`w-3.5 h-3.5 rounded-sm border border-warm-300 dark:border-gray-600 flex-shrink-0 ${getPriceBandColor(item.price)}`} />
                         <span className="font-semibold text-warm-900 dark:text-white min-w-[60px]">
-                          {formatPrice(item.price)}
+                          {rowPriceText(item)}
                         </span>
                         {item.source.kind === 'item' && (
                           <span className="text-xs text-warm-400 dark:text-gray-500 font-mono truncate max-w-[120px]">
@@ -778,19 +915,20 @@ export default function LabelComposerPage() {
                         <div className="ml-auto flex gap-1">
                           <button
                             onClick={() => dispatch({ type: 'UPDATE_ROW_QTY', id: item.id, delta: -1 })}
-                            className="w-6 h-6 rounded border border-warm-300 dark:border-gray-600 text-warm-600 dark:text-gray-400 text-xs flex items-center justify-center hover:bg-warm-50 dark:hover:bg-gray-700"
+                            className="w-11 h-11 sm:w-6 sm:h-6 rounded border border-warm-300 dark:border-gray-600 text-warm-600 dark:text-gray-400 text-xs flex items-center justify-center hover:bg-warm-50 dark:hover:bg-gray-700"
                           >
                             −
                           </button>
                           <button
                             onClick={() => dispatch({ type: 'UPDATE_ROW_QTY', id: item.id, delta: 1 })}
-                            className="w-6 h-6 rounded border border-warm-300 dark:border-gray-600 text-warm-600 dark:text-gray-400 text-xs flex items-center justify-center hover:bg-warm-50 dark:hover:bg-gray-700"
+                            className="w-11 h-11 sm:w-6 sm:h-6 rounded border border-warm-300 dark:border-gray-600 text-warm-600 dark:text-gray-400 text-xs flex items-center justify-center hover:bg-warm-50 dark:hover:bg-gray-700"
                           >
                             +
                           </button>
                           <button
                             onClick={() => dispatch({ type: 'REMOVE_ROW', id: item.id })}
-                            className="w-6 h-6 rounded border border-red-300 dark:border-red-800 text-red-500 dark:text-red-400 text-xs flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30"
+                            aria-label="Remove row"
+                            className="w-11 h-11 sm:w-6 sm:h-6 rounded border border-red-300 dark:border-red-800 text-red-500 dark:text-red-400 text-xs flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30"
                           >
                             ×
                           </button>
@@ -811,82 +949,178 @@ export default function LabelComposerPage() {
                 </div>
               </div>
 
-              {/* Pull from Priced Items */}
+              {/* Pull from Priced Items (card style: Pull from card items) */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
                 <h2 className="text-sm font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-1">
-                  Pull from priced items
+                  {cardMode ? 'Pull from card items' : 'Pull from priced items'}
                 </h2>
                 <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
-                  Search your catalog. Items already priced get their tag added at the listed price.
+                  {cardMode
+                    ? 'Items with card details. The label count starts at the copies still in stock. Prices come from your item records.'
+                    : 'Search your catalog. Items already priced get their tag added at the listed price.'}
                 </p>
 
-                <div className="flex items-center gap-2 bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2 bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-2 min-h-[44px]">
                   <span className="text-warm-400 dark:text-gray-500 text-sm">⌕</span>
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search items..."
-                    className="flex-1 bg-transparent border-none outline-none text-sm text-warm-900 dark:text-white placeholder-warm-400 dark:placeholder-gray-500"
-                   aria-label="Search items..." />
+                    placeholder={cardMode ? 'Search card items...' : 'Search items...'}
+                    className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-warm-900 dark:text-white placeholder-warm-400 dark:placeholder-gray-500"
+                   aria-label={cardMode ? 'Search card items' : 'Search items'} />
                   {catalogData && (
-                    <span className="text-xs font-mono text-warm-400 dark:text-gray-500">
+                    <span className="text-xs font-mono text-warm-400 dark:text-gray-500 flex-shrink-0">
                       {catalogData.items.length} match{catalogData.items.length !== 1 ? 'es' : ''}
                     </span>
                   )}
                 </div>
 
-                {catalogData && catalogData.items.length > 0 && (
+                {/* Loading: skeleton rows */}
+                {catalogLoading && (
+                  <div className="mt-2 space-y-2" aria-busy="true" aria-label="Loading items">
+                    {[0, 1, 2].map(n => (
+                      <div key={n} className="h-14 rounded-lg bg-warm-100 dark:bg-gray-700 animate-pulse" />
+                    ))}
+                  </div>
+                )}
+
+                {/* Error: message and retry; the batch and selection are untouched */}
+                {catalogError && !catalogLoading && (
+                  <div role="alert" className="mt-2 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-700 dark:text-red-300">
+                    <p>{getErrorMessage(catalogErr, 'Could not load items.')}</p>
+                    <button
+                      type="button"
+                      onClick={() => { void refetchCatalog(); }}
+                      className="mt-2 min-h-[44px] px-4 rounded-lg border border-red-300 dark:border-red-700 font-semibold hover:bg-red-100 dark:hover:bg-red-900/40"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+
+                {/* Empty */}
+                {catalogData && !catalogLoading && !catalogError && catalogData.items.length === 0 && (
+                  <p className="mt-2 text-sm text-warm-500 dark:text-gray-400 py-3 text-center">
+                    {searchQuery.length > 0
+                      ? (cardMode ? 'No card items match that search.' : 'No priced items match that search.')
+                      : 'No card items in this sale yet. Add card details to items to use card labels.'}
+                  </p>
+                )}
+
+                {catalogData && !catalogLoading && !catalogError && catalogData.items.length > 0 && (
                   <>
-                    <div className="mt-2 border border-dashed border-warm-300 dark:border-gray-600 rounded-lg max-h-48 overflow-y-auto divide-y divide-warm-100 dark:divide-gray-700">
-                      {catalogData.items.map(item => (
-                        <label
-                          key={item.id}
-                          className="flex items-center gap-2 px-3 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 cursor-pointer text-sm"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedCatalogItems.has(item.id)}
-                            onChange={e => {
-                              const next = new Set(selectedCatalogItems);
-                              if (e.target.checked) next.add(item.id);
-                              else next.delete(item.id);
-                              setSelectedCatalogItems(next);
-                            }}
-                            className="rounded border-warm-300 dark:border-gray-600"
-                          />
-                          <span className="font-mono text-xs text-warm-400 dark:text-gray-500 w-14 flex-shrink-0">
-                            #{item.code}
-                          </span>
-                          <span className="text-warm-800 dark:text-gray-200 truncate flex-1">
-                            {item.name}
-                          </span>
-                          <span className={`w-3 h-3 rounded-sm ${getPriceBandColor(item.price)}`} />
-                          <span className="font-semibold text-warm-700 dark:text-gray-300 w-16 text-right">
-                            {formatPrice(item.price)}
-                          </span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={99}
-                            value={catalogQtyText[item.id] ?? String(catalogQtys[item.id] || 1)}
-                            onChange={e => setCatalogQtyText(prev => ({ ...prev, [item.id]: e.target.value }))}
-                            onBlur={() => {
-                              const raw = catalogQtyText[item.id] ?? String(catalogQtys[item.id] || 1);
-                              const parsed = Math.max(1, parseInt(raw, 10) || 1);
-                              setCatalogQtyText(prev => ({ ...prev, [item.id]: String(parsed) }));
-                              setCatalogQtys(prev => ({ ...prev, [item.id]: parsed }));
-                            }}
-                            className="w-12 px-1 py-0.5 rounded border border-warm-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-center text-xs font-mono text-warm-700 dark:text-gray-300"
-                          />
-                        </label>
-                      ))}
+                    <div className={`mt-2 border border-dashed border-warm-300 dark:border-gray-600 rounded-lg overflow-y-auto overflow-x-hidden divide-y divide-warm-100 dark:divide-gray-700 ${cardMode ? 'max-h-96' : 'max-h-48'}`}>
+                      {catalogData.items.map(item => {
+                        const qtyValue = catalogQtyText[item.id] ?? String(catalogQtys[item.id] || defaultQtyFor(item));
+                        const commitQty = () => {
+                          const parsed = Math.min(300, Math.max(1, parseInt(qtyValue, 10) || 1));
+                          setCatalogQtyText(prev => ({ ...prev, [item.id]: String(parsed) }));
+                          setCatalogQtys(prev => ({ ...prev, [item.id]: parsed }));
+                        };
+                        const toggle = (checked: boolean) => {
+                          const next = new Set(selectedCatalogItems);
+                          if (checked) next.add(item.id);
+                          else next.delete(item.id);
+                          setSelectedCatalogItems(next);
+                        };
+                        const missing = item.priceMissing === true || item.price == null;
+
+                        if (cardMode) {
+                          const lt = item.labelText;
+                          const detail = [lt?.setLine, lt?.conditionLine].filter(Boolean).join('  ·  ');
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 text-sm"
+                            >
+                              <label className="flex items-start gap-3 flex-1 min-w-0 min-h-[44px] cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedCatalogItems.has(item.id)}
+                                  onChange={e => toggle(e.target.checked)}
+                                  className="mt-2.5 h-5 w-5 flex-shrink-0 rounded border-warm-300 dark:border-gray-600"
+                                />
+                                <span className="min-w-0 py-2">
+                                  <span className="block font-semibold text-warm-900 dark:text-white truncate">
+                                    {lt?.name || item.name}
+                                  </span>
+                                  <span className="block text-xs font-mono text-warm-500 dark:text-gray-400 truncate">
+                                    {detail || `#${item.code}`}
+                                  </span>
+                                </span>
+                              </label>
+                              <div className="flex items-center justify-between sm:justify-end gap-3">
+                                {missing ? (
+                                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-400" title="This item has no price. Its label prints PRICE? until you set one.">
+                                    No price, prints PRICE?
+                                  </span>
+                                ) : (
+                                  <span className="font-semibold text-warm-700 dark:text-gray-300">
+                                    {formatPrice(item.price as number)}
+                                  </span>
+                                )}
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={1}
+                                  max={300}
+                                  value={qtyValue}
+                                  onChange={e => setCatalogQtyText(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  onBlur={commitQty}
+                                  aria-label={`Labels to print for ${lt?.name || item.name}`}
+                                  className="w-20 min-h-[44px] px-2 rounded border border-warm-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-center text-sm font-mono text-warm-700 dark:text-gray-300"
+                                />
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <label
+                            key={item.id}
+                            className="flex items-center gap-2 px-3 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 cursor-pointer text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedCatalogItems.has(item.id)}
+                              onChange={e => toggle(e.target.checked)}
+                              className="rounded border-warm-300 dark:border-gray-600"
+                            />
+                            <span className="font-mono text-xs text-warm-400 dark:text-gray-500 w-14 flex-shrink-0">
+                              #{item.code}
+                            </span>
+                            <span className="text-warm-800 dark:text-gray-200 truncate flex-1">
+                              {item.name}
+                            </span>
+                            <span className={`w-3 h-3 rounded-sm ${getPriceBandColor(item.price ?? 0)}`} />
+                            <span className="font-semibold text-warm-700 dark:text-gray-300 w-16 text-right">
+                              {formatPrice(item.price ?? 0)}
+                            </span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={300}
+                              value={qtyValue}
+                              onChange={e => setCatalogQtyText(prev => ({ ...prev, [item.id]: e.target.value }))}
+                              onBlur={commitQty}
+                              className="w-12 px-1 py-0.5 rounded border border-warm-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-center text-xs font-mono text-warm-700 dark:text-gray-300"
+                            />
+                          </label>
+                        );
+                      })}
                     </div>
+
+                    {catalogData.nextCursor && (
+                      <p className="mt-1 text-xs text-warm-400 dark:text-gray-500">
+                        Showing the first {catalogData.items.length}. Search to narrow the list.
+                      </p>
+                    )}
 
                     <button
                       onClick={handleAddSelectedCatalogItems}
                       disabled={selectedCatalogItems.size === 0}
-                      className="mt-2 w-full py-2 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                      className="mt-2 w-full py-2 min-h-[44px] rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
                     >
                       Add {selectedCatalogItems.size} selected → batch
                     </button>
@@ -896,13 +1130,13 @@ export default function LabelComposerPage() {
             </div>
 
             {/* ==================== RIGHT: Live Sheet Preview ==================== */}
-            <div className="space-y-5">
+            <div className="space-y-5 min-w-0">
               {/* Starting position: collapsed by default, ABOVE the preview */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
                 <button
                   type="button"
                   onClick={() => setStartPosExpanded((v) => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left"
+                  className="w-full flex items-center justify-between px-4 py-3 min-h-[44px] text-left"
                   aria-expanded={startPosExpanded}
                 >
                   <span className="text-sm font-medium text-warm-700 dark:text-gray-200">
@@ -917,7 +1151,7 @@ export default function LabelComposerPage() {
                     <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
                       Already peeled a few labels off this sheet? Tap the first blank slot. Labels before it are skipped so your printout lines up. (Counts left-to-right, top-to-bottom.)
                     </p>
-                    <div className="grid grid-cols-3 gap-1 w-32 mb-2">
+                    <div className="grid grid-cols-3 gap-1 w-48 sm:w-32 mb-2">
                       {Array.from({ length: LABELS_PER_PAGE }).map((_, i) => {
                         const slot = i + 1;
                         const isSkipped = slot < startPosition;
@@ -928,7 +1162,7 @@ export default function LabelComposerPage() {
                             type="button"
                             onClick={() => setStartPosition(slot)}
                             title={`Start at slot ${slot}`}
-                            className={`h-5 rounded-sm border text-[8px] flex items-center justify-center transition-colors ${
+                            className={`h-11 sm:h-5 rounded-sm border text-xs sm:text-[8px] flex items-center justify-center transition-colors ${
                               isStart
                                 ? 'bg-amber-500 border-amber-600 text-white font-bold'
                                 : isSkipped
@@ -972,10 +1206,11 @@ export default function LabelComposerPage() {
                   </span>
                 </div>
 
-                {/* Avery 5160 grid */}
+                {/* Avery 5160 grid. The preview scrolls sideways inside its own box so the page never does. */}
+                <div className="overflow-x-auto">
                 <div
                   className="bg-white border-2 border-warm-300 dark:border-gray-600 rounded-md mx-auto"
-                  style={{ aspectRatio: '8.5 / 11', maxWidth: '100%' }}
+                  style={{ aspectRatio: '8.5 / 11', maxWidth: '100%', minWidth: cardMode ? 480 : undefined }}
                 >
                   <div
                     className="grid h-full"
@@ -1004,18 +1239,31 @@ export default function LabelComposerPage() {
                       return (
                         <div
                           key={i}
-                          className={`border border-warm-200 rounded-sm flex items-center justify-center relative ${getPriceBandColor(label.price)}`}
+                          className={`border border-warm-200 rounded-sm flex items-center justify-center relative ${
+                            label.priceMissing ? 'bg-amber-100' : getPriceBandColor(label.price)
+                          }`}
                         >
                           {/* Mini QR placeholder */}
                           <div className="absolute left-[3px] top-[3px] w-[10px] h-[10px] bg-gray-800 opacity-40 rounded-[1px]" />
                           {/* Date: moved to top-right corner */}
-                          <span className="absolute top-[2px] right-[3px] text-[6px] opacity-90 font-mono">
-                            {saleDateRange}
-                          </span>
-                          {/* Price + item name */}
+                          {!(cardMode && label.source.kind === 'item' && label.source.labelText) && (
+                            <span className="absolute top-[2px] right-[3px] text-[6px] opacity-90 font-mono">
+                              {saleDateRange}
+                            </span>
+                          )}
+                          {/* Card layout: lines built by the server (price, name, set and number, condition or grade) */}
+                          {cardMode && label.source.kind === 'item' && label.source.labelText ? (
+                            <div className="flex flex-col justify-center w-full min-w-0 pl-[16px] pr-[3px] text-left leading-tight">
+                              <span className="font-bold text-[11px] leading-none">{label.source.labelText.price}</span>
+                              <span className="text-[7px] font-semibold truncate">{label.source.labelText.name}</span>
+                              <span className="text-[6px] font-mono truncate whitespace-pre">{label.source.labelText.setLine}</span>
+                              <span className="text-[6px] font-bold truncate">{label.source.labelText.conditionLine}</span>
+                            </div>
+                          ) : (
+                          /* Price + item name */
                           <div className="flex flex-col items-center justify-center w-full px-[10px]">
                             <span className="font-bold text-[11px] leading-none">
-                              {formatPrice(label.price)}
+                              {label.priceMissing ? 'PRICE?' : formatPrice(label.price)}
                             </span>
                             {label.name ? (
                               <span
@@ -1026,8 +1274,9 @@ export default function LabelComposerPage() {
                               </span>
                             ) : null}
                           </div>
+                          )}
                           {/* Room: per-item; rendered where the date used to be */}
-                          {label.room ? (
+                          {label.room && !(cardMode && label.source.kind === 'item' && label.source.labelText) ? (
                             <span className="absolute bottom-[2px] right-[3px] left-[3px] text-[6px] opacity-90 font-mono truncate text-right">
                               {label.room}
                             </span>
@@ -1037,6 +1286,7 @@ export default function LabelComposerPage() {
                     })}
                   </div>
                 </div>
+                </div>
 
                 {/* Pagination */}
                 <div className="flex items-center justify-center gap-2 mt-3">
@@ -1044,7 +1294,7 @@ export default function LabelComposerPage() {
                     <button
                       key={i}
                       onClick={() => dispatch({ type: 'SET_PAGE', page: i })}
-                      className={`w-6 h-6 rounded text-xs font-mono flex items-center justify-center border transition-colors ${
+                      className={`w-11 h-11 sm:w-6 sm:h-6 rounded text-xs font-mono flex items-center justify-center border transition-colors ${
                         state.currentPage === i
                           ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
                           : 'border-warm-300 dark:border-gray-600 text-warm-600 dark:text-gray-400 hover:bg-warm-50 dark:hover:bg-gray-700'
@@ -1080,7 +1330,7 @@ export default function LabelComposerPage() {
                         price: e.target.value ? parseFloat(e.target.value) : null,
                       })
                     }
-                    className="px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-warm-800 dark:text-gray-200"
+                    className="px-3 py-1.5 min-h-[44px] rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-warm-800 dark:text-gray-200"
                   >
                     <option value="">Leave blank</option>
                     {prices.map(p => (
@@ -1092,7 +1342,7 @@ export default function LabelComposerPage() {
                   <button
                     onClick={() => dispatch({ type: 'APPLY_LEFTOVER_FILL' })}
                     disabled={state.leftoverFill === null || blanksOnPage <= 0}
-                    className="px-4 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 text-sm font-semibold text-warm-700 dark:text-gray-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-1.5 min-h-[44px] rounded-lg border border-warm-300 dark:border-gray-600 text-sm font-semibold text-warm-700 dark:text-gray-300 hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     Apply
                   </button>
@@ -1128,28 +1378,28 @@ export default function LabelComposerPage() {
             <button
               onClick={handlePrint}
               disabled={totalLabels === 0 || createBatchMutation.isPending}
-              className="px-6 py-2.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+              className="px-6 py-2.5 min-h-[44px] rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
             >
               {createBatchMutation.isPending ? 'Generating...' : 'Print sheet'}
             </button>
             <button
               onClick={handleExportPdf}
               disabled={totalLabels === 0 || createBatchMutation.isPending}
-              className="px-4 py-2.5 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 font-semibold text-sm hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2.5 min-h-[44px] rounded-lg border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 font-semibold text-sm hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Export PDF
             </button>
             <button
               onClick={handleSaveBatch}
               disabled={totalLabels === 0}
-              className="px-4 py-2.5 rounded-lg text-warm-500 dark:text-gray-400 text-sm hover:text-warm-700 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2.5 min-h-[44px] rounded-lg text-warm-500 dark:text-gray-400 text-sm hover:text-warm-700 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Save batch
             </button>
             <button
               onClick={() => dispatch({ type: 'CLEAR' })}
               disabled={totalLabels === 0}
-              className="px-4 py-2.5 rounded-lg text-red-400 text-sm hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2.5 min-h-[44px] rounded-lg text-red-400 text-sm hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Clear all
             </button>
@@ -1157,6 +1407,13 @@ export default function LabelComposerPage() {
               Avery 5160 · {totalLabels} labels · {totalPages} sheet{totalPages !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {/* Print or export failed: server message stays on screen, the batch is untouched */}
+          {actionError && (
+            <div role="alert" className="mt-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+              {actionError}
+            </div>
+          )}
 
           {/* Saved Batches */}
           {savedBatches.length > 0 && (
@@ -1180,13 +1437,14 @@ export default function LabelComposerPage() {
                       </span>
                       <button
                         onClick={() => handleLoadBatch(b.key)}
-                        className="ml-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-semibold"
+                        className="ml-1 px-2 min-h-[44px] sm:min-h-0 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-semibold"
                       >
                         Load
                       </button>
                       <button
                         onClick={() => handleDeleteBatch(b.key, b.name)}
-                        className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                        aria-label={`Delete saved batch ${b.name}`}
+                        className="px-2 min-h-[44px] sm:min-h-0 text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300"
                       >
                         ×
                       </button>

@@ -17,8 +17,13 @@ import {
   getRequiredAspectsForCategory,
   resolveCoinConditionOverride,
   ebayPublishWithSelfHeal,
+  toConditionDescriptorPayload,
+  type EbayConditionDescriptorPayload,
   type RequiredAspect,
 } from '../services/ebayPublishService';
+// ADR-134 #643 (B5): pinned card categories and card-derived item specifics. Both are pure modules.
+import { getPinnedCardCategory, isPinnedCardCategoryId } from '../config/cardEbayCategories';
+import { buildCardAspects, mergeCardAspects } from '../services/ebayCardAspects';
 // Re-export so external importers of ensureConditionValidForCategory / RequiredAspect from
 // './ebayController' keep resolving (same pattern S1048 used for the OAuth token fns).
 export { ensureConditionValidForCategory } from '../services/ebayPublishService';
@@ -1774,6 +1779,26 @@ export const disconnectEbay = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * ADR-134 #643: the ItemCard columns the eBay layer reads (condition descriptors, pinned category,
+ * aspect auto-fill). Shared by every item select in this file that feeds a publish.
+ */
+const EBAY_CARD_SELECT = {
+  game: true,
+  productType: true,
+  cardName: true,
+  setCode: true,
+  setName: true,
+  collectorNumber: true,
+  language: true,
+  finish: true,
+  rarity: true,
+  conditionCode: true,
+  grader: true,
+  grade: true,
+  certNumber: true,
+} as const;
+
+/**
  * GET /api/organizer/items/:itemId/ebay-preview
  * Return pre-filled eBay listing data for review modal
  */
@@ -1806,6 +1831,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
         createdAt: true,
         costBasis: true,
         roomTag: true,
+        card: { select: { game: true, productType: true } },
         sale: {
           select: {
             organizerId: true,
@@ -1834,6 +1860,21 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
     // (same cascade as pushSaleToEbay). Requires an active user access token
     // for the Taxonomy API call; refresh lazily only when we need to suggest.
     let categoryId: string | null = item.ebayCategoryId || null;
+    // ADR-134 #643: a card record in a pinned game gets its pinned category here too, so previewing a card
+    // can never persist a title-suggested category that the push path would then keep over the pin.
+    if (!categoryId) {
+      const pinnedCardCategory = getPinnedCardCategory(item.card);
+      if (pinnedCardCategory) {
+        categoryId = pinnedCardCategory.id;
+        await prisma.item.update({
+          where: { id: item.id },
+          data: {
+            ebayCategoryId: pinnedCardCategory.id,
+            ...(pinnedCardCategory.name ? { ebayCategoryName: pinnedCardCategory.name } : {}),
+          },
+        });
+      }
+    }
     if (!categoryId) {
       const suggested = await suggestEbayCategoryForTitle(item.title, item.category);
       if (suggested) {
@@ -2416,6 +2457,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             stockTotal: true,
             stockSold: true,
             qrAssetReady: true,
+            card: { select: EBAY_CARD_SELECT },
           },
         },
       },
@@ -2571,6 +2613,25 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         //    cache it back to the item so future pushes skip the API call
         // 3. Static name→ID map (last resort; may land on a branch → 25021)
         let categoryId: string | null = item.ebayCategoryId || null;
+        // ADR-134 #643: a card record in a pinned game (SINGLE product) uses its pinned eBay category before
+        // any title-based suggestion, and never overrides a category the organizer or an import already set.
+        // The id is persisted (name only when known) and mirrored onto the in-memory item so the self-heal
+        // below, which reads item.ebayCategoryId, sees the same category.
+        if (!categoryId) {
+          const pinnedCardCategory = getPinnedCardCategory(item.card);
+          if (pinnedCardCategory) {
+            categoryId = pinnedCardCategory.id;
+            item.ebayCategoryId = pinnedCardCategory.id;
+            if (pinnedCardCategory.name) item.ebayCategoryName = pinnedCardCategory.name;
+            await prisma.item.update({
+              where: { id: item.id },
+              data: {
+                ebayCategoryId: pinnedCardCategory.id,
+                ...(pinnedCardCategory.name ? { ebayCategoryName: pinnedCardCategory.name } : {}),
+              },
+            });
+          }
+        }
         if (!categoryId) {
           // Domain-aware resolve (ADR 2026-06-14): pass item.category as the domain
           // hint so an aquarium pump lands under Pet Supplies, not Fishing.
@@ -2610,11 +2671,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // the original condition/no descriptors, same as before this fix existed;
         // the item will 25064 and land in ebayNeedsReview for manual review rather
         // than risk a fabricated or misdescribed condition.
-        let conditionDescriptors: Array<{ name: string; values: string[] }> | undefined;
+        let conditionDescriptors: EbayConditionDescriptorPayload[] | undefined;
         const coinResolution = await resolveCoinConditionOverride(categoryId ?? '99', {
           title: item.title,
           description: item.description,
           tags: item.tags,
+          card: item.card,
         });
         if (coinResolution.status === 'resolved') {
           if (ebayCondition !== coinResolution.condition) {
@@ -2623,9 +2685,25 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             );
           }
           ebayCondition = coinResolution.condition;
-          conditionDescriptors = coinResolution.conditionDescriptors;
+          // toConditionDescriptorPayload copies coin descriptors unchanged and appends a graded card's
+          // certification number (27503, additionalInfo).
+          conditionDescriptors = toConditionDescriptorPayload(coinResolution);
         } else if (coinResolution.status === 'unresolved') {
           console.warn(`[eBay Push] ${item.title.slice(0, 40)} → coin/card condition policy applies but unresolved: ${coinResolution.reason}`);
+          // ADR-134 #643: a CARD in a pinned card category is never published without resolved descriptors.
+          // A graded slab whose grader or grade cannot be mapped must not go out as ungraded, and an
+          // unresolved ungraded card would only fail at eBay with errorId 25064. Refuse it here with a
+          // clear message (same per-item error shape as the routing and pre-publish guards) and move on.
+          if (item.card && isPinnedCardCategoryId(categoryId)) {
+            results.push({
+              itemId: item.id,
+              sku,
+              status: 'error',
+              code: 'CARD_CONDITION_UNRESOLVED',
+              message: `This card was not sent to eBay: ${coinResolution.reason}. Fix the grader, grade or condition on the item and push again.`,
+            });
+            continue;
+          }
         }
 
         // Determine price — organizer-set price always wins.
@@ -2715,7 +2793,17 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // REQUIRED aspects the category demands (prevents errorId 25002
         // "The item specific X is missing").
         const userAspects = buildAspects(item.tags);
-        let aspects = await fillRequiredAspects(userAspects, categoryId ?? '99', {
+        // ADR-134 #643: for a card, fill Game, Set, Card Name, Card Number, Finish, Language and Manufacturer
+        // from the card record BEFORE fillRequiredAspects. Organizer tag aspects win on conflict, and
+        // fillRequiredAspects keeps any aspect already present. getRequiredAspectsForCategory is cached, so
+        // the second lookup inside fillRequiredAspects costs nothing. Non-card items skip this entirely.
+        const cardSeededAspects = item.card
+          ? mergeCardAspects(
+              userAspects,
+              buildCardAspects(item.card, await getRequiredAspectsForCategory(categoryId ?? '99'))
+            )
+          : userAspects;
+        let aspects = await fillRequiredAspects(cardSeededAspects, categoryId ?? '99', {
           title: item.title,
           tags: item.tags,
           description: item.description,
@@ -3193,6 +3281,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             category: item.category,
             tags: item.tags,
             description: item.description,
+            card: item.card,
           },
           accessToken,
           sku,
@@ -3680,6 +3769,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayShippingOverride: true,
         ebayFulfillmentPolicyOverrideId: true,
         tags: true,
+        card: { select: EBAY_CARD_SELECT },
         sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
       },
     });
@@ -4019,6 +4109,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         isbn: item.isbn,
         tags: item.tags,
         description: item.description,
+        card: item.card,
       },
       accessToken,
       sku,

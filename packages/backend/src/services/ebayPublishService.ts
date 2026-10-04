@@ -31,6 +31,19 @@ import {
   ebayUserHeaders,
   getEbayAccessToken,
 } from './ebayHttp';
+// ADR-134 #643 (B5): pinned card ids and the eBay-published card descriptor vocabulary. Pure data,
+// no imports of its own, so no new import cycle.
+import {
+  CARD_CERT_MAX_LENGTH,
+  CARD_CONDITION_GRADED,
+  CARD_CONDITION_UNGRADED,
+  CARD_DESCRIPTOR,
+  isPinnedCardCategoryId,
+  lookupCardConditionValueId,
+  lookupCardGradeValueId,
+  lookupCardGraderValueId,
+  type EbayCardInput,
+} from '../config/cardEbayCategories';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Relocated category/condition/aspect helpers (moved verbatim from ebayController)
@@ -390,10 +403,149 @@ function parseGradedCoinInfo(
   return { graderValueId: graderMatch.conditionDescriptorValueId, letterValueId: letterMatch.conditionDescriptorValueId, numericValueId };
 }
 
-type CoinConditionResolution =
+export type CoinConditionResolution =
   | { status: 'not_applicable' } // category has no coin/card condition-descriptor policy at all
-  | { status: 'resolved'; condition: string; conditionDescriptors: Array<{ name: string; values: string[] }> }
+  | {
+      status: 'resolved';
+      condition: string;
+      conditionDescriptors: Array<{ name: string; values: string[] }>;
+      /**
+       * ADR-134 #643: graded CARD certification number (descriptor 27503, open text, max 30). Kept out of
+       * `conditionDescriptors` so that array's element type (used by the legacy XML builder) is unchanged.
+       * Set only by the card branch; coin results never carry this key.
+       */
+      certificationNumber?: string;
+    }
   | { status: 'unresolved'; reason: string }; // policy applies but couldn't be confidently satisfied — caller must NOT guess
+
+/**
+ * Condition descriptor as sent to eBay. The Inventory API shape is { name, values[], additionalInfo }
+ * (https://developer.ebay.com/api-docs/sell/inventory/openapi/3/sell_inventory_v1_oas3.json, schema
+ * ConditionDescriptor); the Trading API ConditionDescriptorType is Name, Value[0..*], AdditionalInfo[0..1]
+ * (https://developer.ebay.com/devzone/xml/docs/reference/ebay/types/ConditionDescriptorType.html).
+ * `values` is optional because the certification-number descriptor carries only additionalInfo.
+ * UNVERIFIED (ADR-134 V4): that eBay accepts descriptor 27503 with additionalInfo and no values.
+ */
+export interface EbayConditionDescriptorPayload {
+  name: string;
+  values?: string[];
+  additionalInfo?: string;
+}
+
+/**
+ * The ONE place a resolved condition becomes an Inventory API / Trading API descriptor list. Copies each
+ * { name, values } pair unchanged (so a coin serializes exactly as before) and, for a graded card,
+ * appends { name: '27503', additionalInfo: <cert> }.
+ */
+export function toConditionDescriptorPayload(resolution: {
+  conditionDescriptors: Array<{ name: string; values: string[] }>;
+  certificationNumber?: string;
+}): EbayConditionDescriptorPayload[] {
+  const out: EbayConditionDescriptorPayload[] = resolution.conditionDescriptors.map((d) => ({
+    name: d.name,
+    values: d.values,
+  }));
+  if (resolution.certificationNumber) {
+    out.push({ name: CARD_DESCRIPTOR.CERT_NUMBER, additionalInfo: resolution.certificationNumber });
+  }
+  return out;
+}
+
+function xmlEscape(v: string): string {
+  return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/**
+ * Trading API <ConditionDescriptors> block for ReviseItem. For a descriptor with exactly one value and no
+ * additionalInfo (every coin descriptor and every card grader, grade and condition descriptor) the output is
+ * byte-identical to the string ebayPriceRevisionService used to build inline. A descriptor with no values
+ * (the certification number) emits only Name and AdditionalInfo, never a Value element. Returns '' for an
+ * empty or missing list. Cert text is user-entered, so it is XML-escaped.
+ */
+export function buildTradingConditionDescriptorsXml(
+  descriptors: EbayConditionDescriptorPayload[] | null | undefined
+): string {
+  if (!descriptors || descriptors.length === 0) return '';
+  return `
+    <ConditionDescriptors>${descriptors.map((d) => `
+      <ConditionDescriptor>
+        <Name>${d.name}</Name>${(d.values ?? []).map((v) => `
+        <Value>${xmlEscape(v)}</Value>`).join('')}${d.additionalInfo ? `
+        <AdditionalInfo>${xmlEscape(d.additionalInfo)}</AdditionalInfo>` : ''}
+      </ConditionDescriptor>`).join('')}
+    </ConditionDescriptors>`;
+}
+
+/**
+ * ADR-134 #643 card branch of the condition resolver. Runs only for a card record in one of the three
+ * pinned card categories (see resolveCoinConditionOverride). Never falls through to the coin logic and a
+ * graded card NEVER resolves as ungraded: a grader or grade that cannot be mapped to an eBay id, or that is
+ * not in the live Metadata policy, returns `unresolved` and the callers refuse or skip the publish.
+ *
+ *   graded:   LIKE_NEW (2750) + 27501 Grader + 27502 Grade (+ 27503 certification number as additionalInfo)
+ *   ungraded: USED_VERY_GOOD (4000) + 40001 Card Condition (value id differs between 183454 and the others)
+ * Source of the ids: https://developer.ebay.com/api-docs/user-guides/static/mip-user-guide/mip-enum-condition-descriptor-ids-for-trading-cards.html
+ */
+async function resolveCardCondition(categoryId: string, card: EbayCardInput): Promise<CoinConditionResolution> {
+  const isGraded = !!((card.grader ?? '').trim() || (card.grade ?? '').trim());
+  const unresolved = (reason: string): CoinConditionResolution => ({ status: 'unresolved', reason });
+  const specs = await getConditionDescriptorSpecs(categoryId, isGraded ? CARD_CONDITION_GRADED : CARD_CONDITION_UNGRADED);
+  const policyUnreadable =
+    `eBay's condition policy for category ${categoryId} could not be read just now, so the card's ` +
+    `${isGraded ? 'grader and grade' : 'condition'} could not be checked against it. Try again shortly.`;
+  const listedIn = (descriptorId: string, valueId: string): boolean =>
+    specs.some(
+      (sp) =>
+        sp.conditionDescriptorId === descriptorId &&
+        sp.values.some((v) => v.conditionDescriptorValueId === valueId)
+    );
+
+  if (isGraded) {
+    const grader = lookupCardGraderValueId(card.grader, categoryId);
+    if (!grader.ok) return unresolved(`graded card: ${grader.reason}`);
+    const grade = lookupCardGradeValueId(card.grade);
+    if (!grade.ok) return unresolved(`graded card: ${grade.reason}`);
+    if (specs.length === 0) return unresolved(policyUnreadable);
+    if (!listedIn(CARD_DESCRIPTOR.GRADER, grader.valueId)) {
+      return unresolved(`graded card: eBay's live policy for category ${categoryId} does not list grader value ${grader.valueId} for "${String(card.grader).trim()}"`);
+    }
+    if (!listedIn(CARD_DESCRIPTOR.GRADE, grade.valueId)) {
+      return unresolved(`graded card: eBay's live policy for category ${categoryId} does not list grade value ${grade.valueId} for "${String(card.grade).trim()}"`);
+    }
+    const resolved: Extract<CoinConditionResolution, { status: 'resolved' }> = {
+      status: 'resolved',
+      condition: CARD_CONDITION_GRADED,
+      conditionDescriptors: [
+        { name: CARD_DESCRIPTOR.GRADER, values: [grader.valueId] },
+        { name: CARD_DESCRIPTOR.GRADE, values: [grade.valueId] },
+      ],
+    };
+    const cert = (card.certNumber ?? '').trim();
+    if (cert) {
+      if (cert.length > CARD_CERT_MAX_LENGTH) {
+        // Never send a truncated (wrong) certification number; the listing goes out without it.
+        console.warn(`[eBay CardCondition] category ${categoryId}: certification number longer than ${CARD_CERT_MAX_LENGTH} characters omitted`);
+      } else {
+        resolved.certificationNumber = cert;
+      }
+    }
+    console.log(`[eBay CardCondition] category ${categoryId}: resolved GRADED (grader ${grader.valueId}, grade ${grade.valueId}${resolved.certificationNumber ? ', cert attached' : ''})`);
+    return resolved;
+  }
+
+  const cond = lookupCardConditionValueId(card.conditionCode, categoryId);
+  if (!cond.ok) return unresolved(`ungraded card: ${cond.reason}`);
+  if (specs.length === 0) return unresolved(policyUnreadable);
+  if (!listedIn(CARD_DESCRIPTOR.CARD_CONDITION, cond.valueId)) {
+    return unresolved(`ungraded card: eBay's live policy for category ${categoryId} does not list card condition value ${cond.valueId} for "${String(card.conditionCode).trim()}"`);
+  }
+  console.log(`[eBay CardCondition] category ${categoryId}: resolved UNGRADED (card condition ${cond.valueId})`);
+  return {
+    status: 'resolved',
+    condition: CARD_CONDITION_UNGRADED,
+    conditionDescriptors: [{ name: CARD_DESCRIPTOR.CARD_CONDITION, values: [cond.valueId] }],
+  };
+}
 
 /**
  * Single entry point for eBay's Coin/Card Condition Requirements policy. Checks BOTH
@@ -404,8 +556,21 @@ type CoinConditionResolution =
  */
 export async function resolveCoinConditionOverride(
   categoryId: string,
-  item: { title?: string | null; description?: string | null; tags?: string[] | null }
+  item: {
+    title?: string | null;
+    description?: string | null;
+    tags?: string[] | null;
+    /** ADR-134 #643: the item's card record. Absent or null leaves the coin logic exactly as it was. */
+    card?: EbayCardInput | null;
+  }
 ): Promise<CoinConditionResolution> {
+  // Card branch (ADR-134 #643). Only when the item HAS a card record AND the category is one of the three
+  // pinned card categories; everything else (coins, jewelry, a card in any other category) takes the
+  // pre-existing logic below, untouched.
+  if (item.card && isPinnedCardCategoryId(categoryId)) {
+    return resolveCardCondition(categoryId, item.card);
+  }
+
   const [gradedSpecs, ungradedSpecs] = await Promise.all([
     getConditionDescriptorSpecs(categoryId, 'LIKE_NEW'),
     getConditionDescriptorSpecs(categoryId, 'USED_VERY_GOOD'),
@@ -641,6 +806,12 @@ export interface EbayPublishItem {
   isbn?: string | null; // ADR-089: real ISBN for the Books item-specific aspect (heal25002)
   tags?: string[] | null; // needed by heal25064 to derive a Coin/Card Condition descriptor value
   description?: string | null; // needed by heal25064's graded-coin detection (parseGradedCoinInfo reads title+description+tags)
+  /**
+   * ADR-134 #643: the item's card record (ItemCard). OPTIONAL so a caller that omits it compiles and behaves
+   * exactly as before, but heal25064 can then overwrite a correct graded slab with ungraded values, so every
+   * caller that can load `card` must pass it.
+   */
+  card?: EbayCardInput | null;
 }
 
 /**
@@ -1434,6 +1605,7 @@ const heal25064: Healer = async (ctx, errorBody) => {
     title: ctx.item.title,
     description: ctx.item.description,
     tags: ctx.item.tags,
+    card: ctx.item.card,
   });
   if (resolution.status !== 'resolved') {
     console.warn(
@@ -1466,7 +1638,9 @@ const heal25064: Healer = async (ctx, errorBody) => {
     console.log(`[eBay SelfHeal 25064] ${ctx.sku}: overriding condition ${invBody.condition ?? 'unset'} → ${resolution.condition} (organizer text indicates ${resolution.condition === 'LIKE_NEW' ? 'a professionally graded' : 'an ungraded'} coin/card)`);
   }
   invBody.condition = resolution.condition;
-  invBody.conditionDescriptors = resolution.conditionDescriptors;
+  // toConditionDescriptorPayload copies each { name, values } unchanged (coins serialize as before) and adds
+  // the graded-card certification number (27503 as additionalInfo) when the card branch resolved one.
+  invBody.conditionDescriptors = toConditionDescriptorPayload(resolution);
   const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, {
     method: 'PUT',
     body: invBody,

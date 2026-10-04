@@ -4,8 +4,15 @@
  * Endpoints:
  *   GET  /api/organizers/:saleId/cheatsheet         → preset prices
  *   GET  /api/organizers/:saleId/items-for-labels    → paginated priced-item search
+ *                                                      (?style=card lists items that have an ItemCard)
  *   POST /api/organizers/:saleId/label-batch         → create batch, assign tagIds
  *   GET  /api/organizers/batches/:batchId/print      → PDF with QR labels
+ *
+ * ADR-134 section 6 (batch B6): adds labelStyle 'card' and fixes four defects:
+ *   1. item lookup is scoped to the authorized sale (no cross-sale item ids)
+ *   2. item prices are read from the database, never taken from the request body
+ *   3. a batch can only be printed by the user who created it
+ *   4. every interpolated string in the label HTML is escaped
  */
 
 import { Response } from 'express';
@@ -15,6 +22,13 @@ import { buildItemQrUrl, QR_SOURCE_ITEM_LABEL } from '../utils/qrUrl';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { CHEATSHEET_PRICES } from '../constants/cheatsheet';
+import {
+  CardLabelSource,
+  buildCardLabelText,
+  escapeHtml,
+  formatLabelPrice,
+  renderCardLabelTextHtml,
+} from '../services/cardLabelText';
 
 // ---------------------------------------------------------------------------
 // Avery 5160 constants (all in points, 72 DPI)
@@ -36,13 +50,19 @@ const QR_SIZE_LABEL = 600;    // Source PNG resolution for label QR (was 48px --
 // ---------------------------------------------------------------------------
 interface TagRecord {
   tagId: string;
-  price: number;
+  price: number | null; // item tags: Item.price read from the database (null prints PRICE?); preset/blank tags: validated number
   itemId?: string;
   position: number;
   room?: string | null; // per-item room tag (Item.roomTag); null when item has none or for preset/blank tags
   name?: string | null; // per-item title (Item.title); shown after the price
   blank?: boolean; // leading skip-slot for partially-used Avery sheets (no QR / no price rendered)
+  card?: CardLabelSource | null; // set only for labelStyle 'card' tags whose item has an ItemCard; read from the database
 }
+
+type LabelStyle = 'standard' | 'card';
+
+// Largest price accepted for a preset (non-item) label.
+const MAX_PRESET_PRICE = 100000;
 
 interface StoredBatch {
   batchId: string;
@@ -51,17 +71,28 @@ interface StoredBatch {
   saleDates: string; // e.g. "4/17–19"
   tags: TagRecord[];
   createdAt: number;
+  organizerUserId: string; // creator; printLabelBatch only serves the batch to this user
+  labelStyle: LabelStyle;
 }
 
 const batchStore = new Map<string, StoredBatch>();
 
 // Cleanup batches older than 2 hours
-setInterval(() => {
+const batchSweepTimer = setInterval(() => {
   const cutoff = Date.now() - 2 * 60 * 60 * 1000;
   for (const [id, batch] of batchStore) {
     if (batch.createdAt < cutoff) batchStore.delete(id);
   }
 }, 15 * 60 * 1000);
+// Do not keep the process (or a test runner) alive just for the sweep.
+if (typeof batchSweepTimer.unref === 'function') batchSweepTimer.unref();
+
+/** A finite, non-negative price within range, rounded to cents; null when invalid. */
+function parsePresetPrice(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || n < 0 || n > MAX_PRESET_PRICE) return null;
+  return Math.round(n * 100) / 100;
+}
 
 function generateId(length = 10): string {
   return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
@@ -125,6 +156,7 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
 
     const q = (req.query.q as string || '').trim();
     const category = req.query.category as string | undefined;
+    const cardStyle = req.query.style === 'card';
     const minPrice = req.query.minPrice ? parseFloat(req.query.minPrice as string) : undefined;
     const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice as string) : undefined;
     const cursor = req.query.cursor as string | undefined;
@@ -137,10 +169,12 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
     if (minPrice !== undefined) priceFilter.gte = minPrice;
     if (maxPrice !== undefined) priceFilter.lte = maxPrice;
 
+    // Card style lists items that have an ItemCard, including items with no price yet (their label
+    // prints PRICE? and the picker shows a warning). Every other style keeps the priced-only filter.
     const items = await prisma.item.findMany({
       where: {
         saleId,
-        price: priceFilter,
+        ...(cardStyle ? { card: { isNot: null } } : { price: priceFilter }),
         status: 'AVAILABLE',
         isActive: true,
         ...(titleFilter ? { title: titleFilter } : {}),
@@ -153,6 +187,19 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
         price: true,
         category: true,
         roomTag: true,
+        stockTotal: true,
+        stockSold: true,
+        card: {
+          select: {
+            cardName: true,
+            setCode: true,
+            collectorNumber: true,
+            finish: true,
+            conditionCode: true,
+            grader: true,
+            grade: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
@@ -163,17 +210,29 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
     const results = hasMore ? items.slice(0, limit) : items;
     const nextCursor = hasMore ? results[results.length - 1].id : null;
 
+    // Does this sale have any item with a card record? Drives the card option in the style picker.
+    const firstCardItem = await prisma.item.findFirst({
+      where: { saleId, card: { isNot: null } },
+      select: { id: true },
+    });
+
     return res.json({
-      items: results.map((item: { id: string; sku: string | null; title: string; price: number | null; category: string | null; roomTag: string | null }) => ({
+      items: results.map((item) => ({
         id: item.id,
         code: item.sku || item.id.slice(-6).toUpperCase(),
         name: item.title,
-        price: item.price ?? 0,
+        price: item.price ?? (cardStyle ? null : 0),
+        priceMissing: item.price == null,
         category: item.category,
         room: item.roomTag ?? null,
         needsTag: true, // v1: always true — tag tracking is a follow-up
+        // Server-built label lines for the picker and the preview, so the browser never formats card text.
+        labelText: item.card ? buildCardLabelText(item.card, item.price, item.title) : null,
+        // One label per remaining copy (stockTotal - stockSold), at least 1; the per-row cap of 300 applies.
+        defaultQty: Math.max(1, Math.min((item.stockTotal ?? 1) - (item.stockSold ?? 0), 300)),
       })),
       nextCursor,
+      saleHasCards: firstCardItem !== null,
     });
   } catch (error) {
     console.error('getItemsForLabels error:', error);
@@ -190,14 +249,57 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
     const auth = await authorizeOrganizerForSale(req, saleId);
     if (!auth.ok) return res.status(auth.status).json({ message: auth.error });
 
-    const { items, leftoverFill, startPosition } = req.body as {
-      items: Array<{ price: number; qty: number; source: { kind: string; itemId?: string } }>;
-      leftoverFill?: number | null;
-      startPosition?: number | null;
+    const body = (req.body ?? {}) as {
+      items?: unknown;
+      leftoverFill?: unknown;
+      startPosition?: unknown;
+      labelStyle?: unknown;
     };
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
       return res.status(400).json({ message: 'Batch must contain at least one item.' });
+    }
+    if (body.labelStyle != null && body.labelStyle !== 'standard' && body.labelStyle !== 'card') {
+      return res.status(400).json({ message: 'Unknown label style.' });
+    }
+    const labelStyle: LabelStyle = body.labelStyle === 'card' ? 'card' : 'standard';
+
+    // Validate every row. Item rows carry an item id and a count; the price is NEVER read from
+    // the request for them (it comes from the database below). Preset rows carry a price because
+    // they have no database row, so it is validated instead.
+    interface ParsedRow { qty: number; itemId?: string; presetPrice?: number }
+    const rows: ParsedRow[] = [];
+    for (const raw of body.items as unknown[]) {
+      const row = (raw && typeof raw === 'object' ? raw : {}) as {
+        price?: unknown;
+        qty?: unknown;
+        source?: { kind?: unknown; itemId?: unknown };
+      };
+      const source = row.source;
+      if (!source || typeof source !== 'object') {
+        return res.status(400).json({ message: 'Each label row needs a source.' });
+      }
+      const qtyNum = Number(row.qty);
+      const qty = Number.isFinite(qtyNum) ? Math.max(1, Math.min(Math.floor(qtyNum), 300)) : 1; // cap at 300 per row
+      if (source.kind === 'item') {
+        if (typeof source.itemId !== 'string' || source.itemId.length === 0) {
+          return res.status(400).json({ message: 'Item rows need an item id.' });
+        }
+        rows.push({ qty, itemId: source.itemId });
+      } else {
+        const presetPrice = parsePresetPrice(row.price);
+        if (presetPrice === null) {
+          return res.status(400).json({ message: 'Invalid label price.' });
+        }
+        rows.push({ qty, presetPrice });
+      }
+    }
+
+    let leftoverFill: number | null = null;
+    if (body.leftoverFill != null) {
+      const parsed = parsePresetPrice(body.leftoverFill);
+      if (parsed === null) return res.status(400).json({ message: 'Invalid fill price.' });
+      leftoverFill = parsed > 0 ? parsed : null;
     }
 
     const batchId = generateId(12);
@@ -206,7 +308,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
 
     // Partial-sheet support: pad the first sheet with leading blank slots so the
     // first real label lands at `startPosition` (1 = top-left / normal, no offset).
-    const startSlot = Math.max(1, Math.min(Number(startPosition) || 1, LABELS_PER_PAGE));
+    const startSlot = Math.max(1, Math.min(Math.floor(Number(body.startPosition)) || 1, LABELS_PER_PAGE));
     for (let i = 0; i < startSlot - 1; i++) {
       tags.push({
         tagId: generateId(10),
@@ -216,47 +318,87 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Authoritative room lookup: pull roomTag straight from the DB for every
-    // referenced itemId (don't trust the client payload).
-    const referencedItemIds = Array.from(
-      new Set(
-        items
-          .filter((it) => it.source.kind === 'item' && it.source.itemId)
-          .map((it) => it.source.itemId as string)
-      )
-    );
-    const roomMap = new Map<string, string | null>();
-    const nameMap = new Map<string, string | null>();
+    // Authoritative item lookup, scoped to the sale the caller was just authorized for. An item id
+    // from another sale or another organizer is not found here, so the whole batch is rejected
+    // instead of printing that item's title, price or QR code. Price, title, room and the card
+    // record all come from this query, never from the request body.
+    const referencedItemIds = Array.from(new Set(rows.filter((r) => r.itemId).map((r) => r.itemId as string)));
+    const itemMap = new Map<
+      string,
+      {
+        title: string;
+        price: number | null;
+        roomTag: string | null;
+        card: CardLabelSource | null;
+      }
+    >();
     if (referencedItemIds.length > 0) {
-      const roomRows = await prisma.item.findMany({
-        where: { id: { in: referencedItemIds } },
-        select: { id: true, roomTag: true, title: true },
+      const itemRows = await prisma.item.findMany({
+        where: { id: { in: referencedItemIds }, saleId },
+        select: {
+          id: true,
+          title: true,
+          price: true,
+          roomTag: true,
+          card: {
+            select: {
+              cardName: true,
+              setCode: true,
+              collectorNumber: true,
+              finish: true,
+              conditionCode: true,
+              grader: true,
+              grade: true,
+            },
+          },
+        },
       });
-      for (const row of roomRows) {
-        roomMap.set(row.id, row.roomTag ?? null);
-        nameMap.set(row.id, row.title ?? null);
+      for (const row of itemRows) {
+        itemMap.set(row.id, {
+          title: row.title,
+          price: row.price ?? null,
+          roomTag: row.roomTag ?? null,
+          card: row.card ?? null,
+        });
+      }
+      if (itemMap.size !== referencedItemIds.length) {
+        return res.status(404).json({ message: 'One or more items were not found in this sale.', code: 'ITEM_NOT_IN_SALE' });
       }
     }
 
-    for (const item of items) {
-      const qty = Math.max(1, Math.min(item.qty, 300)); // cap at 300 per row
-      const itemId = item.source.kind === 'item' ? item.source.itemId : undefined;
-      const room = itemId ? roomMap.get(itemId) ?? null : null;
-      const name = itemId ? nameMap.get(itemId) ?? null : null;
-      for (let i = 0; i < qty; i++) {
-        tags.push({
-          tagId: generateId(10),
-          price: item.price,
-          itemId,
-          position: position++,
-          room,
-          name,
-        });
+    const priceMissingItemIds = new Set<string>();
+    let cardLabelCount = 0;
+    for (const row of rows) {
+      if (row.itemId) {
+        const dbItem = itemMap.get(row.itemId);
+        if (!dbItem) continue; // unreachable: missing ids were rejected above
+        const card = labelStyle === 'card' ? dbItem.card : null;
+        if (dbItem.price === null) priceMissingItemIds.add(row.itemId);
+        for (let i = 0; i < row.qty; i++) {
+          tags.push({
+            tagId: generateId(10),
+            price: dbItem.price,
+            itemId: row.itemId,
+            position: position++,
+            room: dbItem.roomTag,
+            name: dbItem.title,
+            card: card ? { ...card, cardName: card.cardName ?? dbItem.title } : null,
+          });
+          if (card) cardLabelCount++;
+        }
+      } else {
+        for (let i = 0; i < row.qty; i++) {
+          tags.push({
+            tagId: generateId(10),
+            price: row.presetPrice as number,
+            position: position++,
+          });
+        }
       }
     }
 
     // Apply leftover fill if specified
-    if (leftoverFill != null && leftoverFill > 0) {
+    if (leftoverFill !== null && leftoverFill > 0) {
       const remainder = LABELS_PER_PAGE - (tags.length % LABELS_PER_PAGE);
       if (remainder > 0 && remainder < LABELS_PER_PAGE) {
         for (let i = 0; i < remainder; i++) {
@@ -279,6 +421,8 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       saleDates,
       tags,
       createdAt: Date.now(),
+      organizerUserId: (req.user as { id: string }).id,
+      labelStyle,
     });
 
     return res.json({
@@ -286,6 +430,9 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       tags,
       totalLabels: tags.length,
       totalPages: Math.ceil(tags.length / LABELS_PER_PAGE),
+      labelStyle,
+      cardLabelCount,
+      priceMissingItemIds: Array.from(priceMissingItemIds),
     });
   } catch (error) {
     console.error('createLabelBatch error:', error);
@@ -330,7 +477,8 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
 
     const { batchId } = req.params;
     const batch = batchStore.get(batchId);
-    if (!batch) {
+    // Same 404 for "no such batch" and "someone else's batch" so a batch id cannot be probed.
+    if (!batch || batch.organizerUserId !== req.user.id) {
       return res.status(404).json({ message: 'Batch not found or expired. Please regenerate.' });
     }
 
@@ -350,7 +498,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       // removed in favor of these permanent, always-resolvable URLs.
       const qrUrl = tag.itemId
         ? buildItemQrUrl(FRONTEND_URL, tag.itemId, QR_SOURCE_ITEM_LABEL)
-        : `${FRONTEND_URL}/pos/${batch.saleId}?action=add-misc&price=${tag.price.toFixed(2)}`;
+        : `${FRONTEND_URL}/pos/${batch.saleId}?action=add-misc&price=${(tag.price ?? 0).toFixed(2)}`;
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         type: 'image/png',
         width: QR_SIZE_LABEL,
@@ -419,6 +567,11 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
     .label-brand { font-size: 5pt; color: #000; }
     .label-room { font-size: 5pt; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1in; text-align: right; }
     .label-date-corner { position: absolute; top: 0.05in; right: 0.06in; font-size: 5pt; color: #000; }
+    .card-text { justify-content: space-between; }
+    .card-price { font-size: 16pt; font-weight: bold; color: #000; line-height: 1; white-space: nowrap; overflow: hidden; }
+    .card-name { font-size: 7.5pt; font-weight: bold; color: #000; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-set { font-size: 6.5pt; color: #000; line-height: 1.1; white-space: pre; overflow: hidden; text-overflow: ellipsis; min-height: 1.1em; }
+    .card-cond { font-size: 7pt; font-weight: bold; color: #000; line-height: 1.1; white-space: nowrap; overflow: hidden; min-height: 1.1em; }
   </style>
 </head>
 <body>`;
@@ -440,19 +593,33 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
           continue;
         }
 
+        // Card label: text comes from the ItemCard row and Item.price read at batch creation.
+        // Items without a card record inside a card-style batch fall through to the standard label.
+        if (tag.card) {
+          htmlContent += `
+          <div class="label">
+            <div class="label-qr">
+              <img src="${qrDataUrl}" alt="QR">
+            </div>
+            ${renderCardLabelTextHtml(buildCardLabelText(tag.card, tag.price, tag.name))}
+          </div>`;
+          continue;
+        }
+
+        // Every interpolated string is escaped: sale titles, item names and room tags are user input.
         htmlContent += `
           <div class="label">
-            <div class="label-date-corner">${batch.saleDates}</div>
+            <div class="label-date-corner">${escapeHtml(batch.saleDates)}</div>
             <div class="label-qr">
               <img src="${qrDataUrl}" alt="QR">
             </div>
             <div class="label-text">
-              <div class="label-sale">${batch.saleTitle}</div>
-              <div class="label-price">$${tag.price.toFixed(2)}</div>
-              <div class="label-name">${tag.name ?? ''}</div>
+              <div class="label-sale">${escapeHtml(batch.saleTitle)}</div>
+              <div class="label-price">${escapeHtml(formatLabelPrice(tag.price))}</div>
+              <div class="label-name">${escapeHtml(tag.name ?? '')}</div>
               <div class="label-footer">
                 <div class="label-brand">finda.sale</div>
-                <div class="label-room">${tag.room ?? ''}</div>
+                <div class="label-room">${escapeHtml(tag.room ?? '')}</div>
               </div>
             </div>
           </div>`;

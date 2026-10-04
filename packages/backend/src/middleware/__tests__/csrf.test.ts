@@ -78,6 +78,24 @@ describe('exact-path allowlist (no substring exemptions)', () => {
     }
   });
 
+  it('exempts the Etsy webhook (signature-verified in the handler), with or without a trailing slash', () => {
+    for (const path of ['/api/etsy/webhook', '/api/etsy/webhook/']) {
+      expect(isCsrfExemptPath(path)).toBe(true);
+      const { next, res } = run(path);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.status).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does NOT exempt any other /api/etsy route or an Etsy webhook look-alike', () => {
+    for (const path of ['/api/etsy', '/api/etsy/connect', '/api/etsy/callback', '/api/etsy/connection', '/api/etsy/shop-setup', '/api/etsy/items/abc/publish', '/api/etsy/webhook/extra', '/api/etsy/webhooks', '/api/etsy/webhook-anything', '/api/users/me/api/etsy/webhook']) {
+      expect(isCsrfExemptPath(path)).toBe(false);
+      const { next, res } = run(path, { cookie: 'accessToken=abc' });
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+    }
+  });
+
   it('does NOT exempt the TEAMS webhook CRUD or any path that merely contains "webhook"', () => {
     for (const path of ['/api/webhooks', '/api/webhooks/abc', '/api/items/x/webhook-anything', '/api/users/me/webhook', '/api/stripe/webhook/extra', '/api/stripe/webhooks']) {
       expect(isCsrfExemptPath(path)).toBe(false);

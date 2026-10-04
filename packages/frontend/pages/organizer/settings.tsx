@@ -32,6 +32,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { io as socketIO } from 'socket.io-client';
 import WebsiteEmbedTab from '../../components/WebsiteEmbedTab';
 import DiscogsListingCheck from '../../components/DiscogsListingCheck'; // ADR-132 dry-run listing check
+import EtsyConnectPanel from '../../components/etsy/EtsyConnectPanel'; // ADR-135 Etsy connector tab
 import { describeInclusiveRates } from '../../lib/platformFees';
 
 const OrganizerSettingsPage = () => {
@@ -44,7 +45,7 @@ const OrganizerSettingsPage = () => {
   const { usage: offPlatformUsage, isLoading: offPlatformUsageLoading } = useOffPlatformUsage();
   const offPlatformOptIn = useOffPlatformOptIn();
   const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help' | 'ebay' | 'reverb' | 'discogs' | 'website'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help' | 'ebay' | 'reverb' | 'discogs' | 'etsy' | 'website'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   // Universal Crosslister -- Reverb (Official-API Tier, Personal Access Token model, see
   // reverbConnector.ts's 2026-08-18 auth-model correction). Local-only, never logged/persisted
@@ -621,7 +622,7 @@ const OrganizerSettingsPage = () => {
     }
 
     // Set active tab from query param (e.g. /organizer/settings?tab=profile)
-    const validTabs = ['payments', 'notifications', 'profile', 'subscription', 'appearance', 'verification', 'security', 'help', 'ebay', 'website'];
+    const validTabs = ['payments', 'notifications', 'profile', 'subscription', 'appearance', 'verification', 'security', 'help', 'ebay', 'etsy', 'website'];
     if (router.query.tab && validTabs.includes(router.query.tab as string)) {
       setActiveTab(router.query.tab as any);
     }
@@ -856,7 +857,7 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto flex-nowrap">
-            {(['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'reverb', 'discogs', ...(tier !== 'SIMPLE' && tier !== null ? ['website'] : []), 'help'] as const).map((tab) => {
+            {(['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'reverb', 'discogs', 'etsy', ...(tier !== 'SIMPLE' && tier !== null ? ['website'] : []), 'help'] as const).map((tab) => {
               const tabLabel = tab === 'verification' ? 'Get Verified' : tab === 'website' ? 'Website' : tab.charAt(0).toUpperCase() + tab.slice(1);
               return (
                 <button
@@ -2649,6 +2650,13 @@ const OrganizerSettingsPage = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Etsy Tab (ADR-135). The panel reads ?etsy=connected / ?etsy=error&reason=<key> itself and shows the banner. */}
+          {activeTab === 'etsy' && (
+            <div className="space-y-6">
+              <EtsyConnectPanel />
             </div>
           )}
 
