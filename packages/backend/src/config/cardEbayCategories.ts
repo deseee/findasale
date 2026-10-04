@@ -16,29 +16,36 @@
  *     https://developer.ebay.com/api-docs/sell/inventory/openapi/3/sell_inventory_v1_oas3.json
  *     (schema ConditionDescriptor).
  *
- * UNVERIFIED (kept honest on purpose, see ADR-134 section 14):
- *   - The DISPLAY NAMES of the three categories. The doc names the ids but not the names, so `name`
- *     is null until step V1 of scripts/verifyCardEbayPolicies.ts is run and its output attached.
- *   - Which of the three is a leaf in eBay's category tree (V1 prints leafCategoryTreeNode). Taxonomy
- *     getItemAspectsForCategory rejects a non-leaf id.
- *   - That the live Metadata policy still matches the tables below (V3 prints the live ids). The
- *     resolver also re-checks every id against the live policy before using it.
+ * VERIFIED LIVE 2026-10-04 (scripts/verifyCardEbayPolicies.ts, V1 to V3, EBAY_US, tree 0, 0 call failures):
+ *   - Names: 183454 "CCG Individual Cards", 183050 and 261328 "Trading Card Singles". All three are
+ *     leaf categories (V1), so getItemAspectsForCategory accepts them.
+ *   - Every id in the tables below exists in the live Metadata policy (V3 missingFromLive is empty for
+ *     graders, grades and card condition). Ungraded Card Condition ids match exactly.
+ *   - Grader availability per category was corrected to the live lists (ACE in all three, TCG in
+ *     183454 and 261328).
+ *   - Live ids NOT in the tables (not reachable from CARD_GRADERS today): graders AGS 2750124, DSG
+ *     2750125, Majesty 2750126, GRAAD 2750127, Arena Club 2750128, AiGrading 2750129 (all three
+ *     categories); grade "Sample" 2750223. The resolver re-checks every id against the live policy.
+ *
+ * STILL UNVERIFIED:
+ *   - That the code values LIKE_NEW (graded) and USED_VERY_GOOD (ungraded) map to legacy conditions
+ *     2750 and 4000 (the Metadata endpoint reports ids, not enums).
  *   - Whether eBay accepts a descriptor 27503 entry that carries additionalInfo and no values (V4,
  *     needs an organizer token, not run by this batch).
  */
 
 export interface PinnedCardCategory {
   readonly id: string;
-  /** UNVERIFIED: null until V1 output is attached. Never invent a display name. */
+  /** Display name as eBay's taxonomy returned it (V1, 2026-10-04). Null only if a future id has not been read yet. */
   readonly name: string | null;
 }
 
-/** eBay card category used for collectible card game singles. UNVERIFIED display name. */
-export const CCG_SINGLES: PinnedCardCategory = { id: '183454', name: null };
-/** UNVERIFIED display name. Not reached by any game today (see GAME_TO_PINNED_CATEGORY). */
-export const NON_SPORT_SINGLES: PinnedCardCategory = { id: '183050', name: null };
-/** UNVERIFIED display name. Not reached by any game today (see GAME_TO_PINNED_CATEGORY). */
-export const SPORTS_SINGLES: PinnedCardCategory = { id: '261328', name: null };
+/** eBay card category used for collectible card game singles. Name read live (V1, 2026-10-04). */
+export const CCG_SINGLES: PinnedCardCategory = { id: '183454', name: 'CCG Individual Cards' };
+/** Name read live (V1, 2026-10-04). Not reached by any game today (see GAME_TO_PINNED_CATEGORY). */
+export const NON_SPORT_SINGLES: PinnedCardCategory = { id: '183050', name: 'Trading Card Singles' };
+/** Name read live (V1, 2026-10-04). Not reached by any game today (see GAME_TO_PINNED_CATEGORY). */
+export const SPORTS_SINGLES: PinnedCardCategory = { id: '261328', name: 'Trading Card Singles' };
 
 export const PINNED_CARD_CATEGORY_IDS: readonly string[] = [
   CCG_SINGLES.id,
@@ -116,7 +123,8 @@ const ALL3 = ['183050', '183454', '261328'] as const;
 
 /**
  * Descriptor 27501 values, keyed by the uppercase grader code stored on ItemCard.grader.
- * CSG is sports only (261328); PCA, PCG, ACE, TCG and ARK are 183454 only.
+ * CSG is sports only (261328); PCA, PCG and ARK are 183454 only; TCG is 183454 and 261328; ACE is in all three
+ * (live-verified 2026-10-04).
  */
 export const CARD_GRADER_VALUE_IDS: Readonly<Record<string, GraderEntry>> = {
   PSA: { valueId: '275010', categories: ALL3 },
@@ -138,9 +146,9 @@ export const CARD_GRADER_VALUE_IDS: Readonly<Record<string, GraderEntry>> = {
   RARE: { valueId: '2750116', categories: ALL3 },
   RCG: { valueId: '2750117', categories: ALL3 },
   PCG: { valueId: '2750118', categories: ['183454'] },
-  ACE: { valueId: '2750119', categories: ['183454'] },
+  ACE: { valueId: '2750119', categories: ALL3 },
   CGA: { valueId: '2750120', categories: ALL3 },
-  TCG: { valueId: '2750121', categories: ['183454'] },
+  TCG: { valueId: '2750121', categories: ['183454', '261328'] },
   ARK: { valueId: '2750122', categories: ['183454'] },
   OTHER: { valueId: '2750123', categories: ALL3 },
 };
@@ -170,6 +178,7 @@ export const CARD_GRADE_VALUE_IDS: Readonly<Record<string, string>> = {
   'authentic altered': '2750220',
   'authentic - trimmed': '2750221',
   'authentic - coloured': '2750222',
+  'authentic - colored': '2750222', // eBay's live spelling
 };
 
 /**

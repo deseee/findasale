@@ -286,13 +286,13 @@ describe('ADR-134 5.4 (1): pinned eBay category set only when null', () => {
       mockPrisma.itemCard.findUnique.mockResolvedValue({ game: 'MTG' });
     });
 
-    it('a pinned-game single starts with the pinned category id (and no name while the name is unverified)', async () => {
+    it('a pinned-game single starts with the pinned category id and its live-verified name', async () => {
       const res = makeRes();
       await createItem({ user: organizerUser, body: { ...baseBody, card: { game: 'MTG' } }, files: undefined }, res);
       expect(res.statusCode).toBe(201);
       const data = mockPrisma.item.create.mock.calls[0][0].data;
       expect(data.ebayCategoryId).toBe(PINNED);
-      expect(data).not.toHaveProperty('ebayCategoryName');
+      expect(data.ebayCategoryName).toBe('CCG Individual Cards'); // name read live from eBay (V1, 2026-10-04)
     });
 
     it('every pinned game maps to the pinned category', async () => {

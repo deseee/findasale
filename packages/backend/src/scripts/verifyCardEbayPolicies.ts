@@ -49,6 +49,8 @@ import {
 
 const CALL_DELAY_MS = 250;
 const MAX_VALUES_PRINTED = 60;
+/** Aspects with at most this many values are printed in full (Game, Finish, Language, Rarity, Manufacturer); bigger lists such as Card Name stay capped. */
+const MAX_FULL_LIST_VALUES = 800;
 
 interface CallResult {
   ok: boolean;
@@ -137,6 +139,7 @@ export function summarizeAspects(data: unknown): Record<string, unknown> {
     aspectCount: aspects.length,
     aspects: aspects.map((a) => {
       const values = (a.aspectValues ?? []).map((v) => v.localizedValue ?? '');
+      const printCap = values.length <= MAX_FULL_LIST_VALUES ? values.length : MAX_VALUES_PRINTED;
       return {
         name: a.localizedAspectName ?? null,
         required: a.aspectConstraint?.aspectRequired === true,
@@ -144,8 +147,8 @@ export function summarizeAspects(data: unknown): Record<string, unknown> {
         cardinality: a.aspectConstraint?.itemToAspectCardinality ?? null,
         dataType: a.aspectConstraint?.aspectDataType ?? null,
         valueCount: values.length,
-        values: values.slice(0, MAX_VALUES_PRINTED),
-        valuesTruncated: values.length > MAX_VALUES_PRINTED,
+        values: values.slice(0, printCap),
+        valuesTruncated: values.length > printCap,
       };
     }),
   };

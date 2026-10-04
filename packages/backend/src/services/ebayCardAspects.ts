@@ -14,13 +14,14 @@
  *  3. Organizer tag aspects win on conflict (mergeCardAspects, case-insensitive key check).
  *  4. Nothing is guessed from other fields: a null card field produces no aspect.
  *
- * UNVERIFIED (ADR-134 section 5.6 and 14, step V2): the live aspect names for categories 183454,
- * 183050 and 261328 and their allowed values. The names below are the candidate names the ADR lists
- * (Game, Set, Card Name, Card Number, Finish, Language, Manufacturer) plus the graded family
- * (Graded, Professional Grader, Grade, Certification Number). Because of rule 1, a wrong or
- * retired candidate name is simply never emitted. Attach the V2 output before relying on any of them.
- * The per-value candidate lists (game display names, publishers, finish words) are likewise
- * UNVERIFIED against eBay's enum and are only emitted when the live spec accepts them.
+ * CHECKED AGAINST LIVE 2026-10-04 (ADR-134 step V2, EBAY_US): in 183454 the aspects Game (required),
+ * Set, Card Name, Card Number, Finish, Language and Manufacturer all exist, all FREE_TEXT. The graded
+ * family (Graded, Professional Grader, Grade, Certification Number) does NOT exist in any of the three
+ * categories (eBay moved grading to condition descriptors), so it is never emitted; that code stays as
+ * a harmless fallback. 183050 and 261328 have no Game or Finish aspect. Live Game values used here:
+ * "Magic: The Gathering", "Pokémon TCG", "Yu-Gi-Oh! TCG", "Disney Lorcana TCG", "One Piece CCG".
+ * Live Finish values: Foil, Holo, Regular, Reverse Holo. Because of rule 1, a candidate name the live
+ * spec lacks is simply never emitted, and the candidate lists below only decide which spelling is sent.
  *
  * `Manufacturer` is supplied here explicitly because fillRequiredAspects special-cases
  * Manufacturer, Model and MPN to item.mpn, which is always null for cards.
@@ -47,16 +48,16 @@ export const CARD_ASPECT_NAMES = {
   certNumber: ['Certification Number'],
 } as const;
 
-/** Game code to the value candidates for the Game aspect (first is used for free text). UNVERIFIED. */
+/** Game code to the value candidates for the Game aspect (first is used for free text). First entries match live values (2026-10-04). */
 const GAME_VALUES: Readonly<Record<string, readonly string[]>> = {
   MTG: ['Magic: The Gathering', 'Magic The Gathering'],
   POKEMON: ['Pokémon TCG', 'Pokemon TCG', 'Pokémon', 'Pokemon'],
   YUGIOH: ['Yu-Gi-Oh! TCG', 'Yu-Gi-Oh!', 'Yu-Gi-Oh', 'YuGiOh'],
-  LORCANA: ['Disney Lorcana', 'Lorcana'],
-  ONE_PIECE: ['One Piece Card Game', 'One Piece'],
+  LORCANA: ['Disney Lorcana TCG', 'Disney Lorcana', 'Lorcana'],
+  ONE_PIECE: ['One Piece CCG', 'One Piece Card Game', 'One Piece'],
 };
 
-/** Game code to publisher candidates for the Manufacturer aspect (first is used for free text). UNVERIFIED. */
+/** Game code to publisher candidates for the Manufacturer aspect (first is used for free text). All first entries exist in the live 183454 list (2026-10-04). */
 const MANUFACTURER_VALUES: Readonly<Record<string, readonly string[]>> = {
   MTG: ['Wizards of the Coast'],
   POKEMON: ['Nintendo', 'The Pokémon Company', 'The Pokemon Company', 'Pokémon Company International'],
@@ -65,9 +66,9 @@ const MANUFACTURER_VALUES: Readonly<Record<string, readonly string[]>> = {
   ONE_PIECE: ['Bandai'],
 };
 
-/** ItemCard.finish code to value candidates for the Finish aspect. UNVERIFIED. */
+/** ItemCard.finish code to value candidates for the Finish aspect. Live 183454 values: Foil, Holo, Regular, Reverse Holo. Etched has no live value and is sent as free text. */
 const FINISH_VALUES: Readonly<Record<string, readonly string[]>> = {
-  NONFOIL: ['Non-Foil', 'Nonfoil', 'Regular', 'Normal'],
+  NONFOIL: ['Regular', 'Non-Foil', 'Nonfoil', 'Normal'],
   FOIL: ['Foil'],
   ETCHED: ['Etched Foil', 'Etched'],
   HOLO: ['Holo', 'Holofoil', 'Holographic'],

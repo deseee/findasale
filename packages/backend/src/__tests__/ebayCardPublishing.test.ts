@@ -63,9 +63,9 @@ const GRADER_ROWS: Array<[string, string, string[]]> = [
   ['Rare Edition (Rare)', '2750116', ALL3],
   ['Revolution Card Grading (RCG)', '2750117', ALL3],
   ['Premier Card Grading (PCG)', '2750118', ['183454']],
-  ['Ace Grading (Ace)', '2750119', ['183454']],
+  ['Ace Grading (Ace)', '2750119', ALL3],
   ['Card Grading Australia (CGA)', '2750120', ALL3],
-  ['Trading Card Grading (TCG)', '2750121', ['183454']],
+  ['Trading Card Grading (TCG)', '2750121', ['183454', '261328']],
   ['ARK Grading (ARK)', '2750122', ['183454']],
   ['Other', '2750123', ALL3],
 ];
@@ -302,7 +302,8 @@ describe('(2) a graded card that cannot be mapped is unresolved and never ungrad
   it('the push path refuses an unresolved card before anything is sent (source order check)', () => {
     const src = fs.readFileSync(path.join(__dirname, '../controllers/ebayController.ts'), 'utf8');
     const resolveAt = src.indexOf("resolveCoinConditionOverride(categoryId ?? '99'");
-    const refuseAt = src.indexOf("code: 'CARD_CONDITION_UNRESOLVED'");
+    // The fee-check path earlier in the file has its own CARD_CONDITION_UNRESOLVED refusal, so look for the push-path one after the resolver call.
+    const refuseAt = src.indexOf("code: 'CARD_CONDITION_UNRESOLVED'", resolveAt);
     const validateAt = src.indexOf('validateItemForEbayPublish({', resolveAt);
     expect(resolveAt).toBeGreaterThan(0);
     expect(refuseAt).toBeGreaterThan(resolveAt);
@@ -439,7 +440,9 @@ describe('pinned category', () => {
     expect(cfg.getPinnedCardCategory(null)).toBeNull();
     expect(cfg.isPinnedCardCategoryId('183050')).toBe(true);
     expect(cfg.isPinnedCardCategoryId('15687')).toBe(false);
-    expect(cfg.CCG_SINGLES.name).toBeNull(); // UNVERIFIED display name, filled from V1 output only
+    expect(cfg.CCG_SINGLES.name).toBe('CCG Individual Cards'); // live V1 2026-10-04
+    expect(cfg.NON_SPORT_SINGLES.name).toBe('Trading Card Singles');
+    expect(cfg.SPORTS_SINGLES.name).toBe('Trading Card Singles');
   });
 });
 
@@ -591,5 +594,38 @@ describe('(7) and (8) verification script', () => {
       expect(tc.grader27501.missingFromLive).toContain('275010');
       expect(mod.redact('abc SECRET def Bearer xyz.123', 'SECRET')).toBe('abc [redacted] def Bearer [redacted]');
     });
+  });
+});
+
+describe('live eBay spellings (read 2026-10-04)', () => {
+  const live = [
+    { name: 'Game', required: true, enumValues: ['Magic: The Gathering', 'Pokémon TCG', 'Yu-Gi-Oh! TCG', 'Disney Lorcana TCG', 'One Piece CCG'], cardinality: 'SINGLE', mode: 'FREE_TEXT' },
+    { name: 'Finish', required: false, enumValues: ['Foil', 'Holo', 'Regular', 'Reverse Holo'], cardinality: 'SINGLE', mode: 'FREE_TEXT' },
+    { name: 'Manufacturer', required: false, enumValues: ['Bandai', 'Konami', 'Ravensburger', 'The Pokémon Company', 'Wizards of the Coast'], cardinality: 'SINGLE', mode: 'FREE_TEXT' },
+  ] as any[];
+  const base = { productType: 'SINGLE', cardName: 'X', setName: 'Y', collectorNumber: '1', language: 'en', grader: null, grade: null, certNumber: null, conditionCode: 'NM' };
+
+  it('Lorcana and One Piece use the live Game spelling, and a non-foil card sends Regular', async () => {
+    const { buildCardAspects } = await import('../services/ebayCardAspects');
+    expect(buildCardAspects({ ...base, game: 'LORCANA', finish: 'NONFOIL' }, live)).toStrictEqual({
+      Game: ['Disney Lorcana TCG'],
+      Finish: ['Regular'],
+      Manufacturer: ['Ravensburger'],
+    });
+    expect(buildCardAspects({ ...base, game: 'ONE_PIECE', finish: 'FOIL' }, live)).toStrictEqual({
+      Game: ['One Piece CCG'],
+      Finish: ['Foil'],
+      Manufacturer: ['Bandai'],
+    });
+  });
+
+  it('grader categories follow the live lists (ACE in all three, TCG in 183454 and 261328 only)', async () => {
+    const { lookupCardGraderValueId, lookupCardGradeValueId } = await import('../config/cardEbayCategories');
+    for (const cat of ['183050', '183454', '261328']) expect(lookupCardGraderValueId('ACE', cat)).toStrictEqual({ ok: true, valueId: '2750119' });
+    expect(lookupCardGraderValueId('TCG', '183454').ok).toBe(true);
+    expect(lookupCardGraderValueId('TCG', '261328').ok).toBe(true);
+    expect(lookupCardGraderValueId('TCG', '183050').ok).toBe(false);
+    expect(lookupCardGradeValueId('Authentic - Colored')).toStrictEqual({ ok: true, valueId: '2750222' });
+    expect(lookupCardGradeValueId('Authentic - Coloured')).toStrictEqual({ ok: true, valueId: '2750222' });
   });
 });
