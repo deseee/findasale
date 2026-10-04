@@ -2019,7 +2019,8 @@ export default function POSPage() {
       }
 
       // Item sticker QR
-      const match = qrText.match(/items\/([a-z0-9]+)$/i);
+      // Printed labels carry ?utm_source=qr_item_label (buildItemQrUrl), so allow a query/hash after the id.
+      const match = qrText.match(/items\/([a-z0-9]+)(?:[?#]|$)/i);
       if (match) {
         const itemId = match[1];
         setQrScanMessage('Item found! Adding to cart…');

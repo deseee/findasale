@@ -115,6 +115,9 @@ export function makeEtsyConnectHandlers(deps: EtsyConnectControllerDeps = {}) {
     if (mapped.httpStatus >= 500 && !(err instanceof EtsyError)) {
       // Unexpected failure: log the type only, never the message (it could carry token fragments).
       console.error(`[etsy] ${where} failed unexpectedly:`, (err as any)?.name || 'Error');
+    } else if (mapped.httpStatus >= 500 && err instanceof EtsyError) {
+      // Diagnostic (2026-10-04): the Etsy error code and upstream HTTP status only, never the message or any token.
+      console.error(`[etsy] ${where} failed: code=${err.code} upstreamStatus=${err.status ?? 'n/a'}`);
     }
     res.status(mapped.httpStatus).json({
       code: mapped.code,

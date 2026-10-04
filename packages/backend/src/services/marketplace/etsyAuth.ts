@@ -211,7 +211,12 @@ export async function resolveEtsyShop(
     endpointClass: 'public',
   });
   if (res.status === 404) return null;
-  if (!res.ok) throw new EtsyError('ETSY_UPSTREAM', `Etsy shop lookup failed with HTTP ${res.status}`, { status: res.status });
+  if (!res.ok) {
+    // Diagnostic (2026-10-04): Etsy's own short error text (e.g. "Invalid API key"), never request headers or tokens.
+    const etsyText = typeof res.data?.error === 'string' ? res.data.error.slice(0, 120) : 'n/a';
+    console.error(`[etsy] shop lookup rejected: HTTP ${res.status}, etsyError=${etsyText}`);
+    throw new EtsyError('ETSY_UPSTREAM', `Etsy shop lookup failed with HTTP ${res.status}`, { status: res.status });
+  }
   const shop = res.data && res.data.shop_id !== undefined ? res.data : Array.isArray(res.data?.results) ? res.data.results[0] : null;
   if (!shop || shop.shop_id === undefined || shop.shop_id === null) return null;
   return {
