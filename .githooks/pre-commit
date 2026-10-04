@@ -23,11 +23,25 @@ fi
 
 PLACEHOLDER_RE='(example|sample|placeholder|your-|your_|dummy|localhost|127\.0\.0\.1|REDACTED|redacted|xxxx|XXXX|<[A-Za-z_ -]+>|CHANGEME|changeme|test_key|fake)'
 
+# Env lookups are not secrets (2026-10-04): a line that is ONLY an assignment from an environment
+# variable, e.g. `const FOO_API_KEY = process.env.FOO_API_KEY;` or `FOO_SECRET: process.env.FOO_SECRET,`,
+# is excluded. Strict on purpose: no quote character may appear before the lookup (so a quoted literal
+# followed by a `// = process.env.X` comment is still caught) and nothing but `;` `,` or a // comment may
+# follow it (so `process.env.X || "literal"` is still scanned). Unquoted literals in .env/.sh/.yml style
+# lines are not env lookups and stay blocked.
+QUOTE_CHARS=$(printf '\042\047\140')
+SQ_CHAR=$(printf '\047')
+DQ_CHAR=$(printf '\042')
+ENV_ONLY_RE="^[0-9]+:[^${QUOTE_CHARS}]*[:=][[:space:]]*(process\.env\.[A-Za-z0-9_]+|process\.env\[[^]]*\]|import\.meta\.env\.[A-Za-z0-9_]+)([[:space:]]*(\|\||\?\?)[[:space:]]*(${SQ_CHAR}${SQ_CHAR}|${DQ_CHAR}${DQ_CHAR}))?[[:space:]]*[;,]?[[:space:]]*(//.*)?\$"
+
 # Pattern table: one "NAME|ERE" per line. Blank lines ignored.
 # Hardcoded-sensitive-value (added 2026-10-03, GitGuardian incident 37759183):
 # catches a raw secret literal assigned to ANY *_SECRET/*_KEY/*_TOKEN/*_PASSWORD-style
 # variable name, regardless of vendor. This is the gap that let a hand-typed JWT_SECRET
 # value through — it had no vendor prefix so none of the patterns below matched it.
+# Env-fallback-literal (added 2026-10-04): the JWT_SECRET shape, `X_SECRET = process.env.X || 'typed-literal'`
+# (or `??`). The Hardcoded-sensitive-value pattern above misses it because the env lookup eats its length
+# window. An empty-string fallback does not match (the literal must be 8+ characters).
 SECRET_PATTERNS='DB-connection-string|(postgres(ql)?|mysql|mongodb(\+srv)?|redis|rediss)://[^ '"'"'"@/]+:[^ '"'"'"@/]+@
 PGPASSWORD|PGPASSWORD[[:space:]]*=[[:space:]]*[^[:space:]'"'"'"]+
 GitHub-PAT-classic|ghp_[A-Za-z0-9]{20,}
@@ -50,7 +64,8 @@ Stripe-webhook-secret|whsec_[A-Za-z0-9]{20,}
 Twilio-account-sid|AC[0-9a-f]{32}
 Private-key-block|-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----
 Generic-JWT|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}
-Hardcoded-sensitive-value|[A-Z][A-Z0-9]*_(SECRET|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_TOKEN|AUTH_TOKEN|REFRESH_TOKEN|PASSWORD|CLIENT_SECRET)[[:space:]]*[:=][[:space:]]*.{0,2}[A-Za-z0-9+/_.=-]{24,}'
+Hardcoded-sensitive-value|[A-Z][A-Z0-9]*_(SECRET|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_TOKEN|AUTH_TOKEN|REFRESH_TOKEN|PASSWORD|CLIENT_SECRET)[[:space:]]*[:=][[:space:]]*.{0,2}[A-Za-z0-9+/_.=-]{24,}
+Env-fallback-literal|[A-Z][A-Z0-9]*_(SECRET|API_KEY|APIKEY|PRIVATE_KEY|ACCESS_TOKEN|AUTH_TOKEN|REFRESH_TOKEN|PASSWORD|CLIENT_SECRET)[[:space:]]*[:=][[:space:]]*(process\.env\.[A-Za-z0-9_]+|process\.env\[[^]]*\]|import\.meta\.env\.[A-Za-z0-9_]+)[[:space:]]*(\|\||\?\?)[[:space:]]*['"'"'"`][^'"'"'"`]{8,}['"'"'"`]'
 
 HIT_FILE="${TMPDIR:-/tmp}/.findasale_secret_hit.$$"
 rm -f "$HIT_FILE"
@@ -70,7 +85,7 @@ for file in $STAGED_ALL; do
   printf '%s\n' "$SECRET_PATTERNS" | while IFS='|' read -r NAME ERE; do
     [ -z "$NAME" ] && continue
     [ -z "$ERE" ] && continue
-    MATCHES=$(printf '%s\n' "$CONTENT" | grep -nE -e "$ERE" 2>/dev/null | grep -viE -e "$PLACEHOLDER_RE" || true)
+    MATCHES=$(printf '%s\n' "$CONTENT" | grep -nE -e "$ERE" 2>/dev/null | grep -viE -e "$PLACEHOLDER_RE" | grep -vE -e "$ENV_ONLY_RE" || true)
     if [ -n "$MATCHES" ]; then
       echo "❌ Pre-commit blocked: possible secret [$NAME] in $file"
       printf '%s\n' "$MATCHES" | while IFS= read -r line; do
