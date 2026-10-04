@@ -1218,6 +1218,9 @@ async function syncListedReleaseFromLive(organizerId: string, item: Item): Promi
       data: {
         discogsListingReleaseId: listedReleaseId,
         discogsCandidates: envelope as unknown as Prisma.InputJsonValue,
+        // Derived cache write on a GET: must not look like an organizer edit. Prisma honors an
+        // explicitly supplied @updatedAt value, so pass the row's current one back unchanged.
+        updatedAt: item.updatedAt,
       },
     });
   } catch (e) {
@@ -1285,7 +1288,9 @@ async function resolveDiscogsMatchForItem(
         discogsMatchedAt: new Date(),
         discogsMatchInputHash: eff.hash,
       };
-  const updated = await prisma.item.update({ where: { id: item.id }, data });
+  // Derived cache write (also hit by the GET that merely opens an item): keep Item.updatedAt as it
+  // was. Prisma honors an explicitly supplied @updatedAt value, so pass the row's current one back.
+  const updated = await prisma.item.update({ where: { id: item.id }, data: { ...data, updatedAt: item.updatedAt } });
   return buildDiscogsMatchView(updated);
 }
 
