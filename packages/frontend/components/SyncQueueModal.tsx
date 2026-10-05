@@ -9,6 +9,8 @@ import { getPendingSync, clearAllOfflineData, getLastSyncTime } from '../lib/off
 import { useOfflineSyncContext } from '../contexts/OfflineSyncContext';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
+import { FOLLOWUP_COPY, describeConflict, isBulkReconcileCode, readConflicts, formatDollarsFromCents } from '../lib/bulkLotFollowup'; // ADR-136 Addendum B (#659)
+import { formatCardCount } from '../lib/bulkLot';
 
 interface SyncQueueModalProps {
   isOpen: boolean;
@@ -157,6 +159,13 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
                           {item.payload.category && <p>Category: {item.payload.category}</p>}
                           {item.operation === 'CHECKOUT_CASH' && (
                             <>
+                              {(item.payload.items || [])
+                                .filter((i: any) => typeof i.quantity === 'number')
+                                .map((i: any, lineIdx: number) => (
+                                  <p key={`lot-${lineIdx}`} className="text-gray-600">
+                                    {i.label || 'Bulk lot'}: {formatCardCount(i.quantity)} cards, {formatDollarsFromCents(Math.round((i.amount || 0) * 100))}
+                                  </p>
+                                ))}
                               <p>Cash sale: ${(item.payload.items || []).reduce((sum: number, i: any) => sum + (i.amount || 0), 0).toFixed(2)}</p>
                               <p>Cash received: ${Number(item.payload.cashReceived || 0).toFixed(2)}</p>
                             </>
@@ -164,11 +173,26 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
                         </div>
                       )}
 
-                      {needsReconciliation && (
+                      {needsReconciliation && !isBulkReconcileCode(item.reconcile?.code) && (
                         <p className="mt-2 text-sm text-red-700 flex items-start gap-1">
                           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                           Needs reconciliation. One or more items in this sale were already sold elsewhere while this device was offline. This sale was NOT recorded; review manually before re-entering it.
                         </p>
+                      )}
+                      {needsReconciliation && isBulkReconcileCode(item.reconcile?.code) && (
+                        <div className="mt-2 text-sm text-red-700">
+                          <p className="flex items-start gap-1">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                            {item.operation === 'CHECKOUT_CASH' ? FOLLOWUP_COPY.offlineBulkNeedsReview : (item.reconcile?.message || FOLLOWUP_COPY.offlineLotEditRefused)}
+                          </p>
+                          {readConflicts({ conflicts: item.reconcile?.conflicts }).length > 0 && (
+                            <ul className="mt-1 ml-5 list-disc space-y-0.5">
+                              {readConflicts({ conflicts: item.reconcile?.conflicts }).map((c, cIdx) => (
+                                <li key={`${c.itemId}-${cIdx}`}>{describeConflict(c)}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       )}
 
                       {stale && (

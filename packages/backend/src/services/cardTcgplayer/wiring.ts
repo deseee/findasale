@@ -13,6 +13,7 @@ import { withdrawDiscogsListingIfExists } from '../marketplace/discogsListingCon
 import { withdrawReverbListingIfExists } from '../marketplace/reverbConnector';
 import { notifyFacebookExportedItemSold } from '../facebookNudgeService';
 import type { SoldResult, SyncDb, SyncDeps, SyncTx } from './syncService';
+import { assertNotBulkLot } from './lotGuard';
 
 export const syncDb = prisma as unknown as SyncDb;
 
@@ -34,14 +35,20 @@ export function propagateSold(result: SoldResult): void {
 
 export function createDefaultDeps(): SyncDeps {
   return {
-    sellUnits: (itemId, units, tx: SyncTx) => sellItemUnits(itemId, units, tx as unknown as Parameters<typeof sellItemUnits>[2]),
+    // A bulk lot is never part of the round trip (ADR-136 Addendum C): refuse before any stock write.
+    sellUnits: async (itemId, units, tx: SyncTx) => {
+      await assertNotBulkLot(tx, itemId);
+      return sellItemUnits(itemId, units, tx as unknown as Parameters<typeof sellItemUnits>[2]);
+    },
     raiseUnits: async (itemId, units, tx: SyncTx) => {
-      // COALESCE keeps an item whose stockTotal is null (single unit) correct. Only an AVAILABLE item can grow.
+      // COALESCE keeps an item whose stockTotal is null (single unit) correct. Only an AVAILABLE item can grow, and a
+      // bulk lot never grows from a TCGplayer file (the NOT EXISTS below).
       const raw = tx as unknown as { $executeRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<number> };
       const count = await raw.$executeRaw`
         UPDATE "Item"
         SET "stockTotal" = COALESCE("stockTotal", 1) + ${units}
         WHERE "id" = ${itemId} AND "status" = 'AVAILABLE'
+          AND NOT EXISTS (SELECT 1 FROM "ItemBulkLot" b WHERE b."itemId" = "Item"."id")
       `;
       return count > 0;
     },

@@ -15,13 +15,15 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import BulkLotFollowupPanel from './BulkLotFollowupPanel'; // ADR-136 Addendum B: adjust count with history, take cards back, hold cards
+import BulkLotEbayBundlePanel from './BulkLotEbayBundlePanel'; // ADR-136 Addendum C: eBay bundles (renders nothing while CARD_BULK_EBAY_ENABLED is off)
+import { FOLLOWUP_COPY } from '../lib/bulkLotFollowup';
 import {
   BULK_COPY,
   BulkLot,
   BulkStatus,
   describeBulkError,
   formatCardCount,
-  parseCardCount,
   parseLotTotal,
   parsePricePerThousand,
   readBulkStatus,
@@ -78,7 +80,6 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
 
   const [totalText, setTotalText] = useState('');
   const [priceText, setPriceText] = useState('');
-  const [addText, setAddText] = useState('');
   const [kind, setKind] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -87,7 +88,6 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
   const fillFrom = (l: BulkLot | null) => {
     setTotalText(l ? String(l.totalCards) : '');
     setPriceText(l && l.pricePerThousandCents !== null ? (l.pricePerThousandCents / 100).toFixed(2) : '');
-    setAddText('');
     setKind(l ? l.lotKind : status?.vocabulary?.defaultKind ?? '');
   };
 
@@ -141,14 +141,8 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
     if (price === null) return setError(BULK_COPY.errorPrice);
     if (lot.pricePerThousandCents === null || Math.round(price * 100) !== lot.pricePerThousandCents) body.pricePerThousand = price;
 
-    const add = addText.trim() === '' ? null : parseCardCount(addText);
-    if (addText.trim() !== '' && add === null) return setError(BULK_COPY.errorAddCards);
-    const total = parseLotTotal(totalText);
-    if (total === null) return setError(BULK_COPY.errorTotal);
-    if (add !== null && total !== lot.totalCards) return setError(BULK_COPY.errorBoth);
-    if (add !== null) body.addCards = add;
-    else if (total !== lot.totalCards) body.totalCards = total;
-
+    // ADR-136 Addendum B: the card count is NOT saved here. It changes only through Adjust count (below), which records history;
+    // the server refuses totalCards and addCards on this save.
     if (kind && kind !== lot.lotKind) body.lotKind = kind;
     if (Object.keys(body).length === 0) return setError(BULK_COPY.errorNothingToSave);
 
@@ -227,7 +221,7 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
                 </div>
               </div>
               {kindSelect}
-              <p className="text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.ebayNote}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400">{FOLLOWUP_COPY.channelsNote}</p>
               <button type="button" onClick={enable} disabled={locked} className={`${primaryBtn} w-full sm:w-auto`}>
                 {busy ? `${BULK_COPY.enablingButton}...` : BULK_COPY.enableButton}
               </button>
@@ -263,24 +257,13 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
               <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.priceHelp}</p>
             </div>
             {kindSelect}
-            <div>
-              <label htmlFor={`${baseId}-total`} className={labelCls}>
-                {BULK_COPY.totalCardsLabel}
-              </label>
-              <input id={`${baseId}-total`} type="text" inputMode="numeric" value={totalText} disabled={locked} onChange={(e) => setTotalText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
-            </div>
-            <div>
-              <label htmlFor={`${baseId}-add`} className={labelCls}>
-                {BULK_COPY.addCardsLabel}
-              </label>
-              <input id={`${baseId}-add`} type="text" inputMode="numeric" value={addText} disabled={locked} onChange={(e) => setAddText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
-              <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.addCardsHelp}</p>
-            </div>
           </div>
-          <p className="text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.ebayNote}</p>
+          <p className="text-xs text-warm-500 dark:text-warm-400">{FOLLOWUP_COPY.channelsNote}</p>
           <button type="button" onClick={save} disabled={locked} className={`${primaryBtn} w-full sm:w-auto`}>
             {busy ? `${BULK_COPY.savingButton}...` : BULK_COPY.saveButton}
           </button>
+          <BulkLotFollowupPanel itemId={itemId} lot={lot} disabled={!!disabled} onLotChange={(l) => { queryClient.setQueryData(lotKey, l); fillFrom(l); if (onLotChange) onLotChange(l); }} />
+          <BulkLotEbayBundlePanel itemId={itemId} disabled={!!disabled} />
         </div>
       )}
 

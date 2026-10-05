@@ -22,6 +22,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { marketplaceLotRefusal } from '../services/bulkLot/bulkLotExportFilter';
 import {
   connectDiscogsAccount,
   disconnectDiscogsAccount,
@@ -166,6 +167,11 @@ export const getDiscogsEligibility = async (req: AuthRequest, res: Response) => 
       res.status(404).json({ message: 'Item not found' });
       return;
     }
+    const lotRefusal = await marketplaceLotRefusal('Discogs', [item.id], prisma as any);
+    if (lotRefusal) {
+      res.status(lotRefusal.status).json({ message: lotRefusal.message, code: lotRefusal.code });
+      return;
+    }
     const result = await checkDiscogsEligibility(organizer.id, item);
     res.json(result);
   } catch (error: any) {
@@ -192,6 +198,11 @@ export const pushItemToDiscogs = async (req: AuthRequest, res: Response) => {
     }
     if (!item) {
       res.status(404).json({ message: 'Item not found' });
+      return;
+    }
+    const lotRefusal = await marketplaceLotRefusal('Discogs', [item.id], prisma as any);
+    if (lotRefusal) {
+      res.status(lotRefusal.status).json({ message: lotRefusal.message, code: lotRefusal.code });
       return;
     }
     const publish = req.body?.publish === true;

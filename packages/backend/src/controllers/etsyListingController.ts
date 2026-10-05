@@ -22,6 +22,8 @@ import type { AuthRequest } from '../middleware/auth';
 import { EtsyError } from '../services/marketplace/etsyBudget';
 import { etsyWhenMadeQualifies, ETSY_VINTAGE_MIN_AGE_YEARS, ETSY_WHEN_MADE } from '../config/etsyWhenMade';
 import { checkEtsyEligibility } from '../services/marketplace/etsyEligibility';
+import { lotRefusalForPlatform } from '../services/bulkLot/bulkLotExportGuard';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 import {
   ETSY_LISTING_MESSAGES,
   EtsyListingError,
@@ -113,6 +115,14 @@ export function makeEtsyListingHandlers(deps: EtsyListingControllerDeps = {}) {
     const item = await loadOwnedEtsyItem(who.organizerId, String(req.params.id ?? ''), deps);
     if (!item) {
       res.status(404).json({ code: 'ETSY_ITEM_NOT_FOUND', message: ETSY_LISTING_CONTROLLER_MESSAGES.itemNotFound });
+      return null;
+    }
+    // Bulk lots (ADR-136 Addendum C) are priced per 1,000 cards and counted in cards: Etsy cannot sell one.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const lotDb = deps.db ?? require('../lib/prisma').prisma;
+    const lotRefusal = await lotRefusalForPlatform(lotDb, 'Etsy', [item.id], isBulkLotsEnabled(getEnv() as Record<string, string | undefined>));
+    if (lotRefusal) {
+      res.status(lotRefusal.status).json({ code: lotRefusal.code, message: lotRefusal.message });
       return null;
     }
     return { ...who, item };

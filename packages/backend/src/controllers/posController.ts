@@ -12,14 +12,24 @@
  */
 
 import { Response } from 'express';
-import type { HoldInvoice, POSPaymentLink } from '@prisma/client';
+import type { HoldInvoice, POSPaymentLink, Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import * as Sentry from '@sentry/node';
 import { resolveAndBackfillSquareLocationId } from '../services/squarePosPaymentAdapter';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
-import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 Addendum A (#659): bulk lots are sold through the QR payment link too
+import {
+  assertBulkLinesStillAvailable,
+  bulkLinesTotalCents,
+  bulkLotError,
+  findBulkLotItemIds,
+  isBulkLotError,
+  planBulkRequestLines,
+  toBulkLineRecords,
+  type BulkLineRecord,
+  type BulkLotDb,
+} from '../services/bulkLot/bulkLotService';
 import { applyCrewInvasionDiscount, releaseCrewInvasionRedemption, validateCrewInvasionCode, linkCrewInvasionRedemptionToInvoice } from '../services/crewInvasionRedemptionService'; // Feature #397 (2026-09-29): real redemption of the Crew Invasion code on hold invoices
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
@@ -104,6 +114,10 @@ export async function createPaymentLinkInternal(opts: {
   // POSPaymentLink row so the cash-leg commission can accrue when the link is paid. Optional and
   // ignored when absent/0 -- reservationController's CHECKOUT_LINK caller never sets it.
   cashAmountCents?: number;
+  // Bulk lots (ADR-136 Addendum A, #659): the priced cards for each lot item in itemIds, stored on the link row. When the
+  // link is paid, posPaymentLinkRecorder takes exactly these cards inside the same transaction that writes the Purchase rows.
+  // A lot in itemIds with no line here is refused (BULK_QUANTITY_REQUIRED): a lot is never sold as one unit.
+  bulkLines?: BulkLineRecord[];
 }): Promise<{ linkId: string; paymentLinkUrl: string; qrCodeDataUrl?: string; amount: number }> {
   const { organizerId, stripeConnectId, subscriptionTier, saleId, itemIds, amount, buyerEmail, expiresAt, squareOnboarded, squareMerchantId } = opts;
 
@@ -119,6 +133,20 @@ export async function createPaymentLinkInternal(opts: {
     : [];
   if (itemIds.length > 0 && items.length !== new Set(itemIds).size) {
     throw new PaymentLinkItemScopeError();
+  }
+
+  // Bulk lots: every lot in the link must carry its priced line, and every line must belong to the link. Checked before any
+  // Square call so nothing is created for a link that could not be recorded correctly.
+  const linkBulkLines: BulkLineRecord[] = opts.bulkLines ?? [];
+  if (itemIds.length > 0 || linkBulkLines.length > 0) {
+    const lotIdsInLink = await findBulkLotItemIds(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    const lineIds = new Set(linkBulkLines.map((l) => l.itemId));
+    const idSet = new Set(itemIds);
+    if (lineIds.size !== linkBulkLines.length || linkBulkLines.some((l) => !idSet.has(l.itemId) || !lotIdsInLink.has(l.itemId) || !(l.cards >= 1) || !(l.cents >= 1))) {
+      throw bulkLotError('BULK_VALIDATION', 400);
+    }
+    if (Array.from(lotIdsInLink).some((id) => !lineIds.has(id))) throw bulkLotError('BULK_QUANTITY_REQUIRED', 400);
+    if (linkBulkLines.length > 0 && !isBulkLotsEnabled()) throw bulkLotError('BULK_DISABLED', 409);
   }
 
   const amountCents = Math.round(amount * 100);
@@ -192,6 +220,7 @@ export async function createPaymentLinkInternal(opts: {
       amount: amountCents,
       itemIds,
       status: 'ACTIVE',
+      ...(linkBulkLines.length > 0 ? { bulkLines: linkBulkLines as unknown as Prisma.InputJsonValue } : {}),
       ...(opts.cashAmountCents && opts.cashAmountCents > 0
         ? { isSplitPayment: true, cashAmountCents: opts.cashAmountCents, cardAmountCents: amountCents }
         : {}),
@@ -570,9 +599,11 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { saleId, itemIds, amount, buyerEmail, cashAmountCents, discountType, discountValue, discountReasonNote, expiresInSeconds } = req.body as {
+    const { saleId, itemIds, amount, buyerEmail, cashAmountCents, discountType, discountValue, discountReasonNote, expiresInSeconds, bulkLines: requestedBulkLines } = req.body as {
       saleId?: string;
       itemIds?: string[];
+      // Bulk lots (ADR-136 Addendum A): [{ itemId, quantity, amount? }] for each lot in itemIds. The server prices every line.
+      bulkLines?: unknown;
       amount?: number;
       buyerEmail?: string;
       // Discount on catalog items (2026-09-29, money review P1-6/8): same fields and same
@@ -596,9 +627,6 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     if (itemIds.length > 200 || itemIds.some((id) => typeof id !== 'string' || id.trim() === '') || new Set(itemIds).size !== itemIds.length) {
       return res.status(400).json({ message: 'itemIds must be a list of unique item ids (at most 200)', code: 'INVALID_ITEM_IDS' });
     }
-    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
-    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
     let linkExpiresAt: Date | undefined;
     if (expiresInSeconds !== undefined && expiresInSeconds !== null) {
       if (
@@ -669,15 +697,35 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     // `catalogSubtotal - discount - 1` holds. Same rule as createPaymentRequest, via the shared
     // helper. The total compared is everything the buyer pays across tenders (card + cash).
     let linkCatalogSubtotalCents = 0;
+    let linkBulkLineRecords: BulkLineRecord[] = [];
     if (itemIds.length > 0) {
       const scopedItems = await prisma.item.findMany({
         where: { id: { in: itemIds }, saleId, sale: { organizerId: organizer.id } },
-        select: { id: true, price: true },
+        select: { id: true, price: true, status: true, stockTotal: true, stockSold: true },
       });
       if (scopedItems.length !== itemIds.length) {
         return res.status(404).json({ message: 'One or more items were not found in this sale', code: 'ITEM_NOT_FOUND' });
       }
-      linkCatalogSubtotalCents = Math.round(scopedItems.reduce((sum, it) => sum + (it.price ?? 0), 0) * 100);
+      // Bulk lots (ADR-136 Addendum A, #659). The lot lookup runs whether or not the flag is on, so a lot is never put on a
+      // link as one unit. The server prices every lot line (cards x price per 1,000, half up to the cent, once) and the
+      // register's own figure for the line must match to the cent (PRICE_CHANGED). The cards are NOT held: they are taken
+      // when the link is paid, in the transaction that records the sale. A lot that sells out in between refunds the payment.
+      try {
+        const linkPlans = await planBulkRequestLines(prisma as unknown as BulkLotDb, {
+          itemIds,
+          bulkLines: requestedBulkLines,
+          itemRows: Object.fromEntries(scopedItems.map((it) => [it.id, it])),
+          flagOn: isBulkLotsEnabled(),
+        });
+        linkBulkLineRecords = toBulkLineRecords(linkPlans);
+        await assertBulkLinesStillAvailable(prisma as unknown as BulkLotDb, linkBulkLineRecords);
+      } catch (bulkErr) {
+        if (isBulkLotError(bulkErr)) return res.status(bulkErr.status).json({ message: bulkErr.message, code: bulkErr.code });
+        throw bulkErr;
+      }
+      const lotIds = new Set(linkBulkLineRecords.map((l) => l.itemId));
+      linkCatalogSubtotalCents =
+        Math.round(scopedItems.reduce((sum, it) => sum + (lotIds.has(it.id) ? 0 : (it.price ?? 0)), 0) * 100) + bulkLinesTotalCents(linkBulkLineRecords);
     }
     const linkFloor = await authorizeDiscountAndCheckFloor({
       actor: organizer,
@@ -723,8 +771,12 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
         squareMerchantId: organizer.squareMerchantId,
         ...(linkCashCents > 0 ? { cashAmountCents: linkCashCents } : {}),
         ...(linkExpiresAt ? { expiresAt: linkExpiresAt } : {}),
+        ...(linkBulkLineRecords.length > 0 ? { bulkLines: linkBulkLineRecords } : {}),
       });
     } catch (stripeErr) {
+      if (isBulkLotError(stripeErr)) {
+        return res.status(stripeErr.status).json({ message: stripeErr.message, code: stripeErr.code });
+      }
       if (stripeErr instanceof PaymentLinkItemScopeError) {
         return res.status(404).json({ message: stripeErr.message, code: 'ITEM_NOT_FOUND' });
       }

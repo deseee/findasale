@@ -108,7 +108,11 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
       return res.status(400).json({ message: 'A tokenized payment source is required.' });
     }
-    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    // Bulk lots (ADR-136 Addendum A, #659): the register sells a lot on every tender (cash, Venmo, Zelle, card on the phone,
+    // manual card, QR link). THIS online buy-now checkout is the one path that still refuses: it has no quantity to ask the
+    // shopper for (a lot is priced per 1,000 cards, so the charge depends on how many they want), and its shipping, coupon,
+    // buyer-premium and affiliate math all assume one unit. Charging it as one unit would be a silent wrong charge, so it
+    // refuses with a plain message and the shop rings the lot up in person. Revisit with a shopper-facing quantity picker.
     const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, [itemId], isBulkLotsEnabled());
     if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
 
@@ -615,7 +619,8 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
     if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
       return res.status(400).json({ error: 'A tokenized payment source is required.' });
     }
-    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    // Bulk lots (ADR-136 Addendum A, #659): the online cart checkout still refuses a lot, for the same reason as the single
+    // item checkout above (no quantity for the shopper to choose, one-unit shipping and fee math). The register sells lots.
     const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
     if (bulkRefusal) return res.status(bulkRefusal.status).json({ error: bulkRefusal.message, code: bulkRefusal.code });
 

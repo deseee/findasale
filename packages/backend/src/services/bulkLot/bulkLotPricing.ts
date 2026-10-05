@@ -93,6 +93,20 @@ export function formatPerCardPrice(pricePerThousandCents: number): string {
   return `$${text}`;
 }
 
+/**
+ * Receipt and cart wording for one bulk sale line (ADR-136 Addendum A): the cards and the price per 1,000 are both shown,
+ * for example "MTG commons: 1,500 cards at $8.00 per 1,000". Without a price per 1,000 it is just "MTG commons: 1,500 cards".
+ * Plain text; callers that put it in HTML escape the title themselves.
+ */
+export function describeBulkSaleLine(title: string, cards: number, pricePerThousandCents?: number | null): string {
+  const name = typeof title === 'string' && title.trim() ? title.trim() : 'Bulk lot';
+  const base = `${name}: ${formatCardCount(cards)} ${cards === 1 ? 'card' : 'cards'}`;
+  if (typeof pricePerThousandCents === 'number' && Number.isFinite(pricePerThousandCents) && pricePerThousandCents > 0) {
+    return `${base} at ${formatCents(pricePerThousandCents)} per 1,000`;
+  }
+  return base;
+}
+
 export interface LadderRow {
   cards: number;
   cents: number;

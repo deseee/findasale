@@ -26,6 +26,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { marketplaceLotRefusal } from '../services/bulkLot/bulkLotExportFilter';
 import {
   connectReverbAccount,
   disconnectReverbAccount,
@@ -168,6 +169,11 @@ export const pushItemToReverb = async (req: AuthRequest, res: Response) => {
     }
     if (!item) {
       res.status(404).json({ message: 'Item not found' });
+      return;
+    }
+    const lotRefusal = await marketplaceLotRefusal('Reverb', [item.id], prisma as any);
+    if (lotRefusal) {
+      res.status(lotRefusal.status).json({ message: lotRefusal.message, code: lotRefusal.code });
       return;
     }
 

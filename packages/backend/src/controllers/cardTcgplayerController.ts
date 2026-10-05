@@ -23,7 +23,8 @@ import { AuthRequest } from '../middleware/auth';
 import { EnvLike, getIntakeConfig } from '../services/cardIntake/config';
 import { isIntakeFileError } from '../services/cardIntake/parseSpreadsheet';
 import { fileErrorToFailure } from '../services/cardIntake/intakeService';
-import { API_MESSAGES } from '../services/cardTcgplayer/messages';
+import { API_MESSAGES, NOTES } from '../services/cardTcgplayer/messages';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 import { REGISTER_CHECK_MAX_ITEMS, isTcgplayerSyncEnabled } from '../services/cardTcgplayer/config';
 import { ExportOptions } from '../services/cardTcgplayer/exportBuilder';
 import { FirstSyncPolicy, ReconcileOptions } from '../services/cardTcgplayer/reconcileEngine';
@@ -132,11 +133,16 @@ export function createCardTcgplayerHandlers(deps: TcgplayerControllerDeps) {
     return res.locals[SALE_LOCAL] as SaleScope;
   }
 
+  /** With bulk lots on, every answer says that lots are left out of the TCGplayer round trip (ADR-136 Addendum C). */
+  function lotsNote(): { bulkLotsNote?: string } {
+    return isBulkLotsEnabled(deps.env) ? { bulkLotsNote: NOTES.BULK_LOTS_IGNORED } : {};
+  }
+
   const status = async (_req: AuthRequest, res: Response) => {
     try {
       if (!enabled()) return res.json({ success: true, data: { enabled: false } });
       const data = await getStatus(deps.db, scopeOf(res).id);
-      return res.json({ success: true, data: { enabled: true, ...data } });
+      return res.json({ success: true, data: { enabled: true, ...data, ...lotsNote() } });
     } catch (err) {
       return serverError(res, err, 'status');
     }
@@ -174,6 +180,7 @@ export function createCardTcgplayerHandlers(deps: TcgplayerControllerDeps) {
             csv: plan.rows.length > 0 ? plan.csv : null,
             summary: plan.summary,
             skipped: result.skipped,
+            ...lotsNote(),
           },
         });
       } finally {
@@ -239,7 +246,7 @@ export function createCardTcgplayerHandlers(deps: TcgplayerControllerDeps) {
       const prepared = await prepare(req, res);
       if (!prepared) return undefined;
       const report = await previewReconcile(deps.db, prepared.scope.id, prepared.parsed, prepared.opts);
-      return res.json({ success: true, data: { ...report, exportWaiting: prepared.exportWaiting } });
+      return res.json({ success: true, data: { ...report, exportWaiting: prepared.exportWaiting, ...lotsNote() } });
     } catch (err) {
       return handleFileError(res, err) ?? serverError(res, err, 'reconcile-preview');
     } finally {
@@ -258,7 +265,7 @@ export function createCardTcgplayerHandlers(deps: TcgplayerControllerDeps) {
       running.add(scope.id);
       locked = scope.id;
       const report = await applyReconcile(deps.db, scope.id, prepared.parsed, prepared.opts, deps.syncDeps);
-      return res.json({ success: true, data: report });
+      return res.json({ success: true, data: { ...report, ...lotsNote() } });
     } catch (err) {
       return handleFileError(res, err) ?? serverError(res, err, 'reconcile-apply');
     } finally {

@@ -207,6 +207,7 @@ import itemCardRoutes from './routes/itemCard';               // ADR-134 B2: per
 import cardIntakeRoutes from './routes/cardIntake';           // ADR-134 B4: spreadsheet-first card intake
 import cardTcgplayerRoutes from './routes/cardTcgplayer';     // ADR-137 #660: TCGplayer round trip for card shops (writing routes answer 404 unless CARD_TCGPLAYER_SYNC_ENABLED and CARD_CATALOG_ENABLED are true)
 import bulkLotRoutes from './routes/bulkLots';                // ADR-136 #659: bulk lots for card shops (answers 404 BULK_DISABLED unless CARD_BULK_LOTS_ENABLED is true)
+import bulkLotEbayRoutes from './routes/bulkLotEbay';          // ADR-136 Addendum C #659: eBay bundles of bulk lots (404 BUNDLE_DISABLED unless CARD_BULK_EBAY_ENABLED is true)
 import etsyRoutes from './routes/etsy';                       // ADR-135 B1: Etsy connect, callback, connection, shop setup (kill switch per route)
 import etsyListingRoutes from './routes/etsyListings';        // ADR-135 B3: Etsy item eligibility, draft, publish, end (kill switch per route)
 import etsyWebhookRoutes from './routes/etsyWebhook';         // ADR-135 B4: Etsy webhook (public, raw body, signature verified in the handler)
@@ -261,6 +262,7 @@ import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly 
 import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
 import './jobs/posStrandedSaleReconcileCron'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151): auto-record stranded QR/POS sales every 10 min
 import './jobs/boothCartAbandonmentSweepJob'; // Refresh-during-sale bug companion (2026-08-01): release abandoned PENDING/IN_PROGRESS booth carts every 10 min
+import './jobs/bulkLotHoldSweepJob'; // ADR-136 Addendum B #659: expired bulk lot holds give their cards back to the lot every 5 min (no-op unless CARD_BULK_LOTS_ENABLED)
 import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper digest — Sundays 6 PM
 import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily batch processing and warnings
 import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transaction detection at 2 AM
@@ -289,6 +291,7 @@ import { scheduleMarkdownRetagAlertJob } from './jobs/markdownRetagAlertJob'; //
 import { scheduleGoogleMerchantFeedCron } from './jobs/googleMerchantFeedCron'; // Feature #463: Google Merchant Center feed
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
+import { startBulkLotEbayBundleSweepCron } from './jobs/bulkLotEbayBundleSweepCron'; // ADR-136 Addendum C #659: keeps eBay bundle listings in line with lot stock
 import { startDiscogsSoldSyncCron } from './jobs/discogsSoldSyncCron'; // 2026-09-23: Discogs seller-order poll -> SOLD + fan-out
 import { startReverbSoldSyncCron } from './jobs/reverbSoldSyncCron'; // 2026-09-23: Reverb seller-order poll -> SOLD + fan-out
 import { scheduleCardCatalogScryfallRefresh, scheduleCardCatalogTcgcsvRefresh } from './jobs/cardCatalogRefreshCron'; // ADR-134 B3: daily card catalog refresh (inert unless CARD_CATALOG_ENABLED is true)
@@ -906,6 +909,7 @@ app.use('/api/cards', cardCatalogRoutes);                                   // A
 app.use('/api/item-cards', itemCardRoutes);                                 // ADR-134 B2: per-item card record
 app.use('/api/card-intake', cardIntakeRoutes);                              // ADR-134 B4: spreadsheet-first card intake
 app.use('/api/card-tcgplayer', cardTcgplayerRoutes);                        // ADR-137 #660: TCGplayer round trip (flag CARD_TCGPLAYER_SYNC_ENABLED, default off)
+app.use('/api/bulk-lots/ebay', bulkLotEbayRoutes);                      // ADR-136 Addendum C #659: eBay bundles (flag CARD_BULK_EBAY_ENABLED, default off); before /api/bulk-lots so its paths are never shadowed
 app.use('/api/bulk-lots', bulkLotRoutes);                                // ADR-136 #659: bulk lots (flag CARD_BULK_LOTS_ENABLED, default off)
 // ADR-135 (Etsy): the webhook router mounts FIRST (no auth, no kill switch: the handler answers 200 and ignores
 // when the connector is off), then the two organizer routers, each with the kill switch applied per route.
@@ -1141,6 +1145,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #244 Phase 3: Register eBay sold sync cron (every 15 minutes — polling fallback)
   startEbaySoldSyncCron();
+
+  // ADR-136 Addendum C (#659): every 10 minutes, revise, end or relist eBay bundle listings of bulk lots (no-op unless CARD_BULK_EBAY_ENABLED)
+  startBulkLotEbayBundleSweepCron();
 
   // 2026-09-23: Discogs sold sync (every 15 minutes, seller orders -> SOLD + fan-out)
   startDiscogsSoldSyncCron();

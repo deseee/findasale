@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import api from '../lib/api';
 import { getPendingSync, getPendingSyncCount, initOfflineDB, markSyncConfirmed, markNeedsReconciliation, mapLocalToServerId, clearSyncedOperations, setLastSyncTime } from '../lib/offlineSync';
 import { useToast } from '../components/ToastContext';
+import { FOLLOWUP_COPY, isBulkReconcileCode, readConflicts } from '../lib/bulkLotFollowup'; // ADR-136 Addendum B (#659)
 
 export interface OfflineSyncState {
   isOffline: boolean;
@@ -159,17 +160,26 @@ export function useOfflineSync() {
         // conflict, not a transient sync error. Route it to "needs reconciliation" (stops the
         // endless-retry loop non-retryable failures would otherwise cause) instead of lumping
         // it into the generic failure toast.
-        const reconciliationNeeded = failed.filter(
-          (f: any) => f.operationType === 'CHECKOUT_CASH' && f.code === 'ITEM_UNAVAILABLE'
-        );
-        const otherFailures = failed.filter(
-          (f: any) => !(f.operationType === 'CHECKOUT_CASH' && f.code === 'ITEM_UNAVAILABLE')
-        );
+        // ADR-136 Addendum B (#659): a bulk lot sale that no longer sells as queued (price changed, not enough cards) and a
+        // queued edit of a lot the server refused are the same kind of conflict, never retryable, so they wait for review too,
+        // with the per-line reason kept on the entry.
+        const needsReview = (f: any) =>
+          (f.operationType === 'CHECKOUT_CASH' && f.code === 'ITEM_UNAVAILABLE') ||
+          (f.retryable === false && isBulkReconcileCode(f.code));
+        const reconciliationNeeded = failed.filter(needsReview);
+        const otherFailures = failed.filter((f: any) => !needsReview(f));
 
         if (reconciliationNeeded.length > 0) {
-          await markNeedsReconciliation(reconciliationNeeded.map((f: any) => f.localId));
+          const reasons: Record<string, { code?: string; message?: string; conflicts?: unknown[] }> = {};
+          for (const f of reconciliationNeeded) {
+            reasons[f.localId] = { code: f.code, message: f.error, conflicts: readConflicts(f.details) };
+          }
+          await markNeedsReconciliation(reconciliationNeeded.map((f: any) => f.localId), reasons);
+          const bulkCount = reconciliationNeeded.filter((f: any) => isBulkReconcileCode(f.code)).length;
           showToast(
-            `${reconciliationNeeded.length} cash sale${reconciliationNeeded.length > 1 ? 's' : ''} need${reconciliationNeeded.length > 1 ? '' : 's'} reconciliation. Item sold elsewhere while offline. Review in Offline Sync Queue.`,
+            bulkCount > 0
+              ? `${bulkCount} queued ${bulkCount > 1 ? 'entries' : 'entry'} ${FOLLOWUP_COPY.offlineBulkToast}`
+              : `${reconciliationNeeded.length} cash sale${reconciliationNeeded.length > 1 ? 's' : ''} need${reconciliationNeeded.length > 1 ? '' : 's'} reconciliation. Item sold elsewhere while offline. Review in Offline Sync Queue.`,
             'warning'
           );
         }

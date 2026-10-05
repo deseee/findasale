@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
 import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { LOT_CHANNEL_MESSAGES } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B: a lot is held by card count (POST /api/bulk-lots/item/:itemId/hold), not as one item
 import { AuthRequest } from '../middleware/auth';
 import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // Cart drawer Pay Now link (2026-08-24)
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): payment-deadline notification-gap fixes
@@ -113,9 +114,13 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     const { itemId, note, latitude, longitude, qrScanId } = req.body;
     if (!itemId) return res.status(400).json({ message: 'itemId is required' });
 
-    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    // Bulk lots (ADR-136, #659) are held by the number of cards, never as one item: POST /api/bulk-lots/item/:itemId/hold takes
+    // the cards off the lot and gives them back on expiry. Refuse this single-item hold before anything is reserved.
     const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, [itemId], isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
+    if (bulkRefusal) {
+      if (bulkRefusal.code === 'BULK_CHANNEL_UNSUPPORTED') return res.status(bulkRefusal.status).json({ message: LOT_CHANNEL_MESSAGES.HOLD_INVOICE, code: 'BULK_USE_CARD_HOLD' });
+      return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
+    }
 
     const item = await prisma.item.findUnique({
       where: { id: itemId },

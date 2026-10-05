@@ -4,7 +4,8 @@ import { AuthRequest } from '../middleware/auth';
 import { BoothAuthRequest } from '../middleware/requireBoothAuth';
 import { prisma } from '../lib/prisma';
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
-import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { BULK_LOT_MESSAGES, findBulkLotItemIds, isBulkLotError, parseBulkLineRequests, type BulkLotDb } from '../services/bulkLot/bulkLotService'; // ADR-136 Addendum B (#659): a hub cart takes lot lines (N cards) in bulkLines
+import { listCartLotLines, removeCartLotLines, reserveCartLotLines, settleCartLotLine, type CartLotDb } from '../services/bulkLot/bulkLotBoothCartService';
 import { getStripe } from '../utils/stripe';
 import { assertBoothCartCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard';
 import { endEbayListingIfExists } from './ebayController';
@@ -12,7 +13,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
-import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
 import { calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula; inclusive-fee migration (2026-09-24, Patrick ruling) -- booth-cart legs (cash and card) are always IN_PERSON, collected at the physical booth
@@ -35,6 +36,27 @@ import {
 } from '../services/squareVendorBoothCartService'; // vendor-booth-cart-checkout dispatch (2026-09-07) -- Square-side sibling, see that file's header comment for the researched design
 
 const stripe = () => getStripe();
+
+// ADR-136 Addendum B (#659): thrown inside a lot-line transaction when the cart is no longer PENDING, so the whole transaction
+// (cards taken or returned) rolls back.
+class CartNotOpenError extends Error {}
+
+/** After a lot's cards change in a hub cart: let the eBay bundle catch up. Never throws, never blocks the sale. */
+function notifyLotStockChanged(itemId: string, why: string): void {
+  import('../services/bulkLot/bulkLotEbayWiring')
+    .then((m) => m.reconcileBulkLotEbayInBackgroundIfEnabled(itemId, why))
+    .catch(() => undefined);
+}
+
+/** RESERVED lot lines of a cart (one booth, or all). Flag off: a failed read means no lines (the table may not exist yet). */
+async function readCartLotLines(cartId: string, vendorBoothId?: string) {
+  try {
+    return await listCartLotLines(prisma as unknown as CartLotDb, cartId, vendorBoothId);
+  } catch (err) {
+    if (isBulkLotsEnabled()) throw err;
+    return [];
+  }
+}
 
 // ADR-090 §6 (2026-07-20, Patrick "defaults based on industry standards"): server-enforced
 // ceiling on VendorBooth.revenueSharePercent. Also enforced at write-time in
@@ -634,11 +656,27 @@ export const startBoothCart = async (req: BoothAuthRequest, res: Response) => {
 export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) => {
   try {
     const { hubId, cartTransactionId } = req.params;
-    const { itemIds } = req.body as { itemIds?: string[] };
+    const { itemIds: rawItemIds, bulkLines: rawBulkLines } = req.body as { itemIds?: string[]; bulkLines?: unknown };
     if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
-    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+    // ADR-136 Addendum B (#659): lot lines are { itemId, quantity, amount? } in bulkLines. The server prices them; amount is only a check.
+    let lotRequests: ReturnType<typeof parseBulkLineRequests>;
+    try {
+      lotRequests = parseBulkLineRequests(rawBulkLines);
+    } catch (lotErr) {
+      if (isBulkLotError(lotErr)) return res.status(lotErr.status).json({ error: lotErr.message, code: lotErr.code });
+      throw lotErr;
+    }
+    const plainItemIds: string[] = Array.isArray(rawItemIds) ? rawItemIds : [];
+    if (plainItemIds.length === 0 && lotRequests.length === 0) {
       return res.status(400).json({ error: 'itemIds is required and must be a non-empty array' });
     }
+    if (lotRequests.length > 0 && !isBulkLotsEnabled()) {
+      return res.status(404).json({ error: BULK_LOT_MESSAGES.BULK_DISABLED, code: 'BULK_DISABLED' });
+    }
+    if (lotRequests.some((r) => plainItemIds.includes(r.itemId))) {
+      return res.status(400).json({ error: BULK_LOT_MESSAGES.BULK_VALIDATION, code: 'BULK_VALIDATION' });
+    }
+    const itemIds: string[] = [...plainItemIds, ...lotRequests.map((r) => r.itemId)];
 
     // Fix 2 (2026-08-01): the hub's own organizerId, so an item belonging to the hub
     // OWNER (not a claimed vendor) can be recognized below and lazily routed to the
@@ -662,6 +700,7 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
       where: { id: { in: itemIds } },
       select: {
         id: true, title: true, price: true, status: true, organizerId: true, boothEligible: true,
+        stockTotal: true, stockSold: true, // ADR-136 Addendum B: a lot line is priced and checked against these
       },
     });
 
@@ -669,9 +708,21 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
       return res.status(400).json({ error: 'One or more items not found' });
     }
 
-    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
-    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ error: bulkRefusal.message, code: bulkRefusal.code });
+    // Bulk lots (ADR-136, #659): a lot goes in the cart as a quantity line (bulkLines), never as a plain item id. Refuse
+    // before anything is reserved. The lookup fails closed (503) while the flag is on.
+    let lotIdSet: Set<string>;
+    try {
+      lotIdSet = await findBulkLotItemIds(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    } catch (lotErr) {
+      if (isBulkLotError(lotErr)) return res.status(lotErr.status).json({ error: lotErr.message, code: lotErr.code });
+      throw lotErr;
+    }
+    if (plainItemIds.some((id) => lotIdSet.has(id))) {
+      return res.status(400).json({ error: BULK_LOT_MESSAGES.BULK_QUANTITY_REQUIRED, code: 'BULK_QUANTITY_REQUIRED' });
+    }
+    if (lotRequests.some((r) => !lotIdSet.has(r.itemId))) {
+      return res.status(409).json({ error: BULK_LOT_MESSAGES.BULK_NOT_LOT, code: 'BULK_NOT_LOT' });
+    }
 
     // Batch-resolve owner (Item.organizerId -> Organizer.userId) then batch-check
     // for a CONFIRMED VendorBooth at this hub per resolved userId. Two small
@@ -695,6 +746,7 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
 
     const rejected: Array<{ itemId: string; reason: string }> = [];
     const accepted: Array<{ id: string; title: string; price: number | null; vendorBoothId: string }> = [];
+    const acceptedLots: Array<{ item: (typeof items)[number]; vendorBoothId: string }> = [];
 
     // Fix 2 (2026-08-01): lazily resolved at most once per request, only if actually
     // needed (an item owned by the hub itself with no pre-existing CONFIRMED booth
@@ -719,10 +771,14 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
         continue;
       }
+      if (lotIdSet.has(item.id)) {
+        acceptedLots.push({ item, vendorBoothId: booth.id });
+        continue;
+      }
       accepted.push({ id: item.id, title: item.title, price: item.price, vendorBoothId: booth.id });
     }
 
-    if (accepted.length === 0) {
+    if (accepted.length === 0 && acceptedLots.length === 0) {
       return res.status(409).json({ error: 'No items could be added to the cart', rejected });
     }
 
@@ -731,13 +787,59 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
 
     const newTotal = accepted.reduce((sum, i) => sum + (i.price || 0), 0) + Number(cart.totalAmount);
 
-    const updated = await prisma.boothCartTransaction.update({
-      where: { id: cart.id },
-      data: {
-        boothsRepresented: mergedBoothsRepresented,
-        totalAmount: newTotal,
-      },
-    });
+    // ADR-136 Addendum B (#659): take the cards for each lot line and update the cart in ONE transaction. The cart update is a
+    // compare-and-swap on PENDING; if checkout started meanwhile it throws and every card goes back.
+    let addedLotLines: Awaited<ReturnType<typeof reserveCartLotLines>>['added'] = [];
+    if (acceptedLots.length > 0) {
+      const requestByItem = new Map(lotRequests.map((r) => [r.itemId, r]));
+      try {
+        const reserved = await reserveCartLotLines(
+          prisma as unknown as CartLotDb,
+          { sell: (tx, id, units) => sellItemUnitsInTransaction(tx, id, units) },
+          {
+            cartId: cart.id,
+            requests: acceptedLots.map((l) => ({
+              item: { id: l.item.id, price: l.item.price, status: l.item.status, stockTotal: l.item.stockTotal, stockSold: l.item.stockSold },
+              vendorBoothId: l.vendorBoothId,
+              quantity: requestByItem.get(l.item.id)!.quantity,
+              amountDollars: requestByItem.get(l.item.id)!.amount,
+            })),
+          },
+          async (tx, added) => {
+            const withLots = Array.from(new Set([...mergedBoothsRepresented, ...added.vendorBoothIds]));
+            const cas = await tx.boothCartTransaction.updateMany({
+              where: { id: cart.id, status: 'PENDING' },
+              data: { boothsRepresented: withLots, totalAmount: newTotal + added.totalCents / 100 },
+            });
+            if (cas.count !== 1) throw new CartNotOpenError();
+          }
+        );
+        addedLotLines = reserved.added;
+        for (const r of reserved.rejected) rejected.push({ itemId: r.itemId, reason: r.code });
+      } catch (lotErr) {
+        if (lotErr instanceof CartNotOpenError) {
+          const freshCart = await prisma.boothCartTransaction.findFirst({ where: { id: cart.id } });
+          return res.status(409).json({ error: `Cart is not open for edits (status: ${freshCart?.status ?? 'unknown'})` });
+        }
+        throw lotErr;
+      }
+      for (const l of addedLotLines) notifyLotStockChanged(l.itemId, 'hub cart line added');
+      if (accepted.length === 0 && addedLotLines.length === 0) {
+        return res.status(409).json({ error: 'No items could be added to the cart', rejected });
+      }
+    }
+
+    const updated =
+      addedLotLines.length > 0
+        ? await prisma.boothCartTransaction.findFirstOrThrow({ where: { id: cart.id } })
+        : await prisma.boothCartTransaction.update({
+            where: { id: cart.id },
+            data: {
+              boothsRepresented: mergedBoothsRepresented,
+              totalAmount: newTotal,
+            },
+          });
+    // (lot lines already wrote boothsRepresented and totalAmount, plain items included, in their own transaction above)
 
     // Reserve items against this cart so a second concurrent cart can't also grab
     // them, AND persist BOTH the resolved vendorBoothId and this cart's own id.
@@ -764,6 +866,7 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     return res.status(200).json({
       cart: updated,
       accepted: accepted.map((i) => ({ itemId: i.id, title: i.title, price: i.price })),
+      acceptedLines: addedLotLines.map((l) => ({ lineId: l.lineId, itemId: l.itemId, quantity: l.quantity, lineCents: l.lineCents })),
       rejected,
     });
   } catch (error) {
@@ -792,6 +895,46 @@ export const removeBoothCartItem = async (req: BoothAuthRequest, res: Response) 
     if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (cart.status !== 'PENDING') {
       return res.status(409).json({ error: `Cart is not open for edits (status: ${cart.status})` });
+    }
+
+    // ADR-136 Addendum B (#659): itemId may name a bulk lot with lines in this cart. Remove one line (?lineId=) or all of them,
+    // return the cards, and update the cart, in one transaction (a compare-and-swap on PENDING; if checkout started it rolls back).
+    const lotLinesHere = (await readCartLotLines(cart.id)).filter((l) => l.itemId === itemId);
+    if (lotLinesHere.length > 0) {
+      const lineId = typeof req.query?.lineId === 'string' && req.query.lineId.length > 0 ? req.query.lineId : null;
+      try {
+        const removedLot = await removeCartLotLines(prisma as unknown as CartLotDb, { cartId: cart.id, itemId, lineId }, async (tx, r) => {
+          const plainBooths: Array<{ vendorBoothId: string | null }> = await tx.item.findMany({
+            where: { boothCartTransactionId: cart.id, status: 'RESERVED' },
+            select: { vendorBoothId: true },
+            distinct: ['vendorBoothId'],
+          });
+          const lotBooths: Array<{ vendorBoothId: string | null }> = await tx.boothCartBulkLine.findMany({
+            where: { boothCartTransactionId: cart.id, status: 'RESERVED' },
+            select: { vendorBoothId: true },
+            distinct: ['vendorBoothId'],
+          });
+          const stillRepresented = Array.from(new Set([...plainBooths, ...lotBooths].map((b) => b.vendorBoothId).filter((id): id is string => !!id)));
+          const cas = await tx.boothCartTransaction.updateMany({
+            where: { id: cart.id, status: 'PENDING' },
+            data: { boothsRepresented: stillRepresented, totalAmount: { decrement: r.cents / 100 } },
+          });
+          if (cas.count !== 1) throw new CartNotOpenError();
+        });
+        notifyLotStockChanged(itemId, 'hub cart line removed');
+        let updatedAfterLot = await prisma.boothCartTransaction.findFirstOrThrow({ where: { id: cart.id } });
+        if (Number(updatedAfterLot.totalAmount) < 0) {
+          updatedAfterLot = await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { totalAmount: 0 } });
+        }
+        return res.status(200).json({ removed: true, cart: updatedAfterLot, removedLines: removedLot.lines, removedCards: removedLot.cards });
+      } catch (lotErr) {
+        if (lotErr instanceof CartNotOpenError) {
+          const freshCart = await prisma.boothCartTransaction.findFirst({ where: { id: cart.id } });
+          return res.status(409).json({ error: `Cart is not open for edits (status: ${freshCart?.status ?? 'unknown'})` });
+        }
+        if (isBulkLotError(lotErr) && lotErr.code === 'BULK_NOT_FOUND') return res.status(404).json({ error: 'Item is not reserved in this cart' });
+        throw lotErr;
+      }
     }
 
     const item = await prisma.item.findFirst({
@@ -1048,7 +1191,7 @@ async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented
   // markdown itself already "composes for free": each call reads Item.price/
   // originalPrice live, so a markdown that fired since this item was reserved is picked
   // up automatically, same as it always has been.
-  return items.map((item) => {
+  const plainLegItems = items.map((item) => {
     const cap = computeCashierDiscretionCap({ originalPrice: item.originalPrice, price: item.price });
     const storedAppliedCents = item.pendingCashierDiscretionAppliedCents || 0;
     const discretionAppliedCents = Math.max(0, Math.min(storedAppliedCents, cap.maxDiscretionCents));
@@ -1061,6 +1204,31 @@ async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented
       netPriceCents,
     };
   });
+
+  // ADR-136 Addendum B (#659): the lot lines (N cards each) of this booth in this cart join the leg as pseudo items, priced at the
+  // snapshot taken when the line was added. Every consumer of this function (booth summary, leg amounts on every rail, cash
+  // capture, finalize) therefore sums lots and ordinary items the same way. A lot line has no cashier discretion (cap 0).
+  const lotLines = await readCartLotLines(cartTransactionId, vendorBoothId);
+  if (lotLines.length === 0) return plainLegItems.map((i) => ({ ...i, bulkLine: undefined as undefined | { lineId: string; quantity: number; pricePerThousandCents: number } }));
+  const lotTitles = await prisma.item.findMany({ where: { id: { in: Array.from(new Set(lotLines.map((l) => l.itemId))) } }, select: { id: true, title: true } });
+  const titleById = new Map(lotTitles.map((t) => [t.id, t.title]));
+  const lotLegItems = lotLines.map((l) => ({
+    id: l.itemId,
+    price: l.lineCents / 100,
+    title: titleById.get(l.itemId) ?? 'Bulk lot',
+    vendorBoothId: l.vendorBoothId as string | null,
+    originalPrice: l.lineCents / 100 as number | null,
+    pendingCashierDiscretionAppliedCents: 0,
+    pendingCashierDiscretionAppliedByType: null,
+    pendingCashierDiscretionAppliedById: null,
+    discretionAppliedCents: 0,
+    discretionCap: { currentCents: l.lineCents, originalCents: l.lineCents, maxDiscretionCents: 0 } as ReturnType<typeof computeCashierDiscretionCap>,
+    netPriceCents: l.lineCents,
+    bulkLine: { lineId: l.lineId, quantity: l.quantity, pricePerThousandCents: l.pricePerThousandCents } as undefined | { lineId: string; quantity: number; pricePerThousandCents: number },
+  }));
+  return [...plainLegItems.map((i) => ({ ...i, bulkLine: undefined as undefined | { lineId: string; quantity: number; pricePerThousandCents: number } })), ...lotLegItems] as Array<
+    (typeof plainLegItems)[number] & { bulkLine: undefined | { lineId: string; quantity: number; pricePerThousandCents: number } }
+  >;
 }
 
 /**
@@ -1183,6 +1351,8 @@ export const getBoothCartSummary = async (req: BoothAuthRequest, res: Response) 
             netPriceCents: i.netPriceCents,
             discretionAppliedCents: i.discretionAppliedCents,
             maxDiscretionCents: i.discretionCap.maxDiscretionCents,
+            // ADR-136 Addendum B (#659): set only for a bulk lot line (N cards at the price per 1,000 taken when it was added).
+            ...(i.bulkLine ? { bulkLineId: i.bulkLine.lineId, bulkQuantity: i.bulkLine.quantity } : {}),
           })),
         };
       })
@@ -1226,8 +1396,27 @@ export const getBoothCartContents = async (req: BoothAuthRequest, res: Response)
       : [];
     const boothById = new Map(booths.map((b) => [b.id, b]));
 
+    // ADR-136 Addendum B (#659): bulk lot lines (N cards each) reserved in this cart.
+    const lotLines = await readCartLotLines(cart.id);
+    const lotTitleRows = lotLines.length
+      ? await prisma.item.findMany({ where: { id: { in: Array.from(new Set(lotLines.map((l) => l.itemId))) } }, select: { id: true, title: true, photoUrls: true } })
+      : [];
+    const lotItemById = new Map(lotTitleRows.map((r) => [r.id, r]));
+
     return res.status(200).json({
       cart: { id: cart.id, hubId: cart.hubId, status: cart.status, totalAmount: cart.totalAmount.toString() },
+      bulkLines: lotLines.map((l) => ({
+        lineId: l.lineId,
+        itemId: l.itemId,
+        title: lotItemById.get(l.itemId)?.title ?? 'Bulk lot',
+        photoUrl: lotItemById.get(l.itemId)?.photoUrls?.[0] ?? null,
+        quantity: l.quantity,
+        lineCents: l.lineCents,
+        pricePerThousandCents: l.pricePerThousandCents,
+        vendorBoothId: l.vendorBoothId,
+        vendorName: boothById.get(l.vendorBoothId)?.vendorName ?? null,
+        boothNumber: boothById.get(l.vendorBoothId)?.boothNumber ?? null,
+      })),
       items: items.map((i) => {
         const cap = computeCashierDiscretionCap({ originalPrice: i.originalPrice, price: i.price });
         const discretionAppliedCents = Math.max(0, Math.min(i.pendingCashierDiscretionAppliedCents || 0, cap.maxDiscretionCents));
@@ -1786,6 +1975,42 @@ async function finalizeCapturedLegs(
     const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, leg.vendorBoothId);
     for (const item of items) {
       try {
+        // ADR-136 Addendum B (#659): a bulk lot line. The cards left the lot when the line was added, so there is NO stock write
+        // here; the line goes SOLD and its Purchase row (bulkQuantity = cards) is written in one transaction, so a retried finalize
+        // cannot write it twice. Refunds read bulkQuantity and give the cards back by count.
+        if (item.bulkLine) {
+          const lotIsSquareLeg = leg.processor === 'SQUARE';
+          const lotIsDirectCharge = leg.rail !== 'CASH' && !lotIsSquareLeg && !!leg.stripeAccountId;
+          const lotPurchaseId = await settleCartLotLine(prisma as unknown as CartLotDb, item.bulkLine.lineId, (tx) =>
+            tx.purchase.create({
+              data: {
+                userId: null,
+                itemId: item.id,
+                amount: item.netPriceCents / 100,
+                priceOriginalCents: item.netPriceCents,
+                priceBeforeDiscretionCents: item.netPriceCents,
+                bulkQuantity: item.bulkLine!.quantity,
+                processor: lotIsSquareLeg ? 'SQUARE' : 'STRIPE',
+                ...(lotIsSquareLeg
+                  ? { squarePaymentId: leg.squarePaymentId }
+                  : {
+                      stripePaymentIntentId: leg.stripePaymentIntentId,
+                      chargeType: lotIsDirectCharge ? 'DIRECT' : 'DESTINATION',
+                      ...(lotIsDirectCharge ? { stripeAccountId: leg.stripeAccountId! } : {}),
+                    }),
+                source: 'POS',
+                status: 'PAID',
+                boothCartTransactionId: cart.id,
+              },
+            })
+          );
+          if (lotPurchaseId) {
+            purchaseIds.push(lotPurchaseId);
+            notifyLotStockChanged(item.id, 'hub cart sale');
+            generateReceipt(lotPurchaseId).catch((err) => console.error('[receipt] Failed to generate receipt:', err));
+          }
+          continue;
+        }
         // findasale-hacker fix (2026-08-09, Direct-charges adversarial pass): a non-CASH
         // leg's PaymentIntent was captured with { stripeAccount: leg.stripeAccountId } (see
         // captureBoothCart/QR-rail authorize above) -- a genuine Direct charge on the booth's
@@ -2487,14 +2712,25 @@ export const searchHubCartItems = async (req: BoothAuthRequest, res: Response) =
           { sku: { contains: q ?? '', mode: 'insensitive' as const } },
         ],
       },
-      select: { id: true, title: true, sku: true, price: true, photoUrls: true, organizerId: true },
+      select: { id: true, title: true, sku: true, price: true, photoUrls: true, organizerId: true, stockTotal: true, stockSold: true },
       orderBy: { title: 'asc' },
       take: 50,
     });
 
+    // ADR-136 Addendum B (#659): which results are bulk lots, so the cashier is asked for a number of cards (bulkLines) instead of
+    // adding the lot as one item. Never fails the search: a failed lookup means no lot flags (the add itself still refuses a lot
+    // sent as a plain item).
+    let searchLotIds = new Set<string>();
+    try {
+      searchLotIds = await findBulkLotItemIds(prisma as unknown as BulkLotDb, items.map((i) => i.id), false);
+    } catch {
+      searchLotIds = new Set<string>();
+    }
+
     return res.status(200).json({
       items: items.map((item) => {
         const booth = item.organizerId ? organizerIdToBooth.get(item.organizerId) : undefined;
+        const isLot = searchLotIds.has(item.id);
         return {
           id: item.id,
           title: item.title,
@@ -2504,6 +2740,8 @@ export const searchHubCartItems = async (req: BoothAuthRequest, res: Response) =
           vendorBoothId: booth?.id ?? null,
           vendorName: booth?.vendorName ?? null,
           boothNumber: booth?.boothNumber ?? null,
+          // For a lot, price is dollars per 1,000 cards and the cart line is a number of cards.
+          ...(isLot ? { bulkLot: true, remainingCards: Math.max(0, (item.stockTotal ?? 0) - (item.stockSold ?? 0)) } : {}),
         };
       }),
     });

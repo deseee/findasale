@@ -26,7 +26,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
-import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
@@ -34,16 +34,17 @@ import { resolveOrganizerOrTeamMember, type ResolvedPosActor } from '../utils/po
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Shared cash-commission accrual (2026-08-17) — same mechanism reservationController's RECORD mode uses
 import { resolvePosDiscount } from '../services/posDiscountService';
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots, default off
+import { describeBulkSaleLine } from '../services/bulkLot/bulkLotPricing';
 import {
-  BULK_LOT_MESSAGES,
-  bulkLotError,
-  findBulkLotItemIds,
   isBulkLotError,
-  planBulkLine,
-  releaseBulkLotUnits,
+  lockBulkSaleKey,
+  planBulkCart,
+  sellBulkLinesInTransaction,
+  toBulkLineRecords,
   type BulkLotDb,
   type BulkLotErrorCode,
 } from '../services/bulkLot/bulkLotService';
+import { escapeHtml } from '../utils/htmlEscape'; // ADR-136 Addendum A: the lot line on the receipt carries an organizer-typed lot name
 
 /**
  * #561 offline POS cash-checkout queuing: typed error carrying HTTP status + retryability +
@@ -58,6 +59,20 @@ export class CashSaleError extends Error {
     this.status = status;
     this.retryable = retryable;
     this.code = code;
+  }
+}
+
+/**
+ * ADR-136 Addendum A: thrown INSIDE the bulk-lot transaction when the re-check under the advisory lock finds that the same
+ * clientTransactionId was recorded by a request that committed a moment earlier. It aborts the transaction (nothing of
+ * this request is written) and the caller answers with the replay result. Not exported: internal control flow only.
+ */
+class CashSaleReplayInTransaction extends Error {
+  rows: Array<{ id: string; amount: number; platformFeeAmount: number | null; isTestTransaction?: boolean | null }>;
+  constructor(rows: CashSaleReplayInTransaction['rows']) {
+    super('cash sale already recorded for this clientTransactionId');
+    this.name = 'CashSaleReplayInTransaction';
+    this.rows = rows;
   }
 }
 
@@ -154,34 +169,37 @@ export async function processCashSaleCore(params: {
   // Idempotent replay check — must run BEFORE any item-availability check, since a genuine
   // replay of an already-synced sale should never re-validate item state (the item may have
   // legitimately moved on since the original sync).
+  // ADR-136 Addendum A: the replay answer is built by a closure so the same result can be returned from the pre-check
+  // here and from the in-transaction re-check on a sale that holds a bulk lot (two identical requests racing).
+  const replayResultFor = async (existing: Array<{ id: string; amount: number; platformFeeAmount: number | null; isTestTransaction?: boolean | null }>): Promise<CashSaleResult> => {
+    const existingTotal = existing.reduce((sum, p) => sum + p.amount, 0);
+    const existingFee = existing.reduce((sum, p) => sum + (p.platformFeeAmount ?? 0), 0);
+    const updatedOrganizer = await prisma.organizer.findUnique({
+      where: { id: organizer.id },
+      select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
+    });
+    return {
+      purchaseIds: existing.map(p => p.id),
+      totalAmount: existingTotal,
+      platformFee: existingFee,
+      cashReceived,
+      change: cashReceived - existingTotal,
+      receiptSent: false, // not re-sent on replay
+      cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
+      cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt ?? null,
+      replay: true,
+      // Reflect what was actually persisted on the replayed row(s), not the current
+      // request's flag -- the DB row is the source of truth for a replay.
+      isTestTransaction: existing[0]?.isTestTransaction ?? false,
+    };
+  };
   if (clientTransactionId) {
     // SECURITY FIX 2026-08-05 (adversarial pass, fix-and-reverify -- same class of gap just
     // fixed in createTerminalPaymentIntent's card path above, this is the cash-path sibling
     // that was the original precedent for the pattern): scope to this organizer's own sales
     // so a clientTransactionId collision/guess can't surface another organizer's Purchase rows.
     const existing = await prisma.purchase.findMany({ where: { clientTransactionId, sale: { organizerId: organizer.id } } });
-    if (existing.length > 0) {
-      const existingTotal = existing.reduce((sum, p) => sum + p.amount, 0);
-      const existingFee = existing.reduce((sum, p) => sum + (p.platformFeeAmount ?? 0), 0);
-      const updatedOrganizer = await prisma.organizer.findUnique({
-        where: { id: organizer.id },
-        select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
-      });
-      return {
-        purchaseIds: existing.map(p => p.id),
-        totalAmount: existingTotal,
-        platformFee: existingFee,
-        cashReceived,
-        change: cashReceived - existingTotal,
-        receiptSent: false, // not re-sent on replay
-        cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
-        cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt ?? null,
-        replay: true,
-        // Reflect what was actually persisted on the replayed row(s), not the current
-        // request's flag -- the DB row is the source of truth for a replay.
-        isTestTransaction: existing[0]?.isTestTransaction ?? false,
-      };
-    }
+    if (existing.length > 0) return replayResultFor(existing);
   }
 
   // Fetch and validate all items with itemId
@@ -222,24 +240,13 @@ export async function processCashSaleCore(params: {
   // Bulk lots (ADR-136, roadmap #659). The lookup runs whether or not CARD_BULK_LOTS_ENABLED is on: a lot must
   // never be sold as one $/1,000 unit. A lot line needs a quantity; a quantity on a non-lot item is refused; the
   // server prices the line (cards x price per 1,000, half up to the cent, once) and refuses PRICE_CHANGED when the
-  // register's total differs. Stock is reserved later, right before the Purchase rows are written.
+  // register's total differs. The cards are taken later, inside the same database transaction that writes the
+  // Purchase rows (Addendum A), so no stock is held while this function validates.
   const bulkFlagOn = isBulkLotsEnabled();
   const bulkDb = prisma as unknown as BulkLotDb;
-  const bulkPlans = new Map<string, { cards: number; cents: number }>();
+  let bulkPlans: Awaited<ReturnType<typeof planBulkCart>>;
   try {
-    const lotIds = await findBulkLotItemIds(bulkDb, itemIds, bulkFlagOn);
-    for (const line of items) {
-      const isLot = !!line.itemId && lotIds.has(line.itemId);
-      const hasQuantity = line.quantity !== undefined && line.quantity !== null;
-      if (!isLot) {
-        if (hasQuantity) throw bulkLotError('BULK_NOT_LOT', 400);
-        continue;
-      }
-      if (!bulkFlagOn) throw bulkLotError('BULK_DISABLED', 409);
-      if (!hasQuantity) throw bulkLotError('BULK_QUANTITY_REQUIRED', 400);
-      const plan = planBulkLine(dbItems[line.itemId!], line.quantity, line.amount);
-      bulkPlans.set(line.itemId!, { cards: plan.cards, cents: plan.cents });
-    }
+    bulkPlans = await planBulkCart(bulkDb, { lines: items, itemRows: dbItems, flagOn: bulkFlagOn });
   } catch (bulkErr) {
     if (isBulkLotError(bulkErr)) {
       throw new CashSaleError(bulkErr.message, bulkErr.status, bulkErr.code === 'BULK_CHECK_FAILED', bulkErr.code);
@@ -300,54 +307,21 @@ export async function processCashSaleCore(params: {
   // this same controller already did.
   const feeRate = await resolveCashCommissionRate(organizer);
 
-  // Bulk lots (ADR-136): reserve the cards BEFORE any Purchase row exists, with the same atomic guarded decrement
-  // every channel uses (sellItemUnits: the UPDATE re-checks capacity in its WHERE clause), so two registers racing
-  // for the last cards can never both win. If a later step fails, the reservation is given back below. A test
-  // transaction never touches stock (same rule as the stock loop further down).
+  // Bulk lots (ADR-136 Addendum A): a sale that holds a lot takes the cards and writes EVERY Purchase row in ONE database
+  // transaction (sellItemUnitsInTransaction: one guarded UPDATE per lot whose WHERE clause re-checks capacity). Either the
+  // cards are gone and all the rows exist, or nothing changed: there is no reserve-then-compensate window and no process
+  // crash can leave cards taken with no sale. A test transaction never touches stock (same rule as the stock loop
+  // further down), so it keeps the plain row-by-row write. A cart with no lot is byte-for-byte the pre-existing path.
   const bulkStockResult = new Map<string, { fullySoldOut: boolean; remainingStock: number }>();
-  const bulkUnattached = new Map<string, number>(); // itemId -> cards reserved that have no Purchase row yet
-  const releaseUnattachedBulk = async () => {
-    for (const [lotItemId, cards] of Array.from(bulkUnattached.entries())) {
-      try {
-        await releaseBulkLotUnits(bulkDb, lotItemId, cards);
-        bulkUnattached.delete(lotItemId);
-      } catch (releaseErr) {
-        console.error(`[terminal] Could not give ${cards} reserved card(s) back to bulk lot ${lotItemId}:`, releaseErr);
-        try {
-          Sentry.captureException(releaseErr instanceof Error ? releaseErr : new Error(String(releaseErr)), {
-            tags: { area: 'terminal-cash-sale-bulk-release' },
-            extra: { saleId, itemId: lotItemId, cards, organizerId: organizer.id },
-          });
-        } catch {
-          // Sentry may not be initialized -- silently continue
-        }
-      }
-    }
-  };
-  if (!isTestTransaction) {
-    for (const [lotItemId, plan] of Array.from(bulkPlans.entries())) {
-      try {
-        bulkStockResult.set(lotItemId, await sellItemUnits(lotItemId, plan.cards));
-        bulkUnattached.set(lotItemId, plan.cards);
-      } catch (stockErr) {
-        await releaseUnattachedBulk();
-        if (stockErr instanceof InsufficientStockError) {
-          throw new CashSaleError(BULK_LOT_MESSAGES.INSUFFICIENT_STOCK, 409, false, 'INSUFFICIENT_STOCK');
-        }
-        throw stockErr;
-      }
-    }
-  }
+  const useBulkTransaction = bulkPlans.size > 0 && !isTestTransaction;
 
-  // Create Purchase records immediately with status PAID
-  const purchaseIds: string[] = [];
-  try {
-  for (const item of chargedItems) {
+  // One Purchase row for one cart line. `client` is the shared prisma client, or the transaction client.
+  const createPurchaseRow = (client: any, item: (typeof chargedItems)[number]) => {
     // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
     const cashPIId = `cash_${randomUUID()}`;
     const itemPlatformFeeAmount = cashCommissionOn(item.amount, feeRate);
 
-    const purchase = await prisma.purchase.create({
+    return client.purchase.create({
       data: {
         itemId: item.itemId ?? null,
         saleId,
@@ -381,13 +355,46 @@ export async function processCashSaleCore(params: {
         ...(item.itemId && bulkPlans.has(item.itemId) ? { bulkQuantity: bulkPlans.get(item.itemId)!.cards } : {}),
       },
     });
-    purchaseIds.push(purchase.id);
-    if (item.itemId) bulkUnattached.delete(item.itemId); // this reservation now has its Purchase row
-  }
-  } catch (purchaseErr) {
-    // A bulk reservation without a Purchase row is stock nobody paid for: give it back, then rethrow.
-    await releaseUnattachedBulk();
-    throw purchaseErr;
+  };
+
+  // Create Purchase records immediately with status PAID
+  let purchaseIds: string[] = [];
+  if (useBulkTransaction) {
+    try {
+      purchaseIds = await prisma.$transaction(
+        async (tx) => {
+          // Two identical requests racing (a double tap, an offline replay overlapping a live retry) serialize here; the
+          // second one then sees the first one's rows and answers as a replay instead of taking the cards twice.
+          if (clientTransactionId) {
+            await lockBulkSaleKey(tx, `cash-sale:${organizer.id}:${clientTransactionId}`);
+            const alreadyRecorded = await tx.purchase.findMany({ where: { clientTransactionId, sale: { organizerId: organizer.id } } });
+            if (alreadyRecorded.length > 0) throw new CashSaleReplayInTransaction(alreadyRecorded);
+          }
+          const sold = await sellBulkLinesInTransaction(tx, toBulkLineRecords(bulkPlans), sellItemUnitsInTransaction);
+          sold.forEach((result, lotItemId) => bulkStockResult.set(lotItemId, result));
+          const ids: string[] = [];
+          for (const item of chargedItems) {
+            const purchase = await createPurchaseRow(tx, item);
+            ids.push(purchase.id);
+          }
+          return ids;
+        },
+        { timeout: 30000, maxWait: 10000 }
+      );
+    } catch (txErr) {
+      bulkStockResult.clear();
+      if (txErr instanceof CashSaleReplayInTransaction) return replayResultFor(txErr.rows);
+      if (isBulkLotError(txErr)) {
+        // A lot ran out between the check above and the guarded decrement: nothing was taken and nothing was recorded.
+        throw new CashSaleError(txErr.message, txErr.status, false, txErr.code);
+      }
+      throw txErr;
+    }
+  } else {
+    for (const item of chargedItems) {
+      const purchase = await createPurchaseRow(prisma, item);
+      purchaseIds.push(purchase.id);
+    }
   }
 
   // Mark items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
@@ -496,8 +503,15 @@ export async function processCashSaleCore(params: {
 
       const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 
+      // ADR-136 Addendum A: a bulk lot line shows the cards and the price per 1,000, not just a dollar figure.
       const itemsList = chargedItems
-        .map(i => `<li>${i.label ?? 'Item'}: $${i.amount.toFixed(2)}</li>`)
+        .map(i => {
+          const lotPlan = i.itemId ? bulkPlans.get(i.itemId) : undefined;
+          const lineText = lotPlan && i.itemId
+            ? escapeHtml(describeBulkSaleLine(dbItems[i.itemId]?.title ?? i.label ?? 'Bulk lot', lotPlan.cards, lotPlan.pricePerThousandCents))
+            : `${i.label ?? 'Item'}`;
+          return `<li>${lineText}: $${i.amount.toFixed(2)}</li>`;
+        })
         .join('');
       const change = (cashReceived - totalAmount).toFixed(2);
 

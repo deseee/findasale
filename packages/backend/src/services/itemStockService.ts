@@ -138,3 +138,64 @@ export async function sellItemUnits(
     remainingStock: Math.max(total - updated.stockSold, 0),
   };
 }
+
+/**
+ * ADR-136 Addendum A (2026-10-05, #659): the transaction-capable variant of the guarded decrement, used to sell N
+ * units (for a bulk lot, N cards) INSIDE a database transaction together with the Purchase row that records the sale.
+ *
+ * Differences from sellItemUnits (which is left exactly as it was for every other caller):
+ *  - ONE statement. The capacity guard, the stockSold increment and the status change are a single UPDATE ... RETURNING,
+ *    so there is no moment in which stockSold has reached stockTotal while status still says AVAILABLE, and no second
+ *    read to race with. sellItemUnits does the increment, a read, then a separate status write.
+ *  - `tx` is required (the caller owns the transaction, so a failure anywhere in it rolls this decrement back with the
+ *    rest; nothing has to be given back by hand).
+ *  - It never writes the legacy "RESERVED or INVOICE_ISSUED back to AVAILABLE" status on a partial sale unless the item
+ *    is in one of those two states (same rule as sellItemUnits), and it moves to SOLD only when the last unit goes.
+ *
+ * Throws InsufficientStockError when the sale would oversell (the UPDATE matched no row and the item exists), and a plain
+ * Error when the item does not exist. A caller inside a transaction treats both as "abort the whole transaction".
+ */
+export async function sellItemUnitsInTransaction(
+  tx: SellItemUnitsTx,
+  itemId: string,
+  unitsSold: number
+): Promise<SellItemUnitsResult> {
+  if (!Number.isInteger(unitsSold) || unitsSold < 1) {
+    throw new Error(`sellItemUnitsInTransaction: unitsSold must be a positive integer, got ${unitsSold}`);
+  }
+  // Same explicit annotation as sellItemUnits (Prisma v5 union-type pitfall, see the comment there).
+  const client: Prisma.TransactionClient = tx as Prisma.TransactionClient;
+
+  const rows = await client.$queryRaw<Array<{ stockTotal: number | null; stockSold: number; status: string }>>`
+    UPDATE "Item"
+    SET "stockSold" = "stockSold" + ${unitsSold},
+        "status" = CASE
+          WHEN "stockSold" + ${unitsSold} >= COALESCE("stockTotal", 1) THEN 'SOLD'
+          WHEN "status" IN ('RESERVED', 'INVOICE_ISSUED') THEN 'AVAILABLE'
+          ELSE "status"
+        END
+    WHERE "id" = ${itemId}
+      AND "stockSold" + ${unitsSold} <= COALESCE("stockTotal", 1)
+    RETURNING "stockTotal", "stockSold", "status"
+  `;
+
+  if (!rows || rows.length === 0) {
+    const existing = await client.item.findUnique({
+      where: { id: itemId },
+      select: { stockTotal: true, stockSold: true },
+    });
+    if (!existing) {
+      throw new Error(`sellItemUnitsInTransaction: item ${itemId} not found`);
+    }
+    const remaining = (existing.stockTotal ?? 1) - existing.stockSold;
+    throw new InsufficientStockError(itemId, unitsSold, Math.max(remaining, 0));
+  }
+
+  const row = rows[0];
+  const total = row.stockTotal ?? 1;
+  const sold = Number(row.stockSold);
+  return {
+    fullySoldOut: sold >= total,
+    remainingStock: Math.max(total - sold, 0),
+  };
+}

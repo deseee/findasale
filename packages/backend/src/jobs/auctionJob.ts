@@ -10,6 +10,8 @@ import { buildSquareIdempotencyKey } from '../services/squarePaymentService';
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // Wave 2 (2026-09-29): engagement parity if an auction Purchase is ever created already PAID
 import { calculateApplicationFee, getInclusivePlatformFeeRate, applyInclusiveFloor, snapshotFromBreakdown, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared with services/auctionService.closeAuction — see that file's header
+import { lotChannelRefusal } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never an auction
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 
 
 export const endAuctions = async () => {
@@ -46,6 +48,16 @@ export const endAuctions = async () => {
 
     for (const item of endedAuctions) {
       try {
+      // ADR-136 Addendum B (#659): never close a bulk lot as an auction. A stray auctionEndTime on a lot is cleared so this
+      // job stops re-selecting it; a failed lookup with the flag on (fail closed) leaves the item untouched for the next run.
+      const lotAuctionRefusal = await lotChannelRefusal(prisma as any, item.id, 'AUCTION', isBulkLotsEnabled());
+      if (lotAuctionRefusal) {
+        console.warn(`[endAuctions] Item ${item.id} is a bulk lot (${lotAuctionRefusal.code}), skipping`);
+        if (lotAuctionRefusal.code === 'BULK_LOT_CHANNEL') {
+          await prisma.item.updateMany({ where: { id: item.id, auctionClosed: false }, data: { auctionEndTime: null } });
+        }
+        continue;
+      }
       // P0 Race Fix: Wrap entire auction close logic in transaction with optimistic lock
       const result = await prisma.$transaction(async (tx) => {
         // 1. Atomic update with WHERE-clause guard: only process if not already closed

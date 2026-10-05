@@ -57,6 +57,8 @@ async function fetchFeedItems(): Promise<FeedItem[]> {
       draftStatus: 'PUBLISHED',
       price: { gt: 0 },
       listingType: { notIn: ['AUCTION', 'REVERSE_AUCTION'] },
+      // ADR-136 Addendum C (#659): a bulk lot's price is per 1,000 cards, never a Google Shopping product price.
+      bulkLot: { is: null },
       sale: {
         is: {
           status: 'PUBLISHED',

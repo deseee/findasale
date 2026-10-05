@@ -88,7 +88,18 @@ export interface EligibilityCheckItem {
   etsyIsCraftSupply?: boolean | null;
   releaseYear?: number | null;
   asOfYear?: number;
+
+  /**
+   * True when the item is a bulk lot (ADR-136 Addendum C): priced per 1,000 cards and counted in cards, so no outside
+   * platform can list it. When true every platform answers ineligible with BULK_LOT_ELIGIBILITY_REASON. Optional;
+   * callers that do not know pass nothing and nothing changes (the item's DONT_LIST shipping override and the
+   * export and send guards cover those paths).
+   */
+  isBulkLot?: boolean | null;
 }
+
+/** Plain reason shown when a bulk lot is checked against any platform. */
+export const BULK_LOT_ELIGIBILITY_REASON = 'Bulk lots are sold by the card at your counter and on your storefront, and by the bundle on eBay. They cannot be listed on this platform.';
 
 export interface EligibilityResult {
   eligible: boolean;
@@ -1206,6 +1217,7 @@ function buildHaystack(item: EligibilityCheckItem): string {
  * CATEGORY_ALLOWLIST match, makes the item ineligible (first blocking rule's reason wins).
  */
 export function checkEligibility(platform: EligibilityPlatform, item: EligibilityCheckItem): EligibilityResult {
+  if (item.isBulkLot === true) return { eligible: false, reason: BULK_LOT_ELIGIBILITY_REASON };
   const rules = RULES.filter((r) => r.platform === platform);
   if (rules.length === 0) return { eligible: true, reason: null };
 

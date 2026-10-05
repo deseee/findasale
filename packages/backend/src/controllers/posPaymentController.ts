@@ -4,8 +4,23 @@ import { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
-import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots, default off
+import { describeBulkSaleLine, formatCardCount } from '../services/bulkLot/bulkLotPricing';
+import {
+  assertBulkLinesStillAvailable,
+  bulkLinesTotalCents,
+  bulkLotError,
+  findBulkLotItemIds,
+  isBulkLotError,
+  lockBulkSaleKey,
+  parseStoredBulkLines,
+  planBulkCart,
+  planBulkRequestLines,
+  sellBulkLinesInTransaction,
+  toBulkLineRecords,
+  type BulkLineRecord,
+  type BulkLotDb,
+} from '../services/bulkLot/bulkLotService'; // ADR-136 Addendum A (#659): bulk lots on the card request, the card reader-less manual entry and the QR link
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-30: replaces the direct awardXp / checkAndAward calls (Feature #58 achievement tracking now runs inside this service, deduped per purchase)
@@ -14,7 +29,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
-import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError, recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard; recordSuspectedSignal: manual card entry has no verifiable buyer account either (2026-09-12)
@@ -22,10 +37,12 @@ import { snapshotForCommissionOnly, getInclusivePlatformFeeRate, calculateInclus
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, applyCashDebtToAppFee, settleCashDebtCollection, releaseCashDebtClaim, wouldExceedCashFeeExposureCap, accrueSplitCashLegOnce, allocateCentsProportionally, validateSplitTender, cardLegProblem, isValidCents, MAX_POS_AMOUNT_CENTS } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use; applyCashDebtToAppFee/settleCashDebtCollection: manual card entry cash-fee-debt recoupment (2026-09-12); wouldExceedCashFeeExposureCap: cash-fee exposure cap pre-check (2026-09-24, Patrick ruling)
 import { CNP_FEE_LABEL } from '../services/cnpSurcharge'; // CNP surcharge (2026-09-30): buyer-facing label for the surcharge line on the manual-card receipt; the surcharge itself is persisted per row (Purchase.cnpSurchargeCents) so refunds can return it proportionally
 import { resolvePosDiscount } from '../services/posDiscountService';
+import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement } from '../services/oversoldPaymentRefundService'; // ADR-136 Addendum A: a lot that sells out after a manual card entry was charged is refunded in full by the same service the QR link recorder uses
 import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S1198 (2026-09-06): bank-fingerprint collusion hold, Organizer POS wiring
 import { posPaymentFailureBody } from '../services/posPaymentFailure'; // 2026-09-30: generic client message + stable code for payment-adapter failures; detail is logged server-side only
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
 import * as squarePos from '../services/squarePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): phone-based Square POS adapter -- charge creation moved to accept/confirm time, see file header
+import { escapeHtml } from '../utils/htmlEscape';
 import { transactionalEmailService } from '../lib/transactionalEmailService'; // 2026-09-16 fix: shopper receipt/notification email gap on manual-card + QR POS payments (mirrors cashPaymentController.ts's receipt pattern)
 
 
@@ -240,6 +257,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       // attacker) could force this endpoint down the guaranteed-to-fail Stripe branch.
       processor: _requestedProcessor,
       isTestTransaction,
+      bulkLines: requestedBulkLines,
     } = req.body as {
       shopperUserId?: string;
       saleId?: string;
@@ -257,6 +275,9 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       // ignored -- see the const above, processor is always SQUARE now.
       processor?: 'STRIPE' | 'SQUARE';
       isTestTransaction?: boolean;
+      // ADR-136 Addendum A (#659): one entry per bulk lot in itemIds, { itemId, quantity, amount? }. The server prices every
+      // line itself; `amount` (dollars the register showed) is only compared to the cent. Omitted when the cart holds no lot.
+      bulkLines?: Array<{ itemId?: string; quantity?: number | string; amount?: number }>;
     };
     const processor: 'SQUARE' = 'SQUARE';
     void _requestedProcessor;
@@ -286,9 +307,6 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     if (!itemIds || !Array.isArray(itemIds)) {
       return res.status(400).json({ message: 'itemIds must be an array' });
     }
-    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
-    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
     // Whole cents only, with a sane upper bound (2026-09-29): a fractional or absurd amount used to
     // sail through this `> 0` check and surface later as a 500 from Square or the database.
     if (!isValidCents(totalAmountCents)) {
@@ -377,18 +395,35 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     }
 
     // Verify items only when itemIds are provided (POS carts may contain custom-amount items with no DB id)
-    let items: Array<{ id: string; title: string; status: string; price: number | null }> = [];
+    let items: Array<{ id: string; title: string; status: string; price: number | null; stockTotal?: number | null; stockSold?: number | null }> = [];
+    let bulkPlans: Awaited<ReturnType<typeof planBulkCart>> = new Map();
     if (itemIds.length > 0) {
       items = await prisma.item.findMany({
         where: {
           id: { in: itemIds },
           saleId,
         },
-        select: { id: true, title: true, status: true, price: true },
+        select: { id: true, title: true, status: true, price: true, stockTotal: true, stockSold: true },
       });
 
       if (items.length !== itemIds.length) {
         return res.status(400).json({ message: 'One or more items not found or not in this sale' });
+      }
+
+      // Bulk lots (ADR-136 Addendum A, #659). The lot lookup runs whether or not the flag is on, so a lot is never charged
+      // as one unit. Every lot line is priced by the server (cards x price per 1,000, half up to the cent, once); the cards
+      // are NOT held. They are taken when the shopper's payment is confirmed (confirmPaymentRequest), in the same
+      // transaction that writes the Purchase rows.
+      try {
+        bulkPlans = await planBulkRequestLines(prisma as unknown as BulkLotDb, {
+          itemIds,
+          bulkLines: requestedBulkLines,
+          itemRows: Object.fromEntries(items.map((it) => [it.id, it])),
+          flagOn: isBulkLotsEnabled(),
+        });
+      } catch (bulkErr) {
+        if (isBulkLotError(bulkErr)) return res.status(bulkErr.status).json({ message: bulkErr.message, code: bulkErr.code });
+        throw bulkErr;
       }
 
       // POS cashier has physical possession — exclude already-SOLD items silently
@@ -400,7 +435,10 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     // discount against the actor's permission and the workspace's cap BEFORE creating
     // any Stripe resources. No-op (discountAmountCents: 0) when no discount was sent --
     // zero behavior change to the pre-existing flow in that case.
-    const catalogSubtotalCents = Math.round(items.reduce((sum, i) => sum + (i.price ?? 0), 0) * 100);
+    // Bulk lot lines (ADR-136 Addendum A) count at their server-priced cents, not at Item.price (which is the price per 1,000).
+    const bulkLineRecords: BulkLineRecord[] = toBulkLineRecords(bulkPlans);
+    const catalogSubtotalCents =
+      Math.round(items.reduce((sum, i) => sum + (bulkPlans.has(i.id) ? 0 : (i.price ?? 0)), 0) * 100) + bulkLinesTotalCents(bulkLineRecords);
     const discountResolution = await resolvePosDiscount({
       actor: organizer,
       input: { discountType, discountValue, discountReasonNote },
@@ -560,6 +598,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
               discountAmountCents: discountResolution.discountAmountCents > 0 ? discountResolution.discountAmountCents : null,
               discountReasonNote: discountResolution.discountAmountCents > 0 ? discountResolution.discountReasonNote : null,
               discountAppliedByUserId: discountResolution.discountAmountCents > 0 ? organizer.actingUserId : null,
+              // ADR-136 Addendum A: the priced lot lines, read back by confirmPaymentRequest. Absent when the cart holds no lot.
+              ...(bulkLineRecords.length > 0 ? { bulkLines: bulkLineRecords as unknown as Prisma.InputJsonValue } : {}),
             },
           });
         },
@@ -639,7 +679,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     // Emit socket event to shopper
     try {
       const io = getIO();
-      const itemNames = items.map((item) => item.title);
+      // A bulk lot shows its cards ("MTG commons (1,500 cards)"), not just the lot name.
+      const itemNames = items.map((item) => (bulkPlans.has(item.id) ? `${item.title} (${formatCardCount(bulkPlans.get(item.id)!.cards)} cards)` : item.title));
       io.to(`user:${shopperUserId}`).emit('POS_PAYMENT_REQUEST', {
         type: 'POS_PAYMENT_REQUEST',
         requestId: posRequest.id,
@@ -756,9 +797,11 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
     if (request.itemIds && request.itemIds.length > 0) {
       const items = await prisma.item.findMany({
         where: { id: { in: request.itemIds } },
-        select: { title: true },
+        select: { id: true, title: true },
       });
-      itemNames = items.map((i) => i.title);
+      // ADR-136 Addendum A: a bulk lot line shows its cards ("MTG commons (1,500 cards)").
+      const requestLotLines = new Map<string, BulkLineRecord>(parseStoredBulkLines((request as { bulkLines?: unknown }).bulkLines).map((l) => [l.itemId, l]));
+      itemNames = items.map((i) => (requestLotLines.has(i.id) ? `${i.title} (${formatCardCount(requestLotLines.get(i.id)!.cards)} cards)` : i.title));
     }
 
     // Check expiration
@@ -1278,6 +1321,35 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       });
     }
 
+    // Bulk lots (ADR-136 Addendum A, #659): the lot lines were priced and stored when the request was created. Before ANY
+    // money moves, look at the lots once more. A lot that sold out, was edited out from under the request, or whose line
+    // is missing is refused here with "No card was charged", so the shopper is never charged for cards that are gone.
+    // The request stays ACCEPTED (nothing was taken), so the shopper can pay again if the shop restocks before it expires.
+    // The decrement inside the recording transaction below is still the authority for the last-card race.
+    const confirmFlagOn = isBulkLotsEnabled();
+    const storedBulkLines = parseStoredBulkLines((posRequest as { bulkLines?: unknown }).bulkLines);
+    const lotLineById = new Map<string, BulkLineRecord>(storedBulkLines.map((l) => [l.itemId, l]));
+    let lotIdsAtConfirm = new Set<string>();
+    try {
+      lotIdsAtConfirm = await findBulkLotItemIds(prisma as unknown as BulkLotDb, posRequest.itemIds ?? [], confirmFlagOn);
+      const unlinedLot = Array.from(lotIdsAtConfirm).find((lotId) => !lotLineById.has(lotId));
+      if (unlinedLot) throw bulkLotError('BULK_QUANTITY_REQUIRED', 409, { itemId: unlinedLot });
+      if (storedBulkLines.length > 0) {
+        if (!confirmFlagOn) throw bulkLotError('BULK_DISABLED', 409);
+        await assertBulkLinesStillAvailable(prisma as unknown as BulkLotDb, storedBulkLines);
+      }
+    } catch (bulkErr) {
+      if (isBulkLotError(bulkErr)) {
+        return res.status(bulkErr.status).json({
+          success: false,
+          charged: false,
+          code: bulkErr.code,
+          message: `${bulkErr.message} No card was charged.`,
+        });
+      }
+      throw bulkErr;
+    }
+
     // QA Test-Transaction Harness (2026-09-17): computed here, AFTER the
     // shopper-ownership + status checks above -- mirrors createSquareTestTransaction's
     // exact authorization order (resource-ownership check BEFORE the QA-header check
@@ -1615,7 +1687,8 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             select: { id: true, price: true },
           });
           const totalCents = posRequest.totalAmountCents;
-          const itemCentsList = fulfillItems.map((it) => Math.round((it.price || 0) * 100));
+          // A bulk lot line is weighted by the cents it was priced at (ADR-136 Addendum A), never by Item.price (the price per 1,000).
+          const itemCentsList = fulfillItems.map((it) => lotLineById.get(it.id)?.cents ?? Math.round((it.price || 0) * 100));
           const itemsListTotalCents = itemCentsList.reduce((sum, c) => sum + c, 0);
           const miscRemainderCents = totalCents - itemsListTotalCents;
           // A misc row carries whatever the catalog items do not explain (custom-amount lines). Also
@@ -1672,6 +1745,28 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             throw new PosFulfillmentUnavailableError(missingId, 'item no longer exists');
           }
 
+          // Bulk lots (ADR-136 Addendum A): take the cards for every lot line FIRST, in item id order, inside this same
+          // transaction (one guarded statement per lot). A lot that sold out after the card was captured aborts the whole
+          // transaction (PosFulfillmentUnavailableError), which rolls the PAID flip and every earlier decrement back and
+          // sends the request down the existing auto-refund path. A lot with no stored line can never be sold as one unit.
+          if (recordedRows.length === 0) {
+            const missingLine = Array.from(lotIdsAtConfirm).find((lotId) => requestedItemIds.includes(lotId) && !lotLineById.has(lotId));
+            if (missingLine) throw new PosFulfillmentUnavailableError(missingLine, 'bulk lot quantity is missing from the request');
+          }
+          const bulkSold = new Map<string, { fullySoldOut: boolean; remainingStock: number }>();
+          if (!isTestBypassActive) {
+            const linesToTake = storedBulkLines.filter((l) => !recordedItemIds.has(l.itemId) && fulfillItems.some((it) => it.id === l.itemId));
+            try {
+              (await sellBulkLinesInTransaction(tx, linesToTake, sellItemUnitsInTransaction)).forEach((result, lotItemId) => bulkSold.set(lotItemId, result));
+            } catch (lotErr) {
+              if (isBulkLotError(lotErr)) {
+                console.error(`[pos-payment] Bulk lot unavailable after the card was captured (request ${requestId}):`, lotErr.code);
+                throw new PosFulfillmentUnavailableError(String(lotErr.extra?.itemId ?? linesToTake[0]?.itemId ?? 'unknown'), lotErr.code);
+              }
+              throw lotErr;
+            }
+          }
+
           for (let idx = 0; idx < fulfillItems.length; idx++) {
             const item = fulfillItems[idx];
             if (recordedItemIds.has(item.id)) continue;
@@ -1681,7 +1776,12 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             // decrement / SOLD flip is skipped for a test transaction (2026-08-29 incident: a real QA pass
             // permanently marked a real production item SOLD with no clean undo). The Purchase row below is
             // still created for real (tagged isTestTransaction) so pricing/fee math is genuinely exercised.
-            if (!isTestBypassActive) {
+            const lotSoldNow = bulkSold.get(item.id);
+            if (lotSoldNow) {
+              if (lotSoldNow.fullySoldOut) fullySoldOutItemIds.push(item.id);
+              else partialSaleUpdates.push({ itemId: item.id, remainingStock: lotSoldNow.remainingStock });
+            }
+            if (!isTestBypassActive && !lotSoldNow) {
               try {
                 const sold = await sellItemUnits(item.id, 1, tx);
                 if (sold.fullySoldOut) fullySoldOutItemIds.push(item.id);
@@ -1715,6 +1815,8 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
                 source: 'POS',
                 status: 'PAID',
                 isTestTransaction: isTestBypassActive,
+                // ADR-136 Addendum A: the cards this row sold, written in the same create as the row. Refunds read it.
+                ...(lotLineById.has(item.id) ? { bulkQuantity: lotLineById.get(item.id)!.cards } : {}),
                 // Split tender (2026-09-29): this row's share of the cash leg, so refunds cap the card
                 // processor at what it actually collected. Left unset (column stays NULL) when not split.
                 ...(rowCashCents[idx] > 0 ? { cashLegAmount: rowCashCents[idx] / 100 } : {}),
@@ -1984,6 +2086,38 @@ const CNP_FEE_RATE_PLACEHOLDER = 0.035;
 const CNP_FEE_FIXED_CENTS_PLACEHOLDER = 15;
 
 /**
+ * Thrown inside the manual card bulk lot transaction when another identical submission already recorded this Square
+ * payment (ADR-136 Addendum A). It aborts the transaction (nothing of this call is written) and the caller answers with the
+ * replay result. Not exported: internal control flow only.
+ */
+class ManualCardReplayInTransaction extends Error {
+  rows: Array<{ id: string }>;
+  constructor(rows: Array<{ id: string }>) {
+    super('manual card payment already recorded for this squarePaymentId');
+    this.name = 'ManualCardReplayInTransaction';
+    this.rows = rows;
+  }
+}
+
+/**
+ * After cards were taken from an item (committed): withdraw it from the other channels when it sold out, or revise the
+ * quantity listed elsewhere when only some cards went. Fire-and-forget, same calls the per-item loop makes.
+ */
+function runCardsTakenSideEffects(itemId: string, result: { fullySoldOut: boolean; remainingStock: number }): void {
+  if (result.fullySoldOut) {
+    endEbayListingIfExists(itemId).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
+    markShopifyItemSold(itemId).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
+    withdrawDiscogsListingIfExists(itemId).catch((err) => console.error('[Discogs] Failed to withdraw listing:', err));
+    withdrawReverbListingIfExists(itemId).catch((err) => console.error('[Reverb] Failed to withdraw listing:', err));
+    notifyFacebookExportedItemSold(itemId).catch((err) => console.warn(`[FB Nudge] failed for item ${itemId}:`, err.message));
+  } else {
+    syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock: result.remainingStock }).catch((err) =>
+      console.error('[eBay ReviseQty] sync failed for item', itemId, err)
+    );
+  }
+}
+
+/**
  * POST /api/pos/manual-card-payment
  * Organizer (or authorized TEAM_MEMBER register operator) keys in a walk-up shopper's card
  * directly at the register -- no card reader, no shopper account, no POSPaymentRequest row.
@@ -2055,7 +2189,9 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     const { sourceId, saleId, items, buyerEmail, discountType, discountValue, discountReasonNote, isTestTransaction, cashAmountCents, expectedTotalCents } = req.body as {
       sourceId?: string;
       saleId?: string;
-      items?: Array<{ itemId?: string; amount: number; label?: string }>;
+      // quantity (ADR-136 Addendum A): cards on a bulk lot line. The server prices the line and refuses PRICE_CHANGED when
+      // `amount` (dollars the register showed) differs from its own price by even one cent.
+      items?: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string }>;
       buyerEmail?: string;
       discountType?: string;
       discountValue?: number;
@@ -2108,15 +2244,12 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     if (itemIds.length !== new Set(itemIds).size) {
       return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
     }
-    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
-    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
 
-    let dbItems: Record<string, { id: string; title: string; status: string; draftStatus: string | null; price: number | null }> = {};
+    let dbItems: Record<string, { id: string; title: string; status: string; draftStatus: string | null; price: number | null; stockTotal?: number | null; stockSold?: number | null }> = {};
     if (itemIds.length > 0) {
       const fetched = await prisma.item.findMany({
         where: { id: { in: itemIds }, saleId },
-        select: { id: true, title: true, status: true, draftStatus: true, price: true },
+        select: { id: true, title: true, status: true, draftStatus: true, price: true, stockTotal: true, stockSold: true },
       });
       dbItems = Object.fromEntries(fetched.map((item) => [item.id, item]));
       const notAvailableItemIds: string[] = [];
@@ -2185,11 +2318,28 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Bulk lots (ADR-136 Addendum A, #659). The lot lookup runs whether or not the flag is on, so a lot is never charged as
+    // one unit. Every lot line is priced by the server (cards x price per 1,000, half up to the cent, once) and must carry
+    // a quantity; the register's own total for the line must match to the cent (PRICE_CHANGED). Nothing is held: the cards
+    // are taken after the card is charged, in the same transaction that writes the Purchase rows (see below).
+    let bulkPlans: Awaited<ReturnType<typeof planBulkCart>> = new Map();
+    if (itemIds.length > 0 || items.some((i) => i.quantity !== undefined && i.quantity !== null)) {
+      try {
+        bulkPlans = await planBulkCart(prisma as unknown as BulkLotDb, { lines: items, itemRows: dbItems, flagOn: isBulkLotsEnabled() });
+        // Right before the card is charged, look at the lots once more (ADR-136 Addendum A).
+        await assertBulkLinesStillAvailable(prisma as unknown as BulkLotDb, toBulkLineRecords(bulkPlans));
+      } catch (bulkErr) {
+        if (isBulkLotError(bulkErr)) return res.status(bulkErr.status).json({ message: bulkErr.message, code: bulkErr.code });
+        throw bulkErr;
+      }
+    }
+
     // POS Cashier Discount Permission -- same server-side resolution every other POS charge
     // path in this codebase uses (never trusts a client-supplied discount amount directly).
+    // A bulk lot line counts at its server-priced cents, not at Item.price (the price per 1,000).
     const catalogSubtotalCents = Math.round(
-      items.reduce((sum, i) => sum + (i.itemId && dbItems[i.itemId]?.price ? dbItems[i.itemId].price! : 0), 0) * 100
-    );
+      items.reduce((sum, i) => sum + (i.itemId && !bulkPlans.has(i.itemId) && dbItems[i.itemId]?.price ? dbItems[i.itemId].price! : 0), 0) * 100
+    ) + Array.from(bulkPlans.values()).reduce((sum, p) => sum + p.cents, 0);
     const discountResolution = await resolvePosDiscount({
       actor: organizer,
       input: { discountType, discountValue, discountReasonNote },
@@ -2459,36 +2609,44 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     //   WHERE p."cashLegAmount" > 0 AND p."source" = 'POS' AND c.id IS NULL;
     // and re-running accrueSplitCashLegOnce (idempotent) heals it.
     let cashFeeAccrualPending = false;
-    if (isManualSplit && !isTestBypassActive) {
-      try {
-        await accrueSplitCashLegOnce({
-          organizer: {
-            id: organizer.id,
-            subscriptionTier: organizer.subscriptionTier,
-            referralDiscountExpiry: organizer.referralDiscountExpiry,
-          },
-          sourceType: 'MANUAL_CARD',
-          sourceId: squarePaymentId,
-          cashAmountCents: manualCashCents,
-        });
-      } catch (accrualErr: any) {
-        cashFeeAccrualPending = true;
-        console.error('[pos-payment] manualCardPayment: cash-leg commission accrual FAILED (card already charged):', accrualErr);
+    // Bulk lots (ADR-136 Addendum A): a cart with a lot is recorded in ONE transaction that also takes the cards (below). When
+    // that transaction finds the cards gone the whole payment is refunded, so the cash-leg commission must not be accrued
+    // first. The accrual therefore runs after the transaction for such a cart, and up front (as before) for every other cart.
+    const useManualBulkTx = bulkPlans.size > 0 && !isTestBypassActive;
+    const manualPriorRows = useManualBulkTx ? await prisma.purchase.findMany({ where: { squarePaymentId } }) : null;
+    const runManualCashLegAccrual = async (): Promise<void> => {
+      if (isManualSplit && !isTestBypassActive) {
         try {
-          Sentry.captureException(accrualErr instanceof Error ? accrualErr : new Error(String(accrualErr)), {
-            tags: { area: 'pos-manual-card-split-cash-commission' },
-            level: 'error',
-            extra: { organizerId: organizer.id, squarePaymentId, cashAmountCents: manualCashCents, saleId },
+          await accrueSplitCashLegOnce({
+            organizer: {
+              id: organizer.id,
+              subscriptionTier: organizer.subscriptionTier,
+              referralDiscountExpiry: organizer.referralDiscountExpiry,
+            },
+            sourceType: 'MANUAL_CARD',
+            sourceId: squarePaymentId,
+            cashAmountCents: manualCashCents,
           });
-        } catch {
-          // Sentry may not be initialized -- silently continue
+        } catch (accrualErr: any) {
+          cashFeeAccrualPending = true;
+          console.error('[pos-payment] manualCardPayment: cash-leg commission accrual FAILED (card already charged):', accrualErr);
+          try {
+            Sentry.captureException(accrualErr instanceof Error ? accrualErr : new Error(String(accrualErr)), {
+              tags: { area: 'pos-manual-card-split-cash-commission' },
+              level: 'error',
+              extra: { organizerId: organizer.id, squarePaymentId, cashAmountCents: manualCashCents, saleId },
+            });
+          } catch {
+            // Sentry may not be initialized -- silently continue
+          }
         }
       }
-    }
+    };
+    if (!useManualBulkTx || (manualPriorRows && manualPriorRows.length > 0)) await runManualCashLegAccrual();
 
     // Whole-charge idempotent-retry-safe lookup -- see this function's header comment for why
     // this is checked once per charge rather than per item.
-    const existingPurchases = await prisma.purchase.findMany({ where: { squarePaymentId } });
+    const existingPurchases = manualPriorRows ?? (await prisma.purchase.findMany({ where: { squarePaymentId } }));
     if (existingPurchases.length > 0) {
       // Idempotent retry of a charge that is already recorded: the original request's claim paid for it, so
       // give back the claim this call just made (2026-09-30).
@@ -2535,7 +2693,189 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // per-item platformFeeAmount always equals baseAppFeeCents exactly -- the real amount
     // charged to Square -- instead of silently under-reporting it on floor-priced sales.
     let remainingAppFeeCentsToAllocate = baseAppFeeCents;
-    for (let idx = 0; idx < chargedItems.length; idx++) {
+
+    // One Purchase row for one cart line. `client` is the shared prisma client or a transaction client.
+    const buildManualRow = (client: any, item: (typeof chargedItems)[number], idx: number, itemFeeCents: number, itemDebtCents: number) =>
+      client.purchase.create({
+        data: {
+          userId: null, // walk-up buyer, no FindA.Sale account -- see Purchase.userId schema comment
+          itemId: item.itemId ?? null,
+          saleId,
+          amount: item.amount,
+          platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
+          cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
+          cashLegAmount: manualCashShares[idx] > 0 ? manualCashShares[idx] / 100 : undefined,
+          // CNP surcharge (2026-09-30): this row's share, so a refund can return it proportionally.
+          cnpSurchargeCents: manualSurchargeShares[idx] ?? 0,
+          ...snapshotForCommissionOnly(itemFeeCents / 100, cardFeeRate),
+          discountType: item.rowDiscountCents > 0 ? discountResolution.discountType : null,
+          discountValueRaw: item.rowDiscountCents > 0 ? discountResolution.discountValueRaw : null,
+          discountAmountCents: item.rowDiscountCents > 0 ? item.rowDiscountCents : null,
+          discountReasonNote: item.rowDiscountCents > 0 ? discountResolution.discountReasonNote : null,
+          discountAppliedByUserId: item.rowDiscountCents > 0 ? organizer.actingUserId : null,
+          processor: 'SQUARE',
+          squarePaymentId,
+          status: 'PAID',
+          source: 'POS',
+          buyerEmail: buyerEmail && buyerEmail.trim() ? buyerEmail.trim() : undefined,
+          isTestTransaction: isTestBypassActive,
+          // ADR-136: cards sold on a bulk lot line, written in the same create as the Purchase. Refunds read it.
+          ...(item.itemId && bulkPlans.has(item.itemId) ? { bulkQuantity: bulkPlans.get(item.itemId)!.cards } : {}),
+        },
+      });
+
+    // ── BULK LOT TRANSACTION (ADR-136 Addendum A, #659) ──────────────────────────────────────
+    // The card is already captured at this point. For a cart with a lot, the cards are taken and EVERY Purchase row is
+    // written in ONE database transaction: either all of it is recorded or none of it is, so the "money taken, sale not
+    // recorded" state cannot happen for a lot. If the cards ran out between the pre-charge check and now, the transaction
+    // rolls back (nothing taken, nothing recorded) and the payment is refunded in full by the shared oversold settlement
+    // (same refund service, kill switch and idempotency key the QR link recorder uses). A retried submit carries the same
+    // sourceId, hence the same squarePaymentId; the advisory lock plus the in-transaction re-read make it a replay.
+    const manualBulkResults = new Map<string, { fullySoldOut: boolean; remainingStock: number }>();
+    let manualBulkReplayRows: Array<{ id: string }> | null = null;
+    if (useManualBulkTx) {
+      const manualRowAllocs: Array<{ feeCents: number; debtCents: number }> = [];
+      let feeLeft = baseAppFeeCents;
+      let debtLeft = debtAppliedCents;
+      for (let idx = 0; idx < chargedItems.length; idx++) {
+        const itemAmountCents = Math.round(chargedItems[idx].amount * 100);
+        const isLast = idx === chargedItems.length - 1;
+        const feeCents = isLast ? feeLeft : Math.min(feeLeft, subtotalCents > 0 ? Math.round(baseAppFeeCents * (itemAmountCents / subtotalCents)) : 0);
+        feeLeft -= feeCents;
+        const debtCents = isLast ? debtLeft : Math.min(debtLeft, subtotalCents > 0 ? Math.round(debtAppliedCents * (itemAmountCents / subtotalCents)) : 0);
+        debtLeft -= debtCents;
+        manualRowAllocs.push({ feeCents, debtCents });
+      }
+      try {
+        const createdIds = await prisma.$transaction(
+          async (tx) => {
+            await lockBulkSaleKey(tx, `manual-card:${squarePaymentId}`);
+            const alreadyRecorded = await tx.purchase.findMany({ where: { squarePaymentId } });
+            if (alreadyRecorded.length > 0) throw new ManualCardReplayInTransaction(alreadyRecorded);
+            const sold = await sellBulkLinesInTransaction(tx, toBulkLineRecords(bulkPlans), sellItemUnitsInTransaction);
+            sold.forEach((result, lotItemId) => manualBulkResults.set(lotItemId, result));
+            const ids: string[] = [];
+            for (let idx = 0; idx < chargedItems.length; idx++) {
+              const row = await buildManualRow(tx, chargedItems[idx], idx, manualRowAllocs[idx].feeCents, manualRowAllocs[idx].debtCents);
+              ids.push(row.id);
+            }
+            return ids;
+          },
+          { timeout: 30000, maxWait: 10000 }
+        );
+        purchaseIds.push(...createdIds);
+      } catch (txErr) {
+        manualBulkResults.clear();
+        if (txErr instanceof ManualCardReplayInTransaction) {
+          manualBulkReplayRows = txErr.rows;
+        } else if (isBulkLotError(txErr)) {
+          // The cards ran out after the charge. Nothing was taken or recorded: give the money back.
+          await releaseCashDebtClaim({ organizerId: organizer.id, debtAppliedCents });
+          const weights = chargedItems.map((ci) => Math.round(ci.amount * 100));
+          const settlement = computeOversoldSettlement({
+            cardCents: totalChargeCents,
+            cashCents: manualCashCents,
+            weightsCents: weights,
+            oversoldIdx: weights.map((_, i) => i),
+          });
+          const settled = await settleOversoldPayment({
+            kind: 'manual-card',
+            refId: squarePaymentId,
+            organizerProfileId: organizer.id,
+            processor: 'SQUARE',
+            paymentId: squarePaymentId,
+            cardPaidCents: totalChargeCents,
+            settlement,
+          });
+          const lotTitles = Array.from(bulkPlans.keys()).map((id) => dbItems[id]?.title ?? 'Bulk lot');
+          await notifyOversoldSettlement({
+            result: settled,
+            settlement,
+            titles: lotTitles,
+            processor: 'SQUARE',
+            ref: squarePaymentId,
+            partiallyFulfilled: false,
+            organizerUserId: sale.organizer?.userId,
+            organizerLink: '/organizer/pos',
+            shopper: buyerEmail && buyerEmail.trim() ? { email: buyerEmail.trim() } : null,
+          });
+          const refunded = settled.status === 'REFUNDED';
+          return res.status(409).json({
+            success: false,
+            charged: true,
+            refunded,
+            code: 'BULK_SOLD_OUT_AFTER_PAYMENT',
+            squarePaymentId,
+            refundCents: settled.refundCents,
+            cashToReturnCents: settlement.cashToReturnCents,
+            message: refunded
+              ? `The cards in this bulk lot ran out while the card was being charged. The card payment of $${(settled.refundCents / 100).toFixed(2)} was refunded in full. Start the sale again with the cards that are left.`
+              : `The cards in this bulk lot ran out while the card was being charged, and the automatic refund did not go through. Refund $${(settled.refundCents / 100).toFixed(2)} from your Square dashboard before you ring the sale up again.`,
+          });
+        } else {
+          // Anything else (a dropped connection, a timeout): the transaction rolled back, so no cards were taken and no
+          // row was written. The card IS charged. A retry of the same submission is safe: same sourceId, same Square
+          // payment, and the replay check above makes sure nothing is recorded twice.
+          console.error('[pos-payment] manualCardPayment: bulk lot transaction FAILED after capture:', txErr);
+          try {
+            Sentry.captureException(txErr instanceof Error ? txErr : new Error(String(txErr)), {
+              tags: { area: 'pos-manual-card-bulk-transaction' },
+              level: 'error',
+              extra: { saleId, organizerId: organizer.id, squarePaymentId },
+            });
+          } catch {
+            // Sentry may not be initialized
+          }
+          await releaseCashDebtClaim({ organizerId: organizer.id, debtAppliedCents });
+          return res.status(500).json({
+            message: 'The card was charged but the sale could not be recorded. Do not charge the card again. Try the same submission once more, or check the Square dashboard.',
+            code: 'BULK_RECORD_FAILED',
+            squarePaymentId,
+          });
+        }
+      }
+      if (manualBulkReplayRows) {
+        // A concurrent identical submission already recorded this payment: answer as a replay, change nothing.
+        await runManualCashLegAccrual();
+        await releaseCashDebtClaim({ organizerId: organizer.id, debtAppliedCents });
+        return res.json({
+          success: true,
+          purchaseIds: manualBulkReplayRows.map((p) => p.id),
+          squarePaymentId,
+          subtotalCents,
+          cnpFeeCents,
+          totalChargedCents: totalChargeCents,
+          isSplitPayment: isManualSplit,
+          cashAmountCents: isManualSplit ? manualCashCents : undefined,
+          cardSubtotalCents,
+          cashFeeAccrualPending,
+          isTestTransaction: isTestBypassActive,
+        });
+      }
+      // Recorded. Now the cash-leg commission (idempotent by payment id) and the marketplace side effects of the cards taken.
+      await runManualCashLegAccrual();
+      manualBulkResults.forEach((result, lotItemId) => runCardsTakenSideEffects(lotItemId, result));
+      // Ordinary items in the same cart keep the existing post-payment stock update (best effort, alerted on failure).
+      for (const item of chargedItems) {
+        if (!item.itemId || bulkPlans.has(item.itemId)) continue;
+        try {
+          const taken = await sellItemUnits(item.itemId, 1);
+          runCardsTakenSideEffects(item.itemId, taken);
+        } catch (stockErr: any) {
+          console.error(`[pos-payment] manualCardPayment: post-payment stock update FAILED for item ${item.itemId} (payment already captured):`, stockErr);
+          try {
+            Sentry.captureException(stockErr instanceof Error ? stockErr : new Error(String(stockErr)), {
+              tags: { area: 'pos-manual-card-payment-post-payment-stock-update' },
+              extra: { saleId, itemId: item.itemId, organizerId: organizer.id, squarePaymentId },
+            });
+          } catch {
+            // Sentry may not be initialized
+          }
+        }
+      }
+    }
+
+    for (let idx = 0; idx < (useManualBulkTx ? 0 : chargedItems.length); idx++) {
       const item = chargedItems[idx];
       const itemAmountCents = Math.round(item.amount * 100);
       const isLastItem = idx === chargedItems.length - 1;
@@ -2555,31 +2895,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       remainingDebtCentsToAllocate -= itemDebtCents;
 
       try {
-        const purchase = await prisma.purchase.create({
-          data: {
-            userId: null, // walk-up buyer, no FindA.Sale account -- see Purchase.userId schema comment
-            itemId: item.itemId ?? null,
-            saleId,
-            amount: item.amount,
-            platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
-            cashDebtCollectedAmount: itemDebtCents > 0 ? itemDebtCents / 100 : undefined,
-            cashLegAmount: manualCashShares[idx] > 0 ? manualCashShares[idx] / 100 : undefined,
-            // CNP surcharge (2026-09-30): this row's share, so a refund can return it proportionally.
-            cnpSurchargeCents: manualSurchargeShares[idx] ?? 0,
-            ...snapshotForCommissionOnly(itemFeeCents / 100, cardFeeRate),
-            discountType: item.rowDiscountCents > 0 ? discountResolution.discountType : null,
-            discountValueRaw: item.rowDiscountCents > 0 ? discountResolution.discountValueRaw : null,
-            discountAmountCents: item.rowDiscountCents > 0 ? item.rowDiscountCents : null,
-            discountReasonNote: item.rowDiscountCents > 0 ? discountResolution.discountReasonNote : null,
-            discountAppliedByUserId: item.rowDiscountCents > 0 ? organizer.actingUserId : null,
-            processor: 'SQUARE',
-            squarePaymentId,
-            status: 'PAID',
-            source: 'POS',
-            buyerEmail: buyerEmail && buyerEmail.trim() ? buyerEmail.trim() : undefined,
-            isTestTransaction: isTestBypassActive,
-          },
-        });
+        const purchase = await buildManualRow(prisma, item, idx, itemFeeCents, itemDebtCents);
         purchaseIds.push(purchase.id);
       } catch (err: any) {
         // P0 fix precedent (2026-08-08, Terminal readiness audit / confirmPaymentRequest
@@ -2653,7 +2969,13 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         const { buildEmail } = await import('../services/emailTemplateService');
         const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
         const itemsList = chargedItems
-          .map((i) => `<li>${(i.itemId && dbItems[i.itemId]?.title) || i.label || 'Item'}: $${i.amount.toFixed(2)}</li>`)
+          .map((i) => {
+            const lotPlan = i.itemId ? bulkPlans.get(i.itemId) : undefined;
+            if (lotPlan && i.itemId) {
+              return `<li>${escapeHtml(describeBulkSaleLine(dbItems[i.itemId]?.title ?? 'Bulk lot', lotPlan.cards, lotPlan.pricePerThousandCents))}: $${i.amount.toFixed(2)}</li>`;
+            }
+            return `<li>${(i.itemId && dbItems[i.itemId]?.title) || i.label || 'Item'}: $${i.amount.toFixed(2)}</li>`;
+          })
           .join('');
         const html = buildEmail({
           preheader: `Receipt for your purchase`,

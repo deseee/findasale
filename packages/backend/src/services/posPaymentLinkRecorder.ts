@@ -2,7 +2,10 @@ import { POSPaymentLink } from '@prisma/client';
 import * as Sentry from '@sentry/node'; // 2026-09-29 money review P1-4/5: alert on foreign item ids
 import { prisma } from '../lib/prisma';
 import { getInclusivePlatformFeeRate, calculateInclusiveCommissionCents, snapshotForCommissionOnly, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): this recorder completes the SAME payment-link flow posController.createPaymentLinkInternal creates (buyer pays remotely via hosted checkout) -- ONLINE channel
-import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { sellItemUnits, sellItemUnitsInTransaction, InsufficientStockError } from '../services/itemStockService';
+import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig'; // ADR-136 Addendum A (#659)
+import { formatCardCount } from './bulkLot/bulkLotPricing';
+import { findBulkLotItemIds, parseStoredBulkLines, type BulkLotDb } from './bulkLot/bulkLotService';
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector';
@@ -285,9 +288,42 @@ export async function recordPosPaymentLinkSale(
           // Sentry may not be initialized.
         }
       }
-      for (const posItemId of scopedItemIds) {
+      // Bulk lots (ADR-136 Addendum A, #659). The link row carries the priced lot lines (POSPaymentLink.bulkLines); the cards
+      // are taken HERE, inside the same transaction that flips the link to COMPLETED and writes the Purchase rows, so a
+      // lot can never be recorded as sold without its cards being taken, nor taken without a sale. Each lot is one guarded
+      // statement; a lot that ran out is treated exactly like any other oversold item (its share is refunded below, the rest
+      // of the cart is recorded). A lot with no stored line (a link written before lots were wired, or a damaged value) is
+      // never sold as one unit: the whole payment is refunded and nothing is sold.
+      const storedBulkLines = parseStoredBulkLines((fresh as unknown as { bulkLines?: unknown }).bulkLines);
+      const lotLineById = new Map(storedBulkLines.filter((l) => scopedIdSet.has(l.itemId)).map((l) => [l.itemId, l] as const));
+      const lotIdsInLink = await findBulkLotItemIds(tx as unknown as BulkLotDb, scopedItemIds, isBulkLotsEnabled());
+      const lotsWithoutLine = Array.from(lotIdsInLink).filter((id) => !lotLineById.has(id));
+      const unrecordableCart = lotsWithoutLine.length > 0;
+      if (unrecordableCart) {
+        console.error(`[pos-record/${source}] Link ${fresh.id} holds bulk lot(s) with no stored card count (${lotsWithoutLine.join(',')}); refunding the payment in full instead of selling a lot as one unit.`);
         try {
-          const { fullySoldOut, remainingStock } = await sellItemUnits(posItemId, 1, tx);
+          Sentry.captureMessage('[pos-record] payment link holds a bulk lot with no stored card count', {
+            level: 'error',
+            tags: { area: 'pos-link-bulk-lot-no-line', source },
+            extra: { linkId: fresh.id, saleId: fresh.saleId, organizerId: fresh.organizerId, itemIds: lotsWithoutLine },
+          });
+        } catch {
+          // Sentry may not be initialized.
+        }
+        oversoldItemIds.push(...scopedItemIds);
+      }
+      // What each row is worth in cents: a lot line's own priced cents, never Item.price (which is the price per 1,000).
+      const rowCentsOf = (id: string, price: number | null | undefined): number => lotLineById.get(id)?.cents ?? Math.round((price || 0) * 100);
+      // Lots first, in item id order (two carts holding the same two lots lock them in the same order), then the rest.
+      const stockOrder = unrecordableCart
+        ? []
+        : [...scopedItemIds.filter((id: string) => lotLineById.has(id)).sort(), ...scopedItemIds.filter((id: string) => !lotLineById.has(id))];
+      for (const posItemId of stockOrder) {
+        const lotLine = lotLineById.get(posItemId);
+        try {
+          const { fullySoldOut, remainingStock } = lotLine
+            ? await sellItemUnitsInTransaction(tx, posItemId, lotLine.cards)
+            : await sellItemUnits(posItemId, 1, tx);
           if (fullySoldOut) fullySoldOutIds.push(posItemId);
           else partialSaleUpdates.push({ itemId: posItemId, remainingStock });
           sellableItemIds.push(posItemId);
@@ -320,7 +356,7 @@ export async function recordPosPaymentLinkSale(
         const ordered = scopedItemIds
           .map((id: string) => byId.get(id))
           .filter((r): r is { id: string; price: number | null; title: string } => !!r);
-        const weights = ordered.map((r) => Math.round((r.price || 0) * 100));
+        const weights = ordered.map((r) => rowCentsOf(r.id, r.price));
         const oversoldSet = new Set(oversoldItemIds);
         const oversoldIdx = ordered.map((r, i) => (oversoldSet.has(r.id) ? i : -1)).filter((i) => i >= 0);
         oversoldState.settlement = computeOversoldSettlement({
@@ -344,7 +380,7 @@ export async function recordPosPaymentLinkSale(
       // the link's total is already well above the floor. Allocated proportionally with the
       // last item absorbing the rounding remainder, same exact-sum pattern used everywhere
       // else in this migration (posPaymentController.ts, reservationController.ts).
-      const itemsSubtotalCents = Math.round(items.reduce((sum, it) => sum + (it.price || 0), 0) * 100);
+      const itemsSubtotalCents = items.reduce((sum, it) => sum + rowCentsOf(it.id, it.price), 0);
       // Split tender (2026-09-29): the platform fee rides on the CARD leg only (ADR-split-payment-
       // S422), so a split link's recorded fee is computed on `fresh.cardAmountCents` (falling back
       // to `fresh.amount`, which IS the card amount for a split link). This equals the
@@ -367,14 +403,14 @@ export async function recordPosPaymentLinkSale(
         ? items.map((it) => (oversoldCashById as Map<string, number>).get(it.id) ?? 0)
         : allocateCentsProportionally(
             splitCashCents,
-            items.map((it) => Math.round((it.price || 0) * 100))
+            items.map((it) => rowCentsOf(it.id, it.price))
           );
       let remainingItemsFeeCentsToAllocate = totalItemsFeeCents;
 
       const createdPurchaseIds: string[] = [];
       for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
         const item = items[itemIdx];
-        const itemPriceCents = Math.round((item.price || 0) * 100);
+        const itemPriceCents = rowCentsOf(item.id, item.price);
         const isLastRecordedItem = itemIdx === items.length - 1;
         const itemFeeCents = isLastRecordedItem
           ? remainingItemsFeeCentsToAllocate
@@ -392,7 +428,7 @@ export async function recordPosPaymentLinkSale(
             data: {
               itemId: item.id,
               saleId: fresh.saleId,
-              amount: item.price || 0,
+              amount: lotLineById.has(item.id) ? itemPriceCents / 100 : item.price || 0,
               platformFeeAmount: itemFeeAmount,
               // FEE SNAPSHOT (2026-08-17): commission-only — a POS payment link never sells an
               // auction lot. Pinning posFeeRate here also pins WHICH tier decision was live at
@@ -401,6 +437,8 @@ export async function recordPosPaymentLinkSale(
               status: 'PAID',
               source: 'POS',
               ...(rowCashCents > 0 ? { cashLegAmount: rowCashCents / 100 } : {}),
+              // ADR-136: cards sold on this lot line, written with the row. Refunds read it.
+              ...(lotLineById.has(item.id) ? { bulkQuantity: lotLineById.get(item.id)!.cards } : {}),
               processor,
               ...(processor === 'SQUARE'
                 ? { squarePaymentId: resolvedPaymentIntentId }
@@ -410,7 +448,7 @@ export async function recordPosPaymentLinkSale(
             },
           });
           createdPurchaseIds.push(purchase.id);
-          recordedItemTitles.push(item.title);
+          recordedItemTitles.push(lotLineById.has(item.id) ? `${item.title} (${formatCardCount(lotLineById.get(item.id)!.cards)} cards)` : item.title);
         } catch (purchaseErr: any) {
           // Compound partial unique (stripePaymentIntentId, itemId) backstop: a
           // webhook/reconciler race that both reach the insert can't double-create.

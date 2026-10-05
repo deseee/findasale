@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { marketplaceLotRefusal } from '../services/bulkLot/bulkLotExportFilter';
 import {
   pushItemToShopify,
   disconnectShopify,
@@ -176,6 +177,12 @@ export async function pushItemAction(req: AuthRequest, res: Response) {
 
     if (!item || item.sale?.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Item not found or does not belong to this organizer' });
+    }
+
+    // Bulk lots (ADR-136 Addendum C) are priced per 1,000 cards and counted in cards: Shopify cannot sell one.
+    const lotRefusal = await marketplaceLotRefusal('Shopify', [itemId], prisma as any);
+    if (lotRefusal) {
+      return res.status(lotRefusal.status).json({ message: lotRefusal.message, code: lotRefusal.code });
     }
 
     const result = await pushItemToShopify(itemId, organizer);

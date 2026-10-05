@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { generateCsvExport, generateCsvFilename } from '../services/exportService';
 import { organizerHasTier } from '../utils/tierAccess';
+import { filterBulkLotsForExport } from '../services/bulkLot/bulkLotExportFilter'; // ADR-136 Addendum C (#659)
 
 type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
@@ -126,7 +127,7 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
     // Fetch items for the sale (all statuses unless filtered, for historical data). saleId is always part of
     // the where clause, so `itemIds` can only ever select items of the caller's own sale.
     // photoUrls required for watermark overlay (#410)
-    const items = await prisma.item.findMany({
+    const allItems = await prisma.item.findMany({
       where: {
         saleId: sale.id,
         ...(itemIds ? { id: { in: itemIds } } : {}),
@@ -152,6 +153,13 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    // ADR-136 Addendum C (#659): bulk lots (cards sold by the thousand) are left out of this export and the response says
+    // so (X-Skipped-Bulk-Lots headers). Answers 503 / 400 itself when it cannot check or every selected item is a lot.
+    const lotSplit = await filterBulkLotsForExport(allItems, res, prisma as any);
+    if (!lotSplit) return;
+    const items = lotSplit.kept;
+    lotSplit.markResponse(res);
 
     if (items.length === 0 && (itemIds || statusFilter)) {
       return res.status(404).json({

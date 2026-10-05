@@ -93,6 +93,8 @@ interface CartItem {
   // ADR-136 (#659): number of cards for a bulk lot line. `amount` is the SERVER's price for exactly this many cards
   // (from POST /api/bulk-lots/item/:id/quote); the server prices the sale again at checkout. Undefined for every other item.
   bulkQuantity?: number;
+  // ADR-136: the server's per-1,000 price text for a bulk lot line ("$8.00 per 1,000 cards"), shown under the line.
+  bulkPriceLabel?: string;
 }
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -1269,12 +1271,18 @@ export default function POSPage() {
         amount: quote.amount,
         photoUrl: lot.photoUrl ?? undefined,
         bulkQuantity: quote.cards,
+        bulkPriceLabel: lot.pricePerThousandLabel ?? undefined,
       },
     ]);
     setErrorMessage('');
-    // Bulk lots are paid with cash, Venmo or Zelle only.
-    if (paymentMode !== 'cash' && paymentMode !== 'venmo' && paymentMode !== 'zelle') setPaymentMode('cash');
   };
+
+  // Bulk lots (ADR-136 Addendum A): the priced lot lines of the cart, sent beside itemIds on a card request to a phone and on a
+  // QR payment link. The server prices every line again and refuses the sale if its total differs by even one cent.
+  const bulkLinesForRequest = () =>
+    cart
+      .filter((c) => c.itemId && c.bulkQuantity)
+      .map((c) => ({ itemId: c.itemId as string, quantity: c.bulkQuantity as number, amount: c.amount }));
 
   // ─── Venue mode: add item via booth-cart endpoint (resolves vendor booth server-side,
   // reserves the item against this cart) -- S1178 ──────────────────────────────────────
@@ -2265,6 +2273,7 @@ export default function POSPage() {
         // link and its commission accrues when the link is paid. `amount` is the card remainder.
         ...(remainingCents > 0 ? { cashAmountCents: cashReceivedCents } : {}),
         itemIds,
+        ...(cartHasBulk ? { bulkLines: bulkLinesForRequest() } : {}),
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
       setPaymentLinkId(res.data.linkId);
@@ -2557,6 +2566,7 @@ export default function POSPage() {
         saleId: selectedSaleId,
         itemIds, // may be empty for custom-amount carts. Backend handles gracefully
         totalAmountCents,
+        ...(cartHasBulk ? { bulkLines: bulkLinesForRequest() } : {}), // ADR-136: priced bulk lot lines
       };
 
       // POS Cashier Discount Permission (2026-08-28): totalAmountCents above already
@@ -2997,6 +3007,9 @@ export default function POSPage() {
                       </span>
                     )}
                   </div>
+                  {item.bulkQuantity && item.bulkPriceLabel ? (
+                    <p className="text-xs text-warm-600 dark:text-warm-400">{item.bulkPriceLabel}</p>
+                  ) : null}
                   {/* ADR cashier-discretionary-discount (2026-09-25): per-item control,
                       venue/hub-cart mode only, and only when this cashier session is
                       actually allowed to grant discretion. Deliberately separate from the
@@ -3686,12 +3699,12 @@ export default function POSPage() {
                 label should claim either way. */}
             <button
               onClick={() => setPaymentMode('qr')}
-              disabled={cart.length === 0 || !!loadedHold || cartHasBulk}
-              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : cartHasBulk ? BULK_COPY.regPayHint : ''}
+              disabled={cart.length === 0 || !!loadedHold}
+              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 paymentMode === 'qr'
                   ? 'bg-sage-700 text-white'
-                  : cart.length === 0 || loadedHold || cartHasBulk
+                  : cart.length === 0 || loadedHold
                   ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
@@ -3775,10 +3788,10 @@ export default function POSPage() {
             {(linkedShopperId || linkedShopperData?.id) && (
               <button
                 onClick={handleSendToPhone}
-                disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold || cashCoversTotal || cartHasBulk}
+                disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold || cashCoversTotal}
                 title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : cart.length === 0 ? 'Add items to cart first' : cashCoversTotal ? 'Cash received covers the whole sale. Record it as a cash sale or clear the cash amount' : `Send $${(cardChargeCents / 100).toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
                 className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 col-span-2 ${
-                  cart.length === 0 || paymentStatus === 'creating' || loadedHold || cashCoversTotal || cartHasBulk
+                  cart.length === 0 || paymentStatus === 'creating' || loadedHold || cashCoversTotal
                     ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                     : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                 }`}
@@ -3798,11 +3811,11 @@ export default function POSPage() {
           <div className="mt-2">
             <button
               onClick={() => {
-                if (!ENABLE_MANUAL_CARD_ENTRY || cartHasBulk) return;
+                if (!ENABLE_MANUAL_CARD_ENTRY) return;
                 setPaymentMode('manual_card');
                 setNumpadOpen(false);
               }}
-              disabled={!ENABLE_MANUAL_CARD_ENTRY || cartHasBulk}
+              disabled={!ENABLE_MANUAL_CARD_ENTRY}
               title={!ENABLE_MANUAL_CARD_ENTRY ? 'Manual card entry is being updated. Cash, QR, and Venmo/Zelle are available now.' : ''}
               className={
                 ENABLE_MANUAL_CARD_ENTRY

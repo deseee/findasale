@@ -47,6 +47,8 @@ import { withdrawReverbListingIfExists } from './marketplace/reverbConnector';
 import { withdrawEtsyListingIfExists } from './marketplace/etsyConnector';
 import { sellItemUnits } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService';
+import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never marked SOLD by a sale seen elsewhere
+import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 
 export interface CommitFacebookNativeSaleResult {
   ok: true;
@@ -58,6 +60,9 @@ export interface CommitFacebookNativeSaleResult {
   partial?: boolean;
   /** Units left after a partial sale (only set when `partial` is true). */
   remainingStock?: number;
+  /** ADR-136 Addendum B (#659): true when the item is a bulk lot. Nothing was changed (alreadyCommitted is true so every
+   * caller treats it as a no-op); the sale is not countable against a card count from here. */
+  bulkLotIgnored?: boolean;
 }
 
 /** Platforms whose listings are tracked as MarketplaceListingJob rows, so a live POST/POSTED row
@@ -219,6 +224,15 @@ export async function commitFacebookNativeSale(
   soldVia: string,
   options: CommitFacebookNativeSaleOptions = {},
 ): Promise<CommitFacebookNativeSaleResult> {
+  // ADR-136 Addendum B (#659): a bulk lot has no "sold" state a single outside sale can reach (it sells by card quantity),
+  // so an outside sale signal for a lot is ignored. A failed lookup with the flag on throws so the caller retries later
+  // instead of marking a lot SOLD.
+  const lotRefusal = await lotChannelRefusal(prisma as any, itemId, 'FACEBOOK_NATIVE', isBulkLotsEnabled());
+  if (lotRefusal) {
+    if (lotRefusal.code === 'BULK_CHECK_FAILED') throw new Error('BULK_CHECK_FAILED');
+    console.warn(`[commitFacebookNativeSale] item ${itemId} is a bulk lot, ignoring sold signal (${soldVia})`);
+    return { ok: true, alreadyCommitted: true, bulkLotIgnored: true };
+  }
   const skip = new Set<string>(options.skipWithdraw ?? []);
   if (options.soldOnPlatform) {
     const unit = await commitPlatformUnitSale(itemId, soldVia, options.soldOnPlatform, skip);

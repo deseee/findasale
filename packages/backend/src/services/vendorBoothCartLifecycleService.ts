@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
 import { resolveVendorBoothSquareAccessToken, cancelSquareBoothCartLeg } from './squareVendorBoothCartService'; // vendor-booth-cart-checkout dispatch (2026-09-07)
+import { releaseAllCartLotLines, type CartLotDb } from './bulkLot/bulkLotBoothCartService'; // ADR-136 Addendum B (#659): a cancelled or abandoned cart gives its lot cards back
 
 const stripe = () => getStripe();
 const isTerminalSimulated = () => process.env.STRIPE_TERMINAL_SIMULATED === 'true';
@@ -105,6 +106,20 @@ export async function releasePendingCartHold(cart: { id: string; status: string 
       pendingCashierDiscretionAppliedById: null,
     },
   });
+
+  // ADR-136 Addendum B (#659): hand back the cards of every bulk lot line in this cart (each line is released by its own
+  // compare-and-swap, so a line settled by a racing capture is never touched). Best effort and never fatal: before the
+  // follow-up migration is applied the table does not exist, and then there are no lines to release.
+  try {
+    const lotItemIds = await releaseAllCartLotLines(prisma as unknown as CartLotDb, cart.id);
+    if (lotItemIds.length > 0) {
+      import('./bulkLot/bulkLotEbayWiring')
+        .then((m) => { for (const id of new Set(lotItemIds)) m.reconcileBulkLotEbayInBackgroundIfEnabled(id, 'hub cart released'); })
+        .catch(() => undefined);
+    }
+  } catch (lotErr) {
+    console.warn(`[releasePendingCartHold] could not release bulk lot lines for cart ${cart.id} (ignored):`, lotErr instanceof Error ? lotErr.message : lotErr);
+  }
 
   // Status already flipped to FAILED by the claim above -- no separate write needed.
 

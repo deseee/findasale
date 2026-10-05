@@ -33,6 +33,7 @@ import { prisma } from '../../lib/prisma';
 import { resolveDiscogsMatch, upsertDiscogsListingForItem } from './discogsListingConnector';
 import { createReverbListing } from './reverbConnector';
 import { checkEligibility } from '../marketplaceEligibilityRules';
+import { marketplaceLotRefusal } from '../bulkLot/bulkLotExportFilter';
 
 export async function dispatchApiTierAutoFanout(organizerId: string, item: Item): Promise<void> {
   let flags: { discogsAutoListEnabled: boolean; reverbAutoListEnabled: boolean } | null = null;
@@ -46,6 +47,16 @@ export async function dispatchApiTierAutoFanout(organizerId: string, item: Item)
     return;
   }
   if (!flags) return;
+
+  // Bulk lots (ADR-136 Addendum C) are priced per 1,000 cards and counted in cards: neither Discogs nor Reverb can sell
+  // one. Fail closed: a failed lot check also skips the fan-out (it is non-blocking and can be retried by hand).
+  if (flags.discogsAutoListEnabled === true || flags.reverbAutoListEnabled === true) {
+    const lotRefusal = await marketplaceLotRefusal('Discogs and Reverb', [item.id], prisma as any);
+    if (lotRefusal) {
+      console.info(`[AutoFanout] skipped item ${item.id}: ${lotRefusal.code}`);
+      return;
+    }
+  }
 
   // Discogs -- independent try/catch; a Discogs failure must never block Reverb below.
   if (flags.discogsAutoListEnabled === true) {

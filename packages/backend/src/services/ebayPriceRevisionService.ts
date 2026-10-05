@@ -34,6 +34,8 @@ import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
 import { ebayProxyUrl, ebayProxyHeaders } from './ebayHttp';
 import { reanalyzeItem } from './reanalyzeService';
 import { prisma } from '../lib/prisma';
+import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
+import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 
 export interface EbayPriceRevisionResult {
   ok: boolean;
@@ -43,6 +45,9 @@ export interface EbayPriceRevisionResult {
     | 'get-failed'
     | 'put-failed'
     | 'error'
+    // ADR-136 Addendum C: a bulk lot's Item.price is dollars per 1,000 cards, never an eBay price. Its bundle price is
+    // revised only by services/bulkLot/bulkLotEbayService.
+    | 'bulk-lot-bundle'
     // Legacy Trading-API path (eBay-sync-issues investigation, 2026-09-16): these items
     // predate FindA.Sale's Inventory-API push flow (April 2026 batch, imported via
     // GetItem/GetMyeBaySelling sync) -- they have Item.ebayListingId (classic numeric
@@ -382,6 +387,17 @@ export async function reviseEbayOfferPrice(
   // both floor at $0.99 now too); this is a defensive last-resort floor for any other
   // future caller of this function.
   const safeNewPrice = Math.max(0.99, newPrice);
+  // ADR-136 Addendum C (#659): never send a bulk lot's per-1,000 price to eBay as the price of a listing. Fails closed
+  // when the lot lookup itself fails and the bulk flag is on (the lookup is a no-op fail-open with the flag off).
+  if (itemId) {
+    try {
+      if ((await findBulkLotItemIds(prisma as any, [itemId], isBulkLotsEnabled())).has(itemId)) {
+        return { ok: false, reason: 'bulk-lot-bundle', detail: 'Bulk lot bundle prices are managed from the lot.' };
+      }
+    } catch {
+      return { ok: false, reason: 'error', detail: 'Could not check whether this item is a bulk lot.' };
+    }
+  }
   if (!offerId) {
     if (!ebayListingId) {
       return { ok: false, reason: 'no-offer-id' };

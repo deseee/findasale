@@ -335,7 +335,8 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
         refundedItemId = refundedPurchase.itemId;
         // Square results say so directly (cumulative across earlier partial refunds); the Stripe path has no
         // partial tracking, so a refund of the whole purchase amount is the only "full" it can report.
-        refundIsFull = 'isFullRefund' in refundResult
+        // ADR-136 Addendum B: a bulk lot cash row reports its own isFullRefund (the row can now be refunded in part).
+        refundIsFull = 'isFullRefund' in refundResult && refundResult.isFullRefund !== undefined
           ? refundResult.isFullRefund
           : Math.round(refundedAmount * 100) >= Math.round(refundedPurchase.amount * 100);
         refundConfirmationParams = {

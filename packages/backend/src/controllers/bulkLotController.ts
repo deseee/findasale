@@ -8,7 +8,8 @@
  *   POST  /sale/:saleId/items        organizer: create a new lot item in the sale
  *   GET   /item/:itemId              organizer or team member: one lot, or data:null when it is not a lot
  *   POST  /item/:itemId/enable       organizer: turn an existing card item into a lot
- *   PATCH /item/:itemId              organizer: restock, set the total, change the price per 1,000 or the lot type
+ *   PATCH /item/:itemId              organizer: change the price per 1,000 or the lot type (totalCards and addCards are refused with
+ *                                    409 BULK_USE_ADJUST: the card count changes only through POST /item/:itemId/adjust, which records history)
  *   POST  /item/:itemId/quote        organizer or team member: server price for N cards
  *
  * Envelope: { success: true, data } or { success: false, error, code }. Every route except /status answers 404
@@ -25,6 +26,7 @@ import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries';
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth';
 import { EnvLike, isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 import { BULK_LOT_VOCABULARY } from '../services/bulkLot/bulkLotVocabulary';
+import { LOT_INVARIANT_MESSAGES } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): the card count changes only through /adjust
 import { LADDER_STEPS, MAX_LOT_CARDS, MAX_PRICE_PER_THOUSAND_CENTS, MIN_LOT_CARDS } from '../services/bulkLot/bulkLotPricing';
 import {
   BULK_LOT_MESSAGES,
@@ -89,6 +91,19 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
     if (enabled()) return true;
     fail(res, 404, BULK_LOT_MESSAGES.BULK_DISABLED, 'BULK_DISABLED');
     return false;
+  }
+
+  /**
+   * ADR-136 Addendum B: the markdown cycle reprices items with a 0.99 floor, which would wreck a per-1,000 price. A lot is
+   * excluded from markdown from the moment it exists. Best effort: a failure here is logged, never shown (the generic item
+   * edit forces the same flag, and the migration backfills existing lots).
+   */
+  async function keepOutOfMarkdown(itemId: string): Promise<void> {
+    try {
+      await deps.db.item.updateMany({ where: { id: itemId, excludeFromMarkdown: false }, data: { excludeFromMarkdown: true } });
+    } catch (err) {
+      console.warn('[bulkLots] could not set excludeFromMarkdown (ignored):', err instanceof Error ? err.message : err);
+    }
   }
 
   /** The caller's own organizer id, for organizer-only writes. Answers the request itself on failure. */
@@ -181,6 +196,7 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
         if (!sale) return fail(res, 404, 'Sale not found.', 'SALE_NOT_FOUND');
         if (sale.organizerId !== organizerId) return fail(res, 403, 'That sale does not belong to your account.', 'NOT_YOUR_SALE');
         const lot = await createBulkLotItem(deps.db, { organizerId, saleId: sale.id }, req.body);
+        await keepOutOfMarkdown(lot.itemId);
         return ok(res, lot, 201);
       } catch (err) {
         return sendError(res, err, 'createInSale');
@@ -208,7 +224,9 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
         if (!organizerId) return;
         const itemId = idParam(req.params.itemId);
         if (!itemId) return fail(res, 404, BULK_LOT_MESSAGES.BULK_NOT_FOUND, 'BULK_NOT_FOUND');
-        return ok(res, await enableBulkLot(deps.db, { organizerId }, itemId, req.body));
+        const enabledLot = await enableBulkLot(deps.db, { organizerId }, itemId, req.body);
+        await keepOutOfMarkdown(itemId);
+        return ok(res, enabledLot);
       } catch (err) {
         return sendError(res, err, 'enable');
       }
@@ -221,6 +239,11 @@ export function createBulkLotHandlers(deps: BulkLotControllerDeps) {
         if (!organizerId) return;
         const itemId = idParam(req.params.itemId);
         if (!itemId) return fail(res, 404, BULK_LOT_MESSAGES.BULK_NOT_FOUND, 'BULK_NOT_FOUND');
+        // The card count is not edited here: it changes through /adjust (recount, damage, correction, added stock) so every change has a history row.
+        const rawBody = req.body as Record<string, unknown> | undefined;
+        if (rawBody && typeof rawBody === 'object' && !Array.isArray(rawBody) && (rawBody.totalCards !== undefined || rawBody.addCards !== undefined)) {
+          return fail(res, 409, LOT_INVARIANT_MESSAGES.BULK_USE_ADJUST, 'BULK_USE_ADJUST');
+        }
         return ok(res, await updateBulkLot(deps.db, { organizerId }, itemId, req.body));
       } catch (err) {
         return sendError(res, err, 'update');

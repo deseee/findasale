@@ -8,6 +8,8 @@ import { buildSquareIdempotencyKey } from './squarePaymentService';
 import { calculateApplicationFee, formatBuyerPremiumRate, getInclusivePlatformFeeRate, applyInclusiveFloor, SubscriptionTier } from '../utils/feeCalculator'; // inclusive-fee migration (2026-09-24, Patrick ruling): the winner completes payment remotely (Square hosted checkout link) -- ONLINE channel, mirrors jobs/auctionJob.ts's cron path exactly
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from './xpService'; // XP parity with jobs/auctionJob.ts — see awardAuctionWinXp below
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared reserve rule — identical to jobs/auctionJob.ts
+import { lotChannelRefusal } from './bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never an auction
+import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 
 /** What actually happened, so POST /api/items/:itemId/close-auction can tell the organizer. */
 export type CloseAuctionOutcome =
@@ -105,6 +107,14 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
     // Verify it's an auction
     if (item.listingType !== 'AUCTION') {
       console.warn(`[auction] Item ${itemId} is not an AUCTION, skipping close`);
+      return { outcome: 'NOT_AN_AUCTION' };
+    }
+
+    // ADR-136 Addendum B (#659): a bulk lot sells by the card quantity and can never be closed as an auction. Checked before
+    // the claim below so nothing is written; a lookup failure with the flag on also leaves the item alone (fail closed).
+    const lotAuctionRefusal = await lotChannelRefusal(prisma as any, itemId, 'AUCTION', isBulkLotsEnabled());
+    if (lotAuctionRefusal) {
+      console.warn(`[auction] Item ${itemId} is a bulk lot (${lotAuctionRefusal.code}), not closing as an auction`);
       return { outcome: 'NOT_AN_AUCTION' };
     }
 

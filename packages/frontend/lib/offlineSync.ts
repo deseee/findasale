@@ -41,6 +41,9 @@ export interface SyncQueueEntry {
   saleId: string;
   timestamp: string;
   retryCount: number;
+  // ADR-136 Addendum B (#659): why a NEEDS_RECONCILIATION entry stopped, stored when the server refused it. `conflicts` is the
+  // per-line detail for a bulk lot sale (see lib/bulkLotFollowup.ts BulkConflict); `message` is the server's plain-language line.
+  reconcile?: { code?: string; message?: string; conflicts?: unknown[] };
 }
 
 /**
@@ -49,7 +52,9 @@ export interface SyncQueueEntry {
  * known) so a replayed sync is idempotent — the backend dedupes on this id.
  */
 export interface CashCheckoutPayload {
-  items: Array<{ itemId?: string; amount: number; label?: string }>;
+  // `quantity` (ADR-136 Addendum B, #659): the number of cards for a bulk lot line. `amount` is the line total in dollars the
+  // register showed (lib/bulkLotFollowup.ts clientLineAmount); the server prices the line again on replay.
+  items: Array<{ itemId?: string; amount: number; label?: string; quantity?: number }>;
   cashReceived: number;
   buyerEmail?: string;
   clientTransactionId: string;
@@ -270,17 +275,23 @@ export async function recordOfflineCashCheckout(
  * replay finds the item already sold elsewhere. Distinct from CONFIRMED (never cleared
  * automatically) and distinct from PENDING (stops being resent on every sync retry).
  */
-export async function markNeedsReconciliation(localIds: string[]): Promise<void> {
+export async function markNeedsReconciliation(
+  localIds: string[],
+  // ADR-136 Addendum B (#659): optional reason per entry (keyed by localId), kept so the queue can show WHAT changed.
+  reasons?: Record<string, { code?: string; message?: string; conflicts?: unknown[] }>
+): Promise<void> {
   const db = await initOfflineDB();
   const entries = await getAllFromStore(db, 'syncQueue');
   const now = new Date().toISOString();
 
   for (const entry of entries) {
     if (localIds.includes(entry.localId)) {
+      const reason = reasons?.[entry.localId];
       await saveToStore(db, 'syncQueue', {
         ...entry,
         status: 'NEEDS_RECONCILIATION',
         timestamp: now,
+        ...(reason ? { reconcile: reason } : {}),
       });
     }
   }

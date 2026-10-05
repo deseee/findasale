@@ -48,6 +48,9 @@ export const ETSY_SOLD_MESSAGES = {
     `${units === 1 ? 'One unit' : `${units} units`} of "${cleanTitle(itemTitle)}" sold on Etsy. ${remaining} remaining.`,
   oversold: (itemTitle: string): string =>
     `"${cleanTitle(itemTitle)}" sold on Etsy, but it had already sold somewhere else. Check your orders so you can cancel or refund one of them.`,
+  // ADR-136 Addendum B (#659): a bulk lot is counted in cards, so an Etsy order for it cannot move the count by itself.
+  bulkLot: (itemTitle: string): string =>
+    `"${cleanTitle(itemTitle)}" sold on Etsy, but it is a bulk lot, so the cards were not counted. Use Adjust count on the lot to update how many cards you have.`,
 } as const;
 
 /** Titles go into an email body: drop angle brackets and cap the length. */
@@ -58,7 +61,7 @@ function cleanTitle(title: string): string {
 export interface EtsySaleNotice {
   organizerId: string;
   item: { id: string; title: string; saleId: string | null };
-  kind: 'sold-out' | 'partial' | 'oversold';
+  kind: 'sold-out' | 'partial' | 'oversold' | 'bulk-lot';
   units: number;
   remainingStock: number;
 }
@@ -77,6 +80,9 @@ export interface EtsySoldDeps extends EtsyConnectorDeps {
   fanOut?: (itemId: string, source: string) => void;
   /** Tell the organizer. Defaults to createNotification (in-app plus email). */
   notify?: (notice: EtsySaleNotice) => Promise<void>;
+  /** ADR-136 Addendum B (#659): is this item a bulk lot? Defaults to the ItemBulkLot lookup (fails open with the flag off,
+   * throws with it on so the sale is retried on the next poll). A lot never has its card count moved from here. */
+  isBulkLot?: (itemId: string) => Promise<boolean>;
 }
 
 type Db = any;
@@ -103,7 +109,9 @@ async function defaultNotify(db: Db, notice: EtsySaleNotice): Promise<void> {
   const organizer = await db.organizer.findUnique({ where: { id: notice.organizerId }, select: { userId: true } });
   if (!organizer?.userId) return;
   const body =
-    notice.kind === 'sold-out'
+    notice.kind === 'bulk-lot'
+      ? ETSY_SOLD_MESSAGES.bulkLot(notice.item.title)
+      : notice.kind === 'sold-out'
       ? ETSY_SOLD_MESSAGES.soldOut(notice.item.title)
       : notice.kind === 'oversold'
       ? ETSY_SOLD_MESSAGES.oversold(notice.item.title)
@@ -118,6 +126,14 @@ async function defaultNotify(db: Db, notice: EtsySaleNotice): Promise<void> {
     link: notice.item.saleId ? `/organizer/sales/${notice.item.saleId}` : `/organizer/inventory`,
     sendEmail: true,
   });
+}
+
+async function defaultIsBulkLot(db: Db, itemId: string): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { findBulkLotItemIds } = require('../bulkLot/bulkLotService');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { isBulkLotsEnabled } = require('../bulkLot/bulkLotConfig');
+  return (await findBulkLotItemIds(db, [itemId], isBulkLotsEnabled())).has(itemId);
 }
 
 const DIGITS = /^[1-9]\d{0,17}$/;
@@ -212,6 +228,25 @@ export async function recordEtsySale(args: RecordEtsySaleArgs, deps: EtsySoldDep
     if (!item) {
       console.warn(`[Etsy Sold] item ${itemId} not found for transaction ${args.transactionId}; ledger row kept`);
       return { status: 'recorded', itemFound: false };
+    }
+
+    // 2b. ADR-136 Addendum B (#659): a bulk lot is counted in cards. An Etsy order for it cannot say how many cards it
+    // covers, so the ledger row stays (the order is not re-read), no stock moves and the organizer is told to adjust.
+    // A failed lookup with the flag on throws into the catch below, which frees the ledger row so the next poll retries.
+    if (await (deps.isBulkLot ?? ((id: string) => defaultIsBulkLot(db, id)))(itemId)) {
+      console.warn(`[Etsy Sold] item ${itemId} is a bulk lot; transaction ${args.transactionId} recorded without moving stock`);
+      try {
+        await notify({
+          organizerId,
+          item: { id: item.id, title: String(item.title ?? ''), saleId: item.saleId ?? null },
+          kind: 'bulk-lot',
+          units: quantity,
+          remainingStock: Math.max((item.stockTotal ?? 1) - (item.stockSold ?? 0), 0),
+        });
+      } catch (err: any) {
+        console.error(`[Etsy Sold] could not notify organizer ${organizerId} for item ${itemId}:`, safeMessage(err, deps));
+      }
+      return { status: 'recorded', itemFound: true, unitsApplied: 0 };
     }
 
     // 3. Stock.

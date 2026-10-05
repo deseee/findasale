@@ -63,6 +63,10 @@ import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, refreshEbayAccessToken } from './ebayHttp';
 import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
 import { buildCustomLabel } from '../controllers/ebayController';
+import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
+import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
+import { isBulkEbayEnabled } from './bulkLot/bulkLotEbayConfig';
+import { reconcileBulkLotEbayInBackgroundIfEnabled } from './bulkLot/bulkLotEbayWiring';
 
 /** How stale EbayConnection.lastEbaySoldSyncAt can be before we log a
  * potential-stale-overwrite warning (condition 2). 15 minutes matches
@@ -139,6 +143,22 @@ export async function syncMarketplaceStock(
     // partial sales are not eBay-linked items), so this early-return is the
     // hot path for every non-eBay checkout.
     if (!item.ebayOfferId) {
+      return;
+    }
+
+    // ADR-136 Addendum C (#659): for a bulk lot `remainingStock` is a number of CARDS, never a quantity to send to eBay
+    // (a 4,200 card lot would become 4,200 bundles). A lot with an eBay offer is a bundle listing, so its quantity is
+    // whole bundles and is worked out by the bundle reconcile, which also ends the listing below one bundle. The lot
+    // lookup runs whatever the flags say (an offer can outlive the flag being turned off); with the bundle flag off
+    // nothing is sent for a lot at all. A failed lookup sends nothing.
+    try {
+      if ((await findBulkLotItemIds(prisma as any, [itemId], isBulkLotsEnabled())).has(itemId)) {
+        if (isBulkEbayEnabled()) reconcileBulkLotEbayInBackgroundIfEnabled(itemId, 'partial sale on another channel');
+        else console.warn(`[eBay ReviseQty] Item ${itemId} is a bulk lot and eBay bundles are off: not revising eBay quantity`);
+        return;
+      }
+    } catch (lotErr) {
+      console.error(`[eBay ReviseQty] bulk lot check failed for item ${itemId}, not revising:`, lotErr);
       return;
     }
 

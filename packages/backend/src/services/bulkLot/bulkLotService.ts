@@ -49,6 +49,7 @@ export type BulkLotErrorCode =
   | 'BULK_QUANTITY_REQUIRED'
   | 'BULK_CHECK_FAILED'
   | 'BULK_CHANNEL_UNSUPPORTED'
+  | 'BULK_SOLD_OUT_AFTER_PAYMENT'
   | 'BAD_QUANTITY'
   | 'BAD_PRICE'
   | 'QUANTITY_TOO_SMALL'
@@ -87,7 +88,10 @@ export const BULK_LOT_MESSAGES: Record<BulkLotErrorCode, string> = {
   BULK_TOTAL_BELOW_SOLD: 'The total cannot be lower than the number of cards already sold.',
   BULK_QUANTITY_REQUIRED: 'Enter how many cards to sell from this bulk lot.',
   BULK_CHECK_FAILED: 'Could not check whether this item is a bulk lot. Try again in a moment.',
-  BULK_CHANNEL_UNSUPPORTED: 'Bulk lots can be sold at the register with cash, Venmo or Zelle. Other payment methods are not available for bulk lots yet.',
+  // ADR-136 Addendum A: card, Square, QR and cash all sell lots now. What still refuses is a path that has no quantity yet
+  // (online buy buttons, hub carts until they are wired, marketplace listings), so the wording is about the path, not the tender.
+  BULK_CHANNEL_UNSUPPORTED: 'This bulk lot cannot be bought this way yet. Ask the shop to ring it up at the register.',
+  BULK_SOLD_OUT_AFTER_PAYMENT: 'The cards in this bulk lot ran out while the payment was being completed. The card payment is being refunded. Start the sale again with the cards that are left.',
   BAD_QUANTITY: 'Enter a whole number of cards, 1 or more.',
   BAD_PRICE: 'This bulk lot does not have a valid price per 1,000 cards.',
   QUANTITY_TOO_SMALL: 'That many cards rounds to less than one cent at this price. Sell a larger quantity.',
@@ -620,4 +624,207 @@ export async function quoteBulkLine(db: BulkLotDb, ctx: OrganizerCtx, itemId: st
   if (!row.bulkLot) throw bulkLotError('BULK_NOT_LOT', 409);
   const plan = planBulkLine(row, rawQuantity, null);
   return { itemId, cards: plan.cards, cents: plan.cents, amount: plan.cents / 100, remainingCards: remainingCards(row.stockTotal, row.stockSold) };
+}
+
+// ---------------------------------------------------------------------------
+// Payment channels (ADR-136 Addendum A, 2026-10-05)
+//
+// Every channel that sells a lot (cash, manual card entry, a card request sent to a phone, a QR or payment link) uses the
+// same four steps, in this order:
+//   1. planBulkCart / planBulkRequestLines   price every lot line on the server (cards x price per 1,000, half up, once)
+//   2. assertBulkLinesStillAvailable         right before money is taken, look at the lot once more (narrows the race)
+//   3. sellBulkLinesInTransaction            when the payment is confirmed, take the cards INSIDE the same database
+//                                            transaction that writes the Purchase rows (one guarded statement per lot)
+//   4. a lot that sold out after the card was captured is refunded by the caller, never silently kept
+// ---------------------------------------------------------------------------
+
+/** One priced lot line. Stored as JSON on POSPaymentRequest.bulkLines and POSPaymentLink.bulkLines. */
+export interface BulkLineRecord {
+  itemId: string;
+  cards: number;
+  cents: number;
+  /** Cents per 1,000 cards at the time the line was priced. Optional so a line written without it still parses. */
+  pricePerThousandCents?: number;
+}
+
+/** Stable order (by item id) so two carts holding the same two lots always lock them in the same order. */
+export function toBulkLineRecords(plans: ReadonlyMap<string, PlannedBulkLine>): BulkLineRecord[] {
+  return Array.from(plans.entries())
+    .map(([itemId, p]) => ({ itemId, cards: p.cards, cents: p.cents, pricePerThousandCents: p.pricePerThousandCents }))
+    .sort((a, b) => (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0));
+}
+
+/**
+ * Reads lines back from a JSON column. Tolerant on purpose: a malformed entry is dropped, never guessed at. A lot item
+ * with no valid line is then treated as "missing its quantity" by the caller and fails closed (refund path), so a damaged
+ * row can never turn into a one-unit sale of a lot.
+ */
+export function parseStoredBulkLines(raw: unknown): BulkLineRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: BulkLineRecord[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    const itemId = typeof e.itemId === 'string' ? e.itemId : '';
+    const cards = e.cards;
+    const cents = e.cents;
+    if (!itemId || seen.has(itemId)) continue;
+    if (typeof cards !== 'number' || !Number.isSafeInteger(cards) || cards < 1 || cards > MAX_LOT_CARDS) continue;
+    if (typeof cents !== 'number' || !Number.isSafeInteger(cents) || cents < 1) continue;
+    const ppt = e.pricePerThousandCents;
+    seen.add(itemId);
+    out.push({
+      itemId,
+      cards,
+      cents,
+      ...(typeof ppt === 'number' && Number.isSafeInteger(ppt) && ppt > 0 ? { pricePerThousandCents: ppt } : {}),
+    });
+  }
+  return out;
+}
+
+/** Sum of the priced lot lines, in cents. */
+export function bulkLinesTotalCents(lines: ReadonlyArray<Pick<BulkLineRecord, 'cents'>>): number {
+  return lines.reduce((sum, l) => sum + l.cents, 0);
+}
+
+export type BulkCartLine = { itemId?: string | null; amount?: number | null; quantity?: unknown };
+export type BulkCartItemRow = Pick<LotItemRow, 'price' | 'status' | 'stockTotal' | 'stockSold'>;
+
+/**
+ * Validates and prices every bulk lot line of a cart, for any channel. Returns itemId -> priced line (empty when the cart
+ * holds no lot). Throws BulkLotError:
+ *   BULK_NOT_LOT (a quantity on an item that is not a lot), BULK_DISABLED (a lot while the flag is off),
+ *   BULK_QUANTITY_REQUIRED (a lot with no quantity), BULK_CHECK_FAILED (flag on and the lookup failed),
+ *   and everything planBulkLine throws (NOT_AVAILABLE, BAD_QUANTITY, BAD_PRICE, INSUFFICIENT_STOCK, QUANTITY_TOO_SMALL,
+ *   PRICE_CHANGED when the line carries the amount the register showed and it differs by even one cent).
+ * The lot lookup runs whether or not the flag is on (a lot is never sold as one unit by a path that missed it).
+ */
+export async function planBulkCart(
+  db: Pick<BulkLotDb, 'itemBulkLot'>,
+  params: { lines: ReadonlyArray<BulkCartLine>; itemRows: Record<string, BulkCartItemRow | undefined>; flagOn: boolean }
+): Promise<Map<string, PlannedBulkLine>> {
+  const plans = new Map<string, PlannedBulkLine>();
+  const itemIds = params.lines.map((l) => l.itemId).filter((v): v is string => typeof v === 'string' && v.length > 0);
+  const lotIds = await findBulkLotItemIds(db, itemIds, params.flagOn);
+  for (const line of params.lines) {
+    const isLot = !!line.itemId && lotIds.has(line.itemId);
+    const hasQuantity = line.quantity !== undefined && line.quantity !== null;
+    if (!isLot) {
+      if (hasQuantity) throw bulkLotError('BULK_NOT_LOT', 400);
+      continue;
+    }
+    if (!params.flagOn) throw bulkLotError('BULK_DISABLED', 409);
+    if (!hasQuantity) throw bulkLotError('BULK_QUANTITY_REQUIRED', 400);
+    const row = params.itemRows[line.itemId as string];
+    if (!row) throw bulkLotError('BULK_NOT_FOUND', 404);
+    plans.set(line.itemId as string, planBulkLine(row, line.quantity, typeof line.amount === 'number' ? line.amount : null));
+  }
+  return plans;
+}
+
+export interface BulkLineRequest {
+  itemId: string;
+  quantity: unknown;
+  /** Dollars the register showed for this line, or null when it did not send one. */
+  amount: number | null;
+}
+
+/** Reads the `bulkLines` array of a card request or payment link body. Absent means no lot lines. */
+export function parseBulkLineRequests(raw: unknown): BulkLineRequest[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > 200) throw bulkLotError('BULK_VALIDATION', 400);
+  const seen = new Set<string>();
+  const out: BulkLineRequest[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') throw bulkLotError('BULK_VALIDATION', 400);
+    const e = entry as Record<string, unknown>;
+    if (typeof e.itemId !== 'string' || !e.itemId || seen.has(e.itemId)) throw bulkLotError('BULK_VALIDATION', 400);
+    if (e.quantity === undefined || e.quantity === null) throw bulkLotError('BULK_QUANTITY_REQUIRED', 400);
+    const amount = typeof e.amount === 'number' && Number.isFinite(e.amount) ? e.amount : null;
+    seen.add(e.itemId);
+    out.push({ itemId: e.itemId, quantity: e.quantity, amount });
+  }
+  return out;
+}
+
+/**
+ * planBulkCart for a channel whose request carries item ids plus a separate `bulkLines` list (card request to a phone,
+ * payment link). A line that names an item that is not in `itemIds` is BULK_VALIDATION.
+ */
+export async function planBulkRequestLines(
+  db: Pick<BulkLotDb, 'itemBulkLot'>,
+  params: { itemIds: ReadonlyArray<string>; bulkLines: unknown; itemRows: Record<string, BulkCartItemRow | undefined>; flagOn: boolean }
+): Promise<Map<string, PlannedBulkLine>> {
+  const requests = parseBulkLineRequests(params.bulkLines);
+  const idSet = new Set(params.itemIds);
+  const byId = new Map<string, BulkLineRequest>();
+  for (const r of requests) {
+    if (!idSet.has(r.itemId)) throw bulkLotError('BULK_VALIDATION', 400);
+    byId.set(r.itemId, r);
+  }
+  const lines: BulkCartLine[] = params.itemIds.map((itemId) => {
+    const r = byId.get(itemId);
+    return { itemId, quantity: r ? r.quantity : undefined, amount: r ? r.amount : null };
+  });
+  return planBulkCart(db, { lines, itemRows: params.itemRows, flagOn: params.flagOn });
+}
+
+/**
+ * The look right before money is taken (a card is about to be charged, or a link is about to be created). Reads each lot
+ * fresh and refuses when it is gone, sold out, or no longer has the cards. This does not reserve anything; it narrows the
+ * window in which a lot can sell out between the quote and the charge to the time one database round trip takes. The
+ * decrement inside the recording transaction is still the authority.
+ */
+export async function assertBulkLinesStillAvailable(db: Pick<BulkLotDb, 'item'>, lines: ReadonlyArray<BulkLineRecord>): Promise<void> {
+  if (lines.length === 0) return;
+  const rows = await db.item.findMany({
+    where: { id: { in: lines.map((l) => l.itemId) } },
+    select: { id: true, status: true, stockTotal: true, stockSold: true },
+  });
+  const byId = new Map<string, { status: string; stockTotal?: number | null; stockSold?: number | null }>(rows.map((r: any) => [r.id, r]));
+  for (const line of lines) {
+    const row = byId.get(line.itemId);
+    if (!row || row.status !== 'AVAILABLE') throw bulkLotError('NOT_AVAILABLE', 409, { itemId: line.itemId });
+    const remaining = remainingCards(row.stockTotal, row.stockSold);
+    if (remaining < line.cards) throw bulkLotError('INSUFFICIENT_STOCK', 409, { itemId: line.itemId, remaining });
+  }
+}
+
+export type SellUnitsInTx = (tx: any, itemId: string, units: number) => Promise<{ fullySoldOut: boolean; remainingStock: number }>;
+
+/**
+ * Takes the cards for every lot line INSIDE the caller's transaction. `sell` is itemStockService.sellItemUnitsInTransaction
+ * (injected so this module imports no Prisma client). Lines are processed in item id order so two carts holding the same
+ * two lots can never lock them in opposite orders and deadlock. A sold out or missing lot becomes a BulkLotError
+ * (INSUFFICIENT_STOCK 409 / NOT_AVAILABLE 409) carrying the item id; any other error is rethrown unchanged. Either way the
+ * caller's transaction rolls back, so cards taken for an earlier line in the same call are given back by the database.
+ */
+export async function sellBulkLinesInTransaction(
+  tx: any,
+  lines: ReadonlyArray<BulkLineRecord>,
+  sell: SellUnitsInTx
+): Promise<Map<string, { fullySoldOut: boolean; remainingStock: number }>> {
+  const results = new Map<string, { fullySoldOut: boolean; remainingStock: number }>();
+  const ordered = [...lines].sort((a, b) => (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0));
+  for (const line of ordered) {
+    try {
+      results.set(line.itemId, await sell(tx, line.itemId, line.cards));
+    } catch (err: any) {
+      if (err && err.name === 'InsufficientStockError') throw bulkLotError('INSUFFICIENT_STOCK', 409, { itemId: line.itemId });
+      if (err && /not found/i.test(String(err.message ?? ''))) throw bulkLotError('NOT_AVAILABLE', 409, { itemId: line.itemId });
+      throw err;
+    }
+  }
+  return results;
+}
+
+/**
+ * Serializes work on one business key (a clientTransactionId, a Square payment id) for the life of the transaction:
+ * pg_advisory_xact_lock(hashtext(key)). A second request with the same key waits here, then re-reads and sees the first
+ * one's rows, so a replay can never take the cards twice. The lock is released by the commit or the rollback.
+ */
+export async function lockBulkSaleKey(tx: any, key: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
 }

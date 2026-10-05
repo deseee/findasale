@@ -39,6 +39,7 @@ export const NOTES = {
   NOT_IN_FINDASALE: 'On TCGplayer but not in this sale. Add these cards with the regular card import.',
   LISTED_BUT_MISSING: 'FindA.Sale believes TCGplayer holds this card, but your file has no row for it. It may have sold out there. Nothing was changed.',
   DUPLICATE_KEYS: 'The same TCGplayer Id, condition and foil appears on more than one row. Those cards were skipped.',
+  BULK_LOTS_IGNORED: 'Bulk lots are not part of this TCGplayer update. They are counted in cards and priced per 1,000, so they are never added to the update file and a TCGplayer file never changes them.',
 } as const;
 
 /** Text for the counter notice and the sync page. */

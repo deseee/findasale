@@ -192,6 +192,8 @@ async function runEbayStuckOfferRetryCron(): Promise<void> {
       ebayNeedsReview: false,
       saleId: { not: null },
       updatedAt: { lt: staleCutoff },
+      // ADR-136 Addendum C: a bulk lot bundle is listed or relisted only by its own flow, which re-checks stock and price.
+      bulkLot: { is: null },
     },
     select: {
       id: true,

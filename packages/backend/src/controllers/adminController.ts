@@ -2638,7 +2638,7 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         // refunds the whole remaining balance, so the purchase is fully refunded when it returns. Guarded on
         // that anyway (a Square result reports it directly) so a future partial mode can not put a
         // still-owned item back on sale.
-        const bulkIsFull = 'isFullRefund' in result ? result.isFullRefund : true;
+        const bulkIsFull = 'isFullRefund' in result ? (result.isFullRefund ?? true) : true;
         if (purchase.itemId && bulkIsFull) {
           await prisma.item.update({
             where: { id: purchase.itemId },

@@ -10,6 +10,10 @@ import { processCashSaleCore, CashSaleError } from './cashPaymentController'; //
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: an offline-replayed category/tags/photos edit must survive the next import
 import { organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, organizer-driven offline replay only
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 Addendum B (#659): bulk lots through the offline queue
+import { findBulkLotItemIds, isBulkLotError } from '../services/bulkLot/bulkLotService';
+import { evaluateLotItemEdit, lotDeleteBlocker, LOT_INVARIANT_MESSAGES } from '../services/bulkLot/bulkLotInvariants';
+import { BULK_CONFLICT_CODE, BULK_CONFLICT_MESSAGE, isBulkLineCode, previewOfflineBulkLines } from '../services/bulkLot/bulkLotOfflineService';
 
 interface SyncOperation {
   type: 'CREATE_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'UPLOAD_PHOTO' | 'CHECKOUT_CASH';
@@ -34,6 +38,8 @@ interface FailedOperation {
   retryable: boolean;
   operationType?: string;
   code?: string;
+  /** ADR-136 Addendum B: structured detail for the queue, e.g. { conflicts: BulkConflict[] } for a bulk lot sale that no longer sells as queued. */
+  details?: unknown;
 }
 
 interface ServerItemChange {
@@ -124,14 +130,14 @@ export async function batchSync(req: AuthRequest, res: Response) {
         } else if (operation.type === 'UPDATE_ITEM') {
           const result = await handleUpdateItem(operation);
           if (result.message) {
-            failed.push({ localId: operation.localId, error: result.message.message, retryable: result.message.retryable });
+            failed.push({ localId: operation.localId, error: result.message.message, retryable: result.message.retryable, ...((result.message as any).code ? { code: (result.message as any).code } : {}) });
           } else {
             synced.push(result.data!);
           }
         } else if (operation.type === 'DELETE_ITEM') {
           const result = await handleDeleteItem(operation);
           if (result.message) {
-            failed.push({ localId: operation.localId, error: result.message.message, retryable: result.message.retryable });
+            failed.push({ localId: operation.localId, error: result.message.message, retryable: result.message.retryable, ...((result.message as any).code ? { code: (result.message as any).code } : {}) });
           } else {
             synced.push(result.data!);
           }
@@ -153,6 +159,7 @@ export async function batchSync(req: AuthRequest, res: Response) {
               retryable: result.message.retryable,
               operationType: operation.type,
               code: result.message.code,
+              ...((result.message as any).details !== undefined ? { details: (result.message as any).details } : {}),
             });
           } else {
             synced.push(result.data!);
@@ -306,6 +313,32 @@ async function handleUpdateItem(operation: SyncOperation) {
       };
     }
 
+    // ADR-136 Addendum B (#659): a bulk lot replayed through the offline queue keeps its invariants. The queue never carries a
+    // card count; a price is rounded to whole cents, a lot stays out of markdown and off eBay as a single listing. A lookup
+    // failure with the flag on is retryable (BULK_CHECK_FAILED), never a write.
+    let lotForced: Record<string, unknown> = {};
+    {
+      const lotFlagOn = isBulkLotsEnabled();
+      let isLot = false;
+      try {
+        isLot = (await findBulkLotItemIds(prisma as any, [itemId], lotFlagOn)).has(itemId);
+      } catch (lotErr) {
+        return { message: { message: LOT_INVARIANT_MESSAGES.BULK_CHECK_FAILED, retryable: true, code: 'BULK_CHECK_FAILED' } };
+      }
+      if (isLot) {
+        const decision = evaluateLotItemEdit(payload as Record<string, unknown>, {
+          stockTotal: currentItem.stockTotal,
+          stockSold: currentItem.stockSold,
+          status: currentItem.status,
+          listingType: currentItem.listingType,
+        });
+        if (!decision.ok) {
+          return { message: { message: decision.refusal.message, retryable: false, code: decision.refusal.code } };
+        }
+        lotForced = decision.forced as unknown as Record<string, unknown>;
+      }
+    }
+
     // Apply update (last-write-wins)
     const updated = await prisma.item.update({
       where: { id: itemId },
@@ -330,6 +363,7 @@ async function handleUpdateItem(operation: SyncOperation) {
           tags: Array.isArray(payload.tags) ? payload.tags : currentItem.tags,
           photoUrls: Array.isArray(payload.photoUrls) ? payload.photoUrls : currentItem.photoUrls,
         }) ? { ebayContentDirtyAt: new Date() } : {}),
+        ...lotForced, // ADR-136 Addendum B (#659): the lot invariants win over the queued edit
       },
     });
 
@@ -376,6 +410,20 @@ async function handleDeleteItem(operation: SyncOperation) {
       };
     }
 
+    // ADR-136 Addendum B (#659): a lot with cards on an active hold or in a hub cart cannot be removed from under them.
+    {
+      const lotFlagOn = isBulkLotsEnabled();
+      let isLot = false;
+      try {
+        isLot = (await findBulkLotItemIds(prisma as any, [itemId], lotFlagOn)).has(itemId);
+        if (isLot && (await lotDeleteBlocker(prisma as any, itemId, lotFlagOn))) {
+          return { message: { message: LOT_INVARIANT_MESSAGES.BULK_LOT_BUSY, retryable: false, code: 'BULK_LOT_BUSY' } };
+        }
+      } catch (lotErr) {
+        return { message: { message: LOT_INVARIANT_MESSAGES.BULK_CHECK_FAILED, retryable: true, code: 'BULK_CHECK_FAILED' } };
+      }
+    }
+
     // Soft delete: set isActive to false
     const deleted = await prisma.item.update({
       where: { id: itemId },
@@ -418,6 +466,23 @@ async function handleCheckoutCash(
   const { payload } = operation;
 
   try {
+    // ADR-136 Addendum B (#659): bulk lot lines of a queued sale. A replay of a sale that was already recorded is never
+    // re-checked (it correctly shows fewer cards on hand). Otherwise every lot line is priced again against the lot as it is
+    // NOW; if any line no longer sells as queued the whole sale is refused BEFORE anything is charged or taken, with one
+    // entry per changed line so the organizer sees exactly what moved. Plain item sales skip all of this.
+    const queuedItems: Array<{ itemId?: string; amount?: number; quantity?: number | string }> = Array.isArray(payload?.items) ? payload.items : [];
+    if (queuedItems.length > 0) {
+      const alreadyRecorded = payload?.clientTransactionId
+        ? (await prisma.purchase.findFirst({ where: { clientTransactionId: payload.clientTransactionId, sale: { organizerId: organizer.id } }, select: { id: true } })) !== null
+        : false;
+      if (!alreadyRecorded) {
+        const preview = await previewOfflineBulkLines(prisma as any, { items: queuedItems, flagOn: isBulkLotsEnabled() });
+        if (preview.conflicts.length > 0) {
+          return { message: { message: BULK_CONFLICT_MESSAGE, retryable: false, code: BULK_CONFLICT_CODE, details: { conflicts: preview.conflicts } } };
+        }
+      }
+    }
+
     // POS Cashier Discount Permission fix (2026-08-28): pass discount fields through if the
     // queued payload has them (added to CashCheckoutPayload the same session) so a discount
     // applied while offline is no longer silently dropped on sync -- it was ALWAYS dropped
@@ -453,7 +518,22 @@ async function handleCheckoutCash(
       },
     };
   } catch (error: any) {
+    if (isBulkLotError(error) && error.code === 'BULK_CHECK_FAILED') {
+      return { message: { message: error.message, retryable: true, code: error.code } };
+    }
     if (error instanceof CashSaleError) {
+      // A bulk line that changed between the check above and the sale itself (a register sale landing in between): look again so
+      // the organizer still gets the per-line detail, falling back to the single code when nothing shows any more.
+      if (isBulkLineCode(error.code) && !error.retryable) {
+        try {
+          const again = await previewOfflineBulkLines(prisma as any, { items: Array.isArray(payload?.items) ? payload.items : [], flagOn: isBulkLotsEnabled() });
+          if (again.conflicts.length > 0) {
+            return { message: { message: BULK_CONFLICT_MESSAGE, retryable: false, code: BULK_CONFLICT_CODE, details: { conflicts: again.conflicts } } };
+          }
+        } catch {
+          /* fall through to the plain error below */
+        }
+      }
       return {
         message: {
           message: error.message,

@@ -11,6 +11,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { bulkLotHandlers } from '../controllers/bulkLotController';
+import { bulkLotFollowupHandlers } from '../controllers/bulkLotFollowupController'; // ADR-136 Addendum B: adjust, history, refunds by cards, holds
 
 const router = Router();
 
@@ -46,5 +47,21 @@ router.post('/item/:itemId/quote', authenticate, bulkLotReadLimiter, bulkLotHand
 router.post('/sale/:saleId/items', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotHandlers.createInSale);
 router.post('/item/:itemId/enable', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotHandlers.enable);
 router.patch('/item/:itemId', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotHandlers.update);
+
+// ADR-136 Addendum B (#659): recount and adjust with history, sale rows for refunds by card count, holds on N cards.
+// Organizer or team member reads (the handler resolves the actor and answers 403 itself).
+router.get('/item/:itemId/adjustments', authenticate, bulkLotReadLimiter, bulkLotFollowupHandlers.adjustments);
+router.get('/item/:itemId/sales', authenticate, bulkLotReadLimiter, bulkLotFollowupHandlers.sales);
+router.post('/item/:itemId/refund-preview', authenticate, bulkLotReadLimiter, bulkLotFollowupHandlers.refundPreview);
+router.get('/item/:itemId/holds', authenticate, bulkLotReadLimiter, bulkLotFollowupHandlers.listHolds);
+// Organizer only
+router.post('/item/:itemId/adjust', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.adjust);
+router.post('/item/:itemId/holds', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.placeOrganizerHold);
+router.post('/holds/:holdId/release', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.releaseOrganizerHold);
+router.post('/holds/:holdId/convert', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.convertHold);
+// Signed-in shopper (their own holds only, 2 hours, one hold per lot)
+router.post('/item/:itemId/hold', authenticate, bulkLotWriteLimiter, bulkLotFollowupHandlers.placeShopperHold);
+router.get('/my-holds', authenticate, bulkLotReadLimiter, bulkLotFollowupHandlers.myHolds);
+router.post('/my-holds/:holdId/release', authenticate, bulkLotWriteLimiter, bulkLotFollowupHandlers.releaseShopperHold);
 
 export default router;

@@ -114,6 +114,9 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       status: 'AVAILABLE',
       ebayListingId: { not: null },
       sale: { organizerId },
+      // ADR-136 Addendum C: a bulk lot's Item.price is per 1,000 cards and its title and quantity are not eBay's. Pulling
+      // the bundle listing's price or title into the lot would corrupt it, so lots are never pull-synced.
+      bulkLot: { is: null },
     },
     select: {
       id: true,

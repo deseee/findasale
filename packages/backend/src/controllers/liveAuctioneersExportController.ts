@@ -18,6 +18,7 @@
 
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
+import { filterBulkLotsForExport } from '../services/bulkLot/bulkLotExportFilter'; // ADR-136 Addendum C (#659)
 import {
   generateLiveAuctioneersCsv,
   getOwnedItemsForLiveAuctioneersExport,
@@ -48,12 +49,18 @@ export const exportLiveAuctioneersCsv = async (req: AuthRequest, res: Response):
       return;
     }
 
-    const { organizer, items } = await getOwnedItemsForLiveAuctioneersExport(userId, { saleId, itemIds });
+    const { organizer, items: allItems } = await getOwnedItemsForLiveAuctioneersExport(userId, { saleId, itemIds });
 
     if (!organizer) {
       res.status(404).json({ message: 'Organizer profile not found' });
       return;
     }
+
+    // ADR-136 Addendum C (#659): bulk lots are left out of this export and the response says so (X-Skipped-Bulk-Lots headers).
+    const lotSplit = await filterBulkLotsForExport(allItems, res);
+    if (!lotSplit) return;
+    const items = lotSplit.kept;
+    lotSplit.markResponse(res);
 
     if (items.length === 0) {
       res.status(404).json({ message: 'No matching items found for this organizer' });

@@ -9,6 +9,7 @@ import { checkExportRateLimit, formatNextExportDate } from '../services/exportRa
 import { organizerHasTier } from '../utils/tierAccess';
 import { facebookMarketplaceCondition, facebookCommerceCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary
 import { csvCell } from '../utils/csvSafe'; // formula-injection-safe cell writer (leading = + - @, tab, CR, LF)
+import { filterBulkLotsForExport } from '../services/bulkLot/bulkLotExportFilter'; // ADR-136 Addendum C (#659): bulk lots are left out of every platform export
 
 /**
  * Category mapping from FindA.Sale to EstateSales.NET format
@@ -140,6 +141,13 @@ export const exportEstatesalesCSV = async (
       res.status(403).json({ message: 'Not authorized' });
       return;
     }
+
+    // ADR-136 Addendum C (#659): bulk lots (cards sold by the thousand) are left out of every platform export and the
+    // response says so (X-Skipped-Bulk-Lots headers). Answers 503 / 400 itself when it cannot or has nothing left.
+    const lotSplit = await filterBulkLotsForExport(sale.items ?? [], res, prisma as any);
+    if (!lotSplit) return;
+    sale.items = lotSplit.kept as typeof sale.items;
+    lotSplit.markResponse(res);
 
     // Verify published items exist
     if (!sale.items || sale.items.length === 0) {
@@ -285,6 +293,13 @@ export const exportFacebookJSON = async (
       return;
     }
 
+    // ADR-136 Addendum C (#659): bulk lots (cards sold by the thousand) are left out of every platform export and the
+    // response says so (X-Skipped-Bulk-Lots headers). Answers 503 / 400 itself when it cannot or has nothing left.
+    const lotSplit = await filterBulkLotsForExport(sale.items ?? [], res, prisma as any);
+    if (!lotSplit) return;
+    sale.items = lotSplit.kept as typeof sale.items;
+    lotSplit.markResponse(res);
+
     // Verify published items exist
     if (!sale.items || sale.items.length === 0) {
       res.status(400).json({ message: 'No published items to export' });
@@ -346,7 +361,7 @@ export const exportFacebookJSON = async (
       data: { fbExportedAt: new Date() }
     });
 
-    res.status(200).json(facebookData);
+    res.status(200).json(lotSplit.skipped.length > 0 ? { ...facebookData, skippedBulkLots: lotSplit.skipped } : facebookData);
   } catch (error) {
     console.error('exportFacebookJSON error:', error);
     res.status(500).json({ message: 'Export failed' });
@@ -423,6 +438,13 @@ export const exportCraigslistText = async (
       res.status(403).json({ message: 'Not authorized' });
       return;
     }
+
+    // ADR-136 Addendum C (#659): bulk lots (cards sold by the thousand) are left out of every platform export and the
+    // response says so (X-Skipped-Bulk-Lots headers). Answers 503 / 400 itself when it cannot or has nothing left.
+    const lotSplit = await filterBulkLotsForExport(sale.items ?? [], res, prisma as any);
+    if (!lotSplit) return;
+    sale.items = lotSplit.kept as typeof sale.items;
+    lotSplit.markResponse(res);
 
     // Verify published items exist
     if (!sale.items || sale.items.length === 0) {
@@ -837,6 +859,13 @@ export const exportFacebookXLSX = async (
       return;
     }
 
+    // ADR-136 Addendum C (#659): bulk lots (cards sold by the thousand) are left out of every platform export and the
+    // response says so (X-Skipped-Bulk-Lots headers). Answers 503 / 400 itself when it cannot or has nothing left.
+    const lotSplit = await filterBulkLotsForExport(sale.items ?? [], res, prisma as any);
+    if (!lotSplit) return;
+    sale.items = lotSplit.kept as typeof sale.items;
+    lotSplit.markResponse(res);
+
     // Verify published items exist
     if (!sale.items || sale.items.length === 0) {
       res.status(400).json({ message: 'No published items to export' });
@@ -994,7 +1023,10 @@ export const exportCommerceManagerFeed = async (
     }
 
     // Only include items that have at least one photo (image_link is required by FB)
-    const feedItems = (sale.items ?? []).filter(
+    // ADR-136 Addendum C (#659): a bulk lot is never in a catalog feed (its price is per 1,000 cards).
+    const feedLotSplit = await filterBulkLotsForExport(sale.items ?? [], res, prisma as any);
+    if (!feedLotSplit) return;
+    const feedItems = feedLotSplit.kept.filter(
       (item) => item.photoUrls && item.photoUrls.length > 0
     );
 
@@ -1097,7 +1129,7 @@ export const exportOrganizerCommerceManagerFeed = async (
     const { organizerId } = req.params;
 
     // Fetch all items from active sales for this organizer
-    const items = await prisma.item.findMany({
+    const allFeedItems = await prisma.item.findMany({
       where: {
         sale: {
           organizerId,
@@ -1121,6 +1153,10 @@ export const exportOrganizerCommerceManagerFeed = async (
         stockSold: true,
       },
     });
+    // ADR-136 Addendum C (#659): a bulk lot is never in a catalog feed (its price is per 1,000 cards).
+    const organizerFeedLotSplit = await filterBulkLotsForExport(allFeedItems, res, prisma as any);
+    if (!organizerFeedLotSplit) return;
+    const items = organizerFeedLotSplit.kept;
 
     // CSV headers — official FB Commerce Manager catalog column names
     const headers = [

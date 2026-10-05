@@ -14,6 +14,8 @@ import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row 
 import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // 2026-09-29: cash-leg commission now accrues through the exactly-once CashFeeAccrual ledger (sourceType 'HOLD_INVOICE'), and per-row amounts/fees/cash legs are allocated in exact cents; mirrors posPaymentLinkRecorder.ts
 // 2026-09-29 money review P0-2: a captured Square payment on a dead invoice is recorded (items still available) or refunded, never left unresolved. The refund service is imported LAZILY (see refundOrEscalateDeadSquarePayment): it pulls in the Square token/crypto chain, which must not load for every caller of this recorder (Stripe webhook, tests) that never refunds.
 import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement, type OversoldSettlement } from './oversoldPaymentRefundService'; // 2026-09-30 payment review finding 2: a paid item that could not be fulfilled (oversold) is refunded by its card share instead of only raising an alert
+import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum B (#659): a bulk lot on a hold invoice is paid by the cards held for it, never sold as one unit
+import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 import { fireSquarePurchaseEngagement } from './squarePurchaseEngagementService'; // 2026-09-29 Sale Passport wiring: purchase XP, milestones, referral, badge, achievement and passport stamp for a Square-paid invoice (idempotent per payment, never throws)
 
 /**
@@ -589,6 +591,13 @@ export async function markHoldInvoicePaid(
   const stripeFeeAmount = stripeFeeAmountCents / 100; // convert from cents
   const organizerPayout = (holdInvoice.totalAmount / 100) - (holdInvoice.platformFeeAmount / 100) - stripeFeeAmount;
 
+  // ADR-136 Addendum B (2026-10-05, #659): which bundled items are bulk lots. Looked up HERE, outside the transaction (a failed
+  // query inside a Postgres transaction poisons it). Flag off: a failed lookup means "no lots" (fail open); flag on: it throws,
+  // the caller retries, and a lot is never recorded as a single unit because a lookup hiccuped.
+  const lotItemIdSet = await findBulkLotItemIds(prisma as any, scopedItemIds, isBulkLotsEnabled());
+  // Per lot item: the BulkLotHold that carries this invoice (cards, price snapshot, status). Filled inside the transaction.
+  const lotHoldByItem = new Map<string, { id: string; quantity: number; lineCents: number; status: string }>();
+
   let didRecord = false;
   // 2026-09-30 oversold settlement: computed inside the tx (needs the row amounts), acted on after it
   // commits (the refund is an external call). Held in an object so TS does not narrow it to null.
@@ -667,12 +676,52 @@ export async function markHoldInvoicePaid(
       data: { status: 'COMPLETED' },
     });
 
+    // ADR-136 Addendum B (#659): the holds that carry this invoice's lot lines. The cards were taken from the lot when the
+    // hold was placed, so a lot line settles against its hold (below), never against sellItemUnits(item, 1).
+    if (lotItemIdSet.size > 0) {
+      const lotHolds: Array<{ id: string; itemId: string; quantity: number; lineCents: number; status: string }> = await tx.bulkLotHold.findMany({
+        where: { holdInvoiceId: invoiceId, itemId: { in: Array.from(lotItemIdSet) } },
+        select: { id: true, itemId: true, quantity: true, lineCents: true, status: true },
+      });
+      for (const h of lotHolds) lotHoldByItem.set(h.itemId, { id: h.id, quantity: h.quantity, lineCents: h.lineCents, status: h.status });
+    }
+
     // Update ALL bundled items to SOLD (LOCKED DECISION #6) -- ADR-085 Track B
     // Phase 1 Step 4: atomic, race-safe stock decrement replaces the old unconditional
     // updateMany. The bundling business decision (#6) is unchanged, only the mechanism.
     for (const bundledItemId of scopedItemIds) {
       try {
-        const { fullySoldOut, remainingStock } = await sellItemUnits(bundledItemId, 1, tx);
+        let fullySoldOut: boolean;
+        let remainingStock: number;
+        if (lotItemIdSet.has(bundledItemId)) {
+          // ADR-136 Addendum B (#659): settle a lot line against its hold. A lot with no hold on this invoice is refused like an
+          // oversold item (nothing is sold, the card share is refunded below) rather than ever being sold as one unit.
+          const lotHold = lotHoldByItem.get(bundledItemId);
+          if (!lotHold) throw new InsufficientStockError(bundledItemId, 0, 0);
+          let converted = false;
+          if (lotHold.status === 'ACTIVE') {
+            const flip = await tx.bulkLotHold.updateMany({ where: { id: lotHold.id, status: 'ACTIVE' }, data: { status: 'CONVERTED' } });
+            converted = flip.count === 1;
+          }
+          if (converted) {
+            // The cards are already out of the lot; only read what is left.
+            const row = await tx.item.findUnique({ where: { id: bundledItemId }, select: { stockTotal: true, stockSold: true } });
+            const left = Math.max(0, (Number(row?.stockTotal ?? 1)) - (Number(row?.stockSold ?? 0)));
+            fullySoldOut = left <= 0;
+            remainingStock = left;
+          } else {
+            // The hold expired or was released before the payment landed, so its cards went back to the lot: take them again.
+            // InsufficientStockError here is the oversold path below (the cards were sold to someone else in between).
+            const again = await sellItemUnits(bundledItemId, lotHold.quantity, tx);
+            await tx.bulkLotHold.updateMany({ where: { id: lotHold.id, status: { in: ['EXPIRED', 'RELEASED'] } }, data: { status: 'CONVERTED' } });
+            fullySoldOut = again.fullySoldOut;
+            remainingStock = again.remainingStock;
+          }
+        } else {
+          const sold = await sellItemUnits(bundledItemId, 1, tx);
+          fullySoldOut = sold.fullySoldOut;
+          remainingStock = sold.remainingStock;
+        }
         if (fullySoldOut) fullySoldOutIds.push(bundledItemId);
         else partialSaleUpdates.push({ itemId: bundledItemId, remainingStock });
         sellableItemIds.push(bundledItemId);
@@ -748,7 +797,9 @@ export async function markHoldInvoicePaid(
     // Exact-cent allocation across ALL bundled items (2026-09-29; see the DISCOUNTED / SPLIT-TENDER
     // block in the file header). Only sellable items get a row below, so an oversold item's share
     // is dropped rather than pushed onto the rows that did sell.
-    const itemPriceCentsList = bundledItems.map((it) => Math.round((it.price || 0) * 100));
+    // ADR-136 Addendum B (#659): a lot line is worth what its hold priced it at (cards x price per 1,000 at the time of the hold),
+    // not the item price (which is dollars per 1,000).
+    const itemPriceCentsList = bundledItems.map((it) => lotHoldByItem.get(it.id)?.lineCents ?? Math.round((it.price || 0) * 100));
     const itemPriceCentsSum = itemPriceCentsList.reduce((a, b) => a + b, 0);
     const invoiceIsDiscounted =
       holdInvoice.itemIds.length > 0 &&
@@ -845,7 +896,8 @@ export async function markHoldInvoicePaid(
       const bundledItem = bundledItems[bundledIdx];
       if (!sellableItemIdSet.has(bundledItem.id)) continue; // oversold race -- no Purchase row, matches posPaymentLinkRecorder.ts
       // Discounted invoice: the scaled share of what was paid; otherwise the list price untouched.
-      const itemAmount = invoiceIsDiscounted ? rowAmountCentsList[bundledIdx] / 100 : (bundledItem.price || 0);
+      const lotHoldForRow = lotHoldByItem.get(bundledItem.id);
+      const itemAmount = invoiceIsDiscounted ? rowAmountCentsList[bundledIdx] / 100 : lotHoldForRow ? lotHoldForRow.lineCents / 100 : (bundledItem.price || 0);
       const itemPlatformFeeAmount = rowFeeCentsList[bundledIdx] / 100;
       // Never let a row's cash leg exceed the row itself.
       const rowCashCents = Math.min(rowCashCentsList[bundledIdx] ?? 0, rowAmountCentsList[bundledIdx] ?? 0);
@@ -863,6 +915,7 @@ export async function markHoldInvoicePaid(
             ...shippingFieldsForPurchase,
             itemId: bundledItem.id,
             saleId: holdInvoice.saleId,
+            ...(lotHoldForRow ? { bulkQuantity: lotHoldForRow.quantity } : {}), // ADR-136 Addendum B: cards on this sale row (refunds read it)
             amount: itemAmount,
             platformFeeAmount: itemPlatformFeeAmount,
             ...(rowCashCents > 0 ? { cashLegAmount: rowCashCents / 100 } : {}),
@@ -893,6 +946,7 @@ export async function markHoldInvoicePaid(
           },
         });
         recordedPurchaseIds.push(createdPurchase.id);
+        if (lotHoldForRow) await tx.bulkLotHold.updateMany({ where: { id: lotHoldForRow.id }, data: { purchaseId: createdPurchase.id } });
       } catch (purchaseErr: any) {
         // Compound partial unique (stripePaymentIntentId, itemId) backstop -- mirrors
         // posPaymentLinkRecorder.ts: a concurrent webhook/reconcile race that both reach

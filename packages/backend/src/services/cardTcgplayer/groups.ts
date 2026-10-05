@@ -50,6 +50,8 @@ export interface SyncItemRow {
   stockTotal: number | null;
   stockSold: number;
   price: number | string | null;
+  /** Present (non-null) when the item is a bulk lot (ADR-136 Addendum C). Lots are never part of the TCGplayer round trip. */
+  bulkLot?: { itemId?: string } | null;
   card: {
     game: string | null;
     cardName: string | null;
@@ -99,6 +101,8 @@ export interface GroupSkips {
   noTcgplayerId: number;
   graded: number;
   notACard: number;
+  /** Bulk lots left out (ADR-136 Addendum C). Only present when at least one lot was seen. */
+  bulkLots?: number;
 }
 
 export function availableUnits(row: Pick<SyncItemRow, 'status' | 'stockTotal' | 'stockSold'>): number {
@@ -121,6 +125,11 @@ export function buildGroups(rows: readonly SyncItemRow[]): { groups: Map<string,
   const groups = new Map<string, SyncGroup>();
   const skipped: GroupSkips = { noTcgplayerId: 0, graded: 0, notACard: 0 };
   for (const row of rows) {
+    // A bulk lot is a count of cards priced per 1,000. It can never match a TCGplayer row, whatever else it carries.
+    if (row.bulkLot) {
+      skipped.bulkLots = (skipped.bulkLots ?? 0) + 1;
+      continue;
+    }
     const card = row.card;
     if (!card) {
       skipped.notACard += 1;

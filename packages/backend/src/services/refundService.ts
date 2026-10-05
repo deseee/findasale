@@ -6,6 +6,14 @@ import { settleHubOwnerReversalForLeg } from '../controllers/vendorBoothCartCont
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { createNotification } from '../lib/notificationService'; // organizer clawback notification (see below)
 import { resolveSplitRefund } from './cashFeeService'; // Split tender (2026-09-29): defensive guard only, see the split-tender block in executeVerifiedRefund
+import {
+  applyBulkRefundReturn,
+  isBulkRefundError,
+  mulDivHalfUp,
+  planExplicitCardRefund,
+  targetCardsForMoney,
+  type BulkRefundSource,
+} from './bulkLot/bulkLotRefundService'; // ADR-136 Addendum B (2026-10-05, #659): partial-quantity refunds of a bulk lot sale
 
 // Lazy — avoids crash when module loads before dotenv runs (same pattern as stripeController.ts)
 const stripe = () => getStripe();
@@ -161,6 +169,151 @@ export function sendRefundConfirmationEmail(params: {
 }
 
 /**
+ * Options carried by the bulk lot refund paths (ADR-136 Addendum B). All optional.
+ */
+export interface BulkRefundOpts {
+  /** Explicit number of MORE cards to take back. The refund amount passed in must equal what they are worth. */
+  bulkCards?: number;
+  source?: BulkRefundSource;
+  actorUserId?: string | null;
+  idempotencyKey?: string | null;
+}
+
+const refundSourceFor = (initiatedBy: 'organizer' | 'admin' | 'dispute'): BulkRefundSource =>
+  initiatedBy === 'organizer' ? 'ORGANIZER' : initiatedBy === 'admin' ? 'ADMIN' : 'DISPUTE';
+
+/**
+ * Refund of a BULK LOT sale row that was paid in cash, Venmo or Zelle (ADR-136 Addendum B, 2026-10-05, #659).
+ *
+ * The legacy path in executeVerifiedRefund marks the whole row REFUNDED whatever amount it is given and puts every
+ * card back, so it cannot express "500 of 1,500 cards". A cash row has no external processor to call, so a partial
+ * refund is one database transaction:
+ *   - the status write is a compare-and-swap on (status PAID, refundedAmount as read), so two concurrent refunds of
+ *     the same row cannot both be based on the same prior total;
+ *   - the row goes to REFUNDED only when the cumulative refunded money reaches the whole amount, otherwise it stays
+ *     PAID with refundedAmount tracked (same convention as the Square path, finalizeSquareRefundTx);
+ *   - the cards go back through applyBulkRefundReturn in the same transaction (compare-and-swap on
+ *     Purchase.bulkRefundedQuantity, guarded stock write, audit row), so a replay returns nothing twice;
+ *   - the cash commission accrued on the sale is reversed in proportion, cumulatively (the same share function the
+ *     Square path uses), so the pieces add up to exactly what was accrued.
+ * A bulk row that was NOT paid in cash never reaches this function.
+ */
+async function executeBulkCashRefund(
+  purchase: any,
+  refundAmount: number,
+  initiatedBy: 'organizer' | 'admin' | 'dispute',
+  bulkOpts: BulkRefundOpts | undefined
+) {
+  const purchaseId: string = purchase.id;
+  const purchaseCents = Math.round(purchase.amount * 100);
+  const priorCents = Math.round((Number(purchase.refundedAmount) || 0) * 100);
+  const requestedCents = Math.round(refundAmount * 100);
+  const remainingCents = Math.max(0, purchaseCents - priorCents);
+  if (remainingCents <= 0) {
+    throw new RefundError('This purchase has already been fully refunded', 400, { code: 'ALREADY_REFUNDED' });
+  }
+  if (!(refundAmount > 0) || requestedCents < 1 || requestedCents > remainingCents) {
+    throw new RefundError(
+      'Refund amount must be greater than zero and cannot exceed the remaining refundable amount on this purchase',
+      400,
+      { requestedAmount: refundAmount, remainingRefundable: remainingCents / 100 }
+    );
+  }
+  const soldCards = Number(purchase.bulkQuantity) || 0;
+  const facts = { soldCards, purchaseCents, returnedCards: Number(purchase.bulkRefundedQuantity) || 0, refundedCents: priorCents };
+  const newTotalCents = priorCents + requestedCents;
+  let isFull = newTotalCents >= purchaseCents;
+  let targetCards: number;
+  if (bulkOpts?.bulkCards !== undefined) {
+    try {
+      const plan = planExplicitCardRefund(facts, bulkOpts.bulkCards);
+      if (plan.cents !== requestedCents) {
+        throw new RefundError('The refund amount does not match what those cards are worth. Reload the sale and try again.', 409, {
+          code: 'BULK_REFUND_AMOUNT_MISMATCH',
+          expectedCents: plan.cents,
+        });
+      }
+      targetCards = plan.targetCards;
+      isFull = plan.isFull || isFull;
+    } catch (err) {
+      if (isBulkRefundError(err)) throw new RefundError(err.message, err.status, { code: err.code, ...(err.extra || {}) });
+      throw err;
+    }
+  } else {
+    targetCards = isFull ? soldCards : targetCardsForMoney(facts, newTotalCents);
+  }
+
+  const organizerId: string | undefined = purchase.sale?.organizer?.id;
+  const feeCents = Math.round((Number(purchase.platformFeeAmount) || 0) * 100);
+  const feeShare = (totalCents: number) => (purchaseCents > 0 ? mulDivHalfUp(feeCents, Math.min(totalCents, purchaseCents), purchaseCents) : 0);
+  const feeToReverseCents = feeCents > 0 ? Math.max(0, feeShare(newTotalCents) - feeShare(priorCents)) : 0;
+
+  const outcome = await prisma.$transaction(async (tx) => {
+    const flipped = await tx.purchase.updateMany({
+      where: { id: purchaseId, status: 'PAID', refundedAmount: purchase.refundedAmount ?? null },
+      data: {
+        status: isFull ? 'REFUNDED' : 'PAID',
+        refundedAmount: newTotalCents / 100,
+        refundedAt: new Date(),
+        refundInitiatedBy: initiatedBy,
+      },
+    });
+    if (flipped.count !== 1) {
+      throw new RefundError('Refund already in progress or not refundable', 400, { code: 'REFUND_CONFLICT' });
+    }
+    const returned = await applyBulkRefundReturn(tx as any, {
+      purchaseId,
+      itemId: purchase.itemId,
+      soldCards,
+      targetCards,
+      cents: requestedCents,
+      source: bulkOpts?.source ?? refundSourceFor(initiatedBy),
+      actorUserId: bulkOpts?.actorUserId ?? null,
+      idempotencyKey: bulkOpts?.idempotencyKey ?? null,
+      isTestTransaction: !!purchase.isTestTransaction,
+    });
+    if (isFull && purchase.itemId) {
+      await tx.itemReservation.updateMany({
+        where: { itemId: purchase.itemId, status: { notIn: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
+        data: { status: 'CANCELLED' },
+      });
+    }
+    if (feeToReverseCents > 0 && organizerId) {
+      const reverseDollars = feeToReverseCents / 100;
+      const dec = await tx.organizer.updateMany({
+        where: { id: organizerId, cashFeeBalance: { gte: reverseDollars } },
+        data: { cashFeeBalance: { decrement: reverseDollars }, cashFeeBalanceUpdatedAt: new Date() },
+      });
+      if (dec.count === 0) {
+        await tx.organizer.updateMany({ where: { id: organizerId }, data: { cashFeeBalance: 0, cashFeeBalanceUpdatedAt: new Date() } });
+      }
+    }
+    return returned;
+  });
+
+  notifyVendorBoothSaleRefunded(purchaseId).catch(err =>
+    console.error(`[executeBulkCashRefund] Vendor refund notification failed for purchase ${purchaseId} (non-fatal):`, err)
+  );
+
+  return {
+    refundedAmount: refundAmount,
+    isFullRefund: isFull,
+    totalRefundedAmount: newTotalCents / 100,
+    remainingRefundable: Math.max(0, purchaseCents - newTotalCents) / 100,
+    bulk: { cardsReturned: outcome.deltaCards, cumulativeCards: outcome.cumulativeCards },
+    purchase: {
+      id: purchase.id,
+      userId: purchase.userId,
+      amount: purchase.amount,
+      itemId: purchase.itemId,
+      user: purchase.user ? { id: purchase.user.id, email: purchase.user.email, name: purchase.user.name } : null,
+      item: purchase.item ? { title: purchase.item.title } : null,
+      sale: purchase.sale ? { organizer: purchase.sale.organizer ? { businessName: purchase.sale.organizer.businessName } : null } : null,
+    },
+  };
+}
+
+/**
  * executeVerifiedRefund — the reusable, Stripe-calling core of what used to be
  * stripeController.ts's createRefund, extracted 2026-07-29 so a SECOND caller
  * (disputeController.ts updateDisputeStatus) can actually move money instead of only
@@ -194,9 +347,22 @@ export async function executeVerifiedRefund(
   // in Stripe (feeds Radar/reporting) instead of going out with no reason at all regardless of
   // why it was issued. Optional + backward compatible -- every existing caller (createRefund/
   // organizer, disputeController, deadInvoiceRefundService) keeps working unchanged.
-  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
+  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer',
+  // ADR-136 Addendum B (2026-10-05, #659): only read for a BULK LOT sale row (Purchase.bulkQuantity set). `bulkCards`
+  // is an explicit "take this many more cards back" (the refund money must equal what those cards are worth, checked
+  // below); without it the cards follow the money. Every other purchase ignores all of this.
+  bulkOpts?: BulkRefundOpts
 ): Promise<{
   refundedAmount: number;
+  /**
+   * Set ONLY for a bulk lot sale row refunded in cash (the one case this legacy path now supports partially): true
+   * when this refund brought the row to fully refunded. Absent on every other result, so callers keep their old logic.
+   */
+  isFullRefund?: boolean;
+  totalRefundedAmount?: number;
+  remainingRefundable?: number;
+  /** Bulk lot rows only: the cards this refund put back and the running count for the row. */
+  bulk?: { cardsReturned: number; cumulativeCards: number };
   purchase: {
     id: string;
     userId: string | null;
@@ -306,6 +472,13 @@ export async function executeVerifiedRefund(
       400,
       { requestedAmount: refundAmount, purchaseAmount: purchase.amount }
     );
+  }
+
+  // Bulk lot sale paid in cash, Venmo or Zelle (ADR-136 Addendum B, 2026-10-05, #659): the legacy path below cannot
+  // refund part of a lot, so a bulk cash row is handled by its own transactional core. Every other purchase continues
+  // down the unchanged path.
+  if (purchase.bulkQuantity && purchase.bulkQuantity > 0 && isCashPurchase) {
+    return executeBulkCashRefund(purchase, refundAmount, initiatedBy, bulkOpts);
   }
 
   // SPLIT TENDER guard (2026-09-29, defensive). A cash + card split Purchase (cashLegAmount > 0) only
@@ -555,20 +728,35 @@ export async function executeVerifiedRefund(
   // above, since the buyer's refund has already succeeded on Stripe by this point.
   if (purchase.itemId) {
     try {
-      // Bulk lots (ADR-136, #659): a bulk lot purchase gives back the number of cards it sold (Purchase.bulkQuantity),
-      // never one unit. The WHERE guard keeps stockSold from going below zero; if it is lower than the cards being
-      // returned it is floored at zero. A bulk TEST purchase never took any stock (cashPaymentController skips the
-      // decrement for a test transaction), so it gives none back. Every non-bulk purchase (bulkQuantity null) runs
-      // exactly the pre-existing one-unit decrement.
-      const restoreUnits = purchase.bulkQuantity ?? 1;
-      if (!(purchase.bulkQuantity && purchase.isTestTransaction)) {
-        const restored = await prisma.item.updateMany({
-          where: { id: purchase.itemId, stockSold: { gte: restoreUnits } },
-          data: { stockSold: { decrement: restoreUnits } },
+      // Bulk lots (ADR-136, #659; Addendum B 2026-10-05): a bulk lot purchase gives back cards, never one unit. This legacy
+      // path marks the whole row REFUNDED, so the target is every card still out when the money reaches the whole amount,
+      // and floor(cards * money / amount) otherwise. The count moves with a compare-and-swap on
+      // Purchase.bulkRefundedQuantity in one transaction with the guarded stock write, so a replay returns nothing twice
+      // and stockSold is floored at zero, never negative. A bulk TEST purchase never took stock, so it gives none back.
+      // Every non-bulk purchase (bulkQuantity null) runs exactly the pre-existing one-unit decrement.
+      if (purchase.bulkQuantity && purchase.bulkQuantity > 0) {
+        const bulkSold = Number(purchase.bulkQuantity);
+        const bulkFacts = { soldCards: bulkSold, purchaseCents: Math.round(purchase.amount * 100), returnedCards: Number(purchase.bulkRefundedQuantity) || 0, refundedCents: 0 };
+        const bulkRefundCents = Math.round(refundAmount * 100);
+        const bulkTarget = targetCardsForMoney(bulkFacts, bulkRefundCents);
+        await prisma.$transaction(async (tx) => {
+          await applyBulkRefundReturn(tx as any, {
+            purchaseId,
+            itemId: purchase.itemId!,
+            soldCards: bulkSold,
+            targetCards: bulkTarget,
+            cents: bulkRefundCents,
+            source: bulkOpts?.source ?? refundSourceFor(initiatedBy),
+            actorUserId: bulkOpts?.actorUserId ?? null,
+            idempotencyKey: bulkOpts?.idempotencyKey ?? null,
+            isTestTransaction: !!purchase.isTestTransaction,
+          });
         });
-        if (restored.count === 0 && restoreUnits > 1) {
-          await prisma.item.updateMany({ where: { id: purchase.itemId, stockSold: { gt: 0 } }, data: { stockSold: 0 } });
-        }
+      } else {
+        await prisma.item.updateMany({
+          where: { id: purchase.itemId, stockSold: { gte: 1 } },
+          data: { stockSold: { decrement: 1 } },
+        });
       }
     } catch (err) {
       console.error(`[executeVerifiedRefund] Failed to decrement stockSold for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal):`, err);

@@ -30,6 +30,8 @@ import * as Sentry from '@sentry/node';
 // purchase flows already use for the fully-sold-out / partial-sale marketplace hooks, so a
 // bounty-fulfillment Item is kept in sync with eBay/Shopify/Facebook exactly like any other Item.
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { lotChannelRefusal } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a bulk lot is never a bounty item
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // Wave 2 (2026-09-29): bounty purchases are real paid Purchase rows, so they earn purchase XP / milestones / Sale Passport MAKE_PURCHASE stamp like every other completed purchase
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -386,6 +388,9 @@ export const submitBountySubmission = async (req: AuthRequest, res: Response) =>
     if (item.status === 'DRAFT') {
       return res.status(400).json({ message: 'Item must be published.' });
     }
+    // ADR-136 Addendum B (#659): a bulk lot sells by the card quantity, so it cannot fulfil a request.
+    const lotBountyRefusal = await lotChannelRefusal(prisma as any, itemId, 'BOUNTY', isBulkLotsEnabled());
+    if (lotBountyRefusal) return res.status(lotBountyRefusal.status).json({ message: lotBountyRefusal.message, code: lotBountyRefusal.code });
 
     // Check for existing pending submission by this organizer for this bounty
     const existingSubmission = await prisma.bountySubmission.findFirst({
@@ -864,6 +869,10 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     if (!['PENDING_REVIEW', 'APPROVED'].includes(submission.status)) {
       return res.status(400).json({ message: 'Submission cannot be purchased.' });
     }
+    // ADR-136 Addendum B (#659): a submission made before an item became a lot must not be bought as one unit. Checked
+    // before any charge or XP movement.
+    const lotBountyPurchaseRefusal = await lotChannelRefusal(prisma as any, submission.itemId, 'BOUNTY', isBulkLotsEnabled());
+    if (lotBountyPurchaseRefusal) return res.status(lotBountyPurchaseRefusal.status).json({ message: lotBountyPurchaseRefusal.message, code: lotBountyPurchaseRefusal.code });
 
     // S1072 Finding #4: collusion/wash-trade guard -- BUG FIX (2026-09-09). Identity-grade
     // device/card fingerprint match between this shopper and the submission's sale organizer.

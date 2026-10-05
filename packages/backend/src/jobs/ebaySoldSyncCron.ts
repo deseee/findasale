@@ -27,6 +27,13 @@ import { createNotification } from '../lib/notificationService';
 import { classifyEbayOrderLine, type EbayOrderShape } from '../services/ebayOrderState'; // 2026-10-01: cancel / payment / refund awareness
 import { reopenEbayCancelledSale } from '../services/ebaySaleReopenService'; // 2026-10-01: explicit logged reopen (ledger rows kept)
 import { fetchLiveEbayListings } from '../services/ebayLiveListingsService';
+// ADR-136 Addendum C (#659): an eBay order line for a bulk lot bundle takes bundles x bundleSize cards from the lot.
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
+import { cardsForBundles, describeBundleSale } from '../services/bulkLot/bulkLotEbayBundle';
+import { absorbBundleOrderLine, releaseCancelledBundleLines, shortfallMessage } from '../services/bulkLot/bulkLotEbaySoldService';
+import { reconcileBulkLotEbayInBackgroundIfEnabled } from '../services/bulkLot/bulkLotEbayWiring';
+import { releaseBulkLotUnits } from '../services/bulkLot/bulkLotService';
+import { formatCardCount } from '../services/bulkLot/bulkLotPricing';
 
 interface EbayItem {
   id: string;
@@ -36,6 +43,8 @@ interface EbayItem {
   saleId: string | null; // Feature #300: nullable — inventory items have no sale
   ebayQuantityAvailable: number | null; // ADR ebay-multiquantity: total units on the eBay listing (null/1 = single)
   ebayQuantitySold: number; // ADR ebay-multiquantity: units already sold via eBay
+  /** ADR-136 Addendum C: cards per bundle when this item is a bulk lot listed as bundles; null for every other item. */
+  bundleSize?: number | null;
 }
 
 interface SyncResult {
@@ -115,6 +124,51 @@ async function reverseReconcileCancelledSales(
 }
 
 /**
+ * ADR-136 Addendum C: gives the cards of a cancelled or refunded eBay bundle order back to the lot, once per order line
+ * (the ledger row's bulkReleasedAt is the claim). Only lines this run can see in eBay's order list are judged; an order
+ * eBay did not return keeps its cards counted as sold. A line that was short when recorded gives back only what was taken.
+ */
+async function releaseCancelledBundleOrders(organizerId: string, organizerUserId: string, ordersById: Map<string, EbayOrderShape>): Promise<void> {
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const rows = await prisma.ebaySoldEvent.findMany({
+    where: {
+      bulkQuantity: { not: null },
+      bulkReleasedAt: null,
+      createdAt: { gte: since },
+      item: { OR: [{ sale: { organizerId } }, { organizerId }] },
+    },
+    select: { id: true, itemId: true, ebayOrderId: true, ebayLineItemId: true, bulkQuantity: true, bulkShortfall: true, item: { select: { title: true } } },
+  });
+  const dead = rows.filter((e) => {
+    const order = ordersById.get(e.ebayOrderId);
+    if (!order) return false;
+    const line = (order.lineItems || []).find((l) => l.lineItemId === e.ebayLineItemId);
+    const v = classifyEbayOrderLine(order, line);
+    return !v.counts && (v.kind === 'CANCELLED' || v.kind === 'REFUNDED');
+  });
+  if (!dead.length) return;
+  const titles = new Map(dead.map((e) => [e.itemId, e.item?.title ?? 'Bulk lot']));
+  const res = await releaseCancelledBundleLines(
+    {
+      claim: async (eventId) => (await prisma.ebaySoldEvent.updateMany({ where: { id: eventId, bulkReleasedAt: null }, data: { bulkReleasedAt: new Date() } })).count === 1,
+      releaseCards: (itemId, cards) => releaseBulkLotUnits(prisma as any, itemId, cards),
+    },
+    dead.map((e) => ({ eventId: e.id, itemId: e.itemId, bulkQuantity: e.bulkQuantity as number, bulkShortfall: e.bulkShortfall ?? null }))
+  );
+  for (const itemId of res.itemIds) {
+    reconcileBulkLotEbayInBackgroundIfEnabled(itemId, 'ebay cancelled bundle order');
+    await createNotification({
+      userId: organizerUserId,
+      type: 'SALE_UPDATE',
+      title: 'eBay bundle order cancelled, cards returned',
+      body: `An eBay order for "${titles.get(itemId)}" was cancelled or refunded. Its cards are back in the lot (${formatCardCount(res.cards)} in this check).`,
+      link: '/organizer/inventory',
+    }).catch(() => undefined);
+  }
+  console.log(`[eBay Sync] Organizer ${organizerId}: returned ${res.cards} cards from ${res.lines} cancelled bundle order line(s)`);
+}
+
+/**
  * Sync sold items for a specific organizer.
  * Called by both the cron job and the manual trigger endpoint (GET /api/ebay/sync-sold).
  */
@@ -131,6 +185,12 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     skipped: { CANCELLED: [] as string[], CANCEL_PENDING: [] as string[], REFUNDED: [] as string[], UNPAID: [] as string[] },
     soldApplied: 0,
   };
+
+  // ADR-136 Addendum C: read once per run. The ORDER side of bundles follows the lot flag, not CARD_BULK_EBAY_ENABLED: a
+  // bundle listing that is already live on eBay outlives the bundle flag being turned off, and an order for it must still
+  // take bundles x bundleSize cards (read as a single unit it would take one card per bundle). With the lot flag off
+  // (default) nothing below touches the bundle table or columns.
+  const isBundleSync = isBulkLotsEnabled();
 
   try {
     // Get the organizer's eBay connection
@@ -157,12 +217,14 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     // Get ALL AVAILABLE items for this organizer (via Sale relation).
     // Includes items with null ebayListingId — title-based fallback handles those
     // when eBay orders come in for items listed directly on eBay (not via FindA.Sale push).
-    const availableItems: EbayItem[] = await prisma.item.findMany({
+    const availableRows = await prisma.item.findMany({
       where: {
         AND: [
           // AVAILABLE single-unit items, PLUS multi-quantity items even once flipped to SOLD
           // (so the idempotent ledger can still absorb re-runs of an already-counted order).
-          { OR: [ { status: 'AVAILABLE' }, { ebayQuantityAvailable: { gt: 1 } } ] },
+          // ADR-136 Addendum C: PLUS bulk lot bundles whatever their status (a lot the counter sold out can still have a
+          // bundle order in flight; its shortfall must be recorded, not lost).
+          { OR: [ { status: 'AVAILABLE' }, { ebayQuantityAvailable: { gt: 1 } }, ...(isBundleSync ? [{ ebayBundle: { isNot: null } }] : []) ] },
           // Both sale items and inventory items (saleId=null) imported from eBay.
           { OR: [ { sale: { organizerId } }, { organizerId, saleId: null } ] },
         ],
@@ -175,8 +237,19 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         saleId: true,
         ebayQuantityAvailable: true,
         ebayQuantitySold: true,
+        ...(isBundleSync ? { ebayBundle: { select: { bundleSize: true } } } : {}),
       },
     });
+    const availableItems: EbayItem[] = (availableRows as any[]).map((r) => ({
+      id: r.id,
+      ebayListingId: r.ebayListingId,
+      ebayOfferId: r.ebayOfferId,
+      title: r.title,
+      saleId: r.saleId,
+      ebayQuantityAvailable: r.ebayQuantityAvailable,
+      ebayQuantitySold: r.ebayQuantitySold,
+      bundleSize: typeof r.ebayBundle?.bundleSize === 'number' ? r.ebayBundle.bundleSize : null,
+    }));
 
     if (!availableItems.length) {
       console.log(`[eBay Sync] Organizer ${organizerId}: no AVAILABLE items`);
@@ -316,6 +389,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         const lineItemId = lineItem.lineItemId || '';
         const unitQty =
           typeof lineItem.quantity === 'number' && lineItem.quantity > 0 ? lineItem.quantity : 1;
+        // ADR-136 Addendum C: a bulk lot bundle line is N bundles = N x bundleSize cards.
+        const bundleSize = isBundleSync && typeof matchedItem.bundleSize === 'number' ? matchedItem.bundleSize : null;
+        const bundleCards = bundleSize !== null ? cardsForBundles(unitQty, bundleSize) : null;
         if (!lineItemId) {
           diag.noLineItemId++;
           console.warn(
@@ -332,6 +408,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
               ebayOrderId: order.orderId,
               ebayLineItemId: lineItemId,
               quantitySold: unitQty,
+              ...(bundleCards !== null ? { bulkQuantity: bundleCards } : {}),
             },
           });
         } catch (err: any) {
@@ -359,7 +436,43 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         // Its fullySoldOut (not the eBay-specific avail/soldCount above) is the
         // authoritative signal for the status flip + "remove everywhere" hooks.
         let fullySold = false;
-        try {
+        let bundleAbsorb: Awaited<ReturnType<typeof absorbBundleOrderLine>> | null = null;
+        if (bundleSize !== null) {
+          // Bulk lot bundle: take bundles x bundleSize cards through the same guarded decrement. A shortfall (the counter
+          // sold the cards first) never drops the sale: it takes what is left, records the gap and tells the organizer.
+          const lotId = matchedItem.id;
+          bundleAbsorb = await absorbBundleOrderLine(
+            {
+              sellUnits: (id, units) => sellItemUnits(id, units),
+              remainingCards: async (id) => {
+                const row = await prisma.item.findUnique({ where: { id }, select: { stockTotal: true, stockSold: true } });
+                return Math.max((row?.stockTotal ?? 1) - (row?.stockSold ?? 0), 0);
+              },
+              isInsufficientStock: (e) => e instanceof InsufficientStockError,
+            },
+            { itemId: lotId, bundleSize, bundles: unitQty }
+          );
+          fullySold = bundleAbsorb.fullySoldOut;
+          if (bundleAbsorb.shortfall > 0) {
+            console.error(
+              `[eBay Sync] BUNDLE SHORTFALL item ${lotId} order ${order.orderId}: owed ${bundleAbsorb.cards} cards, supplied ${bundleAbsorb.taken}`
+            );
+            await prisma.ebaySoldEvent
+              .update({
+                where: { ebayOrderId_ebayLineItemId: { ebayOrderId: order.orderId, ebayLineItemId: lineItemId } },
+                data: { bulkShortfall: bundleAbsorb.shortfall },
+              })
+              .catch((e: any) => console.error(`[eBay Sync] could not record bundle shortfall for order ${order.orderId}:`, e?.message));
+            await createNotification({
+              userId: organizer.userId,
+              type: 'SALE_UPDATE',
+              title: 'eBay bundle order is short on cards',
+              body: shortfallMessage(matchedItem.title, order.orderId, bundleAbsorb.cards, bundleAbsorb.shortfall),
+              link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : `/organizer/inventory`,
+              sendEmail: true,
+            }).catch((e: any) => console.error(`[eBay Sync] shortfall notification failed for item ${lotId}:`, e));
+          }
+        } else try {
           const stockResult = await sellItemUnits(matchedItem.id, unitQty);
           fullySold = stockResult.fullySoldOut;
         } catch (err) {
@@ -422,7 +535,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           type: 'SALE_UPDATE',
           title: 'Item sold on eBay',
           body:
-            avail > 1
+            bundleAbsorb !== null && bundleSize !== null
+              ? `"${matchedItem.title}": ${describeBundleSale(unitQty, bundleSize)} ${formatCardCount(bundleAbsorb.remainingCards)} cards left in the lot.`
+              : avail > 1
               ? `"${matchedItem.title}" sold a unit on eBay (${soldCount} of ${avail}).`
               : `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
           link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : `/organizer/inventory`,
@@ -434,6 +549,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         console.log(
           `[eBay Sync] Item ${matchedItem.id} ("${matchedItem.title}") — unit sold via eBay order ${order.orderId} (${soldCount}/${avail}${fullySold ? ', now SOLD' : ''})`
         );
+
+        // ADR-136 Addendum C: line the eBay quantity up with the cards that are left (END below one bundle). Fire and forget.
+        if (bundleAbsorb !== null) reconcileBulkLotEbayInBackgroundIfEnabled(matchedItem.id, 'ebay sold sync');
 
         result.synced++;
         diag.soldApplied++;
@@ -452,6 +570,15 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
       result.itemsReopened = rev.reopened;
     } catch (revErr: any) {
       console.error(`[eBay Sync] Reverse reconcile failed for organizer ${organizerId}:`, revErr?.message ?? revErr);
+    }
+
+    // ADR-136 Addendum C: cards of cancelled or refunded bundle orders go back to the lot. Never fails the sync cycle.
+    if (isBundleSync) {
+      try {
+        await releaseCancelledBundleOrders(organizerId, organizer.userId, ordersById);
+      } catch (relErr: any) {
+        console.error(`[eBay Sync] Bundle cancel release failed for organizer ${organizerId}:`, relErr?.message ?? relErr);
+      }
     }
 
     console.log(

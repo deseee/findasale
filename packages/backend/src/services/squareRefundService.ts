@@ -10,6 +10,13 @@ import { resolveVendorBoothSquareAccessToken, SquareBoothOnboardingIncompleteErr
 import { resolveSplitRefund, roundMoney } from './cashFeeService'; // Split tender (2026-09-29): cap the processor refund at the card leg; the cash leg is refunded by hand
 import type { SplitRefundResolution } from './cashFeeService'; // partial-refund finalize helpers (2026-09-29)
 import { reverseSplitCashCommissionForRefund } from './cashFeeRefundReversalService'; // Split tender (2026-09-29): proportional, idempotent reversal of the cash-leg commission on the refunded cash value
+import {
+  applyBulkRefundReturn,
+  isBulkRefundError,
+  planExplicitCardRefund,
+  targetCardsForMoney,
+  type BulkRefundSource,
+} from './bulkLot/bulkLotRefundService'; // ADR-136 Addendum B (2026-10-05, #659): partial-quantity refunds of a bulk lot sale row
 import { resolveCnpSurchargeRefund } from './cnpSurcharge'; // CNP surcharge (2026-09-30): the manual-card surcharge is refunded proportionally with the principal; helpers are pure integer-cents math
 
 /**
@@ -176,30 +183,36 @@ export function buildSquareRefundTag(
   priorCents: number,
   amountCents: number,
   initiatedBy: RefundInitiator,
-  surchargeCents = 0
+  surchargeCents = 0,
+  bulkCards = 0
 ): string {
   // CNP surcharge (2026-09-30): when this refund also returns part of the card-not-present surcharge, a
   // SEPARATE ` [cnp <cents>]` marker follows the original tag. The original `[FindA.Sale ref ...]` text is
   // byte-for-byte what it always was, so an older parser (and this one) still matches it; the marker is
   // informational for reconcile (it can cross-check the surcharge share it recomputes).
   const base = `[FindA.Sale ref ${purchaseId}:${priorCents}:${amountCents}:${REFUND_INITIATOR_CODE[initiatedBy]}]`;
-  return surchargeCents > 0 ? `${base} [cnp ${Math.round(surchargeCents)}]` : base;
+  // ADR-136 Addendum B (2026-10-05): an explicit bulk lot card count rides on the tag the same way, so a refund that Square
+  // accepted but whose finalize failed is finished by reconcile with the SAME number of cards the organizer named.
+  const withCnp = surchargeCents > 0 ? `${base} [cnp ${Math.round(surchargeCents)}]` : base;
+  return bulkCards > 0 ? `${withCnp} [cards ${Math.round(bulkCards)}]` : withCnp;
 }
 
 export function parseSquareRefundTag(
   reason: string | null | undefined
-): { purchaseId: string; priorCents: number; amountCents: number; initiatedBy: RefundInitiator; surchargeCents?: number } | null {
+): { purchaseId: string; priorCents: number; amountCents: number; initiatedBy: RefundInitiator; surchargeCents?: number; bulkCards?: number } | null {
   if (!reason) return null;
   const m = /\[FindA\.Sale ref ([^:\]\s]+):(\d+):(\d+):([oad])\]/.exec(reason);
   if (!m) return null;
   // Optional CNP marker (2026-09-30): absent on every refund without a surcharge share and on every older tag.
   const cnp = /\[cnp (\d+)\]/.exec(reason);
+  const cards = /\[cards (\d+)\]/.exec(reason);
   return {
     purchaseId: m[1],
     priorCents: parseInt(m[2], 10),
     amountCents: parseInt(m[3], 10),
     initiatedBy: REFUND_INITIATOR_FROM_CODE[m[4]],
     ...(cnp ? { surchargeCents: parseInt(cnp[1], 10) } : {}),
+    ...(cards ? { bulkCards: parseInt(cards[1], 10) } : {}),
   };
 }
 
@@ -247,6 +260,19 @@ interface FinalizablePurchase {
   refundedAmount?: number | null;
   refundCashPortion?: number | null;
   squarePaymentId?: string | null;
+  // ADR-136 Addendum B (2026-10-05, #659): bulk lot sale row facts (all absent or null on every ordinary purchase).
+  bulkQuantity?: number | null;
+  bulkRefundedQuantity?: number | null;
+  isTestTransaction?: boolean | null;
+}
+
+/** Bulk lot options carried through a Square refund (ADR-136 Addendum B). All optional; ignored for non-bulk rows. */
+export interface SquareBulkRefundOpts {
+  /** Explicit number of MORE cards to take back. The refund amount must equal what those cards are worth. */
+  bulkCards?: number;
+  source?: BulkRefundSource;
+  actorUserId?: string | null;
+  idempotencyKey?: string | null;
 }
 
 interface FinalizeOutcome {
@@ -254,6 +280,8 @@ interface FinalizeOutcome {
   alreadyFinalized: boolean;
   isFullRefund: boolean;
   totalRefundedAmount: number;
+  /** Bulk lot rows only: cards this finalize put back on the lot (0 when none or on a replay). */
+  bulkCardsReturned?: number;
 }
 
 /**
@@ -274,8 +302,10 @@ async function finalizeSquareRefundTx(args: {
   initiatedBy: RefundInitiator;
   isCashPurchase: boolean;
   organizerId?: string;
+  /** Bulk lot rows only (ADR-136 Addendum B). */
+  bulk?: SquareBulkRefundOpts;
 }): Promise<FinalizeOutcome> {
-  const { purchase, refundAmount, split, initiatedBy, isCashPurchase, organizerId } = args;
+  const { purchase, refundAmount, split, initiatedBy, isCashPurchase, organizerId, bulk } = args;
   const priorRefunded = roundMoney(Number(purchase.refundedAmount) || 0);
   const newTotal = roundMoney(priorRefunded + refundAmount);
   const isFullRefund = Math.round(newTotal * 100) >= Math.round(purchase.amount * 100);
@@ -320,7 +350,45 @@ async function finalizeSquareRefundTx(args: {
       return { alreadyFinalized: true, isFullRefund, totalRefundedAmount: newTotal };
     }
 
-    if (isFullRefund && purchase.itemId) {
+    // Bulk lot sale row (ADR-136 Addendum B, 2026-10-05, #659): cards go back in proportion on EVERY refund, partial
+    // or full, not one unit on the full refund. The running count moves with a compare-and-swap in this same
+    // transaction, so a replayed finalize (retry or the reconcile sweep) returns nothing twice, and a partial refund
+    // gives back exactly the cards the money implies (floor), or exactly the cards the organizer named.
+    const bulkSold = Number(purchase.bulkQuantity) || 0;
+    const isBulkRow = bulkSold > 0 && !!purchase.itemId;
+    let bulkCardsReturned = 0;
+    if (isBulkRow) {
+      const facts = {
+        soldCards: bulkSold,
+        purchaseCents: Math.round(purchase.amount * 100),
+        returnedCards: Number(purchase.bulkRefundedQuantity) || 0,
+        refundedCents: Math.round(priorRefunded * 100),
+      };
+      const targetCards =
+        bulk?.bulkCards !== undefined
+          ? Math.min(bulkSold, facts.returnedCards + Math.max(0, Math.trunc(bulk.bulkCards)))
+          : isFullRefund
+            ? bulkSold
+            : targetCardsForMoney(facts, Math.round(newTotal * 100));
+      const bulkResult = await applyBulkRefundReturn(tx as any, {
+        purchaseId: purchase.id,
+        itemId: purchase.itemId!,
+        soldCards: bulkSold,
+        targetCards,
+        cents: Math.round(refundAmount * 100),
+        source: bulk?.source ?? (initiatedBy === 'organizer' ? 'ORGANIZER' : initiatedBy === 'admin' ? 'ADMIN' : 'DISPUTE'),
+        actorUserId: bulk?.actorUserId ?? null,
+        idempotencyKey: bulk?.idempotencyKey ?? null,
+        isTestTransaction: !!purchase.isTestTransaction,
+      });
+      bulkCardsReturned = bulkResult.deltaCards;
+      if (isFullRefund) {
+        await tx.itemReservation.updateMany({
+          where: { itemId: purchase.itemId!, status: { notIn: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
+          data: { status: 'CANCELLED' },
+        });
+      }
+    } else if (isFullRefund && purchase.itemId) {
       await tx.itemReservation.updateMany({
         where: { itemId: purchase.itemId, status: { notIn: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
         data: { status: 'CANCELLED' },
@@ -357,7 +425,7 @@ async function finalizeSquareRefundTx(args: {
       });
     }
 
-    return { alreadyFinalized: false, isFullRefund, totalRefundedAmount: newTotal };
+    return { alreadyFinalized: false, isFullRefund, totalRefundedAmount: newTotal, ...(isBulkRow ? { bulkCardsReturned } : {}) };
   });
 }
 
@@ -436,7 +504,9 @@ export async function executeVerifiedSquareRefund(
   purchaseId: string,
   refundAmount: number,
   initiatedBy: 'organizer' | 'admin' | 'dispute',
-  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
+  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer',
+  // ADR-136 Addendum B (2026-10-05, #659): bulk lot sale rows only (Purchase.bulkQuantity set). Ignored for every other purchase.
+  bulkOpts?: SquareBulkRefundOpts
 ): Promise<{
   /** Dollars refunded by THIS call (not the cumulative total; see totalRefundedAmount). */
   refundedAmount: number;
@@ -465,6 +535,8 @@ export async function executeVerifiedSquareRefund(
   surchargeRefundedAmount: number;
   totalSurchargeRefunded: number;
   refundedWithSurchargeAmount: number;
+  /** Bulk lot sale rows only (ADR-136 Addendum B): cards this refund put back on the lot. */
+  bulkCardsReturned?: number;
   purchase: {
     id: string;
     userId: string | null;
@@ -565,6 +637,31 @@ export async function executeVerifiedSquareRefund(
         remainingRefundable: roundMoney(remainingRefundableCents / 100),
       }
     );
+  }
+
+  // Bulk lot explicit card refund (ADR-136 Addendum B): the money must be exactly what the named cards are worth
+  // (the cumulative half-up share, so the pieces always add up to the whole sale). Checked BEFORE the claim and before
+  // any Square call, so a mismatch moves nothing.
+  const bulkSoldCards = Number(purchase.bulkQuantity) || 0;
+  if (bulkOpts?.bulkCards !== undefined) {
+    if (bulkSoldCards < 1) {
+      throw new RefundError('That sale is not a bulk lot sale.', 400, { code: 'BULK_REFUND_NOT_BULK' });
+    }
+    try {
+      const plan = planExplicitCardRefund(
+        { soldCards: bulkSoldCards, purchaseCents: purchaseAmountCents, returnedCards: Number(purchase.bulkRefundedQuantity) || 0, refundedCents: priorRefundedCents },
+        bulkOpts.bulkCards
+      );
+      if (plan.cents !== requestedCents) {
+        throw new RefundError('The refund amount does not match what those cards are worth. Reload the sale and try again.', 409, {
+          code: 'BULK_REFUND_AMOUNT_MISMATCH',
+          expectedCents: plan.cents,
+        });
+      }
+    } catch (err) {
+      if (isBulkRefundError(err)) throw new RefundError(err.message, err.status, { code: err.code, ...(err.extra || {}) });
+      throw err;
+    }
   }
 
   // SPLIT TENDER (2026-09-29): Square only ever captured `amount - cashLegAmount` for a
@@ -679,7 +776,7 @@ export async function executeVerifiedSquareRefund(
         const squareRefundCents = squareTotalRefundCents;
         // The reason carries the reconcile tag (see buildSquareRefundTag) so a refund Square accepted
         // but whose finalize failed can be matched back to this purchase by reconcileStuckSquareRefunds.
-        const tag = buildSquareRefundTag(purchase.id, priorRefundedCents, requestedCents, initiatedBy, cnpRefund.thisShareCents);
+        const tag = buildSquareRefundTag(purchase.id, priorRefundedCents, requestedCents, initiatedBy, cnpRefund.thisShareCents, bulkSoldCards > 0 ? bulkOpts?.bulkCards ?? 0 : 0);
         const reasonText = `${refundReasonText ? `${refundReasonText} ` : ''}${tag}`.slice(0, 192);
         refundRequestSent = true; // from here a failure may mean Square DID accept the refund
         const refundResponse: any = await client.refunds.refundPayment({
@@ -763,7 +860,7 @@ export async function executeVerifiedSquareRefund(
   let finalizeErr: unknown = null;
   for (let attempt = 1; attempt <= 3 && !outcome; attempt++) {
     try {
-      outcome = await finalizeSquareRefundTx({ purchase, refundAmount, split, initiatedBy, isCashPurchase, organizerId });
+      outcome = await finalizeSquareRefundTx({ purchase, refundAmount, split, initiatedBy, isCashPurchase, organizerId, bulk: bulkSoldCards > 0 ? bulkOpts : undefined });
     } catch (err) {
       finalizeErr = err;
       if (attempt < 3) await sleep(150 * attempt);
@@ -809,6 +906,7 @@ export async function executeVerifiedSquareRefund(
     surchargeRefundedAmount: cnpRefund.thisShareCents / 100,
     totalSurchargeRefunded: cnpRefund.cumulativeShareCents / 100,
     refundedWithSurchargeAmount: squareTotalRefundCents / 100,
+    ...(bulkSoldCards > 0 ? { bulkCardsReturned: outcome.bulkCardsReturned ?? 0 } : {}),
     purchase: {
       id: purchase.id,
       userId: purchase.userId,
@@ -937,6 +1035,8 @@ export async function reconcileStuckSquareRefunds(
           initiatedBy: match.tag.initiatedBy,
           isCashPurchase: false,
           organizerId,
+          // ADR-136 Addendum B: an explicit bulk card count rode on the refund tag; without one the cards follow the money.
+          bulk: match.tag.bulkCards ? { bulkCards: match.tag.bulkCards, source: 'SQUARE_RECONCILE' } : undefined,
         });
         // CNP surcharge (2026-09-30): the surcharge share is a pure function of the purchase row and the
         // cumulative principal, so finalize needs nothing from Square for it. Cross-check the marker the

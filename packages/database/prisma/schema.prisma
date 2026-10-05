@@ -1854,6 +1854,9 @@ model Item {
   // is Item.stockTotal / Item.stockSold and the price per 1,000 cards is Item.price (see ADR-136 section 2).
   bulkLot                         ItemBulkLot?
 
+  // ADR-136 Addendum C (2026-10-05, #659): eBay fixed-size bundle settings for this lot (1:1, relation only, no Item column).
+  ebayBundle                      ItemBulkLotEbayBundle?
+
   @@index([draftStatus])
   @@index([saleId, draftStatus])
   @@index([libraryId])
@@ -1889,6 +1892,9 @@ model EbaySoldEvent {
   ebayOrderId    String // eBay order id
   ebayLineItemId String // eBay line item id within the order
   quantitySold   Int      @default(1) // units in this line item
+  bulkQuantity   Int?     // ADR-136 Addendum C: cards taken from a bulk lot by this order line (quantitySold bundles x bundle size). NULL on every ordinary sale.
+  bulkShortfall  Int?     // ADR-136 Addendum C: cards the lot could NOT supply when this order line was recorded (counter sold them first). NULL when fully supplied or not a lot.
+  bulkReleasedAt DateTime? // ADR-136 Addendum C: set once when a cancelled or refunded order line gave its cards back to the lot (claim marker, so it happens at most once).
   soldAt         DateTime @default(now())
   createdAt      DateTime @default(now())
 
@@ -2113,6 +2119,11 @@ model Purchase {
   // by the thousand). NULL on every ordinary sale and every existing row. A refund of a bulk row puts exactly this
   // many cards back on the lot (services/refundService.ts). Written only by processCashSaleCore. NO BACKFILL.
   bulkQuantity Int?
+
+  // ADR-136 Addendum B (2026-10-05, #659): cards already put back on the lot by refunds of this row, cumulative. 0 on
+  // every row until a bulk row is partly refunded. Moved only by services/bulkLot/bulkLotRefundService.ts with a
+  // compare-and-swap, so a replayed refund can never return the same cards twice. NO BACKFILL.
+  bulkRefundedQuantity Int @default(0)
 
   // POS Cashier Discount Permission (2026-08-28): this row's share of a cart-level
   // discount applied at Terminal checkout (terminalController.ts createTerminalPaymentIntent).
@@ -5316,6 +5327,11 @@ model POSPaymentLink {
   isSplitPayment       Boolean   @default(false)
   cashAmountCents      Int?
   cardAmountCents      Int?
+  // ADR-136 Addendum A (2026-10-05, #659): bulk lot lines on this link, [{ itemId, cards, cents }] in the order the
+  // register priced them. Written by posController.createPaymentLink after the server priced every lot line; read by
+  // posPaymentLinkRecorder when the link is paid (the cards are taken, and the Purchase rows written, in that one
+  // transaction). NULL on every link that holds no lot. NO BACKFILL.
+  bulkLines            Json?
 
   @@index([organizerId, status])
   @@index([saleId])
@@ -5361,6 +5377,10 @@ model POSPaymentRequest {
   discountAmountCents     Int?
   discountReasonNote      String?
   discountAppliedByUserId String?
+  // ADR-136 Addendum A (2026-10-05, #659): bulk lot lines on this request, [{ itemId, cards, cents }] priced by the server
+  // when the request was created. confirmPaymentRequest takes the cards and writes the Purchase rows from these lines,
+  // in the same transaction as the PAID flip. NULL on every request that holds no lot. NO BACKFILL.
+  bulkLines             Json?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -8412,4 +8432,132 @@ model ItemBulkLot {
   item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([organizerId])
+}
+
+// ============================================================================
+// ADR-136 Addendum C (2026-10-05, roadmap #659): eBay fixed-size bundle settings for a bulk lot. One row per lot that is
+// (or was) offered on eBay as bundles of `bundleSize` cards. The lot stays ONE Item and ONE eBay listing; the listing price
+// is derived from Item.price (dollars per 1,000 cards) and the quantity is floor(cards available / bundleSize). Nothing reads
+// this table unless CARD_BULK_LOTS_ENABLED and CARD_BULK_EBAY_ENABLED are both true. See migration
+// 20261005170000_bulk_lot_ebay_bundles and services/bulkLot/bulkLotEbayBundle.ts.
+// ============================================================================
+model ItemBulkLotEbayBundle {
+  id               String    @id @default(cuid())
+  itemId           String    @unique
+  organizerId      String?   // denormalized from Item at write time, no FK (same precedent as ItemBulkLot)
+  enabled          Boolean   @default(false)
+  bundleSize       Int       // cards per eBay unit (100 to 5000)
+  adjustmentBps    Int       @default(0) // organizer premium (+) or discount (-) on the derived bundle price, basis points (-5000 to 10000)
+  ebayTitle        String?   // organizer title for the listing (80 characters at most); NULL = generated from lot kind and bundle size
+  condition        String    @default("USED") // USED | NEW (eBay condition used for the bundle)
+  language         String    @default("English") // value for the Language item specific when the category asks for one
+  weightOz         Float     // shipped weight of ONE bundle, box included
+  lengthIn         Float
+  widthIn          Float
+  heightIn         Float
+  dimsConfirmed    Boolean   @default(false) // the organizer confirmed weight and box (suggested defaults are never treated as confirmed)
+  listedQty        Int?      // bundles last pushed to eBay (revise bookkeeping, not a source of truth for stock)
+  listedPriceCents Int?      // price per bundle last pushed to eBay, in cents
+  endedForStock    Boolean   @default(false) // true while the listing is withdrawn because fewer cards than one bundle remain
+  lastSyncAt       DateTime?
+  lastSyncStatus   String?   // OK | ENDED_NO_STOCK | RELISTED | PENDING | ERROR
+  lastSyncError    String?   // plain-language text, never a token or raw eBay payload
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  item             Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
+  @@index([enabled, endedForStock])
+}
+
+// ============================================================================
+// ADR-136 Addendum B (2026-10-05, roadmap #659): bulk lot follow-ups. Four additive tables, no foreign keys (same
+// precedent as ItemBulkLot.organizerId): a lot item is never deleted while any of these rows is open (the item
+// delete path refuses it), and none of these rows is read unless CARD_BULK_LOTS_ENABLED is true.
+// See migration 20261005160000_bulk_lot_followups.
+// ============================================================================
+
+// One row per refund event on a bulk sale row (audit trail, and the client replay guard). Cards are protected by the
+// compare-and-swap on Purchase.bulkRefundedQuantity (a replay computes the same target and gets a zero delta);
+// @@unique([purchaseId, idempotencyKey]) lets a client that sends a key replay the same request and get the first answer.
+model BulkLotRefund {
+  id              String   @id @default(cuid())
+  purchaseId      String
+  itemId          String
+  cardsReturned   Int      // cards put back by THIS event
+  cumulativeCards Int      // cards put back on this row after this event
+  cents           Int      // money refunded by this event
+  source          String   // ORGANIZER | ADMIN | DISPUTE | SQUARE_RECONCILE
+  actorUserId     String?
+  idempotencyKey  String?
+  createdAt       DateTime @default(now())
+
+  @@unique([purchaseId, idempotencyKey])
+  @@index([purchaseId])
+  @@index([itemId])
+}
+
+// Every change to a lot's card count made by the organizer (recount, damage, correction, added stock).
+model BulkLotAdjustment {
+  id           String   @id @default(cuid())
+  itemId       String
+  organizerId  String
+  actorUserId  String
+  reason       String   // RECOUNT | DAMAGE | CORRECTION | ADDED_STOCK
+  beforeCount  Int      // cards on hand before (total minus sold)
+  afterCount   Int      // cards on hand after
+  totalBefore  Int
+  totalAfter   Int
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([itemId, createdAt])
+  @@index([organizerId])
+}
+
+// A hold on N cards of a lot for one customer. The cards are taken from the lot when the hold is placed (guarded
+// stockSold increment) and handed back when it expires, is released, or its payment never lands.
+// ItemReservation cannot do this: it is unique per item and holds a whole item.
+model BulkLotHold {
+  id                    String   @id @default(cuid())
+  itemId                String
+  saleId                String
+  organizerId           String
+  createdByUserId       String
+  shopperUserId         String?
+  customerName          String?
+  quantity              Int
+  pricePerThousandCents Int
+  lineCents             Int
+  status                String   @default("ACTIVE") // ACTIVE | CONVERTED | RELEASED | EXPIRED
+  expiresAt             DateTime
+  holdInvoiceId         String?
+  purchaseId            String?
+  releasedReason        String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([itemId, status])
+  @@index([status, expiresAt])
+  @@index([holdInvoiceId])
+  @@index([organizerId, status])
+}
+
+// A lot line in a multi-vendor hub cart (N cards of a lot). Cart lines for ordinary items are Items in status RESERVED;
+// a lot cannot be, so its line lives here. Cards are taken from the lot on add and handed back on remove or cancel.
+model BoothCartBulkLine {
+  id                     String   @id @default(cuid())
+  boothCartTransactionId String
+  itemId                 String
+  vendorBoothId          String   // the booth that owns the lot (resolved when the line is added; the lot Item row is shared by every cart, so it cannot carry this)
+  quantity               Int
+  pricePerThousandCents  Int
+  lineCents              Int
+  status                 String   @default("RESERVED") // RESERVED | SOLD | RELEASED
+  purchaseId             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([boothCartTransactionId, status])
+  @@index([itemId, status])
 }

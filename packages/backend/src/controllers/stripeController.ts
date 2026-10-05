@@ -49,6 +49,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { getConsignorItemSoldPayout } from '../services/consignorItemSoldPayout'; // Feature #309 fix (2026-09-29): consignor + net for the item-sold email come from the sold item's own consignorId and calculateConsignorPayout (ADR-096), not the inverse `100 - commissionRate` math
+import { planExplicitCardRefund, isBulkRefundError } from '../services/bulkLot/bulkLotRefundService'; // ADR-136 Addendum B (#659): take N cards of a bulk lot sale back
 import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail, disputeClawbackEnabled } from '../services/refundService'; // P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment at this file's createRefund call site.
 import { executeVerifiedSquareRefund } from '../services/squareRefundService'; // Square migration Wave 1 #4 (2026-09-07): one added branch at this file's createRefund call site below routes SQUARE-processor purchases through the Square-side choke point instead of Stripe's.
 import { transactionalEmailService } from '../lib/transactionalEmailService';
@@ -3686,6 +3687,43 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     // amount has been refunded.
     const alreadyRefundedCents = Math.round((Number(purchase.refundedAmount) || 0) * 100);
     const remainingRefundableCents = Math.max(0, Math.round(purchase.amount * 100) - alreadyRefundedCents);
+
+    // ADR-136 Addendum B (2026-10-05, #659): a bulk lot sale row (Purchase.bulkQuantity = cards) can be refunded by CARD COUNT.
+    // Body: { cards?: number, idempotencyKey?: string, amount?: number }. `cards` takes that many MORE cards back and the
+    // server works out the money (the cumulative half-up share, so the pieces add up and the last piece is exact); an
+    // `amount` sent with it must agree. Without `cards` the existing amount rules apply and the cards that go back follow the
+    // money. `idempotencyKey` (8 to 64 of A-Z a-z 0-9 _ : -) makes a repeated click or retry return the first answer instead of
+    // refunding the next slice. Every refund path (Square, cash, dispute, admin bulk) shares the same card math.
+    const bulkSoldCards = Number(purchase.bulkQuantity) > 0 ? Number(purchase.bulkQuantity) : 0;
+    const bulkBody = (req.body ?? {}) as { cards?: unknown; idempotencyKey?: unknown; amount?: unknown };
+    const bulkCardsRaw = bulkBody.cards !== undefined && bulkBody.cards !== null && bulkBody.cards !== '' ? bulkBody.cards : undefined;
+    const bulkIdempotencyKey =
+      bulkSoldCards > 0 && typeof bulkBody.idempotencyKey === 'string' && /^[A-Za-z0-9_:-]{8,64}$/.test(bulkBody.idempotencyKey) ? bulkBody.idempotencyKey : null;
+    if (bulkCardsRaw !== undefined && bulkSoldCards === 0) {
+      return res.status(400).json({ message: 'That sale is not a bulk lot sale.', code: 'BULK_REFUND_NOT_BULK' });
+    }
+    if (bulkIdempotencyKey) {
+      const priorBulkRefund = await prisma.bulkLotRefund.findUnique({
+        where: { purchaseId_idempotencyKey: { purchaseId, idempotencyKey: bulkIdempotencyKey } },
+        select: { cents: true, cardsReturned: true, cumulativeCards: true },
+      });
+      if (priorBulkRefund) {
+        return res.json({
+          message: 'Refund already recorded',
+          replay: true,
+          refundAmount: priorBulkRefund.cents / 100,
+          originalAmount: purchase.amount,
+          isFullRefund: remainingRefundableCents <= 0,
+          remainingRefundable: remainingRefundableCents / 100,
+          bulk: {
+            cardsReturned: priorBulkRefund.cardsReturned,
+            returnedCards: Number(purchase.bulkRefundedQuantity) || 0,
+            outstandingCards: Math.max(0, bulkSoldCards - (Number(purchase.bulkRefundedQuantity) || 0)),
+          },
+        });
+      }
+    }
+
     if (remainingRefundableCents <= 0) {
       return res.status(400).json({ message: 'This purchase has already been fully refunded' });
     }
@@ -3704,11 +3742,40 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
         });
       }
     }
+    let bulkCardPlan: ReturnType<typeof planExplicitCardRefund> | undefined;
+    if (bulkCardsRaw !== undefined) {
+      try {
+        bulkCardPlan = planExplicitCardRefund(
+          { soldCards: bulkSoldCards, purchaseCents: Math.round(purchase.amount * 100), returnedCards: Number(purchase.bulkRefundedQuantity) || 0, refundedCents: alreadyRefundedCents },
+          bulkCardsRaw
+        );
+      } catch (planErr) {
+        if (isBulkRefundError(planErr)) return res.status(planErr.status).json({ message: planErr.message, code: planErr.code });
+        throw planErr;
+      }
+      if (rawRequestedAmount !== undefined && rawRequestedAmount !== null && rawRequestedAmount !== '' && requestedRefundCents !== bulkCardPlan.cents) {
+        return res.status(400).json({ message: 'The refund amount did not match the cards. Try again.', code: 'BULK_REFUND_AMOUNT_MISMATCH', expectedAmount: bulkCardPlan.cents / 100 });
+      }
+      requestedRefundCents = bulkCardPlan.cents;
+    }
+    const bulkRefundOpts = bulkSoldCards > 0
+      ? { bulkCards: bulkCardPlan?.cards, source: (hasOrganizerRole ? 'ORGANIZER' : 'ADMIN') as 'ORGANIZER' | 'ADMIN', actorUserId: req.user.id, idempotencyKey: bulkIdempotencyKey }
+      : undefined;
+
     // Only the Square refund path tracks a running refundedAmount and keeps a partially refunded purchase
     // PAID. The legacy Stripe path (executeVerifiedRefund) marks the whole purchase REFUNDED whatever amount
     // it is given, so a partial amount there would strand the purchase in a state that hides the balance
     // still with the buyer. Refuse it rather than record something untrue.
-    if (purchase.processor !== 'SQUARE' && requestedRefundCents !== remainingRefundableCents) {
+    // ADR-136 Addendum B (2026-10-05, #659): a BULK LOT sale paid in cash, Venmo or Zelle is the one non-Square row that
+    // can be refunded in part: executeVerifiedRefund hands it to its own transactional core (executeBulkCashRefund),
+    // which tracks the running refunded total and puts back the proportional cards. Every other non-Square row keeps
+    // the old rule.
+    const isBulkCashRow =
+      (purchase.bulkQuantity ?? 0) > 0 &&
+      (['CASH', 'MANUAL'].includes(String(purchase.processor ?? '').toUpperCase()) ||
+        !purchase.stripePaymentIntentId ||
+        purchase.stripePaymentIntentId.startsWith('cash_'));
+    if (purchase.processor !== 'SQUARE' && !isBulkCashRow && requestedRefundCents !== remainingRefundableCents) {
       return res.status(400).json({ message: 'Partial refunds are only available for Square purchases. Refund the full amount instead.' });
     }
     const refundAmount = requestedRefundCents / 100;
@@ -3730,6 +3797,8 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     // Card-not-present surcharge (2026-09-30): dollars of the buyer's Card-not-present fee returned with this
     // refund (proportional to the principal refunded; 0 for every purchase without one).
     let surchargeRefundedAmount = 0;
+    // ADR-136 Addendum B: cards this refund put back on the lot (bulk lot sale rows only).
+    let bulkCardsBack: number | undefined;
 
     // Money movement — the PAID-status check, payment-intent-exists check, 30-day window,
     // the PAID->REFUNDING TOCTOU compare-and-swap claim + idempotency key, the booth-cart-vs
@@ -3746,13 +3815,17 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       // squareRefundService.ts's file comment for why), so the catch block below needs no
       // change to handle either processor.
       if (purchase.processor === 'SQUARE') {
-        const squareRefund = await executeVerifiedSquareRefund(purchaseId, refundAmount, initiatedBy);
+        const squareRefund = await (bulkRefundOpts ? executeVerifiedSquareRefund(purchaseId, refundAmount, initiatedBy, undefined, bulkRefundOpts) : executeVerifiedSquareRefund(purchaseId, refundAmount, initiatedBy));
+        bulkCardsBack = squareRefund.bulkCardsReturned;
         cashPortionToRefundByHand = squareRefund.cashPortionToRefundByHand;
         cashRefundMessage = squareRefund.message;
         isFullRefund = squareRefund.isFullRefund;
         surchargeRefundedAmount = squareRefund.surchargeRefundedAmount ?? 0;
       } else {
-        await executeVerifiedRefund(purchaseId, refundAmount, initiatedBy);
+        const legacyRefund = await (bulkRefundOpts ? executeVerifiedRefund(purchaseId, refundAmount, initiatedBy, undefined, bulkRefundOpts) : executeVerifiedRefund(purchaseId, refundAmount, initiatedBy));
+        bulkCardsBack = legacyRefund.bulk?.cardsReturned;
+        // Bulk cash rows report whether this refund finished the row (ADR-136 Addendum B); every other legacy refund is whole-row.
+        if (legacyRefund.isFullRefund !== undefined) isFullRefund = legacyRefund.isFullRefund;
       }
     } catch (refundErr) {
       if (refundErr instanceof RefundError) {
@@ -3824,6 +3897,16 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       // PAID with a balance that can be refunded later.
       isFullRefund,
       remainingRefundable: Math.max(0, (Math.round(purchase.amount * 100) - alreadyRefundedCents - requestedRefundCents) / 100),
+      // ADR-136 Addendum B: bulk lot sale rows report the cards put back and how many are still out on the sale.
+      ...(bulkSoldCards > 0
+        ? {
+            bulk: {
+              cardsReturned: bulkCardsBack ?? 0,
+              returnedCards: (Number(purchase.bulkRefundedQuantity) || 0) + (bulkCardsBack ?? 0),
+              outstandingCards: Math.max(0, bulkSoldCards - (Number(purchase.bulkRefundedQuantity) || 0) - (bulkCardsBack ?? 0)),
+            },
+          }
+        : {}),
       // Split tender (2026-09-29): only present when part of the sale was paid in cash.
       ...(cashPortionToRefundByHand > 0 ? { cashPortionToRefundByHand, cashRefundMessage } : {}),
       // Card-not-present surcharge (2026-09-30): only present when part of the fee was returned with this

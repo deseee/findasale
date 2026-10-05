@@ -74,6 +74,7 @@ const ITEM_SELECT = {
   stockTotal: true,
   stockSold: true,
   price: true,
+  bulkLot: { select: { itemId: true } },
   card: {
     select: {
       game: true,
