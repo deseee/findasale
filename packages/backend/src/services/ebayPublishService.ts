@@ -200,6 +200,54 @@ export async function getAcceptedConditionsForCategory(categoryId: string): Prom
 }
 
 /**
+ * Ordered fallback chains: pick the closest accepted enum for a desired condition that the
+ * category does not accept.
+ *
+ * Wording rules (2026-10-04): a worn or refurbished item must never fall through to NEW or
+ * NEW_OTHER when a USED_* enum is accepted. eBay non-granular categories (for example guitar
+ * effects pedals) accept only 1000 NEW, 1500 NEW_OTHER, 3000 USED_EXCELLENT, 7000
+ * FOR_PARTS_OR_NOT_WORKING, so USED_ACCEPTABLE must try USED_EXCELLENT before NEW_OTHER.
+ * SELLER_REFURBISHED has its own chain of used-type enums only. The 2000-2030 refurbished
+ * enums are deliberately NOT in it: they require a seller qualification program that the
+ * Metadata API does not report, so an unqualified seller would fail publish.
+ */
+const FALLBACKS_BY_DESIRED: Record<string, string[]> = {
+  'NEW':                      ['NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_VERY_GOOD', 'USED_GOOD'],
+  'LIKE_NEW':                 ['USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_GOOD', 'NEW_OTHER'],
+  'USED_VERY_GOOD':           ['USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW_OTHER'],
+  'USED_EXCELLENT':           ['USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE'],
+  'USED_GOOD':                ['USED_VERY_GOOD', 'USED_ACCEPTABLE', 'USED_EXCELLENT', 'NEW_OTHER'],  // never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
+  'USED_ACCEPTABLE':          ['USED_GOOD', 'USED_VERY_GOOD', 'USED_EXCELLENT', 'NEW_OTHER'],  // USED_EXCELLENT before NEW_OTHER; never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
+  'SELLER_REFURBISHED':       ['USED_EXCELLENT', 'USED_VERY_GOOD', 'USED_GOOD'],  // never NEW / NEW_OTHER; no 2000-2030 enums (seller qualification)
+  'FOR_PARTS_OR_NOT_WORKING': ['USED_ACCEPTABLE', 'USED_GOOD'],
+};
+
+/** Desired enums that describe a used, refurbished or like-new item (never to be shown as new). */
+function isUsedOrRefurbishedDesired(desired: string): boolean {
+  return desired.startsWith('USED_') || desired.includes('REFURBISHED') || desired === 'LIKE_NEW';
+}
+
+/**
+ * Pure chain logic behind ensureConditionValidForCategory. Assumes `desired` is NOT in
+ * `accepted`. Returns the substitute and whether it came from the chain or the last resort,
+ * or null when `accepted` is empty. The last resort is the first accepted enum, except that a
+ * used/refurbished desired prefers any accepted USED_* enum over NEW / NEW_OTHER.
+ */
+export function pickFallbackCondition(
+  desired: string,
+  accepted: Set<string>
+): { condition: string; source: 'chain' | 'last-resort' } | null {
+  const chain = FALLBACKS_BY_DESIRED[desired] || ['USED_GOOD', 'USED_VERY_GOOD', 'NEW'];
+  for (const candidate of chain) {
+    if (accepted.has(candidate)) return { condition: candidate, source: 'chain' };
+  }
+  const all = Array.from(accepted);
+  const lastResort =
+    (isUsedOrRefurbishedDesired(desired) ? all.find((c) => c.startsWith('USED_')) : undefined) ?? all[0];
+  return lastResort ? { condition: lastResort, source: 'last-resort' } : null;
+}
+
+/**
  * Remap a condition enum to one accepted by the target category.
  * If the desired condition is accepted, return it unchanged.
  * Otherwise pick the best-available substitute using a quality-ordered fallback.
@@ -214,32 +262,14 @@ export async function ensureConditionValidForCategory(
   if (!accepted) return desired;
   if (accepted.has(desired)) return desired;
 
-  // Ordered fallback — pick the closest accepted enum for the desired condition.
-  const fallbacksByDesired: Record<string, string[]> = {
-    'NEW':                      ['NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_VERY_GOOD', 'USED_GOOD'],
-    'LIKE_NEW':                 ['USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_GOOD', 'NEW_OTHER'],
-    'USED_VERY_GOOD':           ['USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW_OTHER'],
-    'USED_EXCELLENT':           ['USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE'],
-    'USED_GOOD':                ['USED_VERY_GOOD', 'USED_ACCEPTABLE', 'USED_EXCELLENT', 'NEW_OTHER'],  // never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
-    'USED_ACCEPTABLE':          ['USED_GOOD', 'USED_VERY_GOOD', 'NEW_OTHER'],  // never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
-    'FOR_PARTS_OR_NOT_WORKING': ['USED_ACCEPTABLE', 'USED_GOOD'],
-  };
-  const chain = fallbacksByDesired[desired] || ['USED_GOOD', 'USED_VERY_GOOD', 'NEW'];
-  for (const candidate of chain) {
-    if (accepted.has(candidate)) {
-      console.log(
-        `[eBay ConditionRemap] category ${categoryId}: ${desired} not accepted, using ${candidate}`
-      );
-      return candidate;
-    }
-  }
-  // Nothing matched — return the first accepted enum as a last resort.
-  const firstAccepted = Array.from(accepted)[0];
-  if (firstAccepted) {
+  const picked = pickFallbackCondition(desired, accepted);
+  if (picked) {
     console.log(
-      `[eBay ConditionRemap] category ${categoryId}: no chain match for ${desired}, using ${firstAccepted}`
+      picked.source === 'chain'
+        ? `[eBay ConditionRemap] category ${categoryId}: ${desired} not accepted, using ${picked.condition}`
+        : `[eBay ConditionRemap] category ${categoryId}: no chain match for ${desired}, using ${picked.condition}`
     );
-    return firstAccepted;
+    return picked.condition;
   }
   return desired;
 }
