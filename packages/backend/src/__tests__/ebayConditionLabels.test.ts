@@ -121,8 +121,9 @@ describe('desiredEbayCondition is unchanged (golden grid)', () => {
 describe('ebayController wiring (source pins)', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'ebayController.ts'), 'utf8');
 
-  it('buildConditionDescription uses the shared grade line helper, not a local label map', () => {
-    expect(src).toContain('ebayDescriptionGradeLine(item.conditionGrade)');
+  it('buildConditionDescription uses the shared condition description builder, not a local label map', () => {
+    expect(src).toContain('buildEbayConditionDescription(item)');
+    expect(src).not.toContain('ebayDescriptionGradeLine(');
     expect(src).not.toContain('Mint condition');
     expect(src).not.toContain('gradeLabels');
   });

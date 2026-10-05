@@ -166,3 +166,69 @@ export function ebayDescriptionGradeLine(grade: string | null | undefined): stri
   const normalized = normalizeGrade(grade);
   return normalized ? EBAY_DESCRIPTION_GRADE_LINES[normalized] : `Grade ${grade}`;
 }
+
+/** Condition lines for conditions that carry no grade. Plain words, no grade text, no em dashes. */
+const EBAY_DESCRIPTION_NEW_LINE = 'New';
+const EBAY_DESCRIPTION_REFURBISHED_LINE = 'Refurbished';
+const EBAY_DESCRIPTION_PARTS_LINE = 'For parts or repair';
+
+/**
+ * The first line of the eBay condition description for an item, per canonical condition. First publish, edit-sync
+ * and the re-analyze sync all go through this so the line always matches the condition eBay is told.
+ *
+ *   NEW             -> "New" (no grade)
+ *   REFURBISHED     -> "Refurbished" (the grade may still exist on the item, but never reads as a grade here)
+ *   PARTS_OR_REPAIR -> "For parts or repair"
+ *   USED, or no/unknown condition -> the grade line (S reads as A); a legacy LIKE_NEW or EXCELLENT value with no
+ *                      stored grade reads as grade A, same as desiredEbayCondition; no grade -> undefined (no line)
+ */
+export function ebayConditionLine(
+  condition: string | null | undefined,
+  grade: string | null | undefined,
+): string | undefined {
+  const normalized = normalizeCondition(condition);
+  switch (normalized.condition) {
+    case 'NEW':
+      return EBAY_DESCRIPTION_NEW_LINE;
+    case 'REFURBISHED':
+      return EBAY_DESCRIPTION_REFURBISHED_LINE;
+    case 'PARTS_OR_REPAIR':
+      return EBAY_DESCRIPTION_PARTS_LINE;
+    default:
+      return ebayDescriptionGradeLine(grade) ?? (normalized.hintGrade ? ebayDescriptionGradeLine(normalized.hintGrade) : undefined);
+  }
+}
+
+/**
+ * The full eBay conditionDescription text (the line from ebayConditionLine, then the organizer's condition notes,
+ * a short plain-text slice of the description, and a few notable tags), capped at 1000 characters.
+ *
+ * Returns undefined when nothing should be sent: no condition set, or a NEW item (eBay's condition description is
+ * for items that are not brand new, so a new item never carries one; a caller editing a live listing removes any
+ * old text when this is undefined).
+ */
+export function buildEbayConditionDescription(item: {
+  condition: string | null | undefined;
+  conditionGrade: string | null | undefined;
+  description: string | null | undefined;
+  conditionNotes: string | null | undefined;
+  tags: string[] | null | undefined;
+}): string | undefined {
+  if (!item.condition) return undefined;
+  if (normalizeCondition(item.condition).condition === 'NEW') return undefined;
+  const parts: string[] = [];
+  const line = ebayConditionLine(item.condition, item.conditionGrade);
+  if (line) parts.push(line);
+  if (item.conditionNotes) parts.push(item.conditionNotes);
+  if (item.description) {
+    const plain = item.description.replace(/<[^>]*>/g, '').trim();
+    if (plain) parts.push(plain.substring(0, 400));
+  }
+  const relevantTags = (item.tags ?? []).filter((t) =>
+    ['vintage', 'antique', 'handmade', 'rare', 'collectible', 'signed', 'limited'].includes(t.toLowerCase()),
+  );
+  if (relevantTags.length) parts.push(`Notes: ${relevantTags.join(', ')}`);
+  const joined = parts.join('\n\n');
+  if (!joined) return undefined;
+  return joined.length > 1000 ? joined.substring(0, 1000) : joined;
+}

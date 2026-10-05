@@ -92,6 +92,12 @@ export async function syncListedItemFieldsToEbay(params: {
   description?: string | null;
   /** eBay Inventory API condition enum (e.g. NEW, USED_GOOD) — already mapped by caller. */
   conditionEnum?: string | null;
+  /**
+   * eBay condition note built by buildEbayConditionDescription. undefined leaves the existing note alone; null
+   * removes it (a NEW item carries none); a string replaces it. Pass it with a condition change so the note
+   * never keeps the old condition's text.
+   */
+  conditionDescription?: string | null;
   /** Optional pre-refreshed access token; if omitted the helper refreshes its own. */
   accessToken?: string | null;
   logTag?: string;
@@ -172,6 +178,11 @@ export async function syncListedItemFieldsToEbay(params: {
       }
       if (params.conditionEnum !== undefined && params.conditionEnum !== null && params.conditionEnum !== '') {
         invObject.condition = params.conditionEnum;
+        changedAny = true;
+      }
+      if (params.conditionDescription !== undefined) {
+        if (params.conditionDescription) invObject.conditionDescription = params.conditionDescription;
+        else delete invObject.conditionDescription;
         changedAny = true;
       }
 

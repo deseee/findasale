@@ -10,7 +10,7 @@ import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, re
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
 import { canonicalFromEbayCondition, fillBlankCondition } from '../utils/ebayConditionImport'; // inbound eBay condition: grade only when eBay supplies a level
 import { planEnrichWrites, needsEnrichFetch } from '../utils/ebayEnrichPlan'; // background enrich: organizer intent wins, held/dirty never touched
-import { desiredEbayCondition, ebayDescriptionGradeLine } from '../utils/conditionMapping'; // U4: one condition vocabulary (first push and edit-sync share one table)
+import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/conditionMapping'; // U4: one condition vocabulary (first push and edit-sync share one table)
 import { fetchLiveEbayListings, itemIdFromFasSku, lookupOfferIdForSku } from '../services/ebayLiveListingsService'; // eBay sync hardening (2026-10-01): relist adoption + live ActiveList
 import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
 // Re-export the OAuth helpers so existing external importers of these from './ebayController' keep resolving (Phase 1 relocation).
@@ -168,21 +168,11 @@ function sanitizeDescriptionForEbay(raw: string | null | undefined): string {
   return clean.length > 4000 ? clean.substring(0, 4000) : clean;
 }
 
-// Build condition description for eBay from grade, notes, and tags
+// Condition description for eBay: built by buildEbayConditionDescription (utils/conditionMapping.ts), the one table
+// shared with the edit-sync push (services/ebayItemPushService.ts) and the re-analyze sync, so the first line always
+// matches the condition (no grade text on Refurbished, New or Parts or repair items).
 function buildConditionDescription(item: { condition: string | null; conditionGrade: string | null; description: string | null; conditionNotes: string | null; tags: string[] }): string | undefined {
-  if (item.condition === 'NEW' || !item.condition) return undefined;
-  const parts: string[] = [];
-  const gradeLine = ebayDescriptionGradeLine(item.conditionGrade);
-  if (gradeLine) parts.push(gradeLine);
-  if (item.conditionNotes) parts.push(item.conditionNotes);
-  if (item.description) {
-    const plain = item.description.replace(/<[^>]*>/g, '').trim();
-    if (plain) parts.push(plain.substring(0, 400));
-  }
-  const relevantTags = item.tags.filter(t => ['vintage', 'antique', 'handmade', 'rare', 'collectible', 'signed', 'limited'].includes(t.toLowerCase()));
-  if (relevantTags.length) parts.push(`Notes: ${relevantTags.join(', ')}`);
-  const joined = parts.join('\n\n');
-  return joined.length > 1000 ? joined.substring(0, 1000) : joined;
+  return buildEbayConditionDescription(item);
 }
 
 /**
@@ -3041,6 +3031,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           }
           return null;
         })();
+        const conditionDescriptionText = buildConditionDescription(item);
         const inventoryPayload: Record<string, unknown> = {
           product: {
             title: item.title.substring(0, 80),
@@ -3066,7 +3057,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           },
           condition: ebayCondition,
           ...(conditionDescriptors ? { conditionDescriptors } : {}),
-          ...(buildConditionDescription(item) ? { conditionDescription: buildConditionDescription(item) } : {}),
+          ...(conditionDescriptionText ? { conditionDescription: conditionDescriptionText } : {}),
           availability: {
             shipToLocationAvailability: {
               // ADR-085 Track B: real remaining stock, not a hardcoded 1.

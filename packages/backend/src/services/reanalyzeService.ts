@@ -30,7 +30,7 @@ import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
 import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './modelBakeoffService';
 import { resolveGroundedIdentityInline } from './groundedIdentityService';
-import { desiredEbayCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
+import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/conditionMapping'; // U4: one condition vocabulary
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: an applied re-analyze must survive the next import
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from './cardAiSuggestion'; // card-aware re-analyze (same result, no extra API call)
@@ -140,6 +140,7 @@ export async function reanalyzeItem(
       category: true,
       condition: true,
       conditionGrade: true,
+      conditionNotes: true,
       price: true,
       tags: true,
       photoUrls: true,
@@ -403,6 +404,19 @@ export async function reanalyzeItem(
         title: result.title ?? null,
         description: result.description ?? null,
         conditionEnum,
+        // Same table as first publish: the eBay condition note follows the new condition (no stale grade line).
+        ...(result.condition
+          ? {
+              conditionDescription:
+                buildEbayConditionDescription({
+                  condition: result.condition,
+                  conditionGrade: result.suggestedConditionGrade ?? item.conditionGrade,
+                  description: result.description ?? item.description,
+                  conditionNotes: item.conditionNotes,
+                  tags: nextTags ?? item.tags,
+                }) ?? null,
+            }
+          : {}),
         logTag: `[Reanalyze eBay] item ${itemId}`,
       });
       ebaySynced = syncResult.synced && syncResult.published;

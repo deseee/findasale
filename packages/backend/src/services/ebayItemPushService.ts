@@ -22,7 +22,7 @@
 
 import { prisma } from '../lib/prisma';
 import { ebayPublishWithSelfHeal, ensureConditionValidForCategory } from './ebayPublishService';
-import { desiredEbayCondition } from '../utils/conditionMapping';
+import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/conditionMapping';
 
 export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'shipping'] as const;
 export type EbayPushField = (typeof EBAY_PUSH_FIELDS)[number];
@@ -401,6 +401,7 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
         price: true,
         condition: true,
         conditionGrade: true,
+        conditionNotes: true,
         brand: true,
         mpn: true,
         category: true,
@@ -579,6 +580,12 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
             }
             inventoryUpdates['condition'] = finalCondition;
           }
+          if (inventoryFields.includes('condition') || inventoryFields.includes('description')) {
+            // The eBay condition note (conditionDescription) is built by the same table as first publish, so a
+            // condition change (for example Used grade C to Refurbished) rewrites the old grade line, and a
+            // description change refreshes the description slice inside it. null means remove it (a NEW item).
+            inventoryUpdates['conditionDescription'] = buildEbayConditionDescription(item) ?? null;
+          }
 
           const invPath = `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
           let invObject: Record<string, unknown> | null = null;
@@ -603,6 +610,10 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
               };
             }
             if ('condition' in inventoryUpdates) invObject.condition = inventoryUpdates['condition'];
+            if ('conditionDescription' in inventoryUpdates) {
+              if (inventoryUpdates['conditionDescription']) invObject.conditionDescription = inventoryUpdates['conditionDescription'];
+              else delete invObject.conditionDescription;
+            }
 
             // Missing product.brand causes 25002 BrandMPN on republish (confirmed 2026-06-30): mirror it from the
             // aspects when absent. Heals items first pushed before Fix A.

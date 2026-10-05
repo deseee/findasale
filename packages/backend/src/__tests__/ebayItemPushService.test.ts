@@ -225,6 +225,60 @@ describe('pushItemToEbay', () => {
     expect(inv.product.description).toBe('<p>A lamp</p><hr>A lamp');
   });
 
+  describe('eBay condition note (conditionDescription) follows the condition on an edit push', () => {
+    const STALE = 'Grade C: Good condition\n\nOld text';
+    const invWithStaleNote = () => ({ ...INVENTORY(), conditionDescription: STALE });
+    const staleFetch = (call: FetchCall) => {
+      const path = decodeURIComponent(call.url.split('path=')[1] ?? '');
+      if (call.method === 'GET' && path.includes('/inventory_item/')) return { ok: true, status: 200, json: invWithStaleNote() };
+      return happyFetch(call);
+    };
+    const invPut = () => fetchCalls.find((c) => c.method === 'PUT' && c.url.includes('inventory_item'))!.body;
+
+    it('USED grade C to REFURBISHED: condition 2500 enum and a note with no grade text', async () => {
+      fetchPlan = staleFetch;
+      mockPrisma.item.findUnique.mockResolvedValue(ITEM_ROW({ condition: 'REFURBISHED', conditionGrade: 'C', conditionNotes: 'Rewired' }));
+      const out = await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['condition'] });
+      expect(out.status).toBe('SUCCESS');
+      const inv = invPut();
+      expect(inv.condition).toBe('SELLER_REFURBISHED');
+      expect(inv.conditionDescription).toBe('Refurbished\n\nRewired\n\nA lamp');
+      expect(inv.conditionDescription).not.toMatch(/Grade C/);
+    });
+
+    it('PARTS_OR_REPAIR gets the parts line; USED grade A gets the existing grade line', async () => {
+      fetchPlan = staleFetch;
+      mockPrisma.item.findUnique.mockResolvedValue(ITEM_ROW({ condition: 'PARTS_OR_REPAIR', conditionGrade: 'C' }));
+      await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['condition'] });
+      expect(invPut().conditionDescription.startsWith('For parts or repair')).toBe(true);
+
+      fetchCalls.length = 0;
+      mockPrisma.item.findUnique.mockResolvedValue(ITEM_ROW({ condition: 'USED', conditionGrade: 'A' }));
+      await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['condition'] });
+      expect(invPut().conditionDescription.startsWith('Grade A: Excellent condition')).toBe(true);
+    });
+
+    it('NEW removes the old note (a new item carries none)', async () => {
+      fetchPlan = staleFetch;
+      mockPrisma.item.findUnique.mockResolvedValue(ITEM_ROW({ condition: 'NEW', conditionGrade: 'C' }));
+      await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['condition'] });
+      const inv = invPut();
+      expect(inv.condition).toBe('NEW');
+      expect('conditionDescription' in inv).toBe(false);
+    });
+
+    it('a description change refreshes the note; a title-only push leaves the existing note alone', async () => {
+      fetchPlan = staleFetch;
+      mockPrisma.item.findUnique.mockResolvedValue(ITEM_ROW({ condition: 'USED', conditionGrade: 'C', description: 'New words' }));
+      await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['description'] });
+      expect(invPut().conditionDescription).toBe('Grade C: Good condition\n\nNew words');
+
+      fetchCalls.length = 0;
+      await pushItemToEbay({ itemId: 'i1', organizerId: 'org1', trigger: 'SAVE', fields: ['title'] });
+      expect(invPut().conditionDescription).toBe(STALE);
+    });
+  });
+
   it('PARTIAL: price accepted but the inventory item PUT is rejected', async () => {
     fetchPlan = (call) => {
       const path = decodeURIComponent(call.url.split('path=')[1] ?? '');
