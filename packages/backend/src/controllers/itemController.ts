@@ -46,6 +46,9 @@ import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutG
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 import { withdrawDiscogsListingIfExists } from '../services/marketplace/discogsListingConnector'; // P0 (S-discogs-sold-parity 2026-09-15): withdraw Discogs listing on SOLD, mirrors endEbayListingIfExists/markShopifyItemSold
+import { evaluateLotItemEdit, lotDeleteBlocker, LOT_INVARIANT_MESSAGES } from '../services/bulkLot/bulkLotInvariants'; // ADR-136 Addendum B (#659): a lot stays a lot through the generic item form
+import { findBulkLotItemIds } from '../services/bulkLot/bulkLotService';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig';
 import { prepareItemForDeletion, recordItemDeletion } from '../services/itemDeletionService'; // eBay sync hardening (2026-10-01): shared withdraw+snapshot+audit for every hard delete
 import { reopenEbayCancelledSale as reopenEbayCancelledSaleService } from '../services/ebaySaleReopenService'; // eBay sync hardening (2026-10-01): reopen an item whose eBay sale was cancelled/refunded
 import { withdrawReverbListingIfExists } from '../services/marketplace/reverbConnector'; // 2026-09-23: withdraw Reverb listing on SOLD, beside Discogs
@@ -2024,6 +2027,33 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Sale-derived organizer when present, else the inventory organizer: id/tier/lat/lng for the code below.
     const ownerOrganizer = ownerOrganizerRow;
 
+    // ADR-136 Addendum B (#659): a bulk lot keeps its card count, status, listing type and fixed-price shape whatever this
+    // form sends (the card count changes only through POST /api/bulk-lots/item/:id/adjust so every change is recorded).
+    // The lookup fails open with the flag off and closed (503) with it on. `lotForced` is written on top of updateData
+    // just before the update: price rounded to whole cents, excluded from markdown, never an eBay single listing.
+    let lotForced: Record<string, unknown> | null = null;
+    {
+      const lotFlagOn = isBulkLotsEnabled();
+      let isLot = false;
+      try {
+        isLot = (await findBulkLotItemIds(prisma as any, [id], lotFlagOn)).has(id);
+      } catch (lotErr) {
+        return res.status(503).json({ message: LOT_INVARIANT_MESSAGES.BULK_CHECK_FAILED, code: 'BULK_CHECK_FAILED' });
+      }
+      if (isLot) {
+        const lotDecision = evaluateLotItemEdit(req.body as Record<string, unknown>, {
+          stockTotal: item.stockTotal,
+          stockSold: item.stockSold,
+          status: item.status,
+          listingType: item.listingType,
+        });
+        if (!lotDecision.ok) {
+          return res.status(lotDecision.refusal.status).json({ message: lotDecision.refusal.message, code: lotDecision.refusal.code, field: lotDecision.refusal.field });
+        }
+        lotForced = lotDecision.forced as unknown as Record<string, unknown>;
+      }
+    }
+
     // ADR-087 P1 (D1): stockTotal can never drop below units already sold. stockSold is
     // server-owned -- it is intentionally NOT in the updateItem whitelist above, so a
     // client can never set it; we compare the requested stockTotal against the DB value.
@@ -2584,6 +2614,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (importedOnlyEditNeedsDirtyMark(item, { category: updateData.category, tags: updateData.tags, photoUrls: updateData.photoUrls })) {
       updateData.ebayContentDirtyAt = new Date();
     }
+
+    if (lotForced) Object.assign(updateData, lotForced); // ADR-136 Addendum B (#659): the lot invariants win over the form
 
     // Item.lastEditedAt: a card patch is always an organizer edit; otherwise stamp only when a user-visible
     // field in updateData differs from the stored row. lastEditedAt is never read from req.body.
@@ -3525,6 +3557,15 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
         return res.status(403).json({ message: 'Access denied. Not your sale.' });
       }
       ownerOrganizerId = callerOrganizer.id;
+    }
+
+    // ADR-136 Addendum B (#659): a lot with cards out on a hold or in a hub cart cannot be deleted from under them.
+    try {
+      if ((await findBulkLotItemIds(prisma as any, [id], isBulkLotsEnabled())).has(id) && (await lotDeleteBlocker(prisma as any, id, isBulkLotsEnabled()))) {
+        return res.status(409).json({ message: LOT_INVARIANT_MESSAGES.BULK_LOT_BUSY, code: 'BULK_LOT_BUSY' });
+      }
+    } catch (lotErr) {
+      return res.status(503).json({ message: LOT_INVARIANT_MESSAGES.BULK_CHECK_FAILED, code: 'BULK_CHECK_FAILED' });
     }
 
     // ADR item-delete-cross-marketplace-removal (2026-09-28) + eBay sync hardening (2026-10-01):

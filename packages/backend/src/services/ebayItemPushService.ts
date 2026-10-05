@@ -23,6 +23,8 @@
 import { prisma } from '../lib/prisma';
 import { ebayPublishWithSelfHeal, ensureConditionValidForCategory } from './ebayPublishService';
 import { desiredEbayCondition, buildEbayConditionDescription } from '../utils/conditionMapping';
+import { findBulkLotItemIds } from './bulkLot/bulkLotService'; // ADR-136 Addendum C (#659)
+import { isBulkLotsEnabled } from './bulkLot/bulkLotConfig';
 
 export const EBAY_PUSH_FIELDS = ['title', 'description', 'condition', 'price', 'shipping'] as const;
 export type EbayPushField = (typeof EBAY_PUSH_FIELDS)[number];
@@ -431,6 +433,22 @@ export async function pushItemToEbay(params: PushItemToEbayParams): Promise<Ebay
         'This item is no longer for sale, so its eBay listing was not changed.'
       );
       return trigger === 'SAVE' ? outcome : await record(outcome);
+    }
+    // ADR-136 Addendum C (#659): a bulk lot's title, description, price and condition describe a count of cards sold by
+    // the thousand, not an eBay listing. Its bundle listing (title, bundle price, quantity, package) is owned by
+    // services/bulkLot/bulkLotEbayService and re-pushed from the lot screen. Fails closed with the lot flag on.
+    try {
+      if ((await findBulkLotItemIds(prisma as any, [itemId], isBulkLotsEnabled())).has(itemId)) {
+        const outcome = skipOutcome(
+          'SKIPPED_NOT_LISTED',
+          requested,
+          'BULK_LOT_BUNDLE',
+          'This is a bulk lot listed on eBay in bundles. Change its eBay listing from the lot screen.'
+        );
+        return trigger === 'SAVE' ? outcome : await record(outcome);
+      }
+    } catch {
+      return await record(skipOutcome('FAILED', requested, 'BULK_CHECK_FAILED', 'Could not check whether this item is a bulk lot. Try again in a moment.'));
     }
     if (!item.ebayOfferId) {
       return await record(

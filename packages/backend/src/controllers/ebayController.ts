@@ -5,7 +5,9 @@ import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots are never pushed to eBay in v1
-import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { bulkChannelRefusal, findBulkLotItemIds, isBulkLotError, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { isBulkEbayEnabled } from '../services/bulkLot/bulkLotEbayConfig'; // ADR-136 Addendum C (#659): bulk lots list on eBay as fixed-size bundles behind CARD_BULK_EBAY_ENABLED
+import { applyBulkBundleOverlay, type PushAdapterDb } from '../services/bulkLot/bulkLotEbayPushAdapter';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
 import { canonicalFromEbayCondition, fillBlankCondition } from '../utils/ebayConditionImport'; // inbound eBay condition: grade only when eBay supplies a level
@@ -2320,10 +2322,22 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'itemIds required' });
     }
 
-    // Bulk lots (ADR-136, #659): a count of cards sold by the thousand is never listed on eBay in v1 (counter and
-    // storefront only). This also covers the queue and fee-check paths, which run through this handler.
-    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.code === 'BULK_CHANNEL_UNSUPPORTED' ? 'Bulk lots cannot be listed on eBay yet. They are sold at your counter and on your storefront.' : bulkRefusal.message, code: bulkRefusal.code });
+    // Bulk lots (ADR-136, #659). With CARD_BULK_EBAY_ENABLED off (the default) a count of cards sold by the thousand is
+    // never listed on eBay (counter and storefront only); this also covers the queue and fee-check paths, which run
+    // through this handler. With it on (ADR-136 Addendum C) a lot passes, and the loop below swaps in its bundle
+    // listing (title, price per bundle, bundle count as the quantity, package) on the in-memory item only.
+    let bulkLotIdSet = new Set<string>();
+    if (isBulkEbayEnabled()) {
+      try {
+        bulkLotIdSet = await findBulkLotItemIds(prisma as unknown as BulkLotDb, itemIds, true);
+      } catch (lotErr) {
+        if (isBulkLotError(lotErr)) return res.status(lotErr.status).json({ message: lotErr.message, code: lotErr.code });
+        throw lotErr;
+      }
+    } else {
+      const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+      if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.code === 'BULK_CHANNEL_UNSUPPORTED' ? 'Bulk lots cannot be listed on eBay yet. They are sold at your counter and on your storefront.' : bulkRefusal.message, code: bulkRefusal.code });
+    }
 
     // Get organizer and verify tier
     const organizer = await prisma.organizer.findUnique({
@@ -2572,6 +2586,29 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     for (const item of sale.items) {
       try {
+        // Bulk lot bundle (ADR-136 Addendum C): replace the lot's counter fields with its bundle listing, in memory only.
+        // Refused with a plain message when the lot cannot fill one bundle, has no confirmed box, or has no price.
+        let bundleLot = false;
+        if (bulkLotIdSet.has(item.id)) {
+          const bundleSku = buildCustomLabel(item.id, organizer, item);
+          if (queueOnly) {
+            results.push({
+              itemId: item.id,
+              sku: bundleSku,
+              status: 'error',
+              code: 'BULK_BUNDLE_NO_QUEUE',
+              message: 'Bulk lot bundles are listed with List on eBay on the lot, not through the queue.',
+            });
+            continue;
+          }
+          const bundleApplied = await applyBulkBundleOverlay(prisma as unknown as PushAdapterDb, item as any, { persistCategory: !feeCheckOnly });
+          if (!bundleApplied.ok) {
+            results.push({ itemId: item.id, sku: bundleSku, status: 'error', code: bundleApplied.code, message: bundleApplied.message });
+            continue;
+          }
+          bundleLot = true;
+        }
+
         // B2: FEE CHECK, strictly read-only. It must never write an Item, create or update an eBay
         // inventory item or offer, create a policy or a location, or enqueue anything. Everything the real
         // push below does that persists (never-shippable override, category cache, ISBN resolve, shipping
@@ -2744,6 +2781,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
             price: item.price ?? null,
             packageConfirmedByOrganizer: (item as any).packageConfirmedByOrganizer,
+            // A bulk lot bundle weighs well over 3 oz and lists in a category the envelope does not cover; this makes
+            // the refusal explicit instead of relying on those two facts (ADR-136 Addendum C).
+            neverStandardEnvelope: bundleLot,
           },
           { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce, fromZip: sale.zip || null }
         );
@@ -3642,6 +3682,39 @@ export async function pushItemsToEbayQueueOnly(
   return { statusCode, body };
 }
 
+// ─── Internal invocation wrapper for bulk lot bundles (ADR-136 Addendum C) ───────────────────────────────
+// Lists or relists ONE lot through the same pipeline as a manual push (tier gate, quota, token, policies, publish with
+// self-heal). services/bulkLot/bulkLotEbayWiring.ts uses it for "List on eBay" and for the automatic relist when stock
+// returns. Same construction as pushItemsToEbayQueueOnly: the minimal req/res pushSaleToEbay reads, JSON body captured.
+export async function pushItemsToEbayLive(
+  userId: string,
+  saleId: string,
+  itemIds: string[],
+): Promise<{ statusCode: number; body: any }> {
+  let statusCode = 200;
+  let body: any = null;
+  const fakeRes = {
+    headersSent: false,
+    status(code: number) {
+      statusCode = code;
+      return fakeRes;
+    },
+    json(payload: any) {
+      body = payload;
+      fakeRes.headersSent = true;
+      return fakeRes;
+    },
+  } as unknown as Response;
+  const fakeReq = {
+    params: { saleId },
+    body: { itemIds },
+    user: { id: userId },
+  } as unknown as AuthRequest;
+
+  await pushSaleToEbay(fakeReq, fakeRes);
+  return { statusCode, body };
+}
+
 // ─── Internal invocation wrapper for the manual push panel's pre-flight fee
 // check ─────────────────────────
 // Same rationale as pushItemsToEbayQueueOnly directly above: pushSaleToEbay already owns the tier
@@ -3946,9 +4019,24 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // Bulk lots (ADR-136, #659): never published to eBay in v1.
-    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, [itemId], isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.code === 'BULK_CHANNEL_UNSUPPORTED' ? 'Bulk lots cannot be listed on eBay yet. They are sold at your counter and on your storefront.' : bulkRefusal.message, code: bulkRefusal.code });
+    // Bulk lots (ADR-136, #659). Off (default): never published to eBay. On (ADR-136 Addendum C): a lot is listed in
+    // bundles with List on eBay on the lot, which owns its price, quantity and package, so this generic "publish the
+    // stored offer" button must not publish a stale offer for it.
+    if (isBulkEbayEnabled()) {
+      let publishIsLot = false;
+      try {
+        publishIsLot = (await findBulkLotItemIds(prisma as unknown as BulkLotDb, [itemId], true)).has(itemId);
+      } catch (lotErr) {
+        if (isBulkLotError(lotErr)) return res.status(lotErr.status).json({ message: lotErr.message, code: lotErr.code });
+        throw lotErr;
+      }
+      if (publishIsLot) {
+        return res.status(409).json({ message: 'This is a bulk lot. List it on eBay in bundles with List on eBay on the lot.', code: 'BULK_USE_BUNDLE_CONTROLS' });
+      }
+    } else {
+      const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, [itemId], isBulkLotsEnabled());
+      if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.code === 'BULK_CHANNEL_UNSUPPORTED' ? 'Bulk lots cannot be listed on eBay yet. They are sold at your counter and on your storefront.' : bulkRefusal.message, code: bulkRefusal.code });
+    }
 
     // Load the item + its sale's organizerId for ownership check
     const item = await prisma.item.findUnique({
@@ -4736,6 +4824,8 @@ export async function resolvePoliciesForItem(
      *  gates the UNKNOWN-classification fallback below (see that comment). Optional,
      *  permissive-by-default: undefined behaves as before. */
     packageConfirmedByOrganizer?: boolean | null;
+    /** ADR-136 Addendum C: true for a bulk lot bundle. The eBay Standard Envelope is never picked for it. */
+    neverStandardEnvelope?: boolean;
   },
   smartPickContext?: {
     fetchFulfillmentPolicies?: () => Promise<any[]>;
@@ -4984,6 +5074,7 @@ export async function resolvePoliciesForItem(
   > => {
     const envelopePolicyFetcher = smartPickContext?.fetchFulfillmentPolicies;
     if (!envelopePolicyFetcher) return null;
+    if (item.neverStandardEnvelope === true) return null; // bulk lot bundle (ADR-136 Addendum C)
     if (item.packageWeightOz == null || item.packageWeightOz <= 0) return null;
     if (item.packageWeightOz > EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ) return null;
     if (item.price == null || !(item.price < EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD)) return null;
@@ -6192,6 +6283,24 @@ async function endListingViaTradingApi(accessToken: string, ebayListingId: strin
  * null = nothing to end (never listed on eBay). Existing callers ignore the value.
  */
 export async function endEbayListingIfExists(itemId: string, reason: 'sold' | 'delete' = 'sold'): Promise<boolean | null> {
+  const outcome = await endEbayListingIfExistsCore(itemId, reason);
+  // ADR-136 Addendum C: when the listing of a bulk lot bundle is withdrawn (sold out at the register or on eBay), record
+  // that this app ended it, so bundles relist when cards return. Flag-gated and fail-open: with the flag off nothing here
+  // touches the database, and a missing table (migration not applied) only logs.
+  if (outcome === true && reason === 'sold' && isBulkEbayEnabled()) {
+    try {
+      await (prisma as any).itemBulkLotEbayBundle.updateMany({
+        where: { itemId, endedForStock: false },
+        data: { endedForStock: true, listedQty: 0, lastSyncAt: new Date(), lastSyncStatus: 'ENDED', lastSyncError: null },
+      });
+    } catch (bundleErr) {
+      console.warn(`[eBay] could not record bundle end for item ${itemId} (non-fatal):`, (bundleErr as Error).message);
+    }
+  }
+  return outcome;
+}
+
+async function endEbayListingIfExistsCore(itemId: string, reason: 'sold' | 'delete'): Promise<boolean | null> {
   try {
     // Query the item for offer and listing IDs
     const item = await prisma.item.findUnique({
