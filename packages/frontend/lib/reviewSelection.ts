@@ -78,3 +78,49 @@ export function bulkPriceButtonText(price: number | null, count: number): string
 export function bulkCategoryButtonText(count: number): string {
   return `Apply category to ${itemsCountText(count)}`;
 }
+
+// ── Sticky action bar ───────────────────────────────────────────────────────────────────────────────────────
+// The site layout wraps every page in `overflow-x-hidden`, which turns that wrapper into the scroll container
+// for CSS `position: sticky`. The wrapper never scrolls (the window does), so a sticky bar inside it never
+// sticks. The Review page therefore pins its action bar itself: it watches where the bar's in-flow slot is and
+// switches the bar to `position: fixed` once the slot scrolls under the site header. These helpers hold the
+// numbers and the decisions so they can be tested without a browser.
+
+/** Width at which Tailwind's `md` breakpoint starts (the layout's header changes size here). */
+export const MD_BREAKPOINT_PX = 768;
+/** Phone: 48px fixed header + 46px fixed search bar = 94px, plus a 2px gap. */
+export const PHONE_STICKY_TOP_PX = 96;
+/** md and up: the same offset the site uses elsewhere for content under the 64px header (`top-20`). */
+export const DESKTOP_STICKY_TOP_PX = 80;
+
+/** Distance from the top of the window at which the bar should rest, so it sits just under the fixed header(s). */
+export function stickyTopOffset(viewportWidth: number): number {
+  return viewportWidth >= MD_BREAKPOINT_PX ? DESKTOP_STICKY_TOP_PX : PHONE_STICKY_TOP_PX;
+}
+
+/** True once the bar's in-flow slot has scrolled up past the resting offset, so the bar must be pinned. */
+export function isBarStuck(slotTop: number, offset: number): boolean {
+  return slotTop < offset;
+}
+
+export type BulkPanel = 'price' | 'category';
+
+export interface BulkBarLayout {
+  /** The selection row (count, Clear, Set price, Set category) is shown. */
+  showSelectionRow: boolean;
+  /** Which inline panel is open under the selection row (never open with nothing selected). */
+  panel: BulkPanel | null;
+  /**
+   * The stats row (pending count, Discard all, Approve all) is hidden on phones while a panel is open, so the
+   * pinned bar stays well under half the screen. It is always shown from the `sm` breakpoint up, and returns
+   * on phones as soon as the panel is closed.
+   */
+  hideStatsOnPhone: boolean;
+}
+
+/** Which rows of the pinned bar are visible, given how many cards are selected and which panel was opened. */
+export function bulkBarLayout(selectedCount: number, bulkMode: BulkPanel | null): BulkBarLayout {
+  const showSelectionRow = selectedCount > 0;
+  const panel = showSelectionRow ? bulkMode : null;
+  return { showSelectionRow, panel, hideStatsOnPhone: panel !== null };
+}

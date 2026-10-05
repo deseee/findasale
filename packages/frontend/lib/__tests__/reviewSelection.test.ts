@@ -14,6 +14,12 @@ import {
   parseBulkPriceInput,
   bulkPriceButtonText,
   bulkCategoryButtonText,
+  stickyTopOffset,
+  isBarStuck,
+  bulkBarLayout,
+  MD_BREAKPOINT_PX,
+  PHONE_STICKY_TOP_PX,
+  DESKTOP_STICKY_TOP_PX,
 } from '../reviewSelection';
 
 test('toggleSelection adds an absent id and removes a present one without mutating the input', () => {
@@ -86,4 +92,31 @@ test('button text names the amount and the number of items', () => {
   assert.equal(bulkPriceButtonText(null, 2), 'Set price on 2 items');
   assert.equal(bulkCategoryButtonText(1), 'Apply category to 1 item');
   assert.equal(bulkCategoryButtonText(4), 'Apply category to 4 items');
+});
+
+test('stickyTopOffset clears the fixed header and search bar on phones and the header on md and up', () => {
+  assert.equal(stickyTopOffset(375), PHONE_STICKY_TOP_PX);
+  assert.ok(PHONE_STICKY_TOP_PX >= 48 + 46, 'phone offset must clear the 48px header plus the 46px search bar');
+  assert.equal(stickyTopOffset(MD_BREAKPOINT_PX - 1), PHONE_STICKY_TOP_PX);
+  assert.equal(stickyTopOffset(MD_BREAKPOINT_PX), DESKTOP_STICKY_TOP_PX);
+  assert.ok(DESKTOP_STICKY_TOP_PX >= 64, 'desktop offset must clear the 64px header');
+  assert.equal(stickyTopOffset(1440), DESKTOP_STICKY_TOP_PX);
+});
+
+test('isBarStuck pins the bar only after its slot scrolls above the resting offset', () => {
+  assert.equal(isBarStuck(300, 96), false);
+  assert.equal(isBarStuck(96, 96), false);
+  assert.equal(isBarStuck(95.5, 96), true);
+  assert.equal(isBarStuck(-1200, 80), true);
+});
+
+test('bulkBarLayout shows the selection row only with a selection and never opens a panel without one', () => {
+  assert.deepEqual(bulkBarLayout(0, null), { showSelectionRow: false, panel: null, hideStatsOnPhone: false });
+  assert.deepEqual(bulkBarLayout(0, 'category'), { showSelectionRow: false, panel: null, hideStatsOnPhone: false });
+  assert.deepEqual(bulkBarLayout(3, null), { showSelectionRow: true, panel: null, hideStatsOnPhone: false });
+});
+
+test('bulkBarLayout hides the stats row on phones while a panel is open, so the pinned bar stays short', () => {
+  assert.deepEqual(bulkBarLayout(2, 'price'), { showSelectionRow: true, panel: 'price', hideStatsOnPhone: true });
+  assert.deepEqual(bulkBarLayout(2, 'category'), { showSelectionRow: true, panel: 'category', hideStatsOnPhone: true });
 });

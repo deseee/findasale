@@ -72,6 +72,9 @@ import {
   type BulkCategoryOperation,
 } from '../../../../lib/reviewBulkCategory';
 import {
+  stickyTopOffset,
+  isBarStuck,
+  bulkBarLayout,
   toggleSelection,
   selectAllVisible,
   pruneSelection,
@@ -306,6 +309,72 @@ function buildEditStateFromItem(item: Item): ItemEditState {
     mpn: item.mpn ?? '',
     upc: item.upc ?? '',
   };
+}
+
+/**
+ * Pins the review action bar under the site's fixed header while the organizer scrolls the card list.
+ *
+ * Why not `position: sticky`: the site layout wraps every page in `overflow-x-hidden`, which makes that wrapper
+ * the scroll container for sticky children. The wrapper never scrolls (the window does), so a sticky bar there
+ * never sticks. Instead the bar sits in an in-flow "slot"; once the slot scrolls above the resting offset
+ * (below the fixed header and, on phones, the fixed search bar), the bar switches to `position: fixed` at that
+ * offset, with the slot's own left edge and width, and the slot is held at the bar's height so the cards do not
+ * jump. The same elements stay mounted, so keyboard focus and open panels are kept.
+ */
+interface PinnedBar {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+function usePinnedBar(active: boolean) {
+  const slotRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [pinned, setPinned] = useState<PinnedBar | null>(null);
+
+  useEffect(() => {
+    if (!active) {
+      setPinned(null);
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const slot = slotRef.current;
+      const bar = barRef.current;
+      if (!slot || !bar) return;
+      const offset = stickyTopOffset(window.innerWidth);
+      const rect = slot.getBoundingClientRect();
+      if (!isBarStuck(rect.top, offset)) {
+        setPinned((prev) => (prev === null ? prev : null));
+        return;
+      }
+      const next: PinnedBar = { top: offset, left: rect.left, width: rect.width, height: bar.offsetHeight };
+      setPinned((prev) =>
+        prev && prev.top === next.top && prev.left === next.left && prev.width === next.width && prev.height === next.height
+          ? prev
+          : next
+      );
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    // A panel opening or closing changes the bar's height while it is pinned.
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+    if (observer && barRef.current) observer.observe(barRef.current);
+    schedule();
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (observer) observer.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [active]);
+
+  return { slotRef, barRef, pinned };
 }
 
 const ReviewPage = () => {
@@ -789,6 +858,11 @@ const ReviewPage = () => {
       setBulkPickerKey((k) => k + 1);
     }
   }, [selectedItems]);
+
+  // Pinned action bar (stats + bulk bar): active while the bar is rendered (loaded and something left to review).
+  const pinnedBar = usePinnedBar(
+    !itemsLoading && items.some((i) => i.draftStatus !== 'PUBLISHED' && !approvedIds.has(i.id))
+  );
 
   // Auth + saleId guards (MUST be after all hooks to respect Rules of Hooks)
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -1682,16 +1756,37 @@ const ReviewPage = () => {
             </div>
           </div>
 
-          {/* ── Sticky bulk actions bar ── */}
-          {!itemsLoading && !queueEmpty && (
-            <div className="sticky top-4 z-10 mb-5">
+          {/* ── Pinned action bar (stats + bulk actions) ──
+              The slot stays in the page flow; the bar inside it is fixed under the site header once the slot
+              scrolls past (see usePinnedBar). z-30 keeps it under the site header (z-50), the search bar and
+              menus, and under this page's confirm dialogs (z-40). No overflow clipping on any ancestor of the
+              category picker, so its dropdown can extend below the bar. */}
+          {!itemsLoading && !queueEmpty && (() => {
+            const barLayout = bulkBarLayout(selectedCount, bulkMode);
+            return (
+            <div
+              ref={pinnedBar.slotRef}
+              className="mb-5"
+              style={pinnedBar.pinned ? { height: pinnedBar.pinned.height } : undefined}
+            >
+            <div
+              ref={pinnedBar.barRef}
+              className="relative z-30"
+              style={
+                pinnedBar.pinned
+                  ? { position: 'fixed', top: pinnedBar.pinned.top, left: pinnedBar.pinned.left, width: pinnedBar.pinned.width }
+                  : undefined
+              }
+            >
               <div
-                className="bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-sm"
+                className={`bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] px-3 py-2 sm:px-4 sm:py-3 flex-wrap items-center justify-between gap-x-2 sm:gap-x-3 gap-y-2 shadow-sm ${
+                  barLayout.hideStatsOnPhone ? 'hidden sm:flex' : 'flex'
+                }`}
               >
                 {/* Left: count + progress */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    className="hidden sm:flex w-8 h-8 rounded-lg items-center justify-center flex-shrink-0"
                     style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1720,7 +1815,7 @@ const ReviewPage = () => {
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => setShowDiscardAllModal(true)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/6 dark:hover:bg-[#3A3A3C] border border-transparent hover:border-black/10 dark:hover:border-[#3A3A3C] transition-colors"
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/6 dark:hover:bg-[#3A3A3C] border border-transparent hover:border-black/10 dark:hover:border-[#3A3A3C] transition-colors"
                   >
                     Discard all
                   </button>
@@ -1732,7 +1827,7 @@ const ReviewPage = () => {
                   </Link>
                   <button
                     onClick={() => setShowApproveAllModal(true)}
-                    className="px-3 py-1.5 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] transition-colors"
+                    className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] transition-colors"
                   >
                     Approve all
                   </button>
@@ -1740,11 +1835,11 @@ const ReviewPage = () => {
               </div>
 
               {/* Selection bulk bar: appears when at least one card is selected. Never publishes anything. */}
-              {selectedCount > 0 && (
+              {barLayout.showSelectionRow && (
                 <div
                   role="region"
                   aria-label="Bulk actions for selected items"
-                  className="mt-2 bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-[#C8552B]/40 px-4 py-3 shadow-sm"
+                  className={`${barLayout.hideStatsOnPhone ? 'sm:mt-2' : 'mt-2'} bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-[#C8552B]/40 px-3 py-2.5 sm:px-4 sm:py-3 shadow-sm`}
                 >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <p aria-live="polite" className="text-sm font-semibold text-[#1A1814] dark:text-[#F5F5F0] whitespace-nowrap">
@@ -1758,13 +1853,13 @@ const ReviewPage = () => {
                     >
                       Clear
                     </button>
-                    <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                       <button
                         type="button"
                         onClick={() => setBulkMode((m) => (m === 'price' ? null : 'price'))}
                         disabled={bulkBusy}
                         aria-expanded={bulkMode === 'price'}
-                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                        className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                           bulkMode === 'price'
                             ? 'border-[#C8552B] text-[#C8552B] bg-[#C8552B]/5'
                             : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
@@ -1777,7 +1872,7 @@ const ReviewPage = () => {
                         onClick={() => setBulkMode((m) => (m === 'category' ? null : 'category'))}
                         disabled={bulkBusy}
                         aria-expanded={bulkMode === 'category'}
-                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                        className={`flex-1 sm:flex-none px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                           bulkMode === 'category'
                             ? 'border-[#C8552B] text-[#C8552B] bg-[#C8552B]/5'
                             : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
@@ -1788,7 +1883,7 @@ const ReviewPage = () => {
                     </div>
                   </div>
 
-                  {bulkMode === 'price' && (
+                  {barLayout.panel === 'price' && (
                     <form
                       className="mt-3"
                       onSubmit={(e) => {
@@ -1829,13 +1924,15 @@ const ReviewPage = () => {
                     </form>
                   )}
 
-                  {bulkMode === 'category' && (
+                  {barLayout.panel === 'category' && (
                     <div className="mt-3">
                       <p className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
                         New category for {itemsCountText(selectedCount)}
                       </p>
                       <div className={`flex flex-wrap items-start gap-2 ${bulkBusy ? 'pointer-events-none opacity-50' : ''}`} aria-busy={bulkBusy}>
-                        <div className="flex-1 min-w-[12rem]">
+                        {/* The pinned bar is fixed to the screen, so keep the picker's result list inside the window: its
+                            own scroll area (max-h-96 in the picker) is shortened on short screens. Nothing here clips it. */}
+                        <div className="flex-1 min-w-[12rem] [&_.max-h-96]:max-h-[max(10rem,min(24rem,calc(100dvh_-_20rem)))]">
                           <EbayCategoryPicker
                             key={bulkPickerKey}
                             value={bulkCategory}
@@ -1868,7 +1965,9 @@ const ReviewPage = () => {
                 </div>
               )}
             </div>
-          )}
+            </div>
+            );
+          })()}
 
           {/* ── Loading state ── */}
           {itemsLoading && (
