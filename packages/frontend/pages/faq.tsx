@@ -71,12 +71,12 @@ const shopperFAQs: FAQItem[] = [
         Every item on FindA.Sale lists a condition so you know what to expect before you visit:
         <ul className="mt-2 ml-4 space-y-1">
           <li><strong>New</strong>. Never used. Unopened, or with its original tags or packaging.</li>
-          <li><strong>Used</strong>. Owned and used. The organizer also grades the wear from A to D. <strong>A and B</strong> are very good (A looks close to new, B shows light, normal wear). <strong>C</strong> is good (noticeable wear, still works). <strong>D</strong> is acceptable (heavy wear or damage, but still usable).</li>
+          <li><strong>Used</strong>. Owned and used. The organizer also grades the wear from A to D. <strong>A</strong> is excellent (looks close to new). <strong>B</strong> is very good (light, normal wear). <strong>C</strong> is good (noticeable wear, still works). <strong>D</strong> is acceptable (heavy wear or damage, but still usable).</li>
           <li><strong>Refurbished</strong>. Restored to working order.</li>
           <li><strong>Parts / Repair</strong>. Doesn't work, is incomplete, or is untested. Sold as is, for parts or repair. Inspect carefully before you buy.</li>
         </ul>
         <p className="mt-2">Trading cards use the card scale instead: NM (Near Mint), LP (Lightly Played), MP (Moderately Played), HP (Heavily Played) and DMG (Damaged).</p>
-        <p className="mt-2">If an item is also listed on eBay, buyers there see Used items as Used - Very good, Used - Good or Used - Acceptable.</p>
+        <p className="mt-2">If an item is also listed on eBay, buyers there see grades A and B as Used - Very good, C as Used - Good and D as Used - Acceptable.</p>
       </>
     ),
   },

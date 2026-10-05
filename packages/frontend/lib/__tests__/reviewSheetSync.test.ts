@@ -49,7 +49,7 @@ test('grade picker: used goods show A to D', () => {
   assert.equal(p.show, true);
   assert.deepEqual(p.options.map((o) => o.value), ['A', 'B', 'C', 'D']);
   assert.deepEqual(p.options.map((o) => o.label), ['A', 'B', 'C', 'D']);
-  assert.equal(p.options[0].title, 'A - Very good');
+  assert.equal(p.options[0].title, 'A - Excellent');
   assert.equal(p.options[2].title, 'C - Good');
   assert.equal(p.options[3].title, 'D - Acceptable');
 });

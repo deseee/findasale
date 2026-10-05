@@ -40,15 +40,19 @@ export const CANONICAL_CONDITION_LABELS: Record<CanonicalCondition, string> = {
 export const CONDITION_GRADES = ['A', 'B', 'C', 'D'] as const;
 export type ConditionGrade = (typeof CONDITION_GRADES)[number];
 
-/** Approved definitions: A and B are very good, C is good, D is acceptable. */
+/**
+ * Approved organizer-facing grade wording: A is excellent, B is very good, C is good, D is acceptable. This is only the
+ * description shown to organizers. What eBay receives is a separate table (EBAY_CONDITION_LABELS below): A and B both
+ * map to Used - Very good.
+ */
 export const CONDITION_GRADE_LABELS: Record<ConditionGrade, string> = {
-  A: 'Very good',
+  A: 'Excellent',
   B: 'Very good',
   C: 'Good',
   D: 'Acceptable',
 };
 
-/** Picker options. A and B share a definition, so the letter is part of the visible label. */
+/** Picker options: the letter and its wording, for example 'A - Excellent'. */
 export const CONDITION_GRADE_OPTIONS: ReadonlyArray<{ value: ConditionGrade; label: string }> =
   CONDITION_GRADES.map((g) => ({ value: g, label: `${g} - ${CONDITION_GRADE_LABELS[g]}` }));
 

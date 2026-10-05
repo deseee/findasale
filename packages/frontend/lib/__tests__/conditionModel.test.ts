@@ -48,9 +48,9 @@ const UNIFIED_TABLE: Row[] = [
 test('constants: canonical vocabularies and labels', () => {
   assert.deepEqual([...CANONICAL_CONDITIONS], ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR']);
   assert.deepEqual([...CONDITION_GRADES], ['A', 'B', 'C', 'D']);
-  assert.deepEqual(CONDITION_GRADE_LABELS, { A: 'Very good', B: 'Very good', C: 'Good', D: 'Acceptable' });
+  assert.deepEqual(CONDITION_GRADE_LABELS, { A: 'Excellent', B: 'Very good', C: 'Good', D: 'Acceptable' });
   assert.deepEqual(CONDITION_GRADE_OPTIONS.map((o) => o.value), ['A', 'B', 'C', 'D']);
-  assert.deepEqual(CONDITION_GRADE_OPTIONS.map((o) => o.label), ['A - Very good', 'B - Very good', 'C - Good', 'D - Acceptable']);
+  assert.deepEqual(CONDITION_GRADE_OPTIONS.map((o) => o.label), ['A - Excellent', 'B - Very good', 'C - Good', 'D - Acceptable']);
 });
 
 test('constants: same condition values and labels as lib/itemConstants.ts', () => {

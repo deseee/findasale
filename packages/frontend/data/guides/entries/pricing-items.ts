@@ -50,7 +50,7 @@ Read them left to right. The tile closest to your item in condition and recency 
 
 **What to look for:**
 - Are the comps actually similar, or just in the same category? A mid-century credenza and a flat-pack dresser are both "Furniture" but shouldn't share a price.
-- Are the condition grades consistent with yours? If your item is a C (Good) but the comps are all A or B (Very good), the suggested price may be high.
+- Are the condition grades consistent with yours? If your item is a C (Good) but the comps are all A (Excellent) or B (Very good), the suggested price may be high.
 - How old are the comps? Recent sales (30 days) are more reliable than 90-day-old data.
 
 If the comps look accurate, the suggested price is probably a solid starting point. If they don't look like your item, set your own price.

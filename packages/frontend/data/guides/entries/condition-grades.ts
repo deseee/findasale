@@ -24,7 +24,7 @@ The app suggests a condition from the photo. You confirm or change it before you
 
 ## Grades for used items
 
-**A (Very good)**: Looks close to new. No visible wear at normal viewing distance. Minor marks that need a close look are fine.
+**A (Excellent)**: Looks close to new. No visible wear at normal viewing distance. Minor marks that need a close look are fine.
 
 **B (Very good)**: Normal light wear for its age and use. Works fully. Small scratches or fading are fine. The most common grade for household goods.
 
@@ -32,7 +32,7 @@ The app suggests a condition from the photo. You confirm or change it before you
 
 **D (Acceptable)**: Heavy wear or damage, but still usable. If it is broken or sold for parts, use Parts / Repair instead.
 
-A and B both read "Very good" on eBay. The letter still matters in FindA.Sale, because it changes the suggested price.
+eBay shows both A and B as "Used - Very good". The letter still matters in FindA.Sale, because it changes the suggested price.
 
 Grade S is retired for used goods. Something never used belongs under New. Existing items that still carry S show "S (legacy)" in the grade picker and are treated as A. Items stored as "Like new" are treated as Used, grade A.
 

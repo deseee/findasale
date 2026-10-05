@@ -107,7 +107,7 @@ test('grade options: A to D, with S (legacy) only for an item that has S', () =>
   // Still offered after the organizer picks another grade, so they can go back.
   assert.deepEqual(rowGradeOptions('S', 'B').map((o) => o.value), ['S', 'A', 'B', 'C', 'D']);
   assert.equal(rowGradeOptions('S', 'S')[0].label, 'S (legacy)');
-  assert.deepEqual(rowGradeOptions('', '').map((o) => o.label), ['A - Very good', 'B - Very good', 'C - Good', 'D - Acceptable']);
+  assert.deepEqual(rowGradeOptions('', '').map((o) => o.label), ['A - Excellent', 'B - Very good', 'C - Good', 'D - Acceptable']);
 });
 
 test('badge shows only when the failed count is above zero', () => {

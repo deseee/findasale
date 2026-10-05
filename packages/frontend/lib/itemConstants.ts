@@ -31,7 +31,7 @@ export const CONDITION_LABELS: Record<Condition, string> = {
  * LEGACY display map for values already stored in the database. Read-only display of old data: new code should use
  * normalizeCondition / readConditionForForm from lib/conditionModel.ts. Every entry matches that model:
  *   - canonical conditions use CONDITION_LABELS;
- *   - grade letters use the approved grade wording (A and B Very good, C Good, D Acceptable; S is retired and is
+ *   - grade letters use the approved grade wording (A Excellent, B Very good, C Good, D Acceptable; S is retired and is
  *     read as A, so it is labelled "(legacy)");
  *   - legacy condition words read the way the backend reads them: LIKE_NEW, EXCELLENT, GOOD and FAIR are Used,
  *     POOR and FOR_PARTS are Parts / Repair.
@@ -43,8 +43,8 @@ export const CONDITION_MAP: Record<string, string> = {
   'REFURBISHED': CONDITION_LABELS.REFURBISHED,
   'PARTS_OR_REPAIR': CONDITION_LABELS.PARTS_OR_REPAIR,
   // Grade letters (conditionGrade field)
-  'S': 'Very good (legacy)',
-  'A': 'Very good',
+  'S': 'Excellent (legacy)',
+  'A': 'Excellent',
   'B': 'Very good',
   'C': 'Good',
   'D': 'Acceptable',

@@ -24,13 +24,15 @@ The condition tells you what to expect when you arrive. Search results have a Co
 
 ## How used items are graded
 
-**A and B (Very good)**: A looks close to new. B shows light, normal wear. Both work fully.
+**A (Excellent)**: Looks close to new. Works fully.
+
+**B (Very good)**: Shows light, normal wear. Works fully.
 
 **C (Good)**: Noticeable wear, fading, or surface marks. It works, and it looks its age.
 
 **D (Acceptable)**: Heavy wear or damage, but still usable.
 
-When an organizer also lists an item on eBay, buyers there see these as Used - Very good, Used - Good, or Used - Acceptable.
+When an organizer also lists an item on eBay, buyers there see A and B as Used - Very good, C as Used - Good, and D as Used - Acceptable.
 
 ## Trading cards
 

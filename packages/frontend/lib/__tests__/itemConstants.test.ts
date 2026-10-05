@@ -19,7 +19,7 @@ test('every legacy and canonical condition word in CONDITION_MAP agrees with the
 
 test('CONDITION_MAP grade letters use the approved grade wording', () => {
   for (const g of ['A', 'B', 'C', 'D'] as const) assert.equal(CONDITION_MAP[g], CONDITION_GRADE_LABELS[g], g);
-  assert.equal(CONDITION_MAP.S, 'Very good (legacy)');
+  assert.equal(CONDITION_MAP.S, 'Excellent (legacy)');
 });
 
 test('formatCondition', () => {
