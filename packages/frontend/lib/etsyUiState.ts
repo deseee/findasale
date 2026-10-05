@@ -763,7 +763,13 @@ const CONDITION_LABELS: Record<string, string> = {
   REFURBISHED: 'Refurbished',
   PARTS_OR_REPAIR: 'For parts or repair',
 };
-const GRADE_LABELS: Record<string, string> = { S: 'Like New', A: 'Excellent', B: 'Good', C: 'Fair', D: 'Poor' };
+const GRADE_LABELS: Record<string, string> = {
+  S: 'Excellent',
+  A: 'Excellent',
+  B: 'Very good',
+  C: 'Good',
+  D: 'Acceptable',
+};
 
 const SCHEME_URL_RE = /\b(?:https?|ftp):\/\/\S+/gi;
 const WWW_URL_RE = /\bwww\.\S+/gi;

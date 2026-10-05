@@ -203,10 +203,10 @@ describe('buildEtsyDescription and the condition line (ADR-135 D3.2)', () => {
     expect(buildEtsyConditionLine({ condition: 'PARTS_OR_REPAIR' })).toBe('Condition: For parts or repair.');
   });
 
-  it('mirrors the existing frontend grade label map (S Like New, A Excellent, B Good, C Fair, D Poor)', () => {
-    expect(ETSY_GRADE_LABELS).toEqual({ S: 'Like New', A: 'Excellent', B: 'Good', C: 'Fair', D: 'Poor' });
-    expect(buildEtsyConditionLine({ conditionGrade: 'S' })).toBe('Grade: S (Like New).');
-    expect(buildEtsyConditionLine({ conditionGrade: 'D' })).toBe('Grade: D (Poor).');
+  it('uses the app grade words (S Excellent, A Excellent, B Very good, C Good, D Acceptable)', () => {
+    expect(ETSY_GRADE_LABELS).toEqual({ S: 'Excellent', A: 'Excellent', B: 'Very good', C: 'Good', D: 'Acceptable' });
+    expect(buildEtsyConditionLine({ conditionGrade: 'S' })).toBe('Grade: S (Excellent).');
+    expect(buildEtsyConditionLine({ conditionGrade: 'D' })).toBe('Grade: D (Acceptable).');
   });
 
   it('shows the grade letter as stored, and a bare letter when it has no label', () => {
@@ -311,7 +311,7 @@ describe('buildEtsyDraftPayload', () => {
     expect(r.fields).toEqual({
       quantity: '1',
       title: 'Vintage Fenton Vase',
-      description: 'Hand painted.\n\nCondition: Pre-owned. Grade: B (Good).',
+      description: 'Hand painted.\n\nCondition: Pre-owned. Grade: B (Very good).',
       price: '24.50',
       who_made: 'someone_else',
       when_made: '1960s',

@@ -280,7 +280,7 @@ test('eligibility messages match the backend wrapper text (ADR-135 D4.3)', { ski
 
 test('condition and grade labels in the preview match the backend mapper', { skip: !fs.existsSync(path.join(BACKEND_MKT, 'etsyMapping.ts')) }, () => {
   const src = fs.readFileSync(path.join(BACKEND_MKT, 'etsyMapping.ts'), 'utf8');
-  for (const needle of ["USED: 'Pre-owned'", "REFURBISHED: 'Refurbished'", "PARTS_OR_REPAIR: 'For parts or repair'", "NEW: 'New'", "S: 'Like New'", "A: 'Excellent'", "B: 'Good'", "C: 'Fair'", "D: 'Poor'"]) {
+  for (const needle of ["USED: 'Pre-owned'", "REFURBISHED: 'Refurbished'", "PARTS_OR_REPAIR: 'For parts or repair'", "NEW: 'New'", "S: 'Excellent'", "A: 'Excellent'", "B: 'Very good'", "C: 'Good'", "D: 'Acceptable'"]) {
     assert.ok(src.includes(needle), needle);
   }
   const p = ui.buildEtsyPreview({ id: 'i', description: 'Nice.', condition: 'USED', conditionGrade: 'A' });
@@ -481,7 +481,7 @@ test('preview: links and emails removed, condition line added, tags de-duplicate
   assert.equal(p.quantity, 1);
   assert.deepEqual(p.tags, ['brass', 'candle']);
   assert.ok(!/https?:|example\.com|@/.test(p.description), p.description);
-  assert.ok(p.description.endsWith('Condition: Pre-owned. Grade: B (Good).'));
+  assert.ok(p.description.endsWith('Condition: Pre-owned. Grade: B (Very good).'));
   assert.deepEqual(p.photoUrls, ['https://res.cloudinary.com/x/1.jpg']);
   const many = ui.buildEtsyPreview({ id: 'x', photoUrls: Array.from({ length: 25 }, (_, i) => `https://res.cloudinary.com/x/${i}.jpg`) });
   assert.equal(many.photoUrls.length, 20);

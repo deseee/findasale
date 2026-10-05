@@ -73,17 +73,17 @@ export const ETSY_CONDITION_LABELS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Item.conditionGrade label map (S | A | B | C | D). Mirrors the existing frontend map exactly:
- * packages/frontend/lib/itemConstants.ts CONDITION_MAP (S Like New, A Excellent, B Good, C Fair,
- * D Poor), which is also the inline map in pages/organizer/edit-item/[id].tsx and
- * pages/organizer/add-items/[saleId]/review.tsx. The letter itself is printed as stored.
+ * Item.conditionGrade label map (S | A | B | C | D). Uses the app's grade words: A Excellent,
+ * B Very good, C Good, D Acceptable. Grade S is retired and reads as A, so S is Excellent too.
+ * The frontend preview keeps an identical copy (packages/frontend/lib/etsyUiState.ts GRADE_LABELS)
+ * and a parity test pins them. The letter itself is printed as stored.
  */
 export const ETSY_GRADE_LABELS: Readonly<Record<string, string>> = {
-  S: 'Like New',
+  S: 'Excellent',
   A: 'Excellent',
-  B: 'Good',
-  C: 'Fair',
-  D: 'Poor',
+  B: 'Very good',
+  C: 'Good',
+  D: 'Acceptable',
 };
 
 /** Card condition codes (ADR-134 section 2.2: ItemCard.conditionCode) -> description label. */

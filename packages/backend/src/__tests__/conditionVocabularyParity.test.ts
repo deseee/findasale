@@ -118,9 +118,9 @@ describe('golden marketplace strings for the canonical conditions (unchanged by 
     expect(await price(undefined)).toBe(50000); // missing condition is USED
   });
 
-  it('Etsy grade labels are untouched (U6 owns the grade vocabulary)', () => {
-    expect(ETSY_GRADE_LABELS).toEqual({ S: 'Like New', A: 'Excellent', B: 'Good', C: 'Fair', D: 'Poor' });
-    expect(buildEtsyConditionLine({ condition: 'USED', conditionGrade: 'B' })).toBe('Condition: Pre-owned. Grade: B (Good).');
+  it('Etsy grade labels use the app grade words (S retired, reads as Excellent)', () => {
+    expect(ETSY_GRADE_LABELS).toEqual({ S: 'Excellent', A: 'Excellent', B: 'Very good', C: 'Good', D: 'Acceptable' });
+    expect(buildEtsyConditionLine({ condition: 'USED', conditionGrade: 'B' })).toBe('Condition: Pre-owned. Grade: B (Very good).');
   });
 });
 
