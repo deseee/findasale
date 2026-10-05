@@ -43,6 +43,8 @@ import SoldItemBanner from '../../components/SoldItemBanner';
 import SimilarItemsGrid from '../../components/SimilarItemsGrid';
 import EbayCompTiles from '../../components/EbayCompTiles';
 import MessageComposeModal from '../../components/MessageComposeModal'; // ADR-097: item-scoped messaging entry point
+import BulkLotCard from '../../components/BulkLotCard'; // ADR-136 (#659): bulk lot price per 1,000 in place of the buy buttons
+import { BulkLot, readBulkStatus } from '../../lib/bulkLot';
 import { serverFetch } from '@/lib/serverFetch';
 
 interface Item {
@@ -285,6 +287,31 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         return null;
       }
     },
+  });
+
+  // Bulk lot (ADR-136, #659): when bulk lots are on and this item is one, its price per 1,000 and price list replace the
+  // buy buttons (a lot is paid for at the register, never as one unit). Both requests are skipped while the feature is off.
+  const { data: bulkStatus } = useQuery({
+    queryKey: ['bulk-lots-status'],
+    queryFn: async () => readBulkStatus((await api.get('/bulk-lots/status')).data),
+    staleTime: 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const { data: bulkLotInfo = null } = useQuery<BulkLot | null>({
+    queryKey: ['bulk-lot-public', id],
+    queryFn: async () => {
+      try {
+        const res = await api.get(`/bulk-lots/item/${id}/public`);
+        return (res.data?.data ?? null) as BulkLot | null;
+      } catch {
+        return null; // not a lot, or not public: show the normal item page
+      }
+    },
+    enabled: !!id && bulkStatus?.enabled === true,
+    staleTime: 30 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // Mutations
@@ -1125,6 +1152,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                         </div>
                       );
                     })()
+                  ) : bulkLotInfo ? (
+                    <BulkLotCard lot={bulkLotInfo} priceListSaleId={item.sale?.id ?? null} headingLevel="h3" />
                   ) : (
                     <div className="space-y-2">
                       <button

@@ -27,7 +27,9 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
       // ADR-134 B4: card intake preview (parse + catalog resolve) and confirm (one item per row, NDJSON
       // progress) exceed 30s on real spreadsheets. Excluded here; given requestTimeout(180000) at the route
       // registration in index.ts, same pattern as the reanalyze line above.
-      /^\/api\/card-intake\/[^/]+\/(preview|confirm)$/.test(req.path)
+      /^\/api\/card-intake\/[^/]+\/(preview|confirm)$/.test(req.path) ||
+      // ADR-137 #660: TCGplayer export reconcile (preview and apply), same reasoning and same route-level timeout.
+      /^\/api\/card-tcgplayer\/[^/]+\/reconcile\/(preview|apply)$/.test(req.path)
     ) {
       return next();
     }

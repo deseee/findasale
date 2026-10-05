@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto';
 import { AuthRequest } from '../middleware/auth';
 import { BoothAuthRequest } from '../middleware/requireBoothAuth';
 import { prisma } from '../lib/prisma';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
+import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
 import { getStripe } from '../utils/stripe';
 import { assertBoothCartCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard';
 import { endEbayListingIfExists } from './ebayController';
@@ -666,6 +668,10 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     if (items.length !== itemIds.length) {
       return res.status(400).json({ error: 'One or more items not found' });
     }
+
+    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ error: bulkRefusal.message, code: bulkRefusal.code });
 
     // Batch-resolve owner (Item.organizerId -> Organizer.userId) then batch-check
     // for a CONFIRMED VendorBooth at this hub per resolved userId. Two small

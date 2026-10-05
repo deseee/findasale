@@ -371,6 +371,12 @@ export function parsePriceFromPolicyName(name: string): number | null {
  *  service that reaches the DB). If eBay ever changes the ceiling, both must change. */
 export const STANDARD_ENVELOPE_MAX_WEIGHT_OZ = 3;
 
+/** eBay's published Standard Envelope item-price ceiling in US dollars. The item must sell for LESS than this, so a price
+ *  of exactly 20 is not eligible. Mirrors EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD in services/ebayRateEstimateService.ts, kept
+ *  as a local copy for the same reason as the weight ceiling above. Enforced in matchStandardEnvelopePolicy even for a
+ *  policy whose name states no cap (ADR-137, #660: a raw card priced at $20 or more never gets the envelope). */
+export const STANDARD_ENVELOPE_MAX_PRICE_USD = 20;
+
 export interface ParsedStandardEnvelopePolicy {
   policyId: string;
   policyName: string;
@@ -476,6 +482,7 @@ export function matchStandardEnvelopePolicy(
   if (!Number.isFinite(weightOz) || weightOz <= 0) return null;
   if (weightOz > STANDARD_ENVELOPE_MAX_WEIGHT_OZ) return null;
   if (priceUsd == null || !Number.isFinite(priceUsd)) return null;
+  if (!(priceUsd < STANDARD_ENVELOPE_MAX_PRICE_USD)) return null;
 
   const neededOz = Math.max(1, Math.ceil(weightOz));
   const candidates = parseStandardEnvelopePolicies(policies).filter((p) => {

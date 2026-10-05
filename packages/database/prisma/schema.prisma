@@ -1850,6 +1850,10 @@ model Item {
   // ADR-134 (2026-10-03): 1:1 card record. Relation only, no new Item column.
   card                            ItemCard?
 
+  // ADR-136 (2026-10-05, #659): count-based bulk lot record. Relation only, no new Item column. The card count
+  // is Item.stockTotal / Item.stockSold and the price per 1,000 cards is Item.price (see ADR-136 section 2).
+  bulkLot                         ItemBulkLot?
+
   @@index([draftStatus])
   @@index([saleId, draftStatus])
   @@index([libraryId])
@@ -2104,6 +2108,11 @@ model Purchase {
   // to the principal refunded (full refund = full surcharge); see services/cnpSurcharge.ts.
   // 0 on every existing row and every non-manual-card sale. NO BACKFILL, DELIBERATE.
   cnpSurchargeCents Int @default(0)
+
+  // ADR-136 (2026-10-05, #659): number of cards sold on this row when the item is a bulk lot (a count-based lot sold
+  // by the thousand). NULL on every ordinary sale and every existing row. A refund of a bulk row puts exactly this
+  // many cards back on the lot (services/refundService.ts). Written only by processCashSaleCore. NO BACKFILL.
+  bulkQuantity Int?
 
   // POS Cashier Discount Permission (2026-08-28): this row's share of a cart-level
   // discount applied at Terminal checkout (terminalController.ts createTerminalPaymentIntent).
@@ -6924,6 +6933,14 @@ model ItemCard {
   catalogPrintingId  String?
   dedupKey           String
   lockedFields       String[]      @default([])
+  // ADR-137 (2026-10-05, #660): TCGplayer round trip. tcgplayerQty is the quantity last known to be listed on TCGplayer
+  // for this card (null = not known to be listed there). It is set only by the TCGplayer sync (reconcile) and by
+  // "mark export as uploaded"; it is the baseline the export delta and the reconcile three-way merge are measured from.
+  // tcgplayerPendingQty is what the most recent export would leave on TCGplayer if the file is uploaded.
+  tcgplayerQty        Int?
+  tcgplayerSyncedAt   DateTime?
+  tcgplayerPendingQty Int?
+  tcgplayerPendingAt  DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   item               Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
@@ -8375,4 +8392,24 @@ model OrganizerBillingCharge {
   @@unique([organizerId, periodKey])
   @@index([organizerId, createdAt])
   @@index([status])
+}
+
+// ============================================================================
+// ADR-136 (2026-10-05, roadmap #659): bulk lots for card shops. One row marks an Item as a count-based bulk lot
+// (for example 4,200 bulk commons priced per 1,000 cards). Additive. See migration 20261005130000_card_bulk_lots.
+// The count lives on the existing stock pool (Item.stockTotal, Item.stockSold, written only by
+// services/itemStockService.ts) and the price per 1,000 cards is Item.price in dollars. This row carries only what
+// the Item cannot: the fact that the item is a lot, its game and its kind. Written only by services/bulkLot/bulkLotService.ts.
+// ============================================================================
+model ItemBulkLot {
+  id          String   @id @default(cuid())
+  itemId      String   @unique
+  organizerId String?  // denormalized from Item at write time, no FK (same precedent as Item.organizerId and ItemCard.organizerId)
+  game        String   @default("MTG")                  // vocabulary: constants/cardVocabulary.ts CARD_GAMES
+  lotKind     String   @default("BULK_COMMON_UNCOMMON") // vocabulary: services/bulkLot/bulkLotVocabulary.ts
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
 }

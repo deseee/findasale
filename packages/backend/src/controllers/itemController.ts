@@ -60,9 +60,10 @@ import { IMPORT_FIELD_KEYS, IMPORT_MAX_ROWS, buildImportItem, detectImportColumn
 import { CARD_PUBLIC_SELECT, CARD_EDIT_SELECT, parseCardInput, buildCardCreateData, buildCardNestedUpsert, isCardValidationError, cardValidationBody } from '../services/cardRecordService'; // ADR-134 #640 (B2): card record, the only ItemCard writer
 import { organizerEditStamp, organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, stamped only by organizer request handlers
 import { resolveItemOwnerOrganizer } from '../utils/itemOwner'; // 2026-10-04 (B1): default-deny owner resolution for sale items and inventory items (saleId null)
-import { getPinnedCardCategory } from '../config/cardEbayCategories'; // ADR-134 5.4 (W4): pinned eBay category for a card record (pure module, no env or network)
+import { getPinnedCardCategory, isPinnedCardCategoryId, standardEnvelopePriceCrossing } from '../config/cardEbayCategories'; // ADR-134 5.4 (W4): pinned eBay category for a card record (pure module, no env or network)
 import { normalizeCondition, normalizeGrade, type ConditionGrade } from '../utils/conditionMapping'; // 2026-10-04 (U4): one condition vocabulary; coerces legacy values, never 400s on them
 import { pushItemToEbay, computeEbayPushFields, buildEbayPlan, buildExtensionPlan, EBAY_CONTENT_FIELDS, EBAY_PUSH_FIELDS, type EbayPushField, type MarketplacePlan } from '../services/ebayItemPushService'; // 2026-10-04 (U1/U2): structured, recorded eBay push extracted from updateItem
+import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a local category/tags/photos edit must survive the next import
 import { listedExtensionPlatformsByItemId, getItemMarketplaceStatus, getFailedPushCountsByItemId, ITEM_STATUS_SELECT, EXTENSION_PLATFORMS } from '../services/itemMarketplaceStatusService'; // 2026-10-04 (U3): newest-row-wins listing status shared by the Add Items list and GET /items/:id/marketplace-status
 
 /**
@@ -2530,6 +2531,14 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       (packageWidthIn !== undefined && numOrNull(updateData.packageWidthIn) !== numOrNull(item.packageWidthIn)) ||
       (packageHeightIn !== undefined && numOrNull(updateData.packageHeightIn) !== numOrNull(item.packageHeightIn)) ||
       (packageType !== undefined && (updateData.packageType ?? null) !== (item.packageType ?? null));
+    // ADR-137 (#660): a CARD whose price crosses eBay's Standard Envelope ceiling ($20) must have its live offer's shipping
+    // policy re-resolved by this save (the same 'shipping' push field a package edit uses), not at the next daily drift
+    // sweep. Without it a card raised from $15 to $25 would stay on the untracked envelope policy until then. Cards only
+    // (pinned card category); every other item keeps today's behavior.
+    const cardEnvelopePriceCrossed =
+      priceChanged &&
+      isPinnedCardCategoryId(updateData.ebayCategoryId !== undefined ? updateData.ebayCategoryId : item.ebayCategoryId) &&
+      standardEnvelopePriceCrossing(item.price, updateData.price);
     const ebayListedBeforeSave = !!(item.ebayOfferId || item.ebayListingId);
     // Resaving an unchanged price on an item whose price sync is parked in a failed state re-opens the sync (see the
     // ebaySyncState = PENDING branch above), and the old push re-sent the price in that case, so it stays an attempted field.
@@ -2545,7 +2554,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         conditionGrade: updateData.conditionGrade,
         price: updateData.price,
       },
-      { priceReopen, shippingInputsChanged }
+      { priceReopen, shippingInputsChanged: shippingInputsChanged || cardEnvelopePriceCrossed }
     );
     // Hold: "Save without updating marketplaces" on an eBay-listed item, or an item that is already held (the hold
     // persists until an explicit "Update eBay now" or "Resume syncing"; a normal save never releases it).
@@ -2557,6 +2566,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Dirty: a real title/description/condition change on an eBay-listed item keeps the pull-sync cron from overwriting
     // it with eBay's older value until a push confirms (cleared by pushItemToEbay on success).
     if (ebayListedBeforeSave && changedMarketplaceFields.some((f) => (EBAY_CONTENT_FIELDS as readonly string[]).includes(f))) {
+      updateData.ebayContentDirtyAt = new Date();
+    }
+    // Imported-only eBay item (listing id, no offer id): a real category/tags/photos change sets the same flag so the
+    // enrich pass and Trading backfill do not revert it from eBay. Items with an offer id are unaffected.
+    if (importedOnlyEditNeedsDirtyMark(item, { category: updateData.category, tags: updateData.tags, photoUrls: updateData.photoUrls })) {
       updateData.ebayContentDirtyAt = new Date();
     }
 
@@ -4045,6 +4059,11 @@ const getItemForOrganizer = async (id: string, userId: string) => {
   return { item, owner };
 };
 
+// Imported-only eBay items: a real photo add/remove/reorder sets ebayContentDirtyAt (same flag as updateItem) so the enrich pass
+// does not restore eBay's photos. Spread into the item.update data; {} for every other item.
+const importedPhotoEditMark = (item: { ebayListingId?: string | null; ebayOfferId?: string | null; photoUrls?: string[] | null }, nextPhotoUrls: string[]) =>
+  importedOnlyEditNeedsDirtyMark(item, { photoUrls: nextPhotoUrls }) ? { ebayContentDirtyAt: new Date() } : {};
+
 export const addItemPhoto = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerAccess = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -4081,7 +4100,7 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
 
     const updated = await prisma.item.update({
       where: { id },
-      data: { photoUrls: [...item.photoUrls, url], ...organizerEditStampAlways() },
+      data: { photoUrls: [...item.photoUrls, url], ...organizerEditStampAlways(), ...importedPhotoEditMark(item, [...item.photoUrls, url]) },
     });
     // #319/#325/#328: Sync Photo table — fire-and-forget
     prisma.photo.create({
@@ -4122,7 +4141,7 @@ export const removeItemPhoto = async (req: AuthRequest, res: Response) => {
     const removedUrl = item.photoUrls[idx];
     const updated = await prisma.item.update({
       where: { id },
-      data: { photoUrls: item.photoUrls.filter((_, i) => i !== idx), ...organizerEditStampAlways() },
+      data: { photoUrls: item.photoUrls.filter((_, i) => i !== idx), ...organizerEditStampAlways(), ...importedPhotoEditMark(item, item.photoUrls.filter((_, i) => i !== idx)) },
     });
     // #319/#325/#328: Sync Photo table — delete the removed record, re-index remaining
     const remainingUrls = updated.photoUrls;
@@ -4166,7 +4185,7 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
     }
     const updated = await prisma.item.update({
       where: { id },
-      data: { photoUrls, ...organizerEditStampAlways() },
+      data: { photoUrls, ...organizerEditStampAlways(), ...importedPhotoEditMark(item, photoUrls) },
     });
     // #319/#325/#328: Sync Photo table — update orderIndex and isPrimary to match new order
     Promise.all(

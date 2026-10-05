@@ -1,0 +1,296 @@
+/**
+ * BulkLotSection (ADR-136, roadmap #659): sell a card item by the thousand, inside the card record panel.
+ *
+ * Owns its own data (GET /api/bulk-lots/item/:id, POST .../enable, PATCH .../item/:id) and saves separately from the
+ * rest of the item form. Renders nothing at all unless the server says CARD_BULK_LOTS_ENABLED is on, so a shop without
+ * bulk lots sees no change.
+ *
+ * The page mounts this inside its item <form>, so Enter in a field here is swallowed (it must not save the item), every
+ * button is type="button" and no control uses native validation attributes.
+ *
+ * Price per 1,000 is stored in Item.price and the card count in Item.stockTotal. After a save the item form's own copies
+ * of those two fields are refreshed through onLotChange, so saving the item afterwards cannot overwrite them with old values.
+ */
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import api from '../lib/api';
+import { useToast } from './ToastContext';
+import {
+  BULK_COPY,
+  BulkLot,
+  BulkStatus,
+  describeBulkError,
+  formatCardCount,
+  parseCardCount,
+  parseLotTotal,
+  parsePricePerThousand,
+  readBulkStatus,
+} from '../lib/bulkLot';
+
+export interface BulkLotSectionProps {
+  itemId: string;
+  /** True once the item has a saved card record. Turning an item into a lot needs one. */
+  hasCardRecord: boolean;
+  disabled?: boolean;
+  /** Called with the saved lot, so the page can refresh its own price and stock fields. */
+  onLotChange?: (lot: BulkLot) => void;
+}
+
+const inputCls =
+  'w-full min-h-[44px] px-4 py-2 text-base sm:text-sm border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:opacity-60';
+const labelCls = 'block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1';
+const primaryBtn =
+  'min-h-[44px] rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-50';
+
+const swallowEnter = (e: React.KeyboardEvent) => {
+  if (e.key === 'Enter') e.preventDefault();
+};
+
+const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, disabled, onLotChange }) => {
+  const baseId = useId();
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const statusQuery = useQuery({
+    queryKey: ['bulk-lots-status'],
+    queryFn: async (): Promise<BulkStatus> => readBulkStatus((await api.get('/bulk-lots/status')).data),
+    staleTime: 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const status = statusQuery.data;
+  const enabled = status?.enabled === true;
+
+  const lotKey = ['bulk-lot', itemId];
+  const lotQuery = useQuery({
+    queryKey: lotKey,
+    queryFn: async (): Promise<BulkLot | null> => {
+      const res = await api.get(`/bulk-lots/item/${encodeURIComponent(itemId)}`);
+      return (res.data?.data ?? null) as BulkLot | null;
+    },
+    enabled: enabled && !!itemId,
+    staleTime: 0,
+    retry: 1,
+    retryDelay: 500,
+    refetchOnWindowFocus: false,
+  });
+  const lot = lotQuery.data ?? null;
+
+  const [totalText, setTotalText] = useState('');
+  const [priceText, setPriceText] = useState('');
+  const [addText, setAddText] = useState('');
+  const [kind, setKind] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const syncedFor = useRef<string | null>(null);
+
+  const fillFrom = (l: BulkLot | null) => {
+    setTotalText(l ? String(l.totalCards) : '');
+    setPriceText(l && l.pricePerThousandCents !== null ? (l.pricePerThousandCents / 100).toFixed(2) : '');
+    setAddText('');
+    setKind(l ? l.lotKind : status?.vocabulary?.defaultKind ?? '');
+  };
+
+  // Fill the form once per item when the lot has loaded. After that the form is the seller's.
+  useEffect(() => {
+    if (!lotQuery.isSuccess) return;
+    if (syncedFor.current === itemId) return;
+    syncedFor.current = itemId;
+    fillFrom(lotQuery.data ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lotQuery.isSuccess, lotQuery.data, itemId]);
+
+  if (!enabled) return null;
+
+  const vocab = status?.vocabulary ?? null;
+  const locked = !!disabled || busy;
+
+  const applySaved = (saved: BulkLot, message: string) => {
+    queryClient.setQueryData(lotKey, saved);
+    fillFrom(saved);
+    setError('');
+    if (onLotChange) onLotChange(saved);
+    showToast(message, 'success');
+  };
+
+  const enable = async () => {
+    const total = parseLotTotal(totalText);
+    const price = parsePricePerThousand(priceText);
+    if (total === null) return setError(BULK_COPY.errorTotal);
+    if (price === null) return setError(BULK_COPY.errorPrice);
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.post(`/bulk-lots/item/${encodeURIComponent(itemId)}/enable`, {
+        totalCards: total,
+        pricePerThousand: price,
+        ...(kind ? { lotKind: kind } : {}),
+      });
+      applySaved(res.data?.data as BulkLot, BULK_COPY.panelEnabled);
+    } catch (err) {
+      setError(describeBulkError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async () => {
+    if (!lot) return;
+    const body: Record<string, unknown> = {};
+    const price = parsePricePerThousand(priceText);
+    if (price === null) return setError(BULK_COPY.errorPrice);
+    if (lot.pricePerThousandCents === null || Math.round(price * 100) !== lot.pricePerThousandCents) body.pricePerThousand = price;
+
+    const add = addText.trim() === '' ? null : parseCardCount(addText);
+    if (addText.trim() !== '' && add === null) return setError(BULK_COPY.errorAddCards);
+    const total = parseLotTotal(totalText);
+    if (total === null) return setError(BULK_COPY.errorTotal);
+    if (add !== null && total !== lot.totalCards) return setError(BULK_COPY.errorBoth);
+    if (add !== null) body.addCards = add;
+    else if (total !== lot.totalCards) body.totalCards = total;
+
+    if (kind && kind !== lot.lotKind) body.lotKind = kind;
+    if (Object.keys(body).length === 0) return setError(BULK_COPY.errorNothingToSave);
+
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.patch(`/bulk-lots/item/${encodeURIComponent(itemId)}`, body);
+      applySaved(res.data?.data as BulkLot, BULK_COPY.panelSaved);
+    } catch (err) {
+      setError(describeBulkError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const kindSelect = (
+    <div>
+      <label htmlFor={`${baseId}-kind`} className={labelCls}>
+        {BULK_COPY.kindLabel}
+      </label>
+      <select
+        id={`${baseId}-kind`}
+        value={kind}
+        disabled={locked}
+        onChange={(e) => setKind(e.target.value)}
+        onKeyDown={swallowEnter}
+        className={inputCls}
+      >
+        {(vocab?.kinds ?? []).map((k) => (
+          <option key={k} value={k}>
+            {vocab?.labels[k] ?? k}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  return (
+    <section aria-labelledby={`${baseId}-heading`} className="space-y-3 rounded-lg border border-warm-200 px-3 py-3 dark:border-gray-600">
+      <h3 id={`${baseId}-heading`} className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+        {BULK_COPY.panelHeading}
+      </h3>
+
+      {lotQuery.isLoading && <p className="text-sm text-warm-600 dark:text-warm-400">{BULK_COPY.manageLoading}</p>}
+
+      {lotQuery.isError && (
+        <div role="alert" className="rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-200">
+          <p>{BULK_COPY.panelLoadError}</p>
+          <button type="button" onClick={() => lotQuery.refetch()} className="mt-2 min-h-[44px] rounded-lg bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700">
+            {BULK_COPY.retry}
+          </button>
+        </div>
+      )}
+
+      {lotQuery.isSuccess && !lot && (
+        <>
+          <p className="text-xs text-warm-600 dark:text-warm-400">{BULK_COPY.panelIntro}</p>
+          {!hasCardRecord ? (
+            <p className="text-xs text-warm-600 dark:text-warm-400">{BULK_COPY.panelNeedsCard}</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor={`${baseId}-total`} className={labelCls}>
+                    {BULK_COPY.totalCardsLabel}
+                  </label>
+                  <input id={`${baseId}-total`} type="text" inputMode="numeric" value={totalText} disabled={locked} onChange={(e) => setTotalText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
+                  <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.totalCardsHelp}</p>
+                </div>
+                <div>
+                  <label htmlFor={`${baseId}-price`} className={labelCls}>
+                    {BULK_COPY.priceLabel}
+                  </label>
+                  <input id={`${baseId}-price`} type="text" inputMode="decimal" value={priceText} disabled={locked} onChange={(e) => setPriceText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
+                  <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.priceHelp}</p>
+                </div>
+              </div>
+              {kindSelect}
+              <p className="text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.ebayNote}</p>
+              <button type="button" onClick={enable} disabled={locked} className={`${primaryBtn} w-full sm:w-auto`}>
+                {busy ? `${BULK_COPY.enablingButton}...` : BULK_COPY.enableButton}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {lotQuery.isSuccess && lot && (
+        <div className="space-y-3">
+          <p className="text-sm text-warm-800 dark:text-warm-200">{BULK_COPY.panelIsLot}</p>
+          <dl className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <dt className="text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.soldSoFar}</dt>
+              <dd className="font-semibold text-warm-900 dark:text-warm-100">{formatCardCount(lot.soldCards)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.remaining}</dt>
+              <dd className="font-semibold text-warm-900 dark:text-warm-100">{formatCardCount(lot.remainingCards)}</dd>
+            </div>
+          </dl>
+          {lot.perCardLabel && (
+            <p className="text-xs text-warm-500 dark:text-warm-400">
+              {BULK_COPY.pricePerCard} {lot.perCardLabel}.
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor={`${baseId}-price`} className={labelCls}>
+                {BULK_COPY.priceLabel}
+              </label>
+              <input id={`${baseId}-price`} type="text" inputMode="decimal" value={priceText} disabled={locked} onChange={(e) => setPriceText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
+              <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.priceHelp}</p>
+            </div>
+            {kindSelect}
+            <div>
+              <label htmlFor={`${baseId}-total`} className={labelCls}>
+                {BULK_COPY.totalCardsLabel}
+              </label>
+              <input id={`${baseId}-total`} type="text" inputMode="numeric" value={totalText} disabled={locked} onChange={(e) => setTotalText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
+            </div>
+            <div>
+              <label htmlFor={`${baseId}-add`} className={labelCls}>
+                {BULK_COPY.addCardsLabel}
+              </label>
+              <input id={`${baseId}-add`} type="text" inputMode="numeric" value={addText} disabled={locked} onChange={(e) => setAddText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
+              <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.addCardsHelp}</p>
+            </div>
+          </div>
+          <p className="text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.ebayNote}</p>
+          <button type="button" onClick={save} disabled={locked} className={`${primaryBtn} w-full sm:w-auto`}>
+            {busy ? `${BULK_COPY.savingButton}...` : BULK_COPY.saveButton}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+};
+
+export default BulkLotSection;

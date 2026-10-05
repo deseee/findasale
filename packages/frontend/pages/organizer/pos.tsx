@@ -26,6 +26,10 @@ import PosInvoiceModal from '../../components/PosInvoiceModal';
 import PosOpenCarts from '../../components/PosOpenCarts';
 import PosPaymentQr from '../../components/PosPaymentQr';
 import PosManualCard from '../../components/PosManualCard';
+import TcgplayerRegisterNotice from '../../components/TcgplayerRegisterNotice'; // ADR-137 (#660): TCGplayer warning at the counter
+import { registerIds } from '../../lib/cardTcgplayer';
+import BulkQuantityModal from '../../components/BulkQuantityModal'; // ADR-136 (#659): bulk lots at the register
+import { BULK_COPY, BULK_ERROR_COPY, BulkLot, BulkQuote, cartLabelForLot, formatCardCount, readBulkStatus } from '../../lib/bulkLot';
 import { PosTierStatus } from '../../lib/types/posTiers';
 import QRCode from 'react-qr-code';
 
@@ -86,6 +90,9 @@ interface CartItem {
   // deliberately un-composed mechanism, see the gate on canApplyDiscount below).
   maxDiscretionCents?: number;
   discretionAppliedCents?: number;
+  // ADR-136 (#659): number of cards for a bulk lot line. `amount` is the SERVER's price for exactly this many cards
+  // (from POST /api/bulk-lots/item/:id/quote); the server prices the sale again at checkout. Undefined for every other item.
+  bulkQuantity?: number;
 }
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -311,6 +318,13 @@ export default function POSPage() {
   // the non-venue flow. Reset on every clearCart() so it can never silently persist
   // into the next real sale.
   const [isTestTransaction, setIsTestTransaction] = useState(false);
+  // ADR-137 (#660): the last non-empty cart, kept so the TCGplayer notice can still ask about those items after
+  // clearCart() empties the cart at payment. Nothing here changes how a sale is taken.
+  const [lastTcgCart, setLastTcgCart] = useState<{ saleId: string; ids: string[]; test: boolean } | null>(null);
+  useEffect(() => {
+    if (!selectedSaleId || cart.length === 0) return;
+    setLastTcgCart({ saleId: selectedSaleId, ids: registerIds(cart.map((c) => c.itemId)), test: isTestTransaction });
+  }, [cart, selectedSaleId, isTestTransaction]);
 
   // Terminal state
   const [readerStatus, setReaderStatus] = useState<ReaderStatus>('idle');
@@ -520,6 +534,24 @@ export default function POSPage() {
       })
       .catch(err => console.error('[pos] Failed to load POS context:', err));
   }, [user, venueHubId]);
+
+  // Bulk lots (ADR-136, #659). Nothing about bulk lots is requested unless the server says CARD_BULK_LOTS_ENABLED is on: the
+  // status route is public and cheap, so a shop without bulk lots sees no change at the register.
+  const { data: bulkLots = [] } = useQuery<BulkLot[]>({
+    queryKey: ['bulk-lots-register', selectedSaleId],
+    queryFn: async () => {
+      const status = readBulkStatus((await api.get('/bulk-lots/status')).data);
+      if (!status.enabled) return [];
+      const res = await api.get(`/bulk-lots/sale/${encodeURIComponent(selectedSaleId)}`);
+      return (res.data?.data?.lots ?? []) as BulkLot[];
+    },
+    enabled: !!user && !!selectedSaleId && !venueHubId,
+    staleTime: 15000,
+    retry: false,
+  });
+  const bulkLotById = new Map<string, BulkLot>(bulkLots.map((l) => [l.itemId, l]));
+  const [bulkModalLot, setBulkModalLot] = useState<BulkLot | null>(null);
+  const cartHasBulk = cart.some((c) => !!c.bulkQuantity);
 
   // Pending Payments polling
   const { data: activePendingPayments = [] } = useQuery<PendingPayment[]>({
@@ -1177,6 +1209,20 @@ export default function POSPage() {
       }
     }
 
+    // Bulk lot (ADR-136): ask how many cards before it goes in the cart. The line is then priced by the server.
+    if ('price' in item && bulkLotById.has(item.id)) {
+      const lot = bulkLotById.get(item.id) as BulkLot;
+      setItemSearch('');
+      setSearchResults([]);
+      if (!lot.available) {
+        setErrorMessage(BULK_ERROR_COPY.NOT_AVAILABLE);
+        return;
+      }
+      setErrorMessage('');
+      setBulkModalLot(lot);
+      return;
+    }
+
     const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
     if ('price' in item) {
       setCart(prev => [
@@ -1202,6 +1248,32 @@ export default function POSPage() {
     setErrorMessage('');
     setItemSearch('');
     setSearchResults([]);
+  };
+
+  // Bulk lot line (ADR-136): called by the quantity modal with the server's quote for the number of cards typed.
+  const handleBulkAdd = (quote: BulkQuote) => {
+    const lot = bulkModalLot;
+    setBulkModalLot(null);
+    if (!lot) return;
+    clientTransactionIdRef.current = null;
+    if (cart.some(c => c.itemId === lot.itemId)) {
+      setErrorMessage(`"${lot.title}" is already in the cart.`);
+      return;
+    }
+    setCart(prev => [
+      ...prev,
+      {
+        id: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        itemId: lot.itemId,
+        title: lot.title,
+        amount: quote.amount,
+        photoUrl: lot.photoUrl ?? undefined,
+        bulkQuantity: quote.cards,
+      },
+    ]);
+    setErrorMessage('');
+    // Bulk lots are paid with cash, Venmo or Zelle only.
+    if (paymentMode !== 'cash' && paymentMode !== 'venmo' && paymentMode !== 'zelle') setPaymentMode('cash');
   };
 
   // ─── Venue mode: add item via booth-cart endpoint (resolves vendor booth server-side,
@@ -1666,6 +1738,8 @@ export default function POSPage() {
     setItemSearch('');
     setSearchResults([]);
     setIsTestTransaction(false);
+    // Bulk lots (ADR-136): the cards left change after every sale, so re-read them.
+    queryClient.invalidateQueries({ queryKey: ['bulk-lots-register'] });
   };
 
   // cartTotal declaration moved up to right after `cart` state (see comment there) -- S1178 BQ fix.
@@ -1741,8 +1815,16 @@ export default function POSPage() {
     const items = cart.map(c => ({
       ...(c.itemId ? { itemId: c.itemId } : {}),
       amount: c.amount,
-      label: c.title,
+      label: c.bulkQuantity ? cartLabelForLot(c.title, c.bulkQuantity) : c.title,
+      ...(c.bulkQuantity ? { quantity: c.bulkQuantity } : {}), // ADR-136: the server prices the line from this
     }));
+
+    // Bulk lots (ADR-136) are never queued offline: the server has to take the cards out of stock at the moment of sale.
+    if (cartHasBulk && typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setPaymentStatus('error');
+      setErrorMessage(BULK_COPY.regOnlineOnly);
+      return;
+    }
 
     // #561 offline POS transaction queuing: queue the cash sale instead of hard-failing
     // when there's no connectivity. Card (Stripe Terminal) swipes stay online-only:
@@ -1820,7 +1902,7 @@ export default function POSPage() {
       // A server-returned error (4xx/5xx) means the request WAS received and rejected:
       // that's a real failure (e.g. item already sold), not a connectivity issue, so it
       // must still surface to the organizer rather than silently queue.
-      if (!err?.response) {
+      if (!err?.response && !cartHasBulk) {
         try {
           await queueOffline();
           return;
@@ -1830,8 +1912,10 @@ export default function POSPage() {
       }
       console.error('[pos] Cash payment error:', err);
       setPaymentStatus('error');
-      const message =
-        err?.response?.data?.message ?? err?.message ?? 'Cash sale failed. Please try again.';
+      // A bulk sale that got no answer may or may not have been recorded: say so instead of inviting a blind retry (ADR-136).
+      const message = cartHasBulk && !err?.response
+        ? BULK_COPY.regUnconfirmed
+        : err?.response?.data?.message ?? err?.message ?? 'Cash sale failed. Please try again.';
       setErrorMessage(message);
     }
   };
@@ -1848,7 +1932,8 @@ export default function POSPage() {
       const items = cart.map(c => ({
         ...(c.itemId ? { itemId: c.itemId } : {}),
         amount: c.amount,
-        label: c.title,
+        label: c.bulkQuantity ? cartLabelForLot(c.title, c.bulkQuantity) : c.title,
+        ...(c.bulkQuantity ? { quantity: c.bulkQuantity } : {}), // ADR-136: the server prices the line from this
       }));
 
       const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
@@ -2875,6 +2960,11 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Bulk lot quantity (ADR-136, #659) */}
+      {bulkModalLot && (
+        <BulkQuantityModal lot={bulkModalLot} onClose={() => setBulkModalLot(null)} onAdd={handleBulkAdd} />
+      )}
+
       {/* Cart display */}
       {cart.length > 0 && (
         <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-sage-200 dark:border-gray-700">
@@ -2896,6 +2986,11 @@ export default function POSPage() {
                   )}
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
+                    {item.bulkQuantity ? (
+                      <span className="px-1.5 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 whitespace-nowrap">
+                        {formatCardCount(item.bulkQuantity)} {BULK_COPY.regCardsSuffix}
+                      </span>
+                    ) : null}
                     {loadedHold && item.itemId === loadedHold.itemId && (
                       <span className="px-1.5 py-0.5 text-xs rounded-full bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 whitespace-nowrap">
                         📌 On Hold
@@ -3557,6 +3652,9 @@ export default function POSPage() {
           ) : (
             <>
               <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">How are they paying?</h3>
+              {cartHasBulk && (
+                <p className="mb-3 text-xs text-warm-600 dark:text-warm-400">{BULK_COPY.regPayHint}</p>
+              )}
           <div className="grid grid-cols-2 gap-2">
             {/* Cash button */}
             <button
@@ -3588,12 +3686,12 @@ export default function POSPage() {
                 label should claim either way. */}
             <button
               onClick={() => setPaymentMode('qr')}
-              disabled={cart.length === 0 || !!loadedHold}
-              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : ''}
+              disabled={cart.length === 0 || !!loadedHold || cartHasBulk}
+              title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : cartHasBulk ? BULK_COPY.regPayHint : ''}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 paymentMode === 'qr'
                   ? 'bg-sage-700 text-white'
-                  : cart.length === 0 || loadedHold
+                  : cart.length === 0 || loadedHold || cartHasBulk
                   ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                   : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
@@ -3677,10 +3775,10 @@ export default function POSPage() {
             {(linkedShopperId || linkedShopperData?.id) && (
               <button
                 onClick={handleSendToPhone}
-                disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold || cashCoversTotal}
+                disabled={cart.length === 0 || paymentStatus === 'creating' || !!loadedHold || cashCoversTotal || cartHasBulk}
                 title={loadedHold ? 'Item is on hold. Use Invoice to complete this sale' : cart.length === 0 ? 'Add items to cart first' : cashCoversTotal ? 'Cash received covers the whole sale. Record it as a cash sale or clear the cash amount' : `Send $${(cardChargeCents / 100).toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
                 className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 col-span-2 ${
-                  cart.length === 0 || paymentStatus === 'creating' || loadedHold || cashCoversTotal
+                  cart.length === 0 || paymentStatus === 'creating' || loadedHold || cashCoversTotal || cartHasBulk
                     ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
                     : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                 }`}
@@ -3700,11 +3798,11 @@ export default function POSPage() {
           <div className="mt-2">
             <button
               onClick={() => {
-                if (!ENABLE_MANUAL_CARD_ENTRY) return;
+                if (!ENABLE_MANUAL_CARD_ENTRY || cartHasBulk) return;
                 setPaymentMode('manual_card');
                 setNumpadOpen(false);
               }}
-              disabled={!ENABLE_MANUAL_CARD_ENTRY}
+              disabled={!ENABLE_MANUAL_CARD_ENTRY || cartHasBulk}
               title={!ENABLE_MANUAL_CARD_ENTRY ? 'Manual card entry is being updated. Cash, QR, and Venmo/Zelle are available now.' : ''}
               className={
                 ENABLE_MANUAL_CARD_ENTRY
@@ -3960,6 +4058,11 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* ADR-137 (#660): cards in the cart that are also listed on TCGplayer */}
+      {selectedSaleId && cart.length > 0 && paymentStatus !== 'success' && (
+        <TcgplayerRegisterNotice saleId={selectedSaleId} itemIds={cart.map((c) => c.itemId)} />
+      )}
+
       {/* Error / success messages */}
       {errorMessage && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
@@ -4006,6 +4109,11 @@ export default function POSPage() {
             New Transaction
           </button>
         </div>
+      )}
+
+      {/* ADR-137 (#660): cards just sold that are also listed on TCGplayer, with a one step download */}
+      {successMessage && paymentStatus === 'success' && lastTcgCart && !lastTcgCart.test && lastTcgCart.ids.length > 0 && (
+        <TcgplayerRegisterNotice saleId={lastTcgCart.saleId} itemIds={lastTcgCart.ids} sold />
       )}
 
       {/* Test Transaction safety net UI (2026-08-29): only meaningful for the

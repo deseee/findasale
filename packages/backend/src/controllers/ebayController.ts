@@ -4,6 +4,8 @@ import express, { Request, Response } from 'express';
 import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots are never pushed to eBay in v1
+import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
 import { canonicalFromEbayCondition, fillBlankCondition } from '../utils/ebayConditionImport'; // inbound eBay condition: grade only when eBay supplies a level
@@ -2328,6 +2330,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'itemIds required' });
     }
 
+    // Bulk lots (ADR-136, #659): a count of cards sold by the thousand is never listed on eBay in v1 (counter and
+    // storefront only). This also covers the queue and fee-check paths, which run through this handler.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.code === 'BULK_CHANNEL_UNSUPPORTED' ? 'Bulk lots cannot be listed on eBay yet. They are sold at your counter and on your storefront.' : bulkRefusal.message, code: bulkRefusal.code });
+
     // Get organizer and verify tier
     const organizer = await prisma.organizer.findUnique({
       where: { userId },
@@ -3947,6 +3954,10 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     if (!userId) {
       return res.status(401).json({ message: 'Authentication required' });
     }
+
+    // Bulk lots (ADR-136, #659): never published to eBay in v1.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, [itemId], isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.code === 'BULK_CHANNEL_UNSUPPORTED' ? 'Bulk lots cannot be listed on eBay yet. They are sold at your counter and on your storefront.' : bulkRefusal.message, code: bulkRefusal.code });
 
     // Load the item + its sale's organizerId for ownership check
     const item = await prisma.item.findUnique({

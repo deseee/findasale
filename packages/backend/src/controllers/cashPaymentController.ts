@@ -33,6 +33,17 @@ import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Find
 import { resolveOrganizerOrTeamMember, type ResolvedPosActor } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Shared cash-commission accrual (2026-08-17) — same mechanism reservationController's RECORD mode uses
 import { resolvePosDiscount } from '../services/posDiscountService';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots, default off
+import {
+  BULK_LOT_MESSAGES,
+  bulkLotError,
+  findBulkLotItemIds,
+  isBulkLotError,
+  planBulkLine,
+  releaseBulkLotUnits,
+  type BulkLotDb,
+  type BulkLotErrorCode,
+} from '../services/bulkLot/bulkLotService';
 
 /**
  * #561 offline POS cash-checkout queuing: typed error carrying HTTP status + retryability +
@@ -41,7 +52,7 @@ import { resolvePosDiscount } from '../services/posDiscountService';
 export class CashSaleError extends Error {
   status: number;
   retryable: boolean;
-  code: 'VALIDATION' | 'DUPLICATE_ITEMS' | 'ITEM_NOT_FOUND' | 'ITEM_UNAVAILABLE' | 'DRAFT_PENDING';
+  code: 'VALIDATION' | 'DUPLICATE_ITEMS' | 'ITEM_NOT_FOUND' | 'ITEM_UNAVAILABLE' | 'DRAFT_PENDING' | BulkLotErrorCode; // bulk codes: ADR-136
   constructor(message: string, status: number, retryable: boolean, code: CashSaleError['code']) {
     super(message);
     this.status = status;
@@ -101,7 +112,9 @@ export async function processCashSaleCore(params: {
     workspaceRole?: import('@prisma/client').WorkspaceRole;
   };
   saleId: string;
-  items: Array<{ itemId?: string; amount: number; label?: string }>;
+  // quantity (ADR-136, #659): the number of cards for a bulk lot line. Only meaningful for an item that is a bulk lot;
+  // the server prices the line itself and refuses PRICE_CHANGED when `amount` does not match to the cent.
+  items: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string }>;
   cashReceived: number;
   buyerEmail?: string;
   clientTransactionId?: string;
@@ -186,7 +199,7 @@ export async function processCashSaleCore(params: {
       // POS Cashier Discount Permission fix (2026-08-28): price is now selected so
       // catalogSubtotalCents (below) can be computed the same way the card path does --
       // this cash path previously had no way to validate a discount against catalog price.
-      select: { id: true, title: true, status: true, draftStatus: true, price: true },
+      select: { id: true, title: true, status: true, draftStatus: true, price: true, stockTotal: true, stockSold: true },
     });
     dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
 
@@ -206,15 +219,44 @@ export async function processCashSaleCore(params: {
     }
   }
 
+  // Bulk lots (ADR-136, roadmap #659). The lookup runs whether or not CARD_BULK_LOTS_ENABLED is on: a lot must
+  // never be sold as one $/1,000 unit. A lot line needs a quantity; a quantity on a non-lot item is refused; the
+  // server prices the line (cards x price per 1,000, half up to the cent, once) and refuses PRICE_CHANGED when the
+  // register's total differs. Stock is reserved later, right before the Purchase rows are written.
+  const bulkFlagOn = isBulkLotsEnabled();
+  const bulkDb = prisma as unknown as BulkLotDb;
+  const bulkPlans = new Map<string, { cards: number; cents: number }>();
+  try {
+    const lotIds = await findBulkLotItemIds(bulkDb, itemIds, bulkFlagOn);
+    for (const line of items) {
+      const isLot = !!line.itemId && lotIds.has(line.itemId);
+      const hasQuantity = line.quantity !== undefined && line.quantity !== null;
+      if (!isLot) {
+        if (hasQuantity) throw bulkLotError('BULK_NOT_LOT', 400);
+        continue;
+      }
+      if (!bulkFlagOn) throw bulkLotError('BULK_DISABLED', 409);
+      if (!hasQuantity) throw bulkLotError('BULK_QUANTITY_REQUIRED', 400);
+      const plan = planBulkLine(dbItems[line.itemId!], line.quantity, line.amount);
+      bulkPlans.set(line.itemId!, { cards: plan.cards, cents: plan.cents });
+    }
+  } catch (bulkErr) {
+    if (isBulkLotError(bulkErr)) {
+      throw new CashSaleError(bulkErr.message, bulkErr.status, bulkErr.code === 'BULK_CHECK_FAILED', bulkErr.code);
+    }
+    throw bulkErr;
+  }
+
   // POS Cashier Discount Permission fix (2026-08-28, findasale-hacker P0): resolve + validate
   // any requested discount server-side BEFORE computing totals/fees, mirroring
   // createTerminalPaymentIntent's card-path handling above (see resolvePosDiscount doc comment
   // -- it already claimed to cover "the cash flow" but was never actually wired in here; that
   // gap meant the staff discount cap was unenforceable and the discount never reached
   // Purchase.amount for Cash/Venmo/Zelle). No-op when no discount was sent.
+  // Bulk lot lines (ADR-136) contribute their server-priced cents; every other line is unchanged.
   const catalogSubtotalCents = Math.round(
-    items.reduce((sum, i) => sum + (i.itemId && dbItems[i.itemId]?.price ? dbItems[i.itemId].price : 0), 0) * 100
-  );
+    items.reduce((sum, i) => sum + (i.itemId && !bulkPlans.has(i.itemId) && dbItems[i.itemId]?.price ? dbItems[i.itemId].price : 0), 0) * 100
+  ) + Array.from(bulkPlans.values()).reduce((sum, p) => sum + p.cents, 0);
   // Cast: organizer here is the permissive shape (see the param type comment above) --
   // the live cashPayment route always supplies a genuine full ResolvedPosActor at runtime,
   // and the no-op branch (no discount requested) never dereferences the extra fields, so
@@ -258,8 +300,48 @@ export async function processCashSaleCore(params: {
   // this same controller already did.
   const feeRate = await resolveCashCommissionRate(organizer);
 
+  // Bulk lots (ADR-136): reserve the cards BEFORE any Purchase row exists, with the same atomic guarded decrement
+  // every channel uses (sellItemUnits: the UPDATE re-checks capacity in its WHERE clause), so two registers racing
+  // for the last cards can never both win. If a later step fails, the reservation is given back below. A test
+  // transaction never touches stock (same rule as the stock loop further down).
+  const bulkStockResult = new Map<string, { fullySoldOut: boolean; remainingStock: number }>();
+  const bulkUnattached = new Map<string, number>(); // itemId -> cards reserved that have no Purchase row yet
+  const releaseUnattachedBulk = async () => {
+    for (const [lotItemId, cards] of Array.from(bulkUnattached.entries())) {
+      try {
+        await releaseBulkLotUnits(bulkDb, lotItemId, cards);
+        bulkUnattached.delete(lotItemId);
+      } catch (releaseErr) {
+        console.error(`[terminal] Could not give ${cards} reserved card(s) back to bulk lot ${lotItemId}:`, releaseErr);
+        try {
+          Sentry.captureException(releaseErr instanceof Error ? releaseErr : new Error(String(releaseErr)), {
+            tags: { area: 'terminal-cash-sale-bulk-release' },
+            extra: { saleId, itemId: lotItemId, cards, organizerId: organizer.id },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+      }
+    }
+  };
+  if (!isTestTransaction) {
+    for (const [lotItemId, plan] of Array.from(bulkPlans.entries())) {
+      try {
+        bulkStockResult.set(lotItemId, await sellItemUnits(lotItemId, plan.cards));
+        bulkUnattached.set(lotItemId, plan.cards);
+      } catch (stockErr) {
+        await releaseUnattachedBulk();
+        if (stockErr instanceof InsufficientStockError) {
+          throw new CashSaleError(BULK_LOT_MESSAGES.INSUFFICIENT_STOCK, 409, false, 'INSUFFICIENT_STOCK');
+        }
+        throw stockErr;
+      }
+    }
+  }
+
   // Create Purchase records immediately with status PAID
   const purchaseIds: string[] = [];
+  try {
   for (const item of chargedItems) {
     // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
     const cashPIId = `cash_${randomUUID()}`;
@@ -295,9 +377,17 @@ export async function processCashSaleCore(params: {
         isTestTransaction: isTestTransaction === true,
         ...(clientTransactionId ? { clientTransactionId } : {}),
         ...(buyerEmail ? { buyerEmail } : {}),
+        // ADR-136: cards sold on a bulk lot line, written in the same create as the Purchase. Refunds read it.
+        ...(item.itemId && bulkPlans.has(item.itemId) ? { bulkQuantity: bulkPlans.get(item.itemId)!.cards } : {}),
       },
     });
     purchaseIds.push(purchase.id);
+    if (item.itemId) bulkUnattached.delete(item.itemId); // this reservation now has its Purchase row
+  }
+  } catch (purchaseErr) {
+    // A bulk reservation without a Purchase row is stock nobody paid for: give it back, then rethrow.
+    await releaseUnattachedBulk();
+    throw purchaseErr;
   }
 
   // Mark items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
@@ -327,7 +417,8 @@ export async function processCashSaleCore(params: {
       let fullySoldOut: boolean;
       let remainingStock: number;
       try {
-        ({ fullySoldOut, remainingStock } = await sellItemUnits(item.itemId, 1));
+        // Bulk lot lines were already reserved above (ADR-136); reuse that result instead of selling one more unit.
+        ({ fullySoldOut, remainingStock } = bulkStockResult.get(item.itemId) ?? (await sellItemUnits(item.itemId, 1)));
       } catch (stockErr: any) {
         console.error(
           `[terminal] Post-payment stock update FAILED for cash-sale item ${item.itemId} -- Purchase already created as PAID, cash already collected, item was NOT marked SOLD:`,
@@ -478,7 +569,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     // never did, so the staff discount cap was unenforceable for those 3 payment methods and
     // the discount never reached the persisted Purchase.amount.
     const { items, cashReceived, buyerEmail, saleId, clientTransactionId, discountType, discountValue, discountReasonNote, isTestTransaction } = req.body as {
-      items?: Array<{ itemId?: string; amount: number; label?: string }>;
+      items?: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string }>;
       cashReceived?: number;
       buyerEmail?: string;
       saleId?: string;
@@ -542,7 +633,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     res.json(result);
   } catch (error: any) {
     if (error instanceof CashSaleError) {
-      return res.status(error.status).json({ message: error.message });
+      return res.status(error.status).json({ message: error.message, code: error.code });
     }
     console.error('[terminal] cashPayment error:', error);
     res.status(500).json({ message: 'Failed to record cash sale' });

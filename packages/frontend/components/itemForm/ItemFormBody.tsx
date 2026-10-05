@@ -1996,6 +1996,15 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
               onApplyPrice={(price) => setFormData((prev) => ({ ...prev, price: price.toFixed(2) }))}
               onApplyTitle={(title) => setFormData((prev) => ({ ...prev, title }))}
               disabled={updateMutation.isPending}
+              /* ADR-136 (#659): a bulk lot save changes Item.price (per 1,000) and Item.stockTotal on the server. Refresh this
+                 form's copies so saving the item afterwards cannot overwrite them with the values loaded before. */
+              onBulkLotChange={(lot) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  price: lot.pricePerThousandCents !== null ? (lot.pricePerThousandCents / 100).toFixed(2) : prev.price,
+                  stockTotal: lot.totalCards,
+                }))
+              }
             />
 
             <ItemFormSection id="section-pricing" title="Pricing" defaultOpen summary={formData.price ? `$${formData.price}` : undefined}>

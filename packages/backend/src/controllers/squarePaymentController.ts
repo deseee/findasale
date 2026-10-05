@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
+import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
 import { createNotification } from '../lib/notificationService';
 import { generateReceipt } from '../services/receiptService';
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
@@ -106,6 +108,9 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
       return res.status(400).json({ message: 'A tokenized payment source is required.' });
     }
+    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, [itemId], isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
 
     let normalizedGuestEmail: string | null = null;
     let normalizedGuestName: string | null = null;
@@ -610,6 +615,9 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
     if (!sourceId || typeof sourceId !== 'string' || !sourceId.trim()) {
       return res.status(400).json({ error: 'A tokenized payment source is required.' });
     }
+    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ error: bulkRefusal.message, code: bulkRefusal.code });
 
     const items = await prisma.item.findMany({
       where: { id: { in: itemIds } },

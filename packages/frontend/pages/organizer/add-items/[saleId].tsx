@@ -78,6 +78,8 @@ import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 import { ShippingNetPreview } from '../../../components/ShippingNetPreview'; // ADR-103 Phase 5 (2026-09-03)
 import CardConditionConfirm from '../../../components/cardRecord/CardConditionConfirm'; // trading card condition (NM/LP/MP/HP/DMG), one-tap confirm
 import { showCardCondition } from '../../../lib/cardConditionVisibility';
+import BulkLotsLink from '../../../components/BulkLotsLink'; // ADR-136 (#659): link to bulk lots, rendered only when the feature is on
+import TcgplayerSyncLink from '../../../components/TcgplayerSyncLink'; // ADR-137 (#660): link to TCGplayer sync, rendered only when the feature is on
 
 // Feature flag: hides "Enhance All" button until backend endpoint exists.
 // Set NEXT_PUBLIC_ENABLE_ENHANCE_ALL=true to enable.
@@ -2453,6 +2455,18 @@ const AddItemsDetailPage = () => {
               >
                 Import cards from a spreadsheet
               </Link>
+            )}
+            {typeof saleId === 'string' && saleId !== '' && (
+              <TcgplayerSyncLink
+                saleId={saleId}
+                className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"
+              />
+            )}
+            {typeof saleId === 'string' && saleId !== '' && (
+              <BulkLotsLink
+                saleId={saleId}
+                className="inline-flex min-h-[44px] items-center px-4 py-2 rounded-lg font-medium bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border border-warm-300 dark:border-gray-600 hover:border-amber-400 transition-all"
+              />
             )}
           </div>
 

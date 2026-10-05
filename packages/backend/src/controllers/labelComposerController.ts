@@ -57,9 +57,15 @@ interface TagRecord {
   name?: string | null; // per-item title (Item.title); shown after the price
   blank?: boolean; // leading skip-slot for partially-used Avery sheets (no QR / no price rendered)
   card?: CardLabelSource | null; // set only for labelStyle 'card' tags whose item has an ItemCard; read from the database
+  perThousand?: boolean; // ADR-136: the item is a bulk lot, so its price is per 1,000 cards and the label says so
 }
 
 type LabelStyle = 'standard' | 'card';
+
+/** ADR-136: a bulk lot's label price is per 1,000 cards. Leaves a missing-price marker alone. */
+function withPerThousand<T extends { price: string; priceMissing: boolean }>(text: T, perThousand: boolean | undefined): T {
+  return perThousand && !text.priceMissing ? { ...text, price: `${text.price} /1000` } : text;
+}
 
 // Largest price accepted for a preset (non-item) label.
 const MAX_PRESET_PRICE = 100000;
@@ -189,6 +195,7 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
         roomTag: true,
         stockTotal: true,
         stockSold: true,
+        bulkLot: { select: { id: true } }, // ADR-136: a bulk lot defaults to one label, not one per card
         card: {
           select: {
             cardName: true,
@@ -229,7 +236,8 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
         // Server-built label lines for the picker and the preview, so the browser never formats card text.
         labelText: item.card ? buildCardLabelText(item.card, item.price, item.title) : null,
         // One label per remaining copy (stockTotal - stockSold), at least 1; the per-row cap of 300 applies.
-        defaultQty: Math.max(1, Math.min((item.stockTotal ?? 1) - (item.stockSold ?? 0), 300)),
+        // A bulk lot (ADR-136) holds thousands of cards but is ONE shelf label, so it defaults to 1.
+        defaultQty: (item as { bulkLot?: unknown }).bulkLot ? 1 : Math.max(1, Math.min((item.stockTotal ?? 1) - (item.stockSold ?? 0), 300)),
       })),
       nextCursor,
       saleHasCards: firstCardItem !== null,
@@ -330,6 +338,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
         price: number | null;
         roomTag: string | null;
         card: CardLabelSource | null;
+        perThousand: boolean;
       }
     >();
     if (referencedItemIds.length > 0) {
@@ -340,6 +349,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
           title: true,
           price: true,
           roomTag: true,
+          bulkLot: { select: { id: true } }, // ADR-136: label prints "per 1,000"
           card: {
             select: {
               cardName: true,
@@ -359,6 +369,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
           price: row.price ?? null,
           roomTag: row.roomTag ?? null,
           card: row.card ?? null,
+          perThousand: !!(row as { bulkLot?: unknown }).bulkLot,
         });
       }
       if (itemMap.size !== referencedItemIds.length) {
@@ -383,6 +394,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
             room: dbItem.roomTag,
             name: dbItem.title,
             card: card ? { ...card, cardName: card.cardName ?? dbItem.title } : null,
+            ...(dbItem.perThousand ? { perThousand: true } : {}),
           });
           if (card) cardLabelCount++;
         }
@@ -601,7 +613,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
             <div class="label-qr">
               <img src="${qrDataUrl}" alt="QR">
             </div>
-            ${renderCardLabelTextHtml(buildCardLabelText(tag.card, tag.price, tag.name))}
+            ${renderCardLabelTextHtml(withPerThousand(buildCardLabelText(tag.card, tag.price, tag.name), tag.perThousand))}
           </div>`;
           continue;
         }
@@ -615,7 +627,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
             </div>
             <div class="label-text">
               <div class="label-sale">${escapeHtml(batch.saleTitle)}</div>
-              <div class="label-price">${escapeHtml(formatLabelPrice(tag.price))}</div>
+              <div class="label-price">${escapeHtml(formatLabelPrice(tag.price))}${tag.perThousand ? ' <span style="font-size:8pt;font-weight:normal">per 1,000</span>' : ''}</div>
               <div class="label-name">${escapeHtml(tag.name ?? '')}</div>
               <div class="label-footer">
                 <div class="label-brand">finda.sale</div>

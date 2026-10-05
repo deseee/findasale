@@ -27,6 +27,8 @@ import Skeleton from './Skeleton';
 import CardSearchBox from './cardRecord/CardSearchBox';
 import CardConditionConfirm from './cardRecord/CardConditionConfirm';
 import SuggestedPriceBox from './cardRecord/SuggestedPriceBox';
+import BulkLotSection from './BulkLotSection'; // ADR-136 (#659): sell by the thousand (renders nothing unless the server has bulk lots on)
+import type { BulkLot } from '../lib/bulkLot';
 import {
   CARD_PANEL_COPY,
   CARD_PANEL_TEMPLATES,
@@ -69,6 +71,8 @@ export interface CardRecordPanelProps {
   onDirtyChange?: (dirty: boolean) => void;
   /** Optional. Disables every control while the page is busy. */
   disabled?: boolean;
+  /** Optional (ADR-136). Called with the saved bulk lot so the page can refresh its own price and stock fields. */
+  onBulkLotChange?: (lot: BulkLot) => void;
 }
 
 const inputCls =
@@ -146,7 +150,7 @@ const LoadError: React.FC<{ message: string; onRetry: () => void }> = ({ message
   </div>
 );
 
-const CardRecordPanel: React.FC<CardRecordPanelProps> = ({ itemId, currentPrice, onApplyPrice, onApplyTitle, onDirtyChange, disabled }) => {
+const CardRecordPanel: React.FC<CardRecordPanelProps> = ({ itemId, currentPrice, onApplyPrice, onApplyTitle, onDirtyChange, disabled, onBulkLotChange }) => {
   const baseId = useId();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -583,6 +587,8 @@ const CardRecordPanel: React.FC<CardRecordPanelProps> = ({ itemId, currentPrice,
                     {asOf ? `. ${CARD_PANEL_COPY.creditAsOf}${asOf}.` : '.'}
                   </p>
                 )}
+
+                <BulkLotSection itemId={itemId} hasCardRecord={card !== null && !dirty} disabled={busy} onLotChange={onBulkLotChange} />
               </>
             )}
           </>

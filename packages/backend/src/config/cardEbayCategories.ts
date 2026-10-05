@@ -58,6 +58,30 @@ export function isPinnedCardCategoryId(categoryId: string | null | undefined): b
 }
 
 /**
+ * ADR-137 (#660): eBay Standard Envelope item-price ceiling in US dollars. The item must sell for LESS than this, so a card
+ * priced at exactly 20 is not eligible and ships tracked. A local copy on purpose (this module imports nothing); the same
+ * figure is EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD in services/ebayRateEstimateService.ts and STANDARD_ENVELOPE_MAX_PRICE_USD in
+ * utils/ebayPolicyParser.ts, and a unit test fails if the three ever differ.
+ */
+export const CARD_STANDARD_ENVELOPE_MAX_PRICE_USD = 20;
+
+/**
+ * True when a price change moves a card across the Standard Envelope ceiling in either direction (one side is under the
+ * ceiling and the other is not, or one side has no price). A live offer that was priced into the envelope policy must be
+ * re-resolved the moment its price reaches the ceiling, instead of waiting for the daily drift sweep. Pure: no I/O.
+ * Accepts the number, numeric string or Prisma Decimal shapes an item price can arrive in.
+ */
+export function standardEnvelopePriceCrossing(before: unknown, after: unknown): boolean {
+  const toNum = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const underCeiling = (n: number | null): boolean => n !== null && n < CARD_STANDARD_ENVELOPE_MAX_PRICE_USD;
+  return underCeiling(toNum(before)) !== underCeiling(toNum(after));
+}
+
+/**
  * Game (ItemCard.game) to pinned category, for productType SINGLE only. OTHER and every non-SINGLE
  * product type get no pin and keep the existing suggestEbayCategoryForTitle flow.
  */

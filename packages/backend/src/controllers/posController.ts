@@ -18,6 +18,8 @@ import * as Sentry from '@sentry/node';
 import { resolveAndBackfillSquareLocationId } from '../services/squarePosPaymentAdapter';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
+import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
 import { applyCrewInvasionDiscount, releaseCrewInvasionRedemption, validateCrewInvasionCode, linkCrewInvasionRedemptionToInvoice } from '../services/crewInvasionRedemptionService'; // Feature #397 (2026-09-29): real redemption of the Crew Invasion code on hold invoices
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
@@ -594,6 +596,9 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     if (itemIds.length > 200 || itemIds.some((id) => typeof id !== 'string' || id.trim() === '') || new Set(itemIds).size !== itemIds.length) {
       return res.status(400).json({ message: 'itemIds must be a list of unique item ids (at most 200)', code: 'INVALID_ITEM_IDS' });
     }
+    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
     let linkExpiresAt: Date | undefined;
     if (expiresInSeconds !== undefined && expiresInSeconds !== null) {
       if (

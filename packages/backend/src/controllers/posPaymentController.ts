@@ -4,6 +4,8 @@ import { Prisma } from '@prisma/client';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
+import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { fireSquarePurchaseEngagement } from '../services/squarePurchaseEngagementService'; // 2026-09-30: replaces the direct awardXp / checkAndAward calls (Feature #58 achievement tracking now runs inside this service, deduped per purchase)
@@ -284,6 +286,9 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     if (!itemIds || !Array.isArray(itemIds)) {
       return res.status(400).json({ message: 'itemIds must be an array' });
     }
+    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
     // Whole cents only, with a sane upper bound (2026-09-29): a fractional or absurd amount used to
     // sail through this `> 0` check and surface later as a 500 from Square or the database.
     if (!isValidCents(totalAmountCents)) {
@@ -2103,6 +2108,9 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     if (itemIds.length !== new Set(itemIds).size) {
       return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
     }
+    // Bulk lots (ADR-136, #659) are sold at the register with cash, Venmo or Zelle only. Refuse before any money moves.
+    const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
+    if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
 
     let dbItems: Record<string, { id: string; title: string; status: string; draftStatus: string | null; price: number | null }> = {};
     if (itemIds.length > 0) {

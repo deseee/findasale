@@ -555,10 +555,21 @@ export async function executeVerifiedRefund(
   // above, since the buyer's refund has already succeeded on Stripe by this point.
   if (purchase.itemId) {
     try {
-      await prisma.item.updateMany({
-        where: { id: purchase.itemId, stockSold: { gt: 0 } },
-        data: { stockSold: { decrement: 1 } },
-      });
+      // Bulk lots (ADR-136, #659): a bulk lot purchase gives back the number of cards it sold (Purchase.bulkQuantity),
+      // never one unit. The WHERE guard keeps stockSold from going below zero; if it is lower than the cards being
+      // returned it is floored at zero. A bulk TEST purchase never took any stock (cashPaymentController skips the
+      // decrement for a test transaction), so it gives none back. Every non-bulk purchase (bulkQuantity null) runs
+      // exactly the pre-existing one-unit decrement.
+      const restoreUnits = purchase.bulkQuantity ?? 1;
+      if (!(purchase.bulkQuantity && purchase.isTestTransaction)) {
+        const restored = await prisma.item.updateMany({
+          where: { id: purchase.itemId, stockSold: { gte: restoreUnits } },
+          data: { stockSold: { decrement: restoreUnits } },
+        });
+        if (restored.count === 0 && restoreUnits > 1) {
+          await prisma.item.updateMany({ where: { id: purchase.itemId, stockSold: { gt: 0 } }, data: { stockSold: 0 } });
+        }
+      }
     } catch (err) {
       console.error(`[executeVerifiedRefund] Failed to decrement stockSold for item ${purchase.itemId} after refund of purchase ${purchaseId} (non-fatal):`, err);
     }
