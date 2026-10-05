@@ -71,6 +71,17 @@ import {
   bulkCategoryPartialItemsMessage,
   type BulkCategoryOperation,
 } from '../../../../lib/reviewBulkCategory';
+import {
+  toggleSelection,
+  selectAllVisible,
+  pruneSelection,
+  allVisibleSelected,
+  selectedCountText,
+  itemsCountText,
+  parseBulkPriceInput,
+  bulkPriceButtonText,
+  bulkCategoryButtonText,
+} from '../../../../lib/reviewSelection';
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
@@ -323,6 +334,13 @@ const ReviewPage = () => {
 
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkCategory, setBulkCategory] = useState('');
+  // Bulk bar UI (selection checkboxes): which inline panel is open, the category the picker returned, and
+  // whether a bulk category run is sending (the in-flight ref below is the re-entry guard; this state only
+  // disables the controls while it runs).
+  const [bulkMode, setBulkMode] = useState<'price' | 'category' | null>(null);
+  const [bulkCategoryPick, setBulkCategoryPick] = useState<{ l1CategoryName: string; leafCategoryId: string; leafCategoryName: string } | null>(null);
+  const [bulkPickerKey, setBulkPickerKey] = useState(0);
+  const [bulkCategoryBusy, setBulkCategoryBusy] = useState(false);
   const [showBuyerPreview, setShowBuyerPreview] = useState(router.query.preview === 'true');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -754,6 +772,24 @@ const ReviewPage = () => {
     });
   }, [sortBy, sortOrder]);
 
+  // Selection follows the queue: a card that was approved, published or discarded can no longer be selected.
+  useEffect(() => {
+    const pendingIdList = items
+      .filter((i) => i.draftStatus !== 'PUBLISHED' && !approvedIds.has(i.id))
+      .map((i) => i.id);
+    setSelectedItems((prev) => pruneSelection(prev, pendingIdList) as Set<string>);
+  }, [items, approvedIds]);
+
+  // An empty selection closes the bulk panels and forgets the picked category (also runs after a bulk
+  // action completes, because the handlers clear the selection).
+  useEffect(() => {
+    if (selectedItems.size === 0) {
+      setBulkMode(null);
+      setBulkCategoryPick(null);
+      setBulkPickerKey((k) => k + 1);
+    }
+  }, [selectedItems]);
+
   // Auth + saleId guards (MUST be after all hooks to respect Rules of Hooks)
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
@@ -1087,6 +1123,18 @@ const ReviewPage = () => {
       bulkCategoryInFlightRef.current = false;
       // Refetch even after a failure: an earlier step may already have been written.
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+    }
+  };
+
+  // Bulk bar: the category picker only collects the choice; this runs the existing handleBulkCategory with it.
+  const bulkBusy = bulkUpdateMutation.isPending || bulkCategoryBusy;
+  const runBulkCategory = async () => {
+    if (!bulkCategoryPick || bulkBusy) return;
+    setBulkCategoryBusy(true);
+    try {
+      await handleBulkCategory(bulkCategoryPick);
+    } finally {
+      setBulkCategoryBusy(false);
     }
   };
 
@@ -1445,6 +1493,9 @@ const ReviewPage = () => {
   const publishedCount = items.filter(i => i.draftStatus === 'PUBLISHED').length + approvedIds.size;
   const totalCount = items.length;
   const queueEmpty = pendingItems.length === 0 && totalCount > 0;
+  const pendingIds = pendingItems.map((i) => i.id);
+  const selectedCount = pendingIds.filter((id) => selectedItems.has(id)).length;
+  const bulkPriceValue = parseBulkPriceInput(bulkPrice);
 
   // ── Rarity badge colors (light + dark palette) ──────────────────────────────
   const rarityColors: Record<string, { bg: string; fg: string; darkBg: string; darkFg: string }> = {
@@ -1588,6 +1639,28 @@ const ReviewPage = () => {
                   ? `All ${totalCount} items are live`
                   : `Review ${pendingItems.length} item${pendingItems.length !== 1 ? 's' : ''} before they go live`}
               </h1>
+              {!itemsLoading && pendingItems.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItems(selectAllVisible(pendingIds))}
+                    disabled={bulkBusy || allVisibleSelected(selectedItems, pendingIds)}
+                    className="px-3 py-1.5 rounded-lg border border-black/18 dark:border-[#3A3A3C] text-xs font-medium text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Select all ({pendingItems.length})
+                  </button>
+                  {selectedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItems(new Set())}
+                      disabled={bulkBusy}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/6 dark:hover:bg-[#3A3A3C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 sm:flex-shrink-0">
               {saleId && (
@@ -1665,6 +1738,135 @@ const ReviewPage = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Selection bulk bar: appears when at least one card is selected. Never publishes anything. */}
+              {selectedCount > 0 && (
+                <div
+                  role="region"
+                  aria-label="Bulk actions for selected items"
+                  className="mt-2 bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-[#C8552B]/40 px-4 py-3 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <p aria-live="polite" className="text-sm font-semibold text-[#1A1814] dark:text-[#F5F5F0] whitespace-nowrap">
+                      {selectedCountText(selectedCount)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItems(new Set())}
+                      disabled={bulkBusy}
+                      className="px-2 py-1 rounded-lg text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] hover:bg-black/6 dark:hover:bg-[#3A3A3C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => setBulkMode((m) => (m === 'price' ? null : 'price'))}
+                        disabled={bulkBusy}
+                        aria-expanded={bulkMode === 'price'}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                          bulkMode === 'price'
+                            ? 'border-[#C8552B] text-[#C8552B] bg-[#C8552B]/5'
+                            : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
+                        }`}
+                      >
+                        Set price
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkMode((m) => (m === 'category' ? null : 'category'))}
+                        disabled={bulkBusy}
+                        aria-expanded={bulkMode === 'category'}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                          bulkMode === 'category'
+                            ? 'border-[#C8552B] text-[#C8552B] bg-[#C8552B]/5'
+                            : 'border-black/18 dark:border-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C]'
+                        }`}
+                      >
+                        Set category
+                      </button>
+                    </div>
+                  </div>
+
+                  {bulkMode === 'price' && (
+                    <form
+                      className="mt-3"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (bulkPriceValue !== null && !bulkBusy) handleBulkPrice();
+                      }}
+                    >
+                      <label htmlFor="bulk-price-input" className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
+                        New price for {itemsCountText(selectedCount)}
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative w-32">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[rgba(26,24,20,0.5)] dark:text-[#B8B8BA]" aria-hidden="true">$</span>
+                          <input
+                            id="bulk-price-input"
+                            type="number"
+                            inputMode="decimal"
+                            min="0.01"
+                            step="0.01"
+                            value={bulkPrice}
+                            onChange={(e) => setBulkPrice(e.target.value)}
+                            disabled={bulkBusy}
+                            placeholder="0.00"
+                            className="w-full pl-7 pr-3 py-2 rounded-lg border border-black/18 dark:border-[#3A3A3C] bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] text-sm focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40 disabled:opacity-50"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={bulkPriceValue === null || bulkBusy}
+                          className="px-3 py-2 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {bulkUpdateMutation.isPending ? 'Applying…' : bulkPriceButtonText(bulkPriceValue, selectedCount)}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA]">
+                        Saves this price on every selected item. Nothing is published. Items already listed on eBay cannot go below $0.99; those are skipped and you will see a note.
+                      </p>
+                    </form>
+                  )}
+
+                  {bulkMode === 'category' && (
+                    <div className="mt-3">
+                      <p className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
+                        New category for {itemsCountText(selectedCount)}
+                      </p>
+                      <div className={`flex flex-wrap items-start gap-2 ${bulkBusy ? 'pointer-events-none opacity-50' : ''}`} aria-busy={bulkBusy}>
+                        <div className="flex-1 min-w-[12rem]">
+                          <EbayCategoryPicker
+                            key={bulkPickerKey}
+                            value={bulkCategory}
+                            onChange={({ l1CategoryName, leafCategoryId, leafCategoryName }) => {
+                              setBulkCategory(l1CategoryName);
+                              setBulkCategoryPick(
+                                l1CategoryName || leafCategoryId || leafCategoryName
+                                  ? { l1CategoryName, leafCategoryId, leafCategoryName }
+                                  : null
+                              );
+                            }}
+                            label=""
+                            placeholder="Search eBay categories…"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={runBulkCategory}
+                          disabled={!bulkCategoryPick || bulkBusy}
+                          className="px-3 py-2 rounded-lg bg-[#C8552B] text-white text-xs font-semibold hover:bg-[#b04825] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {bulkCategoryBusy ? 'Applying…' : bulkCategoryButtonText(selectedCount)}
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA]">
+                        Sets the category and the eBay category on every selected item. Nothing is published.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -1759,13 +1961,25 @@ const ReviewPage = () => {
                   <div
                     key={item.id}
                     ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
-                    className={`relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] border-l-4 overflow-hidden`}
+                    className={`relative bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] border-l-4 overflow-hidden${selectedItems.has(item.id) ? ' ring-2 ring-[#C8552B]/50' : ''}`}
                     style={{ boxShadow: '0 1px 3px rgba(20,18,14,0.06)', borderLeftColor: readinessBorderColor }}
                   >
 
                     <div className="pl-5 pr-5 pt-5 pb-5">
                       {/* Smart chip row */}
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex flex-wrap items-center justify-between gap-y-2 mb-4">
+                        <div className="flex items-center gap-3">
+                          <label className="inline-flex items-center gap-2 min-h-[40px] pr-1 cursor-pointer select-none text-[11px] font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA]">
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.has(item.id)}
+                              disabled={bulkBusy}
+                              onChange={() => setSelectedItems((prev) => toggleSelection(prev, item.id))}
+                              aria-label={`Select ${editState.title?.trim() || item.title || 'item'}`}
+                              className="h-5 w-5 rounded border-black/30 accent-[#C8552B] focus:outline-none focus:ring-2 focus:ring-[#C8552B]/40"
+                            />
+                            Select
+                          </label>
                         <span
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono tracking-widest uppercase"
                           style={{ background: 'rgba(200,85,43,0.10)', color: '#C8552B' }}
@@ -1775,6 +1989,7 @@ const ReviewPage = () => {
                           </svg>
                           Smart
                         </span>
+                        </div>
                         <div className="flex items-center gap-2 sm:gap-3">
                           {item.isAiTagged && item.aiConfidence != null && (
                             <span className="text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]">
