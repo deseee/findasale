@@ -9,11 +9,12 @@
  * 3. Compare each field to what's stored in FindA.Sale
  * 4. If anything changed (and eBay value is non-empty), update the FindA.Sale item
  *
- * Condition mapping (eBay Inventory API enum -> FindA.Sale condition string):
- *   NEW / NEW_OTHER / NEW_WITH_DEFECTS       -> NEW
- *   USED_EXCELLENT / USED_VERY_GOOD / USED_GOOD / USED_ACCEPTABLE -> USED
- *   SELLER_REFURBISHED                       -> REFURBISHED
- *   FOR_PARTS_OR_NOT_WORKING                 -> PARTS_OR_REPAIR
+ * Condition (2026-10-04, eBay-import condition rule): the pull never flips or overwrites a stored condition or grade.
+ * It fills a BLANK condition only (utils/ebayConditionImport.ts, fillBlankCondition) and never a grade on these
+ * items (every item here has an ebayOfferId, so FindA.Sale published it). A difference between eBay's condition and
+ * what FindA.Sale would push is first compared remap-aware: desiredEbayCondition(condition, grade) passed through
+ * ensureConditionValidForCategory(…, ebayCategoryId), so a value eBay shows only because the category does not accept
+ * ours is not drift. Anything left over is logged and counted, never written, and no notification is created.
  *
  * ADR markdown-cycle-ebay-price-sync (2026-09-15) -- push-first-then-pull:
  * Before the pull-and-compare logic below runs for an item, this now checks
@@ -61,6 +62,9 @@ import {
 import { fetchAndCacheEbayStoreSubscription, isEbayStoreSubscriptionStale } from '../services/ebayStoreSubscriptionService';
 import { reconcileEbayInsertionsUsage, isEbayInsertionsReconciliationStale } from '../lib/ebayInsertionsQuotaTracker';
 import { isEbayRateLimited } from '../lib/ebayRateLimiter';
+import { ensureConditionValidForCategory } from '../services/ebayPublishService';
+import { desiredEbayCondition } from '../utils/conditionMapping';
+import { canonicalFromEbayCondition, ebayConditionIdOf, fillBlankCondition } from '../utils/ebayConditionImport';
 
 // ADR markdown-cycle-ebay-price-sync (2026-09-15), UX spec Piece 2: an item counts as
 // "sync-failed" (not just mid-retry) once this much time has passed since
@@ -79,25 +83,9 @@ export const SYNC_FAILURE_THRESHOLD_MS = 8 * 60 * 60 * 1000; // exported (dispat
 // EXACT link (not just the type) is what stops the two flavours suppressing each other.
 const SYNC_ISSUES_LINK = '/organizer/platforms?syncIssues=1';
 
-// Map eBay Inventory API condition enum -> FindA.Sale condition string
-function mapEbayConditionToFas(ebayCondition: string): string | null {
-  switch (ebayCondition) {
-    case 'NEW':
-    case 'NEW_OTHER':
-    case 'NEW_WITH_DEFECTS':
-      return 'NEW';
-    case 'USED_EXCELLENT':
-    case 'USED_VERY_GOOD':
-    case 'USED_GOOD':
-    case 'USED_ACCEPTABLE':
-      return 'USED';
-    case 'SELLER_REFURBISHED':
-      return 'REFURBISHED';
-    case 'FOR_PARTS_OR_NOT_WORKING':
-      return 'PARTS_OR_REPAIR';
-    default:
-      return null; // Unknown condition -- don't overwrite
-  }
+/** Comparison key for an eBay condition value: the numeric id when it has one (enum names and ids compare equal). */
+function ebayConditionKey(value: string): string {
+  return ebayConditionIdOf(value) ?? value.trim().toUpperCase();
 }
 
 interface EbayInventoryItem {
@@ -133,6 +121,8 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       description: true,
       price: true,
       condition: true,
+      conditionGrade: true,
+      ebayCategoryId: true,
       ebayListingId: true,
       ebayOfferId: true,
       priceUpdatedAt: true,
@@ -228,6 +218,10 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
   // re-fires daily is precisely the behavior this ADR exists to stop. Each gets one
   // per-item notification carrying eBay's real message (see bottom of this function).
   const terminalItems: { id: string; title: string; reason: string }[] = [];
+
+  // Eligible items whose eBay condition differs from what FindA.Sale would push, after the category remap is accounted
+  // for. Logged and counted only (2026-10-04 eBay-import condition rule); nothing is written for these.
+  let conditionDriftCount = 0;
 
   for (const item of items) {
     try {
@@ -421,12 +415,42 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
             }
           }
 
-          // Condition
+          // Condition (2026-10-04 rule): fill a blank condition only. Never overwrite a stored condition or grade.
           if (inventoryData.condition) {
-            const fasCond = mapEbayConditionToFas(inventoryData.condition);
-            if (fasCond && fasCond !== item.condition) {
-              updates.condition = fasCond;
-              changeLog.push(`condition "${item.condition ?? 'null'}" -> "${fasCond}"`);
+            const ebayCondition = String(inventoryData.condition);
+            const imported = canonicalFromEbayCondition(ebayCondition, { categoryId: item.ebayCategoryId });
+            const blankFill = fillBlankCondition(
+              { condition: item.condition, conditionGrade: item.conditionGrade, ebayOfferId: item.ebayOfferId },
+              imported,
+            );
+            if (blankFill.condition) {
+              updates.condition = blankFill.condition;
+              changeLog.push(`condition (blank) -> "${blankFill.condition}"`);
+            }
+            if (blankFill.conditionGrade) {
+              updates.conditionGrade = blankFill.conditionGrade;
+              changeLog.push(`grade (blank) -> "${blankFill.conditionGrade}"`);
+            }
+            // Drift check on a stored condition: remap-aware, log and count only.
+            if (item.condition && item.condition.trim() !== '') {
+              const desired = desiredEbayCondition(item.condition, item.conditionGrade);
+              const ebayKey = ebayConditionKey(ebayCondition);
+              if (ebayKey !== ebayConditionKey(desired)) {
+                let expected: string = desired;
+                if (item.ebayCategoryId) {
+                  try {
+                    expected = await ensureConditionValidForCategory(desired, item.ebayCategoryId);
+                  } catch (remapErr) {
+                    console.warn(`[eBay PullSync] item ${item.id}: category condition lookup failed (non-fatal): ${(remapErr as Error).message}`);
+                  }
+                }
+                if (ebayKey !== ebayConditionKey(expected)) {
+                  conditionDriftCount++;
+                  console.log(
+                    `[eBay PullSync] item ${item.id}: eBay condition ${ebayCondition} differs from FindA.Sale (condition=${item.condition}, grade=${item.conditionGrade ?? 'none'}, would push ${expected}${item.ebayCategoryId ? ` for category ${item.ebayCategoryId}` : ''}) -- not explained by a category remap; left unchanged`
+                  );
+                }
+              }
             }
           }
         } else {
@@ -450,6 +474,10 @@ export async function pullSyncForOrganizer(organizerId: string): Promise<void> {
       console.error(`[eBay PullSync ERROR] Item ${item.id}:`, err);
       // Continue -- one item failure shouldn't block the rest
     }
+  }
+
+  if (conditionDriftCount > 0) {
+    console.log(`[eBay PullSync] organizer ${organizerId}: ${conditionDriftCount} item(s) with an eBay condition that differs from FindA.Sale and is not explained by a category remap (left unchanged)`);
   }
 
   // ADR markdown-cycle-ebay-price-sync (2026-09-15) / UX spec Piece 2, Dev Handoff Note

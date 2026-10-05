@@ -2,7 +2,8 @@
  * Pull-sync hold guard (item editor unification, Wave 2: U2).
  * A held item (ebaySyncHeldAt) is skipped entirely: no price push-first, no pull, no eBay call.
  * A dirty item (ebayContentDirtyAt) keeps its title, description and condition (the inventory item is not even fetched)
- * but still syncs price. An untouched item behaves exactly as before.
+ * but still syncs price. An untouched item pulls price, title and description; it never overwrites a stored condition
+ * (2026-10-04 eBay-import condition rule, covered in depth by ebayConditionImport.test.ts).
  */
 
 const mockPrisma: any = {
@@ -32,12 +33,13 @@ jest.mock('../lib/ebayInsertionsQuotaTracker', () => ({
   reconcileEbayInsertionsUsage: jest.fn().mockResolvedValue(undefined),
   isEbayInsertionsReconciliationStale: () => false,
 }));
+jest.mock('../services/ebayPublishService', () => ({ ensureConditionValidForCategory: async (d: string) => d }));
 jest.mock('../lib/ebayRateLimiter', () => ({ isEbayRateLimited: () => false }));
 
 import { pullSyncForOrganizer } from '../jobs/ebayListingSyncCron';
 
 const baseItem = (over: Record<string, unknown> = {}) => ({
-  id: 'i1', title: 'Local Title', description: 'Local desc', price: 20, condition: 'USED',
+  id: 'i1', title: 'Local Title', description: 'Local desc', price: 20, condition: 'USED', conditionGrade: null, ebayCategoryId: null,
   ebayListingId: 'L1', ebayOfferId: 'O1', priceUpdatedAt: null, ebayPriceSyncedAt: null,
   ebaySyncState: 'SYNCED', ebaySyncFailureReason: null, ebaySyncAttempts: 0,
   ebaySyncHeldAt: null, ebayContentDirtyAt: null,
@@ -62,12 +64,15 @@ beforeEach(() => {
 });
 
 describe('ebayListingSyncCron hold guard', () => {
-  it('the item query selects the two guard columns', async () => {
+  it('the item query selects the two guard columns and the condition rule columns', async () => {
     mockPrisma.item.findMany.mockResolvedValue([]);
     await pullSyncForOrganizer('org1');
     const select = mockPrisma.item.findMany.mock.calls[0][0].select;
     expect(select.ebaySyncHeldAt).toBe(true);
     expect(select.ebayContentDirtyAt).toBe(true);
+    expect(select.conditionGrade).toBe(true);
+    expect(select.ebayCategoryId).toBe(true);
+    expect(select.condition).toBe(true);
   });
 
   it('a held item is skipped entirely: no push-first, no eBay call, no write', async () => {
@@ -96,12 +101,12 @@ describe('ebayListingSyncCron hold guard', () => {
     expect(mockRevise).toHaveBeenCalledTimes(1);
   });
 
-  it('an untouched item behaves exactly as before: price, title, description and condition are pulled', async () => {
+  it('an untouched item pulls price, title and description, and never overwrites a stored condition', async () => {
     mockPrisma.item.findMany.mockResolvedValue([baseItem()]);
     await pullSyncForOrganizer('org1');
     expect(calls.some((p) => p.includes('/inventory_item/'))).toBe(true);
     expect(mockPrisma.item.update.mock.calls[0][0].data).toEqual({
-      price: 30, title: 'eBay Title', description: 'eBay desc', condition: 'NEW',
+      price: 30, title: 'eBay Title', description: 'eBay desc',
     });
   });
 

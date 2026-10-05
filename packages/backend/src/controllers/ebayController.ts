@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
+import { canonicalFromEbayCondition, fillBlankCondition } from '../utils/ebayConditionImport'; // inbound eBay condition: grade only when eBay supplies a level
 import { desiredEbayCondition, ebayDescriptionGradeLine } from '../utils/conditionMapping'; // U4: one condition vocabulary (first push and edit-sync share one table)
 import { fetchLiveEbayListings, itemIdFromFasSku, lookupOfferIdForSku } from '../services/ebayLiveListingsService'; // eBay sync hardening (2026-10-01): relist adoption + live ActiveList
 import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
@@ -6701,25 +6702,11 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         const description: string = product.description || '';
         const imageUrls: string[] = product.imageUrls || [];
 
-        // Map eBay condition to conditionGrade
-        const conditionMap: Record<string, string> = {
-          'NEW': 'S',
-          'LIKE_NEW': 'A',
-          'EXCELLENT_REFURBISHED': 'A',
-          'VERY_GOOD_REFURBISHED': 'B',
-          'GOOD_REFURBISHED': 'B',
-          'SELLER_REFURBISHED': 'B',
-          'USED_EXCELLENT': 'B',
-          'USED_VERY_GOOD': 'B',
-          'USED_GOOD': 'C',
-          'USED_ACCEPTABLE': 'D',
-          'FOR_PARTS_OR_NOT_WORKING': 'D',
-        };
-        const conditionGrade = conditionMap[ebayItem.condition] || null;
-        const condition = conditionGrade === 'S' ? 'NEW'
-          : conditionGrade === 'D' ? 'PARTS_OR_REPAIR'
-          : conditionGrade ? 'USED'
-          : null;
+        // Map the eBay condition (Inventory API enum) to condition + grade. A grade is stored only when eBay
+        // supplies a quality level (utils/ebayConditionImport.ts); "Used" (USED_EXCELLENT, id 3000) carries none.
+        const importedCondition = canonicalFromEbayCondition(ebayItem.condition);
+        const conditionGrade = importedCondition.grade;
+        const condition = importedCondition.condition;
 
         // Reconcile this classic/non-FAS listing with an existing item by normalized title before creating a duplicate
         if (await tryReconcileByTitle(title, ebayListingIdToStore, null, null)) { skipped++; continue; }
@@ -6771,10 +6758,6 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
     {
       console.log('[eBay Import] Running Trading API GetMyeBaySelling to capture classic listings...');
 
-      const tradingConditionMap: Record<string, string> = {
-        '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A',
-        '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D',
-      };
 
       let tradingPage = 1;
       let tradingTotalPages = 1;
@@ -6863,17 +6846,16 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             .trim()
             .slice(0, 2000);
           const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
-          const conditionGrade = tradingConditionMap[conditionId] || null;
-          const condition = conditionGrade === 'S' ? 'NEW'
-            : conditionGrade === 'D' ? 'PARTS_OR_REPAIR'
-            : conditionGrade ? 'USED'
-            : null;
           // Extract PrimaryCategory name AND numeric CategoryID.
           // Storing both — name drives human-readable UI + shipping classifier;
           // ID is used directly on push-back to avoid 25021 category errors.
           const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
           const ebayCategory = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
           const ebayCategoryIdFromImport = categoryBlock ? xmlVal(categoryBlock, 'CategoryID') : null;
+          // Grade only when eBay supplies a level; cards and coins keep their own scale (category hint).
+          const importedCondition = canonicalFromEbayCondition(conditionId, { categoryId: ebayCategoryIdFromImport, categoryName: ebayCategory });
+          const conditionGrade = importedCondition.grade;
+          const condition = importedCondition.condition;
           // Extract ItemSpecifics values as tags (Brand, Type, Color, Material, etc.)
           const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
           const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
@@ -6881,15 +6863,15 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             .map(nvBlock => xmlVal(nvBlock, 'Value'))
             .filter((v): v is string => !!v && v.length > 0)
             .slice(0, 10);
-          console.log(`[eBay Import] Item ${ebayItemId}: photos=${photoUrls.length}, condition=${conditionGrade || 'none'}, category=${ebayCategory || 'none'}, tags=${ebayCategoryTags.length}`);
+          console.log(`[eBay Import] Item ${ebayItemId}: photos=${photoUrls.length}, condition=${condition || 'none'}, grade=${conditionGrade || 'none'}, category=${ebayCategory || 'none'}, tags=${ebayCategoryTags.length}`);
 
           // If item already exists, backfill any empty fields on re-sync
           if (existing) {
             const backfill: Record<string, any> = {};
             if (photoUrls.length > existing.photoUrls.length) backfill.photoUrls = photoUrls;
             if (description && !existing.description) backfill.description = description;
-            if (condition && !existing.condition) backfill.condition = condition;
-            if (conditionGrade && !existing.conditionGrade) backfill.conditionGrade = conditionGrade;
+            // Fill blanks only: never overwrite a condition or grade that is already set.
+            Object.assign(backfill, fillBlankCondition(existing, importedCondition));
             if (ebayCategory && !existing.category) backfill.category = ebayCategory;
             if (ebayCategoryTags.length > 0 && (!existing.tags || existing.tags.length === 0)) backfill.tags = ebayCategoryTags;
             // P0 fix: keep ebayShippingClassification in sync whenever this backfill
@@ -7006,7 +6988,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           organizerId: organizer.id,
           ebayListingId: { not: null },
         },
-        select: { id: true, ebayListingId: true, description: true, category: true, ebayCategoryId: true, tags: true, conditionGrade: true, photoUrls: true },
+        select: { id: true, ebayListingId: true, description: true, category: true, ebayCategoryId: true, tags: true, condition: true, conditionGrade: true, ebayOfferId: true, photoUrls: true },
       });
 
       // Always enrich ALL eBay items to refresh photos/details on every sync
@@ -7061,14 +7043,17 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           if (pictureUrls.length > 0) {
             backfill.photoUrls = pictureUrls;
           }
-          if (!item.conditionGrade) {
-            const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
-            const condMapEnrich: Record<string, string> = { '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A', '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D' };
-            const condGrade = condMapEnrich[conditionId] || null;
-            if (condGrade) { backfill.conditionGrade = condGrade; backfill.condition = condGrade === 'S' ? 'NEW' : condGrade === 'D' ? 'PARTS_OR_REPAIR' : 'USED'; }
-          }
           const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
           const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
+          // Fill blanks only (condition and grade): an organizer's or earlier code's value is never rewritten.
+          // A grade is filled only when eBay supplies a quality level; "Used" (3000) leaves it empty.
+          if (!item.condition || !item.conditionGrade) {
+            const enrichCondition = canonicalFromEbayCondition(xmlVal(itemBlock, 'ConditionID') || '', {
+              categoryId: categoryBlock ? xmlVal(categoryBlock, 'CategoryID') : null,
+              categoryName,
+            });
+            Object.assign(backfill, fillBlankCondition(item, enrichCondition));
+          }
           if (categoryName) backfill.category = categoryName;
           // ROOT-CAUSE FIX (2026-08-11): this enrichment pass is the ONLY sync path that
           // re-touches EVERY already-imported eBay item on every sync, and it parsed
