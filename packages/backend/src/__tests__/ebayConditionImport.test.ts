@@ -624,7 +624,10 @@ describe('source guards', () => {
   it('the controller uses the shared helper on the Inventory import, Trading import, backfill and enrich paths', () => {
     expect(controller).toMatch(/from '\.\.\/utils\/ebayConditionImport'/);
     expect((controller.match(/canonicalFromEbayCondition\(/g) || []).length).toBeGreaterThanOrEqual(3);
-    expect((controller.match(/fillBlankCondition\(/g) || []).length).toBeGreaterThanOrEqual(2);
+    // The Trading import calls fillBlankCondition directly; the enrich pass reaches it through planEnrichWrites (utils/ebayEnrichPlan.ts).
+    expect((controller.match(/fillBlankCondition\(/g) || []).length).toBeGreaterThanOrEqual(1);
+    expect(controller).toMatch(/planEnrichWrites\(item,/);
+    expect(read('../utils/ebayEnrichPlan.ts')).toMatch(/fillBlankCondition\(/);
     expect(controller).toMatch(/condition=\$\{condition \|\| 'none'\}, grade=\$\{conditionGrade \|\| 'none'\}/);
   });
 

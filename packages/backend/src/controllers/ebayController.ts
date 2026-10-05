@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
 import { canonicalFromEbayCondition, fillBlankCondition } from '../utils/ebayConditionImport'; // inbound eBay condition: grade only when eBay supplies a level
+import { planEnrichWrites, needsEnrichFetch } from '../utils/ebayEnrichPlan'; // background enrich: organizer intent wins, held/dirty never touched
 import { desiredEbayCondition, ebayDescriptionGradeLine } from '../utils/conditionMapping'; // U4: one condition vocabulary (first push and edit-sync share one table)
 import { fetchLiveEbayListings, itemIdFromFasSku, lookupOfferIdForSku } from '../services/ebayLiveListingsService'; // eBay sync hardening (2026-10-01): relist adoption + live ActiveList
 import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
@@ -6868,7 +6869,14 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           // If item already exists, backfill any empty fields on re-sync
           if (existing) {
             const backfill: Record<string, any> = {};
-            if (photoUrls.length > existing.photoUrls.length) backfill.photoUrls = photoUrls;
+            // Organizer intent wins: an item FindA.Sale published (non-blank ebayOfferId), held (ebaySyncHeldAt) or with a
+            // pending local edit (ebayContentDirtyAt) only ever has BLANK photos / eBay category id filled here; it is
+            // never replaced by eBay's value. Imported-only items keep the grow-only photo and category-id refresh.
+            const ownedOrProtected =
+              (typeof existing.ebayOfferId === 'string' && existing.ebayOfferId.trim() !== '') ||
+              !!existing.ebaySyncHeldAt ||
+              !!existing.ebayContentDirtyAt;
+            if (ownedOrProtected ? (photoUrls.length > 0 && existing.photoUrls.length === 0) : photoUrls.length > existing.photoUrls.length) backfill.photoUrls = photoUrls;
             if (description && !existing.description) backfill.description = description;
             // Fill blanks only: never overwrite a condition or grade that is already set.
             Object.assign(backfill, fillBlankCondition(existing, importedCondition));
@@ -6882,8 +6890,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
                 backfill.tags !== undefined ? backfill.tags : existing.tags,
               );
             }
-            // Backfill eBay numeric CategoryID for push-back (always overwrite — import is source of truth)
-            if (ebayCategoryIdFromImport && existing.ebayCategoryId !== ebayCategoryIdFromImport) backfill.ebayCategoryId = ebayCategoryIdFromImport;
+            // Backfill eBay numeric CategoryID for push-back. Imported-only items: eBay is the source of truth, so refresh
+            // when it differs. Owned / held / dirty items: fill a blank only (the stored id is what a push-back uses).
+            if (ebayCategoryIdFromImport && (ownedOrProtected ? !existing.ebayCategoryId : existing.ebayCategoryId !== ebayCategoryIdFromImport)) backfill.ebayCategoryId = ebayCategoryIdFromImport;
             // Migrate SKU-stored ebayListingId to numeric eBay ItemID so GetItem enrichment works
             if (existing.ebayListingId !== ebayItemId) backfill.ebayListingId = ebayItemId;
             // Auto-publish on FindA.Sale — this item is live on eBay (returned by the
@@ -6988,11 +6997,12 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           organizerId: organizer.id,
           ebayListingId: { not: null },
         },
-        select: { id: true, ebayListingId: true, description: true, category: true, ebayCategoryId: true, tags: true, condition: true, conditionGrade: true, ebayOfferId: true, photoUrls: true },
+        select: { id: true, ebayListingId: true, description: true, category: true, ebayCategoryId: true, tags: true, condition: true, conditionGrade: true, ebayOfferId: true, photoUrls: true, ebaySyncHeldAt: true, ebayContentDirtyAt: true },
       });
 
-      // Always enrich ALL eBay items to refresh photos/details on every sync
-      const itemsToEnrich = allEbayItems;
+      // Organizer intent wins (utils/ebayEnrichPlan.ts): held or content-dirty items are never fetched or written; items
+      // FindA.Sale published (ebayOfferId) are only fetched while something is still blank; imported-only items refresh.
+      const itemsToEnrich = allEbayItems.filter((i) => needsEnrichFetch(i));
 
       if (itemsToEnrich.length === 0) return;
       console.log(`[eBay Enrich] Starting GetItem enrichment for ${itemsToEnrich.length} items...`);
@@ -7025,7 +7035,6 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             return;
           }
           const itemBlock = text.match(/<Item>([\s\S]*?)<\/Item>/)?.[1] || '';
-          const backfill: Record<string, any> = {};
           const descRaw = xmlVal(itemBlock, 'Description') || '';
           const descWithoutBlocks = descRaw
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
@@ -7038,51 +7047,33 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           // Fall back to ConditionDescription if main description is template-only (strips to empty)
           const conditionDesc = (xmlVal(itemBlock, 'ConditionDescription') || '').trim().slice(0, 2000);
           const finalDesc = descClean || conditionDesc;
-          if (finalDesc) backfill.description = finalDesc;
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
-          if (pictureUrls.length > 0) {
-            backfill.photoUrls = pictureUrls;
-          }
           const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
           const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
-          // Fill blanks only (condition and grade): an organizer's or earlier code's value is never rewritten.
-          // A grade is filled only when eBay supplies a quality level; "Used" (3000) leaves it empty.
-          if (!item.condition || !item.conditionGrade) {
-            const enrichCondition = canonicalFromEbayCondition(xmlVal(itemBlock, 'ConditionID') || '', {
-              categoryId: categoryBlock ? xmlVal(categoryBlock, 'CategoryID') : null,
-              categoryName,
-            });
-            Object.assign(backfill, fillBlankCondition(item, enrichCondition));
-          }
-          if (categoryName) backfill.category = categoryName;
-          // ROOT-CAUSE FIX (2026-08-11): this enrichment pass is the ONLY sync path that
-          // re-touches EVERY already-imported eBay item on every sync, and it parsed
-          // <PrimaryCategory> for CategoryName ONLY -- it never read CategoryID. Net effect in
-          // production: 74 live-on-eBay items (all of one organizer's 2026-04-17 import) carried
-          // a correct eBay category NAME while Item.ebayCategoryId stayed permanently NULL.
-          // The one path that DOES capture the numeric ID (the GetMyeBaySelling import block
-          // above, ~line 5803) has never run to completion for that organizer --
-          // EbayConnection.lastEbayInventorySyncAt (written only at the very end of
-          // importEbayInventory) is still NULL in production, so that backfill never fired.
-          // eBay owns this value, so always overwrite when it differs -- same "import is source
-          // of truth" rule the GetMyeBaySelling block already applies to this field.
           const categoryIdFromEnrich = categoryBlock ? xmlVal(categoryBlock, 'CategoryID') : null;
-          if (categoryIdFromEnrich && item.ebayCategoryId !== categoryIdFromEnrich) {
-            backfill.ebayCategoryId = categoryIdFromEnrich;
-          }
+          // A grade is filled only when eBay supplies a quality level; "Used" (3000) leaves it empty. planEnrichWrites
+          // applies it blank-only (fillBlankCondition), so an organizer's or earlier code's value is never rewritten.
+          const enrichCondition = canonicalFromEbayCondition(xmlVal(itemBlock, 'ConditionID') || '', {
+            categoryId: categoryIdFromEnrich,
+            categoryName,
+          });
           const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
           const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
           const tags: string[] = nameValueBlocks.map(b => xmlVal(b, 'Value')).filter((v): v is string => !!v && v.length > 0).slice(0, 10);
-          if (tags.length > 0) backfill.tags = tags;
-          // P0 fix: keep ebayShippingClassification in sync whenever this enrichment pass
-          // actually changes category and/or tags.
-          if (backfill.category !== undefined || backfill.tags !== undefined) {
-            backfill.ebayShippingClassification = classifyEbayShipping(
-              backfill.category !== undefined ? backfill.category : item.category,
-              backfill.tags !== undefined ? backfill.tags : item.tags,
-            );
-          }
-          if (Object.keys(backfill).length > 0) {
+          // Decision logic lives in utils/ebayEnrichPlan.ts (pure, unit-tested): held/dirty items are skipped, items
+          // FindA.Sale published (ebayOfferId) get blanks filled only, imported-only items refresh from eBay, and
+          // ebayShippingClassification is recomputed only when category and/or tags are actually written.
+          // (2026-08-11 history: ebayCategoryId was never captured here, leaving it NULL on 74 imported items; the plan
+          // still fills it, and refreshes it on imported-only items where eBay owns the value.)
+          const backfill = planEnrichWrites(item, {
+            description: finalDesc,
+            photoUrls: pictureUrls,
+            categoryName,
+            categoryId: categoryIdFromEnrich,
+            tags,
+            ebayCondition: enrichCondition,
+          });
+          if (backfill) {
             await prisma.item.update({ where: { id: item.id }, data: backfill });
             enrichedCount++;
           }
