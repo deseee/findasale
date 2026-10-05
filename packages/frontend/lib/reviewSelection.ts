@@ -86,16 +86,19 @@ export function bulkCategoryButtonText(count: number): string {
 // switches the bar to `position: fixed` once the slot scrolls under the site header. These helpers hold the
 // numbers and the decisions so they can be tested without a browser.
 
-/** Width at which Tailwind's `md` breakpoint starts (the layout's header changes size here). */
-export const MD_BREAKPOINT_PX = 768;
-/** Phone: 48px fixed header + 46px fixed search bar = 94px, plus a 2px gap. */
+/**
+ * Width at which Tailwind's `lg` breakpoint starts. The site layout changes here: below it the header is 48px
+ * and a 47px fixed search bar sits under it; from it up the header is 64px and the search bar is gone.
+ */
+export const LG_BREAKPOINT_PX = 1024;
+/** Below lg: 48px fixed header + 47px fixed search bar = 95px, plus a 1px gap. */
 export const PHONE_STICKY_TOP_PX = 96;
-/** md and up: the same offset the site uses elsewhere for content under the 64px header (`top-20`). */
+/** lg and up: the same offset the site uses elsewhere for content under the 64px header (`top-20`). */
 export const DESKTOP_STICKY_TOP_PX = 80;
 
 /** Distance from the top of the window at which the bar should rest, so it sits just under the fixed header(s). */
 export function stickyTopOffset(viewportWidth: number): number {
-  return viewportWidth >= MD_BREAKPOINT_PX ? DESKTOP_STICKY_TOP_PX : PHONE_STICKY_TOP_PX;
+  return viewportWidth >= LG_BREAKPOINT_PX ? DESKTOP_STICKY_TOP_PX : PHONE_STICKY_TOP_PX;
 }
 
 /** True once the bar's in-flow slot has scrolled up past the resting offset, so the bar must be pinned. */
@@ -123,4 +126,19 @@ export function bulkBarLayout(selectedCount: number, bulkMode: BulkPanel | null)
   const showSelectionRow = selectedCount > 0;
   const panel = showSelectionRow ? bulkMode : null;
   return { showSelectionRow, panel, hideStatsOnPhone: panel !== null };
+}
+
+/**
+ * Whether a key press should close the open bulk panel (Set price / Set category). Only a plain Escape does,
+ * and only while a panel is open, no confirm dialog or camera overlay is open (those own Escape), the event
+ * was not already handled by something else (for example a menu), and it is not part of IME composition.
+ */
+export function shouldCloseBulkPanelOnKey(opts: {
+  key: string;
+  panelOpen: boolean;
+  overlayOpen: boolean;
+  defaultPrevented?: boolean;
+  isComposing?: boolean;
+}): boolean {
+  return opts.key === 'Escape' && opts.panelOpen && !opts.overlayOpen && !opts.defaultPrevented && !opts.isComposing;
 }

@@ -75,6 +75,7 @@ import {
   stickyTopOffset,
   isBarStuck,
   bulkBarLayout,
+  shouldCloseBulkPanelOnKey,
   toggleSelection,
   selectAllVisible,
   pruneSelection,
@@ -863,6 +864,30 @@ const ReviewPage = () => {
   const pinnedBar = usePinnedBar(
     !itemsLoading && items.some((i) => i.draftStatus !== 'PUBLISHED' && !approvedIds.has(i.id))
   );
+
+  // Escape closes the open bulk panel (Set price / Set category). The listener exists only while a panel is
+  // open and is removed when it closes or the page unmounts. Confirm dialogs and the camera overlay own Escape
+  // themselves, so it is ignored while one of them is open.
+  const bulkPanelOpen = bulkMode !== null;
+  const overlayOpen = showApproveAllModal || showDiscardAllModal || inlineCameraOpen;
+  useEffect(() => {
+    if (!bulkPanelOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        shouldCloseBulkPanelOnKey({
+          key: e.key,
+          panelOpen: true,
+          overlayOpen,
+          defaultPrevented: e.defaultPrevented,
+          isComposing: e.isComposing,
+        })
+      ) {
+        setBulkMode(null);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [bulkPanelOpen, overlayOpen]);
 
   // Auth + saleId guards (MUST be after all hooks to respect Rules of Hooks)
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -1778,6 +1803,18 @@ const ReviewPage = () => {
                   : undefined
               }
             >
+              {/* Solid page-colored backdrop behind the pinned bar. It fills the gap between the fixed header(s) and
+                  the bar and the gap between the stats row and the selection row, so cards never show through.
+                  It is absolute inside the fixed bar (no layout effect), sits behind the bar content (-z-10 inside
+                  the bar's z-30 stacking context) and so under the site header and search bar. Same tokens as <main>. */}
+              {pinnedBar.pinned && (
+                <div
+                  aria-hidden="true"
+                  data-testid="pinned-bar-backdrop"
+                  className="absolute inset-x-0 bottom-0 -z-10 bg-[#F4EFE7] dark:bg-[#1C1C1E]"
+                  style={{ top: -pinnedBar.pinned.top }}
+                />
+              )}
               <div
                 className={`bg-[#FBF8F2] dark:bg-[#2C2C2E] rounded-xl border border-black/10 dark:border-[#3A3A3C] px-3 py-2 sm:px-4 sm:py-3 flex-wrap items-center justify-between gap-x-2 sm:gap-x-3 gap-y-2 shadow-sm ${
                   barLayout.hideStatsOnPhone ? 'hidden sm:flex' : 'flex'
