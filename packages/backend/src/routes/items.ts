@@ -70,6 +70,7 @@ import { reanalyzeItemForOrganizer } from '../controllers/reanalyzeController'; 
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
 import { normalizeBulkCategoryValue } from '../utils/bulkCategory';
+import { importedOnlyEditNeedsDirtyMark, importedOnlyIdsNeedingDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: a bulk category/tags/photos edit must survive the next import
 
 // Bulk operations validation schemas
 const bulkItemsSchema = z.object({
@@ -707,6 +708,11 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           where: { id: { in: confirmedIds } },
           data: { category, ...organizerEditStampAlways() },
         });
+        // Imported-only eBay items whose category really changed: same dirty flag as updateItem (updateMany cannot compare per item).
+        const categoryDirtyIds = importedOnlyIdsNeedingDirtyMark(confirmedItems, { category });
+        if (categoryDirtyIds.length > 0) {
+          await prisma.item.updateMany({ where: { id: { in: categoryDirtyIds } }, data: { ebayContentDirtyAt: new Date() } });
+        }
         const catStatus = failed.length > 0 ? 207 : 200;
         return res.status(catStatus).json({
           message: `Updated category for ${confirmedIds.length} item(s).`,
@@ -988,6 +994,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
               // P0 fix: keep ebayShippingClassification in sync whenever bulk tag ops change tags.
               ebayShippingClassification: classifyEbayShipping(item.category, updatedTags),
               ...organizerEditStampAlways(),
+              ...(importedOnlyEditNeedsDirtyMark(item, { tags: updatedTags }) ? { ebayContentDirtyAt: new Date() } : {}),
             },
           });
         }
@@ -1045,6 +1052,8 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
       select: {
         id: true,
         photoUrls: true,
+        ebayListingId: true,
+        ebayOfferId: true,
         saleId: true,
         organizerId: true,
         sale: { select: { organizer: { select: { id: true, userId: true, subscriptionTier: true, lat: true, lng: true } } } },
@@ -1095,6 +1104,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
             data: {
               photoUrls: [...item.photoUrls, ...newPhotos],
               ...organizerEditStampAlways(),
+              ...(importedOnlyEditNeedsDirtyMark(item, { photoUrls: [...item.photoUrls, ...newPhotos] }) ? { ebayContentDirtyAt: new Date() } : {}),
             },
           });
           confirmedIds.push(item.id);
@@ -1120,6 +1130,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
             data: {
               photoUrls: filtered,
               ...organizerEditStampAlways(),
+              ...(importedOnlyEditNeedsDirtyMark(item, { photoUrls: filtered }) ? { ebayContentDirtyAt: new Date() } : {}),
             },
           });
           confirmedIds.push(item.id);

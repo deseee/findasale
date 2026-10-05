@@ -8,6 +8,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { processCashSaleCore, CashSaleError } from './cashPaymentController'; // #561 offline cash-checkout replay
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
+import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: an offline-replayed category/tags/photos edit must survive the next import
 import { organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, organizer-driven offline replay only
 
 interface SyncOperation {
@@ -324,6 +325,11 @@ async function handleUpdateItem(operation: SyncOperation) {
         ),
         updatedAt: new Date(),
         ...organizerEditStampAlways(), // replay of the organizer's offline edit
+        ...(importedOnlyEditNeedsDirtyMark(currentItem, {
+          category: payload.category || currentItem.category,
+          tags: Array.isArray(payload.tags) ? payload.tags : currentItem.tags,
+          photoUrls: Array.isArray(payload.photoUrls) ? payload.photoUrls : currentItem.photoUrls,
+        }) ? { ebayContentDirtyAt: new Date() } : {}),
       },
     });
 

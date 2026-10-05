@@ -31,6 +31,7 @@ import { syncListedItemFieldsToEbay } from '../controllers/itemController';
 import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './modelBakeoffService';
 import { resolveGroundedIdentityInline } from './groundedIdentityService';
 import { desiredEbayCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary
+import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: an applied re-analyze must survive the next import
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { applyAiCardResult, withPreservedCardSuggestion, AiCardDb } from './cardAiSuggestion'; // card-aware re-analyze (same result, no extra API call)
 
@@ -158,6 +159,7 @@ export async function reanalyzeItem(
       packageConfirmedByOrganizer: true,
       userEditedFields: true,
       ebayOfferId: true,
+      ebayListingId: true,
       catalogSuggestions: true, // read so a pending cardSuggestion can be carried across the enrichment suggestion write
       organizerId: true,
       sale: { select: { id: true, organizerId: true } },
@@ -356,6 +358,13 @@ export async function reanalyzeItem(
         data.category !== undefined ? data.category : item.category,
         data.tags !== undefined ? data.tags : item.tags,
       );
+    }
+    // Imported-only eBay item (listing id, no offer id): a real title/description/condition/category/tags change sets
+    // ebayContentDirtyAt, same flag as updateItem, so the enrich pass and Trading backfill do not revert it.
+    if (importedOnlyEditNeedsDirtyMark(item, {
+      title: data.title, description: data.description, condition: data.condition, category: data.category, tags: data.tags,
+    })) {
+      data.ebayContentDirtyAt = new Date();
     }
     if (Object.keys(data).length > 0) {
       await prisma.item.update({ where: { id: itemId }, data });
