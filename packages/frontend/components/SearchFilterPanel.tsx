@@ -321,7 +321,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   if (!isMobile) {
     return (
       <div className="w-64 flex-shrink-0 pr-6">
-        <div className="sticky top-20">
+        <div className="sticky top-24 lg:top-20 max-h-[calc(100vh-7rem)] overflow-y-auto -mx-1 px-1">
           <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Filters</h2>
           {filterContent}
           {resultCount !== undefined && (

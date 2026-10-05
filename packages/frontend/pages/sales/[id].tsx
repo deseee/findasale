@@ -2345,7 +2345,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           </div>{/* end MAIN COLUMN */}
 
           {/* ── SIDE RAIL (desktop only, sticky) ── */}
-          <aside className="hidden lg:flex flex-col gap-4 self-start sticky top-6">
+          <aside className="hidden lg:flex flex-col gap-4 self-start sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto">
 
 
             {/* Map rail block */}

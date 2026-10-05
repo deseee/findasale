@@ -189,7 +189,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
       className="hidden md:block w-56 flex-shrink-0"
       aria-label="Search filters"
     >
-      <div className="sticky top-4 bg-white dark:bg-gray-800 rounded-xl border border-warm-100 dark:border-gray-700 p-4 shadow-sm">
+      <div className="sticky top-24 lg:top-20 max-h-[calc(100vh-7rem)] overflow-y-auto bg-white dark:bg-gray-800 rounded-xl border border-warm-100 dark:border-gray-700 p-4 shadow-sm">
         <p className="text-base font-bold text-warm-900 dark:text-gray-200 mb-4">Filters</p>
         <FiltersContent filters={filters} facets={facets} onChange={onChange} onClear={onClear} />
       </div>

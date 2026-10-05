@@ -474,7 +474,7 @@ const GuidePage = () => {
           <div className="flex flex-col md:flex-row gap-8">
             {/* Sidebar nav */}
             <nav className="md:w-56 shrink-0">
-              <ul className="space-y-1 sticky top-6">
+              <ul className="space-y-1 sticky top-28 lg:top-20">
                 {sections.map((s) => (
                   <li key={s.id}>
                     <button

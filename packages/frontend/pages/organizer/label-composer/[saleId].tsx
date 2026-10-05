@@ -692,7 +692,7 @@ export default function LabelComposerPage() {
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 sticky top-0 z-50">
+        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 sticky top-24 lg:top-16 z-30">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
               <Link href={`/organizer/print-kit/${saleId}`}>

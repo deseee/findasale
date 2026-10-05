@@ -579,13 +579,13 @@ interface FooterProps {
 }
 function WizardFooter({ c, onBack, onNext, onSaveDraft, nextLabel = 'Continue', backLabel = 'Back', warn, nextDisabled }: FooterProps) {
   return (
-    <div style={{
+    // Sticky via classes (not inline) so it can clear the fixed 56px mobile bottom tab bar (same offsets as the item form action bar).
+    <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 z-30" style={{
       borderTop: `1px solid ${c.border}`,
       padding: '16px 24px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       background: c.bg, gap: 12,
       flexWrap: 'wrap',
-      position: 'sticky', bottom: 0,
     }}>
       <button
         type="button"

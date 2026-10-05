@@ -122,7 +122,7 @@ const MessageThreadPage = () => {
       </Head>
 
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
+      <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 sticky top-24 lg:top-16 z-10">
         <Link href="/messages" className="text-warm-500 dark:text-warm-400 hover:text-warm-900 dark:text-warm-100 p-1 -ml-1" aria-label="Back">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
