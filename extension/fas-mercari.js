@@ -508,7 +508,169 @@
     if (closeBtn) { await realClick(closeBtn); await sleep(150); return true; }
     return false;
   }
-  async function pickCategory(categoryText, breadcrumbText) {
+  // ================================================================================================
+  // 2026-10-05 (S-EXT-MERCARI-CATEGORY-MAP): FindA.Sale's backend now resolves each item to a REAL Mercari
+  // category (packages/backend/src/config/mercariCategoryMap.ts + services/mercariCategoryResolver.ts) and
+  // ships it on the item as mercariCategoryId / mercariCategoryPath / mercariCategorySource. Root cause this
+  // fixes: pickCategory() below only ever had eBay's free-text category to fuzzy-search Mercari's picker with,
+  // so a youth baseball glove could land in a generic category instead of Sports & outdoors > Baseball
+  // Equipment > Baseball Gloves & Mitts. When item.mercariCategoryPath is present this path runs FIRST: it
+  // types the exact leaf title into Mercari's own "Search category" box and clicks ONLY the result row whose
+  // breadcrumb ("Women > Athletic apparel > Tracksuits") matches the mapped path. Any miss, ambiguity or
+  // error closes the modal, returns false, and the existing search logic below runs completely unchanged.
+  // UNVERIFIED against the live picker beyond what the older comments in this file already recorded (rows
+  // are role-less buttons showing the full breadcrumb; the Category control shows the committed value).
+  // ================================================================================================
+  function mercariMappedPathParts(item) {
+    return String((item && item.mercariCategoryPath) || '').split('>').map((x) => x.trim()).filter(Boolean);
+  }
+  // Returns a function(options) -> { el, matches, distinct }. A row qualifies only when it SHOWS a breadcrumb
+  // ("A > B > C") whose last segment is exactly our leaf title, whose parent segment equals our parent, and
+  // (for a 3-level path) whose first segment equals our family. Rows with no breadcrumb are never trusted
+  // (a bare "Other" or "Home decor" exists under several parents). Exactly one distinct row must qualify.
+  function mercariMappedRowChooser(parts) {
+    const want = parts.map(norm);
+    const leafN = want[want.length - 1];
+    const parentN = want.length > 1 ? want[want.length - 2] : '';
+    const rootN = want.length > 2 ? want[0] : '';
+    return function (options) {
+      const pool = options.filter((o) => String(o.className || '').indexOf('CategoryDialog') !== -1);
+      const rows = pool.length ? pool : options;
+      const hits = [];
+      for (const el of rows) {
+        const text = norm(el.textContent);
+        if (!text || text.length > 200 || text.indexOf('>') === -1) continue;
+        const segs = text.split('>').map((x) => x.trim()).filter(Boolean);
+        if (segs.length < 2 || segs[segs.length - 1] !== leafN) continue;
+        if (parentN && segs[segs.length - 2] !== parentN) continue;
+        if (rootN && segs[0] !== rootN) continue;
+        hits.push({ el: el, text: segs.join(' > ') });
+      }
+      const distinct = [];
+      hits.forEach((h) => { if (distinct.indexOf(h.text) === -1) distinct.push(h.text); });
+      return { el: distinct.length === 1 ? hits[0].el : null, matches: hits.length, distinct: distinct.length };
+    };
+  }
+  function mercariCategorySearchInput() {
+    return document.querySelector('input[placeholder="Search category" i]')
+      || qa('input[type="text"], input:not([type])').find((el) => {
+        const ph = norm(el.getAttribute('placeholder') || '');
+        return ph.indexOf('search') !== -1 && ph.indexOf('categor') !== -1;
+      }) || null;
+  }
+  // Text of the Category control (and its immediate wrapper) as shown right now, for the landed check.
+  function mercariCategoryControlTexts(opener) {
+    const out = [];
+    const el = (opener && opener.isConnected) ? opener : openerByLabel('Category');
+    if (el) {
+      out.push(norm(el.textContent));
+      const par = el.parentElement;
+      if (par) { const pt = norm(par.textContent); if (pt.length < 240) out.push(pt); }
+    }
+    return out;
+  }
+  async function pickMappedMercariCategory(item) {
+    const parts = mercariMappedPathParts(item);
+    if (parts.length < 2) return false;
+    const leaf = parts[parts.length - 1];
+    const leafN = norm(leaf);
+    const outcome = { id: item.mercariCategoryId || null, path: item.mercariCategoryPath, source: item.mercariCategorySource || null, result: 'unknown', query: null, at: Date.now() };
+    const persist = () => { try { chrome.storage.local.set({ fasMercariLastCategoryMap: outcome }); } catch (e) { /* best-effort diagnostic */ } };
+    console.log('[FAS Mercari] Category mapped by FindA.Sale: id ' + outcome.id + ' (' + outcome.source + ') "' + item.mercariCategoryPath + '" -- searching the picker for "' + leaf + '".');
+    const giveUp = async (result, why) => {
+      outcome.result = result;
+      persist();
+      console.warn('[FAS Mercari] Mapped category "' + leaf + '" not selected (' + why + ') -- falling back to the search logic.');
+      await closeCategoryModal();
+      return false;
+    };
+    try {
+      const opener = openerByLabel('Category');
+      if (!opener) { outcome.result = 'no-opener'; persist(); return false; }
+      const before = JSON.stringify(mercariCategoryControlTexts(opener));
+      opener.click();
+      await sleep(400);
+      const searchInput = mercariCategorySearchInput();
+      if (!searchInput) return await giveUp('no-search-input', 'no "Search category" input in the picker');
+      const chooser = mercariMappedRowChooser(parts);
+      // Exact leaf title first. Mercari's own search is literal and chokes on "&" (live-confirmed earlier in
+      // this file), so a title containing "&" or "," is retried once with that tail cut off; the row match above
+      // stays exact either way, so the retry cannot widen what gets clicked.
+      const queries = [leaf];
+      const stripped = leaf.replace(/\s*[&,]\s*.*$/, '').trim();
+      if (stripped && norm(stripped) !== leafN) queries.push(stripped);
+      let last = { el: null, matches: 0, distinct: 0 };
+      let row = null;
+      for (const query of queries) {
+        searchInput.focus();
+        setNativeValue(searchInput, query);
+        outcome.query = query;
+        await sleep(700); // let Mercari's own search debounce/results settle
+        row = await waitForSelector(() => {
+          last = chooser(qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button'));
+          return last.el;
+        }, 2400);
+        if (row) break;
+      }
+      if (!row) {
+        return await giveUp(last.distinct > 1 ? 'ambiguous' : 'no-match', last.distinct > 1 ? last.distinct + ' different rows match the mapped path' : 'no result row shows the mapped breadcrumb');
+      }
+      await realClick(row);
+      await sleep(300);
+      // Same confirm / close sequence as the search branch of pickCategory below, including the exclusion of
+      // Mercari's real page-level actions (a stray "Save draft" click once redirected the whole run).
+      const MERCARI_REAL_PAGE_ACTIONS = ['save draft', 'save & continue', 'list', 'list this item', 'publish', 'save and continue'];
+      const confirmBtn = qa('button, [role="button"]').find((b) => {
+        const t = norm(b.textContent);
+        if (MERCARI_REAL_PAGE_ACTIONS.indexOf(t) !== -1) return false;
+        return t.length > 0 && t.length < 30 && /\b(apply|done|select|confirm)\b/.test(t);
+      });
+      if (confirmBtn) { await realClick(confirmBtn); await sleep(250); }
+      await closeCategoryModal();
+      await sleep(300);
+      const texts = mercariCategoryControlTexts(opener);
+      outcome.shown = (texts[0] || '').slice(0, 120);
+      const landed = texts.some((t) => t.indexOf(leafN) !== -1);
+      if (landed) {
+        outcome.result = 'selected';
+        persist();
+        console.log('[FAS Mercari] Category mapped and confirmed: control shows "' + outcome.shown + '".');
+        return true;
+      }
+      if (mercariCategorySearchInput()) return await giveUp('modal-still-open', 'the picker is still open after the click');
+      if (JSON.stringify(texts) === before) return await giveUp('did-not-stick', 'the Category control did not change');
+      // The control changed but does not spell the leaf title (Mercari may truncate or reformat the value).
+      // The row we clicked matched the mapped breadcrumb exactly, so keep it and record the mismatch.
+      outcome.result = 'selected-format-mismatch';
+      persist();
+      console.warn('[FAS Mercari] Mapped category selected; Category control shows "' + outcome.shown + '" which does not contain "' + leafN + '" (value format differs from expectation -- keeping the selection).');
+      return true;
+    } catch (e) {
+      console.warn('[FAS Mercari] Mapped category attempt threw -- falling back to the search logic:', e && e.message);
+      outcome.result = 'error';
+      persist();
+      try { await closeCategoryModal(); } catch (e2) { /* non-fatal */ }
+      return false;
+    }
+  }
+
+  async function pickCategory(categoryText, breadcrumbText, item) {
+    // 2026-10-05 (S-EXT-MERCARI-CATEGORY-MAP): FindA.Sale's own mapped Mercari category goes first (absent
+    // item.mercariCategoryPath = this block never runs). It runs even when categoryText is empty (the item may
+    // have no eBay category but still resolve from its title). On any miss it returns false and everything
+    // below runs exactly as before.
+    if (item && item.mercariCategoryPath) {
+      try {
+        if (await pickMappedMercariCategory(item)) return true;
+      } catch (e) {
+        console.warn('[FAS Mercari] Mapped category error, using the search logic instead:', e && e.message);
+      }
+      // When the call site passed the mapped path itself as the text (item had no eBay category), turn
+      // "A > B > C" into the "A:B:C" shape the segment logic below expects.
+      if (categoryText && categoryText === item.mercariCategoryPath) {
+        categoryText = String(categoryText).split('>').map((x) => x.trim()).filter(Boolean).join(':');
+      }
+    }
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
     if (!opener) return false;
@@ -2156,7 +2318,9 @@
     // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- pickCategory uses
     // the breadcrumb for less-specific fallback segments (and to derive the men's/women's gender
     // tiebreak) after the clean leaf name's own simplified variants are tried first.
-    await guardedFill('Category', item.category, (v) => pickCategory(v, item.categoryBreadcrumb));
+    // 2026-10-05 (S-EXT-MERCARI-CATEGORY-MAP): item.mercariCategoryPath (when the backend sent one) is tried first inside
+    // pickCategory; an item with no eBay category but a mapped path still gets a Category attempt.
+    await guardedFill('Category', item.category || item.mercariCategoryPath, (v) => pickCategory(v, item.categoryBreadcrumb, item));
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own guard still skips silently on unset items;
     // category-type gating (apparel-only for size/color) is left to Mercari's own form,

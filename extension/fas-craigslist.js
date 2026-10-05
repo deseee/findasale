@@ -438,33 +438,175 @@
   }
 
   // ---- FindA.Sale category -> Craigslist for-sale category (best-effort; default general) ----
+  // FIXED 2026-10-05 (S-EXT-CRAIGSLIST-CATEGORY-MAP). This used to be a 20-rule SUBSTRING table, so
+  // "Home & Garden" went to farm (the garden rule fired before household), "Video Games & Consoles" to
+  // photo ("video"), "Skin Care" to sporting ("ski" inside "skin"), "Smart Watches" to arts ("art" inside
+  // "smart"), and Baseball Gloves, Pet Supplies, Music and Pottery & Glass all fell to general. It now
+  // matches WHOLE WORDS only (a word hidden inside another word can never decide) and has rules for the
+  // categories that have a real home. barter / wanted / free stuff / garage sales are never chosen.
+  // This stays the FALLBACK: when the backend resolver (craigslistCategoryResolver.ts) sends
+  // craigslistCategoryId / craigslistCategoryPath, doCatStep() tries that first and only falls through to
+  // this function on a miss. It still returns the same legacy label strings it always returned
+  // ('sporting', 'household', 'general for sale', ...) plus new ones for the categories it could not
+  // reach before ('bikes', 'bike parts', 'cds/dvd/vhs', 'computer parts', 'materials', 'business',
+  // 'tickets', 'video gaming').
+  function clNormText(s) {
+    return String(s || '').toLowerCase().replace(/&amp;/g, '&').replace(/['’]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  // code -> [Craigslist tree title, radio-label candidates (most specific first), legacy fallback label].
+  // The live posting form's radio wording is UNVERIFIED (see radioLabelTextFor), so each category carries
+  // several spellings; clRadioForLabels() tries whole-word matches first, then the old substring tolerance.
+  const CL_CATEGORIES = {
+    ata: ['antiques', ['antiques'], 'antiques'],
+    ppa: ['appliances', ['appliances'], 'appliances'],
+    ara: ['arts+crafts', ['arts+crafts', 'arts & crafts', 'arts and crafts', 'arts'], 'arts'],
+    baa: ['baby+kids', ['baby+kids', 'baby & kid', 'baby and kid', 'baby'], 'baby'],
+    bar: ['barter', [], 'barter'],
+    haa: ['beauty+hlth', ['beauty+hlth', 'beauty & health', 'beauty and health', 'health and beauty', 'health & beauty', 'beauty'], 'health and beauty'],
+    bip: ['bike parts', ['bike parts', 'bicycle parts'], 'bike parts'],
+    bia: ['bikes', ['bikes', 'bicycles'], 'bikes'],
+    bka: ['books', ['books'], 'books'],
+    bfa: ['business', ['business', 'business/commercial'], 'business'],
+    ema: ['cds/dvd/vhs', ['cds/dvd/vhs', 'cds, dvd, vhs', 'cd/dvd', 'dvd'], 'cds/dvd/vhs'],
+    moa: ['cell phones', ['cell phones', 'cell phone', 'mobile phones'], 'cell phones'],
+    cla: ['clothes+acc', ['clothes+acc', 'clothing & accessories', 'clothing and accessories', 'clothing', 'clothes'], 'clothing'],
+    cba: ['collectibles', ['collectibles'], 'collectibles'],
+    syp: ['computer parts', ['computer parts'], 'computer parts'],
+    sya: ['computers', ['computers'], 'computers'],
+    ela: ['electronics', ['electronics'], 'electronics'],
+    gra: ['farm+garden', ['farm+garden', 'farm & garden', 'farm and garden', 'farm'], 'farm'],
+    zip: ['free stuff', [], 'free stuff'],
+    fua: ['furniture', ['furniture'], 'furniture'],
+    gms: ['garage sales', [], 'garage sales'],
+    foa: ['general', ['general for sale', 'general'], 'general for sale'],
+    hsa: ['household', ['household', 'household items'], 'household'],
+    jwa: ['jewelry', ['jewelry'], 'jewelry'],
+    maa: ['materials', ['materials', 'building materials'], 'materials'],
+    msa: ['music instr', ['music instr', 'musical instruments', 'musical instrument', 'instruments'], 'musical instruments'],
+    pha: ['photo+video', ['photo+video', 'photo & video', 'photo and video', 'photo'], 'photo'],
+    sga: ['sporting', ['sporting goods', 'sporting'], 'sporting'],
+    tia: ['tickets', ['tickets'], 'tickets'],
+    tla: ['tools', ['tools'], 'tools'],
+    taa: ['toys+games', ['toys+games', 'toys & games', 'toys and games', 'toys'], 'toys'],
+    vga: ['video gaming', ['video gaming', 'video games', 'video game'], 'video gaming'],
+    waa: ['wanted', [], 'wanted'],
+    // autos (reachable only from the backend resolver, which reads the eBay CATEGORY text, never a title)
+    sna: ['atvs/utvs/snow', ['atv/utv/sno', 'atvs/utvs/snow', 'atv', 'snow'], 'atvs/utvs/snow'],
+    pta: ['auto parts', ['auto parts'], 'auto parts'],
+    wta: ['auto wheels & tires', ['auto wheels & tires', 'wheels & tires', 'wheels+tires', 'wheels and tires', 'wheels'], 'auto wheels & tires'],
+    ava: ['aviation', ['aviation'], 'aviation'],
+    bpa: ['boat parts', ['boat parts'], 'boat parts'],
+    boo: ['boats', ['boats'], 'boats'],
+    cta: ['cars+trucks', ['cars+trucks', 'cars & trucks', 'cars and trucks'], 'cars+trucks'],
+    hva: ['heavy equipment', ['heavy equipment', 'heavy equip'], 'heavy equipment'],
+    mpa: ['motorcycle parts', ['motorcycle parts'], 'motorcycle parts'],
+    mca: ['motorcycles', ['motorcycles'], 'motorcycles'],
+    rva: ['RVs', ['rvs', 'rv'], 'rvs'],
+    tra: ['trailers', ['trailers'], 'trailers']
+  };
+  // Never selected, whatever the input: not places a normal item belongs.
+  const CL_NEVER_CATEGORY_CODES = ['bar', 'waa', 'zip', 'gms'];
+  // Ordered, whole-word rules for the keyword FALLBACK (first match wins; specific before generic).
+  // Patterns run against clNormText() output: lower case, "&" -> "and", every other symbol -> one space.
+  const CL_FALLBACK_RULES = [
+    ['video games?|video game consoles?|game consoles?|nintendo|playstation|xbox|sega|atari', 'vga'],
+    ['smart ?watch(es)?|wearables?|fitness trackers?', 'ela'],
+    ['antiques?', 'ata'],
+    ['appliances?', 'ppa'],
+    ['skin ?care|health|beauty|cosmetics?|makeup|fragrances?|perfumes?|hair care', 'haa'],
+    ['baby|babies|infants?|toddlers?|nursery|kids|children|child', 'baa'],
+    ['bike parts?|bicycle parts?|cycling parts?|bicycle components?', 'bip'],
+    ['bikes?|bicycles?|cycling', 'bia'],
+    ['books?|magazines?|novels?|textbooks?', 'bka'],
+    ['cell phones?|smartphones?|iphones?|android|mobile phones?', 'moa'],
+    ['musical instruments?|instruments?|guitars?|pianos?|violins?|drums?|pro audio|amplifiers?', 'msa'],
+    ['sports mem|fan shop|memorabilia|collectibles?|collectables?|coins?|stamps?|trading cards?|paper money|tobacciana', 'cba'],
+    ['movies?|dvds?|cds?|vinyl|records?|music|vhs|blu ray', 'ema'],
+    ['martial arts', 'sga'],
+    ['arts?|crafts?|artwork|paintings?|sewing|knitting|crochet|scrapbooking|art supplies', 'ara'],
+    ['computer parts?|computer components?|computer accessories|printers?|keyboards?|hard drives?', 'syp'],
+    ['computers?|laptops?|desktops?|monitors?|tablets?', 'sya'],
+    ['photo|photography|cameras?|camcorders?|lenses|lens|binoculars?|telescopes?', 'pha'],
+    ['electronics?|tvs?|televisions?|stereos?|speakers?|headphones?|audio|gps', 'ela'],
+    ['yard garden and outdoor living|lawn and garden|gardening|lawn mowers?|farm|plants?|mowers?|patio|lawn|yard', 'gra'],
+    ['building materials?|lumber|flooring|plumbing|roofing|insulation|building supplies', 'maa'],
+    ['business and industrial|industrial|commercial|restaurant equipment|laboratory', 'bfa'],
+    ['tickets and experiences|event tickets|concert tickets', 'tia'],
+    ['home and garden|home decor|decor|kitchen|linens?|cookware|dinnerware|dining|pottery|glassware|glass|lamps?|lighting|candles?|rugs?|bedding', 'hsa'],
+    ['furniture|couch(es)?|sofas?|tables?|chairs?|desks?|dressers?|beds?|cabinets?|bookcases?|ottomans?|stools?|bench(es)?', 'fua'],
+    ['jewel(ry|lery)|watch(es)?|rings?|necklaces?|bracelets?|earrings?|pendants?|brooch(es)?|cufflinks?', 'jwa'],
+    ['sporting|sports?|fitness|exercise|golf|skis?|skiing|snowboards?|fishing|baseball|softball|basketball|football|soccer|hockey|tennis|camping|hiking|hunting|archery|gloves and mitts', 'sga'],
+    ['clothing|clothes|apparel|shoes?|accessories|jackets?|dress(es)?|handbags?|purses?|boots?|sneakers?|hats?|scarves|jeans|shirts?', 'cla'],
+    ['tools?|drills?|saws?|wrench(es)?|hardware', 'tla'],
+    ['toys?|games?|puzzles?|lego|dolls?|action figures?|hobbies', 'taa'],
+    ['home|household', 'hsa'],
+    ['pet supplies|pets?|aquariums?|fish and aquariums|dog supplies|cat supplies', 'foa'],
+    ['garden', 'gra']
+  ].map((r) => [new RegExp('\\b(?:' + r[0] + ')\\b'), r[1]]);
+  function mapCraigslistCategoryCode(category) {
+    const c = clNormText(category);
+    if (!c) return 'foa';
+    for (const rule of CL_FALLBACK_RULES) { if (rule[0].test(c)) return rule[1]; }
+    return 'foa';
+  }
   function mapCraigslistCategory(category) {
-    const c = norm(category);
-    if (!c) return 'general for sale';
-    const rules = [
-      [['antique'], 'antiques'],
-      [['appliance'], 'appliances'],
-      [['art', 'craft'], 'arts'],
-      [['baby', 'kid', 'child', 'toddler', 'infant'], 'baby'],
-      [['book', 'magazine'], 'books'],
-      [['cell phone', 'smartphone', 'iphone', 'android'], 'cell phones'],
-      [['cloth', 'apparel', 'shoe', 'accessor', 'jacket', 'dress'], 'clothing'],
-      [['collectible', 'coin', 'stamp', 'memorabilia'], 'collectibles'],
-      [['computer', 'laptop', 'monitor'], 'computers'],
-      [['electronic', 'tv', 'stereo', 'speaker', 'headphone'], 'electronics'],
-      [['farm', 'garden', 'plant', 'lawn', 'mower'], 'farm'],
-      [['furniture', 'couch', 'sofa', 'table', 'chair', 'desk', 'dresser', 'bed', 'cabinet'], 'furniture'],
-      [['jewel', 'watch', 'ring', 'necklace', 'bracelet'], 'jewelry'],
-      [['instrument', 'guitar', 'piano', 'violin', 'drum'], 'musical instruments'],
-      [['photo', 'camera', 'lens', 'video'], 'photo'],
-      [['sport', 'fitness', 'exercise', 'golf', 'bike', 'bicycle', 'ski', 'fishing'], 'sporting'],
-      [['tool', 'drill', 'saw', 'wrench', 'hardware'], 'tools'],
-      [['toy', 'game', 'puzzle', 'lego', 'doll'], 'toys'],
-      [['kitchen', 'household', 'home', 'decor', 'linen', 'cookware'], 'household'],
-      [['health', 'beauty', 'cosmetic'], 'health and beauty']
-    ];
-    for (const rule of rules) { if (rule[0].some((k) => c.indexOf(k) !== -1)) return rule[1]; }
-    return 'general for sale';
+    const code = mapCraigslistCategoryCode(category);
+    return (CL_CATEGORIES[code] && CL_CATEGORIES[code][2]) || 'general for sale';
+  }
+
+  // ---- backend-resolved category (DOM helpers) ----
+  // S-EXT-CRAIGSLIST-CATEGORY-MAP (2026-10-05): the backend (craigslistCategoryResolver.ts) will send
+  // item.craigslistCategoryId (3-letter code), item.craigslistCategoryPath ("for sale > sporting") and
+  // item.craigslistCategorySource. Absent / null is normal (older payloads, or no safe mapping): every
+  // helper below tolerates that and returns null so doCatStep() falls through to mapCraigslistCategory().
+  function clLoose(s) {
+    return String(s || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  function clBackendCategoryPick(item) {
+    if (!item) return null;
+    let code = String(item.craigslistCategoryId == null ? '' : item.craigslistCategoryId).trim().toLowerCase();
+    const pathText = String(item.craigslistCategoryPath || '').trim();
+    const parts = pathText.split('>').map((x) => x.trim()).filter(Boolean);
+    const leafTitle = parts.length ? parts[parts.length - 1].toLowerCase() : '';
+    if (!CL_CATEGORIES[code]) {
+      code = '';
+      if (leafTitle) {
+        for (const k of Object.keys(CL_CATEGORIES)) { if (CL_CATEGORIES[k][0].toLowerCase() === leafTitle) { code = k; break; } }
+      }
+    }
+    if (code && CL_NEVER_CATEGORY_CODES.indexOf(code) !== -1) return null;
+    let labels = code ? CL_CATEGORIES[code][1].slice() : [];
+    if (!code && leafTitle) labels = [leafTitle];
+    else if (leafTitle && labels.indexOf(leafTitle) === -1) labels.push(leafTitle);
+    if (!labels.length) return null;
+    return { code: code || null, labels: labels, path: pathText || null, source: item.craigslistCategorySource || null };
+  }
+  // Finds the radio for the first label that matches: pass 1 whole-word over the radio's own label text
+  // (spelling-tolerant: "+", "&", "/" are treated as separators), pass 2 the old plain-substring tolerance.
+  function clRadioForLabels(labels) {
+    const radios = Array.from(document.querySelectorAll('input[type="radio"]'));
+    if (!radios.length || !labels || !labels.length) return null;
+    const texts = radios.map((r) => clLoose(radioLabelTextFor(r)));
+    for (const label of labels) {
+      const want = clLoose(label);
+      if (!want) continue;
+      const re = new RegExp('(^| )' + want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)');
+      for (let i = 0; i < radios.length; i++) { if (texts[i] && re.test(texts[i])) return radios[i]; }
+    }
+    for (const label of labels) { const r = radioByLabelText(label); if (r) return r; }
+    return null;
+  }
+  function clRecordCategoryMap(diag) {
+    try {
+      console.log('[FAS Craigslist] Category mapped ' + (diag.used === 'backend'
+        ? 'by FindA.Sale: id ' + ((diag.backend && diag.backend.id) || '-') + ' (' + ((diag.backend && diag.backend.source) || 'no source') + ') "' + ((diag.backend && diag.backend.path) || '-') + '"'
+        : 'by the keyword fallback: "' + diag.fallbackTarget + '"') +
+        ' -> radio "' + diag.radioLabel + '"' + (diag.usedGeneralFallback ? ' (general for sale fallback)' : ''));
+    } catch (e) { /* diagnostic only */ }
+    try {
+      const p = chrome.storage.local.set({ fasCraigslistLastCategoryMap: diag });
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (e) { /* best-effort diagnostic */ }
   }
 
   // ---- photo injection (reuses the worker's cross-origin fetchPhotos, same as fas-content.js) ----
@@ -713,10 +855,46 @@
     // falling back to a shared, all-categories-text container) on the next live run.
     console.log('[FAS Craigslist DIAG] doCatStep: radios on page=' +
       Array.from(document.querySelectorAll('input[type="radio"]')).map((r) => '"' + radioLabelTextFor(r) + '"').join(', '));
-    let radio = radioByLabelText(target);
+    // S-EXT-CRAIGSLIST-CATEGORY-MAP (2026-10-05): prefer the category the backend resolved
+    // (item.craigslistCategoryId / craigslistCategoryPath; absent on older payloads), then fall through
+    // to mapCraigslistCategory() EXACTLY as before on any miss (no backend field, unknown code, no
+    // matching radio, or any error). Wrapped in try/catch so new code can never break the step.
+    let radio = null;
+    let backendPick = null;
+    let usedBackend = false;
+    try {
+      backendPick = clBackendCategoryPick(item);
+      if (backendPick) { radio = clRadioForLabels(backendPick.labels); usedBackend = !!radio; }
+    } catch (e) {
+      console.warn('[FAS Craigslist] backend category pick failed -- using the keyword fallback:', e && e.message);
+      radio = null;
+      usedBackend = false;
+    }
+    if (!radio) radio = radioByLabelText(target);
+    if (!radio) {
+      // The fallback's own category may use a spelling the old plain substring cannot see ("bikes",
+      // "cds/dvd/vhs", ...): try its label candidates before giving up to general.
+      try {
+        const fbCode = mapCraigslistCategoryCode(item.category);
+        if (fbCode && CL_CATEGORIES[fbCode] && CL_NEVER_CATEGORY_CODES.indexOf(fbCode) === -1) radio = clRadioForLabels(CL_CATEGORIES[fbCode][1]);
+      } catch (e) { radio = null; }
+    }
     let usedGeneralFallback = false;
     if (!radio && target !== 'general for sale') { radio = radioByLabelText('general for sale'); usedGeneralFallback = true; }
     if (!radio) throw hardError('Category', 'Couldn\'t find a for-sale category to select on this Craigslist screen.');
+    try {
+      clRecordCategoryMap({
+        at: new Date().toISOString(),
+        itemId: (item && item.id) || null,
+        category: (item && item.category) || null,
+        used: usedBackend ? 'backend' : (usedGeneralFallback ? 'general' : 'fallback'),
+        backend: backendPick ? { id: (item && item.craigslistCategoryId) || backendPick.code, path: backendPick.path, source: backendPick.source, labels: backendPick.labels, radioFound: usedBackend } : null,
+        fallbackTarget: target,
+        usedGeneralFallback: usedGeneralFallback,
+        radioLabel: radioLabelTextFor(radio),
+        radioLabelsOnPage: Array.from(document.querySelectorAll('input[type="radio"]')).slice(0, 80).map((r) => radioLabelTextFor(r))
+      });
+    } catch (e) { /* diagnostic only */ }
     console.log('[FAS Craigslist DIAG] doCatStep: radio found=' + !!radio + ' usedGeneralFallback=' + usedGeneralFallback + ' radioLabelText="' + radioLabelTextFor(radio) + '"');
     selectRadio(radio);
     await humanPause(500, 900);

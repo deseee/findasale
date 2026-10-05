@@ -1344,7 +1344,126 @@
     }
     return false;
   }
-  async function pickCategory(categoryText, breadcrumbText, genderHintText) {
+  // ================================================================================================
+  // 2026-10-05 (S-EXT-POSHMARK-CATEGORY-MAP): FindA.Sale's backend now resolves each item to a REAL
+  // Poshmark category path (packages/backend/src/config/poshmarkCategoryMap.ts +
+  // services/poshmarkCategoryResolver.ts) and ships it on the item as poshmarkCategoryId /
+  // poshmarkCategoryPath ("Department > Category > Sub-category") / poshmarkCategorySource. Root cause
+  // this fixes: pickCategory() below only ever had the free-text category to fuzzy-match with, so
+  // department and leaf were guessed by word overlap. The mapped path is tried FIRST and ONLY accepts a
+  // picker row whose whole text equals the title at that level EXACTLY; any miss, ambiguity or error closes
+  // the picker and returns false, and the existing logic in pickCategory() runs completely unchanged.
+  // An item without poshmarkCategoryPath (older backend, or the resolver had no safe answer) never enters
+  // this path at all.
+  // ================================================================================================
+  function poshmarkMappedPathParts(item) {
+    return String((item && item.poshmarkCategoryPath) || '').split('>').map((x) => x.trim()).filter(Boolean);
+  }
+  // The single picker row whose WHOLE visible text is exactly `title`; null when there is none or more than
+  // one distinct row (never guesses). Rows nested inside one another (an <li> wrapping a role="menuitem")
+  // count as one row, the outermost.
+  function poshmarkExactRow(items, title) {
+    const want = norm(title);
+    if (!want) return null;
+    const hits = items.filter((el) => norm(el.textContent) === want);
+    if (!hits.length) return null;
+    const top = hits.filter((el) => !hits.some((o) => o !== el && o.contains(el)));
+    return top.length === 1 ? top[0] : null;
+  }
+  // Polls (the picker re-renders after every click, so the previous level's rows can linger for a moment)
+  // until exactly one row matches the title, or the timeout passes.
+  async function waitForPoshmarkExactRow(title, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const items = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null && norm(el.textContent) !== 'all categories');
+      const row = poshmarkExactRow(items, title);
+      if (row) return row;
+      await sleep(100);
+    }
+    return null;
+  }
+  async function pickMappedPoshmarkCategory(item) {
+    const parts = poshmarkMappedPathParts(item);
+    // A real Poshmark path is Department > Category (> Sub-category): anything else is not trusted.
+    if (parts.length < 2 || parts.length > 3) return false;
+    const leaf = parts[parts.length - 1];
+    const outcome = { id: item.poshmarkCategoryId || null, path: item.poshmarkCategoryPath, source: item.poshmarkCategorySource || null, result: 'unknown', at: Date.now() };
+    const persist = () => { try { chrome.storage.local.set({ fasPoshmarkLastCategoryMap: outcome }); } catch (e) { /* best-effort diagnostic */ } };
+    console.log('[FAS Poshmark] Category mapped by FindA.Sale: "' + item.poshmarkCategoryPath + '" (' + (outcome.source || 'unknown source') + ') -- walking the picker by exact title.');
+    const opener = openerByLabel('Category');
+    if (!opener) {
+      console.warn('[FAS Poshmark] Mapped category: Category control not found -- falling back to the search logic.');
+      outcome.result = 'no-opener';
+      persist();
+      return false;
+    }
+    let committed = false;
+    try {
+      await vueOpenDropdown(opener);
+      await sleep(400);
+      // Same clean-root reset as pickCategory(): the dropdown can reopen already navigated into a department.
+      const resetItems = await waitForMenuItems((el) => el.offsetParent !== null, 1000);
+      const allCategoriesLink = resetItems.find((el) => norm(el.textContent) === 'all categories');
+      if (allCategoriesLink) { realClick(allCategoriesLink); await sleep(350); }
+      let failedAt = -1;
+      for (let level = 0; level < parts.length; level++) {
+        const row = await waitForPoshmarkExactRow(parts[level], 1500);
+        if (!row) { failedAt = level; break; }
+        realClick(row);
+        await sleep(350);
+      }
+      if (failedAt !== -1) {
+        console.warn('[FAS Poshmark] Mapped category: no single picker row is titled exactly "' + parts[failedAt] + '" at level ' + (failedAt + 1) + ' -- falling back to the search logic.');
+        outcome.result = 'no-exact-row';
+        outcome.failedLevel = parts[failedAt];
+      } else {
+        // Same commit check pickCategory() uses (Poshmark's own Vue state, read through the MAIN-world bridge).
+        const catalogState = await bridgeCall('getCatalogCommitState', {});
+        committed = !!(catalogState && catalogState.committed);
+        console.log('[FAS Poshmark][catdbg] mapped category catalogState=', JSON.stringify(catalogState));
+        if (!committed) outcome.result = 'not-committed';
+      }
+    } catch (e) {
+      console.warn('[FAS Poshmark] Mapped category attempt threw -- falling back to the search logic:', e && e.message);
+      outcome.result = 'error';
+      committed = false;
+    }
+    // Always close the dropdown (success or not): an open panel leaks its rows into later fields' queries,
+    // and the fallback logic reopens it itself.
+    try {
+      const closeRes = await bridgeCall('closeDropdown', { el: opener });
+      if (!closeRes || !closeRes.closed) realClick(opener);
+      await sleep(250);
+    } catch (e) { /* closing is best-effort */ }
+    if (!committed) {
+      persist();
+      return false;
+    }
+    const shown = norm(opener.textContent);
+    outcome.shown = shown.slice(0, 120);
+    if (shown.indexOf(norm(leaf)) === -1) {
+      // Every level was an exact title match and Poshmark reports a committed category, so keep it -- but record
+      // that the Category control shows the value in a format this check did not expect (UNVERIFIED live).
+      console.warn('[FAS Poshmark] Category mapped and committed; the Category control shows "' + shown.slice(0, 80) + '" which does not contain "' + norm(leaf) + '" (display format unverified -- keeping the selection).');
+      outcome.result = 'selected-format-mismatch';
+    } else {
+      console.log('[FAS Poshmark] Category mapped and confirmed: control shows "' + shown.slice(0, 80) + '".');
+      outcome.result = 'selected';
+    }
+    persist();
+    return true;
+  }
+  async function pickCategory(categoryText, breadcrumbText, genderHintText, mappedItem) {
+    // 2026-10-05 (S-EXT-POSHMARK-CATEGORY-MAP): FindA.Sale's own mapped category goes first. Runs even when
+    // categoryText is empty (the item may have no eBay category but still resolve from its title). On any miss
+    // it returns false and everything below runs exactly as before.
+    if (mappedItem && mappedItem.poshmarkCategoryPath) {
+      try {
+        if (await pickMappedPoshmarkCategory(mappedItem)) return { committed: true, confident: true };
+      } catch (e) {
+        console.warn('[FAS Poshmark] Mapped category error, using the search logic instead:', e && e.message);
+      }
+    }
     // BUG FIX 2026-08-22 (P0, Patrick-directed): used to return false immediately for an item with
     // no category at all, skipping the picker entirely -- but Size/Color/Condition are all locked
     // behind a committed category, so an item with no category ended up with none of those fields
@@ -2106,7 +2225,7 @@
     let categoryConfident = false;
     try {
       const genderHintText = [item.title, item.description].filter(Boolean).join(' ');
-      const categoryResult = await pickCategory(item.category || '', item.categoryBreadcrumb, genderHintText);
+      const categoryResult = await pickCategory(item.category || '', item.categoryBreadcrumb, genderHintText, item);
       categoryCommitted = !!(categoryResult && categoryResult.committed);
       categoryConfident = !!(categoryResult && categoryResult.committed && categoryResult.confident);
     } catch (e) {

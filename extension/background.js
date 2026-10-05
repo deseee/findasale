@@ -1644,6 +1644,18 @@ function buildRenewalQueueItem(it, organizerEmail) {
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     conditionRaw: it.conditionRaw, conditionGrade: it.conditionGrade, // fas-condition.js
     description: it.description, category: it.category, photoUrls: it.photoUrls || [],
+    // S-EXT-CATEGORY-MAPS (2026-10-05): renewals use the same exact category leaves as popup.js's queue map
+    // (/extension/items carries them; absent stays undefined and the content script falls back to its own search).
+    vintedCategoryId: it.vintedCategoryId, vintedCategoryPath: it.vintedCategoryPath,
+    vintedCategorySource: it.vintedCategorySource,
+    poshmarkCategoryId: it.poshmarkCategoryId, poshmarkCategoryPath: it.poshmarkCategoryPath,
+    poshmarkCategorySource: it.poshmarkCategorySource,
+    mercariCategoryId: it.mercariCategoryId, mercariCategoryPath: it.mercariCategoryPath,
+    mercariCategorySource: it.mercariCategorySource,
+    grailedCategoryId: it.grailedCategoryId, grailedCategoryPath: it.grailedCategoryPath,
+    grailedCategorySource: it.grailedCategorySource,
+    craigslistCategoryId: it.craigslistCategoryId, craigslistCategoryPath: it.craigslistCategoryPath,
+    craigslistCategorySource: it.craigslistCategorySource,
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt
     packageLengthIn: it.packageLengthIn, packageWidthIn: it.packageWidthIn, packageHeightIn: it.packageHeightIn,

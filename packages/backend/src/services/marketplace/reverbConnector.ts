@@ -53,6 +53,8 @@ import { prisma } from '../../lib/prisma';
 import { encryptToken, decryptToken } from '../../utils/tokenCrypto';
 import { normalizeCondition } from '../../utils/conditionMapping'; // U4: one condition vocabulary
 import type { Item, MarketplaceAccount } from '@prisma/client';
+import { resolveReverbSubcategory } from './reverbCategoryResolver'; // S-REVERB-SUBCATEGORY 2026-10-05
+import { reverbTopSlug, reverbLeafSlug } from '../../config/reverbCategoryTree';
 
 // ── Endpoints ────────────────────────────────────────────────────────────────
 // sandbox.reverb.com/api for testing (full-parity sandbox, confirmed live via
@@ -321,6 +323,49 @@ function guessReverbCategoryName(item: Item): string {
   return DEFAULT_REVERB_CATEGORY_NAME;
 }
 
+/**
+ * S-REVERB-SUBCATEGORY (2026-10-05). Returns the UUID of a Reverb SUB-category for this item, or null.
+ * null means "send exactly what was sent before this existed" -- the caller falls back to the top-level
+ * UUID it already matched. It is null whenever ANY of these holds: the kill switch
+ * REVERB_SUBCATEGORY_DISABLED=true is set; the resolver has no confident leaf (reverbCategoryResolver.ts
+ * returns null on ambiguity); the live /categories/flat list has no entry carrying that leaf's `slug`; the
+ * entry's `root_slug` (or, when absent, the first segment of its `full_name`) is not the top-level
+ * category already chosen; or more than one entry matches. Never throws. Never invents a UUID: the only
+ * source is the live list passed in.
+ */
+export function pickReverbSubcategoryUuid(
+  list: Array<{ uuid?: string; full_name?: string; name?: string; slug?: string; root_slug?: string }>,
+  topLevelName: string,
+  item: Item
+): string | null {
+  try {
+    if (process.env.REVERB_SUBCATEGORY_DISABLED === 'true') return null;
+    const sub = resolveReverbSubcategory({
+      topLevelName,
+      ebayCategoryId: item.ebayCategoryId,
+      ebayCategoryName: item.ebayCategoryName,
+      categoryBreadcrumb: item.category,
+      title: item.title,
+      description: item.description,
+      brand: item.brand,
+    });
+    if (!sub) return null;
+    const topSlug = reverbTopSlug(sub.slug).toLowerCase();
+    const leafSlug = reverbLeafSlug(sub.slug).toLowerCase();
+    const topName = topLevelName.trim().toLowerCase();
+    const hits = (Array.isArray(list) ? list : []).filter(c => {
+      if (!c || typeof c.uuid !== 'string' || !c.uuid || typeof c.slug !== 'string') return false;
+      if (c.slug.trim().toLowerCase() !== leafSlug) return false;
+      if (typeof c.root_slug === 'string' && c.root_slug) return c.root_slug.trim().toLowerCase() === topSlug;
+      const firstSegment = String(c.full_name || '').split(/\s*(?:\/|>)\s*/)[0];
+      return firstSegment.trim().toLowerCase() === topName;
+    });
+    return hits.length === 1 ? (hits[0].uuid as string) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveReverbCategoryUuid(accessToken: string, item: Item): Promise<string> {
   const targetName = guessReverbCategoryName(item);
   try {
@@ -330,7 +375,8 @@ async function resolveReverbCategoryUuid(accessToken: string, item: Item): Promi
       const list: Array<{ uuid: string; full_name?: string; name?: string }> =
         data?.categories || data?._embedded?.categories || [];
       const match = list.find(c => (c.full_name || c.name || '').toLowerCase() === targetName.toLowerCase());
-      if (match?.uuid) return match.uuid;
+      // S-REVERB-SUBCATEGORY: prefer a confidently resolved sub-category from this same live list; null -> today's top-level UUID.
+      if (match?.uuid) return pickReverbSubcategoryUuid(list, targetName, item) || match.uuid;
     }
   } catch (e) {
     console.warn('[Reverb] categories/flat live fetch failed, using fallback table', e);

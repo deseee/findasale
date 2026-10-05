@@ -773,6 +773,210 @@
     return norm(openerFresh.textContent).indexOf(pickedTextRetry) !== -1;
   }
 
+  // ===== MAPPED-FIRST CATEGORY PATH (added 2026-10-05, Grailed category taxonomy pass) =====
+  // FindA.Sale's backend (grailedCategoryResolver) can now supply an exact Grailed leaf as
+  // item.grailedCategoryPath = "Department > Category > Sub-category" (e.g. "Menswear > Tops >
+  // Sweatshirts & Hoodies") plus grailedCategoryId / grailedCategorySource. When that field is
+  // present, pickCategory() tries it FIRST and drives the real three-level picker by EXACT title at
+  // each level (no fuzzy scoring, no eBay-name guessing). On ANY miss, ambiguity or error the
+  // mapped path returns 'miss' and the legacy logic below runs unchanged. When the field is absent
+  // none of this runs. The ordering constraint is preserved: Category (combined Department/Category
+  // control) first, then Sub-category (separate trigger, disabled until Category is set).
+  function grailedMappedPathParts(item) {
+    try {
+      const p = item && item.grailedCategoryPath;
+      let parts = [];
+      if (Array.isArray(p)) parts = p.map((s) => String(s || '').trim()).filter(Boolean);
+      else if (typeof p === 'string') parts = p.split('>').map((s) => s.trim()).filter(Boolean);
+      return parts.length === 3 ? parts : [];
+    } catch (e) { return []; }
+  }
+  // Items of the panel a trigger controls. aria-controls is read fresh on every call (Radix only
+  // exposes it while the panel is open, and the department/category levels re-render in place).
+  function grailedPanelItems(trigger) {
+    const id = trigger && trigger.getAttribute && trigger.getAttribute('aria-controls');
+    const c = id ? document.getElementById(id) : null;
+    if (!c) return [];
+    return Array.from(c.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'));
+  }
+  // Exact (normalized, whole-text) title match; returns the element only if EXACTLY ONE matches.
+  function grailedExactItem(items, title) {
+    const want = norm(title);
+    const hits = items.filter((el) => norm(el.textContent) === want);
+    return hits.length === 1 ? hits[0] : null;
+  }
+  async function grailedPoll(fn, timeoutMs, stepMs) {
+    const end = Date.now() + timeoutMs;
+    for (;;) {
+      let v = null;
+      try { v = fn(); } catch (e) { v = null; }
+      if (v) return v;
+      if (Date.now() >= end) return null;
+      await sleep(stepMs || 120);
+    }
+  }
+  function grailedIsDisabled(el) {
+    return !!(el && (el.disabled || (el.getAttribute && (el.getAttribute('aria-disabled') === 'true' || el.hasAttribute('data-disabled')))));
+  }
+  // Opens a Radix trigger: trustedClick-first (synthetic fallback inside the same attempt), bounded
+  // retries, and an already-expanded panel counts as open (never toggles it closed).
+  async function grailedOpenPanel(trigger) {
+    const isOpen = () => trigger.getAttribute('aria-expanded') === 'true';
+    if (isOpen()) return true;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const usedTrusted = await trustedClick(trigger);
+      if (!usedTrusted) syntheticClick(trigger);
+      if (await grailedPoll(isOpen, 900, 100)) return true;
+    }
+    return false;
+  }
+  // Clicks the panel item whose text is EXACTLY `title`. The element is re-queried fresh every time
+  // (Grailed recreates menuitems when the panel navigates). Synthetic click first (live-confirmed to
+  // work on menuitems), verified through effectFn(); trusted click as the fallback. Returns the
+  // truthiness of effectFn() -- i.e. whether the click demonstrably had its effect.
+  async function grailedClickPanelItem(trigger, title, effectFn) {
+    const el = await grailedPoll(() => grailedExactItem(grailedPanelItems(trigger), title), 1800, 100);
+    if (!el) return false;
+    syntheticClick(el);
+    if (await grailedPoll(effectFn, 800, 100)) return true;
+    const again = grailedExactItem(grailedPanelItems(trigger), title);
+    if (!again) return !!effectFn();
+    await trustedClick(again);
+    return !!(await grailedPoll(effectFn, 1000, 100));
+  }
+  // Best-effort cleanup after a miss: step back to the department list (so the legacy picker finds
+  // the panel in its normal first state) and close the panel without picking anything.
+  async function grailedAbortPanel(trigger) {
+    try {
+      const back = document.querySelector('[aria-label="Back to departments"]');
+      if (back && back.isConnected) { syntheticClick(back); await sleep(300); }
+      if (trigger && trigger.isConnected && trigger.getAttribute('aria-expanded') === 'true') {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true }));
+        await sleep(300);
+        if (trigger.getAttribute('aria-expanded') === 'true') { syntheticClick(trigger); await sleep(300); }
+      }
+    } catch (e) { /* cleanup only */ }
+  }
+  function grailedPersistCategoryMap(rec) {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) chrome.storage.local.set({ fasGrailedLastCategoryMap: rec });
+    } catch (e) { /* diagnostic only */ }
+  }
+  async function pickMappedGrailedCategoryInner(parts, state) {
+    const deptTitle = parts[0], catTitle = parts[1], leafTitle = parts[2];
+    const deptWant = norm(deptTitle), catWant = norm(catTitle), leafWant = norm(leafTitle);
+    const opener = openerByLabel('Category');
+    if (!opener || opener.tagName === 'SELECT') { state.reason = 'no combined Department/Category trigger'; return; }
+    const placeholderText = norm(opener.textContent);
+    if (!(await grailedOpenPanel(opener))) { state.reason = 'Department/Category panel never opened'; return; }
+    try {
+      // Level 1: Department. If the panel is still on a department's category list, step back first.
+      const deptEl = () => grailedExactItem(grailedPanelItems(opener), deptTitle);
+      if (!deptEl()) {
+        const back = document.querySelector('[aria-label="Back to departments"]');
+        if (back) { syntheticClick(back); await grailedPoll(deptEl, 1500, 100); }
+      }
+      const catVisible = () => !!grailedExactItem(grailedPanelItems(opener), catTitle);
+      if (!(await grailedClickPanelItem(opener, deptTitle, catVisible))) {
+        state.reason = 'department "' + deptTitle + '" not found, ambiguous, or its categories never appeared';
+        await grailedAbortPanel(opener);
+        return;
+      }
+      // Level 2: Category (this click commits the combined control and closes the panel).
+      const closedOrChanged = () => !opener.isConnected || opener.getAttribute('aria-expanded') !== 'true' || norm(opener.textContent) !== placeholderText;
+      if (!(await grailedClickPanelItem(opener, catTitle, closedOrChanged))) {
+        state.reason = 'category "' + catTitle + '" not found, ambiguous, or the click had no effect';
+        await grailedAbortPanel(opener);
+        return;
+      }
+    } catch (e) {
+      state.reason = 'threw while picking Department/Category: ' + (e && e.message || e);
+      await grailedAbortPanel(opener);
+      return;
+    }
+    // Verify the combined control now shows BOTH levels. wordBoundaryHas, never indexOf --
+    // "menswear" is a literal substring of "womenswear".
+    await sleep(250);
+    const readCombined = () => {
+      if (opener.isConnected) return norm(opener.textContent);
+      const el = qa('button, [role="button"], [role="combobox"]').find((b) => {
+        const t = norm(b.textContent);
+        return t.indexOf('/') !== -1 && wordBoundaryHas(t, deptWant) && wordBoundaryHas(t, catWant);
+      });
+      return el ? norm(el.textContent) : null;
+    };
+    const combinedText = readCombined();
+    if (!combinedText || combinedText === placeholderText) {
+      state.reason = 'Department/Category text unchanged after the click (not committed)';
+      await grailedAbortPanel(opener);
+      return;
+    }
+    state.shown = combinedText;
+    state.result = 'partial'; // Department/Category is now committed; the legacy picker must not re-pick it.
+    if (!(wordBoundaryHas(combinedText, deptWant) && wordBoundaryHas(combinedText, catWant))) {
+      state.reason = 'Department/Category committed but shown text "' + combinedText + '" does not match "' + deptTitle + ' / ' + catTitle + '"';
+      console.warn('[FAS Grailed] Category mapped by FindA.Sale: ' + deptTitle + ' > ' + catTitle + ' -- but the control shows "' + combinedText + '" (UNVERIFIED) -- check it before publishing.');
+      return;
+    }
+    console.log('[FAS Grailed] Category mapped by FindA.Sale: ' + deptTitle + ' > ' + catTitle + ' (shows "' + combinedText + '")');
+    // Level 3: Sub-category -- a separate trigger, disabled until Category is set.
+    const subOpener = await grailedPoll(() => {
+      const s = openerByLabel('Sub-category') || openerByLabel('Subcategory');
+      return (s && s !== opener && s.tagName !== 'SELECT' && !grailedIsDisabled(s)) ? s : null;
+    }, 3500, 200);
+    if (!subOpener) { state.reason = 'Sub-category trigger not found or still disabled'; return; }
+    const subPlaceholder = norm(subOpener.textContent);
+    if (!(await grailedOpenPanel(subOpener))) { state.reason = 'Sub-category panel never opened'; await grailedAbortPanel(subOpener); return; }
+    const subClosedOrChanged = () => !subOpener.isConnected || subOpener.getAttribute('aria-expanded') !== 'true' || norm(subOpener.textContent) !== subPlaceholder;
+    if (!(await grailedClickPanelItem(subOpener, leafTitle, subClosedOrChanged))) {
+      state.reason = 'sub-category "' + leafTitle + '" not found, ambiguous, or the click had no effect';
+      await grailedAbortPanel(subOpener);
+      return;
+    }
+    await sleep(250);
+    let subShown = null;
+    if (subOpener.isConnected) subShown = norm(subOpener.textContent);
+    else {
+      const el = qa('button, [role="button"], [role="combobox"]').find((b) => norm(b.textContent) === leafWant);
+      subShown = el ? norm(el.textContent) : null;
+    }
+    if (subShown && subShown !== subPlaceholder && wordBoundaryHas(subShown, leafWant)) {
+      state.shown = combinedText + ' | ' + subShown;
+      state.result = 'done';
+      console.log('[FAS Grailed] Category mapped and confirmed: ' + deptTitle + ' > ' + catTitle + ' > ' + leafTitle + ' (shows "' + combinedText + '" | "' + subShown + '")');
+    } else {
+      state.shown = combinedText + ' | ' + (subShown || '(unreadable)');
+      state.reason = 'Sub-category clicked but its shown text "' + (subShown || '') + '" could not be confirmed as "' + leafTitle + '"';
+      console.warn('[FAS Grailed] Category mapped by FindA.Sale: ' + parts.join(' > ') + ' -- Sub-category could not be confirmed (UNVERIFIED) -- check it before publishing.');
+    }
+  }
+  // Returns 'done' (all three levels set and verified), 'partial' (Department/Category committed and
+  // verified but Sub-category missed/unverified -- caller must NOT re-pick), or 'miss' (nothing
+  // committed -- caller falls through to the legacy picker). Never throws.
+  async function pickMappedGrailedCategory(item) {
+    const parts = grailedMappedPathParts(item);
+    if (parts.length !== 3) return 'miss';
+    const state = { result: 'miss', shown: null, reason: '' };
+    try {
+      await pickMappedGrailedCategoryInner(parts, state);
+    } catch (e) {
+      state.reason = 'threw: ' + (e && e.message || e);
+    }
+    if (state.result !== 'done') {
+      console.warn('[FAS Grailed] Mapped category "' + parts.join(' > ') + '" -> ' + state.result + (state.reason ? ' (' + state.reason + ')' : '') + (state.result === 'miss' ? ' -- falling back to the legacy picker.' : '.'));
+    }
+    grailedPersistCategoryMap({
+      id: (item && item.grailedCategoryId) || null,
+      path: parts.join(' > '),
+      source: (item && item.grailedCategorySource) || null,
+      result: state.result,
+      shown: state.shown,
+      reason: state.reason || null,
+      at: new Date().toISOString(),
+    });
+    return state.result;
+  }
+
   // Category: "Department / Category" is ONE combined control on the real form (see the BUG FIX
   // comment above) -- openerByLabel('Category') matches it via substring ("category" is contained
   // in "department / category") plus the nearestControlAfter fallback. Native-select-aware first
@@ -815,7 +1019,17 @@
   // and that signal ("men"/"women") only exists in the breadcrumb, never in the clean leaf name
   // alone, so this file specifically still needs both fields where the other three content scripts
   // (S-EXT-BATCH-12) only need the clean `category` value.
-  async function pickCategory(categoryText, breadcrumbText) {
+  async function pickCategory(categoryText, breadcrumbText, item) {
+    // Mapped-first (2026-10-05): when the backend supplied an exact Grailed path, drive the picker by
+    // exact title. 'done' = fully set and verified. 'partial' = Department/Category already committed
+    // and verified but Sub-category missed -- do NOT re-run the legacy picker against a committed
+    // control; report not-ok so the organizer finishes it. 'miss' = nothing committed, legacy runs.
+    if (item && grailedMappedPathParts(item).length) {
+      let mapped = 'miss';
+      try { mapped = await pickMappedGrailedCategory(item); } catch (e) { mapped = 'miss'; console.warn('[FAS Grailed] Mapped category path threw (' + (e && e.message || e) + ') -- falling back to the legacy picker.'); }
+      if (mapped === 'done') return { ok: true, departmentGuess: null };
+      if (mapped === 'partial') return { ok: false, departmentGuess: null };
+    }
     if (!categoryText) return { ok: false, departmentGuess: null };
     const opener = openerByLabel('Category');
     if (!opener) return { ok: false, departmentGuess: null };
@@ -1819,12 +2033,12 @@
     // review overlay below with the same specific, highlighted treatment as Designer-unconfirmed
     // and Country-of-Origin, instead of being buried in the generic "UNVERIFIED guesses" line.
     let departmentGuessLabel = null;
-    if (item.category) {
+    if (item.category || grailedMappedPathParts(item).length) {
       // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- Grailed is the
       // only one of the four platforms with its own gender-level Department field, and that
       // signal ("men"/"women") only survives in the original breadcrumb, not in the clean leaf
       // name alone (see pickCategory's own comment above for the full explanation).
-      const categoryResult = await pickCategory(item.category, item.categoryBreadcrumb);
+      const categoryResult = await pickCategory(item.category, item.categoryBreadcrumb, item);
       if (!categoryResult.ok) {
         publishBlocked = true;
         console.warn('[FAS Grailed] Category "' + item.category + '" -- no match found in the picker; Designer field may remain disabled as a result.');

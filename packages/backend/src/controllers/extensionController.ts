@@ -9,6 +9,10 @@ import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENT
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
 import { resolveVintedCategory } from '../services/vintedCategoryResolver';
+import { resolvePoshmarkCategory } from '../services/poshmarkCategoryResolver';
+import { resolveMercariCategory } from '../services/mercariCategoryResolver';
+import { resolveGrailedCategory } from '../services/grailedCategoryResolver';
+import { resolveCraigslistCategory } from '../services/craigslistCategoryResolver';
 import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
@@ -62,6 +66,77 @@ function vintedCategoryFields(it: {
     console.warn('[Vinted category] resolve failed for item', e?.message || e);
     return { vintedCategoryId: null, vintedCategoryPath: null, vintedCategorySource: null };
   }
+}
+
+// S-EXT-CATEGORY-MAPS (2026-10-05): the same exact-leaf mapping as vintedCategoryFields above, for
+// Poshmark, Mercari, Grailed and Craigslist (services/<platform>CategoryResolver.ts). Twelve ADDITIVE
+// payload fields, null when no safe mapping exists (the content script then runs its existing
+// category search unchanged), so an older extension build that ignores them keeps working.
+// Never throws, and each platform is isolated: one resolver failure nulls only that platform's three
+// fields and never breaks the items payload or the other platforms. Needs no new Prisma fields: it
+// reads the same title/description/brand/category/ebayCategoryId/ebayCategoryName that
+// vintedCategoryFields reads. Exported so the unit test can call it directly.
+export interface MarketplaceCategoryFields {
+  poshmarkCategoryId: string | null;
+  poshmarkCategoryPath: string | null;
+  poshmarkCategorySource: string | null;
+  mercariCategoryId: number | null;
+  mercariCategoryPath: string | null;
+  mercariCategorySource: string | null;
+  grailedCategoryId: string | null;
+  grailedCategoryPath: string | null;
+  grailedCategorySource: string | null;
+  craigslistCategoryId: string | null;
+  craigslistCategoryPath: string | null;
+  craigslistCategorySource: string | null;
+}
+export function marketplaceCategoryFields(it: {
+  title?: string | null;
+  description?: string | null;
+  brand?: string | null;
+  category?: string | null;
+  ebayCategoryId?: string | null;
+  ebayCategoryName?: string | null;
+}): MarketplaceCategoryFields {
+  const input = {
+    ebayCategoryId: it.ebayCategoryId,
+    ebayCategoryName: it.ebayCategoryName,
+    categoryBreadcrumb: it.category,
+    title: it.title,
+    description: it.description,
+    brand: it.brand,
+  };
+  const out: MarketplaceCategoryFields = {
+    poshmarkCategoryId: null, poshmarkCategoryPath: null, poshmarkCategorySource: null,
+    mercariCategoryId: null, mercariCategoryPath: null, mercariCategorySource: null,
+    grailedCategoryId: null, grailedCategoryPath: null, grailedCategorySource: null,
+    craigslistCategoryId: null, craigslistCategoryPath: null, craigslistCategorySource: null,
+  };
+  try {
+    const r = resolvePoshmarkCategory(input);
+    if (r) { out.poshmarkCategoryId = r.id; out.poshmarkCategoryPath = r.pathText; out.poshmarkCategorySource = r.source; }
+  } catch (e: any) {
+    console.warn('[Poshmark category] resolve failed for item', e?.message || e);
+  }
+  try {
+    const r = resolveMercariCategory(input);
+    if (r) { out.mercariCategoryId = r.id; out.mercariCategoryPath = r.pathText; out.mercariCategorySource = r.source; }
+  } catch (e: any) {
+    console.warn('[Mercari category] resolve failed for item', e?.message || e);
+  }
+  try {
+    const r = resolveGrailedCategory(input);
+    if (r) { out.grailedCategoryId = r.id; out.grailedCategoryPath = r.pathText; out.grailedCategorySource = r.source; }
+  } catch (e: any) {
+    console.warn('[Grailed category] resolve failed for item', e?.message || e);
+  }
+  try {
+    const r = resolveCraigslistCategory(input);
+    if (r) { out.craigslistCategoryId = r.id == null ? null : String(r.id); out.craigslistCategoryPath = r.pathText; out.craigslistCategorySource = r.source; }
+  } catch (e: any) {
+    console.warn('[Craigslist category] resolve failed for item', e?.message || e);
+  }
+  return out;
 }
 
 // Facebook Commerce Policy (coins/currency, and as of S-FB-WEAPON-COIN-FIX-2026-09-03, weapons/
@@ -546,6 +621,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     categoryBreadcrumb: it.category || null,
     // S-EXT-VINTED-CATEGORY-MAP: exact Vinted leaf (id + full path + which layer decided) -- see vintedCategoryFields.
     ...vintedCategoryFields(it),
+    // S-EXT-CATEGORY-MAPS: Poshmark/Mercari/Grailed/Craigslist exact leaves -- see marketplaceCategoryFields.
+    ...marketplaceCategoryFields(it),
     // Facebook Commerce Policy gate (coins/currency AND weapons/ammunition/explosives as of
     // S-FB-WEAPON-COIN-FIX-2026-09-03) -- see isFacebookRestrictedItem above. FB-specific only;
     // does not affect eBay/craigslist/gumtree/native-checkout fields elsewhere in this same
@@ -2548,6 +2625,8 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     category: it.ebayCategoryName || it.category || null,
     categoryBreadcrumb: it.category || null,
     ...vintedCategoryFields(it),
+    // S-EXT-CATEGORY-MAPS: Poshmark/Mercari/Grailed/Craigslist exact leaves -- see marketplaceCategoryFields.
+    ...marketplaceCategoryFields(it),
     photoUrls: applyWatermark
       ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady))
       : (it.photoUrls || []),

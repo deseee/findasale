@@ -105,7 +105,7 @@ describe('vintedCategoryResolver: regressions', () => {
     expect(leafOf({ title: "Adidas Originals Men's Neon Yellow Tracksuit Set, Size M", ebayCategoryName: 'Tracksuits & Sets' })).toBe(582);
     expect(leafOf({ title: "Adidas Originals Women's Tracksuit Set, Size M", ebayCategoryName: 'Tracksuits & Sets' })).toBe(572);
     expect(leafOf({ title: 'Boys Nike tracksuit 8-10', ebayCategoryName: 'Tracksuits & Sets' })).toBe(1204);
-    expect(leafOf({ title: 'Adidas Originals Neon Yellow Tracksuit Set, Size M', ebayCategoryName: 'Tracksuits & Sets' })).toBeNull();
+    expect(leafOf({ title: 'Acme Originals Neon Yellow Tracksuit Set, Size M', ebayCategoryName: 'Tracksuits & Sets' })).toBeNull();
   });
 
   it('deliberate blanks stay blank: test rows, industrial parts, adult bicycles', () => {
@@ -143,13 +143,13 @@ describe('vintedCategoryResolver: department rules', () => {
 
 describe('vintedCategoryResolver: rule layer on items WITHOUT an eBay category id (audit false positives, fixed)', () => {
   it('an Eisenhower dollar with a "Coins & Paper Money" breadcrumb is a coin, not a banknote', () => {
-    const r = resolveVintedCategory({ title: '1971 D Eisenhower Dollar Circulated US Mint Coin Ike !', categoryBreadcrumb: 'Coins & Paper Money:coins: Us:dollars:eisenhower (1971-78)' });
+    const r = resolveVintedCategory({ title: '1971 Silver Dollar Circulated US Mint Coin', categoryBreadcrumb: 'Coins & Paper Money:coins: Us:dollars:eisenhower (1971-78)' });
     expect(r!.pathText).toBe('Hobbies & collectibles > Coins & banknotes > Coins');
   });
 
   it('a golf club set whose title says "Good Grips" and "Steel" is golf clubs, not aquarium gear', () => {
     const r = resolveVintedCategory({
-      title: 'Vtg Walter Hagen HAIG-Ultra Woods 1,3,4,5 & Irons Set 2-P Steel  RH Good Grips',
+      title: 'Vtg Acme Pro Woods 1,3,4,5 & Irons Set 2-P Steel  RH Good Grips',
       ebayCategoryName: 'Golf Clubs',
       categoryBreadcrumb: 'Sporting Goods:golf:golf Clubs & Equipment:golf Clubs',
     });
@@ -158,11 +158,11 @@ describe('vintedCategoryResolver: rule layer on items WITHOUT an eBay category i
   });
 
   it('a mallet putter is a golf club, not a hammer', () => {
-    expect(leafOf({ title: 'Wilson ProStaff Mallet Putter, Steel Shaft', ebayCategoryName: 'Golf Clubs', brand: 'Wilson' })).toBe(4473);
+    expect(leafOf({ title: 'Acme ProTour Mallet Putter, Steel Shaft', ebayCategoryName: 'Golf Clubs', brand: 'Acme' })).toBe(4473);
   });
 
   it('a chromatic guitar tuner is a tuner, not a guitar part', () => {
-    const r = resolveVintedCategory({ title: 'Q12E Chromatic Guitar Tuner, Exogenic Tuning, Vintage', ebayCategoryName: 'Tuners' });
+    const r = resolveVintedCategory({ title: 'Chromatic Guitar Tuner, Clip-On, Vintage', ebayCategoryName: 'Tuners' });
     expect(r!.pathText).toContain('Musical instrument tuners');
   });
 });
@@ -246,6 +246,79 @@ describe('vinted catalog tree + mapping integrity', () => {
 
   it('curated eBay ids are plain numeric strings', () => {
     const bad = Object.keys(VINTED_CURATED_BY_EBAY_ID).filter((k) => !/^[0-9]+$/.test(k));
+    expect(bad).toEqual([]);
+  });
+});
+
+describe('vintedCategoryResolver: singular and plural both match (dropped-singular regex class)', () => {
+  // Patterns are compiled as \b(?:body)\b, so "boxes?" matches "boxe"/"boxes" but NEVER "box". Every word whose
+  // plural adds -es (x/ch/sh/ss/z), -ies (y words) or -ves (f/fe words) needs the (?:es)? / (?:y|ies) / (?:f|ves) form.
+  // All titles are synthetic.
+  const PAIRS: Array<[string, string, number]> = [
+    ['Wooden music box vintage', 'Wooden music boxes vintage', 1963],
+    ['Floating shelf walnut', 'Floating shelves walnut', 1941],
+    ['Silicone pastry brush', 'Silicone pastry brushes', 3516],
+    ['Plastic storage box with lid', 'Plastic storage boxes with lid', 4908],
+  ];
+  for (const [singular, plural, expected] of PAIRS) {
+    it('"' + singular + '" and "' + plural + '" resolve identically', () => {
+      expect(leafOf({ title: singular })).toBe(expected);
+      expect(leafOf({ title: plural })).toBe(expected);
+    });
+  }
+
+  // Words whose SINGULAR genuinely ends in -e / -ie, so a bare "s?" is already correct (axe, glaze, hoodie, ...).
+  const ALLOWED = new Set<string>([
+    'axes?',
+    'cloches?',
+    'glazes?',
+    'mazes?',
+    'underglazes?',
+    'beanies?',
+    'birdies?',
+    'booties?',
+    'dhurries?',
+    'dies?',
+    'hoodies?',
+    'movies?',
+    'neckties?',
+    'rotisseries?',
+    'scrunchies?',
+    'talkies?',
+    'ties?',
+  ]);
+  const DROPPED_SINGULAR_SHAPES: RegExp[] = [
+    /\b[a-z]*(?:ch|sh|x|ss|z)es\?/g, // boxes? benches? brushes? glasses? -> box(?:es)?
+    /\b[a-z]*[^aeiou\s|(?:)]ies\?/g, // batteries? tapestries? -> batter(?:y|ies)
+    /\b[a-z]*(?:shel|kni|lea|scar|wol|hal|loa|cal|thie|wi|el|hoo|sel)ves\?/g, // shelves? knives? scarves? -> shel(?:f|ves)
+    /\b[a-z]*(?:lens|canvas|bus|gas|bias|atlas|status|stylus|virus|bonus|campus|focus|chorus)es\?/g, // lenses? -> lens(?:es)?
+  ];
+  function droppedSingulars(body: string): string[] {
+    const found = new Set<string>();
+    for (const re of DROPPED_SINGULAR_SHAPES) for (const w of body.match(re) || []) found.add(w);
+    return Array.from(found).sort();
+  }
+  function allPatterns(): string[] {
+    const all: string[] = [];
+    for (const r of VINTED_RULES) all.push(...r.all, ...(r.none || []));
+    for (const k of Object.keys(VINTED_CURATED_BY_EBAY_ID)) {
+      const e: any = VINTED_CURATED_BY_EBAY_ID[k];
+      if (e && typeof e === 'object' && Array.isArray(e.split)) for (const [p] of e.split) all.push(p);
+    }
+    return all;
+  }
+
+  it('the guard itself flags the four buggy shapes and leaves the correct forms alone', () => {
+    expect(droppedSingulars('boxes?|knives?|batteries?|lenses?')).toEqual(['batteries?', 'boxes?', 'knives?', 'lenses?']);
+    expect(droppedSingulars('box(?:es)?|kni(?:fe|ves)|batter(?:y|ies)|lens(?:es)?|boxes|hoodies?')).toEqual(['hoodies?']);
+  });
+
+  it('no pattern, in any rule, exclusion or curated split, uses a shape that drops the singular', () => {
+    const bad: string[] = [];
+    for (const p of allPatterns()) {
+      const body = p.replace(/^(cat|title|desc):/, '');
+      for (const w of droppedSingulars(body)) if (!ALLOWED.has(w)) bad.push(w + '  in  ' + p.slice(0, 60));
+    }
     expect(bad).toEqual([]);
   });
 });
