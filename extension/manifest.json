@@ -71,6 +71,7 @@
         "https://post.craigslist.org/*"
       ],
       "js": [
+        "fas-condition.js",
         "fas-craigslist.js"
       ],
       "run_at": "document_idle"
@@ -123,6 +124,7 @@
         "https://www.poshmark.com/*"
       ],
       "js": [
+        "fas-condition.js",
         "fas-poshmark.js"
       ],
       "run_at": "document_idle"
@@ -132,6 +134,7 @@
         "https://www.mercari.com/*"
       ],
       "js": [
+        "fas-condition.js",
         "fas-mercari.js"
       ],
       "run_at": "document_idle"
@@ -151,6 +154,7 @@
         "https://www.vinted.com/*"
       ],
       "js": [
+        "fas-condition.js",
         "fas-vinted.js"
       ],
       "run_at": "document_idle"
@@ -160,6 +164,7 @@
         "https://www.grailed.com/*"
       ],
       "js": [
+        "fas-condition.js",
         "fas-grailed.js"
       ],
       "run_at": "document_idle"

@@ -729,6 +729,7 @@ async function startQueue() {
     .filter((it) => !isIneligibleOnCurrentChannel(it))
     .map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
+    conditionRaw: it.conditionRaw, conditionGrade: it.conditionGrade, // fas-condition.js
     description: it.description, category: it.category,
     // S-EXT-BATCH-12 (2026-08-20): categoryBreadcrumb -- the original full eBay-taxonomy breadcrumb,
     // now sent alongside the cleaner `category` (see extensionController.ts's comment on the `category`

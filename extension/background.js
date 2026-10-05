@@ -1642,6 +1642,7 @@ async function hasActiveQueue(platform) {
 function buildRenewalQueueItem(it, organizerEmail) {
   return {
     id: it.id, title: it.title, price: it.price, condition: it.condition,
+    conditionRaw: it.conditionRaw, conditionGrade: it.conditionGrade, // fas-condition.js
     description: it.description, category: it.category, photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt

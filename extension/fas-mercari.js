@@ -2171,7 +2171,7 @@
     await guardedFill('Size', item.size, (v) => fillMercariSize(v));
     // Color: no dedicated field-fill attempt -- see appendColorToDescription() above, folded into
     // the Description fill instead (Patrick live-confirmed no Color field exists on the real form).
-    const conditionLabel = mapMercariCondition(item.condition);
+    const conditionLabel = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('mercari', item)) || mapMercariCondition(item.condition);
     await guardedFill('Condition', conditionLabel, (v) => fillMercariCondition(v));
     if (item.price != null && isFinite(Number(item.price))) {
       const priceVal = Math.max(1, Math.round(Number(item.price)));

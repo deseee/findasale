@@ -806,7 +806,7 @@
     };
     const conditionSelect = q('select[name="condition"]');
     if (conditionSelect) {
-      const mapped = item.condition ? CL_CONDITION_MAP[String(item.condition).toLowerCase().trim()] : null;
+      const mapped = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('craigslist', item)) || (item.condition ? CL_CONDITION_MAP[String(item.condition).toLowerCase().trim()] : null);
       if (mapped) {
         setInputValue(conditionSelect, mapped);
       } else {

@@ -3015,7 +3015,7 @@
     if (lastMaterialFallbackUsed) {
       warnings.push('Material was set to "Cotton" as a best-guess default (item said "' + item.material + '", which has no specific fiber Vinted recognizes) -- please correct if inaccurate.');
     }
-    const conditionLabel = mapVintedCondition(item.condition);
+    const conditionLabel = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('vinted', item)) || mapVintedCondition(item.condition);
     if (!fasSkipIfSet('condition', 'Condition')) await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
     // FEATURE 2026-09-17 (ADR: eBay freight & Vinted shipping-cap pricing): vintedPrice is item.price
     // plus any bump computed backend-side (extensionController.ts) to cover real shipping cost that

@@ -2158,7 +2158,7 @@
         else if (colorFallback) fieldNotes.push('Color "' + item.color + '" had no exact match -- used closest swatch "' + colorFallback + '" instead. Double-check it.');
       }
     }
-    const conditionLabel = mapPoshmarkCondition(item.condition);
+    const conditionLabel = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('poshmark', item)) || mapPoshmarkCondition(item.condition);
     // Condition is not the field Patrick's report named as blocked, and this file has no prior
     // finding that it's category-gated -- kept unconditional. If it also turns out to be locked
     // behind Category on a live account, gate it the same way as Size/Color above.

@@ -1736,7 +1736,7 @@
     await tryFill('Size', item.size, (v) => fillSize(v));
     // Measurements deliberately NEVER filled -- see file header. No call to any measurements
     // field exists in this function on purpose.
-    const conditionLabel = mapGrailedCondition(item.condition);
+    const conditionLabel = (window.__FAS_COND__ && window.__FAS_COND__.platformValue('grailed', item)) || mapGrailedCondition(item.condition);
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
     // BUG FIX 2026-08-21 (S-EXT-BATCH, P1): Style -- see inferGrailedStyle's own comment for the
     // real brand/keyword signals used and why an unmatched item still gets Grailed's own "None"

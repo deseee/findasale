@@ -129,7 +129,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     take: 2000,
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
-      category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, qrAssetReady: true, createdAt: true,
+      category: true, condition: true, conditionGrade: true, photoUrls: true, qrEmbedEnabled: true, qrAssetReady: true, createdAt: true,
       // S-EXT-BATCH-12 (2026-08-20): ebayCategoryName -- see the `category` field build below for why.
       ebayCategoryName: true,
       // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 5): brand/size/color/material --
@@ -488,6 +488,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     vintedShippingNote: vintedPricingByItemId.get(it.id)?.vintedShippingNote ?? null,
     vintedDomesticShippingUsd: vintedPricingByItemId.get(it.id)?.vintedDomesticShippingUsd ?? null,
     condition: toFacebookCondition(it.condition),
+    // Canonical condition and grade as stored, for the extension's fas-condition.js (read-only additions).
+    conditionRaw: it.condition ?? null,
+    conditionGrade: it.conditionGrade ?? null,
     description: buildDescription(it.description, it.saleId),
     descriptionWithBacklink: buildDescriptionWithBacklink(it.description, it.saleId),
     // S-EXT-BATCH-12 (2026-08-20, Patrick + live-Chrome-confirmed root cause): `category` on Item
@@ -2431,7 +2434,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     take: 2000,
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
-      category: true, ebayCategoryName: true, ebayCategoryId: true, condition: true,
+      category: true, ebayCategoryName: true, ebayCategoryId: true, condition: true, conditionGrade: true,
       photoUrls: true, qrEmbedEnabled: true, qrAssetReady: true,
       brand: true, size: true, color: true, material: true, isbn: true,
       packageWeightOz: true, aiPackageWeightOz: true,
@@ -2502,6 +2505,9 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     title: it.title,
     price: it.price != null ? Number(it.price.toFixed(2)) : null,
     condition: toFacebookCondition(it.condition),
+    // Canonical condition and grade as stored, for the extension's fas-condition.js (read-only additions).
+    conditionRaw: it.condition ?? null,
+    conditionGrade: it.conditionGrade ?? null,
     description: buildDescription(it.description, it.saleId),
     descriptionWithBacklink: buildDescriptionWithBacklink(it.description, it.saleId),
     category: it.ebayCategoryName || it.category || null,
