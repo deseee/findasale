@@ -178,7 +178,7 @@ function buildConditionDescription(item: { condition: string | null; conditionGr
   if (item.condition === 'NEW' || !item.condition) return undefined;
   const parts: string[] = [];
   if (item.conditionGrade) {
-    const gradeLabels: Record<string, string> = { S: 'Grade S: Mint condition', A: 'Grade A: Excellent condition', B: 'Grade B: Very good condition', C: 'Grade C: Good condition', D: 'Grade D: Fair condition' };
+    const gradeLabels: Record<string, string> = { S: 'Grade S: Mint condition', A: 'Grade A: Excellent condition', B: 'Grade B: Very good condition', C: 'Grade C: Good condition', D: 'Grade D: Acceptable condition' };
     parts.push(gradeLabels[item.conditionGrade] || `Grade ${item.conditionGrade}`);
   }
   if (item.conditionNotes) parts.push(item.conditionNotes);
