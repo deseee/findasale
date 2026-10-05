@@ -4,6 +4,7 @@
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { getSubtypesFor } from '../lib/sale-subtypes';
+import { SHOPPER_CONDITION_FILTER_OPTIONS, normalizeConditionFilterValue } from '../lib/shopperCondition';
 
 export interface SearchFilters {
   priceMin: number | null;
@@ -24,14 +25,7 @@ interface SearchFilterPanelProps {
   isMobile?: boolean;
 }
 
-const CONDITION_OPTIONS = [
-  { value: '', label: 'Any' },
-  { value: 'Excellent', label: 'Excellent' },
-  { value: 'Very Good', label: 'Very Good' },
-  { value: 'Good', label: 'Good' },
-  { value: 'Fair', label: 'Fair' },
-  { value: 'Poor', label: 'Poor' },
-];
+const CONDITION_OPTIONS = [{ value: '', label: 'Any' }, ...SHOPPER_CONDITION_FILTER_OPTIONS];
 
 const DEFAULT_CATEGORIES = [
   'Furniture',
@@ -190,7 +184,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
         <label htmlFor="condition-select" className="font-semibold text-warm-900 dark:text-gray-200 mb-3 block">Condition</label>
         <select
           id="condition-select"
-          value={filters.condition}
+          value={normalizeConditionFilterValue(filters.condition)}
           onChange={handleConditionChange}
           className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
         >

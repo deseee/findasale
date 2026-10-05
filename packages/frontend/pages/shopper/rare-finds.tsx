@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import Head from 'next/head';
 import Link from 'next/link';
 import api from '../../lib/api';
+import { shopperConditionText } from '../../lib/shopperCondition';
 import { useAuth } from '../../components/AuthContext';
 import Skeleton from '../../components/Skeleton';
 
@@ -236,7 +237,7 @@ const RareFindsPage = () => {
                       )}
                       {item.condition && (
                         <p className="text-xs text-warm-500 dark:text-warm-500 mt-1 capitalize">
-                          {item.condition}
+                          {shopperConditionText(item.condition)}
                         </p>
                       )}
                     </div>

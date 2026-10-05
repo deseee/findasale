@@ -5,14 +5,13 @@
  */
 import React from 'react';
 import { SearchFacets, ItemSearchFilters } from '../hooks/useItemSearch';
+import { SHOPPER_CONDITION_FILTER_OPTIONS, normalizeConditionFilterValue } from '../lib/shopperCondition';
 
 const CATEGORIES = [
   'furniture', 'decor', 'vintage', 'textiles', 'collectibles',
   'art', 'antiques', 'jewelry', 'books', 'tools',
   'electronics', 'clothing', 'home', 'other',
 ];
-
-const CONDITIONS = ['mint', 'excellent', 'good', 'fair', 'poor'];
 
 const SORT_OPTIONS: { value: ItemSearchFilters['sort']; label: string }[] = [
   { value: 'relevance', label: 'Relevance' },
@@ -37,8 +36,12 @@ function countFor(
   name: string,
 ): number | null {
   if (!facets) return null;
-  const list = type === 'categories' ? facets.categories : facets.conditions;
-  return list.find((f) => f.name.toLowerCase() === name.toLowerCase())?.count ?? null;
+  if (type === 'conditions') {
+    // Facet names are canonical from the server; a legacy name (LIKE_NEW, GOOD, ...) still counts toward its canonical condition.
+    const matching = facets.conditions.filter((f) => normalizeConditionFilterValue(f.name) === name);
+    return matching.length > 0 ? matching.reduce((sum, f) => sum + f.count, 0) : null;
+  }
+  return facets.categories.find((f) => f.name.toLowerCase() === name.toLowerCase())?.count ?? null;
 }
 
 const CheckRow = ({
@@ -115,16 +118,20 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
       {/* Condition */}
       <div>
         <p className="text-sm font-semibold text-warm-900 dark:text-gray-200 mb-2">Condition</p>
-        {CONDITIONS.map((cond) => (
-          <CheckRow
-            key={cond}
-            label={cond}
-            value={cond}
-            selected={filters.condition === cond}
-            count={countFor(facets, 'conditions', cond)}
-            onToggle={() => onChange({ condition: filters.condition === cond ? '' : cond, offset: 0 })}
-          />
-        ))}
+        {SHOPPER_CONDITION_FILTER_OPTIONS.map((opt) => {
+          // An old bookmarked value (excellent, Very Good, poor ...) selects the condition it stands for today.
+          const selected = normalizeConditionFilterValue(filters.condition) === opt.value;
+          return (
+            <CheckRow
+              key={opt.value}
+              label={opt.label}
+              value={opt.value}
+              selected={selected}
+              count={countFor(facets, 'conditions', opt.value)}
+              onToggle={() => onChange({ condition: selected ? '' : opt.value, offset: 0 })}
+            />
+          );
+        })}
       </div>
 
       <hr className="border-warm-100" />

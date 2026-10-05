@@ -19,6 +19,7 @@ import Image from 'next/image';
 import { GetStaticPropsContext, GetStaticPropsResult, GetStaticPathsResult } from 'next';
 import { isCloudinaryUrl } from '@/lib/imageUtils';
 import { serverFetch } from '@/lib/serverFetch';
+import { shopperConditionText } from '@/lib/shopperCondition';
 
 interface ItemCard {
   id: string;
@@ -191,7 +192,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                         {item.condition && (
                           <div className="flex items-center gap-2 text-xs">
                             <span className="bg-warm-200 text-warm-800 dark:text-warm-200 px-2 py-1 rounded">
-                              {item.condition}
+                              {shopperConditionText(item.condition)}
                             </span>
                           </div>
                         )}

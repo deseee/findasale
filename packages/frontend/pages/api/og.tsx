@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
+import { shopperConditionText } from '../../lib/shopperCondition';
 
 export const config = {
   runtime: 'edge',
@@ -18,7 +19,7 @@ export default async function handler(req: NextRequest) {
     if (type === 'item') {
       // Item card design
       const price = searchParams.get('price') || '';
-      const condition = searchParams.get('condition') || '';
+      const condition = shopperConditionText(searchParams.get('condition')) || '';
 
       return new ImageResponse(
         (

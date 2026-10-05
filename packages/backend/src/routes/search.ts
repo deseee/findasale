@@ -9,6 +9,7 @@ import { searchItems } from '../services/itemSearchService';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { searchLimiter } from '../middleware/rateLimiter';
 import { captureUnmetDemand } from '../services/unmetDemandService';
+import { conditionFilterValues } from '../utils/conditionFilter';
 
 const router = Router();
 
@@ -95,8 +96,10 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
     }
 
     // Apply condition filter
-    if (condition) {
-      itemWhere.condition = { equals: condition, mode: 'insensitive' as const };
+    // Canonical value plus legacy spellings (LIKE_NEW, GOOD, FAIR, POOR, ...), so USED finds old rows too.
+    const conditionValues = conditionFilterValues(condition);
+    if (conditionValues) {
+      itemWhere.condition = { in: conditionValues, mode: 'insensitive' as const };
     }
 
     // Apply category filter

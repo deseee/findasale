@@ -137,12 +137,15 @@ export default function handler(req: NextApiRequest, res: NextApiResponse): void
     var map = {
       NEW: ['new', 'New'],
       USED: ['used', 'Used'],
-      USED_EXCELLENT: ['used', 'Used'],
-      USED_GOOD: ['used', 'Used'],
-      REFURBISHED: ['refurb', 'Refurb'],
-      PARTS_OR_REPAIR: ['parts', 'Parts']
+      REFURBISHED: ['refurb', 'Refurbished'],
+      PARTS_OR_REPAIR: ['parts', 'Parts / Repair']
     };
-    var entry = map[condition];
+    // Legacy stored values read as the canonical condition they mean (same rules as the app's condition model).
+    var key = String(condition).trim().toUpperCase().replace(/[\\s-]+/g, '_');
+    if (key === 'LIKE_NEW' || key === 'EXCELLENT' || key === 'GOOD' || key === 'FAIR' || key.indexOf('USED_') === 0) key = 'USED';
+    else if (key === 'POOR' || key === 'PARTS' || key.indexOf('PARTS_') === 0 || key.indexOf('FOR_PARTS') === 0) key = 'PARTS_OR_REPAIR';
+    else if (key === 'SELLER_REFURBISHED') key = 'REFURBISHED';
+    var entry = map[key];
     if (!entry) return '';
     return '<span class="fns-badge fns-badge--' + entry[0] + '">' + entry[1] + '</span>';
   }

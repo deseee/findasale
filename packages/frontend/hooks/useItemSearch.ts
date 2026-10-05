@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
 import { useEffect, useRef } from 'react';
 import api from '../lib/api';
+import { normalizeConditionFilterValue } from '../lib/shopperCondition';
 
 export interface ItemSearchFilters {
   q: string;
@@ -25,6 +26,7 @@ export interface ItemSearchResult {
   photoUrls: string[];
   category: string | null;
   condition: string | null;
+  conditionGrade?: string | null;
   saleId: string;
   organizerId: string;
   businessName: string;
@@ -75,7 +77,8 @@ export function filtersFromQuery(query: Record<string, string | string[] | undef
   return {
     q: (query.q as string) || '',
     category: (query.category as string) || '',
-    condition: (query.condition as string) || '',
+    // Old bookmarked values (excellent, Very Good, poor ...) read as the condition they mean today.
+    condition: normalizeConditionFilterValue(query.condition),
     priceMin: (query.priceMin as string) || '',
     priceMax: (query.priceMax as string) || '',
     sort: ((query.sort as string) || 'relevance') as ItemSearchFilters['sort'],

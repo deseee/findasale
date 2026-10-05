@@ -18,6 +18,8 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
+import { describeShopperCondition } from '../../../lib/shopperCondition';
+import type { CanonicalCondition } from '../../../lib/conditionModel';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
@@ -42,6 +44,7 @@ interface Item {
   title: string;
   price: number | null;
   condition: string | null;
+  conditionGrade?: string | null;
   status: string;
   photoUrl?: string;
   saleId: string;
@@ -49,31 +52,32 @@ interface Item {
 
 interface PrintKitPageProps {}
 
-const ConditionBadge: React.FC<{ condition: string }> = ({ condition }) => {
-  const conditionMap: Record<string, { bg: string; text: string; label: string }> = {
-    S: { bg: '#10b981', text: '#ffffff', label: 'Mint' },
-    A: { bg: '#3b82f6', text: '#ffffff', label: 'Excellent' },
-    B: { bg: '#f59e0b', text: '#ffffff', label: 'Good' },
-    C: { bg: '#ef4444', text: '#ffffff', label: 'Fair' },
-    D: { bg: '#6b7280', text: '#ffffff', label: 'Poor' },
-  };
+// Print-friendly condition tag. Item.condition is NEW, USED, REFURBISHED or PARTS_OR_REPAIR (older rows may hold
+// LIKE_NEW, GOOD, FAIR, POOR); used goods add the grade in plain words, e.g. "Used - Excellent".
+const CONDITION_TAG_COLORS: Record<CanonicalCondition, string> = {
+  NEW: '#10b981',
+  USED: '#3b82f6',
+  REFURBISHED: '#8b5cf6',
+  PARTS_OR_REPAIR: '#6b7280',
+};
 
-  const info = conditionMap[condition];
-  if (!info) return null;
+const ConditionBadge: React.FC<{ condition: string; grade?: string | null }> = ({ condition, grade }) => {
+  const described = describeShopperCondition(condition, grade);
+  if (!described) return null;
 
   return (
     <span
       style={{
         display: 'inline-block',
-        backgroundColor: info.bg,
-        color: info.text,
+        backgroundColor: described.condition ? CONDITION_TAG_COLORS[described.condition] : '#6b7280',
+        color: '#ffffff',
         padding: '2px 6px',
         borderRadius: '4px',
         fontSize: '10px',
         fontWeight: 'bold',
       }}
     >
-      {condition} · {info.label}
+      {described.text}
     </span>
   );
 };
@@ -821,7 +825,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                         <div className="item-price" style={{ color: brandPrimary }}>${item.price != null ? item.price.toFixed(2) : 'N/A'}</div>
                         {item.condition && (
                           <div className="item-condition">
-                            <ConditionBadge condition={item.condition} />
+                            <ConditionBadge condition={item.condition} grade={item.conditionGrade} />
                           </div>
                         )}
                         <div>

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { getItemImageUrl, isCloudinaryUrl } from '../lib/imageUtils';
+import { shopperConditionText } from '../lib/shopperCondition';
 
 /**
  * CityTopFinds (ADR-074 city cluster, wired 2026-09-29).
@@ -75,7 +76,7 @@ export function CityTopFinds({ cityName, items }: CityTopFindsProps) {
                   {item.title}
                 </h3>
                 {item.condition && (
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{item.condition}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{shopperConditionText(item.condition)}</p>
                 )}
                 <p className="mt-2 flex items-baseline gap-2">
                   <span className="text-base font-bold text-warm-900 dark:text-warm-100">${item.price.toFixed(2)}</span>

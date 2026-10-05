@@ -10,6 +10,7 @@ import { GetStaticPaths, GetStaticProps } from 'next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
+import { shopperConditionText } from '../../lib/shopperCondition';
 import { AUCTION_BUYER_PREMIUM_LABEL, buyerTotalWithPremium } from '../../lib/platformFees'; // one source of truth for the premium a shopper is shown
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
@@ -2077,7 +2078,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                             {(item.category || item.condition) && (
                               <div className="flex flex-wrap gap-1">
                                 {item.category && <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">{formatCategoryLabel(item.category)}</span>}
-                                {item.condition && <span className="px-1.5 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-100">{item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}</span>}
+                                {item.condition && <span className="px-1.5 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-100">{shopperConditionText(item.condition)}</span>}
                                 {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 font-bold">${item.organizerDiscountAmount.toFixed(2)} off</span>}
                               </div>
                             )}

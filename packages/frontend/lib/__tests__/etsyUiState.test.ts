@@ -287,6 +287,15 @@ test('condition and grade labels in the preview match the backend mapper', { ski
   assert.equal(p.description, 'Nice.\n\nCondition: Pre-owned. Grade: A (Excellent).');
 });
 
+test('preview condition line reads legacy condition values through the canonical model, like the backend', () => {
+  const line = (condition: string | null) => ui.buildEtsyPreview({ id: 'i', description: 'Nice.', condition }).description;
+  assert.equal(line('LIKE_NEW'), 'Nice.\n\nCondition: Pre-owned.');
+  assert.equal(line('good'), 'Nice.\n\nCondition: Pre-owned.');
+  assert.equal(line('POOR'), 'Nice.\n\nCondition: For parts or repair.');
+  assert.equal(line('NEW'), 'Nice.\n\nCondition: New.');
+  assert.equal(line('nonsense'), 'Nice.');
+});
+
 test('eligibility response: 200 and the 422 Discogs shape', () => {
   assert.deepEqual(ui.normalizeEtsyEligibility(200, { eligible: true, reason: null }), { eligible: true, reason: null, code: null });
   const r = ui.normalizeEtsyEligibility(422, { eligible: false, reason: ui.etsyMsgCardYearTooRecent(2015), code: 'CARD_YEAR_TOO_RECENT' });

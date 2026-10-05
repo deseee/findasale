@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import Skeleton from './Skeleton';
 import { getThumbnailUrl } from '../lib/imageUtils';
+import { shopperConditionText } from '../lib/shopperCondition';
 
 interface SimilarItem {
   id: string;
@@ -22,8 +23,8 @@ interface SimilarItemsGridProps {
 }
 
 function ConditionPill({ condition }: { condition: string | null }) {
-  if (!condition) return null;
-  const label = condition.replace('_', ' ');
+  const label = shopperConditionText(condition);
+  if (!label) return null;
   return (
     <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
       {label}

@@ -19,6 +19,7 @@ import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { Search, Trash2, ArrowRight, Bookmark } from 'lucide-react';
 import api from '../../lib/api';
+import { conditionFilterLabel } from '../../lib/shopperCondition';
 
 // Local type — never import from @findasale/shared (breaks Vercel build).
 // Mirrors the SavedSearch model in packages/database/prisma/schema.prisma.
@@ -77,7 +78,7 @@ const describeFilters = (filters: SavedSearchFilters): string => {
   const parts: string[] = [];
   if (filters.q) parts.push(`"${String(filters.q)}"`);
   if (filters.category) parts.push(String(filters.category));
-  if (filters.condition) parts.push(String(filters.condition));
+  if (filters.condition) parts.push(conditionFilterLabel(filters.condition));
   if (filters.saleStatus && filters.saleStatus !== 'all') parts.push(String(filters.saleStatus));
   const hasMin = filters.priceMin !== undefined && filters.priceMin !== null && filters.priceMin !== '';
   const hasMax = filters.priceMax !== undefined && filters.priceMax !== null && filters.priceMax !== '';

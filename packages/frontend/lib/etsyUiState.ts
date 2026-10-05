@@ -33,6 +33,7 @@ import {
   etsyCurrencyMessage,
 } from './etsyCopy';
 import { etsyEraOptionsFor, getEtsyEra } from './etsyWhenMade';
+import { normalizeCondition } from './conditionModel';
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers.
@@ -780,7 +781,10 @@ function previewDescription(raw: string | null | undefined): string {
 
 function previewConditionLine(item: EtsyItemInput): string {
   const parts: string[] = [];
-  const cond = item.condition ? CONDITION_LABELS[String(item.condition).trim().toUpperCase()] : undefined;
+  // Read the normalized condition, as the backend does (buildEtsyConditionLine): legacy LIKE_NEW, GOOD, FAIR, POOR and
+  // casing fold onto the canonical four, so the preview shows the same Condition line the listing will carry.
+  const canonicalCondition = normalizeCondition(item.condition).condition;
+  const cond = canonicalCondition ? CONDITION_LABELS[canonicalCondition] : undefined;
   if (cond) parts.push(`Condition: ${cond}.`);
   const grade = item.conditionGrade ? String(item.conditionGrade).trim() : '';
   if (grade) {

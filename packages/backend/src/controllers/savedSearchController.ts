@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
+import { conditionFilterValues } from '../utils/conditionFilter';
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Feature #595: match same public-item visibility rules as /api/search
 
 export interface SearchFilters {
@@ -217,8 +218,9 @@ export const checkNewMatches = async (req: AuthRequest, res: Response) => {
       if (filters.category) {
         itemWhere.category = { equals: String(filters.category), mode: 'insensitive' };
       }
-      if (filters.condition) {
-        itemWhere.condition = { equals: String(filters.condition), mode: 'insensitive' };
+      const conditionValues = conditionFilterValues(filters.condition == null ? undefined : String(filters.condition));
+      if (conditionValues) {
+        itemWhere.condition = { in: conditionValues, mode: 'insensitive' };
       }
       if (filters.priceMin != null && filters.priceMin !== '') {
         itemWhere.price = { ...(itemWhere.price || {}), gte: Number(filters.priceMin) };

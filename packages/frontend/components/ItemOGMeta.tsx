@@ -7,6 +7,7 @@
 
 import Head from 'next/head';
 import { generateItemOGImage } from '../lib/ogImage';
+import { shopperConditionText } from '../lib/shopperCondition';
 
 interface ItemPhoto {
   publicId?: string;
@@ -107,7 +108,7 @@ export default function ItemOGMeta({
       itemTitle: item.title,
       saleTitle: saleName,
       price: displayPrice,
-      condition: item.condition,
+      condition: shopperConditionText(item.condition) || undefined,
       cloudinaryPublicId,
       shouldApplyWatermark,
     });

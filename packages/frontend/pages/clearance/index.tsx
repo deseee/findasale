@@ -4,6 +4,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
 import { serverFetch } from '@/lib/serverFetch';
+import { describeShopperCondition } from '@/lib/shopperCondition';
 
 interface ClearanceItem {
   id: string;
@@ -29,13 +30,6 @@ interface PageProps {
   currentMaxPrice: string;
 }
 
-const CONDITION_LABELS: Record<string, string> = {
-  NEW: 'New',
-  USED: 'Used',
-  REFURBISHED: 'Refurbished',
-  PARTS_OR_REPAIR: 'Parts/Repair',
-};
-
 const CONDITION_COLORS: Record<string, string> = {
   NEW: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
   USED: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
@@ -44,8 +38,12 @@ const CONDITION_COLORS: Record<string, string> = {
 };
 
 function ItemCard({ item }: { item: ClearanceItem }) {
-  const conditionLabel = item.condition ? (CONDITION_LABELS[item.condition] ?? item.condition) : null;
-  const conditionColor = item.condition ? (CONDITION_COLORS[item.condition] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300') : null;
+  // Legacy stored values (LIKE_NEW, GOOD, POOR ...) read through the canonical model, so they get the same label and color.
+  const described = describeShopperCondition(item.condition);
+  const conditionLabel = described ? described.label : null;
+  const conditionColor = described
+    ? ((described.condition && CONDITION_COLORS[described.condition]) || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300')
+    : null;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col hover:shadow-md transition-shadow">

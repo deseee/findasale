@@ -9,6 +9,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client'; // type-only. Prevents SSR module crash
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
+import { shopperConditionText } from '../../lib/shopperCondition';
 import { useAuth } from '../../components/AuthContext';
 import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import CheckoutModal from '../../components/CheckoutModal';
@@ -100,6 +101,7 @@ interface Item {
   category: string;
   tags: string[];
   condition: string;
+  conditionGrade?: string | null; // used goods only; shown to shoppers as plain words (Excellent, Very good, Good, Acceptable)
   soldAt: string | null;
   views: number;
   sharedBy: Array<{
@@ -892,7 +894,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Condition: </span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{item.condition}</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{shopperConditionText(item.condition, item.conditionGrade) || item.condition}</span>
                 </div>
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Category: </span>

@@ -19,6 +19,7 @@ import { SkeletonGrid } from '../components/SkeletonCards';
 // Sprint 4b: FTS item search
 import ItemSearch from '../components/ItemSearch';
 import FilterSidebar from '../components/FilterSidebar';
+import { normalizeConditionFilterValue } from '../lib/shopperCondition';
 import ItemSearchResults from '../components/ItemSearchResults';
 import ItemCard from '../components/ItemCard'; // Feature 67: Use main ItemCard with social proof
 import { getItemImageUrl } from '../lib/imageUtils';
@@ -137,7 +138,8 @@ const SearchPage = () => {
 
     const priceMin = router.query.priceMin ? parseInt(router.query.priceMin as string) : null;
     const priceMax = router.query.priceMax ? parseInt(router.query.priceMax as string) : null;
-    const condition = (router.query.condition as string) || '';
+    // Old bookmarked values (excellent, Very Good, poor ...) read as the condition they mean today.
+    const condition = normalizeConditionFilterValue(router.query.condition);
     const category = (router.query.category as string) || '';
     const saleStatus = (router.query.saleStatus as string || 'all') as any;
     const sortBy = (router.query.sortBy as string || 'recent') as any;

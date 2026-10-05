@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getOptimizedUrl, getLqipUrl, getThumbnailUrl, getItemImageUrl, getCloudinarySrcSet } from '../lib/imageUtils';
 import { formatCategoryLabel } from '../lib/itemConstants';
+import { shopperConditionText } from '../lib/shopperCondition';
 import Skeleton from './Skeleton';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import RarityBadge from './RarityBadge';
@@ -40,6 +41,7 @@ export interface UnifiedItemCardItem {
   description?: string;
   category?: string;
   condition?: string;
+  conditionGrade?: string | null;
   auctionEndTime?: string;
 
   // Trending context
@@ -83,6 +85,7 @@ interface Item {
   photoUrls?: string[];
   category?: string;
   condition?: string;
+  conditionGrade?: string | null;
   sale?: { id: string; title: string; city?: string; state?: string };
   businessName?: string;
   _count?: { favorites?: number };
@@ -409,7 +412,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
         {/* Condition badge (if enabled) */}
         {showCondition && item.condition && (
           <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded-full w-fit">
-            {item.condition}
+            {shopperConditionText(item.condition, item.conditionGrade)}
           </span>
         )}
 

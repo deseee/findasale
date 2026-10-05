@@ -8,6 +8,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { conditionFilterValues, canonicalConditionCounts } from '../utils/conditionFilter';
 
 export interface SearchQuery {
   q?: string;
@@ -28,6 +29,8 @@ export interface ItemSearchResult {
   photoUrls: string[];
   category: string | null;
   condition: string | null;
+  /** Grade letter for used goods (shown to shoppers as plain words); null when not graded. */
+  conditionGrade: string | null;
   saleId: string;
   organizerId: string;
   businessName: string;
@@ -133,6 +136,7 @@ async function ftsSearch(params: {
       i."photoUrls",
       i.category,
       i.condition,
+      i."conditionGrade",
       i."saleId",
       s."organizerId",
       o."businessName",
@@ -206,6 +210,7 @@ async function ilikeSearch(params: {
       i."photoUrls",
       i.category,
       i.condition,
+      i."conditionGrade",
       i."saleId",
       s."organizerId",
       o."businessName",
@@ -261,6 +266,7 @@ async function filteredSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<Sea
       i."photoUrls",
       i.category,
       i.condition,
+      i."conditionGrade",
       i."saleId",
       s."organizerId",
       o."businessName",
@@ -403,10 +409,14 @@ function appendFilters(
     sqlParams.push(category);
     idx++;
   }
-  if (condition) {
-    sqlParts.push(`AND i.condition ILIKE $${idx}`);
-    sqlParams.push(condition);
-    idx++;
+  // Condition matches the canonical value AND legacy spellings (LIKE_NEW, GOOD, FAIR, POOR, ...), so old rows and
+  // old bookmarked links still resolve. Case-insensitive; see utils/conditionFilter.ts.
+  const conditionValues = conditionFilterValues(condition);
+  if (conditionValues) {
+    const placeholders = conditionValues.map((_, k) => `$${idx + k}`).join(', ');
+    sqlParts.push(`AND UPPER(i.condition) IN (${placeholders})`);
+    sqlParams.push(...conditionValues);
+    idx += conditionValues.length;
   }
   if (saleId) {
     sqlParts.push(`AND i."saleId" = $${idx}`);
@@ -460,6 +470,7 @@ function mapRow(row: any): ItemSearchResult {
     photoUrls: row.photoUrls ?? [],
     category: row.category ?? null,
     condition: row.condition ?? null,
+    conditionGrade: row.conditionGrade ?? null,
     saleId: row.saleId,
     organizerId: row.organizerId,
     businessName: row.businessName,
@@ -495,7 +506,8 @@ export async function getItemFacets(
 
   return {
     categories: categoryRows.map(r => ({ name: r.category!, count: r._count.id })),
-    conditions: conditionRows.map(r => ({ name: r.condition!, count: r._count.id })),
+    // Folded onto NEW / USED / REFURBISHED / PARTS_OR_REPAIR so the filter's counts match what the filter returns.
+    conditions: canonicalConditionCounts(conditionRows.map(r => ({ name: r.condition!, count: r._count.id }))),
     priceRange:
       priceRows._min.price !== null && priceRows._max.price !== null
         ? { min: Number(priceRows._min.price), max: Number(priceRows._max.price) }

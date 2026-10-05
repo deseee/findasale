@@ -14,6 +14,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
+import { describeShopperCondition } from '../lib/shopperCondition';
 
 interface WidgetItem {
   id: string;
@@ -50,13 +51,14 @@ function formatPrice(price: number | null): string {
 }
 
 function ConditionBadge({ condition }: { condition: string | null }) {
-  if (!condition) return null;
-  let label = condition;
+  const described = describeShopperCondition(condition);
+  if (!described) return null;
+  const label = described.label;
   let cls = 'inline-block text-xs font-semibold px-2 py-0.5 rounded ';
-  if (condition === 'NEW') { label = 'New'; cls += 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'; }
-  else if (condition.startsWith('USED')) { label = 'Used'; cls += 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'; }
-  else if (condition === 'REFURBISHED') { label = 'Refurb'; cls += 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'; }
-  else { cls += 'bg-warm-100 text-warm-700 dark:bg-gray-700 dark:text-gray-300'; }
+  if (described.condition === 'NEW') cls += 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+  else if (described.condition === 'USED') cls += 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+  else if (described.condition === 'REFURBISHED') cls += 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+  else cls += 'bg-warm-100 text-warm-700 dark:bg-gray-700 dark:text-gray-300';
   return <span className={cls}>{label}</span>;
 }
 
