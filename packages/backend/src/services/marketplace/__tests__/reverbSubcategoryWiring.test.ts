@@ -17,7 +17,8 @@ jest.mock('../../../lib/prisma', () => ({
 jest.mock('../../../utils/tokenCrypto', () => ({ encryptToken: (t: string) => t, decryptToken: (t: string) => t }));
 
 import { prisma } from '../../../lib/prisma';
-import { createReverbListing, pickReverbSubcategoryUuid } from '../reverbConnector';
+import { createReverbListing, pickReverbSubcategoryUuid, guessReverbCategoryName } from '../reverbConnector';
+import { isReverbCaseItself } from '../reverbCategoryResolver';
 
 const p = prisma as any;
 const fetchMock = jest.fn();
@@ -313,5 +314,104 @@ describe('pickReverbSubcategoryUuid', () => {
 
   it('is null for a top-level name the tree does not know', () => {
     expect(pickReverbSubcategoryUuid(flatList(), 'Guitars', makeItem())).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// S-REVERB-CASE-TOPLEVEL (2026-10-05): an item that IS a case / gig bag is filed under "Accessories",
+// not the instrument bucket its words pick; a case bundled with an instrument does not move it.
+// ---------------------------------------------------------------------------------------------------
+describe('guessReverbCategoryName: the product is a case or gig bag', () => {
+  const top = (title: string, tags: string[] = []) => guessReverbCategoryName(makeItem({ title, tags }));
+
+  it.each([
+    ['Road Runner guitar/bass hardshell case'],
+    ['Guitar gig bag'],
+    ['Bass guitar case'],
+    ['Hardshell acoustic guitar case'],
+    ['Soft case for electric guitar'],
+    ['Guitar pedal case'], // a case for a pedalboard is still a case: Accessories, not Effects and Pedals
+    ['Marshall guitar amp gig bag'],
+  ])('%s -> Accessories', (title) => {
+    expect(top(title)).toBe('Accessories');
+  });
+
+  it.each([
+    ['Fender Stratocaster electric guitar with hard case', 'Electric Guitars'],
+    ['Ibanez acoustic guitar w/ case', 'Acoustic Guitars'],
+    ['Epiphone Les Paul electric guitar + case', 'Electric Guitars'],
+    ['Epiphone Les Paul + case', 'Accessories'], // no instrument keyword in the title: today's default bucket, unchanged by the case rule
+    ['bass guitar includes gig bag', 'Bass Guitars'],
+    ['Gibson SG electric guitar, hardshell case included', 'Electric Guitars'],
+    ['Martin acoustic guitar in original case', 'Acoustic Guitars'],
+    ['Yamaha electric guitar with gig bag and strap', 'Electric Guitars'],
+  ])('bundled extra: %s stays %s', (title, expected) => {
+    expect(top(title)).toBe(expected);
+  });
+
+  it('is not a case: unchanged instrument and accessory behaviour', () => {
+    expect(top('Electric guitar')).toBe('Electric Guitars');
+    expect(top('Guitar strap')).toBe('Electric Guitars'); // bare "guitar" rule, untouched (separate decision)
+    expect(top('Fender Squier Strat')).toBe('Accessories'); // no rule matches: today's default
+  });
+
+  it('only the title decides: a "case" tag on a guitar listing does not move it', () => {
+    expect(top('Fender Stratocaster electric guitar', ['hard case'])).toBe('Electric Guitars');
+  });
+
+  it('drum and keyboard cases keep their own top-level, where the resolver has case leaves', () => {
+    expect(top('Pearl snare drum case')).toBe('Drums and Percussion');
+    expect(top('Yamaha keyboard gig bag')).toBe('Keyboards and Synths');
+  });
+
+  it('the kill switch REVERB_SUBCATEGORY_DISABLED=true restores the old top-level for a case', () => {
+    process.env.REVERB_SUBCATEGORY_DISABLED = 'true';
+    expect(top('Road Runner guitar/bass hardshell case')).toBe('Electric Guitars');
+    expect(top('Bass guitar case')).toBe('Bass Guitars');
+    expect(top('Guitar pedal case')).toBe('Effects and Pedals');
+  });
+});
+
+describe('isReverbCaseItself', () => {
+  it('is null-safe', () => {
+    expect(isReverbCaseItself(null)).toBe(false);
+    expect(isReverbCaseItself(undefined)).toBe(false);
+    expect(isReverbCaseItself('')).toBe(false);
+  });
+  it('does not match words that merely contain case', () => {
+    expect(isReverbCaseItself('Showcase electric guitar')).toBe(false);
+  });
+});
+
+describe('createReverbListing: a case is posted under Accessories', () => {
+  const ACC = '62835d2e-ac92-41fc-9b8d-4aba8c1c25d5';
+  const SUB_BASS_CASE = '55555555-5555-4555-8555-555555555555';
+
+  it('Road Runner guitar/bass hardshell case (eBay 41408): Accessories top-level; dual guitar/bass stays unresolved', async () => {
+    flatResponse = resp(200, { categories: [...flatList(), { uuid: ACC, name: 'Accessories', full_name: 'Accessories', slug: 'accessories', root_slug: 'accessories' }] });
+    const item = makeItem({ title: 'Road Runner guitar/bass hardshell case', brand: 'Road Runner', ebayCategoryId: '41408', ebayCategoryName: 'Cases' });
+    await createReverbListing('org_1', item);
+    expect(posts[0]).toEqual(oldBody(item, ACC));
+  });
+
+  it('a single-instrument case resolves to its Cases and Gig Bags leaf under Accessories', async () => {
+    flatResponse = resp(200, {
+      categories: [
+        ...flatList(),
+        { uuid: ACC, name: 'Accessories', full_name: 'Accessories', slug: 'accessories', root_slug: 'accessories' },
+        subEntry(SUB_BASS_CASE, 'Bass Cases', 'Accessories / Cases and Gig Bags / Bass Cases', 'bass-cases', 'accessories'),
+      ],
+    });
+    // no eBay id here on purpose: with 41408 present, "bass guitar" matches both curated split patterns (bass + guitar) and stays unresolved
+    const item = makeItem({ title: 'Bass guitar hard case', ebayCategoryId: null, ebayCategoryName: null });
+    await createReverbListing('org_1', item);
+    expect(posts[0]).toEqual(oldBody(item, SUB_BASS_CASE));
+  });
+
+  it('the kill switch sends the pre-change Electric Guitars body for the same case', async () => {
+    process.env.REVERB_SUBCATEGORY_DISABLED = 'true';
+    const item = makeItem({ title: 'Road Runner guitar/bass hardshell case', brand: 'Road Runner', ebayCategoryId: '41408', ebayCategoryName: 'Cases' });
+    await createReverbListing('org_1', item);
+    expect(posts[0]).toEqual(oldBody(item, TOP['Electric Guitars']));
   });
 });

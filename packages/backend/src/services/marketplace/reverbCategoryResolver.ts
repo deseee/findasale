@@ -91,6 +91,34 @@ const BUNDLE_PHRASE = new RegExp(
   'g'
 );
 
+/**
+ * S-REVERB-CASE-TOPLEVEL (2026-10-05). The title with every BUNDLED extra removed, normalised: "with hard case",
+ * "w/ case", "includes gig bag", "and strap" (the BUNDLE_PHRASE above) plus the separators it does not see
+ * ("+", ",", ";" are read as "and") plus "in a case" / "case included". Pure; null-safe.
+ */
+const BUNDLE_IN_CASE = /\b(?:in|inside)\s+(?:(?:an?|the|original|hard ?shell|hardshell|hard|soft|gig|carrying|carry|padded|protective|travel|molded)\s+){0,3}(?:cases?|gig bags?|bags?)\b/g;
+const BUNDLE_CASE_INCLUDED = /\b(?:(?:an?|the|original|hard ?shell|hardshell|hard|soft|gig|carrying|carry|padded|protective|travel|molded)\s+){0,3}(?:cases?|gig bags?|bags?)\s+(?:included|incl|too)\b/g;
+
+export function stripReverbBundledAccessories(raw: string | null | undefined): string {
+  const text = normalizeReverbText(String(raw || '').replace(/[+,;]/g, ' and '));
+  return text
+    .replace(BUNDLE_PHRASE, ' ')
+    .replace(BUNDLE_IN_CASE, ' ')
+    .replace(BUNDLE_CASE_INCLUDED, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * True when the title's product IS a case / gig bag / carrying bag (the case-word survives bundle stripping):
+ * "Road Runner guitar/bass hardshell case", "Guitar gig bag", "Soft case for electric guitar". False for a
+ * bundled extra ("Strat electric guitar with hard case", "Les Paul + case", "bass guitar includes gig bag").
+ * Says nothing about WHICH instrument the case is for; that is the sub-category resolver's job.
+ */
+export function isReverbCaseItself(title: string | null | undefined): boolean {
+  return /\b(?:cases?|gig ?bags?|bags?)\b/.test(stripReverbBundledAccessories(title));
+}
+
 interface Prepared {
   cat: string;
   title: string;

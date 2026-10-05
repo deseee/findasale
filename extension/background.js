@@ -1660,6 +1660,7 @@ function buildRenewalQueueItem(it, organizerEmail) {
     // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt
     packageLengthIn: it.packageLengthIn, packageWidthIn: it.packageWidthIn, packageHeightIn: it.packageHeightIn,
     shippingOverride: it.shippingOverride,
+    localPickupOnly: it.localPickupOnly === true, // S-VINTED-PICKUP-ONLY: same passthrough as popup.js's queue map
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
     bestOfferAutoAcceptAmt: it.bestOfferAutoAcceptAmt, // S-EXT-MERCARI-BATCH-4 (2026-08-23) -- same passthrough as popup.js's queue map
     city: it.city, geographicArea: it.geographicArea, saleCity: it.saleCity,

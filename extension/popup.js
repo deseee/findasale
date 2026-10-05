@@ -496,6 +496,18 @@ function ineligibleReason(it) {
   return (key && it.eligibility && it.eligibility[key] && it.eligibility[key].reason) || 'Not eligible for this marketplace.';
 }
 
+// S-VINTED-PICKUP-ONLY (2026-10-05): marketplaces with no local-pickup / no-shipping option. Verified live on
+// Vinted 2026-10-05 (the sell form has no meet-up choice; "The buyer always pays for shipping"). Items the organizer
+// marked local pickup only (payload `localPickupOnly`, the RAW organizer flag, not the weight-forced shippingOverride)
+// are kept out of these platforms' list/queue/count and surfaced in a note instead. Uppercase platform keys, same casing
+// as PLATFORM_ELIGIBILITY_KEY. Adding a platform later is a one-word change here; do not add one until verified.
+const PICKUP_INCOMPATIBLE_PLATFORMS = ['VINTED'];
+function isPickupOnlyBlockedOnChannel(it, channel) {
+  return !!it && it.localPickupOnly === true &&
+    PICKUP_INCOMPATIBLE_PLATFORMS.indexOf(String(channel || '').toUpperCase()) !== -1;
+}
+function isPickupOnlyBlockedOnCurrentChannel(it) { return isPickupOnlyBlockedOnChannel(it, currentChannel()); }
+
 // (2026-09-03, S-EXT-ITEM-SEARCH) Top-level segment of item.category (which can be a full
 // breadcrumb like "Sporting Goods:Golf:Golf Clubs & Equipment:Golf Clubs" or a plain label like
 // "Musical Instruments & Gear") used to group items into collapsible sections within a sale.
@@ -523,9 +535,13 @@ function render() {
   const q = searchQuery;
   const groups = {};
   let hiddenIneligibleCount = 0;
+  let hiddenPickupOnlyCount = 0; // S-VINTED-PICKUP-ONLY
   let hiddenBySearchCount = 0;
   ITEMS.forEach((it) => {
     if (hideListed && currentListedFlag(it)) return;
+    // S-VINTED-PICKUP-ONLY: never shown (not even under "Show all items" -- the platform cannot sell it as intended),
+    // never selectable; also drop any stale selection carried over from another channel so the count stays honest.
+    if (isPickupOnlyBlockedOnCurrentChannel(it)) { selected.delete(it.id); hiddenPickupOnlyCount++; return; }
     // (2026-09-19, S-EXT-FB-COIN-HIDE) Facebook coin/currency items previously stayed visible
     // with a disabled checkbox + badge instead of being hidden like every other channel's
     // ineligible items -- fold facebookRestricted into the same default-hide filter.
@@ -549,12 +565,25 @@ function render() {
       eligNote.hidden = true;
     }
   }
+  const pickupNote = $('pickupOnlyNote');
+  if (pickupNote) {
+    if (hiddenPickupOnlyCount > 0) {
+      const chName = channelName(currentChannel());
+      pickupNote.hidden = false;
+      pickupNote.textContent = hiddenPickupOnlyCount + ' item' + (hiddenPickupOnlyCount === 1 ? '' : 's') +
+        ' skipped for ' + chName + ': local pickup only. ' + chName + ' has no local pickup option (the buyer always pays for shipping), so these are not offered here.';
+    } else {
+      pickupNote.hidden = true;
+    }
+  }
   const saleTitles = Object.keys(groups);
   if (!saleTitles.length) {
     if (q && hiddenBySearchCount > 0) {
       list.innerHTML = '<div class="status">No items match &ldquo;' + esc(searchInputValue()) + '&rdquo;.</div>';
     } else if (hiddenIneligibleCount > 0 && !showAll) {
       list.innerHTML = '<div class="status">All items on this sale are hidden as not eligible for this marketplace. Check "Show all items" above to see them.</div>';
+    } else if (hiddenPickupOnlyCount > 0) {
+      list.innerHTML = '<div class="status">All remaining items are local pickup only, which ' + esc(channelName(currentChannel())) + ' does not support.</div>';
     } else {
       list.innerHTML = '<div class="status">All items are already listed. Uncheck "Hide items already listed" to see them.</div>';
     }
@@ -727,6 +756,7 @@ async function startQueue() {
   const queue = ITEMS.filter((it) => selected.has(it.id))
     .filter((it) => !(ch === 'facebook' && it.facebookRestricted === true))
     .filter((it) => !isIneligibleOnCurrentChannel(it))
+    .filter((it) => !isPickupOnlyBlockedOnCurrentChannel(it)) // S-VINTED-PICKUP-ONLY defense-in-depth
     .map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     conditionRaw: it.conditionRaw, conditionGrade: it.conditionGrade, // fas-condition.js
@@ -771,6 +801,7 @@ async function startQueue() {
     vintedPrice: it.vintedPrice, vintedShippingNote: it.vintedShippingNote,
     vintedDomesticShippingUsd: it.vintedDomesticShippingUsd,
     shippingOverride: it.shippingOverride,
+    localPickupOnly: it.localPickupOnly === true, // S-VINTED-PICKUP-ONLY: raw organizer flag (fas-vinted.js refuses these)
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
     // S-EXT-MERCARI-BATCH-4 (2026-08-23, Patrick-directed): bestOfferAutoAcceptAmt now flows
     // through too -- Patrick's explicit direction is that this should be the DEFAULT Smart

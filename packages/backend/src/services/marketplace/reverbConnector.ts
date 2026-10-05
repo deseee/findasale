@@ -53,7 +53,7 @@ import { prisma } from '../../lib/prisma';
 import { encryptToken, decryptToken } from '../../utils/tokenCrypto';
 import { normalizeCondition } from '../../utils/conditionMapping'; // U4: one condition vocabulary
 import type { Item, MarketplaceAccount } from '@prisma/client';
-import { resolveReverbSubcategory } from './reverbCategoryResolver'; // S-REVERB-SUBCATEGORY 2026-10-05
+import { resolveReverbSubcategory, isReverbCaseItself } from './reverbCategoryResolver'; // S-REVERB-SUBCATEGORY 2026-10-05; isReverbCaseItself: S-REVERB-CASE-TOPLEVEL
 import { reverbTopSlug, reverbLeafSlug } from '../../config/reverbCategoryTree';
 
 // ── Endpoints ────────────────────────────────────────────────────────────────
@@ -315,12 +315,27 @@ const REVERB_CATEGORY_KEYWORD_RULES: Array<{ pattern: RegExp; name: string }> = 
 ];
 const DEFAULT_REVERB_CATEGORY_NAME = 'Accessories';
 
-function guessReverbCategoryName(item: Item): string {
+// S-REVERB-CASE-TOPLEVEL (2026-10-05): top-level buckets whose own Reverb subtree already has case / gig-bag
+// leaves the sub-category resolver targets (drums-and-percussion/.../cases-and-bags, keyboards-and-synths/
+// .../keyboard-and-synth-cases). A drum or keyboard case keeps its current top-level so that leaf stays reachable.
+const REVERB_TOPS_WITH_OWN_CASE_LEAVES = new Set(['Drums and Percussion', 'Keyboards and Synths']);
+
+/**
+ * Exported for tests. First keyword rule wins; 'Accessories' when none match. One exception, evaluated first:
+ * when the TITLE's product is itself a case / gig bag (isReverbCaseItself: a bundled "with hard case" does not
+ * count), the item is 'Accessories' instead of the instrument bucket its words would pick -- unless that bucket
+ * is one of REVERB_TOPS_WITH_OWN_CASE_LEAVES. REVERB_SUBCATEGORY_DISABLED=true skips the exception (old behaviour).
+ */
+export function guessReverbCategoryName(item: Item): string {
   const haystack = `${item.title || ''} ${(item.tags || []).join(' ')}`.toLowerCase();
+  let name = DEFAULT_REVERB_CATEGORY_NAME;
   for (const rule of REVERB_CATEGORY_KEYWORD_RULES) {
-    if (rule.pattern.test(haystack)) return rule.name;
+    if (rule.pattern.test(haystack)) { name = rule.name; break; }
   }
-  return DEFAULT_REVERB_CATEGORY_NAME;
+  if (process.env.REVERB_SUBCATEGORY_DISABLED !== 'true' && !REVERB_TOPS_WITH_OWN_CASE_LEAVES.has(name) && isReverbCaseItself(item.title)) {
+    return DEFAULT_REVERB_CATEGORY_NAME;
+  }
+  return name;
 }
 
 /**

@@ -13,7 +13,7 @@ import { resolvePoshmarkCategory } from '../services/poshmarkCategoryResolver';
 import { resolveMercariCategory } from '../services/mercariCategoryResolver';
 import { resolveGrailedCategory } from '../services/grailedCategoryResolver';
 import { resolveCraigslistCategory } from '../services/craigslistCategoryResolver';
-import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
+import { suggestNativeShippingPrice, ShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // S-VINTED-SHIPPING-FALLBACK-PRICE: same buyer-facing shipping number FindA.Sale itself suggests (ShippingHardBlockError is the same class re-exported from ebayRateEstimateService)
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
 
@@ -34,6 +34,96 @@ function buildDescriptionWithBacklink(description: string | null | undefined, sa
   if (!saleId) return base;
   const link = `View full listing: https://finda.sale/sales/${saleId}`;
   return base ? `${base}\n\n${link}` : link;
+}
+
+// S-VINTED-PICKUP-ONLY (2026-10-05): true only when the ORGANIZER (or applyNeverShippableOverride) marked the item
+// local pickup only, i.e. the raw DB field ebayShippingOverride === 'LOCAL_PICKUP_ONLY'. Deliberately NOT derived from
+// the payload's `shippingOverride`, which is also forced to 'LOCAL_PICKUP_ONLY' whenever packageWeightOz is null (a
+// Facebook-only convenience) -- an item that merely has no weight yet must still be offered to Vinted. The extension
+// uses this flag to keep pickup-only items out of platforms with no local-pickup option (Vinted: the buyer always pays
+// for shipping). Exported so the unit test can call it directly.
+export function isLocalPickupOnlyItem(it: { ebayShippingOverride?: string | null }): boolean {
+  return it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY';
+}
+
+// S-VINTED-SHIPPING-FALLBACK-PRICE (2026-10-05, Patrick live report: Road Runner guitar/bass hardshell case): when an item has
+// no organizer-set shippingPrice, the Vinted "Domestic shipping" fill used the RAW carrier rate (53.38) -- before FindA.Sale's
+// platform fee -- while FindA.Sale's own shipping price for the same item is the fee-grossed-up, bucket-rounded, charm-priced
+// suggestNativeShippingPrice() number (59.99; this is also what itemController writes to Item.shippingPrice as an AUTO
+// suggestion). The organizer was short the fee and the two numbers disagreed. The fallback now uses that same suggested price
+// for BOTH vintedDomesticShippingUsd and the $100-cap bump test.
+export interface VintedShippingPricing {
+  vintedPrice: number;
+  vintedShippingNote: string | null;
+  vintedDomesticShippingUsd: number | null;
+}
+
+// Pure: given the buyer-facing shipping price, the Vinted price + domestic-shipping fill (and, when it exceeds Vinted's cap,
+// the bump + note). `label` names the number in the note ("FindA.Sale shipping price" for the fallback).
+export function buildVintedShippingPricing(basePrice: number, shippingPrice: number, cap: number, label: string): VintedShippingPricing {
+  const rate = Math.round(shippingPrice * 100) / 100;
+  if (rate > cap) {
+    const overage = Math.round((rate - cap) * 100) / 100;
+    return {
+      vintedPrice: Math.round((basePrice + overage) * 100) / 100,
+      vintedShippingNote: `Price includes $${overage.toFixed(2)} to cover shipping over Vinted's $100 cap (${label}: $${rate.toFixed(2)}).`,
+      vintedDomesticShippingUsd: rate,
+    };
+  }
+  return { vintedPrice: basePrice, vintedShippingNote: null, vintedDomesticShippingUsd: rate };
+}
+
+// Fallback for an item with no organizer shippingPrice but a trusted package and a weight. Inputs mirror
+// itemController.computeAutoShippingPatch / getSuggestedShippingPriceHandler exactly (weight, dims, packageType, sale zip +
+// organizer lat/lng origin, Item.category, ebayCategoryId, price, organizer subscriptionTier) so the number matches
+// Item.shippingPrice AUTO. Never throws: a hard block yields the manual-review note, any other error yields null (no bump).
+export async function computeVintedFallbackShipping(
+  it: {
+    id: string;
+    packageWeightOz: unknown;
+    packageLengthIn: unknown;
+    packageWidthIn: unknown;
+    packageHeightIn: unknown;
+    packageType?: string | null;
+    category?: string | null;
+    ebayCategoryId?: string | null;
+  },
+  ctx: {
+    basePrice: number;
+    zip: string | null;
+    organizer: { lat?: number | null; lng?: number | null; subscriptionTier?: string | null };
+    cap: number;
+  },
+  suggest: (input: any) => Promise<{ suggestedPrice: number }> = suggestNativeShippingPrice
+): Promise<VintedShippingPricing> {
+  try {
+    const suggestion = await suggest({
+      weightOz: Number(it.packageWeightOz),
+      dims: {
+        length: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+        width: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+        height: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+      },
+      packageType: it.packageType ?? null,
+      origin: { zip: ctx.zip, lat: ctx.organizer.lat ?? null, lng: ctx.organizer.lng ?? null },
+      subscriptionTier: (ctx.organizer.subscriptionTier ?? null) as any,
+      categoryId: it.ebayCategoryId ?? null,
+      category: it.category ?? null,
+      priceUsd: ctx.basePrice,
+    });
+    return buildVintedShippingPricing(ctx.basePrice, suggestion.suggestedPrice, ctx.cap, 'FindA.Sale shipping price');
+  } catch (e: any) {
+    if (e instanceof ShippingHardBlockError) {
+      return {
+        vintedPrice: ctx.basePrice,
+        vintedShippingNote:
+          'Shipping cost for this item could not be estimated for Vinted (it exceeds standard carrier limits) -- please review shipping and pricing manually before publishing.',
+        vintedDomesticShippingUsd: null,
+      };
+    }
+    console.warn('[Vinted pricing] suggestNativeShippingPrice failed for item', it.id, e?.message || e);
+    return { vintedPrice: ctx.basePrice, vintedShippingNote: null, vintedDomesticShippingUsd: null };
+  }
 }
 
 // S-EXT-VINTED-CATEGORY-MAP (2026-10-04): the exact Vinted leaf category for an item, resolved on the
@@ -500,9 +590,10 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // shipping" as unavailable based on Vinted's help docs being self-contradictory. That assumption
   // was never re-verified against the live form; it was wrong, same failure class as the weight-
   // ceiling and musical-instruments corrections shipped earlier the same session (see project doc).
-  // vintedDomesticShippingUsd carries the SAME real cheapest.rate this block already computes for
+  // vintedDomesticShippingUsd carries the SAME FindA.Sale shipping price (organizer's own, else the
+  // suggestNativeShippingPrice fallback -- 2026-10-05, no longer the raw carrier rate) this block uses for
   // the $100-cap bump logic, so fas-vinted.js can fill Vinted's real "Domestic shipping" field with
-  // an actual carrier-computed number instead of leaving it blank -- never a guess: null whenever
+  // an actual computed number instead of leaving it blank -- never a guess: null whenever
   // the rate wasn't confirmed (untrusted package, hard-block, or compute error), same posture as
   // vintedShippingNote below.
   const VINTED_SHIPPING_CAP = 100;
@@ -520,7 +611,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // file: it wins over a fresh AI/system-computed alternative. When shippingPrice is set,
     // use it directly for both the $100-cap decision and vintedDomesticShippingUsd, skipping
     // computeCheapestForOrigin entirely -- no more second, unreconciled shipping number for
-    // the same item. Falls through to the pre-existing computeCheapestForOrigin path only for
+    // the same item. Falls through to the suggestNativeShippingPrice fallback below only for
     // items with no shippingPrice set at all.
     if (it.shippingPrice != null && Number(it.shippingPrice) > 0) {
       const ownRate = Math.round(Number(it.shippingPrice) * 100) / 100;
@@ -545,45 +636,13 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       });
       continue;
     }
-    try {
-      const zip = saleLocationById.get(it.saleId || '')?.zip || null;
-      const cheapest = await computeCheapestForOrigin({
-        weightOz: Number(it.packageWeightOz),
-        dims: {
-          length: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-          width: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-          height: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
-        },
-        origin: { zip },
-        packageType: it.packageType ?? null,
-        category: it.ebayCategoryName || it.category || null,
-        categoryId: it.ebayCategoryId || null,
-        priceUsd: basePrice,
-      });
-      const realRate = Math.round(cheapest.rate * 100) / 100;
-      if (cheapest.rate > VINTED_SHIPPING_CAP) {
-        const overage = Math.round((cheapest.rate - VINTED_SHIPPING_CAP) * 100) / 100;
-        vintedPricingByItemId.set(it.id, {
-          vintedPrice: Math.round((basePrice + overage) * 100) / 100,
-          vintedShippingNote: `Price includes $${overage.toFixed(2)} to cover shipping over Vinted's $100 cap (real shipping cost: $${cheapest.rate.toFixed(2)}).`,
-          vintedDomesticShippingUsd: realRate,
-        });
-      } else {
-        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null, vintedDomesticShippingUsd: realRate });
-      }
-    } catch (e: any) {
-      if (e instanceof ShippingHardBlockError) {
-        vintedPricingByItemId.set(it.id, {
-          vintedPrice: basePrice,
-          vintedShippingNote:
-            'Shipping cost for this item could not be estimated for Vinted (it exceeds standard carrier limits) -- please review shipping and pricing manually before publishing.',
-          vintedDomesticShippingUsd: null,
-        });
-      } else {
-        console.warn('[Vinted pricing] computeCheapestForOrigin failed for item', it.id, e?.message || e);
-        vintedPricingByItemId.set(it.id, { vintedPrice: basePrice, vintedShippingNote: null, vintedDomesticShippingUsd: null });
-      }
-    }
+    // FIX 2026-10-05 (S-VINTED-SHIPPING-FALLBACK-PRICE): no organizer shippingPrice -> use the SAME buyer-facing number
+    // FindA.Sale itself suggests (suggestNativeShippingPrice: platform fee grossed up, bucket-rounded, charm-priced) for both
+    // vintedDomesticShippingUsd and the $100-cap test. This used to be the RAW cheapest.rate (53.38 for the Road Runner
+    // case vs FindA.Sale's own 59.99), which short-changed the organizer by the platform fee and disagreed with the price
+    // FindA.Sale shows for the same item. See computeVintedFallbackShipping.
+    const zip = saleLocationById.get(it.saleId || '')?.zip || null;
+    vintedPricingByItemId.set(it.id, await computeVintedFallbackShipping(it, { basePrice, zip, organizer, cap: VINTED_SHIPPING_CAP }));
   }
 
   const shaped = items.map((it) => ({
@@ -772,6 +831,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' || it.packageWeightOz == null
         ? 'LOCAL_PICKUP_ONLY'
         : it.ebayShippingOverride,
+    // S-VINTED-PICKUP-ONLY (2026-10-05): raw organizer/never-shippable pickup-only flag (NOT the weight-forced
+    // shippingOverride above) -- see isLocalPickupOnlyItem.
+    localPickupOnly: isLocalPickupOnlyItem(it),
     // Crosslister shipping-payer preference (2026-08-27) -- organizer's per-item opt-in to offer
     // free shipping (they absorb the cost) when this item is cross-listed to an external
     // marketplace (Mercari today via fas-mercari.js's fillMercariShippingPayer(); other
@@ -2644,6 +2706,8 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
       it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' || it.packageWeightOz == null
         ? 'LOCAL_PICKUP_ONLY'
         : it.ebayShippingOverride,
+    // S-VINTED-PICKUP-ONLY (2026-10-05): see isLocalPickupOnlyItem.
+    localPickupOnly: isLocalPickupOnlyItem(it),
     crosslisterFreeShipping: it.crosslisterFreeShipping === true,
     allowBestOffer: it.allowBestOffer,
     bestOfferMinimumAmt: it.bestOfferMinimumAmt != null ? Number(it.bestOfferMinimumAmt) : null,

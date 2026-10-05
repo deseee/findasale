@@ -5049,6 +5049,33 @@
     return null;
   }
 
+  // S-VINTED-PICKUP-ONLY (2026-10-05): Vinted has no local-pickup / meet-up / no-shipping option (verified live: the
+  // sell form's Shipping section is parcel size + weight only, "The buyer always pays for shipping"). An item the
+  // organizer marked local pickup only cannot be sold here as intended, so it is never filled or published. Same
+  // skip-and-advance flow as the Prohibited Items skip in start(): plain-language overlay, queue advanced, next item
+  // only on an explicit click. The popup already keeps these out of the Vinted queue; this guards a stale or
+  // hand-seeded queue (debug bridge, an older popup build). Returns true when it handled (skipped) the item.
+  async function vintedSkipPickupOnlyItem(item) {
+    if (!item || item.localPickupOnly !== true) return false;
+    console.warn('[FAS Vinted] skipping listing (local pickup only, Vinted has no local pickup option):', item.id, item.title);
+    overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(item.title || 'this item') + '</b> -- it is marked local pickup only, and Vinted has no local pickup option (the buyer always pays for shipping). Nothing was filled or published.</div>');
+    await humanPause(1200, 1800);
+    try { await chrome.runtime.sendMessage({ type: 'advanceVintedQueue' }); } catch (e) {}
+    const next = await (async () => { try { return await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return null; } })();
+    if (next && next.ok && next.item) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped a local-pickup-only item Vinted can\'t sell. Ready for the next one?</div>' +
+        button('fas-vin-skip-next', 'Continue to next item &#9654;', true) +
+        button('fas-vin-close', 'Not yet', false));
+      const skipNext = document.getElementById('fas-vin-skip-next');
+      fasArmButton(skipNext, 3500);
+      if (skipNext) skipNext.onclick = () => { location.href = LISTING_URL_HINT; };
+      closeBtnHandler();
+    } else {
+      overlay('<b>FindA.Sale</b> \u2014 all done. Happy selling!'); setTimeout(() => bar && bar.remove(), 4000);
+    }
+    return true;
+  }
+
   async function start() {
     // DIAGNOSTIC 2026-09-27 (Patrick live report of repeated automatic-feeling reloads on the
     // Vinted listing page, cause not yet confirmed -- added observability instead of shipping a
@@ -5090,6 +5117,9 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getVintedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+
+    // S-VINTED-PICKUP-ONLY: refuse before anything is filled, counted as an attempt, or marked reviewed.
+    if (await vintedSkipPickupOnlyItem(queued.item)) return;
 
     // FEATURE 2026-09-27 (S-EXT-VINTED-REVIEW-MEMORY, live-caught navigation loop): start() had no
     // memory that THIS item already reached the review screen this session -- only the coarse
