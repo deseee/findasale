@@ -736,6 +736,11 @@ async function startQueue() {
     // field build for the full reasoning). Passed through unconditionally the same way every other
     // field on this map already is; absent stays undefined, same never-invent rule as everywhere else.
     categoryBreadcrumb: it.categoryBreadcrumb, photoUrls: it.photoUrls || [],
+    // S-EXT-VINTED-CATEGORY-MAP (2026-10-04): exact Vinted leaf resolved by the backend
+    // (vintedCategoryResolver.ts). fas-vinted.js reads these from the queue item; null/undefined when no
+    // safe mapping exists, in which case the content script falls back to its own category search unchanged.
+    vintedCategoryId: it.vintedCategoryId, vintedCategoryPath: it.vintedCategoryPath,
+    vintedCategorySource: it.vintedCategorySource,
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt
     packageLengthIn: it.packageLengthIn, packageWidthIn: it.packageWidthIn, packageHeightIn: it.packageHeightIn,

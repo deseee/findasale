@@ -8,6 +8,7 @@ import { commitFacebookNativeSale } from '../services/facebookNativeSaleService'
 import { processVintedSoldReport, sanitizeVintedSoldEntries, VINTED_SOLD_MAX_ENTRIES, normalizeListingTitle } from '../services/vintedSoldDetectionService';
 import { decideMessageAutosend } from '../services/messageAutosendService';
 import { checkEligibility } from '../services/marketplaceEligibilityRules';
+import { resolveVintedCategory } from '../services/vintedCategoryResolver';
 import { computeCheapestForOrigin, ShippingHardBlockError } from '../services/ebayRateEstimateService';
 import { PAUSABLE_PLATFORMS, sanitizePausedPlatforms, isPlatformPaused, filterPausedPlatforms, applyPauseToRemovalEntries } from '../services/pausedMarketplaces';
 import { facebookMarketplaceCondition as toFacebookCondition } from '../utils/marketplaceCondition'; // U4: one condition vocabulary (same strings as exportController mapConditionForFacebook)
@@ -29,6 +30,38 @@ function buildDescriptionWithBacklink(description: string | null | undefined, sa
   if (!saleId) return base;
   const link = `View full listing: https://finda.sale/sales/${saleId}`;
   return base ? `${base}\n\n${link}` : link;
+}
+
+// S-EXT-VINTED-CATEGORY-MAP (2026-10-04): the exact Vinted leaf category for an item, resolved on the
+// backend (services/vintedCategoryResolver.ts) so fas-vinted.js opens that leaf instead of fuzzy-searching
+// the picker with generic words from `category` (root cause of a youth baseball glove landing in a generic
+// "Gloves" leaf instead of Sports > Team sports > Baseball & softball > Baseball & softball gloves).
+// ADDITIVE: three new payload fields, all null when no safe mapping exists (the extension then runs its
+// existing search unchanged), so an older extension build that ignores them keeps working. Never throws:
+// a resolver failure must not break the whole items payload.
+function vintedCategoryFields(it: {
+  title?: string | null;
+  description?: string | null;
+  brand?: string | null;
+  category?: string | null;
+  ebayCategoryId?: string | null;
+  ebayCategoryName?: string | null;
+}): { vintedCategoryId: number | null; vintedCategoryPath: string | null; vintedCategorySource: string | null } {
+  try {
+    const r = resolveVintedCategory({
+      ebayCategoryId: it.ebayCategoryId,
+      ebayCategoryName: it.ebayCategoryName,
+      categoryBreadcrumb: it.category,
+      title: it.title,
+      description: it.description,
+      brand: it.brand,
+    });
+    if (!r) return { vintedCategoryId: null, vintedCategoryPath: null, vintedCategorySource: null };
+    return { vintedCategoryId: r.leafId, vintedCategoryPath: r.pathText, vintedCategorySource: r.source };
+  } catch (e: any) {
+    console.warn('[Vinted category] resolve failed for item', e?.message || e);
+    return { vintedCategoryId: null, vintedCategoryPath: null, vintedCategorySource: null };
+  }
 }
 
 // Facebook Commerce Policy (coins/currency, and as of S-FB-WEAPON-COIN-FIX-2026-09-03, weapons/
@@ -511,6 +544,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // department/gender-level signal (e.g. Grailed's Menswear/Womenswear picker) can still use it --
     // never a straight replacement, since ebayCategoryName alone drops that signal entirely.
     categoryBreadcrumb: it.category || null,
+    // S-EXT-VINTED-CATEGORY-MAP: exact Vinted leaf (id + full path + which layer decided) -- see vintedCategoryFields.
+    ...vintedCategoryFields(it),
     // Facebook Commerce Policy gate (coins/currency AND weapons/ammunition/explosives as of
     // S-FB-WEAPON-COIN-FIX-2026-09-03) -- see isFacebookRestrictedItem above. FB-specific only;
     // does not affect eBay/craigslist/gumtree/native-checkout fields elsewhere in this same
@@ -2512,6 +2547,7 @@ export const getAutolistQueue = async (req: AuthRequest, res: Response): Promise
     descriptionWithBacklink: buildDescriptionWithBacklink(it.description, it.saleId),
     category: it.ebayCategoryName || it.category || null,
     categoryBreadcrumb: it.category || null,
+    ...vintedCategoryFields(it),
     photoUrls: applyWatermark
       ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false, it.qrAssetReady))
       : (it.photoUrls || []),

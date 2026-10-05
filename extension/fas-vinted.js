@@ -1526,11 +1526,142 @@
     return out.slice(0, 4);
   }
 
+  // ================================================================================================
+  // 2026-10-04 (S-EXT-VINTED-CATEGORY-MAP): FindA.Sale's backend now resolves each item to a REAL Vinted
+  // leaf category (packages/backend/src/config/vintedCategoryMap.ts + services/vintedCategoryResolver.ts)
+  // and ships it on the item as vintedCategoryId / vintedCategoryPath / vintedCategorySource. Root cause
+  // this fixes: pickCategory() below only ever had eBay's free-text category to fuzzy-search with, so a
+  // youth baseball glove landed in a generic "Gloves" leaf instead of Sports > Team sports > Baseball &
+  // softball > Baseball & softball gloves. The mapped path is tried FIRST and ONLY accepts an exact leaf
+  // title match in the picker (disambiguated by the parent shown in the row when several leaves share a
+  // title); any doubt returns false and the existing search logic below runs completely unchanged.
+  // ================================================================================================
+  function vintedMappedPathParts(item) {
+    return String((item && item.vintedCategoryPath) || '').split('>').map((x) => x.trim()).filter(Boolean);
+  }
+  function vintedMappedCategoryChooser(item) {
+    const parts = vintedMappedPathParts(item);
+    const leafTitle = norm(parts[parts.length - 1] || '');
+    const parentTitle = parts.length > 1 ? norm(parts[parts.length - 2]) : '';
+    const rootTitle = parts.length > 1 ? norm(parts[0]) : '';
+    return function (leaves) {
+      if (!leafTitle) return null;
+      const cands = [];
+      for (const el of leaves) {
+        const t = norm(el.textContent);
+        if (t && t === leafTitle) cands.push(el);
+      }
+      if (!cands.length) {
+        console.warn('[FAS Vinted] Mapped category: no picker row is titled exactly "' + leafTitle + '" -- falling back to the search logic.');
+        return null;
+      }
+      // The row text for each candidate: climb while the ancestor still contains only THIS candidate
+      // and stays option-sized, so a breadcrumb shown beside the title ("Sports > Team sports > ...")
+      // is included without swallowing neighbouring rows.
+      const rowTextOf = (el) => {
+        // Prefer the real option row (Vinted renders each result as a Cell / option / list item); only
+        // if none is found fall back to a short climb that never absorbs a second candidate.
+        let rowEl = null;
+        try { rowEl = el.closest('.web_ui__Cell__cell, [role="option"], [role="radio"], [role="menuitemradio"], li'); } catch (e) { rowEl = null; }
+        if (rowEl && cands.filter((c) => rowEl.contains(c)).length === 1) {
+          const rt = norm(rowEl.textContent);
+          if (rt && rt.length <= 260) return rt;
+        }
+        let node = el;
+        let best = norm(el.textContent);
+        for (let i = 0; i < 3 && node.parentElement; i++) {
+          node = node.parentElement;
+          const tx = norm(node.textContent);
+          if (tx.length > 200) break;
+          if (cands.filter((c) => node.contains(c)).length !== 1) break;
+          best = tx;
+        }
+        return best;
+      };
+      // Strip the leaf title itself from the row text before looking for parent names: the parent often
+      // shares words with the leaf ("Baseball & softball" inside "Baseball & softball gloves").
+      const rows = cands.map((el) => { const full = rowTextOf(el); return { el, text: full, crumb: full.split(leafTitle).join(' ') }; });
+      // A row that shows a breadcrumb which does not contain our parent is a DIFFERENT leaf with the
+      // same title -- reject it. A row with no breadcrumb at all cannot be told apart, so it is kept.
+      let kept = rows.filter((r) => r.crumb.indexOf('>') === -1 || !parentTitle || r.crumb.indexOf(parentTitle) !== -1);
+      if (kept.length > 1 && rootTitle) {
+        const strict = kept.filter((r) => r.crumb.indexOf('>') === -1 || r.crumb.indexOf(rootTitle) !== -1);
+        if (strict.length) kept = strict;
+      }
+      const distinct = [];
+      kept.forEach((r) => { if (distinct.indexOf(r.text) === -1) distinct.push(r.text); });
+      if (distinct.length !== 1) {
+        console.warn('[FAS Vinted] Mapped category: "' + leafTitle + '" is ' + (kept.length ? 'ambiguous (' + distinct.length + ' different rows)' : 'only present under a different parent') + ' -- not guessing, falling back to the search logic.');
+        return null;
+      }
+      return kept[0].el;
+    };
+  }
+  async function pickMappedVintedCategory(item) {
+    const id = item && item.vintedCategoryId;
+    const parts = vintedMappedPathParts(item);
+    if (!id || !parts.length) return false;
+    const leaf = parts[parts.length - 1];
+    const outcome = { id: id, path: item.vintedCategoryPath, source: item.vintedCategorySource || null, result: 'unknown', at: Date.now() };
+    const persist = () => { try { chrome.storage.local.set({ fasVintedLastCategoryMap: outcome }); } catch (e) { /* best-effort diagnostic */ } };
+    console.log('[FAS Vinted] Category mapped by FindA.Sale: leaf id ' + id + ' (' + outcome.source + ') "' + item.vintedCategoryPath + '" -- searching the picker for "' + leaf + '".');
+    let ok = false;
+    try {
+      ok = await pickFromPanel('catalog', 'Category', leaf, vintedMappedCategoryChooser(item));
+    } catch (e) {
+      console.warn('[FAS Vinted] Mapped category attempt threw -- falling back to the search logic:', e && e.message);
+      outcome.result = 'error';
+      persist();
+      return false;
+    }
+    if (!ok) {
+      console.warn('[FAS Vinted] Mapped category "' + leaf + '" was not selected -- falling back to the search logic.');
+      outcome.result = 'no-match';
+      persist();
+      return false;
+    }
+    await sleep(300);
+    const shown = vintedCategoryValue();
+    if (!shown) {
+      console.warn('[FAS Vinted] Mapped category "' + leaf + '" was clicked but the Category control is still empty -- falling back to the search logic.');
+      outcome.result = 'did-not-stick';
+      persist();
+      return false;
+    }
+    if (shown.indexOf(norm(leaf)) === -1) {
+      // The row we clicked was an exact title match, so keep it -- but record that Vinted shows the
+      // value in a format this check did not expect (unverified: the live #category value format).
+      console.warn('[FAS Vinted] Mapped category selected; Category control shows "' + shown + '" which does not contain "' + norm(leaf) + '" (value format differs from expectation -- keeping the selection).');
+      outcome.result = 'selected-format-mismatch';
+    } else {
+      console.log('[FAS Vinted] Category mapped and confirmed: control shows "' + shown + '".');
+      outcome.result = 'selected';
+    }
+    outcome.shown = shown;
+    persist();
+    return true;
+  }
+
   // Category: 3-4 level tree-based picker. Same fuzzy best-effort click-through pattern as the
   // other three new scripts -- FindA.Sale's item.category is a single flat string, not Vinted's
   // real taxonomy tree, so this clicks the closest text match at each level and stops once a
   // level has no confident match.
   async function pickCategory(categoryText, item) {
+    // 2026-10-04 (S-EXT-VINTED-CATEGORY-MAP): FindA.Sale's own mapped Vinted leaf goes first. Runs even when
+    // categoryText is empty (the item may have no eBay category but still resolve from its title). On any
+    // miss it returns false and everything below runs exactly as before.
+    if (item && item.vintedCategoryId) {
+      try {
+        if (await pickMappedVintedCategory(item)) return true;
+      } catch (e) {
+        console.warn('[FAS Vinted] Mapped category error, using the search logic instead:', e && e.message);
+      }
+    }
+    // When the call site passed the mapped path itself as the text (item had no eBay category), turn
+    // "A > B > C" into the "A:B:C" shape the segment logic below expects.
+    if (categoryText && item && item.vintedCategoryPath && categoryText === item.vintedCategoryPath) {
+      categoryText = String(categoryText).split('>').map((x) => x.trim()).filter(Boolean).join(':');
+    }
     if (!categoryText) return false;
     // Try the shared panel picker first with the most-specific segment (Vinted's "Suggested" search
     // results are full resolved leaf paths, e.g. "Shorts" -> Men > Clothing > Activewear, live-
@@ -2670,7 +2801,7 @@
     // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the
     // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up
     // persistently on the review screen below instead of vanishing.
-    const categoryFilled = await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
+    const categoryFilled = await tryFill('Category', item.category || item.vintedCategoryPath, (v) => pickCategory(v, item), warnings);
     // 2026-10-04 (S-EXT-VINTED-CATEGORY-CASCADE, F1): with no Category chosen, Vinted's form has no Brand,
     // Condition, Size, Color, Material or Package size control at all. Running those fills would only
     // produce a cascade of false "could not be filled" failures. Finish what exists (photos, price) and
@@ -3227,7 +3358,7 @@
     const categoryStillSet = categoryTextAfterLanguage && categoryTextAfterLanguage !== norm('Select a category');
     if (!categoryStillSet) {
       console.warn(fasMissingAfterLanguageMsg('Category', 'category', languageStepRan, fasPreLangSnap).replace('re-filling', 're-selecting'));
-      await tryFill('Category', item.category, (v) => pickCategory(v, item), warnings);
+      await tryFill('Category', item.category || item.vintedCategoryPath, (v) => pickCategory(v, item), warnings);
     }
     // BUG FIX 2026-09-27 ROUND 3 (Patrick-directed: "look at the magazines... figure out why
     // it's looping on those"). Gap found in ROUND 2's own sweep above: ISBN was never re-checked.
