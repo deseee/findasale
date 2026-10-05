@@ -6,7 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 import { checkEbayListingFee } from '../lib/ebayListingFeeCheck';
-import { desiredEbayCondition } from '../utils/conditionMapping'; // U4: one condition vocabulary (first push and edit-sync share one table)
+import { desiredEbayCondition, ebayDescriptionGradeLine } from '../utils/conditionMapping'; // U4: one condition vocabulary (first push and edit-sync share one table)
 import { fetchLiveEbayListings, itemIdFromFasSku, lookupOfferIdForSku } from '../services/ebayLiveListingsService'; // eBay sync hardening (2026-10-01): relist adoption + live ActiveList
 import { recordFreeEbayInsertion } from '../lib/ebayInsertionsQuotaTracker';
 // Re-export the OAuth helpers so existing external importers of these from './ebayController' keep resolving (Phase 1 relocation).
@@ -137,15 +137,6 @@ function xmlAll(block: string, tag: string): string[] {
   return results;
 }
 
-// Condition mapping: FindA.Sale grade to eBay condition ID
-const CONDITION_ID_MAP: Record<string, string> = {
-  'S': '1000', // New
-  'A': '3000', // Like New
-  'B': '4000', // Very Good
-  'C': '5000', // Good
-  'D': '6000', // Acceptable
-};
-
 // Secondary category map: tag keywords to eBay category IDs.
 // DISABLED (2026-06-13): these values are ROOT categories, not leaves. eBay
 // rejects non-leaf secondary categories with errorId 25005 "category selected
@@ -177,10 +168,8 @@ function sanitizeDescriptionForEbay(raw: string | null | undefined): string {
 function buildConditionDescription(item: { condition: string | null; conditionGrade: string | null; description: string | null; conditionNotes: string | null; tags: string[] }): string | undefined {
   if (item.condition === 'NEW' || !item.condition) return undefined;
   const parts: string[] = [];
-  if (item.conditionGrade) {
-    const gradeLabels: Record<string, string> = { S: 'Grade S: Mint condition', A: 'Grade A: Excellent condition', B: 'Grade B: Very good condition', C: 'Grade C: Good condition', D: 'Grade D: Acceptable condition' };
-    parts.push(gradeLabels[item.conditionGrade] || `Grade ${item.conditionGrade}`);
-  }
+  const gradeLine = ebayDescriptionGradeLine(item.conditionGrade);
+  if (gradeLine) parts.push(gradeLine);
   if (item.conditionNotes) parts.push(item.conditionNotes);
   if (item.description) {
     const plain = item.description.replace(/<[^>]*>/g, '').trim();
@@ -6101,16 +6090,25 @@ async function fillRequiredAspects(
 }
 
 /**
- * Helper: Get condition label from ID
+ * Helper: Get condition label from ID. Labels match eBay's own display names for each conditionId
+ * (developer.ebay.com condition-id-values). Exported for tests.
  */
-function getConditionLabel(conditionId: string): string {
+export function getConditionLabel(conditionId: string): string {
   const labelMap: Record<string, string> = {
     '1000': 'New',
-    '3000': 'Like New',
+    '1500': 'New other (see details)',
+    '1750': 'New with defects',
+    '2000': 'Certified Refurbished',
+    '2010': 'Excellent - Refurbished',
+    '2020': 'Very Good - Refurbished',
+    '2030': 'Good - Refurbished',
+    '2500': 'Seller refurbished',
+    '2750': 'Like New',
+    '3000': 'Used',
     '4000': 'Very Good',
     '5000': 'Good',
     '6000': 'Acceptable',
-    '7000': 'For Parts or Not Working',
+    '7000': 'For parts or not working',
   };
   return labelMap[conditionId] || 'Unknown';
 }

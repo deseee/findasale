@@ -146,3 +146,23 @@ export function desiredEbayCondition(
     }
   }
 }
+
+/** Organizer-facing grade lines sent to eBay in the condition description. S is retired and reads as A. */
+const EBAY_DESCRIPTION_GRADE_LINES: Record<ConditionGrade, string> = {
+  S: 'Grade A: Excellent condition',
+  A: 'Grade A: Excellent condition',
+  B: 'Grade B: Very good condition',
+  C: 'Grade C: Good condition',
+  D: 'Grade D: Acceptable condition',
+};
+
+/**
+ * The grade line placed at the top of the eBay condition description. Case and surrounding whitespace are
+ * ignored (via normalizeGrade), and grade S reads as A. An empty or missing grade returns undefined (no line).
+ * An unrecognized non-empty grade falls back to `Grade <value>` exactly as given.
+ */
+export function ebayDescriptionGradeLine(grade: string | null | undefined): string | undefined {
+  if (!grade) return undefined;
+  const normalized = normalizeGrade(grade);
+  return normalized ? EBAY_DESCRIPTION_GRADE_LINES[normalized] : `Grade ${grade}`;
+}
