@@ -596,12 +596,12 @@ describe('completeEtsyConnect', () => {
     expect(ctx.db.store.settings[0]).toMatchObject({ shopId: '777', defaultShippingProfileId: null, defaultReturnPolicyId: null, defaultReadinessStateId: null, receiptCursor: null });
   });
 
-  it('looks the shop up through the public endpoint class without sending the token', async () => {
+  it('looks the shop up through the oauth endpoint class, sending the seller bearer token', async () => {
     const ctx = makeCtx({ request: shopRequest() });
     const { state } = await startAndGetState(ctx);
     await completeEtsyConnect({ organizerId: 'org_1', userId: 'user_1', code: CODE, state }, ctx.deps);
-    expect(ctx.request).toHaveBeenCalledWith(expect.objectContaining({ method: 'GET', path: '/v3/application/users/1001/shops', priority: 'URGENT', endpointClass: 'public', organizerId: 'org_1' }));
-    expect(ctx.request.mock.calls[0][0].accessToken).toBeUndefined();
+    expect(ctx.request).toHaveBeenCalledWith(expect.objectContaining({ method: 'GET', path: '/v3/application/users/1001/shops', priority: 'URGENT', endpointClass: 'oauth', organizerId: 'org_1' }));
+    expect(ctx.request.mock.calls[0][0].accessToken).toBe(NEW_TOKENS.access_token);
   });
 
   it('extracts the Etsy user id from the access token prefix', () => {
