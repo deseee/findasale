@@ -26,6 +26,7 @@ import Head from 'next/head';
 import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query';
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
 import api from '../lib/api';
+import { shouldShowSwUpdateToast } from '../lib/swUpdateToast';
 import Layout from '../components/Layout';
 import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
@@ -178,8 +179,15 @@ function ServiceWorkerUpdateNotifier() {
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
+    // Only a page that already had a controller can be "updated". On first install the new worker
+    // claims the page (skipWaiting + clientsClaim) and fires controllerchange with nothing to update.
+    const hadController = !!navigator.serviceWorker.controller;
+    let notified = false;
+
     const handleControllerChange = () => {
-      // A new SW has taken control: prompt user to reload for the latest version
+      if (!shouldShowSwUpdateToast({ hadController, alreadyNotified: notified })) return;
+      notified = true;
+      // A new SW has taken control of an already-controlled page: prompt user to reload
       showToast('A new version is available. Reload to update.', 'info');
     };
 
