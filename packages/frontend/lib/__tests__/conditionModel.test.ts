@@ -66,6 +66,17 @@ test('every table value is a listed eBay enum with a label', () => {
   assert.equal(Object.keys(EBAY_CONDITION_LABELS).length, EBAY_CONDITION_ENUMS.length);
 });
 
+test("EBAY_CONDITION_LABELS use eBay's own condition names", () => {
+  assert.deepEqual(EBAY_CONDITION_LABELS, {
+    NEW: 'New',
+    USED_VERY_GOOD: 'Very Good',
+    USED_GOOD: 'Good',
+    USED_ACCEPTABLE: 'Acceptable',
+    SELLER_REFURBISHED: 'Seller refurbished',
+    FOR_PARTS_OR_NOT_WORKING: 'For parts or not working',
+  });
+});
+
 test('desiredEbayCondition: unified table, every combination', () => {
   assert.equal(UNIFIED_TABLE.length, 30);
   for (const [c, g, expected] of UNIFIED_TABLE) {
@@ -98,15 +109,15 @@ test('eBayConditionPreview: the label eBay shows for each case', () => {
   assert.equal(eBayConditionPreview('NEW', 'D'), 'New');
   assert.equal(eBayConditionPreview('PARTS_OR_REPAIR', 'A'), 'For parts or not working');
   assert.equal(eBayConditionPreview('REFURBISHED', 'C'), 'Seller refurbished');
-  assert.equal(eBayConditionPreview('USED', 'A'), 'Used - Very good');
-  assert.equal(eBayConditionPreview('USED', 'B'), 'Used - Very good');
-  assert.equal(eBayConditionPreview('USED', 'S'), 'Used - Very good');
-  assert.equal(eBayConditionPreview('USED', 'C'), 'Used - Good');
-  assert.equal(eBayConditionPreview('USED', 'D'), 'Used - Acceptable');
-  assert.equal(eBayConditionPreview('USED', null), 'Used - Good');
-  assert.equal(eBayConditionPreview(null, null), 'Used - Good');
-  assert.equal(eBayConditionPreview('', ''), 'Used - Good');
-  assert.equal(eBayConditionPreview('LIKE_NEW', ''), 'Used - Very good');
+  assert.equal(eBayConditionPreview('USED', 'A'), 'Very Good');
+  assert.equal(eBayConditionPreview('USED', 'B'), 'Very Good');
+  assert.equal(eBayConditionPreview('USED', 'S'), 'Very Good');
+  assert.equal(eBayConditionPreview('USED', 'C'), 'Good');
+  assert.equal(eBayConditionPreview('USED', 'D'), 'Acceptable');
+  assert.equal(eBayConditionPreview('USED', null), 'Good');
+  assert.equal(eBayConditionPreview(null, null), 'Good');
+  assert.equal(eBayConditionPreview('', ''), 'Good');
+  assert.equal(eBayConditionPreview('LIKE_NEW', ''), 'Very Good');
 });
 
 test('gradeApplies: only used goods (legacy values normalized first)', () => {

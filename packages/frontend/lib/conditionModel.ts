@@ -43,7 +43,7 @@ export type ConditionGrade = (typeof CONDITION_GRADES)[number];
 /**
  * Approved organizer-facing grade wording: A is excellent, B is very good, C is good, D is acceptable. This is only the
  * description shown to organizers. What eBay receives is a separate table (EBAY_CONDITION_LABELS below): A and B both
- * map to Used - Very good.
+ * map to Very Good (eBay's own name for 4000).
  */
 export const CONDITION_GRADE_LABELS: Record<ConditionGrade, string> = {
   A: 'Excellent',
@@ -67,12 +67,12 @@ export const EBAY_CONDITION_ENUMS = [
 ] as const;
 export type EbayConditionEnum = (typeof EBAY_CONDITION_ENUMS)[number];
 
-/** What eBay shows the buyer for each enum. */
+/** What eBay shows the buyer for each enum: eBay's own condition names (4000 Very Good, 5000 Good, 6000 Acceptable). Mirrors getConditionLabel in the backend. */
 export const EBAY_CONDITION_LABELS: Record<EbayConditionEnum, string> = {
   NEW: 'New',
-  USED_VERY_GOOD: 'Used - Very good',
-  USED_GOOD: 'Used - Good',
-  USED_ACCEPTABLE: 'Used - Acceptable',
+  USED_VERY_GOOD: 'Very Good',
+  USED_GOOD: 'Good',
+  USED_ACCEPTABLE: 'Acceptable',
   SELLER_REFURBISHED: 'Seller refurbished',
   FOR_PARTS_OR_NOT_WORKING: 'For parts or not working',
 };
@@ -201,7 +201,7 @@ export function desiredEbayCondition(
 /**
  * Human label of what eBay will show for this condition and grade, for the save-impact line.
  *   NEW -> New, PARTS_OR_REPAIR -> For parts or not working, REFURBISHED -> Seller refurbished,
- *   USED A or B -> Used - Very good, C -> Used - Good, D -> Used - Acceptable, no grade -> Used - Good.
+ *   USED A or B -> Very Good, C -> Good, D -> Acceptable, no grade -> Good.
  */
 export function eBayConditionPreview(
   condition: string | null | undefined,

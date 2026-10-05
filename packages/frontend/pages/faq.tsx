@@ -76,7 +76,7 @@ const shopperFAQs: FAQItem[] = [
           <li><strong>Parts / Repair</strong>. Doesn't work, is incomplete, or is untested. Sold as is, for parts or repair. Inspect carefully before you buy.</li>
         </ul>
         <p className="mt-2">Trading cards use the card scale instead: NM (Near Mint), LP (Lightly Played), MP (Moderately Played), HP (Heavily Played) and DMG (Damaged).</p>
-        <p className="mt-2">If an item is also listed on eBay, buyers there see grades A and B as Used - Very good, C as Used - Good and D as Used - Acceptable.</p>
+        <p className="mt-2">If an item is also listed on eBay, buyers there see grades A and B as Very Good, C as Good and D as Acceptable.</p>
       </>
     ),
   },

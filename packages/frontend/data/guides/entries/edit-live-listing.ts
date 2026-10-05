@@ -65,7 +65,7 @@ The header shows "Last edited" with the time of your own last edit. Automatic ch
 
 **Description and title**: No limit on length or on how many times you edit. Short, accurate titles perform better than long ones.
 
-**Condition and grade**: If you mis-graded an item and catch it after publishing, fix it. An accurate grade is better than a published-but-wrong one. Switching between A and B doesn't change what eBay shows, because eBay shows both as "Used - Very good".
+**Condition and grade**: If you mis-graded an item and catch it after publishing, fix it. An accurate grade is better than a published-but-wrong one. Switching between A and B doesn't change what eBay shows, because eBay shows both as "Very Good".
 
 **Photos**: Add photos, replace the primary photo, or remove a photo. At least one photo is required to keep the listing live. A second or third angle often helps move items that have been sitting.
 

@@ -32,7 +32,7 @@ The condition tells you what to expect when you arrive. Search results have a Co
 
 **D (Acceptable)**: Heavy wear or damage, but still usable.
 
-When an organizer also lists an item on eBay, buyers there see A and B as Used - Very good, C as Used - Good, and D as Used - Acceptable.
+When an organizer also lists an item on eBay, buyers there see A and B as Very Good, C as Good, and D as Acceptable.
 
 ## Trading cards
 

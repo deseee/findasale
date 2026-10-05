@@ -74,7 +74,7 @@ FindA.Sale sends to eBay:
 - Title (from your item name)
 - Description (from your item notes)
 - Category (from what was tagged)
-- Condition (New is New. Used grade A or B is Used - Very good, C is Used - Good, D is Used - Acceptable. Parts / Repair is For parts or not working. Refurbished follows its own eBay condition)
+- Condition (New is New. Used grade A or B is Very Good, C is Good, D is Acceptable. Parts / Repair is For parts or not working. Refurbished follows its own eBay condition)
 - All photos, in order
 - Your asking price
 - Your shipping policy, payment policy, and fulfillment settings (pulled from your eBay account defaults)

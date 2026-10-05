@@ -32,16 +32,16 @@ The app suggests a condition from the photo. You confirm or change it before you
 
 **D (Acceptable)**: Heavy wear or damage, but still usable. If it is broken or sold for parts, use Parts / Repair instead.
 
-eBay shows both A and B as "Used - Very good". The letter still matters in FindA.Sale, because it changes the suggested price.
+eBay shows both A and B as "Very Good". The letter still matters in FindA.Sale, because it changes the suggested price.
 
 Grade S is retired for used goods. Something never used belongs under New. Existing items that still carry S show "S (legacy)" in the grade picker and are treated as A. Items stored as "Like new" are treated as Used, grade A.
 
 ## What eBay receives
 
 - New: New
-- Used, grade A or B: Used - Very good
-- Used, grade C: Used - Good
-- Used, grade D: Used - Acceptable
+- Used, grade A or B: Very Good
+- Used, grade C: Good
+- Used, grade D: Acceptable
 - Refurbished: Seller refurbished
 - Parts / Repair: For parts or not working
 

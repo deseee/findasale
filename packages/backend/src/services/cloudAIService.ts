@@ -297,7 +297,7 @@ export interface AITagResult {
   tags: string[];
   confidence?: number; // Camera Workflow v2: AI confidence score (0.0–1.0), defaults to 0.5
   suggestedTags?: string[]; // Sprint 1: Curated tags suggested by Haiku from Vision labels
-  suggestedConditionGrade?: string; // #64: AI-suggested condition grade (S|A|B|C|D)
+  suggestedConditionGrade?: string; // #64: AI-suggested condition grade (A|B|C|D; a legacy S reads as A)
   photoOrderIndices?: number[]; // Enhancement 2: Best-photo-first sorting — reordered photo indices by Vision quality
   brand?: string; // Task #339: Optional if confidence < 0.6
   color?: string; // Optional if confidence < 0.6, or item color is unclear/multi-colored/occluded -- describes the ITEM's own dominant surface color, never the background/backdrop/lighting
@@ -786,7 +786,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
   "description": "1-2 sentence description with condition details",
   "category": "best matching category",
   "condition": "NEW | USED | REFURBISHED | PARTS_OR_REPAIR",
-  "suggestedConditionGrade": "A | B | C | D | F",
+  "suggestedConditionGrade": "A | B | C | D",
   "suggestedPrice": 12.50,
   "tags": ["Tag1", "Tag2", "Tag3"],
   "confidence": 0.85,
@@ -966,16 +966,15 @@ Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern"
 
 /**
  * #64: Suggest a condition grade based on image analysis.
- * Returns one of: S | A | B | C | D
- * - S: Like new / pristine, no visible wear
- * - A: Excellent, minor traces of use
- * - B: Good, some wear but fully functional
- * - C: Fair, visible wear or minor damage
- * - D: Poor, significant damage or for parts
+ * Returns one of: A | B | C | D (used-goods grades; grade S is retired, so a model answer of S is read as A)
+ * - A: Excellent, minor traces of use at most
+ * - B: Very good, light wear but fully functional
+ * - C: Good, visible wear or minor flaws
+ * - D: Acceptable, heavy wear or significant flaws
  */
 async function suggestConditionGrade(imageBase64: string, mimeType: string): Promise<string> {
   if (!ANTHROPIC_API_KEY) {
-    return 'B'; // Default to 'Good' if no API key
+    return 'B'; // Default to 'Very good' if no API key
   }
 
   try {
@@ -1011,14 +1010,13 @@ async function suggestConditionGrade(imageBase64: string, mimeType: string): Pro
 - Signs of repair or restoration
 - Original finish vs. worn/patinated surface
 
-Grade using this scale:
-S = Like new / pristine — no visible wear, as if unused
-A = Excellent — minor traces of use, no damage, fully functional
-B = Good — some visible wear (light scratches, minor patina), fully functional
-C = Fair — visible wear, minor chips/cracks/stains, functional but imperfect
-D = Poor — significant damage, heavy wear, broken parts, or for parts only
+Grade this used item using this scale:
+A = Excellent — minor traces of use at most, no damage, fully functional
+B = Very good — light visible wear (light scratches, minor patina), fully functional
+C = Good — visible wear, minor chips/cracks/stains, functional but imperfect
+D = Acceptable — significant wear or flaws, heavy wear, still usable or displayable
 
-If the image is unclear or the item is partially obscured, default to B. Return ONLY the single letter (S, A, B, C, or D), no explanation.`,
+If the image is unclear or the item is partially obscured, default to B. Return ONLY the single letter (A, B, C, or D), no explanation.`,
               },
             ],
           },
@@ -1043,8 +1041,9 @@ If the image is unclear or the item is partially obscured, default to B. Return 
 
     const grade = content.trim().toUpperCase().charAt(0);
 
-    // Validate grade is one of S|A|B|C|D, default to B if invalid
-    return ['S', 'A', 'B', 'C', 'D'].includes(grade) ? grade : 'B';
+    // Grade S is retired and reads as A. Validate the grade is one of A|B|C|D, default to B if invalid.
+    if (grade === 'S') return 'A';
+    return ['A', 'B', 'C', 'D'].includes(grade) ? grade : 'B';
   } catch {
     // Condition grade suggestion is best-effort — default to B on error
     return 'B';
@@ -1510,7 +1509,7 @@ Trading card: ONLY if the photo(s) show a single collectible trading card (Magic
   "description": "1-2 sentence description with condition details",
   "category": "best matching category",
   "condition": "NEW | USED | REFURBISHED | PARTS_OR_REPAIR",
-  "suggestedConditionGrade": "A | B | C | D | F",
+  "suggestedConditionGrade": "A | B | C | D",
   "suggestedPrice": 12.50,
   "tags": ["Tag1", "Tag2", "Tag3"],
   "confidence": 0.85,
