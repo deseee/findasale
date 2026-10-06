@@ -116,7 +116,7 @@ const MessageThreadPage = () => {
     : conversation.organizer.businessName;
 
   return (
-    <div className="flex flex-col h-full bg-warm-50 dark:bg-gray-900">
+    <div className="flex flex-col min-h-[calc(100dvh-5.75rem)] lg:min-h-[calc(100dvh-4rem)] bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{`${otherName ?? ''}. Messages. FindA.Sale`}</title>
       </Head>

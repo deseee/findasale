@@ -93,3 +93,28 @@ test('sticky bars at 96px cover the 2px strip under the 94px search bar with a p
   assert.match(read('pages/messages/[id].tsx'), strip);
   assert.match(read('pages/organizer/add-items/[saleId].tsx'), strip);
 });
+
+// The item editor header is pinned at 96px under the 94px search bar too. The cover strip uses the editor page's own
+// background (bg-white / dark:bg-gray-800 on edit-item/[id].tsx) so it is invisible, and the sheet variant (top-0, not
+// under the search bar) must not get it.
+test('item editor sticky header covers the 2px strip with the editor page background, non-sheet only', () => {
+  const src = read('components/itemForm/ItemFormBody.tsx');
+  assert.match(
+    src,
+    /\$\{isSheet \? '' : "before:content-\[''\] before:absolute before:inset-x-0 before:-top-0\.5 before:h-0\.5 before:bg-white dark:before:bg-gray-800 lg:before:hidden"\} z-30/,
+  );
+  const page = read('pages/organizer/edit-item/[id].tsx');
+  assert.match(page, /min-h-screen bg-white dark:bg-gray-800/);
+});
+
+// The wrapper used h-full inside Layout's <main>, which has no definite height, so it collapsed to the content and the
+// lighter body background showed between the last message and the composer. min-h fills the viewport below the header.
+test('message thread wrapper fills the viewport below the header instead of collapsing with h-full', () => {
+  const src = read('pages/messages/[id].tsx');
+  assert.match(
+    src,
+    /flex flex-col min-h-\[calc\(100dvh-5\.75rem\)\] lg:min-h-\[calc\(100dvh-4rem\)\] bg-warm-50 dark:bg-gray-900/,
+  );
+  assert.ok(!/flex flex-col h-full bg-warm-50/.test(src), 'thread wrapper is back on h-full');
+  assert.match(src, /flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-40 md:pb-28/);
+});
