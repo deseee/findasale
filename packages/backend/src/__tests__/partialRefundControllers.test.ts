@@ -142,7 +142,7 @@ describe('stripeController.createRefund', () => {
     mockExecuteSquare.mockResolvedValue(squareResult({ refundedAmount: 70, totalRefundedAmount: 100, remainingRefundable: 0, isFullRefund: true }));
     const res = await call({});
     expect(mockExecuteSquare).toHaveBeenCalledWith('p1', 70, 'organizer');
-    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', status: 'SOLD' }, data: { status: 'AVAILABLE' } });
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } }, data: { status: 'AVAILABLE' } });
     expect(res.json.mock.calls[0][0]).toMatchObject({ refundAmount: 70, isFullRefund: true, remainingRefundable: 0 });
   });
 
@@ -184,7 +184,7 @@ describe('stripeController.createRefund', () => {
 
     res = await call({});
     expect(mockExecuteStripe).toHaveBeenCalledWith('p1', 100, 'organizer');
-    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', status: 'SOLD' }, data: { status: 'AVAILABLE' } });
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } }, data: { status: 'AVAILABLE' } });
   });
 
   it('a full refund does NOT put the item back on sale when another PAID purchase of it exists', async () => {
@@ -223,24 +223,24 @@ describe('disputeController.updateDisputeStatus', () => {
   it('a partial dispute refund does not put the item back on sale', async () => {
     await call(30);
     expect(mockExecuteSquare).toHaveBeenCalledWith('p1', 30, 'dispute');
-    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
     expect(mockPrisma.dispute.update).toHaveBeenCalled(); // the dispute is still resolved
   });
 
   it('a refund that completes the balance restores the item', async () => {
     mockExecuteSquare.mockResolvedValue(squareResult({ refundedAmount: 70, totalRefundedAmount: 100, remainingRefundable: 0, isFullRefund: true }));
     await call(70);
-    expect(mockPrisma.item.update).toHaveBeenCalledWith({ where: { id: 'item1' }, data: { status: 'AVAILABLE' } });
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', listingType: { not: 'CONSIGNOR_TAG' } }, data: { status: 'AVAILABLE' } });
   });
 
   it('the legacy Stripe path restores only when the whole purchase amount was refunded', async () => {
     mockPrisma.purchase.findUnique.mockResolvedValue(purchaseRow({ processor: 'STRIPE' }));
     mockExecuteStripe.mockResolvedValue({ refundedAmount: 40, purchase: { id: 'p1', itemId: 'item1', amount: 100, user: null, item: null, sale: null } });
     await call(40);
-    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
     mockExecuteStripe.mockResolvedValue({ refundedAmount: 100, purchase: { id: 'p1', itemId: 'item1', amount: 100, user: null, item: null, sale: null } });
     await call(100);
-    expect(mockPrisma.item.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -258,7 +258,7 @@ describe('adminController.bulkRefundPurchases', () => {
     mockExecuteSquare.mockResolvedValue(squareResult({ refundedAmount: 70, totalRefundedAmount: 100, remainingRefundable: 0, isFullRefund: true }));
     const results = await call(['p1']);
     expect(mockExecuteSquare).toHaveBeenCalledWith('p1', 70, 'admin', 'requested_by_customer');
-    expect(mockPrisma.item.update).toHaveBeenCalledWith({ where: { id: 'item1' }, data: { status: 'AVAILABLE' } });
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledWith({ where: { id: 'item1', listingType: { not: 'CONSIGNOR_TAG' } }, data: { status: 'AVAILABLE' } });
     expect(results[0]).toMatchObject({ purchaseId: 'p1', success: true, refundedAmount: 70 });
   });
 
@@ -266,7 +266,7 @@ describe('adminController.bulkRefundPurchases', () => {
     mockPrisma.purchase.findUnique.mockResolvedValue(row());
     mockExecuteSquare.mockResolvedValue(squareResult({ isFullRefund: false }));
     await call(['p1']);
-    expect(mockPrisma.item.update).not.toHaveBeenCalled();
+    expect(mockPrisma.item.updateMany).not.toHaveBeenCalled();
   });
 
   it('reports an already fully refunded purchase without calling the refund service', async () => {
@@ -280,6 +280,6 @@ describe('adminController.bulkRefundPurchases', () => {
     mockPrisma.purchase.findUnique.mockResolvedValue(row({ processor: 'STRIPE' }));
     await call(['p1']);
     expect(mockExecuteStripe).toHaveBeenCalledWith('p1', 100, 'admin', 'requested_by_customer');
-    expect(mockPrisma.item.update).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.item.updateMany).toHaveBeenCalledTimes(1);
   });
 });

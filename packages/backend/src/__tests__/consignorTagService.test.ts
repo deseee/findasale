@@ -254,6 +254,7 @@ describe('mintTagItemInTx', () => {
       price: 5,
       originalPrice: 5,
       photoUrls: [],
+      embedding: [], // NOT NULL column with no DB default
       title: 'Consigned tag $5.00',
       sku: 'CTAG-pay1-tag1',
     });

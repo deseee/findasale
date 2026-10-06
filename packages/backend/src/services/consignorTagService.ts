@@ -379,6 +379,8 @@ export async function mintTagItemInTx(tx: any, ctx: MintTagContext): Promise<{ i
       price,
       originalPrice: price,
       photoUrls: [],
+      // Item.embedding is NOT NULL with no database default (migration add_coupon_model dropped it); every other Item create passes [].
+      embedding: [],
     },
     select: { id: true },
   });
