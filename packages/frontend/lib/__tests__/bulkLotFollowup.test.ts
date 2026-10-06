@@ -212,6 +212,6 @@ test('the team member view: the panel hides recount and refunds behind holdsOnly
   assert.ok(panel.includes('enabled: !holdsOnly'), 'the sales list is not fetched for a team member');
   assert.ok(panel.includes('customerEmail: email.email'), 'the email is sent only when typed');
   const page = readFileSync(join(__dirname, '..', '..', 'pages', 'organizer', 'bulk-lots', '[saleId]', 'holds.tsx'), 'utf8');
-  assert.ok(/<BulkLotFollowupPanel[^>]*holdsOnly/s.test(page));
+  assert.ok(/<BulkLotFollowupPanel[^>]*holdsOnly/.test(page));
   assert.ok(!page.includes("roles.includes('ORGANIZER')"), 'the page does not require the organizer role; the server decides');
 });
