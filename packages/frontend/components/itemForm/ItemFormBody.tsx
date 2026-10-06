@@ -1561,7 +1561,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
               "where this is listed" strip. Every value comes from data already on the loaded
               item. Chips jump to the Where this is listed section. */}
           <div
-            className={`sticky ${isSheet ? 'top-0' : 'top-[92px] md:top-16'} z-30 -mx-4 px-4 py-2 mb-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-warm-200 dark:border-gray-700`}
+            className={`sticky ${isSheet ? 'top-0' : 'top-24 lg:top-16'} z-30 -mx-4 px-4 py-2 mb-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-warm-200 dark:border-gray-700`}
             data-testid="edit-item-sticky-header"
           >
             <div className="flex items-center gap-3 min-w-0">

@@ -35,7 +35,7 @@ export default function OfflineIndicator({ className = '' }: OfflineIndicatorPro
     <>
       {shouldShowBanner && (
       <div
-        className={`fixed top-[92px] md:top-16 left-0 right-0 z-40 transition-all ${
+        className={`fixed top-24 lg:top-16 left-0 right-0 z-40 transition-all ${
           isError ? 'bg-red-100 border-b border-red-300' : isOffline ? 'bg-yellow-100 border-b border-yellow-300' : 'bg-blue-100 border-b border-blue-300'
         } ${className}`}
       >

@@ -122,7 +122,7 @@ const MessageThreadPage = () => {
       </Head>
 
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 sticky top-24 lg:top-16 z-10">
+      <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 sticky top-24 lg:top-16 z-10 before:content-[''] before:absolute before:inset-x-0 before:-top-0.5 before:h-0.5 before:bg-warm-50 dark:before:bg-gray-900 lg:before:hidden">
         <Link href="/messages" className="text-warm-500 dark:text-warm-400 hover:text-warm-900 dark:text-warm-100 p-1 -ml-1" aria-label="Back">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -142,7 +142,7 @@ const MessageThreadPage = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-28">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-40 md:pb-28">
         {messages.length === 0 && (
           <p className="text-center text-warm-400 text-sm py-8">No messages yet. Send one below.</p>
         )}
@@ -176,7 +176,7 @@ const MessageThreadPage = () => {
       {/* Input */}
       <form
         onSubmit={handleSend}
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-600 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.45)] px-4 pt-3 pb-6 z-20"
+        className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-600 shadow-[0_-4px_12px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.45)] px-4 pt-3 pb-3 md:pb-6 z-20"
       >
         <div className="flex gap-2 items-end">
           <QuickReplyPicker onSelect={(text) => setBody(text)} />

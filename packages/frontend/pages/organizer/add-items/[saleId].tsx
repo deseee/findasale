@@ -3114,7 +3114,7 @@ const AddItemsDetailPage = () => {
 
               {/* Sticky Top Toolbar: positioned ABOVE table for proper sticky behavior */}
               {selectedItems.size > 0 && (
-                <div className="sticky top-24 lg:top-16 z-30 bg-amber-600 dark:bg-amber-800 text-white border-b border-amber-700 dark:border-amber-900 px-4 py-3 shadow-md space-y-2">
+                <div className="sticky top-24 lg:top-16 z-30 before:content-[''] before:absolute before:inset-x-0 before:-top-0.5 before:h-0.5 before:bg-warm-50 dark:before:bg-gray-900 lg:before:hidden bg-amber-600 dark:bg-amber-800 text-white border-b border-amber-700 dark:border-amber-900 px-4 py-3 shadow-md space-y-2">
                   {/* Row 1: select-all + count + Hide + Show + Delete */}
                   <div className="flex items-center gap-2">
                     <input

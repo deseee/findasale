@@ -60,3 +60,36 @@ test('encyclopedia filter bar stays non-sticky (it is ~250px tall and would cove
   const src = read('pages/encyclopedia/index.tsx');
   assert.ok(!/sticky top-0 z-10/.test(src));
 });
+
+// Tablet band (768-1023px): the fixed mobile search bar (lg:hidden, ends at y=94) is still showing, so
+// anything pinned under the header must use top-24 (96px) up to lg, never an md: switch to 64px.
+test('item editor sticky header, tier-lapse banner and offline banner clear the search bar in the tablet band', () => {
+  const itemForm = read('components/itemForm/ItemFormBody.tsx');
+  assert.match(itemForm, /isSheet \? 'top-0' : 'top-24 lg:top-16'/);
+  assert.ok(!/top-\[92px\] md:top-16/.test(itemForm), 'item editor header is back on top-[92px] md:top-16');
+  const layout = read('components/Layout.tsx');
+  assert.match(layout, /sticky top-24 lg:top-16 z-40/);
+  assert.match(read('components/OfflineIndicator.tsx'), /fixed top-24 lg:top-16 left-0 right-0 z-40/);
+  for (const f of ['components/Layout.tsx', 'components/OfflineIndicator.tsx', 'components/itemForm/ItemFormBody.tsx']) {
+    assert.ok(!/top-\[92px\] md:top-16/.test(read(f)), `${f} still uses top-[92px] md:top-16`);
+  }
+});
+
+test('main content padding clears header + search bar until lg (search bar is lg:hidden), not md', () => {
+  const layout = read('components/Layout.tsx');
+  assert.match(layout, /className="flex-grow pt-\[92px\] lg:pt-16 pb-15 md:pb-0"/);
+  assert.ok(!/md:pt-16/.test(layout), 'main padding is back on md:pt-16');
+});
+
+test('message thread composer sits above the mobile bottom tab bar and the list leaves room for it', () => {
+  const src = read('pages/messages/[id].tsx');
+  assert.match(src, /fixed bottom-\[calc\(3\.5rem\+env\(safe-area-inset-bottom,0px\)\)\] md:bottom-0 left-0 right-0/);
+  assert.ok(!/fixed bottom-0 left-0 right-0/.test(src), 'composer is back on bottom-0 under the tab bar');
+  assert.match(src, /space-y-3 pb-40 md:pb-28/);
+});
+
+test('sticky bars at 96px cover the 2px strip under the 94px search bar with a page-colored backdrop', () => {
+  const strip = /before:absolute before:inset-x-0 before:-top-0\.5 before:h-0\.5 before:bg-warm-50 dark:before:bg-gray-900 lg:before:hidden/;
+  assert.match(read('pages/messages/[id].tsx'), strip);
+  assert.match(read('pages/organizer/add-items/[saleId].tsx'), strip);
+});

@@ -1430,14 +1430,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
       {/* Main Content
           Mobile: pt accounts for fixed header (48px) + fixed search bar (~44px) = 92px
-          Desktop: pt-16 for fixed header (64px)
+          Desktop (lg+): pt-16 for fixed header (64px); the search bar is lg:hidden so tablets (md) keep the 92px
       */}
       <div
-        className="flex-grow pt-[92px] md:pt-16 pb-15 md:pb-0"
+        className="flex-grow pt-[92px] lg:pt-16 pb-15 md:pb-0"
       >
         {/* Feature #75: Tier Lapse Banner (hard gate for past_due organizers) */}
         {isClient && isOrganizer && isLapsed && (
-          <div className="bg-amber-50 dark:bg-amber-950/40 border-b-2 border-amber-300 dark:border-amber-700 px-4 py-3 sticky top-[92px] md:top-16 z-40">
+          <div className="bg-amber-50 dark:bg-amber-950/40 border-b-2 border-amber-300 dark:border-amber-700 px-4 py-3 sticky top-24 lg:top-16 z-40">
             <div className="container mx-auto flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 flex-1">
                 <ShieldAlert size={20} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
