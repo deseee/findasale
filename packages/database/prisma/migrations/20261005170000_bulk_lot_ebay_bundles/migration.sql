@@ -7,6 +7,10 @@
 -- CARD_BULK_EBAY_ENABLED are both true, so applying this is harmless with the flags off.
 -- Apply AFTER 20261005130000_card_bulk_lots (the table references "Item") and BEFORE deploying the matching backend
 -- build: the regenerated Prisma client selects "EbaySoldEvent"."bulkQuantity" on every default EbaySoldEvent read.
+-- FRESH-DATABASE ORDERING: the three "EbaySoldEvent" columns and their two CHECK constraints are guarded with
+-- to_regclass('"EbaySoldEvent"') because on a fresh database this migration runs before "ebay_multiquantity" creates that
+-- table (see the comment above that block). The follow-up migration z20261006000000_ebay_sold_event_bulk_columns_after_create
+-- repeats them idempotently so a fresh database ends up identical to production.
 -- Do not apply to production from an agent session; Patrick applies it with prisma migrate deploy, then prisma generate.
 --
 -- ROLLBACK (only while no bundle order has been recorded, otherwise the cards-per-order record is lost):
@@ -68,15 +72,22 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-ALTER TABLE "EbaySoldEvent" ADD COLUMN IF NOT EXISTS "bulkQuantity" INTEGER;
-ALTER TABLE "EbaySoldEvent" ADD COLUMN IF NOT EXISTS "bulkShortfall" INTEGER;
-ALTER TABLE "EbaySoldEvent" ADD COLUMN IF NOT EXISTS "bulkReleasedAt" TIMESTAMP(3);
-
+-- "EbaySoldEvent" is created by the non-timestamped migration folder "ebay_multiquantity", which Prisma sorts AFTER every
+-- timestamped folder. On a database that already has the table (production) the block below runs exactly as before. On a
+-- FRESH database (CI, a new dev machine) the table does not exist yet at this point, so the block is skipped, and the
+-- migration "z20261006000000_ebay_sold_event_bulk_columns_after_create" adds the same columns and constraints once the
+-- table has been created.
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EbaySoldEvent_bulkQuantity_check') THEN
-    ALTER TABLE "EbaySoldEvent" ADD CONSTRAINT "EbaySoldEvent_bulkQuantity_check" CHECK ("bulkQuantity" IS NULL OR "bulkQuantity" >= 1);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EbaySoldEvent_bulkShortfall_check') THEN
-    ALTER TABLE "EbaySoldEvent" ADD CONSTRAINT "EbaySoldEvent_bulkShortfall_check" CHECK ("bulkShortfall" IS NULL OR ("bulkShortfall" >= 0 AND "bulkShortfall" <= "bulkQuantity"));
+  IF to_regclass('"EbaySoldEvent"') IS NOT NULL THEN
+    ALTER TABLE "EbaySoldEvent" ADD COLUMN IF NOT EXISTS "bulkQuantity" INTEGER;
+    ALTER TABLE "EbaySoldEvent" ADD COLUMN IF NOT EXISTS "bulkShortfall" INTEGER;
+    ALTER TABLE "EbaySoldEvent" ADD COLUMN IF NOT EXISTS "bulkReleasedAt" TIMESTAMP(3);
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EbaySoldEvent_bulkQuantity_check') THEN
+      ALTER TABLE "EbaySoldEvent" ADD CONSTRAINT "EbaySoldEvent_bulkQuantity_check" CHECK ("bulkQuantity" IS NULL OR "bulkQuantity" >= 1);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EbaySoldEvent_bulkShortfall_check') THEN
+      ALTER TABLE "EbaySoldEvent" ADD CONSTRAINT "EbaySoldEvent_bulkShortfall_check" CHECK ("bulkShortfall" IS NULL OR ("bulkShortfall" >= 0 AND "bulkShortfall" <= "bulkQuantity"));
+    END IF;
   END IF;
 END $$;
