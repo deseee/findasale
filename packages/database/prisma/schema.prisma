@@ -303,6 +303,9 @@ model User {
   // backfill), exactly this codebase's own "nullable, no backfill, deliberate" convention
   // (FEE SNAPSHOT / SHIPPING DESTINATION blocks on Purchase use the same posture).
   addresses                      Address[]
+  // Consignor invite + account link (2026-10-06): consignor rows (possibly across several
+  // organizers) whose email matched this account. See Consignor.userId.
+  consignorProfiles              Consignor[]            @relation("ConsignorUser")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -5297,6 +5300,10 @@ model POSPaymentLink {
   squarePaymentLinkUrl String? // Square-hosted checkout URL, mirrors stripePaymentLinkUrl
   qrCodeDataUrl        String? // base64 QR code image, generated on backend
   amount               Int // total in cents
+  // Consignor price tags (2026-10-06): verified tag lines [{consignorId, nonce, sig, amountCents}] for the
+  // cart this link was created for. Minted into real SOLD Items inside the COMPLETED-flip transaction
+  // (posPaymentLinkRecorder). Null for every link without a tag.
+  consignorLines       Json?
   status               String    @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED | EXPIRED
   // Items in this payment link (for marking SOLD on webhook)
   itemIds              String[]  @default([])
@@ -5362,6 +5369,9 @@ model POSPaymentRequest {
   requestedAt           DateTime  @default(now())
   acceptedAt            DateTime?
   paidAt                DateTime?
+  // Consignor price tags (2026-10-06): verified tag lines [{consignorId, nonce, sig, amountCents}], minted
+  // into SOLD Items inside the PAID-flip transaction. Null when the request has no tag.
+  consignorLines        Json?
   declineReason         String? // SHOPPER_CANCEL | TIMEOUT | PAYMENT_FAILED | USER_CANCEL | INSUFFICIENT_FUNDS | PAYMENT_CONCERN | OTHER
   // Split payment fields
   isSplitPayment        Boolean   @default(false)
@@ -5922,6 +5932,12 @@ model Consignor {
   // Rendered/accepted via consignorAgreementService.ts.
   agreementAcceptedAt      DateTime?
   agreementAcceptedVersion Int?
+  // Archive (2026-10-06, consignor price tags): soft-delete. A consignor with sales or payouts on
+  // record cannot be hard-deleted (Item.consignorId is SetNull, which would orphan the money trail),
+  // so the organizer archives instead. Archived = hidden from pickers, refused for new POS tags,
+  // still visible in the consignors list under the Archived filter and still resolved by every
+  // ledger/portal/payout read. Nullable, additive.
+  archivedAt DateTime?
   items             Item[]             @relation("ConsignorItems")
   payouts           ConsignorPayout[]
   // Organizer-settles ledger (2026-09-29): per-item snapshot lines across all of this consignor's payouts.
@@ -5934,12 +5950,26 @@ model Consignor {
   // Consignor from a ConsignorIntakeRequest -- see that model's resultingConsignorId.
   intakeRequest      ConsignorIntakeRequest?
   intakeAppointments ConsignorIntakeAppointment[]
+  // Consignor invite + account link (2026-10-06): set when this consignor's email matches exactly
+  // one existing FindA.Sale User (case-insensitive). Informational link only: the consignor still
+  // uses the portalToken capability link and never needs to sign in. One User may be linked to
+  // many Consignor rows (the same person consigning with several organizers). SetNull on User delete.
+  userId            String?
+  user              User?              @relation("ConsignorUser", fields: [userId], references: [id], onDelete: SetNull)
+  // Last time the welcome invite (portal link + Square payout setup) was successfully emailed.
+  // Only stamped when the transactional rail accepted the send. Null = never sent.
+  inviteEmailSentAt DateTime?
+  // Portal Square connect (2026-10-06): SHA-256 of the single-use nonce carried in the signed OAuth
+  // state for the consignor-portal Square flow. Set on start, consumed (nulled) on callback, so a
+  // state can complete at most once and only the latest start is valid. Never returned by any API.
+  squarePortalOAuthNonce String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
   @@index([workspaceId])
   @@index([portalToken])
   @@index([payoutsFlaggedForReview]) // S1198: fast admin-queue filtering
+  @@index([userId])
 }
 
 // Consignor Self-Serve Intake (2026-09-25): a prospective consignor's public-form
@@ -7620,6 +7650,9 @@ model BoothCartTransaction {
   stripePaymentIntentId String? // the ONE charge for the whole cart
   totalAmount           Decimal  @default(0) @db.Decimal(10, 2)
   boothsRepresented     String[] // denormalized list of VendorBooth IDs in this cart, for fast audit queries + wash-trade guard resolution
+  // Consignor price tags (2026-10-06): verified tag lines [{consignorId, nonce, sig, amountCents, saleId}]
+  // scanned at the shared register. Minted as SOLD consignor Items (vendorBoothId null) when legs capture.
+  consignorLines        Json?
   status                String   @default("PENDING") // PENDING|COMPLETED|REFUNDED|FAILED
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -8427,6 +8460,7 @@ model ItemBulkLot {
   organizerId String?  // denormalized from Item at write time, no FK (same precedent as Item.organizerId and ItemCard.organizerId)
   game        String   @default("MTG")                  // vocabulary: constants/cardVocabulary.ts CARD_GAMES
   lotKind     String   @default("BULK_COMMON_UNCOMMON") // vocabulary: services/bulkLot/bulkLotVocabulary.ts
+  packSize    Int?     // ADR-136 Addendum E: cards per fixed-size pack (100 to 5000), NULL = not sold in packs. See migration 20261008000000_bulk_lot_pack_size
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
@@ -8526,6 +8560,11 @@ model BulkLotHold {
   createdByUserId       String
   shopperUserId         String?
   customerName          String?
+  // ADR-136 Addendum D (2026-10-06): optional contact for an organizer hold (a shopper hold uses the account email). Normalized
+  // to lower case on input. Null means the customer is told nothing. reminderSentAt is claimed (compare and swap) before the
+  // one expiry reminder is sent, so a replayed sweep or a second server cannot send it twice.
+  customerEmail         String?
+  reminderSentAt        DateTime?
   quantity              Int
   pricePerThousandCents Int
   lineCents             Int

@@ -17,6 +17,11 @@
  *            decides whether a payment is in flight); once that invoice is EXPIRED or CANCELLED the next sweep releases the
  *            hold. A hold whose invoice is PAID is never released (the recorder converts it; an anomaly is logged).
  *
+ * Customer emails (Addendum D, services/bulkLot/bulkLotHoldEmailService.ts): this module only calls the hooks it is given
+ * (HoldDeps.onPlaced and onEnded, and sweepHoldReminders) AFTER the database work has committed; a hook that throws or rejects
+ * is logged and ignored, so an email can never fail, roll back or delay-fail a hold. The reminder is claimed with a compare
+ * and swap on reminderSentAt before it is sent.
+ *
  * If a payment lands for a hold that was already released, the recorder re-reserves the cards if they are still there and
  * otherwise refunds the card share (the existing oversold settlement), so money is never left without cards or a refund.
  *
@@ -25,6 +30,8 @@
 import { z } from 'zod';
 import { BulkLotDb, SellUnitsInTx, bulkLotError, planBulkLine, releaseBulkLotUnits } from './bulkLotService';
 import { MAX_LOT_CARDS, formatCents, formatCardCount } from './bulkLotPricing';
+import { parsePackSize } from './bulkLotPacks'; // ADR-136 Addendum E: a shopper hold on a pack lot is whole packs
+import { planPackLine } from './bulkLotPackService';
 import { randomUUID } from 'crypto';
 
 export const ORGANIZER_HOLD_DEFAULT_HOURS = 24;
@@ -33,6 +40,16 @@ export const SHOPPER_HOLD_MINUTES = 120;
 export const MAX_ACTIVE_HOLDS_PER_LOT = 25;
 export const MAX_ACTIVE_SHOPPER_HOLDS = 5;
 export const HOLD_STATUSES = ['ACTIVE', 'CONVERTED', 'RELEASED', 'EXPIRED'] as const;
+
+/**
+ * Expiry reminder rule (Addendum D). One reminder, for an organizer hold with a customer email and no payment request open,
+ * when 4 hours are left. A hold shorter than 8 hours (twice the lead) gets no reminder, because it would arrive within
+ * hours of the confirmation; a reminder is also skipped when fewer than 15 minutes are left (the sweep was down), because it
+ * would reach the customer after there is no time to act. Shopper holds last 2 hours and never get one.
+ */
+export const HOLD_REMINDER_LEAD_HOURS = 4;
+export const HOLD_REMINDER_MIN_HOLD_HOURS = HOLD_REMINDER_LEAD_HOURS * 2;
+export const HOLD_REMINDER_MIN_REMAINING_MINUTES = 15;
 
 export type BulkHoldErrorCode =
   | 'BULK_HOLD_NOT_FOUND'
@@ -71,6 +88,26 @@ export function isBulkHoldError(err: unknown): err is BulkHoldError {
   return !!err && typeof err === 'object' && (err as { name?: unknown }).name === 'BulkHoldError' && typeof (err as { code?: unknown }).code === 'string';
 }
 
+const CUSTOMER_EMAIL_MESSAGE = 'Enter a valid email address, or leave it blank.';
+
+/** An empty or null email means "none". Anything else must be one valid address (no spaces, no line breaks), saved in lower case. */
+const customerEmailField = z.preprocess(
+  (v) => (v === null || (typeof v === 'string' && v.trim() === '') ? undefined : v),
+  z
+    .string({ invalid_type_error: CUSTOMER_EMAIL_MESSAGE })
+    .trim()
+    .toLowerCase()
+    .max(254, CUSTOMER_EMAIL_MESSAGE)
+    .email(CUSTOMER_EMAIL_MESSAGE)
+    .optional()
+);
+
+/** The address a hold would be saved with, or null when the input is empty or not a valid email. */
+export function normalizeCustomerEmail(raw: unknown): string | null {
+  const parsed = customerEmailField.safeParse(raw);
+  return parsed.success && typeof parsed.data === 'string' ? parsed.data : null;
+}
+
 const quantityField = z
   .number({ invalid_type_error: 'Enter the number of cards as a whole number.', required_error: 'Enter the number of cards to hold.' })
   .int('Enter the number of cards as a whole number.')
@@ -81,6 +118,7 @@ export const OrganizerHoldSchema = z
   .object({
     quantity: quantityField,
     customerName: z.string().trim().min(1, 'Enter the customer name.').max(120, 'Keep the name under 120 characters.').optional(),
+    customerEmail: customerEmailField,
     hours: z.number().int('Enter whole hours.').min(1, 'Hold for at least 1 hour.').max(ORGANIZER_HOLD_MAX_HOURS, 'Hold for at most 7 days.').optional(),
   })
   .strict();
@@ -119,11 +157,31 @@ export interface HoldDeps {
   /** Platform fee in cents on a card or link amount. */
   feeCents?: (amountCents: number) => number;
   newInvoiceId?: () => string;
+  /**
+   * Called AFTER a hold has been saved (the transaction has committed). Used for the customer confirmation email. Awaited
+   * inside a try/catch: a throw or a rejection is logged and ignored, it never fails or undoes the hold.
+   */
+  onPlaced?: (hold: any) => void | Promise<void>;
+  /**
+   * Called AFTER a hold ended without payment: how is 'EXPIRED' (time ran out, or its payment request died) or 'RELEASED'
+   * (the shop let it go). A shopper releasing their own hold is not reported. Same rules as onPlaced.
+   */
+  onEnded?: (hold: any, how: 'EXPIRED' | 'RELEASED') => void | Promise<void>;
 }
 
 export type HoldActor =
   | { kind: 'ORGANIZER'; organizerId: string; actorUserId: string }
   | { kind: 'SHOPPER'; userId: string };
+
+/** Runs a notification hook after the database work is done. Never throws. */
+async function runHook(label: string, fn: (() => void | Promise<void>) | undefined): Promise<void> {
+  if (!fn) return;
+  try {
+    await fn();
+  } catch (err) {
+    console.warn(`[bulkLotHold] ${label} hook failed (ignored):`, err instanceof Error ? err.message : err);
+  }
+}
 
 export interface HoldView {
   id: string;
@@ -135,6 +193,8 @@ export interface HoldView {
   lineCents: number;
   lineLabel: string;
   customerName: string | null;
+  /** Only the shop and its staff see this; null for a shopper's own view. */
+  customerEmail: string | null;
   status: string;
   expiresAt: string;
   createdAt: string;
@@ -158,6 +218,7 @@ export function toHoldView(row: any, actor?: HoldActor): HoldView {
     lineCents: Number(row.lineCents),
     lineLabel: formatCents(Number(row.lineCents)),
     customerName: row.customerName ?? null,
+    customerEmail: actor && actor.kind === 'ORGANIZER' ? row.customerEmail ?? null : null,
     status: String(row.status),
     expiresAt: iso(row.expiresAt),
     createdAt: iso(row.createdAt),
@@ -168,7 +229,7 @@ export function toHoldView(row: any, actor?: HoldActor): HoldView {
   };
 }
 
-function parseWith<T>(schema: z.ZodType<T>, raw: unknown): T {
+function parseWith<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     throw bulkLotError('BULK_VALIDATION', 400, { issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) });
@@ -183,13 +244,13 @@ const nowOf = (deps: HoldDeps): Date => (deps.now ? deps.now() : new Date());
 // ---------------------------------------------------------------------------
 
 export async function placeBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldActor, itemId: string, rawInput: unknown): Promise<HoldView> {
-  const input = actor.kind === 'ORGANIZER' ? parseWith(OrganizerHoldSchema, rawInput) : { ...parseWith(ShopperHoldSchema, rawInput), customerName: undefined, hours: undefined };
+  const input = actor.kind === 'ORGANIZER' ? parseWith(OrganizerHoldSchema, rawInput) : { ...parseWith(ShopperHoldSchema, rawInput), customerName: undefined, customerEmail: undefined, hours: undefined };
 
   const row = await db.item.findUnique({
     where: { id: itemId },
     select: {
       id: true, saleId: true, organizerId: true, price: true, status: true, stockTotal: true, stockSold: true,
-      bulkLot: { select: { id: true } },
+      bulkLot: { select: { id: true, packSize: true } },
     },
   });
   if (!row || !row.saleId) throw bulkLotError('BULK_NOT_FOUND', 404);
@@ -197,7 +258,18 @@ export async function placeBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldActor
   if (!row.bulkLot) throw bulkLotError('BULK_NOT_LOT', 409);
 
   // Price snapshot and the stock check (read side). The write below repeats the capacity check atomically.
-  const plan = planBulkLine(row, input.quantity, null);
+  // ADR-136 Addendum E: a SHOPPER hold on a lot with a pack size is whole packs (cards must be a multiple of the pack size), priced
+  // as packs, so a held pack costs exactly what the same pack costs in a cart or online. An ORGANIZER hold stays free quantity
+  // (the organizer holds any number of cards for a customer at the counter).
+  const lotPackSize = parsePackSize((row.bulkLot as { packSize?: number | null }).packSize);
+  let plan = null as ReturnType<typeof planBulkLine> | null;
+  if (actor.kind === 'SHOPPER' && lotPackSize !== null) {
+    const wanted = Number(input.quantity);
+    if (!Number.isSafeInteger(wanted) || wanted < lotPackSize || wanted % lotPackSize !== 0) throw bulkLotError('BULK_PACK_ONLY', 409);
+    plan = planPackLine(row, lotPackSize, wanted / lotPackSize, null);
+  } else {
+    plan = planBulkLine(row, input.quantity, null);
+  }
 
   const activeOnLot = await db.bulkLotHold.count({ where: { itemId, status: 'ACTIVE' } });
   if (activeOnLot >= MAX_ACTIVE_HOLDS_PER_LOT) throw new BulkHoldError('BULK_HOLD_LIMIT', 409);
@@ -224,6 +296,7 @@ export async function placeBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldActor
           createdByUserId: actor.kind === 'ORGANIZER' ? actor.actorUserId : actor.userId,
           shopperUserId: actor.kind === 'SHOPPER' ? actor.userId : null,
           customerName: input.customerName ?? null,
+          customerEmail: input.customerEmail ?? null,
           quantity: plan.cards,
           pricePerThousandCents: plan.pricePerThousandCents,
           lineCents: plan.cents,
@@ -237,6 +310,7 @@ export async function placeBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldActor
     if (err && (err as { name?: unknown }).name === 'InsufficientStockError') throw bulkLotError('INSUFFICIENT_STOCK', 409);
     throw err;
   }
+  await runHook('onPlaced', () => deps.onPlaced?.(created));
   return toHoldView(created, actor);
 }
 
@@ -296,6 +370,8 @@ export async function releaseBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldAct
 
   const released = await releaseHoldCards(db, hold.id, hold.itemId, hold.quantity, 'RELEASED', actor.kind === 'ORGANIZER' ? 'ORGANIZER_RELEASED' : 'SHOPPER_RELEASED');
   const fresh = (await loadHold(db, holdId)) ?? hold;
+  // Only the shop letting a hold go is told to the customer; a shopper who released their own hold knows.
+  if (released && actor.kind === 'ORGANIZER') await runHook('onEnded', () => deps.onEnded?.(fresh, 'RELEASED'));
   return { hold: toHoldView(fresh, actor), released };
 }
 
@@ -307,6 +383,8 @@ export interface ConvertCtx {
   organizerId: string;
   /** Organizer.userId (HoldInvoice.organizerUserId). */
   organizerUserId: string;
+  /** The signed-in user doing the conversion (a team member at the register). Defaults to the organizer's own user id. */
+  actorUserId?: string;
   squareReady: boolean;
 }
 
@@ -320,7 +398,7 @@ export interface ConvertResult {
 
 export async function convertBulkHold(db: HoldDb, deps: HoldDeps, ctx: ConvertCtx, holdId: string, rawInput: unknown): Promise<ConvertResult> {
   const input = parseWith(ConvertHoldSchema, rawInput);
-  const actor: HoldActor = { kind: 'ORGANIZER', organizerId: ctx.organizerId, actorUserId: ctx.organizerUserId };
+  const actor: HoldActor = { kind: 'ORGANIZER', organizerId: ctx.organizerId, actorUserId: ctx.actorUserId ?? ctx.organizerUserId };
   const hold = await loadHold(db, holdId);
   if (!hold || hold.organizerId !== ctx.organizerId) throw new BulkHoldError('BULK_HOLD_NOT_FOUND', 404);
   if (hold.status !== 'ACTIVE') throw new BulkHoldError('BULK_HOLD_NOT_ACTIVE', 409);
@@ -334,6 +412,9 @@ export async function convertBulkHold(db: HoldDb, deps: HoldDeps, ctx: ConvertCt
   const base = {
     shopperUserId: hold.shopperUserId ?? null,
     guestName: hold.shopperUserId ? null : hold.customerName ?? null,
+    // The existing hold-invoice payment path emails the buyer a receipt to shopper.email or guestEmail. Giving it the hold's
+    // contact is how an organizer-hold customer gets the paid confirmation (Addendum D): no second receipt is built here.
+    guestEmail: hold.shopperUserId ? null : hold.customerEmail ?? null,
     organizerUserId: ctx.organizerUserId,
     saleId: hold.saleId,
     itemIds: [hold.itemId],
@@ -405,7 +486,7 @@ export interface SweepResult {
   paidAnomalies: number;
 }
 
-export async function sweepExpiredBulkHolds(db: HoldDb, deps: Pick<HoldDeps, 'now'>, batch = 200, onReleased?: (itemId: string) => void): Promise<SweepResult> {
+export async function sweepExpiredBulkHolds(db: HoldDb, deps: Pick<HoldDeps, 'now' | 'onEnded'>, batch = 200, onReleased?: (itemId: string) => void): Promise<SweepResult> {
   const now = deps.now ? deps.now() : new Date();
   const due: any[] = await db.bulkLotHold.findMany({ where: { status: 'ACTIVE', expiresAt: { lte: now } }, orderBy: { expiresAt: 'asc' }, take: batch });
   const out: SweepResult = { examined: due.length, expired: 0, waitingOnInvoice: 0, paidAnomalies: 0 };
@@ -431,9 +512,93 @@ export async function sweepExpiredBulkHolds(db: HoldDb, deps: Pick<HoldDeps, 'no
         } catch {
           // a follow-up notification must never stop the sweep
         }
+        // Tell the customer the hold ended. After the release committed; never throws.
+        await runHook('onEnded', () => deps.onEnded?.(hold, 'EXPIRED'));
       }
     } catch (err) {
       console.error(`[bulkLotHold] sweep could not release hold ${hold.id}:`, err instanceof Error ? err.message : err);
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Expiry reminder sweep (Addendum D)
+// ---------------------------------------------------------------------------
+
+export interface ReminderSweepResult {
+  examined: number;
+  /** Not eligible (hold too short, no address) or the gate said the address cannot be emailed. Nothing was claimed. */
+  skipped: number;
+  /** Another sweep claimed it first. */
+  lostClaim: number;
+  /** This sweep claimed it and handed it to the sender. */
+  claimed: number;
+}
+
+/** True when the hold should get the one expiry reminder (the rule in HOLD_REMINDER_LEAD_HOURS). Pure. */
+export function holdQualifiesForReminder(hold: { status?: unknown; shopperUserId?: unknown; customerEmail?: unknown; holdInvoiceId?: unknown; reminderSentAt?: unknown; createdAt?: unknown; expiresAt?: unknown }, now: Date): boolean {
+  if (hold.status !== 'ACTIVE' || hold.shopperUserId || hold.holdInvoiceId || hold.reminderSentAt) return false;
+  if (typeof hold.customerEmail !== 'string' || hold.customerEmail.trim() === '') return false;
+  const expires = new Date(hold.expiresAt as any).getTime();
+  const created = new Date(hold.createdAt as any).getTime();
+  if (!Number.isFinite(expires) || !Number.isFinite(created)) return false;
+  if (expires - created < HOLD_REMINDER_MIN_HOLD_HOURS * 3_600_000) return false;
+  const left = expires - now.getTime();
+  return left >= HOLD_REMINDER_MIN_REMAINING_MINUTES * 60_000 && left <= HOLD_REMINDER_LEAD_HOURS * 3_600_000;
+}
+
+export interface ReminderDeps {
+  now?: () => Date;
+  /** Pre-claim gate (a usable, not suppressed address and a configured mail rail). False: nothing is claimed, so a later sweep can try again. */
+  canEmail?: (hold: any) => Promise<boolean> | boolean;
+  /** Sends the reminder. Called only by the sweep that won the claim. A throw or a rejection is logged and the claim stays (at most once). */
+  sendReminder: (hold: any) => Promise<unknown> | unknown;
+}
+
+/**
+ * Claim then send. The claim is `updateMany where id, status ACTIVE and reminderSentAt null`, so when two sweeps (or two
+ * servers) look at the same hold exactly one gets count 1 and sends. A send that fails after the claim is not retried: the
+ * rule is at most one reminder, and a missed reminder costs less than a second one.
+ */
+export async function sweepHoldReminders(db: HoldDb, deps: ReminderDeps, batch = 200): Promise<ReminderSweepResult> {
+  const now = deps.now ? deps.now() : new Date();
+  const lead = HOLD_REMINDER_LEAD_HOURS * 3_600_000;
+  const rows: any[] = await db.bulkLotHold.findMany({
+    where: {
+      status: 'ACTIVE',
+      reminderSentAt: null,
+      holdInvoiceId: null,
+      shopperUserId: null,
+      customerEmail: { not: null },
+      expiresAt: { gt: new Date(now.getTime() + HOLD_REMINDER_MIN_REMAINING_MINUTES * 60_000), lte: new Date(now.getTime() + lead) },
+      createdAt: { lte: new Date(now.getTime() - lead) },
+    },
+    orderBy: { expiresAt: 'asc' },
+    take: batch,
+  });
+  const out: ReminderSweepResult = { examined: rows.length, skipped: 0, lostClaim: 0, claimed: 0 };
+  for (const hold of rows) {
+    try {
+      if (!holdQualifiesForReminder(hold, now)) {
+        out.skipped++;
+        continue;
+      }
+      if (deps.canEmail && !(await deps.canEmail(hold))) {
+        out.skipped++;
+        continue;
+      }
+      const claim = await db.bulkLotHold.updateMany({ where: { id: hold.id, status: 'ACTIVE', reminderSentAt: null }, data: { reminderSentAt: now } });
+      if (claim.count !== 1) {
+        out.lostClaim++;
+        continue;
+      }
+      out.claimed++;
+      await runHook('reminder', () => {
+        return Promise.resolve(deps.sendReminder(hold)).then(() => undefined);
+      });
+    } catch (err) {
+      console.error(`[bulkLotHold] reminder sweep could not process hold ${hold.id}:`, err instanceof Error ? err.message : err);
     }
   }
   return out;

@@ -11,6 +11,7 @@ import { createHoldInvoiceSquareCheckout } from '../services/holdInvoiceSquareCh
 import { deleteSquareCheckoutLink } from '../services/squareCheckoutLinkService';
 import { calculateInclusiveCommissionCents, SubscriptionTier } from '../utils/feeCalculator';
 import { reconcileBulkLotEbayInBackgroundIfEnabled } from '../services/bulkLot/bulkLotEbayWiring';
+import { onBulkHoldEnded, onBulkHoldPlaced } from '../services/bulkLot/bulkLotHoldEmailWiring'; // ADR-136 Addendum D: customer emails for holds
 import { createBulkLotFollowupHandlers, FollowupDeps } from './bulkLotFollowupHandlers';
 
 export const bulkLotFollowupHandlers = createBulkLotFollowupHandlers({
@@ -30,4 +31,5 @@ export const bulkLotFollowupHandlers = createBulkLotFollowupHandlers({
   },
   feeFor: (tier, amountCents) => calculateInclusiveCommissionCents(amountCents, (tier ?? 'SIMPLE') as SubscriptionTier, 'ONLINE'),
   afterStockChange: (itemId, why) => reconcileBulkLotEbayInBackgroundIfEnabled(itemId, why),
+  holdNotify: { onPlaced: onBulkHoldPlaced, onEnded: onBulkHoldEnded },
 });

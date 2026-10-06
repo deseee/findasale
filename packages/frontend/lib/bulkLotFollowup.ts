@@ -288,6 +288,19 @@ export const FOLLOWUP_COPY = {
   refundCardsInvalid: 'Enter a whole number of cards, 1 or more.',
   holdExpires: 'Expires',
   holdSavedPrice: 'Price saved at hold',
+  holdEmailLabel: 'Customer email (optional)',
+  holdEmailHint: 'If you add one, the customer gets a confirmation and one reminder before the hold ends.',
+  holdEmailInvalid: 'Enter a valid email address, or leave it blank.',
+  holdEmailSentTo: 'Emails go to',
+  // Team members at the register (Addendum D)
+  staffHoldsTitle: 'Holds at the register',
+  staffHoldsIntro: 'Set cards aside for a customer, turn a hold into a sale, or let a hold go. Count changes and refunds are done by the shop owner.',
+  staffNoAccess: 'You need register access for this shop to work with holds. Ask the shop owner to turn it on for you.',
+  staffNoLots: 'There are no bulk lots in this sale yet.',
+  staffLoading: 'Loading the lots...',
+  staffNotOn: 'Bulk lots are not turned on yet.',
+  staffSignIn: 'Sign in to work with holds.',
+  staffCardsLeft: 'Cards left',
   // Offline queue
   offlineBulkNeedsReview: 'A bulk lot line changed while this device was offline. Nothing was charged or taken from the lot. Review the lines below and ring the sale up again.',
   offlineBulkToast: 'changed while offline. Open the Offline Sync Queue to review the bulk lot lines.',
@@ -326,6 +339,7 @@ export const FOLLOWUP_ERROR_COPY: Record<string, string> = {
   BULK_USE_CARD_HOLD: 'A bulk lot hold is placed with the number of cards. Use Hold cards on the lot.',
   BULK_HOLD_NOT_ACTIVE: 'That hold is no longer active.',
   BULK_HOLD_NOT_FOUND: 'That hold was not found.',
+  FORBIDDEN: FOLLOWUP_COPY.staffNoAccess,
   BULK_CART_NOT_OPEN: 'That cart is no longer open.',
 };
 
@@ -334,6 +348,29 @@ export function describeFollowupCode(code: string | null | undefined, serverText
   if (code && FOLLOWUP_ERROR_COPY[code]) return FOLLOWUP_ERROR_COPY[code];
   if (code && BULK_ERROR_COPY[code]) return BULK_ERROR_COPY[code];
   return BULK_COPY.errorGeneric;
+}
+
+// ---------------------------------------------------------------------------
+// Hold contact email (parity with normalizeCustomerEmail in services/bulkLot/bulkLotHoldService.ts)
+// ---------------------------------------------------------------------------
+
+export type OptionalEmail = { ok: true; email: string | null } | { ok: false };
+
+/**
+ * Reads the optional customer email box. Blank is fine (no email). Otherwise one plain address, no spaces, at most 254
+ * characters, saved in lower case. The server checks again; this only keeps an obvious typo from a round trip.
+ */
+export function parseOptionalEmail(text: string): OptionalEmail {
+  const t = (text ?? '').trim();
+  if (t === '') return { ok: true, email: null };
+  if (t.length > 254 || /\s/.test(t) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return { ok: false };
+  return { ok: true, email: t.toLowerCase() };
+}
+
+/** True when a failed request means "this account has no register access" (the server answers 403 FORBIDDEN). */
+export function isNoRegisterAccess(err: unknown): boolean {
+  const r = (err as { response?: { status?: unknown; data?: { code?: unknown } } } | null)?.response;
+  return !!r && (r.status === 403 || r.data?.code === 'FORBIDDEN');
 }
 
 /** Every user-facing string in this module, for the copy lint test. */

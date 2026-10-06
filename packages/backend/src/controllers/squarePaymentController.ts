@@ -4,7 +4,9 @@ import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
-import { bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { BULK_LOT_MESSAGES, bulkChannelRefusal, type BulkLotDb } from '../services/bulkLot/bulkLotService';
+import { loadLotPackSizes } from '../services/bulkLot/bulkLotPackService'; // ADR-136 Addendum E (#659): packs
+import { tryHandleBulkPackPayment } from './bulkLotPackPaymentController'; // ADR-136 Addendum E (#659): online purchase of a lot sold in packs
 import { createNotification } from '../lib/notificationService';
 import { generateReceipt } from '../services/receiptService';
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
@@ -113,6 +115,10 @@ export const createSquarePayment = async (req: AuthRequest, res: Response) => {
     // shopper for (a lot is priced per 1,000 cards, so the charge depends on how many they want), and its shipping, coupon,
     // buyer-premium and affiliate math all assume one unit. Charging it as one unit would be a silent wrong charge, so it
     // refuses with a plain message and the shop rings the lot up in person. Revisit with a shopper-facing quantity picker.
+    // ADR-136 Addendum E (#659): a lot that has a PACK SIZE is bought here as whole packs (the shopper never types a number of cards),
+    // by a separate handler with its own money rules. It answers the request itself and this function returns. A lot with no pack
+    // size, or any other item, falls through to the old refusal below, unchanged. Flag off: never reached.
+    if (isBulkLotsEnabled() && (await tryHandleBulkPackPayment(req, res))) return;
     const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, [itemId], isBulkLotsEnabled());
     if (bulkRefusal) return res.status(bulkRefusal.status).json({ message: bulkRefusal.message, code: bulkRefusal.code });
 
@@ -622,7 +628,23 @@ export const createSquareCartPayment = async (req: AuthRequest, res: Response) =
     // Bulk lots (ADR-136 Addendum A, #659): the online cart checkout still refuses a lot, for the same reason as the single
     // item checkout above (no quantity for the shopper to choose, one-unit shipping and fee math). The register sells lots.
     const bulkRefusal = await bulkChannelRefusal(prisma as unknown as BulkLotDb, itemIds, isBulkLotsEnabled());
-    if (bulkRefusal) return res.status(bulkRefusal.status).json({ error: bulkRefusal.message, code: bulkRefusal.code });
+    if (bulkRefusal) {
+      // ADR-136 Addendum E (#659): a pack lot is bought on its own (single item checkout). One charge here covers many Purchase rows
+      // with a best-effort, non-transactional decrement per row and no automatic partial refund, which is not safe for cards taken
+      // by the pack. So a pack lot in a cart gets its own plain message instead of the generic one.
+      let refusal = bulkRefusal;
+      if (isBulkLotsEnabled()) {
+        try {
+          const sizes = await loadLotPackSizes(prisma as unknown as BulkLotDb, itemIds, true);
+          if (itemIds.some((id) => typeof sizes.get(id) === 'number')) {
+            refusal = { status: 409, message: BULK_LOT_MESSAGES.BULK_PACK_CART_UNSUPPORTED, code: 'BULK_PACK_CART_UNSUPPORTED' };
+          }
+        } catch {
+          // keep the generic refusal
+        }
+      }
+      return res.status(refusal.status).json({ error: refusal.message, code: refusal.code });
+    }
 
     const items = await prisma.item.findMany({
       where: { id: { in: itemIds } },

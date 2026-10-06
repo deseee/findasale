@@ -8,6 +8,10 @@
  *   Hold cards     set N cards aside for a customer. The hold gives the cards back when it expires or is released, and
  *                  turns into a sale when it is paid (cash now, or a Square link).
  *
+ * holdsOnly (ADR-136 Addendum D): the view for a team member at the register. Only the hold controls show; count changes and
+ * refunds stay with the shop owner (the server refuses them for staff too). The same panel is mounted by
+ * pages/organizer/bulk-lots/[saleId]/holds.tsx.
+ *
  * Mounted by BulkLotSection inside the item form: every button is type="button", Enter is swallowed, and nothing here uses
  * native validation attributes. The server is the authority on every number; the previews here only show what it will do.
  */
@@ -26,6 +30,7 @@ import {
   describeAdjustment,
   describeFollowupCode,
   formatDollarsFromCents,
+  parseOptionalEmail,
   previewCardRefund,
   readAdjustments,
 } from '../lib/bulkLotFollowup';
@@ -34,6 +39,8 @@ export interface BulkLotFollowupPanelProps {
   itemId: string;
   lot: BulkLot;
   disabled?: boolean;
+  /** Team member view: show only the hold controls (no recount, no refunds). */
+  holdsOnly?: boolean;
   /** Called with the lot after anything that changes its cards, so the page can refresh. */
   onLotChange?: (lot: BulkLot) => void;
 }
@@ -57,6 +64,7 @@ interface HoldRow {
   lineCents: number;
   lineLabel: string;
   customerName: string | null;
+  customerEmail?: string | null;
   status: string;
   expiresAt: string;
   holdInvoiceId: string | null;
@@ -97,7 +105,7 @@ function errText(err: unknown): string {
   return describeFollowupCode(code, text);
 }
 
-const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot, disabled, onLotChange }) => {
+const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot, disabled, holdsOnly, onLotChange }) => {
   const baseId = useId();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -158,6 +166,7 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
       const list = res.data?.data?.sales;
       return Array.isArray(list) ? (list as SaleRow[]) : [];
     },
+    enabled: !holdsOnly,
     staleTime: 0,
     retry: 1,
     refetchOnWindowFocus: false,
@@ -209,6 +218,7 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
   const [holdOpen, setHoldOpen] = useState(false);
   const [holdCards, setHoldCards] = useState('');
   const [holdName, setHoldName] = useState('');
+  const [holdEmail, setHoldEmail] = useState('');
   const [holdHours, setHoldHours] = useState('24');
   const [linkFor, setLinkFor] = useState<{ holdId: string; url: string } | null>(null);
 
@@ -217,12 +227,15 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
     if (cards === null) return setError(C.holdQuantityInvalid);
     const hours = parseWhole(holdHours, 1, 168);
     if (hours === null) return setError(C.holdHoursInvalid);
+    const email = parseOptionalEmail(holdEmail);
+    if (!email.ok) return setError(C.holdEmailInvalid);
     setBusy(true);
     setError('');
     try {
-      await api.post(`/bulk-lots/item/${enc}/holds`, { quantity: cards, hours, ...(holdName.trim() ? { customerName: holdName.trim() } : {}) });
+      await api.post(`/bulk-lots/item/${enc}/holds`, { quantity: cards, hours, ...(holdName.trim() ? { customerName: holdName.trim() } : {}), ...(email.email ? { customerEmail: email.email } : {}) });
       setHoldCards('');
       setHoldName('');
+      setHoldEmail('');
       setHoldOpen(false);
       showToast(C.holdPlaced, 'success');
       await Promise.all([holdsQuery.refetch(), refreshLot()]);
@@ -259,7 +272,7 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
       } else {
         showToast(C.holdPaidCash, 'success');
       }
-      await Promise.all([holdsQuery.refetch(), salesQuery.refetch(), refreshLot()]);
+      await Promise.all([holdsQuery.refetch(), holdsOnly ? Promise.resolve() : salesQuery.refetch(), refreshLot()]);
     } catch (err) {
       setError(errText(err));
     } finally {
@@ -282,6 +295,8 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
 
   return (
     <div className="space-y-4 border-t border-warm-200 pt-3 dark:border-gray-600">
+      {!holdsOnly && (
+        <>
       {/* Adjust */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -425,6 +440,9 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
         </ul>
       </div>
 
+        </>
+      )}
+
       {/* Holds */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -455,6 +473,13 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
                 <input id={`${baseId}-hold-hours`} type="text" inputMode="numeric" value={holdHours} disabled={locked} onChange={(e) => setHoldHours(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
               </div>
             </div>
+            <div>
+              <label htmlFor={`${baseId}-hold-email`} className={labelCls}>
+                {C.holdEmailLabel}
+              </label>
+              <input id={`${baseId}-hold-email`} type="text" inputMode="email" autoComplete="off" maxLength={254} value={holdEmail} disabled={locked} onChange={(e) => setHoldEmail(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
+              <p className={`${muted} mt-1`}>{C.holdEmailHint}</p>
+            </div>
             <button type="button" onClick={placeHold} disabled={locked} className={primaryBtn}>
               {busy ? C.holdPlacing : C.holdPlace}
             </button>
@@ -470,6 +495,7 @@ const BulkLotFollowupPanel: React.FC<BulkLotFollowupPanelProps> = ({ itemId, lot
               <p className={muted}>
                 {C.holdExpires} {new Date(h.expiresAt).toLocaleString()}
                 {h.holdInvoiceId ? `. ${C.holdWithInvoice}` : ''}
+                {h.customerEmail ? `. ${C.holdEmailSentTo} ${h.customerEmail}` : ''}
               </p>
               {linkFor && linkFor.holdId === h.id && (
                 <div className="mt-2 space-y-1">

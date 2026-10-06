@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 (#659): bulk lots cannot be sold through this channel
 import { BULK_LOT_MESSAGES, findBulkLotItemIds, isBulkLotError, parseBulkLineRequests, type BulkLotDb } from '../services/bulkLot/bulkLotService'; // ADR-136 Addendum B (#659): a hub cart takes lot lines (N cards) in bulkLines
 import { listCartLotLines, removeCartLotLines, reserveCartLotLines, settleCartLotLine, type CartLotDb } from '../services/bulkLot/bulkLotBoothCartService';
+import { assertLotLinesMatchPacks, loadLotPackSizes, packViewForRow, parsePackLineRequests, toCartLotRequests } from '../services/bulkLot/bulkLotPackService'; // ADR-136 Addendum E (#659): fixed-size packs in a hub cart
 import { getStripe } from '../utils/stripe';
 import { assertBoothCartCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard';
 import { endEbayListingIfExists } from './ebayController';
@@ -18,6 +19,18 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
 import { calculateInclusiveCommissionCents } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula; inclusive-fee migration (2026-09-24, Patrick ruling) -- booth-cart legs (cash and card) are always IN_PERSON, collected at the physical booth
 import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotificationService'; // per-vendor "your item sold" notification
+import {
+  ConsignorTagError,
+  consignorTagErrorBody,
+  formatTagTitle,
+  isConsignorTagError,
+  mintTagItemInTx,
+  parseStoredTagLines,
+  resolveTagLines,
+  toTagLineInput,
+  type StoredTagLine,
+  type TagLineInput,
+} from '../services/consignorTagService'; // consignor price tags at the hub register: each rides on the leg of the booth of the organizer who printed the tag
 import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 (2026-08-01): hub owner's own items sell through a synthetic booth
 import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
 import { Decimal } from '@prisma/client/runtime/library';
@@ -55,6 +68,162 @@ async function readCartLotLines(cartId: string, vendorBoothId?: string) {
   } catch (err) {
     if (isBulkLotsEnabled()) throw err;
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Which booth rings up an organizer's goods in a hub. Shared by addBoothCartItems and the consignor price tags below, so a tag and an
+// ordinary item of the same organizer always land on the same booth.
+// ---------------------------------------------------------------------------
+
+/**
+ * organizer id -> the booth that sells that organizer's goods in this hub (same rule addBoothCartItems has always used):
+ *  1. the CONFIRMED VendorBooth of the organizer's user in this hub;
+ *  2. otherwise, when the organizer is the hub owner, the synthetic house booth (created on first use);
+ *  3. otherwise no booth: the organizer is absent from the map.
+ * Two small queries however many organizers are passed (no N+1). The house booth is only created if some organizer needs it.
+ */
+async function resolveBoothsForOrganizers(
+  hubId: string,
+  hubOrganizerId: string,
+  organizerIds: string[]
+): Promise<Map<string, { id: string; userId: string | null }>> {
+  const result = new Map<string, { id: string; userId: string | null }>();
+  const distinctOrganizerIds = Array.from(new Set(organizerIds.filter((id) => !!id)));
+  if (distinctOrganizerIds.length === 0) return result;
+  const organizers = await prisma.organizer.findMany({ where: { id: { in: distinctOrganizerIds } }, select: { id: true, userId: true } });
+  const candidateUserIds = Array.from(new Set(organizers.map((o) => o.userId)));
+  const confirmedBooths = candidateUserIds.length
+    ? await prisma.vendorBooth.findMany({
+        where: { hubId, status: 'CONFIRMED', userId: { in: candidateUserIds } },
+        select: { id: true, userId: true },
+      })
+    : [];
+  const userIdToBooth = new Map(confirmedBooths.map((b) => [b.userId as string, b]));
+
+  // Fix 2 (2026-08-01): lazily resolved at most once. `undefined` = not yet attempted; `null` = attempted and unavailable.
+  let houseBooth: { id: string; userId: string; stripeAccountId: string | null } | null | undefined;
+  for (const organizer of organizers) {
+    let booth: { id: string; userId: string | null } | undefined = userIdToBooth.get(organizer.userId);
+    if (!booth && organizer.id === hubOrganizerId) {
+      if (houseBooth === undefined) {
+        houseBooth = await getOrCreateHouseBooth(hubId);
+      }
+      if (houseBooth) booth = { id: houseBooth.id, userId: houseBooth.userId };
+    }
+    if (booth) result.set(organizer.id, { id: booth.id, userId: booth.userId });
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Consignor price tags at the hub register.
+//
+// A tag is printed by SOME organizer (the one whose sale and consignor it is): the hub owner, or a vendor-organizer who sells in this
+// hub. Patrick: "An organizer, not the mall, sets whether a piece is consigned." So the tag is verified against THAT organizer (their
+// sale, their TEAMS tier, their workspace's consignor) and rides on THAT organizer's booth (resolveBoothsForOrganizers), exactly like a
+// consigned item of theirs would. It is stored on BoothCartTransaction.consignorLines with the resolved vendorBoothId, the organizerId
+// and the saleId, and the booth is added to boothsRepresented, so the leg, its total, its fee split (vendor revenue share, mall cut,
+// cashier bonus, platform fee), its processor account and its capture are the ones every other item of that booth gets. Nothing is
+// reserved and no Item exists until the payment is captured; finalizeCapturedLegs then mints the SOLD consignor Item (consignorId,
+// organizerId, saleId and vendorBoothId set, the same pair reserve-time stamping gives a consigned hub item) in the same transaction as
+// its Purchase row.
+// ---------------------------------------------------------------------------
+const MAX_CART_TAG_LINES = 50;
+
+type CartTagLine = StoredTagLine & { saleId: string; vendorBoothId: string; organizerId: string };
+
+/** The tag lines of a hub cart (optionally one booth's). A damaged line throws: a money line is never dropped silently. */
+async function readCartTagLines(cartId: string, vendorBoothId?: string): Promise<CartTagLine[]> {
+  const row = await prisma.boothCartTransaction.findUnique({
+    where: { id: cartId },
+    select: { consignorLines: true, hub: { select: { organizerId: true } } },
+  });
+  const lines = parseStoredTagLines((row as any)?.consignorLines ?? null);
+  const hubOrganizerId: string | null = (row as any)?.hub?.organizerId ?? null;
+  const complete = lines.map((l) => {
+    // A line stored before organizerId existed belonged to the hub owner (the only tag the first version accepted).
+    const organizerId = l.organizerId ?? hubOrganizerId;
+    if (!l.saleId || !l.vendorBoothId || !organizerId) throw new ConsignorTagError('Stored consignor tag lines are damaged.', 500, 'TAG_LINES_CORRUPT');
+    return { ...l, organizerId } as CartTagLine;
+  });
+  return vendorBoothId ? complete.filter((l) => l.vendorBoothId === vendorBoothId) : complete;
+}
+
+/**
+ * Verify one scanned tag for a hub register and resolve the booth it sells on. Throws ConsignorTagError.
+ * Order: sale lookup, then resolveTagLines for the sale's OWN organizer (flag, signing configured, TEAMS, signature, consignor in that
+ * organizer's workspace), then the booth (TAG_SELLER_NO_BOOTH when that organizer has no confirmed booth here).
+ */
+async function resolveHubTagLine(
+  hub: { id: string; organizerId: string },
+  saleId: string,
+  line: TagLineInput,
+  opts: { refuseArchived?: boolean } = {}
+) {
+  const invalid = () => new ConsignorTagError('This price tag is not valid.', 400, 'TAG_INVALID');
+  const sale = await prisma.sale.findUnique({ where: { id: saleId }, select: { id: true, organizerId: true } });
+  if (!sale) throw invalid();
+  const tagOrganizer = await prisma.organizer.findUnique({
+    where: { id: sale.organizerId },
+    select: { id: true, userId: true, subscriptionTier: true },
+  });
+  if (!tagOrganizer) throw invalid();
+  const resolved = await resolveTagLines(prisma, { organizer: tagOrganizer, saleId, lines: [line], refuseArchived: opts.refuseArchived });
+  const booth = (await resolveBoothsForOrganizers(hub.id, hub.organizerId, [tagOrganizer.id])).get(tagOrganizer.id);
+  if (!booth) {
+    throw new ConsignorTagError("This tag's seller does not have a confirmed booth at this market.", 409, 'TAG_SELLER_NO_BOOTH');
+  }
+  return { tag: resolved[0], organizerId: tagOrganizer.id, vendorBoothId: booth.id };
+}
+
+/**
+ * Re-verify every tag line of a cart right before the first money moves: the booth is still this seller's booth in this hub, and the
+ * signature, sale ownership, TEAMS tier and consignor still hold for the line's own organizer.
+ * Throws CheckoutGuardError so the caller answers 403 and the cart stays PENDING for the cashier to fix.
+ */
+async function assertCartTagLinesStillValid(cart: { id: string; hubId: string }): Promise<void> {
+  const lines = await readCartTagLines(cart.id);
+  if (lines.length === 0) return;
+  const hub = await prisma.saleHub.findUnique({ where: { id: cart.hubId }, select: { organizerId: true } });
+  if (!hub) throw new CheckoutGuardError('This market could not be verified. Please try again.');
+  const organizers = await prisma.organizer.findMany({
+    where: { id: { in: Array.from(new Set(lines.map((l) => l.organizerId))) } },
+    select: { id: true, userId: true, subscriptionTier: true },
+  });
+  const organizerById = new Map(organizers.map((o) => [o.id, o]));
+  const booths = await prisma.vendorBooth.findMany({
+    where: { id: { in: Array.from(new Set(lines.map((l) => l.vendorBoothId))) }, hubId: cart.hubId },
+    select: { id: true, userId: true, status: true, isHubOwnerBooth: true },
+  });
+  const boothById = new Map(booths.map((b) => [b.id, b]));
+  const byOrganizerSale = new Map<string, CartTagLine[]>();
+  for (const l of lines) {
+    const key = `${l.organizerId}|${l.saleId}`;
+    byOrganizerSale.set(key, [...(byOrganizerSale.get(key) ?? []), l]);
+  }
+  try {
+    for (const l of lines) {
+      const organizer = organizerById.get(l.organizerId);
+      const booth = boothById.get(l.vendorBoothId);
+      const boothStillTheirs = !!organizer && !!booth && (booth.isHubOwnerBooth ? organizer.id === hub.organizerId : booth.status === 'CONFIRMED' && booth.userId === organizer.userId);
+      if (!boothStillTheirs) {
+        throw new ConsignorTagError("This tag's seller does not have a confirmed booth at this market.", 409, 'TAG_SELLER_NO_BOOTH');
+      }
+    }
+    for (const group of byOrganizerSale.values()) {
+      await resolveTagLines(prisma, {
+        organizer: organizerById.get(group[0].organizerId)!,
+        saleId: group[0].saleId,
+        lines: group.map((l) => ({ consignorId: l.consignorId, nonce: l.nonce, sig: l.sig, priceCents: l.priceCents })),
+        refuseArchived: false, // an archived consignor still gets credited for a tag already in a cart
+      });
+    }
+  } catch (err) {
+    if (isConsignorTagError(err)) {
+      throw new CheckoutGuardError(`A consignor price tag in this cart can no longer be used (${err.message}) Remove it and try again.`);
+    }
+    throw err;
   }
 }
 
@@ -656,27 +825,33 @@ export const startBoothCart = async (req: BoothAuthRequest, res: Response) => {
 export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) => {
   try {
     const { hubId, cartTransactionId } = req.params;
-    const { itemIds: rawItemIds, bulkLines: rawBulkLines } = req.body as { itemIds?: string[]; bulkLines?: unknown };
+    const { itemIds: rawItemIds, bulkLines: rawBulkLines, packLines: rawPackLines } = req.body as { itemIds?: string[]; bulkLines?: unknown; packLines?: unknown };
     if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
     // ADR-136 Addendum B (#659): lot lines are { itemId, quantity, amount? } in bulkLines. The server prices them; amount is only a check.
+    // ADR-136 Addendum E (#659): a lot with a pack size goes in as packLines { itemId, packs, amount? }; the server prices them.
     let lotRequests: ReturnType<typeof parseBulkLineRequests>;
+    let packRequests: ReturnType<typeof parsePackLineRequests>;
     try {
       lotRequests = parseBulkLineRequests(rawBulkLines);
+      packRequests = parsePackLineRequests(rawPackLines);
     } catch (lotErr) {
       if (isBulkLotError(lotErr)) return res.status(lotErr.status).json({ error: lotErr.message, code: lotErr.code });
       throw lotErr;
     }
     const plainItemIds: string[] = Array.isArray(rawItemIds) ? rawItemIds : [];
-    if (plainItemIds.length === 0 && lotRequests.length === 0) {
+    if (plainItemIds.length === 0 && lotRequests.length === 0 && packRequests.length === 0) {
       return res.status(400).json({ error: 'itemIds is required and must be a non-empty array' });
     }
-    if (lotRequests.length > 0 && !isBulkLotsEnabled()) {
+    if (lotRequests.length + packRequests.length > 0 && !isBulkLotsEnabled()) {
       return res.status(404).json({ error: BULK_LOT_MESSAGES.BULK_DISABLED, code: 'BULK_DISABLED' });
     }
-    if (lotRequests.some((r) => plainItemIds.includes(r.itemId))) {
+    if (
+      lotRequests.some((r) => plainItemIds.includes(r.itemId)) ||
+      packRequests.some((r) => plainItemIds.includes(r.itemId) || lotRequests.some((l) => l.itemId === r.itemId))
+    ) {
       return res.status(400).json({ error: BULK_LOT_MESSAGES.BULK_VALIDATION, code: 'BULK_VALIDATION' });
     }
-    const itemIds: string[] = [...plainItemIds, ...lotRequests.map((r) => r.itemId)];
+    const itemIds: string[] = [...plainItemIds, ...lotRequests.map((r) => r.itemId), ...packRequests.map((r) => r.itemId)];
 
     // Fix 2 (2026-08-01): the hub's own organizerId, so an item belonging to the hub
     // OWNER (not a claimed vendor) can be recognized below and lazily routed to the
@@ -720,53 +895,40 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     if (plainItemIds.some((id) => lotIdSet.has(id))) {
       return res.status(400).json({ error: BULK_LOT_MESSAGES.BULK_QUANTITY_REQUIRED, code: 'BULK_QUANTITY_REQUIRED' });
     }
-    if (lotRequests.some((r) => !lotIdSet.has(r.itemId))) {
+    if (lotRequests.some((r) => !lotIdSet.has(r.itemId)) || packRequests.some((r) => !lotIdSet.has(r.itemId))) {
       return res.status(409).json({ error: BULK_LOT_MESSAGES.BULK_NOT_LOT, code: 'BULK_NOT_LOT' });
     }
+    // ADR-136 Addendum E (#659): a lot with a pack size is sold in whole packs only (no free quantity here), and a pack line needs a
+    // lot that has a pack size. The pack size lookup fails closed (503) while the flag is on.
+    let packSizes = new Map<string, number | null>();
+    if (lotRequests.length + packRequests.length > 0) {
+      try {
+        packSizes = await loadLotPackSizes(prisma as unknown as BulkLotDb, Array.from(lotIdSet), isBulkLotsEnabled());
+        assertLotLinesMatchPacks({ freeItemIds: lotRequests.map((r) => r.itemId), packItemIds: packRequests.map((r) => r.itemId), packSizes });
+      } catch (lotErr) {
+        if (isBulkLotError(lotErr)) return res.status(lotErr.status).json({ error: lotErr.message, code: lotErr.code });
+        throw lotErr;
+      }
+    }
 
-    // Batch-resolve owner (Item.organizerId -> Organizer.userId) then batch-check
-    // for a CONFIRMED VendorBooth at this hub per resolved userId. Two small
-    // queries regardless of batch size, not N+1.
-    const distinctOrganizerIds = Array.from(
-      new Set(items.map((i) => i.organizerId).filter((id): id is string => !!id))
+    // Batch-resolve each item's owning organizer to the booth that sells for them in this hub (the same helper consignor price tags use).
+    const boothByOrganizerId = await resolveBoothsForOrganizers(
+      hubId,
+      hub.organizerId,
+      items.map((i) => i.organizerId).filter((id): id is string => !!id)
     );
-    const organizers = distinctOrganizerIds.length
-      ? await prisma.organizer.findMany({ where: { id: { in: distinctOrganizerIds } }, select: { id: true, userId: true } })
-      : [];
-    const organizerIdToUserId = new Map(organizers.map((o) => [o.id, o.userId]));
-
-    const candidateUserIds = Array.from(new Set(organizers.map((o) => o.userId)));
-    const confirmedBooths = candidateUserIds.length
-      ? await prisma.vendorBooth.findMany({
-          where: { hubId, status: 'CONFIRMED', userId: { in: candidateUserIds } },
-          select: { id: true, userId: true },
-        })
-      : [];
-    const userIdToBooth = new Map(confirmedBooths.map((b) => [b.userId as string, b]));
 
     const rejected: Array<{ itemId: string; reason: string }> = [];
     const accepted: Array<{ id: string; title: string; price: number | null; vendorBoothId: string }> = [];
     const acceptedLots: Array<{ item: (typeof items)[number]; vendorBoothId: string }> = [];
-
-    // Fix 2 (2026-08-01): lazily resolved at most once per request, only if actually
-    // needed (an item owned by the hub itself with no pre-existing CONFIRMED booth
-    // match). `undefined` = not yet attempted; `null` = attempted and unavailable
-    // (hub/organizer missing) -- distinct from "not attempted" so we never retry.
-    let houseBooth: { id: string; userId: string; stripeAccountId: string | null } | null | undefined;
 
     for (const item of items) {
       if (item.status !== 'AVAILABLE') {
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
         continue;
       }
-      const ownerUserId = item.organizerId ? organizerIdToUserId.get(item.organizerId) : undefined;
-      let booth = ownerUserId ? userIdToBooth.get(ownerUserId) : undefined;
-      if (!booth && item.organizerId && item.organizerId === hub.organizerId) {
-        if (houseBooth === undefined) {
-          houseBooth = await getOrCreateHouseBooth(hubId);
-        }
-        if (houseBooth) booth = { id: houseBooth.id, userId: houseBooth.userId };
-      }
+      // Fix 2 (2026-08-01): an item owned by the hub itself resolves to the synthetic house booth inside the helper.
+      const booth = item.organizerId ? boothByOrganizerId.get(item.organizerId) : undefined;
       if (!booth) {
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
         continue;
@@ -791,19 +953,22 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     // compare-and-swap on PENDING; if checkout started meanwhile it throws and every card goes back.
     let addedLotLines: Awaited<ReturnType<typeof reserveCartLotLines>>['added'] = [];
     if (acceptedLots.length > 0) {
-      const requestByItem = new Map(lotRequests.map((r) => [r.itemId, r]));
       try {
         const reserved = await reserveCartLotLines(
           prisma as unknown as CartLotDb,
           { sell: (tx, id, units) => sellItemUnitsInTransaction(tx, id, units) },
           {
             cartId: cart.id,
-            requests: acceptedLots.map((l) => ({
-              item: { id: l.item.id, price: l.item.price, status: l.item.status, stockTotal: l.item.stockTotal, stockSold: l.item.stockSold },
-              vendorBoothId: l.vendorBoothId,
-              quantity: requestByItem.get(l.item.id)!.quantity,
-              amountDollars: requestByItem.get(l.item.id)!.amount,
-            })),
+            // Pack lines are priced by the server from the lot's pack size (planPackLine); `amount` is only a check.
+            requests: toCartLotRequests({
+              lots: acceptedLots.map((l) => ({
+                item: { id: l.item.id, price: l.item.price, status: l.item.status, stockTotal: l.item.stockTotal, stockSold: l.item.stockSold },
+                vendorBoothId: l.vendorBoothId,
+              })),
+              freeRequests: lotRequests,
+              packRequests,
+              packSizes,
+            }),
           },
           async (tx, added) => {
             const withLots = Array.from(new Set([...mergedBoothsRepresented, ...added.vendorBoothIds]));
@@ -866,7 +1031,10 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     return res.status(200).json({
       cart: updated,
       accepted: accepted.map((i) => ({ itemId: i.id, title: i.title, price: i.price })),
-      acceptedLines: addedLotLines.map((l) => ({ lineId: l.lineId, itemId: l.itemId, quantity: l.quantity, lineCents: l.lineCents })),
+      acceptedLines: addedLotLines.map((l) => {
+        const size = packSizes.get(l.itemId);
+        return { lineId: l.lineId, itemId: l.itemId, quantity: l.quantity, lineCents: l.lineCents, ...(typeof size === 'number' ? { packSize: size, packs: Math.round(l.quantity / size) } : {}) };
+      }),
       rejected,
     });
   } catch (error) {
@@ -914,7 +1082,8 @@ export const removeBoothCartItem = async (req: BoothAuthRequest, res: Response) 
             select: { vendorBoothId: true },
             distinct: ['vendorBoothId'],
           });
-          const stillRepresented = Array.from(new Set([...plainBooths, ...lotBooths].map((b) => b.vendorBoothId).filter((id): id is string => !!id)));
+          const tagBoothIdsHere = (await readCartTagLines(cart.id)).map((l) => l.vendorBoothId);
+          const stillRepresented = Array.from(new Set([...[...plainBooths, ...lotBooths].map((b) => b.vendorBoothId).filter((id): id is string => !!id), ...tagBoothIdsHere]));
           const cas = await tx.boothCartTransaction.updateMany({
             where: { id: cart.id, status: 'PENDING' },
             data: { boothsRepresented: stillRepresented, totalAmount: { decrement: r.cents / 100 } },
@@ -1005,9 +1174,11 @@ export const removeBoothCartItem = async (req: BoothAuthRequest, res: Response) 
       select: { vendorBoothId: true },
       distinct: ['vendorBoothId'],
     });
-    const newBoothsRepresented = remainingBooths
-      .map((b) => b.vendorBoothId)
-      .filter((id): id is string => !!id);
+    // A consignor price tag keeps its booth in the cart even when no item of that booth is left.
+    const tagBoothIds = (await readCartTagLines(cart.id)).map((l) => l.vendorBoothId);
+    const newBoothsRepresented = Array.from(
+      new Set([...remainingBooths.map((b) => b.vendorBoothId).filter((id): id is string => !!id), ...tagBoothIds])
+    );
 
     const cas = await prisma.boothCartTransaction.updateMany({
       where: { id: cart.id, status: 'PENDING' },
@@ -1166,7 +1337,7 @@ const isTerminalSimulated = () => process.env.STRIPE_TERMINAL_SIMULATED === 'tru
  * Callers: leg amounts (both rails), the cashier's booth summary, and the capture
  * finalize loop -- all of which must see the same, cart-exact set.
  */
-async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented: string[], vendorBoothId: string) {
+async function resolveBoothLegItemsBase(cartTransactionId: string, boothsRepresented: string[], vendorBoothId: string) {
   if (!boothsRepresented.includes(vendorBoothId)) return [];
   const items = await prisma.item.findMany({
     where: { status: 'RESERVED', vendorBoothId, boothCartTransactionId: cartTransactionId },
@@ -1232,6 +1403,39 @@ async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented
 }
 
 /**
+ * The leg's items INCLUDING consignor price tags. A tag has no Item yet, so it joins as a pseudo item (id `tag:<nonce>`, `tagLine` set)
+ * priced at the signed cents, with no discretion cap. Every caller (summary, leg amounts on every rail, cash capture, finalize) therefore
+ * totals tags and goods the same way. A tag rides on the leg of the booth that belongs to the organizer who printed it (the house booth for the hub owner).
+ */
+async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented: string[], vendorBoothId: string) {
+  const base = await resolveBoothLegItemsBase(cartTransactionId, boothsRepresented, vendorBoothId);
+  type LegItem = (typeof base)[number] & { tagLine: undefined | CartTagLine };
+  const plain: LegItem[] = base.map((i) => ({ ...i, tagLine: undefined }));
+  if (!boothsRepresented.includes(vendorBoothId)) return plain;
+  const tagLines = await readCartTagLines(cartTransactionId, vendorBoothId);
+  if (tagLines.length === 0) return plain;
+  const tagItems = tagLines.map(
+    (t) =>
+      ({
+        id: `tag:${t.nonce}`,
+        price: t.priceCents / 100,
+        title: formatTagTitle(t.priceCents),
+        vendorBoothId: t.vendorBoothId as string | null,
+        originalPrice: t.priceCents / 100,
+        pendingCashierDiscretionAppliedCents: 0,
+        pendingCashierDiscretionAppliedByType: null,
+        pendingCashierDiscretionAppliedById: null,
+        discretionAppliedCents: 0,
+        discretionCap: { currentCents: t.priceCents, originalCents: t.priceCents, maxDiscretionCents: 0 },
+        netPriceCents: t.priceCents,
+        bulkLine: undefined,
+        tagLine: t,
+      }) as unknown as LegItem
+  );
+  return [...plain, ...tagItems];
+}
+
+/**
  * Runs the checkout guard exactly once per cart (on the FIRST leg, whichever rail),
  * and atomically locks the cart (PENDING -> IN_PROGRESS) so `addBoothCartItems`
  * rejects further edits from this point on. Idempotent for subsequent legs of the
@@ -1265,6 +1469,9 @@ async function beginCartCheckout(params: {
   if (!hubForActiveCheck || !hubForActiveCheck.isActive) {
     throw new CheckoutGuardError('This market has been closed and can no longer accept payments.');
   }
+
+  // Consignor price tags: re-verify before the cart locks and before any money moves.
+  await assertCartTagLinesStillValid({ id: cart.id, hubId });
 
   await assertBoothCartCheckoutAllowed({
     // No buyer id is passed, deliberately -- see the note on the same call inside
@@ -1353,6 +1560,8 @@ export const getBoothCartSummary = async (req: BoothAuthRequest, res: Response) 
             maxDiscretionCents: i.discretionCap.maxDiscretionCents,
             // ADR-136 Addendum B (#659): set only for a bulk lot line (N cards at the price per 1,000 taken when it was added).
             ...(i.bulkLine ? { bulkLineId: i.bulkLine.lineId, bulkQuantity: i.bulkLine.quantity } : {}),
+            // Consignor price tag line: removed by nonce (DELETE .../consignor-tags/:nonce), not by item id.
+            ...(i.tagLine ? { tagNonce: i.tagLine.nonce, isConsignorTag: true } : {}),
           })),
         };
       })
@@ -1402,9 +1611,40 @@ export const getBoothCartContents = async (req: BoothAuthRequest, res: Response)
       ? await prisma.item.findMany({ where: { id: { in: Array.from(new Set(lotLines.map((l) => l.itemId))) } }, select: { id: true, title: true, photoUrls: true } })
       : [];
     const lotItemById = new Map(lotTitleRows.map((r) => [r.id, r]));
+    // ADR-136 Addendum E (#659): pack size of each lot line, so a screen can say "2 packs of 1,000 cards". Never fails the cart read.
+    let linePackSizes = new Map<string, number | null>();
+    if (lotLines.length > 0) {
+      try {
+        linePackSizes = await loadLotPackSizes(prisma as unknown as BulkLotDb, lotLines.map((l) => l.itemId), false);
+      } catch {
+        linePackSizes = new Map<string, number | null>();
+      }
+    }
+
+    // Consignor price tag lines (verified when scanned). Names are looked up live; the lines themselves live on the cart row.
+    const tagLines = await readCartTagLines(cart.id);
+    const tagConsignors = tagLines.length
+      ? await prisma.consignor.findMany({ where: { id: { in: Array.from(new Set(tagLines.map((l) => l.consignorId))) } }, select: { id: true, name: true } })
+      : [];
+    const tagConsignorName = new Map(tagConsignors.map((c) => [c.id, c.name]));
+    const tagBoothRows = tagLines.length
+      ? await prisma.vendorBooth.findMany({ where: { id: { in: Array.from(new Set(tagLines.map((l) => l.vendorBoothId))) } }, select: { id: true, vendorName: true, boothNumber: true, isHubOwnerBooth: true } })
+      : [];
+    const tagBoothById = new Map(tagBoothRows.map((b) => [b.id, b]));
 
     return res.status(200).json({
       cart: { id: cart.id, hubId: cart.hubId, status: cart.status, totalAmount: cart.totalAmount.toString() },
+      consignorTags: tagLines.map((l) => ({
+        nonce: l.nonce,
+        title: formatTagTitle(l.priceCents),
+        consignorName: tagConsignorName.get(l.consignorId) ?? null,
+        priceCents: l.priceCents,
+        saleId: l.saleId,
+        vendorBoothId: l.vendorBoothId,
+        boothNumber: tagBoothById.get(l.vendorBoothId)?.boothNumber ?? null,
+        vendorName: tagBoothById.get(l.vendorBoothId)?.vendorName ?? null,
+        isHouseBooth: !!tagBoothById.get(l.vendorBoothId)?.isHubOwnerBooth,
+      })),
       bulkLines: lotLines.map((l) => ({
         lineId: l.lineId,
         itemId: l.itemId,
@@ -1413,6 +1653,10 @@ export const getBoothCartContents = async (req: BoothAuthRequest, res: Response)
         quantity: l.quantity,
         lineCents: l.lineCents,
         pricePerThousandCents: l.pricePerThousandCents,
+        ...((): { packSize?: number; packs?: number } => {
+          const size = linePackSizes.get(l.itemId);
+          return typeof size === 'number' && l.quantity % size === 0 ? { packSize: size, packs: l.quantity / size } : {};
+        })(),
         vendorBoothId: l.vendorBoothId,
         vendorName: boothById.get(l.vendorBoothId)?.vendorName ?? null,
         boothNumber: boothById.get(l.vendorBoothId)?.boothNumber ?? null,
@@ -1930,6 +2174,70 @@ export const authorizeBoothCartSquareLegs = async (req: BoothAuthRequest, res: R
 };
 
 /**
+ * Record one consignor price tag of a finalized hub cart. Mints the SOLD consignor Item (consignorId, the tag organizer's organizerId, the
+ * tag's saleId and the tag's booth as vendorBoothId, which is what reserve-time stamping gives a consigned hub item) and
+ * writes its Purchase row in one transaction; a retried finalize finds the same item (sku is keyed on the cart id and nonce) and the
+ * Purchase row already there, so nothing is written twice. If the mint itself cannot run after the money was taken (for example the
+ * consignor was deleted in the last seconds), a plain Purchase row WITHOUT an item is still written so the payment has a record, and
+ * the failure is logged loudly for ops. Returns the new Purchase id, or null when nothing new was written.
+ */
+async function finalizeCartTagLine(
+  cartId: string,
+  leg: { processor: string; rail: string; stripePaymentIntentId: string | null; squarePaymentId: string | null; stripeAccountId: string | null },
+  line: CartTagLine,
+  allTagLines: CartTagLine[]
+): Promise<string | null> {
+  const isSquareLeg = leg.processor === 'SQUARE';
+  const isDirectCharge = leg.rail !== 'CASH' && !isSquareLeg && !!leg.stripeAccountId;
+  const processorFields = isSquareLeg
+    ? { processor: 'SQUARE' as const, squarePaymentId: leg.squarePaymentId }
+    : {
+        processor: 'STRIPE' as const,
+        stripePaymentIntentId: leg.stripePaymentIntentId,
+        chargeType: isDirectCharge ? ('DIRECT' as const) : ('DESTINATION' as const),
+        ...(isDirectCharge ? { stripeAccountId: leg.stripeAccountId! } : {}),
+      };
+  const baseRow = {
+    userId: null,
+    amount: line.priceCents / 100,
+    priceOriginalCents: line.priceCents,
+    priceBeforeDiscretionCents: line.priceCents,
+    ...processorFields,
+    source: 'POS' as const,
+    status: 'PAID' as const,
+    boothCartTransactionId: cartId,
+  };
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const { itemId } = await mintTagItemInTx(tx, {
+        saleId: line.saleId,
+        organizerId: line.organizerId, // the organizer that owns the tag's sale and consignor (NOT the hub owner, unless they are the same)
+        vendorBoothId: line.vendorBoothId, // the booth this line was sold on, so refunds, receipts and vendor notices find it like any booth item
+        consignorId: line.consignorId,
+        priceCents: line.priceCents,
+        nonce: line.nonce,
+        paymentRef: cartId,
+        allowArchived: true, // already verified when scanned and again before checkout; the credit must not be lost to a later archive
+      });
+      const already = await tx.purchase.findFirst({ where: { itemId, boothCartTransactionId: cartId }, select: { id: true } });
+      if (already) return null;
+      const purchase = await tx.purchase.create({ data: { ...baseRow, itemId } });
+      return purchase.id;
+    });
+  } catch (err) {
+    console.error(
+      `[finalizeCapturedLegs] CONSIGNOR TAG MINT FAILED after capture (cart ${cartId}, nonce ${line.nonce}, ${line.priceCents} cents) -- writing an item-less Purchase row; ops must credit the consignor by hand:`,
+      err
+    );
+    const ordinal = allTagLines.filter((t) => t.priceCents === line.priceCents).findIndex((t) => t.nonce === line.nonce);
+    const existing = await prisma.purchase.count({ where: { boothCartTransactionId: cartId, itemId: null, priceOriginalCents: line.priceCents } });
+    if (existing > Math.max(ordinal, 0)) return null;
+    const row = await prisma.purchase.create({ data: { ...baseRow, itemId: null } });
+    return row.id;
+  }
+}
+
+/**
  * Shared finalize step for a cart whose legs have already reached a captured state,
  * regardless of HOW they got there -- a real Stripe capture (captureBoothCart, TERMINAL
  * or QR rail) or an immediate cash sale with no Stripe step at all (captureBoothCartCash).
@@ -1975,6 +2283,16 @@ async function finalizeCapturedLegs(
     const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, leg.vendorBoothId);
     for (const item of items) {
       try {
+        // Consignor price tag: no stock to sell. Mint the SOLD consignor Item and write its Purchase row in ONE transaction.
+        if (item.tagLine) {
+          const tagLines = items.filter((x) => x.tagLine).map((x) => x.tagLine!);
+          const tagPurchaseId = await finalizeCartTagLine(cart.id, leg, item.tagLine, tagLines);
+          if (tagPurchaseId) {
+            purchaseIds.push(tagPurchaseId);
+            generateReceipt(tagPurchaseId).catch((err) => console.error('[receipt] Failed to generate receipt:', err));
+          }
+          continue;
+        }
         // ADR-136 Addendum B (#659): a bulk lot line. The cards left the lot when the line was added, so there is NO stock write
         // here; the line goes SOLD and its Purchase row (bulkQuantity = cards) is written in one transaction, so a retried finalize
         // cannot write it twice. Refunds read bulkQuantity and give the cards back by count.
@@ -2727,10 +3045,21 @@ export const searchHubCartItems = async (req: BoothAuthRequest, res: Response) =
       searchLotIds = new Set<string>();
     }
 
+    // ADR-136 Addendum E (#659): a lot with a pack size is offered as packs here, not as a free quantity. Never fails the search.
+    let searchPackSizes = new Map<string, number | null>();
+    if (searchLotIds.size > 0) {
+      try {
+        searchPackSizes = await loadLotPackSizes(prisma as unknown as BulkLotDb, Array.from(searchLotIds), false);
+      } catch {
+        searchPackSizes = new Map<string, number | null>();
+      }
+    }
+
     return res.status(200).json({
       items: items.map((item) => {
         const booth = item.organizerId ? organizerIdToBooth.get(item.organizerId) : undefined;
         const isLot = searchLotIds.has(item.id);
+        const searchPackSize = searchPackSizes.get(item.id);
         return {
           id: item.id,
           title: item.title,
@@ -2742,6 +3071,8 @@ export const searchHubCartItems = async (req: BoothAuthRequest, res: Response) =
           boothNumber: booth?.boothNumber ?? null,
           // For a lot, price is dollars per 1,000 cards and the cart line is a number of cards.
           ...(isLot ? { bulkLot: true, remainingCards: Math.max(0, (item.stockTotal ?? 0) - (item.stockSold ?? 0)) } : {}),
+          // Pack lot: the cashier adds whole packs (packLines). `pack` carries the server priced numbers to show.
+          ...(isLot && typeof searchPackSize === 'number' ? { pack: packViewForRow({ price: item.price, status: 'AVAILABLE', stockTotal: item.stockTotal, stockSold: item.stockSold }, searchPackSize) } : {}),
         };
       }),
     });
@@ -2777,5 +3108,175 @@ export const listBoothCartTransactions = async (req: AuthRequest, res: Response)
   } catch (error) {
     console.error('[listBoothCartTransactions] Error:', error);
     return res.status(500).json({ error: 'Failed to list cart transactions' });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Consignor price tags in a hub cart
+// ---------------------------------------------------------------------------
+
+function sendTagError(res: Response, err: ConsignorTagError) {
+  return res.status(err.status).json({ error: err.message, ...consignorTagErrorBody(err) });
+}
+
+/**
+ * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/consignor-tags
+ * Body: { saleId, consignorId, nonce, sig, priceCents }  (the c / n / s / price / sale id read off a scanned consignor tag)
+ *
+ * This is also the hub register's scan-time verification (the single-sale /pos/consignor-tag/verify authorizes the caller as the sale
+ * owner, which a mall cashier is not). Same booth-cart auth as every other hub-cart route (callerOwnsCart), so a mall cashier, a team
+ * member, the hub owner or a vendor with register access may scan a tag for any booth, exactly as they may add any booth's items.
+ *
+ * Verifies the signed tag for the organizer who owns the tag's SALE (flag, signing configured, TEAMS, HMAC, consignor in that organizer's
+ * workspace, archived consignor refused for a NEW scan), resolves that organizer's booth in this hub (the house booth when they are the hub
+ * owner, else their CONFIRMED booth; 409 TAG_SELLER_NO_BOOTH when they have none), and adds it to the cart as a line on that booth's leg.
+ * Answers with the consignor name, price and booth number / vendor name for the cashier to read.
+ */
+export const addBoothCartConsignorTag = async (req: BoothAuthRequest, res: Response) => {
+  try {
+    const { hubId, cartTransactionId } = req.params;
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const saleId = typeof body.saleId === 'string' ? body.saleId : '';
+    if (!saleId || saleId.length > 64) {
+      return res.status(400).json({ error: 'This price tag is not valid.', message: 'This price tag is not valid.', code: 'TAG_INVALID' });
+    }
+
+    const hub = await prisma.saleHub.findUnique({
+      where: { id: hubId },
+      select: { id: true, isActive: true, organizerId: true },
+    });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+    if (!hub.isActive) return res.status(403).json({ error: 'This market has been closed and can no longer accept payments.' });
+
+    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
+    if (cart.status !== 'PENDING') return res.status(409).json({ error: `Cart is not open for edits (status: ${cart.status})` });
+
+    let resolvedTag;
+    try {
+      resolvedTag = await resolveHubTagLine(hub, saleId, toTagLineInput(body));
+    } catch (err) {
+      if (isConsignorTagError(err)) return sendTagError(res, err);
+      throw err;
+    }
+    const { tag, organizerId: tagOrganizerId, vendorBoothId: tagBoothId } = resolvedTag;
+
+    const line: CartTagLine = {
+      consignorId: tag.consignorId,
+      nonce: tag.nonce,
+      sig: tag.sig,
+      priceCents: tag.priceCents,
+      saleId,
+      organizerId: tagOrganizerId,
+      vendorBoothId: tagBoothId,
+    };
+    const tagBooth = await prisma.vendorBooth.findUnique({
+      where: { id: tagBoothId },
+      select: { boothNumber: true, vendorName: true, isHubOwnerBooth: true },
+    });
+
+    // One transaction under an advisory lock: two scans of the same tag (or a tag racing checkout) cannot both pass.
+    const outcome = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'boothcart-tags:' + cart.id}))`;
+      const fresh = await tx.boothCartTransaction.findFirst({
+        where: { id: cart.id, hubId },
+        select: { status: true, boothsRepresented: true, consignorLines: true },
+      });
+      if (!fresh || fresh.status !== 'PENDING') return { kind: 'NOT_OPEN' as const, status: fresh?.status ?? 'unknown' };
+      const existing = parseStoredTagLines((fresh as any).consignorLines ?? null);
+      if (existing.some((l) => l.nonce === line.nonce)) return { kind: 'DUPLICATE' as const };
+      if (existing.length >= MAX_CART_TAG_LINES) return { kind: 'FULL' as const };
+      const updated = await tx.boothCartTransaction.update({
+        where: { id: cart.id },
+        data: {
+          consignorLines: [...existing, line] as any,
+          boothsRepresented: Array.from(new Set([...fresh.boothsRepresented, line.vendorBoothId])),
+          totalAmount: { increment: line.priceCents / 100 },
+        },
+      });
+      return { kind: 'OK' as const, cart: updated };
+    });
+
+    if (outcome.kind === 'NOT_OPEN') return res.status(409).json({ error: `Cart is not open for edits (status: ${outcome.status})` });
+    if (outcome.kind === 'DUPLICATE') {
+      return res.status(400).json({ error: 'This tag is already in the cart.', message: 'This tag is already in the cart.', code: 'TAG_DUPLICATE' });
+    }
+    if (outcome.kind === 'FULL') return res.status(409).json({ error: 'This cart already has the maximum number of price tags.', code: 'TAG_CART_FULL' });
+
+    return res.status(200).json({
+      cart: outcome.cart,
+      line: {
+        nonce: line.nonce,
+        title: formatTagTitle(line.priceCents),
+        consignorName: tag.consignorName,
+        priceCents: line.priceCents,
+        saleId,
+        vendorBoothId: line.vendorBoothId,
+        boothNumber: tagBooth?.boothNumber ?? null,
+        vendorName: tagBooth?.vendorName ?? null,
+        isHouseBooth: !!tagBooth?.isHubOwnerBooth,
+      },
+    });
+  } catch (error) {
+    console.error('[addBoothCartConsignorTag] Error:', error);
+    return res.status(500).json({ error: 'Failed to add the price tag to the cart' });
+  }
+};
+
+/**
+ * DELETE /api/organizer/hubs/:hubId/cart/:cartTransactionId/consignor-tags/:nonce
+ * Takes one price tag out of a still-open cart. Nothing was reserved or minted, so this only edits the cart row.
+ */
+export const removeBoothCartConsignorTag = async (req: BoothAuthRequest, res: Response) => {
+  try {
+    const { hubId, cartTransactionId, nonce } = req.params;
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
+    if (cart.status !== 'PENDING') return res.status(409).json({ error: `Cart is not open for edits (status: ${cart.status})` });
+
+    // Lot lines are read through the safe wrapper (the table may not exist while the flag is off), before the transaction.
+    const lotBoothIds = (await readCartLotLines(cart.id)).map((l) => l.vendorBoothId).filter((id): id is string => !!id);
+
+    const outcome = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'boothcart-tags:' + cart.id}))`;
+      const fresh = await tx.boothCartTransaction.findFirst({ where: { id: cart.id, hubId }, select: { status: true, consignorLines: true } });
+      if (!fresh || fresh.status !== 'PENDING') return { kind: 'NOT_OPEN' as const, status: fresh?.status ?? 'unknown' };
+      const existing = parseStoredTagLines((fresh as any).consignorLines ?? null);
+      const removed = existing.find((l) => l.nonce === nonce);
+      if (!removed) return { kind: 'NOT_FOUND' as const };
+      const next = existing.filter((l) => l.nonce !== nonce);
+      const plainBooths = await tx.item.findMany({
+        where: { boothCartTransactionId: cart.id, status: 'RESERVED' },
+        select: { vendorBoothId: true },
+        distinct: ['vendorBoothId'],
+      });
+      const stillRepresented = Array.from(
+        new Set([
+          ...plainBooths.map((b) => b.vendorBoothId).filter((id): id is string => !!id),
+          ...lotBoothIds,
+          ...next.map((l) => l.vendorBoothId).filter((id): id is string => !!id),
+        ])
+      );
+      const updated = await tx.boothCartTransaction.update({
+        where: { id: cart.id },
+        data: { consignorLines: next as any, boothsRepresented: stillRepresented, totalAmount: { decrement: removed.priceCents / 100 } },
+      });
+      return { kind: 'OK' as const, cart: updated };
+    });
+
+    if (outcome.kind === 'NOT_OPEN') return res.status(409).json({ error: `Cart is not open for edits (status: ${outcome.status})` });
+    if (outcome.kind === 'NOT_FOUND') return res.status(404).json({ error: 'That price tag is not in this cart.' });
+    let updatedCart = outcome.cart;
+    if (Number(updatedCart.totalAmount) < 0) {
+      updatedCart = await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { totalAmount: 0 } });
+    }
+    return res.status(200).json({ removed: true, cart: updatedCart });
+  } catch (error) {
+    console.error('[removeBoothCartConsignorTag] Error:', error);
+    return res.status(500).json({ error: 'Failed to remove the price tag from the cart' });
   }
 };

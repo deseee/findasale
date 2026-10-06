@@ -23,8 +23,14 @@ import {
   BulkLot,
   BulkStatus,
   describeBulkError,
+  PACK_SIZE_PRESETS,
   formatCardCount,
+  packOfferText,
+  packPriceCentsPreview,
+  packsAvailablePreview,
+  packsLeftText,
   parseLotTotal,
+  parsePackSizeInput,
   parsePricePerThousand,
   readBulkStatus,
 } from '../lib/bulkLot';
@@ -81,6 +87,7 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
   const [totalText, setTotalText] = useState('');
   const [priceText, setPriceText] = useState('');
   const [kind, setKind] = useState('');
+  const [packText, setPackText] = useState(''); // ADR-136 Addendum E: cards per pack ('' = not sold in packs)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const syncedFor = useRef<string | null>(null);
@@ -89,6 +96,7 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
     setTotalText(l ? String(l.totalCards) : '');
     setPriceText(l && l.pricePerThousandCents !== null ? (l.pricePerThousandCents / 100).toFixed(2) : '');
     setKind(l ? l.lotKind : status?.vocabulary?.defaultKind ?? '');
+    setPackText(l && typeof l.packSize === 'number' ? String(l.packSize) : '');
   };
 
   // Fill the form once per item when the lot has loaded. After that the form is the seller's.
@@ -157,6 +165,42 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
       setBusy(false);
     }
   };
+
+  // ADR-136 Addendum E: pack size. Saves on its own (the server refuses a size change while a cart line or hold is open on the lot).
+  const savePack = async (clear: boolean) => {
+    if (!lot) return;
+    let next: number | null = null;
+    if (!clear) {
+      next = parsePackSizeInput(packText);
+      if (next === null) return setError(BULK_COPY.errorPackSize);
+      if (next > lot.totalCards) return setError(BULK_COPY.errorPackTooBig);
+    }
+    const current = typeof lot.packSize === 'number' ? lot.packSize : null;
+    if (next === current) return setError(BULK_COPY.errorNothingToSave);
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.patch(`/bulk-lots/item/${encodeURIComponent(itemId)}`, { packSize: next });
+      applySaved(res.data?.data as BulkLot, next === null ? BULK_COPY.packSizeCleared : BULK_COPY.packSizeSaved);
+    } catch (err) {
+      setError(describeBulkError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const packSizeNumber = parsePackSizeInput(packText);
+  const pricePreviewDollars = parsePricePerThousand(priceText);
+  const packCentsShown = packSizeNumber !== null && pricePreviewDollars !== null ? packPriceCentsPreview(packSizeNumber, pricePreviewDollars) : null;
+  const packsLeftShown = lot && packSizeNumber !== null ? packsAvailablePreview(lot.remainingCards, packSizeNumber) : 0;
+  const packPreviewLine =
+    packSizeNumber === null
+      ? ''
+      : pricePreviewDollars === null
+        ? BULK_COPY.packPriceNeedsPrice
+        : packCentsShown === null
+          ? BULK_COPY.errorPackPrice
+          : `${packOfferText(packSizeNumber, packCentsShown)}. ${packsLeftText(packsLeftShown)}.`;
 
   const kindSelect = (
     <div>
@@ -262,6 +306,61 @@ const BulkLotSection: React.FC<BulkLotSectionProps> = ({ itemId, hasCardRecord, 
           <button type="button" onClick={save} disabled={locked} className={`${primaryBtn} w-full sm:w-auto`}>
             {busy ? `${BULK_COPY.savingButton}...` : BULK_COPY.saveButton}
           </button>
+          <div className="space-y-2 rounded-lg border border-warm-200 px-3 py-3 dark:border-gray-600" role="group" aria-labelledby={`${baseId}-pack-heading`}>
+            <h4 id={`${baseId}-pack-heading`} className="text-sm font-semibold text-warm-900 dark:text-warm-100">
+              {BULK_COPY.packHeading}
+            </h4>
+            <p className="text-xs text-warm-600 dark:text-warm-400">{BULK_COPY.packIntro}</p>
+            <div>
+              <label htmlFor={`${baseId}-pack`} className={labelCls}>
+                {BULK_COPY.packSizeLabel}
+              </label>
+              <input id={`${baseId}-pack`} type="text" inputMode="numeric" value={packText} disabled={locked} onChange={(e) => setPackText(e.target.value)} onKeyDown={swallowEnter} className={inputCls} />
+              <p className="mt-1 text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.packSizeHelp}</p>
+            </div>
+            <div role="group" aria-label={BULK_COPY.packPresetsLabel} className="flex flex-wrap gap-2">
+              {PACK_SIZE_PRESETS.filter((n) => n <= lot.totalCards).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={locked}
+                  onClick={() => setPackText(String(n))}
+                  aria-pressed={packSizeNumber === n}
+                  className={`min-h-[44px] rounded-lg border px-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50 ${
+                    packSizeNumber === n ? 'border-amber-600 bg-amber-50 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100' : 'border-warm-300 text-warm-800 dark:border-gray-600 dark:text-warm-200'
+                  }`}
+                >
+                  {formatCardCount(n)}
+                </button>
+              ))}
+            </div>
+            {packPreviewLine && (
+              <p aria-live="polite" className="text-sm font-medium text-warm-900 dark:text-warm-100">
+                {packPreviewLine}
+              </p>
+            )}
+            {packSizeNumber !== null && packCentsShown !== null && <p className="text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.packPriceRounding}</p>}
+            {typeof lot.packSize === 'number' ? (
+              <p className="text-xs text-warm-600 dark:text-warm-400">{lot.packsAvailableLabel ?? ''} {lot.leftoverCards ? BULK_COPY.packLeftoverNote : ''}</p>
+            ) : (
+              <p className="text-xs text-warm-600 dark:text-warm-400">{BULK_COPY.packNotSold}</p>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button type="button" onClick={() => savePack(false)} disabled={locked} className={`${primaryBtn} w-full sm:w-auto`}>
+                {busy ? `${BULK_COPY.savingButton}...` : BULK_COPY.packSaveButton}
+              </button>
+              {typeof lot.packSize === 'number' && (
+                <button
+                  type="button"
+                  onClick={() => savePack(true)}
+                  disabled={locked}
+                  className="min-h-[44px] w-full rounded-lg border border-warm-300 px-4 text-sm font-semibold text-warm-800 hover:bg-warm-50 disabled:opacity-50 dark:border-gray-600 dark:text-warm-200 sm:w-auto"
+                >
+                  {BULK_COPY.packClearButton}
+                </button>
+              )}
+            </div>
+          </div>
           <BulkLotFollowupPanel itemId={itemId} lot={lot} disabled={!!disabled} onLotChange={(l) => { queryClient.setQueryData(lotKey, l); fillFrom(l); if (onLotChange) onLotChange(l); }} />
           <BulkLotEbayBundlePanel itemId={itemId} disabled={!!disabled} />
         </div>

@@ -36,7 +36,8 @@ function build(env: Record<string, string> = { CARD_BULK_LOTS_ENABLED: 'true' },
         res.status(401).json({ success: false, error: 'Sign in', code: 'UNAUTHORIZED' });
         return null;
       }
-      return { id };
+      // Same shape as utils/posAuth resolveOrganizerOrTeamMember: the signed-in organizer resolves to themselves.
+      return { id, ownerUserId: req.user.id, actingUserId: req.user.id, actorKind: 'ORGANIZER', subscriptionTier: 'PRO', squareOnboarded: false, squareMerchantId: null };
     },
     sell: fakeSell(fake) as any,
     markPaid: async () => ({} as any),

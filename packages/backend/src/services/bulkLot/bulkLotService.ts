@@ -32,6 +32,7 @@ import {
   remainingCards,
 } from './bulkLotPricing';
 import { BULK_LOT_KINDS, BULK_LOT_KIND_LABELS, DEFAULT_BULK_LOT_GAME, DEFAULT_BULK_LOT_KIND, BulkLotKind } from './bulkLotVocabulary';
+import { PACK_SIZE_MAX, PACK_SIZE_MIN, PackView, buildPackView, packPriceCents, parsePackSize } from './bulkLotPacks'; // ADR-136 Addendum E: optional pack size on a lot
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -50,6 +51,19 @@ export type BulkLotErrorCode =
   | 'BULK_CHECK_FAILED'
   | 'BULK_CHANNEL_UNSUPPORTED'
   | 'BULK_SOLD_OUT_AFTER_PAYMENT'
+  // ADR-136 Addendum E (2026-10-06): packs
+  | 'BULK_PACK_INVALID'
+  | 'BULK_PACK_COUNT'
+  | 'BULK_PACK_ONLY'
+  | 'BULK_NOT_PACK'
+  | 'BULK_PACK_LOCKED'
+  | 'BULK_PACK_TOO_PRICEY'
+  | 'BULK_PACK_PICKUP_ONLY'
+  | 'BULK_PACK_NO_DISCOUNT'
+  | 'BULK_PACK_TOO_CHEAP'
+  | 'BULK_PACK_CART_UNSUPPORTED'
+  | 'BULK_PACK_RETRY_TOKEN'
+  | 'BULK_PACK_DUPLICATE_PAYMENT'
   | 'BAD_QUANTITY'
   | 'BAD_PRICE'
   | 'QUANTITY_TOO_SMALL'
@@ -92,6 +106,18 @@ export const BULK_LOT_MESSAGES: Record<BulkLotErrorCode, string> = {
   // (online buy buttons, hub carts until they are wired, marketplace listings), so the wording is about the path, not the tender.
   BULK_CHANNEL_UNSUPPORTED: 'This bulk lot cannot be bought this way yet. Ask the shop to ring it up at the register.',
   BULK_SOLD_OUT_AFTER_PAYMENT: 'The cards in this bulk lot ran out while the payment was being completed. The card payment is being refunded. Start the sale again with the cards that are left.',
+  BULK_PACK_INVALID: `Pack size must be a whole number of cards from ${PACK_SIZE_MIN} to ${formatCardCount(PACK_SIZE_MAX)}, and no bigger than the lot.`,
+  BULK_PACK_COUNT: 'Choose from 1 to 50 packs.',
+  BULK_PACK_ONLY: 'This bulk lot is sold in packs. Add whole packs.',
+  BULK_NOT_PACK: 'This bulk lot is not sold in packs.',
+  BULK_PACK_LOCKED: 'This lot has packs in a cart or on hold right now. Change the pack size after they are paid for or released.',
+  BULK_PACK_TOO_PRICEY: 'A pack would cost more than $99,999.99. Choose a smaller pack size or a lower price.',
+  BULK_PACK_PICKUP_ONLY: 'Bulk packs are pickup only for now. Turn off shipping and try again.',
+  BULK_PACK_NO_DISCOUNT: 'Coupons and item discounts do not apply to bulk packs.',
+  BULK_PACK_TOO_CHEAP: 'This pack costs too little to sell online. Buy it at the shop.',
+  BULK_PACK_CART_UNSUPPORTED: 'Buy a bulk pack on its own. Packs cannot go in a cart checkout yet.',
+  BULK_PACK_RETRY_TOKEN: 'Refresh the page and try again.',
+  BULK_PACK_DUPLICATE_PAYMENT: 'This order was already paid. The second payment is being refunded.',
   BAD_QUANTITY: 'Enter a whole number of cards, 1 or more.',
   BAD_PRICE: 'This bulk lot does not have a valid price per 1,000 cards.',
   QUANTITY_TOO_SMALL: 'That many cards rounds to less than one cent at this price. Sell a larger quantity.',
@@ -134,7 +160,7 @@ const LOT_ITEM_SELECT = {
   stockTotal: true,
   stockSold: true,
   photoUrls: true,
-  bulkLot: { select: { game: true, lotKind: true } },
+  bulkLot: { select: { game: true, lotKind: true, packSize: true } },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -185,10 +211,14 @@ export const UpdateLotSchema = z
       .optional(),
     pricePerThousand: pricePerThousandField.optional(),
     lotKind: lotKindField.optional(),
+    /** ADR-136 Addendum E: cards in one pack (a whole number from 100 to 5,000), or null to stop selling in packs. */
+    packSize: z
+      .union([z.number({ invalid_type_error: 'Enter the pack size as a whole number of cards.' }).int('Enter the pack size as a whole number of cards.'), z.null()])
+      .optional(),
   })
   .strict()
   .refine((v) => v.totalCards === undefined || v.addCards === undefined, { message: 'Set the total or add cards, not both.', path: ['addCards'] })
-  .refine((v) => v.totalCards !== undefined || v.addCards !== undefined || v.pricePerThousand !== undefined || v.lotKind !== undefined, {
+  .refine((v) => v.totalCards !== undefined || v.addCards !== undefined || v.pricePerThousand !== undefined || v.lotKind !== undefined || v.packSize !== undefined, {
     message: 'Nothing to change.',
   });
 export type UpdateLotInput = z.infer<typeof UpdateLotSchema>;
@@ -225,7 +255,7 @@ export interface LadderRowView {
   isAll: boolean;
 }
 
-export interface BulkLotView {
+export interface BulkLotView extends PackView {
   itemId: string;
   saleId: string | null;
   title: string;
@@ -266,7 +296,7 @@ export interface LotItemRow {
   stockTotal?: number | null;
   stockSold?: number | null;
   photoUrls?: string[] | null;
-  bulkLot?: { game?: string | null; lotKind?: string | null } | null;
+  bulkLot?: { game?: string | null; lotKind?: string | null; packSize?: number | null } | null;
 }
 
 function labelForKind(kind: string): string {
@@ -309,6 +339,8 @@ export function toBulkLotView(row: LotItemRow): BulkLotView {
     available: !soldOut && cents !== null && row.status === 'AVAILABLE',
     ladder,
     photoUrl: Array.isArray(row.photoUrls) && row.photoUrls.length > 0 ? row.photoUrls[0] : null,
+    // ADR-136 Addendum E: every field is null or 0 for a lot with no pack size, so a lot without packs reads as before.
+    ...buildPackView({ packSize: row.bulkLot?.packSize ?? null, pricePerThousandCents: cents, remaining, status: row.status }),
   };
 }
 
@@ -524,12 +556,31 @@ export async function createBulkLotItem(db: BulkLotDb, ctx: OrganizerCtx & { sal
   return toOrganizerBulkLotView(created);
 }
 
-/** Restock, set the total, change the price per 1,000 or the lot type. */
+/**
+ * ADR-136 Addendum E: the pack size of a lot can change only while nothing is open on it. A hub cart line or a hold carries cards
+ * counted in the old pack size, so changing it underneath them would leave a customer with a pack count that no longer adds up.
+ * Open means a RESERVED hub cart line or an ACTIVE hold. Fails closed: if the check cannot run, the change is not made.
+ */
+export interface PackLockDb {
+  boothCartBulkLine: { count(args: any): Promise<number> };
+  bulkLotHold: { count(args: any): Promise<number> };
+}
+
+export async function assertPackSizeEditable(db: Partial<PackLockDb>, itemId: string): Promise<void> {
+  if (!db.boothCartBulkLine || !db.bulkLotHold) throw bulkLotError('BULK_CHECK_FAILED', 503);
+  const [openLines, activeHolds] = await Promise.all([
+    db.boothCartBulkLine.count({ where: { itemId, status: 'RESERVED' } }),
+    db.bulkLotHold.count({ where: { itemId, status: 'ACTIVE' } }),
+  ]);
+  if (openLines > 0 || activeHolds > 0) throw bulkLotError('BULK_PACK_LOCKED', 409, { openCartLines: openLines, activeHolds });
+}
+
+/** Restock, set the total, change the price per 1,000, the lot type or the pack size. */
 export async function updateBulkLot(db: BulkLotDb, ctx: OrganizerCtx, itemId: string, rawInput: unknown): Promise<OrganizerBulkLotView> {
   const input = parseUpdateLot(rawInput);
   const existing = await db.item.findUnique({
     where: { id: itemId },
-    select: { id: true, organizerId: true, status: true, stockTotal: true, stockSold: true, bulkLot: { select: { id: true } } },
+    select: { id: true, organizerId: true, status: true, price: true, stockTotal: true, stockSold: true, bulkLot: { select: { id: true, packSize: true } } },
   });
   if (!existing || existing.organizerId !== ctx.organizerId) throw bulkLotError('BULK_NOT_FOUND', 404);
   if (!existing.bulkLot) throw bulkLotError('BULK_NOT_LOT', 409);
@@ -537,6 +588,27 @@ export async function updateBulkLot(db: BulkLotDb, ctx: OrganizerCtx, itemId: st
   const data: Record<string, unknown> = {};
   if (input.pricePerThousand !== undefined) {
     data.price = (pricePerThousandCentsFromDollars(input.pricePerThousand) as number) / 100;
+  }
+
+  // ADR-136 Addendum E: pack size (set, change or clear), and the pack price that goes with the price per 1,000. The pack must hold
+  // at least the minimum and no more than the lot, and its price must be a real number of cents. Only the owning organizer reaches
+  // this function (the route is organizer only and the item must be theirs); staff cannot set or clear a pack size.
+  const currentPackSize: number | null = typeof existing.bulkLot.packSize === 'number' ? existing.bulkLot.packSize : null;
+  let nextPackSize: number | null = currentPackSize;
+  if (input.packSize !== undefined) {
+    if (input.packSize === null) {
+      nextPackSize = null;
+    } else {
+      const parsed = parsePackSize(input.packSize);
+      if (parsed === null || parsed > (existing.stockTotal ?? 1)) throw bulkLotError('BULK_PACK_INVALID', 400);
+      nextPackSize = parsed;
+    }
+    if (nextPackSize !== currentPackSize) await assertPackSizeEditable(db as unknown as Partial<PackLockDb>, itemId);
+  }
+  if (nextPackSize !== null && (input.packSize !== undefined || input.pricePerThousand !== undefined)) {
+    const effectivePerThousand = input.pricePerThousand !== undefined ? pricePerThousandCentsFromDollars(input.pricePerThousand) : pricePerThousandCentsFromDollars(existing.price);
+    const packPrice = packPriceCents(nextPackSize, effectivePerThousand);
+    if (!packPrice.ok) throw bulkLotError(packPrice.code, 400);
   }
 
   // Stock changes are guarded at the database: the WHERE clause re-checks stockSold, so a register sale landing
@@ -560,8 +632,13 @@ export async function updateBulkLot(db: BulkLotDb, ctx: OrganizerCtx, itemId: st
     }
   }
 
-  if (input.lotKind !== undefined) {
-    data.bulkLot = { update: { lotKind: input.lotKind } };
+  if (input.lotKind !== undefined || input.packSize !== undefined) {
+    data.bulkLot = {
+      update: {
+        ...(input.lotKind !== undefined ? { lotKind: input.lotKind } : {}),
+        ...(input.packSize !== undefined ? { packSize: nextPackSize } : {}),
+      },
+    };
   }
   const hasMore = Object.keys(data).length > 0;
   const finalRow = hasMore

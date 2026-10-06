@@ -18,7 +18,7 @@
  *
  * No Prisma client in this module: the database client is passed in.
  */
-import { BulkLotDb, BulkLotErrorCode, SellUnitsInTx, bulkLotError, isBulkLotError, planBulkLine, releaseBulkLotUnits } from './bulkLotService';
+import { BulkLotDb, BulkLotErrorCode, PlannedBulkLine, SellUnitsInTx, bulkLotError, isBulkLotError, planBulkLine, releaseBulkLotUnits } from './bulkLotService';
 
 export interface CartLotDb extends BulkLotDb {
   $transaction<T>(fn: (tx: any) => Promise<T>): Promise<T>;
@@ -65,6 +65,12 @@ export interface CartLotRequest {
   quantity: unknown;
   /** Dollars the register showed for the line, or null. */
   amountDollars: number | null;
+  /**
+   * ADR-136 Addendum E: prices the line instead of planBulkLine (a pack line passes planPackLine here). It receives the row, may
+   * throw a BulkLotError to refuse just this line, and must return cards and cents. `quantity` and `amountDollars` are not read
+   * when it is given; the planner applies the amount check itself.
+   */
+  planner?: (item: LotItemForCart) => PlannedBulkLine;
 }
 
 export interface CartLotRejection {
@@ -94,7 +100,7 @@ export async function reserveCartLotLines(
     const rejected: CartLotRejection[] = [];
     for (const req of args.requests) {
       try {
-        const plan = planBulkLine(req.item, req.quantity, req.amountDollars);
+        const plan = req.planner ? req.planner(req.item) : planBulkLine(req.item, req.quantity, req.amountDollars);
         await deps.sell(tx, req.item.id, plan.cards);
         const row = await tx.boothCartBulkLine.create({
           data: {

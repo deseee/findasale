@@ -80,9 +80,9 @@ export interface OversoldSettleResult {
 }
 
 export interface SettleOversoldParams {
-  /** Which recorder called: keeps logs and the idempotency kind readable. ('manual-card' added by ADR-136 Addendum A, 2026-10-05.) */
-  kind: 'pos-link' | 'hold-invoice' | 'manual-card';
-  /** POSPaymentLink.id or HoldInvoice.id, or the Square payment id for 'manual-card' (that flow has no row of its own). */
+  /** Which recorder called: keeps logs and the idempotency kind readable. ('manual-card' added by ADR-136 Addendum A, 2026-10-05; 'online-pack' by Addendum E, 2026-10-06.) */
+  kind: 'pos-link' | 'hold-invoice' | 'manual-card' | 'online-pack';
+  /** POSPaymentLink.id or HoldInvoice.id, or the Square payment id for 'manual-card' and 'online-pack' (those flows have no row of their own). */
   refId: string;
   /** Organizer PROFILE id (Sale.organizerId), used to resolve the Square token. */
   organizerProfileId: string | null | undefined;

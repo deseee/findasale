@@ -56,9 +56,11 @@ router.post('/item/:itemId/refund-preview', authenticate, bulkLotReadLimiter, bu
 router.get('/item/:itemId/holds', authenticate, bulkLotReadLimiter, bulkLotFollowupHandlers.listHolds);
 // Organizer only
 router.post('/item/:itemId/adjust', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.adjust);
-router.post('/item/:itemId/holds', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.placeOrganizerHold);
-router.post('/holds/:holdId/release', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.releaseOrganizerHold);
-router.post('/holds/:holdId/convert', authenticate, requireOrganizer, bulkLotWriteLimiter, bulkLotFollowupHandlers.convertHold);
+// Organizer or team member at the register (Addendum D): same resolution as the POS (utils/posAuth). The handler resolves the actor
+// and answers 403 itself, and every hold is checked against the RESOLVED organizer, so staff never reach another shop's lots.
+router.post('/item/:itemId/holds', authenticate, bulkLotWriteLimiter, bulkLotFollowupHandlers.placeOrganizerHold);
+router.post('/holds/:holdId/release', authenticate, bulkLotWriteLimiter, bulkLotFollowupHandlers.releaseOrganizerHold);
+router.post('/holds/:holdId/convert', authenticate, bulkLotWriteLimiter, bulkLotFollowupHandlers.convertHold);
 // Signed-in shopper (their own holds only, 2 hours, one hold per lot)
 router.post('/item/:itemId/hold', authenticate, bulkLotWriteLimiter, bulkLotFollowupHandlers.placeShopperHold);
 router.get('/my-holds', authenticate, bulkLotReadLimiter, bulkLotFollowupHandlers.myHolds);

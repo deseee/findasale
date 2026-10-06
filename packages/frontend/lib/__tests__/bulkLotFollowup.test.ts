@@ -11,6 +11,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   ADJUST_REASONS,
   FOLLOWUP_COPY,
@@ -24,6 +26,8 @@ import {
   describeFollowupCode,
   formatDollarsFromCents,
   isBulkReconcileCode,
+  isNoRegisterAccess,
+  parseOptionalEmail,
   pricePerThousandCents,
   previewCardRefund,
   readAdjustments,
@@ -174,4 +178,40 @@ test('copy lint: no em dash, no "AI", no "estate sale", no empty or hype strings
     assert.ok(!/!{2,}/.test(s), `hype in: ${s}`);
   }
   assert.equal(FOLLOWUP_COPY.adjustButton, 'Adjust count');
+});
+
+// ---------------------------------------------------------------------------
+// ADR-136 Addendum D: hold contact email and the team member view
+// ---------------------------------------------------------------------------
+
+test('optional customer email: blank is none, a valid address is lower-cased, anything else is refused', () => {
+  assert.deepEqual(parseOptionalEmail(''), { ok: true, email: null });
+  assert.deepEqual(parseOptionalEmail('   '), { ok: true, email: null });
+  assert.deepEqual(parseOptionalEmail('  Sam@Example.COM '), { ok: true, email: 'sam@example.com' });
+  for (const bad of ['nope', 'a@b', 'a b@example.com', '@example.com', 'sam@', 'sam@example.com\nBcc: x@y.com', 'x'.repeat(250) + '@example.com']) {
+    assert.deepEqual(parseOptionalEmail(bad), { ok: false }, bad);
+  }
+});
+
+test('a 403 from the server means no register access, nothing else does', () => {
+  assert.equal(isNoRegisterAccess({ response: { status: 403, data: { code: 'FORBIDDEN' } } }), true);
+  assert.equal(isNoRegisterAccess({ response: { status: 403 } }), true);
+  assert.equal(isNoRegisterAccess({ response: { status: 404, data: { code: 'BULK_NOT_FOUND' } } }), false);
+  assert.equal(isNoRegisterAccess({ response: { status: 500 } }), false);
+  assert.equal(isNoRegisterAccess(new Error('network')), false);
+  assert.equal(isNoRegisterAccess(null), false);
+  assert.equal(describeFollowupCode('FORBIDDEN'), FOLLOWUP_COPY.staffNoAccess);
+});
+
+test('the team member view: the panel hides recount and refunds behind holdsOnly, and the staff page asks for it', () => {
+  const panel = readFileSync(join(__dirname, '..', '..', 'components', 'BulkLotFollowupPanel.tsx'), 'utf8');
+  const adjustAt = panel.indexOf('{/* Adjust */}');
+  const holdsAt = panel.indexOf('{/* Holds */}');
+  const gateAt = panel.indexOf('{!holdsOnly && (');
+  assert.ok(gateAt > -1 && gateAt < adjustAt && adjustAt < holdsAt, 'adjust and refunds sit inside the holdsOnly gate, holds after it');
+  assert.ok(panel.includes('enabled: !holdsOnly'), 'the sales list is not fetched for a team member');
+  assert.ok(panel.includes('customerEmail: email.email'), 'the email is sent only when typed');
+  const page = readFileSync(join(__dirname, '..', '..', 'pages', 'organizer', 'bulk-lots', '[saleId]', 'holds.tsx'), 'utf8');
+  assert.ok(/<BulkLotFollowupPanel[^>]*holdsOnly/s.test(page));
+  assert.ok(!page.includes("roles.includes('ORGANIZER')"), 'the page does not require the organizer role; the server decides');
 });

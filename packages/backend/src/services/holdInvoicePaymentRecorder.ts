@@ -10,6 +10,7 @@ import { withdrawReverbListingIfExists } from '../services/marketplace/reverbCon
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { escapeHtml } from '../utils/htmlEscape'; // ADR-136 Addendum D: the customer name and item title in the receipt are typed by the organizer
 import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row backfill (2026-08-09): recompute chargeType at payment-confirmation time, mirrors posPaymentLinkRecorder.ts
 import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // 2026-09-29: cash-leg commission now accrues through the exactly-once CashFeeAccrual ledger (sourceType 'HOLD_INVOICE'), and per-row amounts/fees/cash legs are allocated in exact cents; mirrors posPaymentLinkRecorder.ts
 // 2026-09-29 money review P0-2: a captured Square payment on a dead invoice is recorded (items still available) or refunded, never left unresolved. The refund service is imported LAZILY (see refundOrEscalateDeadSquarePayment): it pulls in the Square token/crypto chain, which must not load for every caller of this recorder (Stripe webhook, tests) that never refunds.
@@ -1330,8 +1331,8 @@ export async function markHoldInvoicePaid(
         subject: `Payment confirmed for ${itemList}`,
         html: `
           <h2>Payment Confirmed</h2>
-          <p>Hi ${buyerDisplayName},</p>
-          <p>Your payment of $${totalPaid} for <strong>${itemList}</strong> has been confirmed.</p>
+          <p>Hi ${escapeHtml(buyerDisplayName)},</p>
+          <p>Your payment of $${totalPaid} for <strong>${escapeHtml(itemList)}</strong> has been confirmed.</p>
           <p>The organizer will contact you soon about shipping or pickup details.</p>
           <p style="color: #6b7280; font-size: 14px;">Transaction ID: ${invoiceId.slice(0, 8)}</p>
         `,
@@ -1355,7 +1356,7 @@ export async function markHoldInvoicePaid(
       html: `
         <h2>Payment Received</h2>
         <p>Hi ${holdInvoice.organizer.name},</p>
-        <p>Payment of $${organizerPayout.toFixed(2)} has been received for <strong>${itemList}</strong>.</p>
+        <p>Payment of $${organizerPayout.toFixed(2)} has been received for <strong>${escapeHtml(itemList)}</strong>.</p>
         <p>Payout will be transferred to your ${payoutAccountPhrase} within 1-2 business days.</p>
         <p style="color: #6b7280; font-size: 14px;">Platform fee: $${platformFee} | ${payoutProcessorLabel} fee: $${stripeFeeAmount.toFixed(2)}</p>
       `,

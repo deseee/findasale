@@ -6,16 +6,19 @@
  *   GET  /item/:itemId/sales                organizer or team member: sale rows of this lot with cards still out, for refunds
  *   POST /item/:itemId/refund-preview       organizer or team member: exact money for taking N cards of one sale back
  *   GET  /item/:itemId/holds                organizer or team member: holds on the lot (status=ACTIVE by default, or ALL)
- *   POST /item/:itemId/holds                organizer: hold N cards for a customer
- *   POST /holds/:holdId/release             organizer: release a hold, the cards go back to the lot
- *   POST /holds/:holdId/convert             organizer: turn a hold into a sale (cash now, or a Square payment link)
+ *   POST /item/:itemId/holds                organizer or team member at the register: hold N cards for a customer
+ *   POST /holds/:holdId/release             organizer or team member at the register: release a hold, the cards go back to the lot
+ *   POST /holds/:holdId/convert             organizer or team member at the register: turn a hold into a sale (cash now, or a Square payment link)
  *   POST /item/:itemId/hold                 signed-in shopper: hold N cards of a public lot for 2 hours
  *   GET  /my-holds                          signed-in shopper: their active holds
  *   POST /my-holds/:holdId/release          signed-in shopper: let go of their own hold
  *
  * Same envelope and gate as controllers/bulkLotController.ts: { success, data } or { success: false, error, code }, and
  * every route answers 404 BULK_DISABLED while CARD_BULK_LOTS_ENABLED is off. The organizer id always comes from the
- * logged-in account. Handlers are built by createBulkLotFollowupHandlers(deps) so tests inject fakes; the Prisma and
+ * logged-in account. Team members (ADR-136 Addendum D): the three hold routes above resolve the caller with the same helper the
+ * register uses (utils/posAuth resolveOrganizerOrTeamMember): an organizer, or a team member whose workspace owner is the
+ * organizer. Whoever resolves, the hold must belong to THAT organizer's lot, otherwise it is the same 404 as a missing one.
+ * Adjust, lot edits, delete and bundle settings stay organizer only. Handlers are built by createBulkLotFollowupHandlers(deps) so tests inject fakes; the Prisma and
  * Square wiring is in controllers/bulkLotFollowupController.ts.
  */
 import { Response } from 'express';
@@ -37,6 +40,21 @@ import {
 import { isBulkRefundError, planExplicitCardRefund } from '../services/bulkLot/bulkLotRefundService';
 import { formatCents } from '../services/bulkLot/bulkLotPricing';
 
+/**
+ * What resolveOrganizerOrTeamMember (utils/posAuth) returns, trimmed to what the follow-up routes read. `id` is the RESOLVED
+ * organizer (for a team member, the workspace owner's organizer); `ownerUserId` is that organizer's own User id (the one
+ * HoldInvoice.organizerUserId points at); `actingUserId` is the person actually signed in.
+ */
+export interface ResolvedCaller {
+  id: string;
+  ownerUserId: string;
+  actingUserId: string;
+  actorKind: 'ORGANIZER' | 'TEAM_MEMBER';
+  subscriptionTier: string | null;
+  squareOnboarded: boolean;
+  squareMerchantId: string | null;
+}
+
 export interface FollowupDeps {
   db: BulkLotDb &
     AdjustDb &
@@ -47,7 +65,7 @@ export interface FollowupDeps {
     };
   env: EnvLike;
   publicFilter: Record<string, unknown>;
-  resolveActor: (req: AuthRequest, res: Response) => Promise<{ id: string } | null>;
+  resolveActor: (req: AuthRequest, res: Response) => Promise<ResolvedCaller | null>;
   sell: SellUnitsInTx;
   markPaid: NonNullable<HoldDeps['markPaid']>;
   createSquareLink: (organizerId: string, p: { holdInvoiceId: string; amountCents: number; description: string; appFeeCents: number }) => Promise<SquareLinkResult>;
@@ -55,6 +73,8 @@ export interface FollowupDeps {
   feeFor: (subscriptionTier: string | null | undefined, amountCents: number) => number;
   /** Called after the cards of a lot change by hand or by a hold (eBay bundle reconcile). Must never throw. */
   afterStockChange?: (itemId: string, why: string) => void;
+  /** Customer emails for holds (Addendum D). Called after the hold is saved or ended; must never throw. Off by default (undefined). */
+  holdNotify?: Pick<HoldDeps, 'onPlaced' | 'onEnded'>;
   now?: () => Date;
 }
 
@@ -122,10 +142,47 @@ export function createBulkLotFollowupHandlers(deps: FollowupDeps) {
     return { id: organizer.id, userId: organizer.userId ?? userId, subscriptionTier: organizer.subscriptionTier ?? null, squareOnboarded: organizer.squareOnboarded === true, squareMerchantId: organizer.squareMerchantId ?? null };
   }
 
+  /**
+   * Organizer or team member at the register, for the hold routes. The shared resolver answers 401 or 403 itself in its own shape;
+   * this wraps the response so the caller still gets this controller's { success: false, error, code } envelope.
+   */
+  async function holdCallerFor(req: AuthRequest, res: Response): Promise<{ organizerId: string; ownerUserId: string; actingUserId: string; tier: string | null; squareReady: boolean } | null> {
+    let answered = false;
+    const wrapped: any = {
+      _status: 400,
+      status(code: number) {
+        this._status = code;
+        return this;
+      },
+      json(body: any) {
+        answered = true;
+        const raw = typeof body?.error === 'string' ? body.error : typeof body?.message === 'string' ? body.message : '';
+        const status = this._status;
+        if (status === 401) return fail(res, 401, raw || 'Sign in to work with holds.', 'UNAUTHORIZED');
+        if (status === 403) return fail(res, 403, 'You need register access for this shop to work with holds.', 'FORBIDDEN');
+        return fail(res, status, raw || SERVER_ERROR_TEXT, typeof body?.code === 'string' ? body.code : status === 404 ? 'NOT_FOUND' : 'BAD_REQUEST');
+      },
+    };
+    const actor = await deps.resolveActor(req, wrapped as Response);
+    if (!actor) {
+      if (!answered) fail(res, 403, 'You need register access for this shop to work with holds.', 'FORBIDDEN');
+      return null;
+    }
+    return {
+      organizerId: actor.id,
+      ownerUserId: actor.ownerUserId,
+      actingUserId: actor.actingUserId,
+      tier: actor.subscriptionTier ?? null,
+      squareReady: actor.squareOnboarded === true && !!actor.squareMerchantId,
+    };
+  }
+
   function holdDeps(organizerId?: string, tier?: string | null): HoldDeps {
     return {
       sell: deps.sell,
       now: deps.now,
+      onPlaced: deps.holdNotify?.onPlaced,
+      onEnded: deps.holdNotify?.onEnded,
       markPaid: deps.markPaid,
       createSquareLink: organizerId ? (p) => deps.createSquareLink(organizerId, p) : undefined,
       deleteSquareLink: organizerId ? (p) => deps.deleteSquareLink(organizerId, p) : undefined,
@@ -261,11 +318,12 @@ export function createBulkLotFollowupHandlers(deps: FollowupDeps) {
     async placeOrganizerHold(req: AuthRequest, res: Response) {
       if (!gate(res)) return;
       try {
-        const organizer = await organizerFor(req, res);
-        if (!organizer) return;
+        const caller = await holdCallerFor(req, res);
+        if (!caller) return;
         const itemId = idParam(req.params.itemId);
         if (!itemId) return fail(res, 404, BULK_LOT_MESSAGES.BULK_NOT_FOUND, 'BULK_NOT_FOUND');
-        const hold = await placeBulkHold(deps.db, holdDeps(), { kind: 'ORGANIZER', organizerId: organizer.id, actorUserId: organizer.userId }, itemId, req.body);
+        // The lot must belong to the resolved organizer (placeBulkHold checks again); createdByUserId is the person at the register.
+        const hold = await placeBulkHold(deps.db, holdDeps(), { kind: 'ORGANIZER', organizerId: caller.organizerId, actorUserId: caller.actingUserId }, itemId, req.body);
         notify(itemId, 'hold placed');
         return ok(res, hold, 201);
       } catch (err) {
@@ -276,11 +334,11 @@ export function createBulkLotFollowupHandlers(deps: FollowupDeps) {
     async releaseOrganizerHold(req: AuthRequest, res: Response) {
       if (!gate(res)) return;
       try {
-        const organizer = await organizerFor(req, res);
-        if (!organizer) return;
+        const caller = await holdCallerFor(req, res);
+        if (!caller) return;
         const holdId = idParam(req.params.holdId);
         if (!holdId) return fail(res, 404, 'That hold was not found.', 'BULK_HOLD_NOT_FOUND');
-        const result = await releaseBulkHold(deps.db, holdDeps(organizer.id), { kind: 'ORGANIZER', organizerId: organizer.id, actorUserId: organizer.userId }, holdId);
+        const result = await releaseBulkHold(deps.db, holdDeps(caller.organizerId), { kind: 'ORGANIZER', organizerId: caller.organizerId, actorUserId: caller.actingUserId }, holdId);
         if (result.released) notify(result.hold.itemId, 'hold released');
         return ok(res, result);
       } catch (err) {
@@ -291,12 +349,12 @@ export function createBulkLotFollowupHandlers(deps: FollowupDeps) {
     async convertHold(req: AuthRequest, res: Response) {
       if (!gate(res)) return;
       try {
-        const organizer = await organizerFor(req, res);
-        if (!organizer) return;
+        const caller = await holdCallerFor(req, res);
+        if (!caller) return;
         const holdId = idParam(req.params.holdId);
         if (!holdId) return fail(res, 404, 'That hold was not found.', 'BULK_HOLD_NOT_FOUND');
-        const squareReady = organizer.squareOnboarded && !!organizer.squareMerchantId;
-        const result = await convertBulkHold(deps.db, holdDeps(organizer.id, organizer.subscriptionTier), { organizerId: organizer.id, organizerUserId: organizer.userId, squareReady }, holdId, req.body);
+        // organizerUserId is the owner's User id (the invoice column has a foreign key to it); actorUserId is the person at the register.
+        const result = await convertBulkHold(deps.db, holdDeps(caller.organizerId, caller.tier), { organizerId: caller.organizerId, organizerUserId: caller.ownerUserId, actorUserId: caller.actingUserId, squareReady: caller.squareReady }, holdId, req.body);
         notify(result.hold.itemId, 'hold converted');
         return ok(res, result);
       } catch (err) {

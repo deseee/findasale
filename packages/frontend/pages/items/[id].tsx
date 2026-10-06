@@ -44,6 +44,7 @@ import SimilarItemsGrid from '../../components/SimilarItemsGrid';
 import EbayCompTiles from '../../components/EbayCompTiles';
 import MessageComposeModal from '../../components/MessageComposeModal'; // ADR-097: item-scoped messaging entry point
 import BulkLotCard from '../../components/BulkLotCard'; // ADR-136 (#659): bulk lot price per 1,000 in place of the buy buttons
+import BulkPackCheckoutModal from '../../components/BulkPackCheckoutModal'; // ADR-136 Addendum E: buy whole packs of a lot online
 import { BulkLot, readBulkStatus } from '../../lib/bulkLot';
 import { serverFetch } from '@/lib/serverFetch';
 
@@ -218,6 +219,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [showBulkPackModal, setShowBulkPackModal] = useState(false); // ADR-136 Addendum E
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [bidAmount, setBidAmount] = useState<number | null>(null);
   const [bidError, setBidError] = useState('');
@@ -1153,7 +1155,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                       );
                     })()
                   ) : bulkLotInfo ? (
-                    <BulkLotCard lot={bulkLotInfo} priceListSaleId={item.sale?.id ?? null} headingLevel="h3" />
+                    <BulkLotCard lot={bulkLotInfo} priceListSaleId={item.sale?.id ?? null} headingLevel="h3" onBuyPack={() => setShowBulkPackModal(true)} />
                   ) : (
                     <div className="space-y-2">
                       <button
@@ -1296,6 +1298,17 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
       </div>
 
       {/* Modals */}
+      {showBulkPackModal && item && bulkLotInfo && (
+        <BulkPackCheckoutModal
+          itemId={item.id}
+          itemTitle={item.title}
+          lot={bulkLotInfo}
+          organizerSquareLocationId={item.sale.organizer?.squareLocationId}
+          onClose={() => setShowBulkPackModal(false)}
+          onPaid={() => { queryClient.invalidateQueries({ queryKey: ['bulk-lot-public', id] }); }}
+        />
+      )}
+
       {showCheckoutModal && item && (
         <CheckoutModal
           itemId={item.id}

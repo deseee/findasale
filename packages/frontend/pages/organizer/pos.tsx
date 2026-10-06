@@ -26,12 +26,22 @@ import PosInvoiceModal from '../../components/PosInvoiceModal';
 import PosOpenCarts from '../../components/PosOpenCarts';
 import PosPaymentQr from '../../components/PosPaymentQr';
 import PosManualCard from '../../components/PosManualCard';
+import { parsePosTagUrl, type ParsedPosTag } from '../../utils/posTagUrl'; // consignor price tags (signed QR)
 import TcgplayerRegisterNotice from '../../components/TcgplayerRegisterNotice'; // ADR-137 (#660): TCGplayer warning at the counter
 import { registerIds } from '../../lib/cardTcgplayer';
 import BulkQuantityModal from '../../components/BulkQuantityModal'; // ADR-136 (#659): bulk lots at the register
-import { BULK_COPY, BULK_ERROR_COPY, BulkLot, BulkQuote, cartLabelForLot, formatCardCount, readBulkStatus } from '../../lib/bulkLot';
+import { BULK_COPY, BULK_ERROR_COPY, BulkLot, BulkQuote, cartLabelForLot, cartLabelForPack, formatCardCount, parsePackCountInput, readBulkStatus } from '../../lib/bulkLot';
 import { PosTierStatus } from '../../lib/types/posTiers';
 import QRCode from 'react-qr-code';
+
+// Cart line text for a consignor price tag: "Consigned tag $5.00, <consignor>, Booth <n>" (booth only on the venue register).
+function consignorTagLineTitle(priceCents: number, consignorName: string | null, boothNumber: string | null, boothName: string | null): string {
+  let title = `Consigned tag $${(priceCents / 100).toFixed(2)}`;
+  if (consignorName) title += `, ${consignorName}`;
+  if (boothNumber) title += `, Booth ${boothNumber}`;
+  else if (boothName) title += `, ${boothName}`;
+  return title;
+}
 
 // Generate a client transaction id for POS card-payment idempotency (double-tap / retry
 // guard -- see handleCharge). Prefers crypto.randomUUID() (matches backend
@@ -75,6 +85,17 @@ interface HubSearchItem extends Item {
   vendorBoothId: string | null;
   vendorName: string | null;
   boothNumber: string | null;
+  // ADR-136 Addendum E (#659): set by the server when the result is a bulk lot sold in packs. All text and prices are the server's.
+  bulkLot?: boolean;
+  pack?: {
+    packSize: number | null;
+    packCents: number | null;
+    packLabel: string | null;
+    packPriceLabel: string | null;
+    packsAvailable: number;
+    packsAvailableLabel: string | null;
+    packAvailable: boolean;
+  };
 }
 
 interface CartItem {
@@ -95,6 +116,19 @@ interface CartItem {
   bulkQuantity?: number;
   // ADR-136: the server's per-1,000 price text for a bulk lot line ("$8.00 per 1,000 cards"), shown under the line.
   bulkPriceLabel?: string;
+  // ADR-136 Addendum E: a pack line in a venue (hub) cart. `bulkLineId` is the server's line id (used to remove just this line).
+  bulkLineId?: string;
+  // Consignor price tag (signed QR, 2026-10-06): a priced line credited to one consignor. It has no itemId; the server mints the SOLD item
+  // inside the sale's own transaction. `consignorId` and `sig` are present when the tag was scanned on this register; a venue cart rebuilt
+  // from the server after a refresh carries only the nonce (the server holds the verified line). Tag lines are outside the discount.
+  consignorTag?: {
+    consignorId?: string;
+    consignorName: string | null;
+    nonce: string;
+    sig?: string;
+    priceCents: number;
+    saleId?: string;
+  };
 }
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -272,16 +306,18 @@ export default function POSPage() {
   // the separate discountType/discountValue fields sent alongside it. See
   // claude_docs/feature-notes/ADR-pos-cashier-discount-permission.md.
   const cartSubtotal = cart.reduce((sum, c) => sum + c.amount, 0);
+  // Consignor price tags are never discounted (the server keeps them out of the discount base and cap), so the discount works on the rest.
+  const discountBase = cart.reduce((sum, c) => (c.consignorTag ? sum : sum + c.amount), 0);
   const discountValueNum = parseFloat(discountValueInput) || 0;
   const rawDiscountAmount =
-    discountType === 'PERCENT' ? (discountValueNum / 100) * cartSubtotal : discountValueNum;
+    discountType === 'PERCENT' ? (discountValueNum / 100) * discountBase : discountValueNum;
   const discountCapDollars = discountCap
-    ? (discountCap.type === 'PERCENT' ? (discountCap.value / 100) * cartSubtotal : discountCap.value)
+    ? (discountCap.type === 'PERCENT' ? (discountCap.value / 100) * discountBase : discountCap.value)
     : null;
   const discountExceedsCap = discountCapDollars != null && rawDiscountAmount > discountCapDollars;
   const discountAmount = Math.max(
     0,
-    Math.min(rawDiscountAmount, discountCapDollars ?? Infinity, cartSubtotal)
+    Math.min(rawDiscountAmount, discountCapDollars ?? Infinity, discountBase)
   );
   const cartTotal = Math.max(0, cartSubtotal - discountAmount);
   // Bug found live 2026-08-28 (POS Cashier Discount Permission re-verification, cash path):
@@ -452,6 +488,7 @@ export default function POSPage() {
   // equivalent, hitting searchHubCartItems instead of /items?saleId=.
   const [venueItemSearch, setVenueItemSearch] = useState('');
   const [venueSearchResults, setVenueSearchResults] = useState<HubSearchItem[]>([]);
+  const [venuePackCounts, setVenuePackCounts] = useState<Record<string, string>>({}); // ADR-136 Addendum E: packs to add, per search result
   const [venueBooths, setVenueBooths] = useState<Array<{
     vendorBoothId: string;
     vendorName: string;
@@ -752,13 +789,32 @@ export default function POSPage() {
           `/organizer/hubs/${venueHubId}/cart/${res.data.id}`,
           venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
         ).then(hydrateRes => {
-          setCart(hydrateRes.data.items.map((i: any) => ({
+          const hydratedItems: CartItem[] = hydrateRes.data.items.map((i: any) => ({
             id: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
             itemId: i.itemId,
             title: i.title,
             amount: i.price ?? 0,
             photoUrl: i.photoUrl,
-          })));
+          }));
+          // Consignor price tags already in this venue cart (verified when scanned) come back as their own list.
+          const hydratedTags: CartItem[] = (hydrateRes.data.consignorTags ?? []).map((t: any) => ({
+            id: `tag-${t.nonce}`,
+            title: consignorTagLineTitle(t.priceCents, t.consignorName ?? null, t.boothNumber ?? null, t.vendorName ?? null) || t.title,
+            amount: t.priceCents / 100,
+            consignorTag: { consignorName: t.consignorName ?? null, nonce: t.nonce, priceCents: t.priceCents, saleId: t.saleId },
+          }));
+          // ADR-136 Addendum E: pack lines already in this venue cart (refresh mid-sale) come back in bulkLines with packSize and packs.
+          const hydratedPackLines: CartItem[] = (hydrateRes.data.bulkLines ?? [])
+            .filter((l: any) => typeof l.packSize === 'number' && typeof l.packs === 'number')
+            .map((l: any) => ({
+              id: `pack-${l.lineId}`,
+              itemId: l.itemId,
+              bulkLineId: l.lineId,
+              title: cartLabelForPack(l.title, l.packs, l.packSize),
+              amount: (l.lineCents ?? 0) / 100,
+              photoUrl: l.photoUrl ?? undefined,
+            }));
+          setCart([...hydratedItems, ...hydratedPackLines, ...hydratedTags]);
           return { cart: res.data as { id: string; hubId: string; status: string }, failureMessage: null };
         });
       })
@@ -812,6 +868,12 @@ export default function POSPage() {
     if (!saleIdFromUrl) {
       const s = router.query.saleId;
       saleIdFromUrl = typeof s === 'string' && s ? s : null;
+    }
+
+    // A signed consignor tag (or a damaged one) is handled by its own effect further down, which verifies it with the server first.
+    if (typeof window !== 'undefined') {
+      const maybeTag = parsePosTagUrl(window.location.pathname + window.location.search);
+      if (maybeTag && (maybeTag.isConsignorTag || maybeTag.incompleteTag)) return;
     }
 
     if (action === 'add-misc' && priceStr) {
@@ -1359,6 +1421,152 @@ export default function POSPage() {
     });
   }, [venueHubId, ensureVenueCart, cart, venueBoothToken]);
 
+  // ADR-136 Addendum E (#659): add N whole packs of a pack lot to the venue (hub) cart. The server prices the packs from the lot's pack
+  // size and returns the line; `amount` is only a check against what this screen showed. Several lines of the same lot are fine.
+  const addVenuePackToCart = useCallback((item: HubSearchItem, packs: number): Promise<{ added: boolean; message?: string }> => {
+    const packCents = item.pack?.packCents;
+    if (!item.pack || typeof packCents !== 'number') return Promise.resolve({ added: false });
+    return ensureVenueCart().then(({ cart: activeCart, failureMessage }) => {
+      if (!activeCart) {
+        const message = failureMessage || 'Register is still starting. Wait a moment and try again.';
+        setErrorMessage(message);
+        return { added: false, message };
+      }
+      return api.post(
+        `/organizer/hubs/${venueHubId}/cart/${activeCart.id}/items`,
+        { packLines: [{ itemId: item.id, packs, amount: (packs * packCents) / 100 }] },
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      )
+        .then(res => {
+          const lines = res.data?.acceptedLines || [];
+          const rejected = res.data?.rejected || [];
+          let added = false;
+          let message: string | undefined;
+          if (lines.length > 0) {
+            const l = lines[0];
+            setCart(prev => [...prev, {
+              id: `pack-${l.lineId}`,
+              itemId: l.itemId,
+              bulkLineId: l.lineId,
+              title: cartLabelForPack(item.title, l.packs ?? packs, l.packSize ?? item.pack?.packSize ?? 0),
+              amount: (l.lineCents ?? 0) / 100,
+              photoUrl: item.photoUrls?.[0],
+            }]);
+            setErrorMessage('');
+            added = true;
+          }
+          if (rejected.length > 0) {
+            const code = typeof rejected[0].reason === 'string' ? rejected[0].reason : '';
+            message = BULK_ERROR_COPY[code] || `"${item.title}" could not be added: ${rejected[0].reason}`;
+            setErrorMessage(message);
+          }
+          return { added, message };
+        })
+        .catch(err => {
+          console.error('[pos] Venue add-pack error:', err);
+          const code = err?.response?.data?.code;
+          const message = err?.response?.data?.error || (code && BULK_ERROR_COPY[code]) || `Failed to add "${item.title}".`;
+          setErrorMessage(message);
+          return { added: false, message };
+        });
+    });
+  }, [venueHubId, ensureVenueCart, venueBoothToken]);
+
+  // ─── Consignor price tags (signed QR, 2026-10-06) ────────────────────────────────
+  // A tag line is verified by the server BEFORE it joins the cart, so what the register shows is what the server will accept again
+  // at payment. Register: POST /pos/consignor-tag/verify (nothing written). Venue (hub) register: POST .../cart/:id/consignor-tags,
+  // which verifies the tag for the organizer who printed it and puts it on that organizer's booth (the house booth for the hub owner). A tag never gets a plain-misc
+  // fallback: if it cannot be verified it is refused, so the consignor is never silently left uncredited.
+  const addConsignorTag = useCallback(async (tag: ParsedPosTag): Promise<{ added: boolean; message?: string }> => {
+    const refuse = (message: string) => {
+      setErrorMessage(message);
+      return { added: false, message };
+    };
+    if (!tag.isConsignorTag || !tag.consignorId || !tag.nonce || !tag.sig) {
+      return refuse('This price tag looks damaged or incomplete. Scan it again, or ring the price up by hand.');
+    }
+    const tagSaleId = tag.saleIdFromPath ?? tag.saleIdFromQuery;
+    const consignorId = tag.consignorId;
+    const nonce = tag.nonce;
+    const sig = tag.sig;
+    if (cart.some(c => c.consignorTag?.nonce === nonce)) return refuse('This tag is already in the cart.');
+    const venueHeaders = venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined;
+    try {
+      let consignorName: string | null = null;
+      let boothNumber: string | null = null; // venue (hub) register only: the booth the tag sells on
+      let boothName: string | null = null;
+      let amountCents = tag.priceCents;
+      let lineSaleId = tagSaleId;
+      if (venueHubId) {
+        if (!tagSaleId) return refuse('This price tag has no sale on it, so it cannot be rung up here.');
+        const { cart: activeCart, failureMessage } = await ensureVenueCart();
+        if (!activeCart) return refuse(failureMessage || 'Register is still starting. Wait a moment and try again.');
+        const res = await api.post(
+          `/organizer/hubs/${venueHubId}/cart/${activeCart.id}/consignor-tags`,
+          { saleId: tagSaleId, consignorId, nonce, sig, priceCents: tag.priceCents },
+          venueHeaders
+        );
+        consignorName = res.data?.line?.consignorName ?? null;
+        amountCents = res.data?.line?.priceCents ?? tag.priceCents;
+        boothNumber = res.data?.line?.boothNumber ?? null;
+        boothName = res.data?.line?.vendorName ?? null;
+      } else {
+        const registerSaleId = selectedSaleId || tagSaleId;
+        if (!registerSaleId) return refuse('Choose a sale before scanning a consignor price tag.');
+        if (tagSaleId && selectedSaleId && tagSaleId !== selectedSaleId) {
+          return refuse('This tag is from a different sale. Open that sale in the register to ring it up.');
+        }
+        const res = await api.post<{ consignorName: string; amountCents: number }>('/pos/consignor-tag/verify', {
+          saleId: registerSaleId, consignorId, nonce, sig, priceCents: tag.priceCents,
+        });
+        consignorName = res.data.consignorName;
+        amountCents = res.data.amountCents;
+        lineSaleId = registerSaleId;
+        if (!selectedSaleId) setSelectedSaleId(registerSaleId);
+      }
+      clientTransactionIdRef.current = null;
+      setCart(prev => prev.some(c => c.consignorTag?.nonce === nonce) ? prev : [...prev, {
+        id: `tag-${nonce}`,
+        title: consignorTagLineTitle(amountCents, consignorName, boothNumber, boothName),
+        amount: amountCents / 100,
+        consignorTag: { consignorId, consignorName, nonce, sig, priceCents: amountCents, saleId: lineSaleId },
+      }]);
+      setErrorMessage('');
+      return { added: true };
+    } catch (err: any) {
+      console.error('[pos] Consignor tag add error:', err);
+      return refuse(err?.response?.data?.message || err?.response?.data?.error || 'Could not verify this price tag.');
+    }
+  }, [cart, venueHubId, venueBoothToken, ensureVenueCart, selectedSaleId]);
+
+  // A phone camera that scanned a tag opened /pos/<saleId>?action=add-misc&...&c&n&s, which redirects here with those params.
+  // Handle it once the signed-in user is known (the verify call needs the session), then clear the params so a refresh cannot re-add it.
+  const handledTagNonceRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || !user || typeof window === 'undefined') return;
+    const tag = parsePosTagUrl(window.location.pathname + window.location.search);
+    if (!tag || (!tag.isConsignorTag && !tag.incompleteTag)) return;
+    const key = tag.nonce ?? 'incomplete';
+    if (handledTagNonceRef.current === key) return;
+    handledTagNonceRef.current = key;
+    const saleIdFromUrl = tag.saleIdFromQuery ?? tag.saleIdFromPath;
+    const clearParams = () => {
+      router.replace({
+        pathname: router.pathname,
+        query: saleIdFromUrl ? { saleId: saleIdFromUrl } : {},
+      }, undefined, { shallow: true });
+    };
+    if (tag.incompleteTag) {
+      setErrorMessage('This price tag looks damaged or incomplete. Scan it again, or ring the price up by hand.');
+      clearParams();
+      return;
+    }
+    addConsignorTag(tag).then(({ added }) => {
+      if (added) showToast('Consignor tag added to cart', 'success');
+      clearParams();
+    });
+  }, [loading, user, router, addConsignorTag, showToast]);
+
   // ADR cashier-discretionary-discount (2026-09-25): once the venue cart is open, ask
   // the server whether THIS cashier session may apply a discretionary discount at all
   // (getBoothCartSummary resolves it from the real boothAuth session -- HUB_OWNER always,
@@ -1721,7 +1929,24 @@ export default function POSPage() {
     const removedItem = cart.find(c => c.id === cartId);
     setCart(prev => prev.filter(c => c.id !== cartId));
 
-    if (venueHubId && venueCart && removedItem?.itemId) {
+    if (venueHubId && venueCart && removedItem?.consignorTag) {
+      api.delete(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/consignor-tags/${removedItem.consignorTag.nonce}`,
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      ).catch(err => {
+        setCart(prev => [...prev, removedItem]);
+        setErrorMessage(err?.response?.data?.error || 'Could not remove the price tag. Please try again.');
+      });
+    } else if (venueHubId && venueCart && removedItem?.bulkLineId && removedItem?.itemId) {
+      // ADR-136 Addendum E: remove just this pack line; the server returns its cards to the lot.
+      api.delete(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items/${removedItem.itemId}?lineId=${encodeURIComponent(removedItem.bulkLineId)}`,
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      ).catch(err => {
+        setCart(prev => [...prev, removedItem]);
+        setErrorMessage(err?.response?.data?.error || 'Could not remove the packs. Please try again.');
+      });
+    } else if (venueHubId && venueCart && removedItem?.itemId) {
       api.delete(
         `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items/${removedItem.itemId}`,
         venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
@@ -1735,6 +1960,12 @@ export default function POSPage() {
       });
     }
   };
+
+  // Signed consignor price tags in the cart, in the shape the payment-request and payment-link endpoints take. The server re-verifies each one.
+  const consignorLinesForRequest = () =>
+    cart
+      .filter(c => c.consignorTag?.consignorId && c.consignorTag.sig)
+      .map(c => ({ consignorId: c.consignorTag!.consignorId!, nonce: c.consignorTag!.nonce, sig: c.consignorTag!.sig!, priceCents: c.consignorTag!.priceCents }));
 
   const clearCart = () => {
     clientTransactionIdRef.current = null;
@@ -1825,6 +2056,7 @@ export default function POSPage() {
       amount: c.amount,
       label: c.bulkQuantity ? cartLabelForLot(c.title, c.bulkQuantity) : c.title,
       ...(c.bulkQuantity ? { quantity: c.bulkQuantity } : {}), // ADR-136: the server prices the line from this
+      ...(c.consignorTag?.consignorId && c.consignorTag.sig ? { consignorTag: { consignorId: c.consignorTag.consignorId, nonce: c.consignorTag.nonce, sig: c.consignorTag.sig } } : {}),
     }));
 
     // Bulk lots (ADR-136) are never queued offline: the server has to take the cards out of stock at the moment of sale.
@@ -1942,6 +2174,7 @@ export default function POSPage() {
         amount: c.amount,
         label: c.bulkQuantity ? cartLabelForLot(c.title, c.bulkQuantity) : c.title,
         ...(c.bulkQuantity ? { quantity: c.bulkQuantity } : {}), // ADR-136: the server prices the line from this
+        ...(c.consignorTag?.consignorId && c.consignorTag.sig ? { consignorTag: { consignorId: c.consignorTag.consignorId, nonce: c.consignorTag.nonce, sig: c.consignorTag.sig } } : {}),
       }));
 
       const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
@@ -2170,6 +2403,30 @@ export default function POSPage() {
         return;
       }
 
+      // Consignor price tag (signed): verify with the server and add as its own line. Never falls through to plain misc.
+      const scannedTag = parsePosTagUrl(qrText);
+      if (scannedTag && (scannedTag.isConsignorTag || scannedTag.incompleteTag)) {
+        if (scannedTag.incompleteTag) {
+          setQrScanStatus('error');
+          setQrScanMessage('This price tag looks damaged or incomplete');
+          setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3000);
+          return;
+        }
+        setQrScanMessage('Checking price tag…');
+        addConsignorTag(scannedTag).then(({ added, message }) => {
+          if (added) {
+            showToast('✓ Consignor tag added to cart', 'success');
+            setQrScanStatus('scanning');
+            setQrScanMessage('');
+          } else {
+            setQrScanStatus('error');
+            setQrScanMessage(message || 'Could not add this price tag');
+            setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3500);
+          }
+        });
+        return;
+      }
+
       // Price sheet misc-add QR
       const hasMiscAction = qrText.includes('action=add-misc');
       const priceMatch = qrText.match(/[?&]price=([0-9.]+)/);
@@ -2217,7 +2474,7 @@ export default function POSPage() {
     };
 
     tryFrame();
-  }, [addToCart, quickAddMisc, venueHubId, addVenueItemToCart]);
+  }, [addToCart, quickAddMisc, venueHubId, addVenueItemToCart, addConsignorTag]);
 
   const stopQRScan = useCallback(() => {
     if (animationFrameRef.current) {
@@ -2274,6 +2531,7 @@ export default function POSPage() {
         ...(remainingCents > 0 ? { cashAmountCents: cashReceivedCents } : {}),
         itemIds,
         ...(cartHasBulk ? { bulkLines: bulkLinesForRequest() } : {}),
+        ...(consignorLinesForRequest().length > 0 ? { consignorLines: consignorLinesForRequest() } : {}),
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
       setPaymentLinkId(res.data.linkId);
@@ -2488,6 +2746,12 @@ export default function POSPage() {
   };
 
   const handleSendInvoice = async (reservationId: string, shopperEmail: string, miscItems?: CartItem[]) => {
+    // A hold invoice cannot carry a consignor price tag (the consignor would not be credited). Say so instead of dropping the line.
+    if (miscItems?.some(m => m.consignorTag)) {
+      setErrorMessage('Consignor price tags cannot go on a hold invoice. Remove the tag from the cart and ring it up as its own sale.');
+      showToast('Remove the consignor tag first. Tags cannot go on a hold invoice.', 'error');
+      return;
+    }
     try {
       const response = await api.post(`/pos/holds/${reservationId}/invoice`, { deliverVia: 'EMAIL', miscItems });
       setHolds(prev => prev.filter(h => h.reservationId !== reservationId));
@@ -2567,6 +2831,7 @@ export default function POSPage() {
         itemIds, // may be empty for custom-amount carts. Backend handles gracefully
         totalAmountCents,
         ...(cartHasBulk ? { bulkLines: bulkLinesForRequest() } : {}), // ADR-136: priced bulk lot lines
+        ...(consignorLinesForRequest().length > 0 ? { consignorLines: consignorLinesForRequest() } : {}), // signed consignor price tags (never in itemIds)
       };
 
       // POS Cashier Discount Permission (2026-08-28): totalAmountCents above already
@@ -2790,7 +3055,50 @@ export default function POSPage() {
               selectedSaleId spans a multi-vendor hub the way it does off venue mode. */}
           {venueSearchResults.length > 0 && (
             <ul className="mt-1 border border-warm-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm divide-y divide-warm-100 dark:divide-gray-700 max-h-48 overflow-y-auto">
-              {venueSearchResults.map(item => (
+              {venueSearchResults.map(item => item.pack && typeof item.pack.packSize === 'number' ? (
+                <li key={item.id} className="px-3 py-2">
+                  <span className="block text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</span>
+                  <span className="block text-xs text-warm-500 dark:text-warm-400 truncate">
+                    {item.vendorName || 'Unknown booth'}{item.boothNumber ? ` (Booth ${item.boothNumber})` : ''}
+                  </span>
+                  <span className="block text-xs text-warm-700 dark:text-warm-300">
+                    {BULK_COPY.regPackBadge}: {item.pack.packLabel}, {item.pack.packPriceLabel}
+                  </span>
+                  <span className="block text-xs text-warm-600 dark:text-warm-400">{item.pack.packsAvailableLabel}</span>
+                  {item.pack.packAvailable ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <label htmlFor={`venue-pack-count-${item.id}`} className="sr-only">{BULK_COPY.regPackCount}</label>
+                      <input
+                        id={`venue-pack-count-${item.id}`}
+                        type="text"
+                        inputMode="numeric"
+                        value={venuePackCounts[item.id] ?? '1'}
+                        onChange={(e) => setVenuePackCounts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        className="min-h-[44px] w-16 rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 px-2 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const count = parsePackCountInput(venuePackCounts[item.id] ?? '1');
+                          if (count === null || count > (item.pack?.packsAvailable ?? 0)) {
+                            setErrorMessage(count === null ? BULK_ERROR_COPY.BULK_PACK_COUNT : BULK_ERROR_COPY.INSUFFICIENT_STOCK);
+                            return;
+                          }
+                          addVenuePackToCart(item, count);
+                          setVenueItemSearch('');
+                          setVenueSearchResults([]);
+                        }}
+                        className="min-h-[44px] rounded bg-sage-600 px-3 text-sm font-semibold text-white"
+                      >
+                        {BULK_COPY.regPackAdd}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="mt-1 block text-xs font-medium text-warm-700 dark:text-warm-300">{BULK_COPY.regPackNoneLeft}</span>
+                  )}
+                  <span className="mt-1 block text-xs text-warm-500 dark:text-warm-400">{BULK_COPY.regPackAskCards}</span>
+                </li>
+              ) : (
                 <li key={item.id}>
                   <button
                     onClick={() => {
@@ -3015,7 +3323,7 @@ export default function POSPage() {
                       actually allowed to grant discretion. Deliberately separate from the
                       cart-wide POS Cashier Discount Permission control (gated off above,
                       !venueHubId) -- item-level and cap-bounded, not cart-level. */}
-                  {venueHubId && cashierDiscretionAllowed && item.itemId && (
+                  {venueHubId && cashierDiscretionAllowed && item.itemId && !item.bulkLineId && (
                     discretionOpenForCartId === item.id ? (
                       <div className="mt-1 flex items-center gap-2">
                         <input
