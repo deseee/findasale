@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { requireOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: replaces requireOrganizer -- also recognizes an authenticated TEAM_MEMBER with register access
-import { paymentLimiter } from '../middleware/rateLimiter';
+import { paymentLimiter, consignorTagScanLimiter } from '../middleware/rateLimiter';
 import {
   shareCart,
   getLinkedCarts,
@@ -28,6 +28,7 @@ import {
   confirmPaymentRequest,
   manualCardPayment,
 } from '../controllers/posPaymentController';
+import { verifyConsignorTag } from '../controllers/posConsignorTagController';
 
 const router = Router();
 
@@ -64,6 +65,8 @@ router.post('/payment-request', authenticate, requireOrganizerOrTeamMember, paym
 // walk-up shopper's card directly -- no shopper account, no POSPaymentRequest row (see
 // manualCardPayment's own header comment in posPaymentController.ts for the full design).
 router.post('/manual-card-payment', authenticate, requireOrganizerOrTeamMember, paymentLimiter, manualCardPayment);
+// Consignor price tag verify (2026-10-06): validates a scanned tag's signature/sale/consignor. Writes nothing.
+router.post('/consignor-tag/verify', authenticate, requireOrganizerOrTeamMember, consignorTagScanLimiter, verifyConsignorTag);
 // Transaction summary — organizer only
 router.get('/transactions/today-summary', authenticate, requireOrganizerOrTeamMember, getTodaySummary);
 // 'active' and 'pending' must be registered before '/:requestId' to avoid param collision

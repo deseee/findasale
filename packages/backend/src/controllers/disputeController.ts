@@ -387,8 +387,9 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     // already does — so a dispute-triggered refund is not a silent, second-class one.
     if (actualRefundedAmount !== undefined) {
       if (refundedItemId && refundIsFull) {
-        await prisma.item.update({
-          where: { id: refundedItemId },
+        // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item never returns to the available pool.
+        await prisma.item.updateMany({
+          where: { id: refundedItemId, listingType: { not: 'CONSIGNOR_TAG' } },
           data: { status: 'AVAILABLE' }
         }).catch((err: unknown) => console.error(`[updateDisputeStatus] Failed to restore item ${refundedItemId} to AVAILABLE (non-fatal):`, err));
       }

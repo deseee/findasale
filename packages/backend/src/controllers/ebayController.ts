@@ -1168,6 +1168,7 @@ export async function getUnknownShippingClassificationCount(req: AuthRequest, re
       where: {
         sale: { organizerId: organizer.id },
         ebayShippingClassification: 'UNKNOWN',
+        listingType: { not: 'CONSIGNOR_TAG' }, // price-tag sales are not shippable inventory
       },
     });
 
@@ -6612,6 +6613,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       const candidates = await prisma.item.findMany({
         where: {
           ebayListingId: null,
+          listingType: { not: 'CONSIGNOR_TAG' },
           OR: [
             { organizerId: organizer.id },
             { sale: { organizerId: organizer.id } },

@@ -24,6 +24,8 @@ import {
 } from '../services/consignorLedgerService';
 import { renderConsignorAgreementForConsignor } from '../services/consignorAgreementService';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
+import { findLinkableUserId, sendWelcomeInviteNonBlocking, sendWelcomeInviteForConsignor } from '../services/consignorInviteService';
+import { consignorSquareStatus } from '../utils/consignorSquareStatus';
 
 // Consignor intake follow-up (2026-09-24): tiny, deliberately-duplicated mirror of
 // itemController.ts's local (non-exported) assignRarity() -- same 4-line price-tier
@@ -89,6 +91,31 @@ export class ConsignorValidationError extends Error {
 // (base prisma, a raw tx, or an extended interactive-transaction tx) type-checks. Same pattern
 // as itemStockService.ts sellItemUnits / xpService.ts spendXp (Prisma v5 pitfall, confirmed via
 // Railway build failure 2026-09-25, TS2345 on this exact function -- see STATE.md).
+/**
+ * Consignor invite + account link (2026-10-06): strips fields an organizer must never receive from
+ * every organizer-facing Consignor response. userId is replaced by the boolean linkedExistingUser
+ * (never another person's account details); the portal OAuth nonce hash and the encrypted Square
+ * tokens are internal. Adds squareStatus (NOT_CONNECTED | ACTIVE | NEEDS_ACTIVATION).
+ */
+export function toOrganizerConsignorView<T extends Record<string, any>>(row: T) {
+  const {
+    userId,
+    squarePortalOAuthNonce: _nonce,
+    squareAccessTokenEncrypted: _at,
+    squareRefreshTokenEncrypted: _rt,
+    linkedExistingUser: _linked,
+    ...rest
+  } = row as any;
+  return {
+    ...rest,
+    linkedExistingUser: Boolean(userId),
+    squareStatus: consignorSquareStatus(row as any),
+  } as Omit<T, 'userId' | 'squarePortalOAuthNonce' | 'squareAccessTokenEncrypted' | 'squareRefreshTokenEncrypted'> & {
+    linkedExistingUser: boolean;
+    squareStatus: ReturnType<typeof consignorSquareStatus>;
+  };
+}
+
 type ConsignorTxClient =
   | Prisma.TransactionClient
   | Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
@@ -141,6 +168,11 @@ export async function createConsignorCore(
     await seedDefaultCommissionTiers(workspaceId);
   }
 
+  // Consignor invite + account link (2026-10-06): link to an existing FindA.Sale account when the
+  // email matches exactly one live User, case-insensitively (consignorInviteService.findLinkableUserId).
+  // Runs on `client`, so inside a transaction it is part of the same atomic create.
+  const userId = await findLinkableUserId(client, email);
+
   const consignor = await client.consignor.create({
     data: {
       workspaceId,
@@ -151,10 +183,12 @@ export async function createConsignorCore(
       useTieredCommission: tiered,
       unsoldItemDisposition: (unsoldItemDisposition as string) || null,
       notes: notes || null,
+      userId,
     },
   });
 
-  return consignor;
+  // Additive return field: existing callers that only read the row (e.g. `.id`) are unaffected.
+  return { ...consignor, linkedExistingUser: userId !== null };
 }
 
 /**
@@ -182,8 +216,14 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'TEAMS subscription required' });
     }
 
+    // Archived consignors are hidden by default (so every picker that calls this list stops offering them). ?archived=only lists just the
+    // archived ones (the consignors page's Archived filter); ?archived=all lists both. Money reads never go through this filter.
+    const archivedParam = typeof req.query.archived === 'string' ? req.query.archived : '';
+    const archivedFilter =
+      archivedParam === 'only' ? { archivedAt: { not: null } } : archivedParam === 'all' ? {} : { archivedAt: null };
+
     const consignors = await prisma.consignor.findMany({
-      where: { workspaceId: workspace.id },
+      where: { workspaceId: workspace.id, ...archivedFilter },
       include: {
         items: {
           where: { status: 'SOLD' },
@@ -270,7 +310,9 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
 
     // Convert Decimal fields to strings for JSON serialization
     const serialized = consignors.map((c) => ({
-      ...c,
+      // toOrganizerConsignorView (2026-10-06): adds linkedExistingUser + squareStatus and strips
+      // userId, the portal OAuth nonce hash and the encrypted Square tokens from the response.
+      ...toOrganizerConsignorView(c),
       unclaimedCount: unclaimedCountByConsignor.get(c.id) || 0,
       relistCapExceededCount: relistCapExceededCountByConsignor.get(c.id) || 0,
       // Ledger figures. owedAmount is the consignor's share still owed, as a 2-decimal string.
@@ -363,6 +405,7 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
     // Transaction: when an item is included, the Consignor and its first Item are created
     // together or not at all -- never a Consignor left with a half-failed item attach.
     let newConsignorId: string;
+    let linkedExistingUser = false;
     try {
       const txResult = await prisma.$transaction(async (tx) => {
       const createdConsignor = await createConsignorCore(
@@ -401,15 +444,22 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      return { consignorId: createdConsignor.id };
+      return { consignorId: createdConsignor.id, linkedExistingUser: createdConsignor.linkedExistingUser };
       });
       newConsignorId = txResult.consignorId;
+      linkedExistingUser = txResult.linkedExistingUser;
     } catch (err) {
       if (err instanceof ConsignorValidationError) {
         return res.status(err.status).json({ error: err.message });
       }
       throw err;
     }
+
+    // Consignor invite (2026-10-06): email the portal link + Square payout setup. Never blocks or
+    // fails creation (sendWelcomeInviteNonBlocking never throws and caps its wait); the result is
+    // reported so the organizer sees whether it went out. inviteEmailSentAt is stamped only on a
+    // successful send, inside the service.
+    const welcomeEmail = await sendWelcomeInviteNonBlocking(newConsignorId);
 
     const consignor = await prisma.consignor.findUnique({
       where: { id: newConsignorId },
@@ -432,7 +482,12 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
         markdownPolicy.summary,
     };
 
-    return res.status(201).json({ ...consignor, markdownPolicyNotice });
+    return res.status(201).json({
+      ...(consignor ? toOrganizerConsignorView(consignor) : {}),
+      markdownPolicyNotice,
+      welcomeEmail,
+      linkedExistingUser,
+    });
   } catch (error) {
     console.error('[createConsignor] Error:', error);
     return res.status(500).json({ error: 'Failed to create consignor' });
@@ -499,7 +554,9 @@ export const getConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Consignor not found' });
     }
 
-    return res.status(200).json(consignor);
+    // toOrganizerConsignorView (2026-10-06, security pass): this response previously included the
+    // encrypted Square token columns; they are now stripped, along with userId and the portal nonce.
+    return res.status(200).json(toOrganizerConsignorView(consignor));
   } catch (error) {
     console.error('[getConsignor] Error:', error);
     return res.status(500).json({ error: 'Failed to get consignor' });
@@ -547,7 +604,12 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
     // Validate commissionRate if provided
     let updateData: any = {};
     if (name !== undefined) updateData.name = name;
-    if (email !== undefined) updateData.email = email;
+    if (email !== undefined) {
+      updateData.email = email;
+      // Consignor account link (2026-10-06): re-evaluate when the email changes so the link
+      // always reflects the current address (exactly-one, case-insensitive match, else null).
+      updateData.userId = await findLinkableUserId(prisma as unknown as Prisma.TransactionClient, email);
+    }
     if (phone !== undefined) updateData.phone = phone;
     if (notes !== undefined) updateData.notes = notes;
     if (unsoldItemDisposition !== undefined) {
@@ -580,7 +642,7 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    return res.status(200).json(updated);
+    return res.status(200).json(toOrganizerConsignorView(updated));
   } catch (error) {
     console.error('[updateConsignor] Error:', error);
     return res.status(500).json({ error: 'Failed to update consignor' });
@@ -589,7 +651,7 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
 
 /**
  * DELETE /api/consignors/:id
- * Delete a consignor (blocks if they have payouts)
+ * Delete a consignor (blocks, 409, if they have any sale, payout or settlement history -- archive instead)
  * Requires: authenticate, TEAMS subscription
  */
 export const deleteConsignor = async (req: AuthRequest, res: Response) => {
@@ -623,15 +685,25 @@ export const deleteConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Consignor not found' });
     }
 
-    // Check if consignor has payouts
-    const payoutCount = await prisma.consignorPayout.count({
-      where: { consignorId: id },
-    });
+    // The money trail must survive. A consignor with ANY sold item (settled or not), purchase, payout, payout line or settlement
+    // history cannot be deleted: Item.consignorId is SetNull, so deleting would leave sold items with no owner and the ledger could no
+    // longer say who is owed or was paid. Archive them instead (POST /consignors/:id/archive).
+    const [soldItemCount, purchaseCount, payoutCount, payoutLineCount] = await Promise.all([
+      prisma.item.count({ where: { consignorId: id, OR: [{ status: 'SOLD' }, { listingType: 'CONSIGNOR_TAG' }] } }),
+      prisma.purchase.count({ where: { item: { consignorId: id } } }),
+      prisma.consignorPayout.count({ where: { consignorId: id } }),
+      prisma.consignorPayoutItem.count({ where: { consignorId: id } }),
+    ]);
 
-    if (payoutCount > 0) {
+    if (soldItemCount > 0 || purchaseCount > 0 || payoutCount > 0 || payoutLineCount > 0) {
       return res.status(409).json({
-        error: 'Cannot delete consignor with existing payouts',
+        error: 'This consignor has sales or payouts on record. Archive them instead so the money trail stays intact.',
+        code: 'CONSIGNOR_HAS_MONEY_TRAIL',
+        canArchive: true,
+        soldItemCount,
+        purchaseCount,
         payoutCount,
+        payoutLineCount,
       });
     }
 
@@ -646,6 +718,96 @@ export const deleteConsignor = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Failed to delete consignor' });
   }
 };
+
+/**
+ * POST /api/consignors/:id/archive  and  POST /api/consignors/:id/unarchive
+ * Soft-delete a consignor so the money trail stays intact: sets (or clears) Consignor.archivedAt. An archived consignor is hidden from the
+ * composer, item-form and add-items pickers and takes no NEW price tags, but is still listed under the Archived filter and still resolved
+ * by every ledger, payout, portal and refund read. Idempotent. Requires: authenticate, TEAMS subscription, consignor in the caller's workspace.
+ */
+async function setConsignorArchived(req: AuthRequest, res: Response, archive: boolean) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { id } = req.params;
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
+    }
+    const { organizer, workspace } = result;
+    if (organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+    const consignor = await prisma.consignor.findFirst({
+      where: { id, workspaceId: workspace.id },
+      select: { id: true, archivedAt: true },
+    });
+    if (!consignor) {
+      return res.status(404).json({ error: 'Consignor not found' });
+    }
+    if (archive && consignor.archivedAt) {
+      return res.status(200).json({ id: consignor.id, archivedAt: consignor.archivedAt });
+    }
+    if (!archive && !consignor.archivedAt) {
+      return res.status(200).json({ id: consignor.id, archivedAt: null });
+    }
+    const updated = await prisma.consignor.update({
+      where: { id: consignor.id },
+      data: { archivedAt: archive ? new Date() : null },
+      select: { id: true, archivedAt: true },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    console.error(`[${archive ? 'archiveConsignor' : 'unarchiveConsignor'}] Error:`, error);
+    return res.status(500).json({ error: `Failed to ${archive ? 'archive' : 'unarchive'} consignor` });
+  }
+}
+
+/**
+ * POST /api/consignors/:id/send-invite  (2026-10-06)
+ * Resend the welcome invite (portal link + Square payout setup). Organizer auth, TEAMS, consignor in
+ * the caller's workspace (same scoping as every other :id route). Rate limited per organizer and
+ * consignor (consignorInviteResendLimiter, middleware/rateLimiter.ts); only successful sends count.
+ * 200 { sent: true, inviteEmailSentAt } | 422 { sent: false, reason } for NO_EMAIL / SUPPRESSED /
+ * BLOCKED_DOMAIN | 502 { sent: false, reason: 'ERROR' }.
+ */
+export const resendConsignorInvite = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { id } = req.params;
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
+    }
+    const { organizer, workspace } = result;
+    if (organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+    const consignor = await prisma.consignor.findFirst({
+      where: { id, workspaceId: workspace.id },
+      select: { id: true },
+    });
+    if (!consignor) {
+      return res.status(404).json({ error: 'Consignor not found' });
+    }
+
+    const r = await sendWelcomeInviteForConsignor(consignor.id);
+    if (r.sent) {
+      const fresh = await prisma.consignor.findUnique({ where: { id: consignor.id }, select: { inviteEmailSentAt: true } });
+      return res.status(200).json({ sent: true, inviteEmailSentAt: fresh?.inviteEmailSentAt ?? null });
+    }
+    return res.status(r.reason === 'ERROR' || !r.reason ? 502 : 422).json({ sent: false, reason: r.reason ?? 'ERROR' });
+  } catch (error) {
+    console.error('[resendConsignorInvite] Error:', error);
+    return res.status(500).json({ error: 'Failed to send invite' });
+  }
+};
+
+export const archiveConsignor = (req: AuthRequest, res: Response) => setConsignorArchived(req, res, true);
+export const unarchiveConsignor = (req: AuthRequest, res: Response) => setConsignorArchived(req, res, false);
 
 /**
  * POST /api/consignors/:id/payout

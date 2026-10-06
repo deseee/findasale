@@ -112,7 +112,7 @@ export const exportEstatesalesCSV = async (
       include: {
         organizer: true,
         items: {
-          where: { draftStatus: 'PUBLISHED' },
+          where: { draftStatus: 'PUBLISHED', listingType: { not: 'CONSIGNOR_TAG' } },
           select: {
             id: true,
             title: true,
@@ -263,7 +263,7 @@ export const exportFacebookJSON = async (
       include: {
         organizer: true,
         items: {
-          where: { draftStatus: 'PUBLISHED' },
+          where: { draftStatus: 'PUBLISHED', listingType: { not: 'CONSIGNOR_TAG' } },
           select: {
             id: true,
             title: true,
@@ -412,7 +412,7 @@ export const exportCraigslistText = async (
           include: { user: { select: { email: true } } },
         },
         items: {
-          where: { draftStatus: 'PUBLISHED' },
+          where: { draftStatus: 'PUBLISHED', listingType: { not: 'CONSIGNOR_TAG' } },
           select: {
             id: true,
             title: true,
@@ -589,7 +589,7 @@ export const exportOrganizer = async (
         state: true,
         address: true,
         description: true,
-        _count: { select: { items: true } },
+        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
       },
     });
 
@@ -597,6 +597,7 @@ export const exportOrganizer = async (
     const items = await prisma.item.findMany({
       where: {
         sale: { organizerId: organizer.id },
+        listingType: { not: 'CONSIGNOR_TAG' },
       },
       take: 5000,
       select: {
@@ -830,7 +831,7 @@ export const exportFacebookXLSX = async (
       include: {
         organizer: true,
         items: {
-          where: { draftStatus: 'PUBLISHED' },
+          where: { draftStatus: 'PUBLISHED', listingType: { not: 'CONSIGNOR_TAG' } },
           select: {
             id: true,
             title: true,

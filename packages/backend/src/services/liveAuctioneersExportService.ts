@@ -239,6 +239,7 @@ export async function getOwnedItemsForLiveAuctioneersExport(
     items = await prisma.item.findMany({
       where: {
         id: { in: selection.itemIds },
+        listingType: { not: 'CONSIGNOR_TAG' },
         OR: [{ organizerId: organizer.id }, { sale: { organizerId: organizer.id } }],
       },
       select: itemSelect,
@@ -247,6 +248,7 @@ export async function getOwnedItemsForLiveAuctioneersExport(
     items = await prisma.item.findMany({
       where: {
         saleId: selection.saleId,
+        listingType: { not: 'CONSIGNOR_TAG' },
         sale: { organizerId: organizer.id },
       },
       select: itemSelect,

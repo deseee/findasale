@@ -129,17 +129,18 @@ async function computeRecapMetrics(saleId: string): Promise<RecapMetrics> {
   const [sale, linkClickCount, itemsListed, soldItems] = await Promise.all([
     prisma.sale.findUnique({ where: { id: saleId }, select: { qrScanCount: true } }),
     prisma.linkClick.count({ where: { saleId } }),
-    prisma.item.count({ where: { saleId } }),
+    prisma.item.count({ where: { saleId, listingType: { not: 'CONSIGNOR_TAG' } } }), // consignor price tags are sales, not listed inventory
     // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
     prisma.item.findMany({
       where: { saleId, status: 'SOLD' },
-      select: { price: true, purchases: { where: { status: 'PAID', isTestTransaction: false }, select: { amount: true } } },
+      select: { price: true, listingType: true, purchases: { where: { status: 'PAID', isTestTransaction: false }, select: { amount: true } } },
     }),
   ]);
 
   const social = await getSaleSocialProof(saleId);
 
-  const itemsSold = soldItems.length;
+  // Revenue (below) keeps consignor price tags; the sold COUNT leaves them out so sell-through stays sold / listed inventory.
+  const itemsSold = soldItems.filter((it) => it.listingType !== 'CONSIGNOR_TAG').length;
   // Gross revenue: sum actual PAID Purchase.amount, not listing price. An item can be
   // status=SOLD with no Purchase row (e.g. lastSoldVia='FB_NATIVE' extension cascade —
   // sold natively on Facebook, no money moved through FindA.Sale) and must not inflate

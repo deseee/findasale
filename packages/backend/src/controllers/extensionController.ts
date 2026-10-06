@@ -1403,7 +1403,7 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const soldItems = await prisma.item.findMany({
     // 2026-07-26 (S1169): same sale.deletedAt gap as getExtensionItems -- a sold item under a
     // soft-deleted sale must not keep surfacing as a pending Facebook removal forever.
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD' },
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
     select: { id: true, title: true },
   });
   // (2026-09-30) The old `if (!soldItems.length) return empty` early exit lived here. It also
@@ -2347,7 +2347,7 @@ export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<vo
   // MAX_REMOVAL_SKIP_ATTEMPTS threshold declared above, same soldItems/jobs shape),
   // with a saleTitle join and lastAttemptAt surfaced for display on this card.
   const soldItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD' },
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
     select: { id: true, title: true, saleId: true },
   });
   const soldItemIds = soldItems.map((i) => i.id);

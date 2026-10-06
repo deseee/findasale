@@ -183,6 +183,7 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
             price: true,
             status: true,
             category: true,
+            listingType: true, // consignor price tags count toward revenue only, never item counts
             // PAID Purchase amount — the real money-received figure, used for
             // totalRevenue below instead of listing price (see loop below).
             // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
@@ -213,9 +214,15 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
     const allItems: any[] = [];
 
     for (const sale of sales) {
-      totalItems += sale.items.length;
+      totalItems += sale.items.filter((i: any) => i.listingType !== 'CONSIGNOR_TAG').length;
 
       for (const item of sale.items) {
+        if (item.listingType === 'CONSIGNOR_TAG') {
+          // Revenue includes consignor price tags; inventory, sold counts, status and category mixes do not.
+          const tagPaid = item.purchases?.[0]?.amount;
+          if (tagPaid) totalRevenue += Number(tagPaid);
+          continue;
+        }
         allItems.push(item);
 
         // Count by status

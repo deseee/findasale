@@ -19,6 +19,9 @@ import {
 // getVendorBoothStripeStatus's poll-based version, adapted for a single OAuth callback.
 import { notifyOrganizerBoothSquareConnected } from '../services/vendorBoothLifecycleNotificationService';
 import { resolveAndBackfillSquareLocationId } from '../services/squarePosPaymentAdapter';
+// Consignor portal Square connect (2026-10-06): the consignor row write is shared with the new
+// public portal flow so the two can never drift. ORGANIZER mode is the same unconditional update.
+import { persistConsignorSquareConnection } from '../services/consignorSquareConnectService';
 
 /**
  * Square Connect-Equivalent Onboarding Controller
@@ -335,16 +338,14 @@ export const handleSquareConnectCallback = async (req: AuthRequest, res: Respons
         },
       });
     } else if (ownerType === 'CONSIGNOR') {
-      await prisma.consignor.update({
-        where: { id: ownerId },
-        data: {
-          squareAccountId: status.merchantId,
-          squareOnboarded: status.active,
-          squareAccessTokenEncrypted,
-          squareRefreshTokenEncrypted,
-          squareTokenExpiresAt,
-        },
-      });
+      // Same five columns, same unconditional update as before -- now via the shared helper
+      // that the consignor portal flow also uses (consignorSquareConnectService.ts).
+      await persistConsignorSquareConnection(
+        ownerId,
+        { squareAccessTokenEncrypted, squareRefreshTokenEncrypted, squareTokenExpiresAt },
+        status,
+        'ORGANIZER'
+      );
     } else {
       await prisma.vendorBooth.update({
         where: { id: ownerId },

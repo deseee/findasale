@@ -336,16 +336,18 @@ export const sendConsignorIntakeRequestNotice = async (params: {
 
   try {
     const contactLine = params.requesterContact
-      ? `<p style="margin: 8px 0; color: #666;">Contact: ${params.requesterContact}</p>`
+      ? `<p style="margin: 8px 0; color: #666;">Contact: ${escapeHtml(params.requesterContact)}</p>`
       : '';
     const timeLine = params.requestedStartsAt
       ? `<p style="margin: 8px 0; color: #666;">Requested time: ${params.requestedStartsAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>`
       : '';
     const html = buildEmail({
-      preheader: `New consignor request from ${params.requesterName}`,
+      // 2026-10-06 security pass: requesterName/requesterContact come from the ANONYMOUS public
+      // intake form, so every interpolation is HTML-escaped and the subject is forced to one line.
+      preheader: escapeHtml(`New consignor request from ${params.requesterName}`),
       headline: 'New consignor request',
-      body: `<p>Hi ${params.organizerName},</p>
-        <p><strong>${params.requesterName}</strong> just submitted a request to bring items in through your consignor intake link.</p>
+      body: `<p>Hi ${escapeHtml(params.organizerName)},</p>
+        <p><strong>${escapeHtml(params.requesterName)}</strong> just submitted a request to bring items in through your consignor intake link.</p>
         <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
           ${contactLine}
           ${timeLine}
@@ -359,7 +361,7 @@ export const sendConsignorIntakeRequestNotice = async (params: {
     await transactionalEmailService.emails.send({
       from: fromEmail,
       to: params.organizerEmail,
-      subject: `New consignor request from ${params.requesterName}`,
+      subject: `New consignor request from ${oneLine(params.requesterName)}`,
       html,
     });
 
@@ -485,7 +487,7 @@ export const sendConsignorStatement = async (params: {
     : '';
 
   const html = buildEmail({
-    preheader: `Consignment statement ${st.reference}: ${fmtMoney(st.totals.consignorShare)}`,
+    preheader: escapeHtml(`Consignment statement ${st.reference}: ${fmtMoney(st.totals.consignorShare)}`),
     headline: 'Your consignment statement',
     body: `<p>Hi ${escapeHtml(st.consignor.name)},</p>
       <p><strong>${escapeHtml(st.organizerName)}</strong> sent you this statement for <strong>${escapeHtml(st.periodLabel)}</strong>.</p>
@@ -550,7 +552,7 @@ export const sendConsignorPaymentRecorded = async (params: {
     .join('');
 
   const html = buildEmail({
-    preheader: `${params.organizerName} recorded a payment of ${amount}`,
+    preheader: escapeHtml(`${params.organizerName} recorded a payment of ${amount}`),
     headline: 'A payment was recorded',
     body: `<p>Hi ${escapeHtml(params.consignorName)},</p>
       <p><strong>${escapeHtml(params.organizerName)}</strong> recorded a payment of <strong>${escapeHtml(amount)}</strong> to you for <strong>${escapeHtml(params.periodLabel)}</strong>.</p>
@@ -573,6 +575,165 @@ export const sendConsignorPaymentRecorded = async (params: {
   return sendLedgerEmail(
     params.consignorEmail,
     `${oneLine(params.organizerName)} recorded a payment of ${amount}`,
+    html,
+    text
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// Consignor welcome invite + Square connect notices (2026-10-06)
+//
+// Same transactional (Resend) rail and result contract as the ledger emails above (sendLedgerEmail):
+// NO_EMAIL, BLOCKED_DOMAIN (never our own finda.sale zone), SUPPRESSED, ERROR. Every interpolated
+// value is HTML-escaped and subjects are single-line. Callers stamp Consignor.inviteEmailSentAt only
+// on { sent: true }.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/** Public portal URL for a consignor's capability token. */
+export function consignorPortalUrl(portalToken: string): string {
+  return `${siteUrl}/consignor/portal/${encodeURIComponent(portalToken)}`;
+}
+
+/** Anchor on the portal page that opens the Square payout card. */
+export const CONSIGNOR_PORTAL_SQUARE_ANCHOR = 'square-payouts';
+
+/** Square's own seller sign up page (from Square's help article "Sign Up for Square Point of Sale"). */
+export const SQUARE_SIGNUP_URL = 'https://squareup.com/signup';
+
+/**
+ * Welcome invite sent when an organizer adds a consignor (manual add or intake approval) and on
+ * "Resend invite". Points the consignor at their portal and at Square payout setup there. No
+ * FindA.Sale account is needed. `linkedExistingAccount` only changes one sentence; it never
+ * reveals any account details.
+ */
+export const sendConsignorWelcomeInvite = async (params: {
+  consignorName: string;
+  consignorEmail: string | null | undefined;
+  organizerName: string;
+  portalToken: string;
+  linkedExistingAccount?: boolean;
+  markdownNotice?: string | null;
+}): Promise<ConsignorEmailResult> => {
+  const organizer = escapeHtml(params.organizerName);
+  const portalUrl = consignorPortalUrl(params.portalToken);
+  const squareUrl = `${portalUrl}#${CONSIGNOR_PORTAL_SQUARE_ANCHOR}`;
+
+  const existingAccountBlock = params.linkedExistingAccount
+    ? `<p style="color:#444;">We found an existing FindA.Sale account with this email address, so your consignments are connected to it. You can still use the portal link in this email without signing in.</p>`
+    : '';
+  const markdownBlock = params.markdownNotice
+    ? `<p style="color:#666;font-size:13px;">Please note: ${organizer} may apply automatic price markdowns to unsold items over time. A markdown lowers an item's sale price, and your payout is calculated from that lower price. ${escapeHtml(params.markdownNotice)}</p>`
+    : '';
+
+  const html = buildEmail({
+    // buildEmail renders preheader raw, so it is escaped here (2026-10-06 security pass).
+    preheader: escapeHtml(`${params.organizerName} added you as a consignor on FindA.Sale`),
+    headline: 'Your consignment portal is ready',
+    body: `<p>Hi ${escapeHtml(params.consignorName)},</p>
+      <p><strong>${organizer}</strong> added you as a consignor on FindA.Sale. Your personal portal shows your items, what has sold, and the payments recorded to you. No FindA.Sale account is needed to use it.</p>
+      ${existingAccountBlock}
+      <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0;">
+        <p style="margin:0 0 8px;color:#111;"><strong>Want to be paid through Square?</strong></p>
+        <p style="margin:0 0 8px;color:#444;">Already have a Square account? Sign in with it. New to Square? You can create a free Square account first (your portal links to Square's sign up page), then come back and connect it.</p>
+        <p style="margin:12px 0 0;"><a href="${escapeHtml(squareUrl)}" style="display:inline-block;padding:10px 16px;background:#3b82f6;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Set up Square payouts</a></p>
+      </div>
+      <p style="color:#444;">Prefer cash, check or another method? Just tell ${organizer}. Nothing changes for you.</p>
+      ${markdownBlock}
+      <p style="color:#666;font-size:12px;">Keep this email. Your portal link is private to you, so please do not share it.</p>`,
+    ctaText: 'Open my portal',
+    ctaUrl: portalUrl,
+    accentColor: '#10b981',
+  });
+
+  const text = [
+    `Hi ${params.consignorName},`,
+    `${params.organizerName} added you as a consignor on FindA.Sale. Your portal shows your items, what has sold, and the payments recorded to you. No FindA.Sale account is needed.`,
+    params.linkedExistingAccount
+      ? 'We found an existing FindA.Sale account with this email address, so your consignments are connected to it. You can still use the portal link without signing in.'
+      : '',
+    `Open your portal: ${portalUrl}`,
+    `Set up Square payouts: ${squareUrl}`,
+    "Already have a Square account? Sign in with it. New to Square? You can create a free Square account first (your portal links to Square's sign up page), then come back and connect it.",
+    `Prefer cash, check or another method? Just tell ${params.organizerName}. Nothing changes for you.`,
+    params.markdownNotice
+      ? `Please note: ${params.organizerName} may apply automatic price markdowns to unsold items over time. Your payout is calculated from the marked down price. ${params.markdownNotice}`
+      : '',
+    'Your portal link is private to you, so please do not share it.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return sendLedgerEmail(
+    params.consignorEmail,
+    `${oneLine(params.organizerName)} added you as a consignor on FindA.Sale`,
+    html,
+    text
+  );
+};
+
+/**
+ * Tells the consignor a Square account was just connected from their portal, so an unexpected
+ * connection (someone else holding their link) is visible to them right away.
+ */
+export const sendConsignorSquareConnectedNotice = async (params: {
+  consignorName: string;
+  consignorEmail: string | null | undefined;
+  organizerName: string;
+  active: boolean;
+  connectedAt: Date;
+}): Promise<ConsignorEmailResult> => {
+  const organizer = escapeHtml(params.organizerName);
+  const when = escapeHtml(fmtDate(params.connectedAt));
+  const activationLine = params.active
+    ? `<p style="color:#444;">Your Square account is active, so ${organizer} can pay you through Square.</p>`
+    : `<p style="color:#444;">Square says your account is not fully activated yet. Finish the steps Square asks for (for example, linking a bank account), then open your portal and choose "Check again".</p>`;
+  const html = buildEmail({
+    preheader: 'A Square account was connected for your consignment payouts',
+    headline: 'Square connected for your payouts',
+    body: `<p>Hi ${escapeHtml(params.consignorName)},</p>
+      <p>A Square account was connected to your consignment portal with ${organizer} on ${when}.</p>
+      ${activationLine}
+      <p style="color:#666;font-size:13px;">If you did not do this, contact ${organizer} right away. A connected Square account cannot be changed from your portal.</p>`,
+    accentColor: '#10b981',
+  });
+  const text = [
+    `A Square account was connected to your consignment portal with ${params.organizerName} on ${fmtDate(params.connectedAt)}.`,
+    params.active
+      ? `Your Square account is active, so ${params.organizerName} can pay you through Square.`
+      : 'Square says your account is not fully activated yet. Finish the steps Square asks for, then open your portal and choose "Check again".',
+    `If you did not do this, contact ${params.organizerName} right away.`,
+  ].join('\n');
+  return sendLedgerEmail(params.consignorEmail, 'Square connected for your consignment payouts', html, text);
+};
+
+/** Tells the organizer (workspace owner) that a consignor connected Square from their portal. */
+export const sendOrganizerConsignorSquareConnectedNotice = async (params: {
+  organizerEmail: string | null | undefined;
+  organizerName: string;
+  consignorName: string;
+  active: boolean;
+  connectedAt: Date;
+}): Promise<ConsignorEmailResult> => {
+  const consignor = escapeHtml(params.consignorName);
+  const html = buildEmail({
+    preheader: escapeHtml(`${params.consignorName} connected Square for payouts`),
+    headline: 'A consignor connected Square',
+    body: `<p>Hi ${escapeHtml(params.organizerName)},</p>
+      <p><strong>${consignor}</strong> connected a Square account from their consignor portal on ${escapeHtml(fmtDate(params.connectedAt))}.</p>
+      <p style="color:#444;">${params.active ? 'Square reports the account as active.' : 'Square reports the account is not fully activated yet. Their portal shows them how to finish.'}</p>
+      <p style="color:#666;font-size:13px;">If you did not expect this, check with ${consignor}. Their portal cannot change a connected Square account, so any change has to start with you.</p>`,
+    ctaText: 'View consignors',
+    ctaUrl: `${siteUrl}/organizer/consignors`,
+    accentColor: '#3b82f6',
+  });
+  const text = [
+    `${params.consignorName} connected a Square account from their consignor portal on ${fmtDate(params.connectedAt)}.`,
+    params.active ? 'Square reports the account as active.' : 'Square reports the account is not fully activated yet.',
+    `View consignors: ${siteUrl}/organizer/consignors`,
+  ].join('\n');
+  return sendLedgerEmail(
+    params.organizerEmail,
+    `${oneLine(params.consignorName)} connected Square for payouts`,
     html,
     text
   );

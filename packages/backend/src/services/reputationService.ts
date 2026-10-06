@@ -117,12 +117,12 @@ export async function computeReputationScore(organizerId: string): Promise<Reput
   const [totalItems, itemsWithPhotos] = await Promise.all([
     prisma.item.count({
       where: {
-        sale: { organizerId, status: 'ENDED' },
+        sale: { organizerId, status: 'ENDED' }, listingType: { not: 'CONSIGNOR_TAG' },
       },
     }),
     prisma.item.count({
       where: {
-        sale: { organizerId, status: 'ENDED' },
+        sale: { organizerId, status: 'ENDED' }, listingType: { not: 'CONSIGNOR_TAG' },
         photoUrls: {
           hasSome: [''], // non-empty array (Prisma array filtering)
         },
@@ -296,6 +296,7 @@ export async function calculateOrganizerReputationScore(organizerId: string): Pr
       select: {
         id: true,
         items: {
+          where: { listingType: { not: 'CONSIGNOR_TAG' } },
           select: { photoUrls: true },
         },
       },

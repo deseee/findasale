@@ -341,7 +341,7 @@ async function computeConversionRate(saleId: string, from: Date, to: Date) {
  */
 async function computeCategoryBreakdown(saleId: string, from: Date, to: Date) {
   const items = await prisma.item.findMany({
-    where: { saleId },
+    where: { saleId, listingType: { not: 'CONSIGNOR_TAG' } },
     select: {
       id: true,
       category: true,

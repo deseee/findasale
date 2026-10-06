@@ -3847,8 +3847,9 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
         where: { itemId: purchase.itemId, id: { not: purchaseId }, status: 'PAID' },
       });
       if (otherPaidPurchases === 0) {
+        // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item never returns to the available pool.
         await prisma.item.updateMany({
-          where: { id: purchase.itemId, status: 'SOLD' },
+          where: { id: purchase.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } },
           data: { status: 'AVAILABLE' },
         });
       }

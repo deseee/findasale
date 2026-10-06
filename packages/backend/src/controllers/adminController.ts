@@ -41,7 +41,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const totalOrganizers = await prisma.organizer.count({
       where: { isUnmanagedListing: false },
     });
-    const totalItems = await prisma.item.count();
+    const totalItems = await prisma.item.count({ where: { listingType: { not: 'CONSIGNOR_TAG' } } });
 
     const salesByStatus = await prisma.sale.groupBy({
       by: ['status'],
@@ -897,7 +897,7 @@ export const getSales = async (req: AuthRequest, res: Response) => {
           startDate: true,
           endDate: true,
           organizer: { select: { businessName: true } },
-          _count: { select: { items: true } },
+          _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
           purchases: { select: { amount: true } },
         },
         skip,
@@ -2640,8 +2640,9 @@ export const bulkRefundPurchases = async (req: AuthRequest, res: Response) => {
         // still-owned item back on sale.
         const bulkIsFull = 'isFullRefund' in result ? (result.isFullRefund ?? true) : true;
         if (purchase.itemId && bulkIsFull) {
-          await prisma.item.update({
-            where: { id: purchase.itemId },
+          // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item never returns to the available pool.
+          await prisma.item.updateMany({
+            where: { id: purchase.itemId, listingType: { not: 'CONSIGNOR_TAG' } },
             data: { status: 'AVAILABLE' },
           });
         }

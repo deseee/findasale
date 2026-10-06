@@ -101,16 +101,16 @@ describe('getCsvExportHandler', () => {
     const res = mockRes();
     await getCsvExportHandler(req({ saleId: 'sale1', format: 'quickbooks', itemIds: 'i1,i2' }), res);
     const where = mockPrisma.item.findMany.mock.calls[0][0].where;
-    expect(where).toEqual({ saleId: 'sale1', id: { in: ['i1', 'i2'] } });
+    expect(where).toEqual({ saleId: 'sale1', listingType: { not: 'CONSIGNOR_TAG' }, id: { in: ['i1', 'i2'] } });
     expect(res.send).toHaveBeenCalled();
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
   });
 
   it('exports the whole sale when no itemIds are sent, and filters by status when asked', async () => {
     await getCsvExportHandler(req({ saleId: 'sale1', format: 'ebay' }), mockRes());
-    expect(mockPrisma.item.findMany.mock.calls[0][0].where).toEqual({ saleId: 'sale1' });
+    expect(mockPrisma.item.findMany.mock.calls[0][0].where).toEqual({ saleId: 'sale1', listingType: { not: 'CONSIGNOR_TAG' } });
     await getCsvExportHandler(req({ saleId: 'sale1', format: 'quickbooks', status: 'available' }), mockRes());
-    expect(mockPrisma.item.findMany.mock.calls[1][0].where).toEqual({ saleId: 'sale1', status: 'AVAILABLE' });
+    expect(mockPrisma.item.findMany.mock.calls[1][0].where).toEqual({ saleId: 'sale1', listingType: { not: 'CONSIGNOR_TAG' }, status: 'AVAILABLE' });
   });
 
   it('400s bad itemIds / status before touching the database', async () => {

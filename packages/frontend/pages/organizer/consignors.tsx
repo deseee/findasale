@@ -47,7 +47,61 @@ interface Consignor {
     paidAt: string | null;
   }>;
   createdAt: string;
+  archivedAt?: string | null; // set when archived (hidden from pickers, kept for the money trail)
+  // Consignor invite + Square (2026-10-06). Optional so an older API response cannot break the page.
+  linkedExistingUser?: boolean; // email matches an existing FindA.Sale account (boolean only)
+  inviteEmailSentAt?: string | null; // last successful welcome-invite email
+  squareStatus?: 'NOT_CONNECTED' | 'ACTIVE' | 'NEEDS_ACTIVATION';
 }
+
+// Result of the welcome invite reported by POST /consignors, intake approve, and send-invite.
+interface WelcomeEmailOutcome {
+  sent: boolean;
+  reason?: string;
+}
+
+const INVITE_REASON_TEXT: Record<string, string> = {
+  NO_EMAIL: 'no email on file',
+  SUPPRESSED: 'this address has bounced or opted out of email',
+  BLOCKED_DOMAIN: 'this address cannot receive email from us',
+  ERROR: 'the email service did not accept it',
+  PENDING: 'it is still sending',
+  RATE_LIMITED: 'several invites already went to this address today',
+};
+
+// Banner shown after adding or approving a consignor, and after a resend.
+interface InviteBanner {
+  tone: 'success' | 'info' | 'warning';
+  message: string;
+  consignorId?: string;
+  portalToken?: string;
+}
+
+function inviteBannerFor(
+  outcome: WelcomeEmailOutcome | undefined,
+  email: string | null | undefined,
+  consignorId?: string,
+  portalToken?: string
+): InviteBanner | null {
+  if (!outcome) return null;
+  if (outcome.sent) {
+    return { tone: 'success', message: `Invite emailed to ${email || 'the consignor'}.`, consignorId, portalToken };
+  }
+  if (outcome.reason === 'NO_EMAIL') {
+    return { tone: 'info', message: 'No email on file. Copy the portal link and share it with them instead.', consignorId, portalToken };
+  }
+  if (outcome.reason === 'PENDING') {
+    return { tone: 'info', message: `The invite to ${email || 'the consignor'} is still sending. Check the invite status on their card shortly.`, consignorId, portalToken };
+  }
+  const why = INVITE_REASON_TEXT[outcome.reason || 'ERROR'] || INVITE_REASON_TEXT.ERROR;
+  return { tone: 'warning', message: `The invite email could not be sent (${why}). Use Resend invite, or copy the portal link.`, consignorId, portalToken };
+}
+
+const SQUARE_BADGE: Record<string, { label: string; className: string }> = {
+  NOT_CONNECTED: { label: 'Square: not connected', className: 'bg-warm-100 dark:bg-gray-700 text-warm-600 dark:text-warm-300' },
+  ACTIVE: { label: 'Square: active', className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
+  NEEDS_ACTIVATION: { label: 'Square: needs activation', className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' },
+};
 
 // Consignor Self-Serve Intake (2026-09-25)
 interface IntakeAppointmentSummary {
@@ -94,6 +148,9 @@ const ConsignorsPage: React.FC = () => {
   // notice returned by POST /consignors (see consignorController.createConsignor),
   // shown once right after a new consignor is created.
   const [markdownNotice, setMarkdownNotice] = useState<string | null>(null);
+  // Consignor invite (2026-10-06): outcome banner + per-consignor resend state.
+  const [inviteBanner, setInviteBanner] = useState<InviteBanner | null>(null);
+  const [resendingInvite, setResendingInvite] = useState<string | null>(null);
 
   // Rapid capture entry point (consignor-scoped capture follow-up, 2026-09-25): lets the
   // organizer jump straight into the existing per-sale rapidfire camera flow with this
@@ -130,6 +187,10 @@ const ConsignorsPage: React.FC = () => {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  // Archive (2026-10-06): a consignor with sales or payouts on record cannot be deleted, so the delete flow offers Archive instead.
+  const [showArchived, setShowArchived] = useState(false);
+  const [archiveOffer, setArchiveOffer] = useState<{ open: boolean; id: string; name: string; message: string }>({ open: false, id: '', name: '', message: '' });
+  const [isArchiving, setIsArchiving] = useState<string | null>(null);
 
   // Consignor Self-Serve Intake (2026-09-25): tab switcher, persistent intake link, and the
   // Requests review queue. Additive to this page -- the existing Consignors tab/content
@@ -156,10 +217,10 @@ const ConsignorsPage: React.FC = () => {
   const [declineReason, setDeclineReason] = useState('');
   const [isDeclining, setIsDeclining] = useState(false);
 
-  const fetchConsignors = async () => {
+  const fetchConsignors = async (archived: boolean = showArchived) => {
     try {
       setLoading(true);
-      const response = await api.get('/consignors');
+      const response = await api.get(archived ? '/consignors?archived=only' : '/consignors');
       setConsignors(response.data || []);
     } catch (error: any) {
       console.error('Error fetching consignors:', error);
@@ -324,12 +385,13 @@ const ConsignorsPage: React.FC = () => {
 
       if (modalMode === 'create') {
         const response = await api.post('/consignors', payload);
-        const { markdownPolicyNotice, ...createdConsignor } = response.data;
+        const { markdownPolicyNotice, welcomeEmail, ...createdConsignor } = response.data;
         setConsignors(prev => [createdConsignor, ...prev]);
         showToast(
           includeItem ? 'Consignor and item created' : 'Consignor created',
           'success'
         );
+        setInviteBanner(inviteBannerFor(welcomeEmail, createdConsignor.email, createdConsignor.id, createdConsignor.portalToken));
         if (markdownPolicyNotice?.message) {
           setMarkdownNotice(markdownPolicyNotice.message);
         }
@@ -363,11 +425,41 @@ const ConsignorsPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error deleting consignor:', error);
       const message = error.response?.data?.error || 'Failed to delete consignor';
-      showToast(message, 'error');
+      if (error.response?.status === 409) {
+        // Sales or payouts on record: deleting would orphan the money trail. Offer Archive instead of just failing.
+        setArchiveOffer({
+          open: true,
+          id: deleteConfirm.id,
+          name: deleteConfirm.name,
+          message: error.response?.data?.error || 'This consignor has sales or payouts on record. Archive them instead so the money trail stays intact.',
+        });
+      } else {
+        showToast(message, 'error');
+      }
     } finally {
       setIsDeleting(null);
       setDeleteConfirm({ open: false, id: '', name: '' });
     }
+  };
+
+  const performArchive = async (consignorId: string, archive: boolean) => {
+    setIsArchiving(consignorId);
+    try {
+      await api.post(`/consignors/${consignorId}/${archive ? 'archive' : 'unarchive'}`);
+      setConsignors(prev => prev.filter(c => c.id !== consignorId));
+      showToast(archive ? 'Consignor archived. Their sales and payouts are unchanged.' : 'Consignor restored', 'success');
+    } catch (error: any) {
+      console.error('Error archiving consignor:', error);
+      showToast(error.response?.data?.error || `Failed to ${archive ? 'archive' : 'restore'} consignor`, 'error');
+    } finally {
+      setIsArchiving(null);
+      setArchiveOffer({ open: false, id: '', name: '', message: '' });
+    }
+  };
+
+  const handleToggleArchived = (next: boolean) => {
+    setShowArchived(next);
+    fetchConsignors(next);
   };
 
   const handleOpenRapidCapture = (consignor: Consignor) => {
@@ -389,6 +481,27 @@ const ConsignorsPage: React.FC = () => {
     });
     router.push(`/organizer/add-items/${rapidCaptureSaleId}?${params.toString()}`);
     setRapidCaptureTarget(null);
+  };
+
+  // Consignor invite (2026-10-06): resend the welcome invite for one consignor.
+  const handleResendInvite = async (consignor: Consignor) => {
+    setResendingInvite(consignor.id);
+    try {
+      const response = await api.post(`/consignors/${consignor.id}/send-invite`);
+      const sentAt = response.data?.inviteEmailSentAt ?? new Date().toISOString();
+      setConsignors(prev => prev.map(c => (c.id === consignor.id ? { ...c, inviteEmailSentAt: sentAt } : c)));
+      setInviteBanner(inviteBannerFor({ sent: true }, consignor.email, consignor.id, consignor.portalToken));
+    } catch (error: any) {
+      const status = error.response?.status;
+      const data = error.response?.data || {};
+      if (status === 422 || status === 502) {
+        setInviteBanner(inviteBannerFor({ sent: false, reason: data.reason }, consignor.email, consignor.id, consignor.portalToken));
+      } else {
+        showToast(data.error || 'Failed to send invite', 'error');
+      }
+    } finally {
+      setResendingInvite(null);
+    }
   };
 
   const handleCopyToken = (token: string) => {
@@ -496,6 +609,14 @@ const ConsignorsPage: React.FC = () => {
       setIntakeRequests(prev => prev.filter(r => r.id !== approveTarget.id));
       setPendingRequestCount(prev => Math.max(0, prev - 1));
       showToast(`${approveTarget.name} approved as a consignor`, 'success');
+      setInviteBanner(
+        inviteBannerFor(
+          response.data.welcomeEmail,
+          response.data.consignor?.email,
+          response.data.consignor?.id,
+          response.data.consignor?.portalToken
+        )
+      );
       setApproveTarget(null);
     } catch (error: any) {
       console.error('Error approving request:', error);
@@ -666,6 +787,43 @@ const ConsignorsPage: React.FC = () => {
             </div>
           )}
 
+          {/* Consignor invite outcome (2026-10-06) */}
+          {inviteBanner && (
+            <div
+              role="status"
+              className={`mb-6 rounded-lg border p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
+                inviteBanner.tone === 'success'
+                  ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                  : inviteBanner.tone === 'warning'
+                  ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+                  : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200'
+              }`}
+            >
+              <p className="text-sm flex items-start gap-2">
+                <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{inviteBanner.message}</span>
+              </p>
+              <div className="flex flex-wrap gap-2 flex-shrink-0">
+                {inviteBanner.portalToken && inviteBanner.tone !== 'success' && (
+                  <button
+                    onClick={() => handleCopyToken(inviteBanner.portalToken as string)}
+                    className="flex items-center gap-1 px-3 py-2 min-h-[44px] rounded-lg text-xs font-bold bg-white dark:bg-gray-800 border border-current"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy portal link
+                  </button>
+                )}
+                <button
+                  onClick={() => setInviteBanner(null)}
+                  className="px-3 py-2 min-h-[44px] rounded-lg text-xs font-bold bg-white dark:bg-gray-800 border border-current"
+                  aria-label="Dismiss"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Tab switcher: Consignors / Requests (2026-09-25) */}
           <div className="flex gap-2 mb-6 border-b border-warm-200 dark:border-gray-700">
             <button
@@ -696,6 +854,36 @@ const ConsignorsPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Active / Archived filter (2026-10-06) */}
+          {activeTab === 'consignors' && (
+            <div className="flex gap-2 mb-4" role="group" aria-label="Consignor filter">
+              <button
+                type="button"
+                onClick={() => handleToggleArchived(false)}
+                aria-pressed={!showArchived}
+                className={`min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  !showArchived
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-200 border-warm-300 dark:border-gray-600'
+                }`}
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleArchived(true)}
+                aria-pressed={showArchived}
+                className={`min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  showArchived
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-200 border-warm-300 dark:border-gray-600'
+                }`}
+              >
+                Archived
+              </button>
+            </div>
+          )}
+
           {/* Consignors List */}
           {activeTab === 'consignors' && (
           loading ? (
@@ -704,13 +892,15 @@ const ConsignorsPage: React.FC = () => {
             </div>
           ) : consignors.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center">
-              <p className="text-warm-600 dark:text-warm-400 mb-4">No consignors yet</p>
-              <button
-                onClick={handleOpenCreateModal}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors inline-block"
-              >
-                Create Your First Consignor
-              </button>
+              <p className="text-warm-600 dark:text-warm-400 mb-4">{showArchived ? 'No archived consignors' : 'No consignors yet'}</p>
+              {!showArchived && (
+                <button
+                  onClick={handleOpenCreateModal}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors inline-block"
+                >
+                  Create Your First Consignor
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid gap-6">
@@ -731,6 +921,19 @@ const ConsignorsPage: React.FC = () => {
                       {consignor.phone && (
                         <p className="text-sm text-warm-600 dark:text-warm-400">{consignor.phone}</p>
                       )}
+                      {/* Consignor invite + Square (2026-10-06) */}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {consignor.linkedExistingUser && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                            Existing FindA.Sale account
+                          </span>
+                        )}
+                        {consignor.squareStatus && SQUARE_BADGE[consignor.squareStatus] && (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${SQUARE_BADGE[consignor.squareStatus].className}`}>
+                            {SQUARE_BADGE[consignor.squareStatus].label}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-amber-600 dark:text-amber-400 font-bold mt-2">
                         Commission: {Number(consignor.commissionRate).toFixed(1)}%
                       </p>
@@ -783,6 +986,24 @@ const ConsignorsPage: React.FC = () => {
                           </>
                         )}
                       </button>
+                      {/* Consignor invite (2026-10-06): status + resend */}
+                      <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
+                        {consignor.inviteEmailSentAt
+                          ? `Invite sent ${new Date(consignor.inviteEmailSentAt).toLocaleDateString()}`
+                          : consignor.email
+                          ? 'Invite not sent yet'
+                          : 'No email on file'}
+                      </p>
+                      {consignor.email && (
+                        <button
+                          onClick={() => handleResendInvite(consignor)}
+                          disabled={resendingInvite === consignor.id}
+                          className="mt-1 flex items-center gap-1 text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline disabled:opacity-50 min-h-[32px]"
+                        >
+                          <Mail className="w-3 h-3" />
+                          {resendingInvite === consignor.id ? 'Sending...' : consignor.inviteEmailSentAt ? 'Resend invite' : 'Send invite'}
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -852,6 +1073,15 @@ const ConsignorsPage: React.FC = () => {
                     >
                       Details
                     </button>
+                    {showArchived ? (
+                      <button
+                        onClick={() => performArchive(consignor.id, false)}
+                        disabled={isArchiving === consignor.id}
+                        className="flex items-center gap-2 min-h-[44px] px-3 py-2 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-700 dark:text-green-400 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
+                      >
+                        {isArchiving === consignor.id ? 'Restoring...' : 'Unarchive'}
+                      </button>
+                    ) : (
                     <button
                       onClick={() => handleDelete(consignor.id, consignor.name)}
                       disabled={isDeleting === consignor.id}
@@ -860,6 +1090,7 @@ const ConsignorsPage: React.FC = () => {
                       <Trash2 className="w-4 h-4" />
                       {isDeleting === consignor.id ? 'Deleting...' : 'Delete'}
                     </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -975,6 +1206,11 @@ const ConsignorsPage: React.FC = () => {
                   onChange={handleFormChange}
                   className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                 aria-label="Email" />
+                {modalMode === 'create' && (
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                    We will email them a link to their portal and Square payout setup.
+                  </p>
+                )}
               </div>
 
               <div className="mb-4">
@@ -1445,6 +1681,16 @@ const ConsignorsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={archiveOffer.open}
+        title="Archive instead?"
+        message={`${archiveOffer.message}\n\nArchiving "${archiveOffer.name}" hides them from the pickers and takes no new price tags. Their sales, payouts and ledger stay exactly as they are, and you can unarchive them any time.`}
+        confirmLabel="Archive"
+        onConfirm={() => performArchive(archiveOffer.id, true)}
+        onCancel={() => setArchiveOffer({ open: false, id: '', name: '', message: '' })}
+        variant="default"
+      />
 
       <ConfirmDialog
         isOpen={deleteConfirm.open}

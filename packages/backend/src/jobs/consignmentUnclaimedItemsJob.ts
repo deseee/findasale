@@ -100,6 +100,7 @@ export const processRelistCapExceededItems = async (): Promise<void> => {
     const candidates = await prisma.item.findMany({
       where: {
         status: 'AVAILABLE',
+        listingType: { not: 'CONSIGNOR_TAG' }, // POS price-tag sales are never unclaimed / expiring inventory
         consignorId: { not: null },
         relistCapFlaggedAt: null,
         consignor: { unsoldItemDisposition: 'RELIST' },
@@ -228,6 +229,7 @@ export const processUnclaimedConsignmentItems = async (): Promise<void> => {
     const candidates = await prisma.item.findMany({
       where: {
         status: 'AVAILABLE',
+        listingType: { not: 'CONSIGNOR_TAG' }, // POS price-tag sales are never unclaimed / expiring inventory
         consignorId: { not: null },
         unclaimedNotifiedAt: null,
       },

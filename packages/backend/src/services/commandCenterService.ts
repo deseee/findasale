@@ -86,7 +86,7 @@ export async function getCommandCenterSummary(
       _count: {
         select: {
           items: {
-            where: { draftStatus: { not: 'DRAFT' } },
+            where: { draftStatus: { not: 'DRAFT' }, listingType: { not: 'CONSIGNOR_TAG' } },
           },
           favorites: true,
           purchases: true,
@@ -154,7 +154,7 @@ export async function getCommandCenterSummary(
     by: ['saleId'],
     where: {
       saleId: { in: saleIds },
-      draftStatus: { not: 'DRAFT' },
+      draftStatus: { not: 'DRAFT' }, listingType: { not: 'CONSIGNOR_TAG' },
     },
     _count: { id: true },
     _sum: { price: true },
@@ -165,7 +165,7 @@ export async function getCommandCenterSummary(
     by: ['saleId', 'status'],
     where: {
       saleId: { in: saleIds },
-      draftStatus: { not: 'DRAFT' },
+      draftStatus: { not: 'DRAFT' }, listingType: { not: 'CONSIGNOR_TAG' },
     },
     _count: { id: true },
   });
@@ -212,7 +212,7 @@ export async function getCommandCenterSummary(
     by: ['saleId'],
     where: {
       saleId: { in: saleIds },
-      draftStatus: { not: 'DRAFT' },
+      draftStatus: { not: 'DRAFT' }, listingType: { not: 'CONSIGNOR_TAG' },
       photoUrls: { equals: [] },
     },
     _count: { id: true },

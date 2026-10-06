@@ -29,7 +29,7 @@ import SquarePaymentRequestForm from './SquarePaymentRequestForm';
 
 interface PosManualCardProps {
   cartTotal: number;
-  cart: Array<{ itemId?: string; title: string; amount: number; bulkQuantity?: number }>; // bulkQuantity: cards on a bulk lot line (ADR-136); the server prices the line
+  cart: Array<{ itemId?: string; title: string; amount: number; bulkQuantity?: number; consignorTag?: { consignorId?: string; nonce: string; sig?: string } }>; // bulkQuantity: cards on a bulk lot line (ADR-136); the server prices the line
   selectedSaleId: string;
   buyerEmail: string;
   onSuccess: (message: string) => void;
@@ -201,6 +201,7 @@ export default function PosManualCard({
         amount: item.amount,
         label: item.title,
         ...(item.bulkQuantity ? { quantity: item.bulkQuantity } : {}), // ADR-136: the server prices a bulk lot line from this
+        ...(item.consignorTag?.consignorId && item.consignorTag.sig ? { consignorTag: { consignorId: item.consignorTag.consignorId, nonce: item.consignorTag.nonce, sig: item.consignorTag.sig } } : {}),
       }));
 
       const response = await api.post<ManualCardPaymentResponse>('/pos/manual-card-payment', {

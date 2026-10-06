@@ -73,6 +73,7 @@ export interface PlatformSoldDeps {
 function organizerItemScope(organizerId: string) {
   return {
     deletedAt: null,
+    listingType: { not: 'CONSIGNOR_TAG' }, // consignor price tags are never sold-sync candidates
     OR: [
       { sale: { organizerId, deletedAt: null } },
       { saleId: null, organizerId },

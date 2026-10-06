@@ -271,6 +271,7 @@ const evaluateAchievementProgress = async (userId: string, achievementKey: strin
         // Count items across all sales by this organizer
         const itemCount = await prisma.item.count({
           where: {
+            listingType: { not: 'CONSIGNOR_TAG' },
             sale: {
               organizerId: organizer.id
             }

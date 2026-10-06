@@ -393,13 +393,16 @@ async function finalizeSquareRefundTx(args: {
         where: { itemId: purchase.itemId, status: { notIn: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
         data: { status: 'CANCELLED' },
       });
+      // Consignor price tags (2026-10-06): the server-minted SOLD item of a tag line has no unit to put back on sale. It keeps
+      // status SOLD and stockSold 1 on a refund (the ledger excludes it through the REFUNDED Purchase row), so it can never join the
+      // available pool. Every other item is unchanged.
       await tx.item.updateMany({
-        where: { id: purchase.itemId, stockSold: { gt: 0 } },
+        where: { id: purchase.itemId, stockSold: { gt: 0 }, listingType: { not: 'CONSIGNOR_TAG' } },
         data: { stockSold: { decrement: 1 } },
       });
       // Put the unit back on sale (callers also restore status; this makes a reconcile-finished refund
       // complete on its own). Only ever SOLD -> AVAILABLE, never walks a later transition backwards.
-      await tx.item.updateMany({ where: { id: purchase.itemId, status: 'SOLD' }, data: { status: 'AVAILABLE' } });
+      await tx.item.updateMany({ where: { id: purchase.itemId, status: 'SOLD', listingType: { not: 'CONSIGNOR_TAG' } }, data: { status: 'AVAILABLE' } });
     }
 
     if (cashFeeToReverse > 0 && organizerId) {
@@ -483,6 +486,18 @@ async function runPostRefundBookkeeping(args: {
   notifyVendorBoothSaleRefunded(purchaseId).catch((err) =>
     console.error(`[executeVerifiedSquareRefund] Vendor refund notification failed for purchase ${purchaseId} (non-fatal):`, err)
   );
+}
+
+/**
+ * The vendor booth whose own Square account a booth-cart purchase refunds against: the item's vendorBoothId. A consignor price tag sold at
+ * a hub register (2026-10-06) is minted with the vendorBoothId of the booth it sold on (consignorId AND vendorBoothId, exactly like a
+ * consigned hub item stamped at reserve time), so it needs no special case here.
+ */
+async function resolveBoothCartRefundBoothId(purchase: {
+  boothCartTransactionId?: string | null;
+  item?: { vendorBoothId?: string | null } | null;
+}): Promise<string | null> {
+  return purchase.item?.vendorBoothId ?? null;
 }
 
 /**
@@ -732,7 +747,7 @@ export async function executeVerifiedSquareRefund(
       // unchanged from before this dispatch.
       let accessToken: string;
       if (isBoothCartPurchase) {
-        const vendorBoothId = purchase.item?.vendorBoothId;
+        const vendorBoothId = await resolveBoothCartRefundBoothId(purchase);
         if (!vendorBoothId) {
           throw new RefundError("Could not resolve this booth-cart purchase's vendor booth. Cannot resolve which Square account to refund against.", 400);
         }
@@ -984,7 +999,7 @@ export async function reconcileStuckSquareRefunds(
 
       let accessToken: string;
       if (purchase.boothCartTransactionId) {
-        const vendorBoothId = purchase.item?.vendorBoothId;
+        const vendorBoothId = await resolveBoothCartRefundBoothId(purchase);
         const booth = vendorBoothId
           ? await prisma.vendorBooth.findUnique({
               where: { id: vendorBoothId },

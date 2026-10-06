@@ -102,6 +102,7 @@ export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
     const soldItemGroups = await prisma.item.groupBy({
       by: ['saleId'],
       where: {
+        listingType: { not: 'CONSIGNOR_TAG' },
         status: 'SOLD',
         sale: { organizerId: { in: organizerIds } },
       },

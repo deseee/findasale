@@ -41,7 +41,7 @@ export async function selectSaleOfTheDay(): Promise<SaleOfTheDayResult | null> {
         lte: sevenDaysFromNow,
       },
       items: {
-        some: {},
+        some: { listingType: { not: 'CONSIGNOR_TAG' } },
       },
     },
     select: {
@@ -61,7 +61,7 @@ export async function selectSaleOfTheDay(): Promise<SaleOfTheDayResult | null> {
         },
       },
       _count: {
-        select: { items: true },
+        select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } },
       },
     },
     orderBy: {

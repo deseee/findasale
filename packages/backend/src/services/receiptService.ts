@@ -140,6 +140,8 @@ export const sendBoothCartReceiptEmail = async (cartTransactionId: string): Prom
     // Group purchases by vendor booth for the itemized breakdown.
     const byBooth = new Map<string, { boothName: string; boothNumber: string; items: Array<{ title: string; amount: number }>; subtotal: number }>();
     let grandTotal = 0;
+    // A consignor price tag sold at a hub register carries the vendorBoothId of the booth it sold on, so it groups under its own booth
+    // like any other line (its title reads "Consigned tag $X.XX").
     for (const p of cart.purchases) {
       const boothId = p.item?.vendorBooth?.id ?? 'unknown';
       const boothName = p.item?.vendorBooth?.vendorName ?? 'Booth';

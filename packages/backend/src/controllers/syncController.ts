@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { processCashSaleCore, CashSaleError } from './cashPaymentController'; // #561 offline cash-checkout replay
+import { isConsignorTagError } from '../services/consignorTagService'; // 2026-10-06: a refused consignor tag is final, never retried
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { importedOnlyEditNeedsDirtyMark } from '../utils/ebayImportedEditMarker'; // imported-only eBay items: an offline-replayed category/tags/photos edit must survive the next import
 import { organizerEditStampAlways } from '../utils/organizerEdit'; // 2026-10-04: Item.lastEditedAt, organizer-driven offline replay only
@@ -520,6 +521,11 @@ async function handleCheckoutCash(
   } catch (error: any) {
     if (isBulkLotError(error) && error.code === 'BULK_CHECK_FAILED') {
       return { message: { message: error.message, retryable: true, code: error.code } };
+    }
+    if (isConsignorTagError(error)) {
+      // A tag refused on replay (feature off, bad signature, archived consignor) will be refused again: surface it for
+      // reconciliation instead of retrying forever. The register does not queue tag lines offline in the first place.
+      return { message: { message: error.message, retryable: false, code: error.code } };
     }
     if (error instanceof CashSaleError) {
       // A bulk line that changed between the check above and the sale itself (a register sale landing in between): look again so

@@ -21,7 +21,7 @@ export async function checkSaleOverLimit(
   message?: string;
 }> {
   const itemCount = await prisma.item.count({
-    where: { saleId }
+    where: { saleId, listingType: { not: 'CONSIGNOR_TAG' } } // price tags do not use up the item limit
   });
 
   const limit = getTierLimit(tier, 'itemsPerSale');

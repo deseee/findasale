@@ -179,6 +179,7 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
       where: { organizerId: organizer.id },
       include: {
         items: {
+          where: { listingType: { not: 'CONSIGNOR_TAG' } },
           select: { id: true, status: true },
         },
         // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
@@ -318,6 +319,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       where: { organizerId: organizer.id },
       include: {
         items: {
+          where: { listingType: { not: 'CONSIGNOR_TAG' } },
           select: { id: true, status: true, draftStatus: true, inInventory: true },
         },
         // isTestTransaction exclusion (2026-08-29): test-transaction rows must never count as a real sale here
@@ -860,7 +862,7 @@ router.get('/me/export/items/:saleId', authenticate, requireTier('PRO'), async (
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
 
     const items = await prisma.item.findMany({
-      where: { saleId: req.params.saleId },
+      where: { saleId: req.params.saleId, listingType: { not: 'CONSIGNOR_TAG' } },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -948,6 +950,7 @@ router.get('/efficiency-stats', authenticate, async (req: AuthRequest, res: Resp
       select: {
         createdAt: true,
         items: {
+          where: { listingType: { not: 'CONSIGNOR_TAG' } },
           select: { status: true, createdAt: true, draftStatus: true },
         },
       },

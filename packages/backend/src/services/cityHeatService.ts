@@ -48,7 +48,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
       lat: true,
       lng: true,
       startDate: true,
-      _count: { select: { items: true } },
+      _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
     },
   });
 
@@ -66,7 +66,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
       id: true,
       items: {
         select: { price: true },
-        where: { price: { not: null } },
+        where: { price: { not: null }, listingType: { not: 'CONSIGNOR_TAG' } },
       },
     },
   });

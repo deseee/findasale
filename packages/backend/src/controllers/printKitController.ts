@@ -51,6 +51,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       include: {
         organizer: { select: { userId: true, subscriptionTier: true, removeWatermarkEnabled: true } },
         items: {
+          where: { listingType: { not: 'CONSIGNOR_TAG' } },
           select: { id: true, title: true, price: true },
           orderBy: { title: 'asc' },
         },
@@ -893,7 +894,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
       where: { id: saleId },
       include: {
         organizer: { select: { userId: true } },
-        items: { select: { id: true, title: true, price: true }, orderBy: { title: 'asc' } },
+        items: { where: { listingType: { not: 'CONSIGNOR_TAG' } }, select: { id: true, title: true, price: true }, orderBy: { title: 'asc' } },
       },
     });
 

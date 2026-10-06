@@ -141,15 +141,15 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
 
     // Step 2: Fetch item counts
     const itemCount = await prisma.item.count({
-      where: { saleId, deletedAt: null },
+      where: { saleId, deletedAt: null, listingType: { not: 'CONSIGNOR_TAG' } },
     });
 
     const unpricedCount = await prisma.item.count({
-      where: { saleId, price: null, deletedAt: null },
+      where: { saleId, price: null, deletedAt: null, listingType: { not: 'CONSIGNOR_TAG' } },
     });
 
     const soldCount = await prisma.item.count({
-      where: { saleId, status: 'SOLD', deletedAt: null },
+      where: { saleId, status: 'SOLD', deletedAt: null, listingType: { not: 'CONSIGNOR_TAG' } },
     });
 
     // Step 3: Fetch treasure hunt clue count

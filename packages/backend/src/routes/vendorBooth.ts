@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, optionalAuthenticate, requireAdmin } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
 import { requireBoothTokenOrTeamMember } from '../middleware/requireBoothAuth';
+import { consignorTagScanLimiter } from '../middleware/rateLimiter';
 import {
   listVendorBooths,
   createVendorBooth,
@@ -37,6 +38,8 @@ import {
 import {
   startBoothCart,
   addBoothCartItems,
+  addBoothCartConsignorTag,
+  removeBoothCartConsignorTag,
   removeBoothCartItem,
   setBoothCartItemDiscretion,
   getBoothCartSummary,
@@ -183,6 +186,9 @@ router.put('/api/organizer/hubs/:hubId/cashier-discretion/:type/:id', authentica
 router.post('/api/organizer/hubs/:hubId/cart/start', optionalAuthenticate, requireBoothTokenOrTeamMember(), startBoothCart);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), addBoothCartItems);
 router.delete('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items/:itemId', optionalAuthenticate, requireBoothTokenOrTeamMember(), removeBoothCartItem);
+// Consignor price tags at the hub register: each rides on the leg of the booth that belongs to the organizer who printed the tag, nothing minted until capture.
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/consignor-tags', optionalAuthenticate, requireBoothTokenOrTeamMember(), consignorTagScanLimiter, addBoothCartConsignorTag);
+router.delete('/api/organizer/hubs/:hubId/cart/:cartTransactionId/consignor-tags/:nonce', optionalAuthenticate, requireBoothTokenOrTeamMember(), removeBoothCartConsignorTag);
 // Cashier Discretionary Discount at Point of Sale (ADR cashier-discretionary-discount,
 // 2026-09-25): same auth model as every other cart-item route above -- booth token or
 // team member, scoped to this hub. Permission to actually grant a NON-ZERO discount

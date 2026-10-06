@@ -106,7 +106,7 @@ export const getTrendingSales = async (req: Request, res: Response) => {
         publishedAt: true,
         createdAt: true,
         organizer: { select: { user: { select: { name: true } } } },
-        _count: { select: { items: true, rsvps: true } },
+        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } }, rsvps: true } },
         // follower count resolved below via a single grouped query
       },
       orderBy: { rsvps: { _count: 'desc' } },

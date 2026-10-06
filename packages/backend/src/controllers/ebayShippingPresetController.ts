@@ -293,6 +293,7 @@ export const searchOwnItemsForPreset = async (req: AuthRequest, res: Response) =
       where: {
         AND: [
           { OR: [{ organizerId: organizer.id }, { sale: { organizerId: organizer.id } }] },
+          { listingType: { not: 'CONSIGNOR_TAG' } },
           ...(q ? [{ title: { contains: q, mode: 'insensitive' as const } }] : []),
         ],
       },

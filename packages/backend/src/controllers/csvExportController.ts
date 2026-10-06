@@ -130,6 +130,7 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
     const allItems = await prisma.item.findMany({
       where: {
         saleId: sale.id,
+        listingType: { not: 'CONSIGNOR_TAG' }, // POS consignor price-tag sales are records of a sale, not listable inventory (no photo, already SOLD)
         ...(itemIds ? { id: { in: itemIds } } : {}),
         ...(statusFilter ? { status: statusFilter } : {}),
       },

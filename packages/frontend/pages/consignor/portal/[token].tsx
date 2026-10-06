@@ -13,6 +13,21 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import axios from 'axios';
+import {
+  PORTAL_SQUARE_ANCHOR,
+  rememberPendingPortalSquareToken,
+} from '../../../lib/consignorPortalSquare';
+
+// Consignor portal Square payouts (2026-10-06). Mirrors GET /consignors/portal/:token/square.
+interface PortalSquareStatus {
+  status: 'NOT_CONNECTED' | 'ACTIVE' | 'NEEDS_ACTIVATION';
+  canConnect: boolean;
+  payoutsFlaggedForReview: boolean;
+}
+
+type SquareNotice = 'connected' | 'needs-activation' | 'cancelled' | 'already-connected' | 'error' | null;
+
+const SQUARE_SIGNUP_URL = 'https://squareup.com/signup';
 
 interface Item {
   id: string;
@@ -71,6 +86,12 @@ const ConsignorPortalPage: React.FC = () => {
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
+  // Square payouts card state (2026-10-06)
+  const [square, setSquare] = useState<PortalSquareStatus | null>(null);
+  const [squareBusy, setSquareBusy] = useState<'start' | 'refresh' | null>(null);
+  const [squareError, setSquareError] = useState<string | null>(null);
+  const [squareNotice, setSquareNotice] = useState<SquareNotice>(null);
+
   useEffect(() => {
     if (!token) return;
 
@@ -95,6 +116,83 @@ const ConsignorPortalPage: React.FC = () => {
 
     fetchPortal();
   }, [token]);
+
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || '/api';
+  const tokenStr = typeof token === 'string' ? token : '';
+
+  const fetchSquareStatus = async () => {
+    if (!tokenStr) return;
+    try {
+      const response = await axios.get(`${apiBase}/consignors/portal/${encodeURIComponent(tokenStr)}/square`);
+      setSquare(response.data);
+    } catch (err: any) {
+      // Non-fatal: the rest of the portal still works; the card shows a retry.
+      setSquareError(err.response?.data?.error || 'Could not load your Square payout status.');
+    }
+  };
+
+  // Load Square status, and read the one-time result the Square callback page hands back
+  // (?square=connected|needs-activation|cancelled|already-connected|error).
+  useEffect(() => {
+    if (!router.isReady || !tokenStr) return;
+    const q = router.query.square;
+    const allowed: SquareNotice[] = ['connected', 'needs-activation', 'cancelled', 'already-connected', 'error'];
+    if (typeof q === 'string' && (allowed as string[]).includes(q)) {
+      setSquareNotice(q as SquareNotice);
+      router.replace(`/consignor/portal/${encodeURIComponent(tokenStr)}#${PORTAL_SQUARE_ANCHOR}`, undefined, { shallow: true });
+    }
+    fetchSquareStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, tokenStr]);
+
+  // Bring the Square card into view when arriving from the email button or the callback.
+  useEffect(() => {
+    if (!data || typeof window === 'undefined') return;
+    if (window.location.hash === `#${PORTAL_SQUARE_ANCHOR}`) {
+      const el = document.getElementById(PORTAL_SQUARE_ANCHOR);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [data]);
+
+  const handleStartSquare = async () => {
+    if (!tokenStr) return;
+    setSquareBusy('start');
+    setSquareError(null);
+    setSquareNotice(null);
+    try {
+      const response = await axios.post(`${apiBase}/consignors/portal/${encodeURIComponent(tokenStr)}/square/start`);
+      const url = response.data?.onboardingUrl;
+      if (typeof url !== 'string' || !url.startsWith('https://')) {
+        throw new Error('bad url');
+      }
+      rememberPendingPortalSquareToken(tokenStr);
+      window.location.assign(url);
+    } catch (err: any) {
+      const code = err.response?.data?.code;
+      if (code === 'SQUARE_ALREADY_CONNECTED') {
+        setSquareNotice('already-connected');
+        fetchSquareStatus();
+      } else {
+        setSquareError(err.response?.data?.error || 'Could not start the Square connection. Please try again.');
+      }
+      setSquareBusy(null);
+    }
+  };
+
+  const handleRefreshSquare = async () => {
+    if (!tokenStr) return;
+    setSquareBusy('refresh');
+    setSquareError(null);
+    try {
+      const response = await axios.post(`${apiBase}/consignors/portal/${encodeURIComponent(tokenStr)}/square/refresh`);
+      setSquare(response.data);
+      setSquareNotice(response.data?.status === 'ACTIVE' ? 'connected' : null);
+    } catch (err: any) {
+      setSquareError(err.response?.data?.error || 'Could not check with Square right now. Please try again.');
+    } finally {
+      setSquareBusy(null);
+    }
+  };
 
   const handleAcceptAgreement = async () => {
     if (!token) return;
@@ -283,6 +381,124 @@ const ConsignorPortalPage: React.FC = () => {
                 ${totalPayouted.toFixed(2)}
               </p>
             </div>
+          </div>
+
+          {/* Square payouts (2026-10-06): consignor connects Square from this portal, no account needed */}
+          <div
+            id={PORTAL_SQUARE_ANCHOR}
+            className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-4 md:p-6 scroll-mt-4"
+          >
+            <h2 className="text-lg font-bold text-warm-900 dark:text-white mb-1">Get paid through Square</h2>
+
+            {squareNotice === 'cancelled' && (
+              <p className="mb-3 text-sm rounded-lg p-3 bg-warm-50 dark:bg-gray-700 text-warm-700 dark:text-warm-300">
+                The Square connection was cancelled. Nothing was changed. You can try again any time.
+              </p>
+            )}
+            {squareNotice === 'error' && (
+              <p className="mb-3 text-sm rounded-lg p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300">
+                We could not finish connecting Square. The link may have expired. Please try again.
+              </p>
+            )}
+            {squareNotice === 'already-connected' && (
+              <p className="mb-3 text-sm rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200">
+                A Square account is already connected for your payouts. If it needs to change, please contact your organizer.
+              </p>
+            )}
+            {squareError && (
+              <div className="mb-3 text-sm rounded-lg p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span>{squareError}</span>
+                <button
+                  onClick={() => { setSquareError(null); fetchSquareStatus(); }}
+                  className="self-start sm:self-auto px-3 py-2 min-h-[44px] rounded-lg text-sm font-bold bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!square && !squareError && (
+              <p className="text-sm text-warm-600 dark:text-warm-400">Loading your payout status...</p>
+            )}
+
+            {square?.status === 'NOT_CONNECTED' && (
+              <div>
+                <p className="text-sm text-warm-700 dark:text-warm-300 mb-2">
+                  Connect a Square account so your organizer can pay you through Square when your items sell.
+                  You do not need a FindA.Sale account.
+                </p>
+                <ul className="text-sm text-warm-600 dark:text-warm-400 mb-4 list-disc pl-5 space-y-1">
+                  <li>Already have a Square account? Sign in with it on the next screen.</li>
+                  <li>
+                    New to Square? First{' '}
+                    <a
+                      href={SQUARE_SIGNUP_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-amber-700 dark:text-amber-400 underline"
+                    >
+                      create a free Square account
+                    </a>
+                    , then come back here and choose Connect Square.
+                  </li>
+                  <li>Prefer cash, check or another method? Just tell your organizer. Nothing changes for you.</li>
+                </ul>
+                <button
+                  onClick={handleStartSquare}
+                  disabled={squareBusy !== null}
+                  className="w-full sm:w-auto px-5 py-3 min-h-[44px] rounded-lg text-sm font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors"
+                >
+                  {squareBusy === 'start' ? 'Opening Square...' : 'Connect Square'}
+                </button>
+              </div>
+            )}
+
+            {square?.status === 'NEEDS_ACTIVATION' && (
+              <div>
+                <p className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-1">
+                  Almost done: finish activating your Square account
+                </p>
+                <p className="text-sm text-warm-700 dark:text-warm-300 mb-4">
+                  Your Square account is connected, but Square says it is not fully active yet. Sign in at squareup.com and
+                  finish the steps Square asks for (for example, linking a bank account). Then come back and check again.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={handleRefreshSquare}
+                    disabled={squareBusy !== null}
+                    className="px-5 py-3 min-h-[44px] rounded-lg text-sm font-bold bg-amber-600 hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors"
+                  >
+                    {squareBusy === 'refresh' ? 'Checking...' : 'Check again'}
+                  </button>
+                  {square.canConnect && (
+                    <button
+                      onClick={handleStartSquare}
+                      disabled={squareBusy !== null}
+                      className="px-5 py-3 min-h-[44px] rounded-lg text-sm font-bold bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 disabled:opacity-60 transition-colors"
+                    >
+                      {squareBusy === 'start' ? 'Opening Square...' : 'Reconnect the same Square account'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {square?.status === 'ACTIVE' && (
+              <div>
+                <p className="text-sm font-bold text-green-700 dark:text-green-400 mb-1">
+                  {squareNotice === 'connected' ? 'Square connected. You are all set.' : 'Square is connected for your payouts.'}
+                </p>
+                <p className="text-sm text-warm-700 dark:text-warm-300">
+                  Your organizer can pay you through Square. To change the connected account, please contact your organizer.
+                </p>
+              </div>
+            )}
+
+            {square?.payoutsFlaggedForReview && (
+              <p className="mt-3 text-xs rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200">
+                As a routine precaution, our team is taking a quick look at this account before payouts begin. No action is needed from you.
+              </p>
+            )}
           </div>
 
           {/* Tabs */}

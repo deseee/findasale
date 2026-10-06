@@ -20,6 +20,15 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { isBulkLotsEnabled } from '../services/bulkLot/bulkLotConfig'; // ADR-136 Addendum A (#659): bulk lots are sold through the QR payment link too
 import {
+  resolveTagLines,
+  toTagLineInput,
+  toStoredTagLines,
+  tagLinesTotalCents,
+  isConsignorTagError,
+  consignorTagErrorBody,
+  type StoredTagLine,
+} from '../services/consignorTagService'; // 2026-10-06: consignor price tags on the QR payment link
+import {
   assertBulkLinesStillAvailable,
   bulkLinesTotalCents,
   bulkLotError,
@@ -118,6 +127,10 @@ export async function createPaymentLinkInternal(opts: {
   // link is paid, posPaymentLinkRecorder takes exactly these cards inside the same transaction that writes the Purchase rows.
   // A lot in itemIds with no line here is refused (BULK_QUANTITY_REQUIRED): a lot is never sold as one unit.
   bulkLines?: BulkLineRecord[];
+  // Consignor price tags (2026-10-06): the VERIFIED tag lines for this link, stored on the row. When the link is paid,
+  // posPaymentLinkRecorder mints a SOLD consignor Item per line inside the COMPLETED-flip transaction. Already validated by the caller
+  // (createPaymentLink); `amount` includes their cents.
+  consignorLines?: StoredTagLine[];
 }): Promise<{ linkId: string; paymentLinkUrl: string; qrCodeDataUrl?: string; amount: number }> {
   const { organizerId, stripeConnectId, subscriptionTier, saleId, itemIds, amount, buyerEmail, expiresAt, squareOnboarded, squareMerchantId } = opts;
 
@@ -221,6 +234,7 @@ export async function createPaymentLinkInternal(opts: {
       itemIds,
       status: 'ACTIVE',
       ...(linkBulkLines.length > 0 ? { bulkLines: linkBulkLines as unknown as Prisma.InputJsonValue } : {}),
+      ...(opts.consignorLines && opts.consignorLines.length > 0 ? { consignorLines: opts.consignorLines as unknown as Prisma.InputJsonValue } : {}),
       ...(opts.cashAmountCents && opts.cashAmountCents > 0
         ? { isSplitPayment: true, cashAmountCents: opts.cashAmountCents, cardAmountCents: amountCents }
         : {}),
@@ -599,11 +613,13 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { saleId, itemIds, amount, buyerEmail, cashAmountCents, discountType, discountValue, discountReasonNote, expiresInSeconds, bulkLines: requestedBulkLines } = req.body as {
+    const { saleId, itemIds, amount, buyerEmail, cashAmountCents, discountType, discountValue, discountReasonNote, expiresInSeconds, bulkLines: requestedBulkLines, consignorLines: requestedConsignorLines } = req.body as {
       saleId?: string;
       itemIds?: string[];
       // Bulk lots (ADR-136 Addendum A): [{ itemId, quantity, amount? }] for each lot in itemIds. The server prices every line.
       bulkLines?: unknown;
+      // Consignor price tags (2026-10-06): [{ consignorId, nonce, sig, amountCents }], re-verified here; `amount` already includes them.
+      consignorLines?: Array<{ consignorId?: string; nonce?: string; sig?: string; amountCents?: number }>;
       amount?: number;
       buyerEmail?: string;
       // Discount on catalog items (2026-09-29, money review P1-6/8): same fields and same
@@ -690,6 +706,24 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Sale does not belong to your account' });
     }
 
+    // Consignor price tags (2026-10-06): verified here, once sale ownership has passed. tagCents (from the VERIFIED lines) is taken
+    // out of the total compared against the catalog floor below, so a tag can never mask a lowballed catalog total.
+    let linkTagLines: StoredTagLine[] = [];
+    if (Array.isArray(requestedConsignorLines) && requestedConsignorLines.length > 0) {
+      try {
+        const resolvedLinkTags = await resolveTagLines(prisma, {
+          organizer: { id: organizer.id, subscriptionTier: organizer.subscriptionTier },
+          saleId,
+          lines: requestedConsignorLines.map((l) => toTagLineInput(l)),
+        });
+        linkTagLines = toStoredTagLines(resolvedLinkTags);
+      } catch (tagErr) {
+        if (isConsignorTagError(tagErr)) return res.status(tagErr.status).json(consignorTagErrorBody(tagErr));
+        throw tagErr;
+      }
+    }
+    const linkTagCents = tagLinesTotalCents(linkTagLines);
+
     // Money review P1-4/5 + P1-6/8 (2026-09-29): every item must be an item of THIS sale and
     // organizer (404 otherwise, so a probe learns nothing about another tenant's ids), and the
     // link may not charge less than the catalog price of its items unless the discount is
@@ -730,7 +764,7 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     const linkFloor = await authorizeDiscountAndCheckFloor({
       actor: organizer,
       catalogSubtotalCents: linkCatalogSubtotalCents,
-      totalCents: linkAmountCents + linkCashCents,
+      totalCents: linkAmountCents + linkCashCents - linkTagCents,
       discount: { discountType, discountValue, discountReasonNote },
     });
     if (!linkFloor.ok) {
@@ -772,6 +806,7 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
         ...(linkCashCents > 0 ? { cashAmountCents: linkCashCents } : {}),
         ...(linkExpiresAt ? { expiresAt: linkExpiresAt } : {}),
         ...(linkBulkLineRecords.length > 0 ? { bulkLines: linkBulkLineRecords } : {}),
+        ...(linkTagLines.length > 0 ? { consignorLines: linkTagLines } : {}),
       });
     } catch (stripeErr) {
       if (isBulkLotError(stripeErr)) {

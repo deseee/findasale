@@ -534,6 +534,8 @@ export async function executeVerifiedRefund(
   // createPaymentIntent uses transfer_data.destination (a destination charge that
   // DOES live on the platform account), so no stripeAccount option for those,
   // exactly as before this change.
+  // A consignor price tag sold at a hub register is minted with the vendorBoothId of the booth it sold on (consignorId AND vendorBoothId,
+  // like any consigned hub item), so its refund resolves the booth account, the leg and the application-fee reversal exactly as for any item.
   const boothStripeAccountId = purchase.item?.vendorBooth?.stripeAccountId;
   if (isBoothCartPurchase && !boothStripeAccountId) {
     await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
@@ -753,8 +755,9 @@ export async function executeVerifiedRefund(
           });
         });
       } else {
+        // Consignor price tags (2026-10-06): a minted CONSIGNOR_TAG item has no unit to give back; it stays SOLD/stockSold 1.
         await prisma.item.updateMany({
-          where: { id: purchase.itemId, stockSold: { gte: 1 } },
+          where: { id: purchase.itemId, stockSold: { gte: 1 }, listingType: { not: 'CONSIGNOR_TAG' } },
           data: { stockSold: { decrement: 1 } },
         });
       }

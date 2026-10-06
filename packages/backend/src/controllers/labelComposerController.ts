@@ -29,6 +29,17 @@ import {
   formatLabelPrice,
   renderCardLabelTextHtml,
 } from '../services/cardLabelText';
+import {
+  ConsignorTagError,
+  consignorTagErrorBody,
+  isConsignorTagError,
+  isConsignorTagsEnabled,
+  isTagSigningConfigured,
+  signTag,
+  buildConsignorTagQrUrl,
+  MIN_TAG_PRICE_CENTS,
+  MAX_TAG_PRICE_CENTS,
+} from '../services/consignorTagService';
 
 // ---------------------------------------------------------------------------
 // Avery 5160 constants (all in points, 72 DPI)
@@ -58,6 +69,9 @@ interface TagRecord {
   blank?: boolean; // leading skip-slot for partially-used Avery sheets (no QR / no price rendered)
   card?: CardLabelSource | null; // set only for labelStyle 'card' tags whose item has an ItemCard; read from the database
   perThousand?: boolean; // ADR-136: the item is a bulk lot, so its price is per 1,000 cards and the label says so
+  // Consignor price tags (2026-10-06): set ONLY on preset and leftover-fill tags of a batch that was created with a
+  // consignorId. Never on item tags or blank slots. printLabelBatch signs a QR with c/n/s for tags that carry it.
+  consignorId?: string;
 }
 
 type LabelStyle = 'standard' | 'card';
@@ -144,7 +158,11 @@ export const getCheatsheet = async (req: AuthRequest, res: Response) => {
     const auth = await authorizeOrganizerForSale(req, req.params.saleId);
     if (!auth.ok) return res.status(auth.status).json({ message: auth.error });
 
-    return res.json({ prices: CHEATSHEET_PRICES });
+    // Consignor price tags (2026-10-06): the composer shows its consignor picker only when this is true (and the
+    // organizer is on TEAMS). Server-side flag AND a configured signing secret, so the picker never appears for a
+    // feature that would answer 503.
+    const consignorTagsEnabled = isConsignorTagsEnabled() && isTagSigningConfigured();
+    return res.json({ prices: CHEATSHEET_PRICES, consignorTagsEnabled });
   } catch (error) {
     console.error('getCheatsheet error:', error);
     return res.status(500).json({ message: 'Server error.' });
@@ -262,6 +280,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       leftoverFill?: unknown;
       startPosition?: unknown;
       labelStyle?: unknown;
+      consignorId?: unknown;
     };
 
     if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
@@ -271,6 +290,40 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Unknown label style.' });
     }
     const labelStyle: LabelStyle = body.labelStyle === 'card' ? 'card' : 'standard';
+
+    // Consignor price tags (2026-10-06): optional consignorId applies to every price-only label of the batch.
+    // Checked in the order TEAMS tier (403), feature configured (503), consignor in the SALE OWNER's workspace (404).
+    // The owner is auth.sale.organizerId, not req.user, so a team member composing for the owner resolves correctly.
+    let consignorId: string | null = null;
+    if (body.consignorId != null && body.consignorId !== '') {
+      if (typeof body.consignorId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(body.consignorId)) {
+        return res.status(400).json({ message: 'Invalid consignor.', code: 'CONSIGNOR_INVALID' });
+      }
+      const owner = await prisma.organizer.findUnique({
+        where: { id: auth.sale.organizerId },
+        select: { id: true, subscriptionTier: true },
+      });
+      if (!owner || owner.subscriptionTier !== 'TEAMS') {
+        return res.status(403).json({ message: 'Consignor price labels need a TEAMS subscription.', code: 'TEAMS_REQUIRED' });
+      }
+      if (!isConsignorTagsEnabled() || !isTagSigningConfigured()) {
+        return res.status(503).json({ message: 'Consignor price labels are not available yet.', code: 'TAG_SIGNING_NOT_CONFIGURED' });
+      }
+      const workspace = await prisma.organizerWorkspace.findFirst({ where: { ownerId: owner.id }, select: { id: true } });
+      const consignor = workspace
+        ? await prisma.consignor.findFirst({
+            where: { id: body.consignorId, workspaceId: workspace.id },
+            select: { id: true, archivedAt: true },
+          })
+        : null;
+      if (!consignor) {
+        return res.status(404).json({ message: 'Consignor not found.', code: 'CONSIGNOR_NOT_FOUND' });
+      }
+      if (consignor.archivedAt) {
+        return res.status(409).json({ message: 'This consignor is archived. Unarchive them to print price labels for them.', code: 'CONSIGNOR_ARCHIVED' });
+      }
+      consignorId = consignor.id;
+    }
 
     // Validate every row. Item rows carry an item id and a count; the price is NEVER read from
     // the request for them (it comes from the database below). Preset rows carry a price because
@@ -308,6 +361,14 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       const parsed = parsePresetPrice(body.leftoverFill);
       if (parsed === null) return res.status(400).json({ message: 'Invalid fill price.' });
       leftoverFill = parsed > 0 ? parsed : null;
+    }
+
+    // A signed consignor tag is a real sale line, so its price must be at least one cent (a free tag has no meaning).
+    if (consignorId) {
+      const bad = rows.some(
+        (r) => !r.itemId && (r.presetPrice === undefined || Math.round(r.presetPrice * 100) < MIN_TAG_PRICE_CENTS || Math.round(r.presetPrice * 100) > MAX_TAG_PRICE_CENTS)
+      );
+      if (bad) return res.status(400).json({ message: 'Consignor price labels need a price above $0.00.', code: 'TAG_INVALID' });
     }
 
     const batchId = generateId(12);
@@ -404,6 +465,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
             tagId: generateId(10),
             price: row.presetPrice as number,
             position: position++,
+            ...(consignorId ? { consignorId } : {}),
           });
         }
       }
@@ -418,6 +480,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
             tagId: generateId(10),
             price: leftoverFill,
             position: position++,
+            ...(consignorId ? { consignorId } : {}),
           });
         }
       }
@@ -496,6 +559,11 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
 
     const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
+    // A batch created with a consignor must not print unsigned-looking stickers if the feature was switched off since.
+    if (batch.tags.some((t) => t.consignorId) && (!isConsignorTagsEnabled() || !isTagSigningConfigured())) {
+      throw new ConsignorTagError('Consignor price labels are not available right now.', 503, 'TAG_SIGNING_NOT_CONFIGURED');
+    }
+
     // Generate all QR codes upfront as data URLs
     const qrDataUrls: string[] = [];
     for (const tag of batch.tags) {
@@ -508,9 +576,27 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       // patterns). The old `/t/${tagId}` short-link had no resolver route and no
       // DB persistence (batchStore is in-memory, wiped on every restart/deploy) --
       // removed in favor of these permanent, always-resolvable URLs.
-      const qrUrl = tag.itemId
-        ? buildItemQrUrl(FRONTEND_URL, tag.itemId, QR_SOURCE_ITEM_LABEL)
-        : `${FRONTEND_URL}/pos/${batch.saleId}?action=add-misc&price=${(tag.price ?? 0).toFixed(2)}`;
+      // Consignor price tags (2026-10-06): a price-only tag that carries a consignorId gets c/n/s appended. The
+      // signature is computed HERE, at print time, over saleId + consignorId + price in cents + the tagId as nonce
+      // (the secret never rides in the in-memory batch). The tagId is unique per label, so each sticker can be
+      // sold once per payment reference (see mintTagItemInTx).
+      let qrUrl: string;
+      if (tag.itemId) {
+        qrUrl = buildItemQrUrl(FRONTEND_URL, tag.itemId, QR_SOURCE_ITEM_LABEL);
+      } else if (tag.consignorId) {
+        const priceCents = Math.round((tag.price ?? 0) * 100);
+        const sig = signTag({ saleId: batch.saleId, consignorId: tag.consignorId, priceCents, nonce: tag.tagId });
+        qrUrl = buildConsignorTagQrUrl({
+          frontendUrl: FRONTEND_URL,
+          saleId: batch.saleId,
+          consignorId: tag.consignorId,
+          priceCents,
+          nonce: tag.tagId,
+          sig,
+        });
+      } else {
+        qrUrl = `${FRONTEND_URL}/pos/${batch.saleId}?action=add-misc&price=${(tag.price ?? 0).toFixed(2)}`;
+      }
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         type: 'image/png',
         width: QR_SIZE_LABEL,
@@ -675,6 +761,10 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="labels-${batchId}.pdf"`);
     res.end(pdfBuffer);
   } catch (error) {
+    if (isConsignorTagError(error)) {
+      if (!res.headersSent) return res.status(error.status).json(consignorTagErrorBody(error));
+      return;
+    }
     console.error('printLabelBatch error:', error);
     if (!res.headersSent) {
       return res.status(500).json({ message: 'Server error generating PDF.' });

@@ -17,6 +17,7 @@ import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import { useToast } from '../../../components/ToastContext';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -339,6 +340,7 @@ export default function LabelComposerPage() {
   const router = useRouter();
   const { saleId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
+  const { tier } = useOrganizerTier();
   const { showToast } = useToast();
 
   const [state, dispatch] = useReducer(batchReducer, initialState);
@@ -362,6 +364,11 @@ export default function LabelComposerPage() {
   const [labelStyle, setLabelStyle] = useState<LabelStyle>('standard');
   // Last failed print or export, shown inline so the selection and the message stay on screen.
   const [actionError, setActionError] = useState<string | null>(null);
+  // Consignor price tags (2026-10-06): optional consignor for the price-only labels of this sheet. Plain useState (the
+  // BatchState reducer and the price-only merge key are untouched), persisted under its own localStorage key.
+  const [consignorId, setConsignorId] = useState('');
+  const [consignorRestored, setConsignorRestored] = useState(false);
+  const [consignorChangedWithRows, setConsignorChangedWithRows] = useState(false);
 
   // Refresh saved batches list from localStorage
   const refreshSavedBatches = useCallback(() => {
@@ -395,7 +402,7 @@ export default function LabelComposerPage() {
   });
 
   // Fetch cheatsheet
-  const { data: cheatsheetData } = useQuery<{ prices: number[] }>({
+  const { data: cheatsheetData } = useQuery<{ prices: number[]; consignorTagsEnabled?: boolean }>({
     queryKey: ['cheatsheet', saleId],
     queryFn: async () => {
       const res = await api.get(`/organizers/${saleId}/cheatsheet`);
@@ -405,6 +412,21 @@ export default function LabelComposerPage() {
   });
 
   const prices = cheatsheetData?.prices || [];
+
+  // Consignor picker: TEAMS tier AND the server says the feature is on. The list endpoint hides archived consignors.
+  const showConsignorPicker = tier === 'TEAMS' && cheatsheetData?.consignorTagsEnabled === true;
+  const { data: consignorOptions } = useQuery({
+    queryKey: ['consignors-for-label-composer'],
+    queryFn: async () => {
+      const response = await api.get('/consignors');
+      return response.data as Array<{ id: string; name: string }>;
+    },
+    enabled: showConsignorPicker,
+    staleTime: 60 * 1000,
+  });
+  // A remembered consignor that was archived or removed since is ignored rather than sent to the server.
+  const activeConsignorId =
+    showConsignorPicker && consignorId && (consignorOptions ?? []).some((c) => c.id === consignorId) ? consignorId : '';
 
   // Does this sale have any item with a card record? Decides whether the Card style is offered.
   const {
@@ -455,6 +477,7 @@ export default function LabelComposerPage() {
         leftoverFill: state.leftoverFill,
         startPosition,
         labelStyle: effectiveStyle,
+        ...(activeConsignorId ? { consignorId: activeConsignorId } : {}),
       });
       return res.data;
     },
@@ -470,6 +493,23 @@ export default function LabelComposerPage() {
       );
     } catch {}
   }, [state, saleId, initialized]);
+
+  // Consignor choice: remembered per sale under its own key (all storage access guarded).
+  useEffect(() => {
+    if (!saleId || typeof saleId !== 'string' || consignorRestored) return;
+    try {
+      const saved = localStorage.getItem(`label-composer-consignor-${saleId}`);
+      if (saved) setConsignorId(saved);
+    } catch {}
+    setConsignorRestored(true);
+  }, [saleId, consignorRestored]);
+  useEffect(() => {
+    if (!saleId || typeof saleId !== 'string' || !consignorRestored) return;
+    try {
+      if (consignorId) localStorage.setItem(`label-composer-consignor-${saleId}`, consignorId);
+      else localStorage.removeItem(`label-composer-consignor-${saleId}`);
+    } catch {}
+  }, [consignorId, saleId, consignorRestored]);
 
   // Restore from localStorage
   useEffect(() => {
@@ -772,6 +812,37 @@ export default function LabelComposerPage() {
                 <h2 className="text-sm font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-3">
                   1. Pick a price
                 </h2>
+                {showConsignorPicker && (
+                  <div className="mb-3">
+                    <label htmlFor="label-consignor" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
+                      Consignor for price labels (optional)
+                    </label>
+                    <select
+                      id="label-consignor"
+                      value={activeConsignorId}
+                      onChange={(e) => {
+                        setConsignorId(e.target.value);
+                        if (state.items.some((i) => i.source.kind === 'preset') || state.leftoverFill !== null) {
+                          setConsignorChangedWithRows(true);
+                        }
+                      }}
+                      className="w-full min-h-[44px] sm:min-h-0 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-warm-900 dark:text-white px-3 py-2 text-sm"
+                    >
+                      <option value="">No consignor</option>
+                      {(consignorOptions ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      Applies to price-only labels. Item labels are unchanged.
+                    </p>
+                    {consignorChangedWithRows && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                        Applies to every price label on this sheet.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-1.5">
                   {prices.map(p => (
                     <button

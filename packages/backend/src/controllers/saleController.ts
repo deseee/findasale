@@ -439,8 +439,8 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         isAuctionSale: true,
         isPinned: true,
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
-        items: { select: { id: true, title: true, price: true, status: true, organizerDiscountAmount: true } },
-        _count: { select: { items: true } }
+        items: { where: { listingType: { not: 'CONSIGNOR_TAG' } }, select: { id: true, title: true, price: true, status: true, organizerDiscountAmount: true } },
+        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } }
       },
       take: 50
     });
@@ -1578,7 +1578,7 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         neighborhood: true, photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
-        _count: { select: { items: true } },
+        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
       },
       orderBy: { startDate: 'asc' },
       take: 50,
@@ -1654,7 +1654,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
-        _count: { select: { items: true } },
+        _count: { select: { items: { where: { listingType: { not: 'CONSIGNOR_TAG' } } } } },
       },
       orderBy: { startDate: 'asc' },
     });

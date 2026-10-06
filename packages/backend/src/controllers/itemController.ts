@@ -1044,7 +1044,7 @@ export const getItemById = async (req: Request, res: Response) => {
     // For everyone else, enforce public visibility rules: must be active.
     // Allow NULL draftStatus (legacy/seeded items pre-Rapidfire) and PUBLISHED items.
     // Only explicitly DRAFT items are blocked (Rapidfire items being AI-analyzed by organizer).
-    if (!isOwner && !isAdmin && (!item.isActive || item.draftStatus === 'DRAFT')) {
+    if (!isOwner && !isAdmin && (!item.isActive || item.draftStatus === 'DRAFT' || item.listingType === 'CONSIGNOR_TAG')) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -4627,6 +4627,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     const items = await prisma.item.findMany({
       where: {
         saleId: saleId as string,
+        listingType: { not: 'CONSIGNOR_TAG' }, // consignor price-tag sales are not inventory
         // Show ALL sale items regardless of publish state — Add Items is the
         // organizer's home base for inventory. Published items remain visible
         // with a status chip (see draftStatus + ebayListingId fields below).

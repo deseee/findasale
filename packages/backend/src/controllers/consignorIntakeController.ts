@@ -24,7 +24,8 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { randomBytes } from 'crypto';
-import { getOrganizerWorkspace, createConsignorCore, ConsignorValidationError } from './consignorController';
+import { getOrganizerWorkspace, createConsignorCore, ConsignorValidationError, toOrganizerConsignorView } from './consignorController';
+import { sendWelcomeInviteNonBlocking } from '../services/consignorInviteService';
 import { sendConsignorIntakeRequestNotice } from '../services/consignorEmailService';
 import { ConsignorIntakeAppointment } from '@prisma/client';
 
@@ -465,12 +466,21 @@ export const approveIntakeRequest = async (req: AuthRequest, res: Response) => {
           });
         }
 
-        return { consignorId: consignor.id, appointment };
+        return { consignorId: consignor.id, appointment, linkedExistingUser: consignor.linkedExistingUser };
       });
       consignorId = txResult.consignorId;
 
+      // Consignor invite (2026-10-06): same welcome invite as the manual Add Consignor path, sent
+      // after the transaction commits. Never fails or blocks the approval; the outcome is reported.
+      const welcomeEmail = await sendWelcomeInviteNonBlocking(consignorId);
+
       const fullConsignor = await prisma.consignor.findUnique({ where: { id: consignorId } });
-      return res.status(200).json({ consignor: fullConsignor, appointment: txResult.appointment });
+      return res.status(200).json({
+        consignor: fullConsignor ? toOrganizerConsignorView(fullConsignor) : null,
+        appointment: txResult.appointment,
+        welcomeEmail,
+        linkedExistingUser: txResult.linkedExistingUser,
+      });
     } catch (err) {
       if (err instanceof ConsignorValidationError) {
         return res.status(err.status).json({ error: err.message });

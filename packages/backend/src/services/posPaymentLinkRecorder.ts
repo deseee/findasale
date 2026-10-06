@@ -19,6 +19,14 @@ import { deleteSquareCheckoutLink } from './squareCheckoutLinkService'; // Squar
 import { accrueSplitCashLegOnce, allocateCentsProportionally } from './cashFeeService'; // Split tender on the QR payment link (2026-09-29): idempotent cash-leg commission accrual + per-row cash-leg allocation, both inside this recorder's own transaction
 import { computeOversoldSettlement, settleOversoldPayment, notifyOversoldSettlement, type OversoldSettlement } from './oversoldPaymentRefundService'; // 2026-09-30 payment review finding 2: refund the card share of any paid item that could not be fulfilled (oversold), instead of leaving captured money behind an alert
 
+import {
+  mintTagItemInTx,
+  parseStoredTagLines,
+  tagLinesTotalCents,
+  formatTagTitle,
+  isConsignorTagError,
+} from './consignorTagService'; // 2026-10-06: consignor price tags minted inside the COMPLETED-flip transaction
+
 const stripe = () => getStripe();
 
 /**
@@ -150,6 +158,7 @@ export async function recordPosPaymentLinkSale(
   // is spread over ALL paid rows (not just the sellable ones) so the returned cash matches the rows kept.
   let oversoldCashById: Map<string, number> | null = null;
 
+  try {
   await prisma.$transaction(async (tx) => {
     // Guarded atomic flip: the WHERE clause + UPDATE row lock is what actually
     // serializes a concurrent webhook/reconciler race — a plain SELECT here would not
@@ -177,6 +186,12 @@ export async function recordPosPaymentLinkSale(
     // once the tx returns.
     recordedSaleId = fresh.saleId;
     recordedAmountCents = fresh.amount;
+
+    // Consignor price tags (2026-10-06): the verified lines stored at link creation. A damaged value throws (a money line is never
+    // dropped silently) and is handled by the catch below with a full refund.
+    const tagLines = parseStoredTagLines((fresh as unknown as { consignorLines?: unknown }).consignorLines);
+    const tagCentsList = tagLines.map((l) => l.priceCents);
+    const tagCentsTotal = tagLinesTotalCents(tagLines);
 
     // Look up organizer tier + Connect id for fee calculation and Direct-charge routing.
     // Hoisted out of the itemIds-only branch (2026-08-28 income-tracking fix, S-POS-MISC-
@@ -249,6 +264,57 @@ export async function recordPosPaymentLinkSale(
       console.warn(`[pos-record/${source}] No real ${processor === 'SQUARE' ? 'Square Payment' : 'Stripe PaymentIntent'} id supplied for link ${fresh.id} -- falling back to synthetic placeholder '${resolvedPaymentIntentId}'. Refunds for this Purchase will FAIL until this is fixed.`);
     }
 
+    // Mint one SOLD consignor Item per tag line and write its Purchase row, inside THIS transaction. The sku is keyed on the payment
+    // id so a replay finds the same item; a Purchase that already exists (P2002 on the compound unique) is treated as recorded. No stock
+    // decrement and no cross-channel hook runs for a tag: the item never existed anywhere else. A mint failure throws a ConsignorTagError,
+    // which rolls the whole recording back and is settled with a full refund by the catch around this transaction.
+    const recordTagRows = async (feeShares: number[], cashShares: number[]): Promise<string[]> => {
+      const ids: string[] = [];
+      for (let t = 0; t < tagLines.length; t++) {
+        const tagLine = tagLines[t];
+        const minted = await mintTagItemInTx(tx, {
+          saleId: fresh.saleId,
+          organizerId: fresh.organizerId,
+          consignorId: tagLine.consignorId,
+          priceCents: tagLine.priceCents,
+          nonce: tagLine.nonce,
+          paymentRef: resolvedPaymentIntentId,
+          allowArchived: true,
+        });
+        const tagFeeAmount = (feeShares[t] ?? 0) / 100;
+        const tagCash = Math.min(cashShares[t] ?? 0, tagLine.priceCents);
+        try {
+          const purchase = await tx.purchase.create({
+            data: {
+              itemId: minted.itemId,
+              saleId: fresh.saleId,
+              amount: tagLine.priceCents / 100,
+              platformFeeAmount: tagFeeAmount,
+              ...snapshotForCommissionOnly(tagFeeAmount, posFeeRate),
+              status: 'PAID',
+              source: 'POS',
+              ...(tagCash > 0 ? { cashLegAmount: tagCash / 100 } : {}),
+              processor,
+              ...(processor === 'SQUARE'
+                ? { squarePaymentId: resolvedPaymentIntentId }
+                : { stripePaymentIntentId: resolvedPaymentIntentId }),
+              chargeType: posUseDirect ? 'DIRECT' : 'DESTINATION',
+              ...(posUseDirect && posStripeConnectId ? { stripeAccountId: posStripeConnectId } : {}),
+            },
+          });
+          ids.push(purchase.id);
+          recordedItemTitles.push(formatTagTitle(tagLine.priceCents));
+        } catch (purchaseErr: any) {
+          if (purchaseErr.code === 'P2002') {
+            console.warn(`[pos-record/${source}] Tag Purchase already exists for item ${minted.itemId} on link ${fresh.id} — treating as already recorded.`);
+          } else {
+            throw purchaseErr;
+          }
+        }
+      }
+      return ids;
+    };
+
     if (fresh.itemIds?.length) {
       // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement. Collects which
       // items are now fully sold out so the cross-channel removal hooks (fired outside the
@@ -266,6 +332,8 @@ export async function recordPosPaymentLinkSale(
       // revenue for one physical unit. Only sellableItemIds get a Purchase row now;
       // oversoldItemIds are surfaced via organizer notification below instead.
       const sellableItemIds: string[] = [];
+      // Tag rows' share of the split-tender cash leg when some items were oversold (filled below, only then).
+      let oversoldTagCash: number[] | null = null;
       // Money review P1-4/5 (2026-09-29): only items that belong to THIS link's sale AND organizer
       // can be sold by this payment. An itemId from another tenant (a link created with a foreign
       // id before the create-side check existed) is excluded and flagged, never sold.
@@ -356,7 +424,8 @@ export async function recordPosPaymentLinkSale(
         const ordered = scopedItemIds
           .map((id: string) => byId.get(id))
           .filter((r): r is { id: string; price: number | null; title: string } => !!r);
-        const weights = ordered.map((r) => rowCentsOf(r.id, r.price));
+        // Tag rows ride along as non-oversold weights so the refund share of the oversold items never absorbs a tag's money.
+        const weights = [...ordered.map((r) => rowCentsOf(r.id, r.price)), ...tagCentsList];
         const oversoldSet = new Set(oversoldItemIds);
         const oversoldIdx = ordered.map((r, i) => (oversoldSet.has(r.id) ? i : -1)).filter((i) => i >= 0);
         oversoldState.settlement = computeOversoldSettlement({
@@ -369,6 +438,7 @@ export async function recordPosPaymentLinkSale(
         if (splitCashCents > 0) {
           const cashAll = allocateCentsProportionally(splitCashCents, weights);
           oversoldCashById = new Map(ordered.map((r, i) => [r.id, cashAll[i] ?? 0] as [string, number]));
+          oversoldTagCash = cashAll.slice(ordered.length);
         }
         // The organizer notice below reports what the shopper actually keeps paying for.
         recordedAmountCents = Math.max(0, fresh.amount - oversoldState.settlement.refundCardCents);
@@ -391,7 +461,7 @@ export async function recordPosPaymentLinkSale(
       // (Square refunds the fee proportionally), so the recorded fee base is the card amount that stays.
       const feeBaseCents = splitCashCents > 0
         ? Math.max(0, (fresh.cardAmountCents ?? fresh.amount) - (oversoldState.settlement?.refundCardCents ?? 0))
-        : itemsSubtotalCents;
+        : itemsSubtotalCents + tagCentsTotal;
       const totalItemsFeeCents = calculateInclusiveCommissionCents(
         feeBaseCents,
         posOrganizerTier as SubscriptionTier,
@@ -399,20 +469,29 @@ export async function recordPosPaymentLinkSale(
       );
       // Each recorded row's share of the cash leg (whole cents, sums exactly to the cash leg), so a
       // later refund knows how much of the row the card processor never collected.
+      const itemRowCentsList = items.map((it) => rowCentsOf(it.id, it.price));
+      const combinedCashShares = tagCentsTotal > 0 && splitCashCents > 0 && !oversoldCashById
+        ? allocateCentsProportionally(splitCashCents, [...itemRowCentsList, ...tagCentsList])
+        : null;
       const cashShares = oversoldCashById
         ? items.map((it) => (oversoldCashById as Map<string, number>).get(it.id) ?? 0)
-        : allocateCentsProportionally(
-            splitCashCents,
-            items.map((it) => rowCentsOf(it.id, it.price))
-          );
+        : combinedCashShares
+          ? combinedCashShares.slice(0, items.length)
+          : allocateCentsProportionally(splitCashCents, itemRowCentsList);
+      const tagCashShares: number[] = oversoldTagCash ?? (combinedCashShares ? combinedCashShares.slice(items.length) : tagCentsList.map(() => 0));
       let remainingItemsFeeCentsToAllocate = totalItemsFeeCents;
+      // With tags in the link the platform fee is allocated ONCE across items and tags together (the application fee Square charged
+      // is on the whole card amount), so the recorded fees sum to it. Without tags the original per-item remainder logic is untouched.
+      const unifiedFeeShares = tagCentsTotal > 0 ? allocateCentsProportionally(totalItemsFeeCents, [...itemRowCentsList, ...tagCentsList]) : null;
 
       const createdPurchaseIds: string[] = [];
       for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
         const item = items[itemIdx];
         const itemPriceCents = rowCentsOf(item.id, item.price);
         const isLastRecordedItem = itemIdx === items.length - 1;
-        const itemFeeCents = isLastRecordedItem
+        const itemFeeCents = unifiedFeeShares
+          ? (unifiedFeeShares[itemIdx] ?? 0)
+          : isLastRecordedItem
           ? remainingItemsFeeCentsToAllocate
           : Math.min(
               remainingItemsFeeCentsToAllocate,
@@ -459,6 +538,9 @@ export async function recordPosPaymentLinkSale(
           }
         }
       }
+      if (tagLines.length > 0) {
+        createdPurchaseIds.push(...(await recordTagRows(unifiedFeeShares ? unifiedFeeShares.slice(items.length) : [], tagCashShares)));
+      }
       purchaseIds = createdPurchaseIds;
 
       if (createdPurchaseIds.length) {
@@ -477,9 +559,17 @@ export async function recordPosPaymentLinkSale(
       // support this case (confirmed via architect schema review — no migration needed).
       // Split tender (2026-09-29): `fresh.amount` is the CARD amount only, so the sale's real value
       // is card + cash. The fee below is deliberately still computed on `fresh.amount` (card leg).
-      const miscAmount = (fresh.amount + splitCashCents) / 100;
-      const miscFeeAmount = calculateInclusiveCommissionCents(fresh.amount, posOrganizerTier as SubscriptionTier, 'ONLINE') / 100;
-      try {
+      // Consignor price tags (2026-10-06): the tag rows are fixed at their verified price, so the misc row carries the REST of the
+      // sale (card + cash - tags) and is skipped when nothing is left. Fee and cash leg are allocated across misc + tags together.
+      const miscTotalCents = fresh.amount + splitCashCents - tagCentsTotal;
+      const miscAmount = miscTotalCents / 100;
+      const totalMiscFeeCents = calculateInclusiveCommissionCents(fresh.amount, posOrganizerTier as SubscriptionTier, 'ONLINE');
+      const miscWeights = [Math.max(0, miscTotalCents), ...tagCentsList];
+      const miscFeeShares = tagCentsTotal > 0 ? allocateCentsProportionally(totalMiscFeeCents, miscWeights) : null;
+      const miscCashShares = tagCentsTotal > 0 && splitCashCents > 0 ? allocateCentsProportionally(splitCashCents, miscWeights) : null;
+      const miscFeeAmount = (miscFeeShares ? miscFeeShares[0] : totalMiscFeeCents) / 100;
+      const miscCashCents = miscCashShares ? miscCashShares[0] : splitCashCents;
+      if (miscTotalCents > 0) try {
         const purchase = await tx.purchase.create({
           data: {
             itemId: null,
@@ -489,7 +579,7 @@ export async function recordPosPaymentLinkSale(
             ...snapshotForCommissionOnly(miscFeeAmount, posFeeRate),
             status: 'PAID',
             source: 'POS',
-            ...(splitCashCents > 0 ? { cashLegAmount: splitCashCents / 100 } : {}),
+            ...(miscCashCents > 0 ? { cashLegAmount: miscCashCents / 100 } : {}),
             processor,
             ...(processor === 'SQUARE'
               ? { squarePaymentId: resolvedPaymentIntentId }
@@ -510,8 +600,82 @@ export async function recordPosPaymentLinkSale(
           throw purchaseErr;
         }
       }
+      if (tagLines.length > 0) {
+        const tagPurchaseIds = await recordTagRows(
+          miscFeeShares ? miscFeeShares.slice(1) : [],
+          miscCashShares ? miscCashShares.slice(1) : tagCentsList.map(() => 0)
+        );
+        purchaseIds = [...purchaseIds, ...tagPurchaseIds];
+        if (purchaseIds.length) {
+          await tx.pOSPaymentLink.update({ where: { id: fresh.id }, data: { purchaseIds } });
+        }
+      }
     }
   });
+  } catch (recordErr) {
+    // A consignor tag could not be minted (or its stored lines were damaged) AFTER the payment was captured. The transaction rolled
+    // back, so nothing is recorded and no item was taken. Refund the whole payment through the shared oversold settlement (same refund
+    // service, kill switch and idempotency key as an oversold item), park the link as CANCELLED so no retry re-records it, and tell the organizer.
+    if (isConsignorTagError(recordErr)) {
+      console.error(`[pos-record/${source}] Consignor tag could not be recorded for link ${posPaymentLink.id}; refunding the payment:`, recordErr.code);
+      try {
+        Sentry.captureException(recordErr, { tags: { area: 'pos-link-consignor-tag-record-failed', source }, extra: { linkId: posPaymentLink.id, saleId: posPaymentLink.saleId, code: recordErr.code } });
+      } catch {
+        // Sentry may not be initialized.
+      }
+      const failCash = posPaymentLink.isSplitPayment && (posPaymentLink.cashAmountCents ?? 0) > 0 ? (posPaymentLink.cashAmountCents as number) : 0;
+      const failSettlement = computeOversoldSettlement({
+        cardCents: posPaymentLink.amount,
+        cashCents: failCash,
+        weightsCents: [posPaymentLink.amount + failCash],
+        oversoldIdx: [0],
+      });
+      const failSettled = await settleOversoldPayment({
+        kind: 'pos-link',
+        refId: posPaymentLink.id,
+        organizerProfileId: posPaymentLink.organizerId,
+        processor,
+        paymentId: externalPaymentId ?? null,
+        cardPaidCents: posPaymentLink.amount,
+        settlement: failSettlement,
+      });
+      await prisma.pOSPaymentLink
+        .updateMany({ where: { id: posPaymentLink.id, status: { not: 'COMPLETED' } }, data: { status: 'CANCELLED' } })
+        .catch((cancelErr: unknown) => console.error(`[pos-record/${source}] could not park link ${posPaymentLink.id} after tag failure:`, cancelErr));
+      let failOrganizerUserId: string | null = null;
+      try {
+        const org = await prisma.organizer.findUnique({ where: { id: posPaymentLink.organizerId }, select: { userId: true } });
+        failOrganizerUserId = org?.userId ?? null;
+      } catch (lookupErr) {
+        console.error(`[pos-record/${source}] Could not resolve organizer for tag-failure notification, link=${posPaymentLink.id}:`, lookupErr);
+      }
+      await notifyOversoldSettlement({
+        result: failSettled,
+        settlement: failSettlement,
+        titles: ['Consignor price tag'],
+        processor,
+        ref: posPaymentLink.id,
+        partiallyFulfilled: false,
+        organizerUserId: failOrganizerUserId,
+        organizerLink: posPaymentLink.saleId ? `/organizer/sales/${posPaymentLink.saleId}` : '/organizer/pos',
+        shopper: null,
+        manualType: 'POS_PAYMENT_NEEDS_REFUND_REVIEW',
+      });
+      return {
+        recorded: false,
+        alreadyCompleted: false,
+        purchaseIds: [],
+        oversoldItemIds: [],
+        oversoldSettlement: {
+          status: failSettled.status,
+          refundCents: failSettled.refundCents,
+          fullRefund: failSettlement.fullRefund,
+          cashToReturnCents: failSettlement.cashToReturnCents,
+        },
+      };
+    }
+    throw recordErr;
+  }
 
   // S-POS-QR-DOUBLE-CHARGE (2026-09-02) defense-in-depth: deactivate the Stripe Payment
   // Link itself right after we record the first completion, so it can never be paid a

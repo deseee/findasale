@@ -44,6 +44,14 @@ import {
   type BulkLotDb,
   type BulkLotErrorCode,
 } from '../services/bulkLot/bulkLotService';
+import {
+  resolveTagLines,
+  mintTagItemInTx,
+  formatTagTitle,
+  isConsignorTagError,
+  consignorTagErrorBody,
+  type ResolvedTagLine,
+} from '../services/consignorTagService'; // 2026-10-06: consignor price tags, minted inside the sale transaction
 import { escapeHtml } from '../utils/htmlEscape'; // ADR-136 Addendum A: the lot line on the receipt carries an organizer-typed lot name
 
 /**
@@ -129,7 +137,9 @@ export async function processCashSaleCore(params: {
   saleId: string;
   // quantity (ADR-136, #659): the number of cards for a bulk lot line. Only meaningful for an item that is a bulk lot;
   // the server prices the line itself and refuses PRICE_CHANGED when `amount` does not match to the cent.
-  items: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string }>;
+  // consignorTag (2026-10-06): a signed consignor price tag line. Carries NO itemId: the server mints the SOLD Item inside the
+  // sale transaction. `amount` is the tag price in dollars and is covered by the signature.
+  items: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string; consignorTag?: { consignorId: string; nonce: string; sig: string } }>;
   cashReceived: number;
   buyerEmail?: string;
   clientTransactionId?: string;
@@ -201,6 +211,27 @@ export async function processCashSaleCore(params: {
     const existing = await prisma.purchase.findMany({ where: { clientTransactionId, sale: { organizerId: organizer.id } } });
     if (existing.length > 0) return replayResultFor(existing);
   }
+
+  // Consignor price tags (2026-10-06). Resolved BEFORE the duplicate-itemId check and any item lookup: flag, TEAMS tier,
+  // sale ownership, signature, consignor workspace, archived. A tag line never has an itemId (the Item does not exist yet).
+  // The replay check above already returned for a repeated clientTransactionId, so a replay never gets here and cannot mint twice.
+  const tagLineItems = items.filter((i) => i.consignorTag);
+  if (tagLineItems.some((i) => i.itemId)) {
+    throw new CashSaleError('A consignor tag line cannot also reference an item.', 400, false, 'VALIDATION');
+  }
+  let resolvedTags: ResolvedTagLine[] = [];
+  if (tagLineItems.length > 0) {
+    resolvedTags = await resolveTagLines(prisma, {
+      organizer: { id: organizer.id, subscriptionTier: organizer.subscriptionTier },
+      saleId,
+      lines: tagLineItems.map((i) => ({ ...i.consignorTag, priceCents: Math.round(i.amount * 100) })),
+    });
+  }
+  // The reference every minted sku is keyed on. clientTransactionId when sent (so a replay finds the same items), else one fresh id.
+  const tagPaymentRef = clientTransactionId ?? `cash-${randomUUID()}`;
+  // Keyed by the line's consignorTag object: chargedItems rows are spread copies that still share that reference.
+  const tagResolvedByTag = new Map<object, ResolvedTagLine>();
+  tagLineItems.forEach((line, idx) => tagResolvedByTag.set(line.consignorTag as object, resolvedTags[idx]));
 
   // Fetch and validate all items with itemId
   const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
@@ -282,6 +313,8 @@ export async function processCashSaleCore(params: {
   const discountRatio = discountResolution.discountAmountCents > 0 && catalogSubtotalCents > 0
     ? discountResolution.discountAmountCents / catalogSubtotalCents
     : 0;
+  // Consignor tag lines have no itemId, so they are outside catalogSubtotalCents above and untouched here: a tag price is
+  // never discounted and never part of the discount cap.
   const chargedItems = items.map((i) => {
     if (discountRatio === 0 || !i.itemId) return { ...i, rowDiscountCents: 0 };
     const beforeCents = Math.round(i.amount * 100);
@@ -313,7 +346,12 @@ export async function processCashSaleCore(params: {
   // crash can leave cards taken with no sale. A test transaction never touches stock (same rule as the stock loop
   // further down), so it keeps the plain row-by-row write. A cart with no lot is byte-for-byte the pre-existing path.
   const bulkStockResult = new Map<string, { fullySoldOut: boolean; remainingStock: number }>();
-  const useBulkTransaction = bulkPlans.size > 0 && !isTestTransaction;
+  // A cart with a consignor tag line also takes the transactional branch (2026-10-06): the SOLD Item is minted in the same
+  // transaction as the Purchase rows. A TEST transaction validates the tag line but never mints: it records a plain misc row.
+  const mintTags = tagLineItems.length > 0 && !isTestTransaction;
+  const useBulkTransaction = (bulkPlans.size > 0 || mintTags) && !isTestTransaction;
+  // chargedItems row -> the itemId minted for it (tag lines only; never touches item.itemId, so no stock/withdraw hook runs).
+  const mintedTagItemIds = new Map<object, string>();
 
   // One Purchase row for one cart line. `client` is the shared prisma client, or the transaction client.
   const createPurchaseRow = (client: any, item: (typeof chargedItems)[number]) => {
@@ -323,7 +361,7 @@ export async function processCashSaleCore(params: {
 
     return client.purchase.create({
       data: {
-        itemId: item.itemId ?? null,
+        itemId: item.itemId ?? mintedTagItemIds.get(item) ?? null,
         saleId,
         amount: item.amount,
         platformFeeAmount: itemPlatformFeeAmount,
@@ -370,10 +408,27 @@ export async function processCashSaleCore(params: {
             const alreadyRecorded = await tx.purchase.findMany({ where: { clientTransactionId, sale: { organizerId: organizer.id } } });
             if (alreadyRecorded.length > 0) throw new CashSaleReplayInTransaction(alreadyRecorded);
           }
-          const sold = await sellBulkLinesInTransaction(tx, toBulkLineRecords(bulkPlans), sellItemUnitsInTransaction);
-          sold.forEach((result, lotItemId) => bulkStockResult.set(lotItemId, result));
+          if (bulkPlans.size > 0) {
+            const sold = await sellBulkLinesInTransaction(tx, toBulkLineRecords(bulkPlans), sellItemUnitsInTransaction);
+            sold.forEach((result, lotItemId) => bulkStockResult.set(lotItemId, result));
+          }
           const ids: string[] = [];
           for (const item of chargedItems) {
+            // Consignor tag line: mint the SOLD Item first so the Purchase row below carries its id. A failure here aborts the
+            // whole transaction: no Purchase row and no Item remain.
+            if (item.consignorTag) {
+              const resolved = tagResolvedByTag.get(item.consignorTag);
+              if (!resolved) throw new CashSaleError('Consignor tag could not be resolved.', 400, false, 'VALIDATION');
+              const minted = await mintTagItemInTx(tx, {
+                saleId,
+                organizerId: organizer.id,
+                consignorId: resolved.consignorId,
+                priceCents: resolved.priceCents,
+                nonce: resolved.nonce,
+                paymentRef: tagPaymentRef,
+              });
+              mintedTagItemIds.set(item, minted.itemId);
+            }
             const purchase = await createPurchaseRow(tx, item);
             ids.push(purchase.id);
           }
@@ -509,7 +564,7 @@ export async function processCashSaleCore(params: {
           const lotPlan = i.itemId ? bulkPlans.get(i.itemId) : undefined;
           const lineText = lotPlan && i.itemId
             ? escapeHtml(describeBulkSaleLine(dbItems[i.itemId]?.title ?? i.label ?? 'Bulk lot', lotPlan.cards, lotPlan.pricePerThousandCents))
-            : `${i.label ?? 'Item'}`;
+            : i.consignorTag ? formatTagTitle(Math.round(i.amount * 100)) : `${i.label ?? 'Item'}`;
           return `<li>${lineText}: $${i.amount.toFixed(2)}</li>`;
         })
         .join('');
@@ -583,7 +638,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     // never did, so the staff discount cap was unenforceable for those 3 payment methods and
     // the discount never reached the persisted Purchase.amount.
     const { items, cashReceived, buyerEmail, saleId, clientTransactionId, discountType, discountValue, discountReasonNote, isTestTransaction } = req.body as {
-      items?: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string }>;
+      items?: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string; consignorTag?: { consignorId: string; nonce: string; sig: string } }>;
       cashReceived?: number;
       buyerEmail?: string;
       saleId?: string;
@@ -648,6 +703,9 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     if (error instanceof CashSaleError) {
       return res.status(error.status).json({ message: error.message, code: error.code });
+    }
+    if (isConsignorTagError(error)) {
+      return res.status(error.status).json(consignorTagErrorBody(error));
     }
     console.error('[terminal] cashPayment error:', error);
     res.status(500).json({ message: 'Failed to record cash sale' });

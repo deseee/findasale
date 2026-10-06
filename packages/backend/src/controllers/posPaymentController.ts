@@ -42,6 +42,19 @@ import { isPayoutFlaggedForReview } from '../services/connectAccountGuard'; // S
 import { posPaymentFailureBody } from '../services/posPaymentFailure'; // 2026-09-30: generic client message + stable code for payment-adapter failures; detail is logged server-side only
 import * as stripePos from '../services/stripePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): Stripe POS logic extracted verbatim, zero behavior change
 import * as squarePos from '../services/squarePosPaymentAdapter'; // Square migration Wave 1 #3 (2026-09-07): phone-based Square POS adapter -- charge creation moved to accept/confirm time, see file header
+import {
+  resolveTagLines,
+  mintTagItemInTx,
+  formatTagTitle,
+  isConsignorTagError,
+  consignorTagErrorBody,
+  toTagLineInput,
+  toStoredTagLines,
+  parseStoredTagLines,
+  tagLinesTotalCents,
+  type ResolvedTagLine,
+  type StoredTagLine,
+} from '../services/consignorTagService'; // 2026-10-06: consignor price tags, minted inside the sale's own transaction
 import { escapeHtml } from '../utils/htmlEscape';
 import { transactionalEmailService } from '../lib/transactionalEmailService'; // 2026-09-16 fix: shopper receipt/notification email gap on manual-card + QR POS payments (mirrors cashPaymentController.ts's receipt pattern)
 
@@ -258,6 +271,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       processor: _requestedProcessor,
       isTestTransaction,
       bulkLines: requestedBulkLines,
+      consignorLines: requestedConsignorLines,
     } = req.body as {
       shopperUserId?: string;
       saleId?: string;
@@ -278,6 +292,9 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       // ADR-136 Addendum A (#659): one entry per bulk lot in itemIds, { itemId, quantity, amount? }. The server prices every
       // line itself; `amount` (dollars the register showed) is only compared to the cent. Omitted when the cart holds no lot.
       bulkLines?: Array<{ itemId?: string; quantity?: number | string; amount?: number }>;
+      // Consignor price tags (2026-10-06): signed tag lines [{consignorId, nonce, sig, amountCents}] riding on top of itemIds. They are
+      // re-verified here, stored on the request, and minted into SOLD Items inside confirmPaymentRequest's PAID-flip transaction.
+      consignorLines?: Array<{ consignorId?: string; nonce?: string; sig?: string; amountCents?: number }>;
     };
     const processor: 'SQUARE' = 'SQUARE';
     void _requestedProcessor;
@@ -394,6 +411,23 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'You do not own this sale' });
     }
 
+    // Consignor price tags (2026-10-06): resolved at CREATION, once the sale ownership above has passed. tagCents comes from the
+    // VERIFIED lines only (the signature covers each price), never from the client's total, and joins the lower-bound check below.
+    let resolvedTagLines: ResolvedTagLine[] = [];
+    if (Array.isArray(requestedConsignorLines) && requestedConsignorLines.length > 0) {
+      try {
+        resolvedTagLines = await resolveTagLines(prisma, {
+          organizer: { id: organizer.id, subscriptionTier: organizer.subscriptionTier },
+          saleId,
+          lines: requestedConsignorLines.map((l) => toTagLineInput(l)),
+        });
+      } catch (tagErr) {
+        if (isConsignorTagError(tagErr)) return res.status(tagErr.status).json(consignorTagErrorBody(tagErr));
+        throw tagErr;
+      }
+    }
+    const tagCents = tagLinesTotalCents(resolvedTagLines);
+
     // Verify items only when itemIds are provided (POS carts may contain custom-amount items with no DB id)
     let items: Array<{ id: string; title: string; status: string; price: number | null; stockTotal?: number | null; stockSold?: number | null }> = [];
     let bulkPlans: Awaited<ReturnType<typeof planBulkCart>> = new Map();
@@ -457,7 +491,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     // catalogSubtotalCents - 1, closing the gap where a lowballed total with no
     // discount fields sent was previously trusted completely. 1-cent tolerance for
     // rounding.
-    const minAllowedTotalCents = catalogSubtotalCents - discountResolution.discountAmountCents - 1;
+    // Consignor tag cents are a verified floor on top of the catalog subtotal (a tag is never discounted): total >= catalog + tag - discount - 1.
+    const minAllowedTotalCents = catalogSubtotalCents + tagCents - discountResolution.discountAmountCents - 1;
     if (totalAmountCents < minAllowedTotalCents) {
       return res.status(400).json({
         message: discountResolution.discountAmountCents > 0
@@ -600,6 +635,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
               discountAppliedByUserId: discountResolution.discountAmountCents > 0 ? organizer.actingUserId : null,
               // ADR-136 Addendum A: the priced lot lines, read back by confirmPaymentRequest. Absent when the cart holds no lot.
               ...(bulkLineRecords.length > 0 ? { bulkLines: bulkLineRecords as unknown as Prisma.InputJsonValue } : {}),
+              // Consignor price tags (2026-10-06): the verified lines, read back (and re-validated) by confirmPaymentRequest.
+              ...(resolvedTagLines.length > 0 ? { consignorLines: toStoredTagLines(resolvedTagLines) as unknown as Prisma.InputJsonValue } : {}),
             },
           });
         },
@@ -680,7 +717,10 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     try {
       const io = getIO();
       // A bulk lot shows its cards ("MTG commons (1,500 cards)"), not just the lot name.
-      const itemNames = items.map((item) => (bulkPlans.has(item.id) ? `${item.title} (${formatCardCount(bulkPlans.get(item.id)!.cards)} cards)` : item.title));
+      const itemNames = [
+        ...items.map((item) => (bulkPlans.has(item.id) ? `${item.title} (${formatCardCount(bulkPlans.get(item.id)!.cards)} cards)` : item.title)),
+        ...resolvedTagLines.map((l) => formatTagTitle(l.priceCents)),
+      ];
       io.to(`user:${shopperUserId}`).emit('POS_PAYMENT_REQUEST', {
         type: 'POS_PAYMENT_REQUEST',
         requestId: posRequest.id,
@@ -1350,6 +1390,39 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       throw bulkErr;
     }
 
+    // Consignor price tags (2026-10-06): the verified lines stored at creation. Re-verified here BEFORE any money moves (signature,
+    // sale, consignor workspace), but an archived consignor is still honored (refuseArchived false): the tag was valid when the
+    // shopper was asked to pay, and archiving must not strand a sale. A damaged or no-longer-valid line is refused with "No card
+    // was charged" and the request stays ACCEPTED.
+    let storedTagLines: StoredTagLine[] = [];
+    try {
+      storedTagLines = parseStoredTagLines((posRequest as { consignorLines?: unknown }).consignorLines);
+      if (storedTagLines.length > 0) {
+        const tagOrganizer = await prisma.organizer.findUnique({ where: { id: posRequest.organizerId }, select: { id: true, subscriptionTier: true } });
+        if (!tagOrganizer) throw new Error('organizer missing for consignor tag re-verify');
+        await resolveTagLines(
+          prisma,
+          {
+            organizer: { id: tagOrganizer.id, subscriptionTier: tagOrganizer.subscriptionTier },
+            saleId: posRequest.saleId,
+            lines: storedTagLines,
+            refuseArchived: false,
+          }
+        );
+      }
+    } catch (tagErr) {
+      if (isConsignorTagError(tagErr)) {
+        return res.status(409).json({
+          success: false,
+          charged: false,
+          code: tagErr.code,
+          message: `${tagErr.message} No card was charged.`,
+        });
+      }
+      throw tagErr;
+    }
+    const confirmTagCents = tagLinesTotalCents(storedTagLines);
+
     // QA Test-Transaction Harness (2026-09-17): computed here, AFTER the
     // shopper-ownership + status checks above -- mirrors createSquareTestTransaction's
     // exact authorization order (resource-ownership check BEFORE the QA-header check
@@ -1686,14 +1759,17 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             where: { id: { in: posRequest.itemIds }, saleId: posRequest.saleId },
             select: { id: true, price: true },
           });
-          const totalCents = posRequest.totalAmountCents;
+          // Consignor price tags (2026-10-06): tag rows are fixed at their verified price and sit OUTSIDE the catalog allocation
+          // below, so a cashier discount (catalog lines only) is never spread onto a tag and the misc remainder is
+          // total - catalog items - tags. totalCents below is therefore the NON-TAG total; tag rows are appended after it.
+          const totalCents = posRequest.totalAmountCents - confirmTagCents;
           // A bulk lot line is weighted by the cents it was priced at (ADR-136 Addendum A), never by Item.price (the price per 1,000).
           const itemCentsList = fulfillItems.map((it) => lotLineById.get(it.id)?.cents ?? Math.round((it.price || 0) * 100));
           const itemsListTotalCents = itemCentsList.reduce((sum, c) => sum + c, 0);
           const miscRemainderCents = totalCents - itemsListTotalCents;
           // A misc row carries whatever the catalog items do not explain (custom-amount lines). Also
           // used when no item carries any price, so the whole charge is still recorded exactly once.
-          const noPricedItems = fulfillItems.length === 0 || itemsListTotalCents <= 0;
+          const noPricedItems = confirmTagCents <= 0 && (fulfillItems.length === 0 || itemsListTotalCents <= 0);
           const needsMiscRow = noPricedItems || miscRemainderCents > 1;
           const rowWeights = [...itemCentsList];
           if (needsMiscRow) rowWeights.push(noPricedItems ? totalCents : miscRemainderCents);
@@ -1702,13 +1778,17 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           // code wrote the LIST price on every row and stamped the whole cart fee on EVERY row, so a
           // discounted or multi-item sale overstated revenue and fees per row and any later refund of one
           // row was computed against the wrong numbers.
-          const rowAmountCents = allocateCentsProportionally(totalCents, rowWeights);
+          const nonTagRowAmountCents = allocateCentsProportionally(totalCents, rowWeights);
+          // Tag rows are appended AFTER the item rows and the optional misc row, so every existing index (items 0..n-1, misc at
+          // fulfillItems.length) is unchanged. Fee and cash legs are allocated across the combined list.
+          const tagRowCentsList = storedTagLines.map((l) => l.priceCents);
+          const rowAmountCents = [...nonTagRowAmountCents, ...tagRowCentsList];
           const rowFeeCents = allocateCentsProportionally(posRequest.platformFeeCents, rowAmountCents);
           const confirmCashCents = posRequest.isSplitPayment && posRequest.cashAmountCents ? posRequest.cashAmountCents : 0;
           const rowCashCents =
             confirmCashCents > 0
               ? allocateCentsProportionally(confirmCashCents, rowAmountCents).map((c, i) => Math.min(c, rowAmountCents[i]))
-              : rowWeights.map(() => 0);
+              : rowAmountCents.map(() => 0);
           const discountTotalCents = Number(posRequest.discountAmountCents) > 0 ? Number(posRequest.discountAmountCents) : 0;
           const rowDiscountCents =
             discountTotalCents > 0
@@ -1843,7 +1923,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           // Misc-only carts: no DB item IDs, one Purchase for the full amount. Mixed carts: a misc Purchase
           // for any remainder beyond catalog item prices.
           if (needsMiscRow && !miscAlreadyRecorded) {
-            const miscIdx = rowWeights.length - 1;
+            const miscIdx = fulfillItems.length; // the misc weight was pushed right after the item weights
             const miscFeeDollars = rowFeeCents[miscIdx] / 100;
             await tx.purchase.create({
               data: {
@@ -1869,6 +1949,55 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
                 status: 'PAID',
                 isTestTransaction: isTestBypassActive,
                 ...(rowCashCents[miscIdx] > 0 ? { cashLegAmount: rowCashCents[miscIdx] / 100 } : {}),
+              },
+            });
+          }
+
+          // Consignor price tags (2026-10-06): mint a SOLD Item per verified line, then its Purchase row, in THIS transaction (the
+          // same one that flipped the request to PAID), so the ledger sees the item the instant the sale exists. The sku is keyed
+          // on the Square payment id, so a replay finds the same item, and a minted item that already has a recorded row is skipped.
+          // No stock decrement and no cross-channel hook runs for a tag: the item never existed anywhere else. A TEST transaction
+          // validates but never mints: it records a plain misc row. A mint failure follows the existing refund path (the throw
+          // rolls everything back and the captured card amount is refunded).
+          for (let t = 0; t < storedTagLines.length; t++) {
+            const tagLine = storedTagLines[t];
+            const tagRowIdx = fulfillItems.length + (needsMiscRow ? 1 : 0) + t;
+            let mintedTagItemId: string | null = null;
+            if (!isTestBypassActive) {
+              try {
+                const minted = await mintTagItemInTx(tx, {
+                  saleId: posRequest.saleId,
+                  organizerId: posRequest.organizerId,
+                  consignorId: tagLine.consignorId,
+                  priceCents: tagLine.priceCents,
+                  nonce: tagLine.nonce,
+                  paymentRef: externalPaymentId,
+                  allowArchived: true,
+                });
+                mintedTagItemId = minted.itemId;
+              } catch (mintErr) {
+                if (isConsignorTagError(mintErr)) {
+                  console.error(`[pos-payment] Consignor tag could not be minted after capture (request ${requestId}):`, mintErr.code);
+                  throw new PosFulfillmentUnavailableError(`consignor-tag:${tagLine.nonce}`, mintErr.code);
+                }
+                throw mintErr;
+              }
+              if (recordedItemIds.has(mintedTagItemId)) continue;
+            }
+            const tagFeeDollars = rowFeeCents[tagRowIdx] / 100;
+            await tx.purchase.create({
+              data: {
+                userId: posRequest.shopperUserId,
+                itemId: mintedTagItemId,
+                saleId: posRequest.saleId,
+                amount: rowAmountCents[tagRowIdx] / 100,
+                platformFeeAmount: tagFeeDollars,
+                ...snapshotForCommissionOnly(tagFeeDollars, null),
+                ...buildProcessorPurchaseFields(mintedTagItemId),
+                source: 'POS',
+                status: 'PAID',
+                isTestTransaction: isTestBypassActive,
+                ...(rowCashCents[tagRowIdx] > 0 ? { cashLegAmount: rowCashCents[tagRowIdx] / 100 } : {}),
               },
             });
           }
@@ -2191,7 +2320,8 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       saleId?: string;
       // quantity (ADR-136 Addendum A): cards on a bulk lot line. The server prices the line and refuses PRICE_CHANGED when
       // `amount` (dollars the register showed) differs from its own price by even one cent.
-      items?: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string }>;
+      // consignorTag (2026-10-06): a signed consignor price tag line (no itemId; the SOLD Item is minted in the sale transaction).
+      items?: Array<{ itemId?: string; amount: number; label?: string; quantity?: number | string; consignorTag?: { consignorId: string; nonce: string; sig: string } }>;
       buyerEmail?: string;
       discountType?: string;
       discountValue?: number;
@@ -2238,6 +2368,31 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     if (sale.status !== 'PUBLISHED') {
       return res.status(400).json({ message: 'Sale is not published' });
     }
+
+    // Consignor price tags (2026-10-06): validated BEFORE anything is charged. Flag, TEAMS, sale ownership, signature,
+    // consignor workspace, archived. Tag lines carry no itemId; they are outside the discount base and the catalog floor
+    // below because those only ever read itemId-bearing lines. The SOLD Item is minted after capture, in the record transaction.
+    const manualTagLineItems = items.filter((i) => i.consignorTag);
+    if (manualTagLineItems.some((i) => i.itemId)) {
+      return res.status(400).json({ message: 'A consignor tag line cannot also reference an item.', code: 'TAG_INVALID' });
+    }
+    let manualResolvedTags: ResolvedTagLine[] = [];
+    if (manualTagLineItems.length > 0) {
+      try {
+        manualResolvedTags = await resolveTagLines(prisma, {
+          organizer: { id: organizer.id, subscriptionTier: organizer.subscriptionTier },
+          saleId,
+          lines: manualTagLineItems.map((i) => ({ ...toTagLineInput(i.consignorTag), priceCents: Math.round(i.amount * 100) })),
+        });
+      } catch (tagErr) {
+        if (isConsignorTagError(tagErr)) return res.status(tagErr.status).json(consignorTagErrorBody(tagErr));
+        throw tagErr;
+      }
+    }
+    // Keyed by the line's consignorTag object: chargedItems rows are spread copies that share that reference.
+    const manualTagResolvedByTag = new Map<object, ResolvedTagLine>();
+    manualTagLineItems.forEach((line, idx) => manualTagResolvedByTag.set(line.consignorTag as object, manualResolvedTags[idx]));
+    const manualMintedTagItemIds = new Map<object, string>();
 
     // Reject duplicate itemIds -- each physical item can only be charged once per transaction.
     const itemIds = items.filter((i) => i.itemId).map((i) => i.itemId!);
@@ -2612,7 +2767,9 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
     // Bulk lots (ADR-136 Addendum A): a cart with a lot is recorded in ONE transaction that also takes the cards (below). When
     // that transaction finds the cards gone the whole payment is refunded, so the cash-leg commission must not be accrued
     // first. The accrual therefore runs after the transaction for such a cart, and up front (as before) for every other cart.
-    const useManualBulkTx = bulkPlans.size > 0 && !isTestBypassActive;
+    // A consignor tag line also takes this transactional branch (2026-10-06): the SOLD Item is minted in the same transaction as
+    // the Purchase rows. A test transaction validates the tag but never mints: it records a plain misc row.
+    const useManualBulkTx = (bulkPlans.size > 0 || manualTagLineItems.length > 0) && !isTestBypassActive;
     const manualPriorRows = useManualBulkTx ? await prisma.purchase.findMany({ where: { squarePaymentId } }) : null;
     const runManualCashLegAccrual = async (): Promise<void> => {
       if (isManualSplit && !isTestBypassActive) {
@@ -2699,7 +2856,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
       client.purchase.create({
         data: {
           userId: null, // walk-up buyer, no FindA.Sale account -- see Purchase.userId schema comment
-          itemId: item.itemId ?? null,
+          itemId: item.itemId ?? (item.consignorTag ? manualMintedTagItemIds.get(item.consignorTag) : undefined) ?? null,
           saleId,
           amount: item.amount,
           platformFeeAmount: (itemFeeCents + itemDebtCents) / 100,
@@ -2752,8 +2909,27 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             await lockBulkSaleKey(tx, `manual-card:${squarePaymentId}`);
             const alreadyRecorded = await tx.purchase.findMany({ where: { squarePaymentId } });
             if (alreadyRecorded.length > 0) throw new ManualCardReplayInTransaction(alreadyRecorded);
-            const sold = await sellBulkLinesInTransaction(tx, toBulkLineRecords(bulkPlans), sellItemUnitsInTransaction);
-            sold.forEach((result, lotItemId) => manualBulkResults.set(lotItemId, result));
+            if (bulkPlans.size > 0) {
+              const sold = await sellBulkLinesInTransaction(tx, toBulkLineRecords(bulkPlans), sellItemUnitsInTransaction);
+              sold.forEach((result, lotItemId) => manualBulkResults.set(lotItemId, result));
+            }
+            // Consignor tag lines: mint the SOLD Item first so its Purchase row carries the id. Keyed on the Square payment id, so
+            // a replay finds the same item. allowArchived: the tag was validated before the card was charged.
+            for (const line of chargedItems) {
+              if (!line.consignorTag) continue;
+              const resolved = manualTagResolvedByTag.get(line.consignorTag);
+              if (!resolved) throw new Error('Consignor tag line was not resolved before charge');
+              const minted = await mintTagItemInTx(tx, {
+                saleId,
+                organizerId: organizer.id,
+                consignorId: resolved.consignorId,
+                priceCents: resolved.priceCents,
+                nonce: resolved.nonce,
+                paymentRef: squarePaymentId,
+                allowArchived: true,
+              });
+              manualMintedTagItemIds.set(line.consignorTag, minted.itemId);
+            }
             const ids: string[] = [];
             for (let idx = 0; idx < chargedItems.length; idx++) {
               const row = await buildManualRow(tx, chargedItems[idx], idx, manualRowAllocs[idx].feeCents, manualRowAllocs[idx].debtCents);
@@ -2768,8 +2944,9 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
         manualBulkResults.clear();
         if (txErr instanceof ManualCardReplayInTransaction) {
           manualBulkReplayRows = txErr.rows;
-        } else if (isBulkLotError(txErr)) {
-          // The cards ran out after the charge. Nothing was taken or recorded: give the money back.
+        } else if (isBulkLotError(txErr) || isConsignorTagError(txErr)) {
+          // The cards ran out (or the consignor tag could not be minted) after the charge. Nothing was taken or recorded: give the money back.
+          const failedByTag = isConsignorTagError(txErr);
           await releaseCashDebtClaim({ organizerId: organizer.id, debtAppliedCents });
           const weights = chargedItems.map((ci) => Math.round(ci.amount * 100));
           const settlement = computeOversoldSettlement({
@@ -2787,7 +2964,9 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             cardPaidCents: totalChargeCents,
             settlement,
           });
-          const lotTitles = Array.from(bulkPlans.keys()).map((id) => dbItems[id]?.title ?? 'Bulk lot');
+          const lotTitles = failedByTag
+            ? manualTagLineItems.map((l) => formatTagTitle(Math.round(l.amount * 100)))
+            : Array.from(bulkPlans.keys()).map((id) => dbItems[id]?.title ?? 'Bulk lot');
           await notifyOversoldSettlement({
             result: settled,
             settlement,
@@ -2800,6 +2979,21 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             shopper: buyerEmail && buyerEmail.trim() ? { email: buyerEmail.trim() } : null,
           });
           const refunded = settled.status === 'REFUNDED';
+          if (failedByTag) {
+            console.error('[pos-payment] manualCardPayment: consignor tag could not be recorded after capture; payment settled via the oversold path:', txErr);
+            return res.status(409).json({
+              success: false,
+              charged: true,
+              refunded,
+              code: 'TAG_RECORD_FAILED_AFTER_PAYMENT',
+              squarePaymentId,
+              refundCents: settled.refundCents,
+              cashToReturnCents: settlement.cashToReturnCents,
+              message: refunded
+                ? `A consignor price tag could not be recorded while the card was being charged. The card payment of $${(settled.refundCents / 100).toFixed(2)} was refunded in full. Ring the sale up again.`
+                : `A consignor price tag could not be recorded while the card was being charged, and the automatic refund did not go through. Refund $${(settled.refundCents / 100).toFixed(2)} from your Square dashboard before you ring the sale up again.`,
+            });
+          }
           return res.status(409).json({
             success: false,
             charged: true,
@@ -2974,6 +3168,7 @@ export const manualCardPayment = async (req: AuthRequest, res: Response) => {
             if (lotPlan && i.itemId) {
               return `<li>${escapeHtml(describeBulkSaleLine(dbItems[i.itemId]?.title ?? 'Bulk lot', lotPlan.cards, lotPlan.pricePerThousandCents))}: $${i.amount.toFixed(2)}</li>`;
             }
+            if (i.consignorTag) return `<li>${formatTagTitle(Math.round(i.amount * 100))}: $${i.amount.toFixed(2)}</li>`;
             return `<li>${(i.itemId && dbItems[i.itemId]?.title) || i.label || 'Item'}: $${i.amount.toFixed(2)}</li>`;
           })
           .join('');

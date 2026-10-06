@@ -271,6 +271,86 @@ export const consignorIntakeSubmitLimiter = rateLimit({
 });
 
 /**
+ * Consignor price tag scans (2026-10-06): a cashier verifies one signed tag per scan, so a bag of 20 stickers is 20 calls in under a
+ * minute. paymentLimiter (5 per minute) would lock the register mid-bag, so tag verification gets its own cap: 60 per minute per
+ * signed-in user, or per IP for a booth-token cashier with no session. Each call is a signature check plus two small reads.
+ */
+export const consignorTagScanLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  keyGenerator: (req: Request) => `consignor-tag-scan:${(req as any).user?.id ?? req.ip ?? '0.0.0.0'}`,
+  validate: false,
+  handler: (_req: Request, res: any) => {
+    res.status(429).json({ error: 'Too many price tag scans. Wait a few seconds and try again.', message: 'Too many price tag scans. Wait a few seconds and try again.', code: 'TAG_SCAN_RATE_LIMITED' });
+  },
+  standardHeaders: false,
+  legacyHeaders: false,
+});
+
+/**
+ * Consignor invite resend (2026-10-06): POST /api/consignors/:id/send-invite emails a real
+ * consignor's inbox, so it is capped like consignorStatementResendLimiter
+ * (routes/consignorSettlement.ts): 3 successful sends per consignor per organizer per 24 hours.
+ * Keyed by organizer user id AND consignor id so one consignor's quota cannot be burned from another
+ * account. skipFailedRequests: the controller answers 422 (NO_EMAIL / SUPPRESSED / BLOCKED_DOMAIN)
+ * or 502 (ERROR) when nothing was sent, and those do not count.
+ */
+export const consignorInviteResendLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 3,
+  keyGenerator: (req: Request) => `consignor-invite:${(req as any).user?.id ?? req.ip ?? '0.0.0.0'}:${req.params.id}`,
+  validate: false,
+  skipFailedRequests: true,
+  handler: (_req: Request, res: any) => {
+    res.status(429).json({
+      error: 'This invite has already been sent 3 times in the last 24 hours. Please try again tomorrow.',
+      code: 'INVITE_RATE_LIMITED',
+    });
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Consignor create/edit (2026-10-06 security pass): both now look up whether the email belongs to an
+ * existing FindA.Sale account and report it to the organizer as a boolean ("Existing FindA.Sale
+ * account"). That boolean is an account-existence signal, which registration deliberately hides, so
+ * POST /api/consignors and PUT /api/consignors/:id are capped per organizer to stop bulk probing.
+ * 60 per hour is far above real use (adding or editing a consignor at a drop-off table).
+ */
+export const consignorWriteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  keyGenerator: (req: Request) => `consignor-write:${(req as any).user?.id ?? req.ip ?? '0.0.0.0'}`,
+  validate: false,
+  handler: (_req: Request, res: any) => {
+    res.status(429).json({ error: 'Too many consignor changes in the last hour. Please try again later.', code: 'RATE_LIMITED' });
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Consignor portal Square endpoints (2026-10-06): GET/POST /api/consignors/portal/:token/square*
+ * are anonymous, capability-token-gated endpoints that start or complete a Square OAuth connection.
+ * Keyed by IP (no user on these requests). 20 per 15 minutes is ample for a real consignor (a status
+ * read, a start, a callback and a few "Check again" clicks) and blunts token guessing and scripted
+ * start/callback floods. Portal tokens are cuid values, so guessing is already impractical; this is
+ * defense in depth.
+ */
+export const consignorPortalSquareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req: Request) => `consignor-portal-square:${req.ip ?? '0.0.0.0'}`,
+  validate: false,
+  handler: (_req: Request, res: any) => {
+    res.status(429).json({ error: 'Too many requests. Please wait a few minutes and try again.', code: 'RATE_LIMITED' });
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Shopper reservations limiter: 40 requests per minute, keyed by req.user.id (rate-limit
  * hardening Item 1, 2026-08-27 -- Architect + Hacker sign-off, incident: a ~17min external
  * 429-storm against /api/reservations/shopper and /api/reservations/my-holds-full, fully

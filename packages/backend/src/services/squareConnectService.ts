@@ -1,5 +1,5 @@
 import { SquareClient, SquareEnvironment } from 'square';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notificationService';
@@ -229,6 +229,11 @@ export const decodeSquareOAuthState = (state: string): SquareOAuthState | null =
       return null;
     }
     if (!['ORGANIZER', 'CONSIGNOR', 'VENDOR_BOOTH'].includes(parsed.ownerType)) return null;
+    // Consignor portal Square connect (2026-10-06): a portal-variant state (see
+    // encodeSquarePortalOAuthState below) is signed with the same derived key but carries
+    // `via: 'PORTAL'` and is NOT bound to a logged-in user. It must never be accepted by the
+    // authenticated organizer callback, so any payload carrying a `via` field is rejected here.
+    if (parsed.via !== undefined) return null;
     if (Date.now() - parsed.ts > SQUARE_OAUTH_STATE_MAX_AGE_MS) return null; // expired -- bounds a stolen-URL replay window
     return parsed as SquareOAuthState;
   } catch {
@@ -290,11 +295,12 @@ const SQUARE_OAUTH_SCOPES = [
   'PAYMENTS_WRITE_ADDITIONAL_RECIPIENTS',
 ].join(' ');
 
-export const buildSquareAuthorizeUrl = (
-  ownerType: SquareOnboardingOwnerType,
-  ownerId: string,
-  userId: string
-): { url: string; state: string } => {
+/**
+ * Resolves the Square application id for the current SQUARE_ENVIRONMENT, or throws with the
+ * same setup guidance the original inline lookup in buildSquareAuthorizeUrl used. Extracted
+ * (2026-10-06) so the consignor-portal builder below shares the exact same lookup.
+ */
+const getSquareAuthorizeClientId = (): string => {
   const isProdSquareEnv = getSquareEnvironment() === SquareEnvironment.Production;
   const clientId = isProdSquareEnv
     ? process.env.SQUARE_APPLICATION_ID
@@ -313,17 +319,141 @@ export const buildSquareAuthorizeUrl = (
             'Developer Dashboard sandbox app, and register the sandbox OAuth redirect URL there.'
     );
   }
-  // SECURITY FIX (2026-09-07, findasale-hacker pass): state is now bound to the initiating
-  // user (see SquareOAuthState.userId's doc comment) -- every caller of this function must
-  // pass the CURRENTLY authenticated req.user.id, never a different/omitted value.
-  const state = encodeSquareOAuthState(ownerType, ownerId, userId);
+  return clientId;
+};
+
+/**
+ * Builds the Square authorize URL for an already-encoded state. `session: 'false'` forces
+ * Square to show its sign-in screen even when the browser already has a Square session --
+ * Square's own docs: "If false, the user must log in to their Square account to view the
+ * Permission Request form, even if they already have a valid user session", and "For a
+ * production application, this parameter must be set to false to help ensure that sellers
+ * with multiple Square accounts use the correct account". That matters doubly for the
+ * consignor portal flow, which may run on an organizer's shared device at drop-off.
+ */
+const buildAuthorizeUrlForState = (state: string): string => {
   const params = new URLSearchParams({
-    client_id: clientId,
+    client_id: getSquareAuthorizeClientId(),
     scope: SQUARE_OAUTH_SCOPES,
     state,
     session: 'false',
   });
-  return { url: `${squareOAuthBaseUrl()}/oauth2/authorize?${params.toString()}`, state };
+  return `${squareOAuthBaseUrl()}/oauth2/authorize?${params.toString()}`;
+};
+
+export const buildSquareAuthorizeUrl = (
+  ownerType: SquareOnboardingOwnerType,
+  ownerId: string,
+  userId: string
+): { url: string; state: string } => {
+  // Throw the missing-config error BEFORE encoding state, exactly as the original inline
+  // implementation did (clientId lookup came first).
+  getSquareAuthorizeClientId();
+  // SECURITY FIX (2026-09-07, findasale-hacker pass): state is now bound to the initiating
+  // user (see SquareOAuthState.userId's doc comment) -- every caller of this function must
+  // pass the CURRENTLY authenticated req.user.id, never a different/omitted value.
+  const state = encodeSquareOAuthState(ownerType, ownerId, userId);
+  return { url: buildAuthorizeUrlForState(state), state };
+};
+
+// ---------------------------------------------------------------------------
+// Consignor PORTAL variant (2026-10-06): lets a consignor connect Square from their emailed
+// portal link with NO FindA.Sale account. Security model, explicit:
+//   * The state is HMAC-signed with the SAME derived key as the organizer variant, but its
+//     payload carries `via: 'PORTAL'` and NO userId. decodeSquareOAuthState (organizer
+//     callback) rejects any payload with `via`; decodeSquarePortalOAuthState (portal callback)
+//     rejects any payload without `via: 'PORTAL'`. Neither variant can be replayed into the
+//     other flow.
+//   * ownerType is always CONSIGNOR and ownerId is the consignor id resolved from the portal
+//     token at start time. The portal callback re-resolves the consignor from the portal token
+//     in the URL and requires decoded.ownerId to match it (cross-consignor replay fails).
+//   * The nonce is 128 random bits. Only its SHA-256 is stored (Consignor.squarePortalOAuthNonce)
+//     and it is consumed atomically on callback, so a state completes at most once and only the
+//     most recent start is valid (replay fails).
+//   * 20-minute TTL (organizer flow is 15). Both stay under the 30-minute ceiling set for this
+//     feature, bounding a leaked-URL window while leaving time to create a Square account.
+//   * The portal flow may only make a FIRST connection; see consignorSquareConnectService.ts.
+// ---------------------------------------------------------------------------
+
+export const SQUARE_PORTAL_OAUTH_STATE_MAX_AGE_MS = 20 * 60 * 1000;
+
+export interface SquarePortalOAuthState {
+  via: 'PORTAL';
+  ownerType: 'CONSIGNOR';
+  ownerId: string;
+  nonce: string;
+  ts: number;
+}
+
+/** SHA-256 hex of a portal nonce -- the only form ever written to the database. */
+export const hashSquarePortalNonce = (nonce: string): string => createHash('sha256').update(nonce, 'utf8').digest('hex');
+
+export const encodeSquarePortalOAuthState = (consignorId: string): { state: string; nonce: string } => {
+  const nonce = randomBytes(16).toString('base64url');
+  const payload: SquarePortalOAuthState = {
+    via: 'PORTAL',
+    ownerType: 'CONSIGNOR',
+    ownerId: consignorId,
+    nonce,
+    ts: Date.now(),
+  };
+  const payloadJson = JSON.stringify(payload);
+  const signature = signSquareStatePayload(payloadJson);
+  const state = Buffer.from(JSON.stringify({ p: payloadJson, s: signature }), 'utf8').toString('base64url');
+  return { state, nonce };
+};
+
+export const decodeSquarePortalOAuthState = (state: string): SquarePortalOAuthState | null => {
+  try {
+    if (typeof state !== 'string' || !state || state.length > 4096) return null;
+    const envelope = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+    if (!envelope || typeof envelope.p !== 'string' || typeof envelope.s !== 'string') return null;
+
+    const expectedSignature = signSquareStatePayload(envelope.p);
+    const provided = Buffer.from(envelope.s, 'utf8');
+    const expected = Buffer.from(expectedSignature, 'utf8');
+    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+      return null;
+    }
+
+    const parsed = JSON.parse(envelope.p);
+    if (
+      !parsed ||
+      parsed.via !== 'PORTAL' ||
+      parsed.ownerType !== 'CONSIGNOR' ||
+      typeof parsed.ownerId !== 'string' ||
+      !parsed.ownerId ||
+      typeof parsed.nonce !== 'string' ||
+      !parsed.nonce ||
+      typeof parsed.ts !== 'number' ||
+      parsed.userId !== undefined
+    ) {
+      return null;
+    }
+    const age = Date.now() - parsed.ts;
+    if (age > SQUARE_PORTAL_OAUTH_STATE_MAX_AGE_MS || age < -60 * 1000) return null;
+    return {
+      via: 'PORTAL',
+      ownerType: 'CONSIGNOR',
+      ownerId: parsed.ownerId,
+      nonce: parsed.nonce,
+      ts: parsed.ts,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Authorize URL for the consignor portal flow. Same scopes, same `session=false`, same fixed
+ * registered redirect URL as every other owner type -- Square has exactly one redirect URL per
+ * application, so the frontend callback page routes on the state variant. Returns the nonce
+ * so the caller can store its hash before handing the URL out.
+ */
+export const buildSquarePortalAuthorizeUrl = (consignorId: string): { url: string; state: string; nonce: string } => {
+  getSquareAuthorizeClientId();
+  const { state, nonce } = encodeSquarePortalOAuthState(consignorId);
+  return { url: buildAuthorizeUrlForState(state), state, nonce };
 };
 
 // ---------------------------------------------------------------------------

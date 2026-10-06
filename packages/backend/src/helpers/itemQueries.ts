@@ -41,6 +41,9 @@ export const PUBLIC_ITEM_FILTER: Prisma.ItemWhereInput = {
   isActive: true,
   status: { notIn: ['GRACE_LOCKED'] },
   draftStatus: 'PUBLISHED',
+  // Consignor price-tag sales (POS-minted, photo-less, SOLD) are never shown to shoppers. isActive:false already keeps them out;
+  // this makes it explicit so a future change to isActive cannot expose them.
+  listingType: { not: 'CONSIGNOR_TAG' },
 };
 
 /**

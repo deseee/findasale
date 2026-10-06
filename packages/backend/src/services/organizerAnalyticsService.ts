@@ -61,6 +61,7 @@ export async function getOrganizerWeeklyStats(organizerId: string): Promise<Orga
   // Get items sold in the past 7 days (from active/recently-ended sales)
   const soldItems = await prisma.item.findMany({
     where: {
+      listingType: { not: 'CONSIGNOR_TAG' },
       status: 'SOLD',
       createdAt: { gte: sevenDaysAgo },
       sale: {
@@ -100,6 +101,7 @@ export async function getOrganizerWeeklyStats(organizerId: string): Promise<Orga
   for (const saleId of salesIds) {
     const count = await prisma.item.count({
       where: {
+        listingType: { not: 'CONSIGNOR_TAG' },
         saleId,
         status: 'SOLD',
         createdAt: { gte: sevenDaysAgo },

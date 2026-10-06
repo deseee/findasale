@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import axios from 'axios';
 import api from '../lib/api';
+import {
+  isPortalSquareState,
+  readPendingPortalSquareToken,
+  clearPendingPortalSquareToken,
+  portalSquareResultHref,
+} from '../lib/consignorPortalSquare';
 
 /**
  * pages/square-oauth-callback.tsx
@@ -14,11 +21,13 @@ import api from '../lib/api';
  * `/square-oauth-callback` is that fixed URL; the path must not change once registered.
  *
  * Square appends either `code`+`state` (merchant approved) or `error`+`error_description`
- * (merchant declined) to this URL. This page never inspects `state` itself -- it's an
- * opaque, single-use round-trip value that only squareConnectController.ts's
- * handleSquareConnectCallback decodes (see squareConnectService.ts for why `state` is not
- * a security boundary here). This page's only job is: read the query params once, make one
- * authenticated call to POST /api/square-connect/callback, and show the result.
+ * (merchant declined) to this URL. For the organizer/booth flows `state` stays opaque here and
+ * only squareConnectController.ts's handleSquareConnectCallback decodes it: this page reads the
+ * query params once, makes one authenticated call to POST /api/square-connect/callback, and
+ * shows the result. Consignor portal flow (2026-10-06): the page peeks at the unsigned state
+ * envelope ONLY to see whether it is the portal variant (lib/consignorPortalSquare.ts), and if
+ * so posts to the public portal callback instead and sends the consignor back to their portal.
+ * The backend verifies every state; the peek never grants anything.
  *
  * Auth: this project's API auth is a cookie-based JWT proxied through Next's own /api
  * rewrite (see next.config.js's `railwayApi` rewrite + lib/api.ts's withCredentials:true +
@@ -82,6 +91,8 @@ export default function SquareOAuthCallbackPage() {
   // button on a network-failure error can re-send the SAME code/state once, without
   // re-reading them from the (already-scrubbed) URL.
   const pendingCodeRef = useRef<{ code: string; state: string } | null>(null);
+  // Portal variant whose portal link could not be recovered in this tab (no retry possible here).
+  const [portalLost, setPortalLost] = useState(false);
 
   useEffect(() => {
     if (!router.isReady || hasHandled.current) return;
@@ -92,6 +103,34 @@ export default function SquareOAuthCallbackPage() {
     // Scrub the OAuth params from the address bar/history immediately. The code is
     // single-use; nothing about it should be reloadable, bookmarkable, or left visible.
     router.replace('/square-oauth-callback', undefined, { shallow: true });
+
+    // Consignor portal Square connect (2026-10-06): a consignor connecting from their portal link
+    // has no FindA.Sale login. Square sends them back to this same fixed URL, so peek at the state
+    // envelope ONLY to choose the route (the backend verifies the signature and decides). Portal
+    // states go to the public portal callback; everything else follows the unchanged organizer
+    // path below. Whether an organizer happens to be logged in on this browser does not matter for
+    // the portal path: it never uses the organizer session.
+    if (typeof oauthState === 'string' && isPortalSquareState(oauthState)) {
+      const portalToken = readPendingPortalSquareToken();
+      clearPendingPortalSquareToken();
+      if (!portalToken) {
+        setPortalLost(true);
+        setPageState('error');
+        setErrorMessage('Please open your consignor portal link again and choose Connect Square to finish.');
+        return;
+      }
+      // Full-page replace (not router.replace) so it never races the shallow scrub above.
+      if (typeof error === 'string' && error) {
+        window.location.replace(portalSquareResultHref(portalToken, 'cancelled'));
+        return;
+      }
+      if (typeof code !== 'string' || !code) {
+        window.location.replace(portalSquareResultHref(portalToken, 'error'));
+        return;
+      }
+      void completePortalConnection(portalToken, code, oauthState);
+      return;
+    }
 
     if (typeof error === 'string' && error) {
       setDeclineMessage(
@@ -141,7 +180,29 @@ export default function SquareOAuthCallbackPage() {
     }
   };
 
+  // Portal variant: public endpoint, plain axios (no organizer cookie or auth refresh involved).
+  const completePortalConnection = async (portalToken: string, code: string, oauthState: string) => {
+    setPageState('loading');
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL || '/api'}/consignors/portal/${encodeURIComponent(portalToken)}/square/callback`,
+        { code, state: oauthState }
+      );
+      const outcome = response.data?.needsActivation ? 'needs-activation' : 'connected';
+      window.location.replace(portalSquareResultHref(portalToken, outcome));
+    } catch (err: any) {
+      const errCode = err?.response?.data?.code;
+      window.location.replace(
+        portalSquareResultHref(portalToken, errCode === 'SQUARE_ALREADY_CONNECTED' || errCode === 'SQUARE_ACCOUNT_MISMATCH' ? 'already-connected' : 'error')
+      );
+    }
+  };
+
   const handleRetry = () => {
+    if (portalLost) {
+      router.push('/');
+      return;
+    }
     if (pendingCodeRef.current) {
       void completeConnection(pendingCodeRef.current.code, pendingCodeRef.current.state);
     } else {
@@ -274,12 +335,14 @@ export default function SquareOAuthCallbackPage() {
               </h1>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">{errorMessage}</p>
               <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                {!portalLost && (
                 <button
                   onClick={handleRetry}
                   className="inline-flex justify-center py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition"
                 >
                   Try Again
                 </button>
+                )}
                 <button
                   onClick={() => router.push('/')}
                   className="inline-flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition"

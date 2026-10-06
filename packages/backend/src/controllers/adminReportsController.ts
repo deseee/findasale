@@ -114,7 +114,7 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
           o."createdAt"                          AS "joinedAt"
         FROM "Organizer" o
         LEFT JOIN "Sale" s ON s."organizerId" = o.id AND s."deletedAt" IS NULL
-        LEFT JOIN "Item" i ON i."saleId" = s.id
+        LEFT JOIN "Item" i ON i."saleId" = s.id AND i."listingType" <> 'CONSIGNOR_TAG'
         GROUP BY o.id, o."businessName", o."subscriptionTier", o."createdAt"
         ORDER BY ${Prisma.raw(sortExpr)} ${Prisma.raw(direction)} ${Prisma.raw(nullsOrder)}, o.id ASC
         LIMIT ${limit} OFFSET ${skip}

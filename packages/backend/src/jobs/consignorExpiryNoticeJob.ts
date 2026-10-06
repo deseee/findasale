@@ -97,6 +97,7 @@ const openPickupWindowsForNewlyUnclaimedReturnItems = async (now: Date): Promise
     where: {
       consignorId: { not: null },
       status: 'AVAILABLE',
+      listingType: { not: 'CONSIGNOR_TAG' }, // POS price-tag sales are never unclaimed / expiring inventory
       pickupWindowStartedAt: null,
     },
     include: {
@@ -220,6 +221,7 @@ const sendMidWindowReminders = async (now: Date): Promise<void> => {
     where: {
       consignorId: { not: null },
       status: 'AVAILABLE',
+      listingType: { not: 'CONSIGNOR_TAG' }, // POS price-tag sales are never unclaimed / expiring inventory
       pickupWindowStartedAt: { not: null, lte: midWindowCutoff },
       pickupReminder2SentAt: null,
     },
