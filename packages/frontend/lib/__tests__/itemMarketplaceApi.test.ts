@@ -32,6 +32,7 @@ test('getStatus: GET /items/:id/marketplace-status and normalizes a partial resp
     itemId: 'abc',
     platforms: {},
     ebayHold: { heldAt: null, heldFields: [], contentDirtyAt: null },
+    ebayAcceptedConditions: null,
     failedUnacknowledgedPushCount: 0,
     recentPushes: [],
   });
@@ -114,4 +115,12 @@ test('marketplaceErrorMessage prefers the server message (409 / 429), else the f
   assert.equal(marketplaceErrorMessage({ response: { data: { error: 'Too many' } } }, 'x'), 'Too many');
   assert.equal(marketplaceErrorMessage(new Error('boom'), 'fallback'), 'fallback');
   assert.equal(marketplaceErrorMessage({ response: { data: { message: '  ' } } }, 'fallback'), 'fallback');
+});
+
+test('normalizeMarketplaceStatus carries ebayAcceptedConditions: a string list, else null', () => {
+  assert.deepEqual(normalizeMarketplaceStatus({ ebayAcceptedConditions: ['NEW', 'USED_EXCELLENT'] }, 'x').ebayAcceptedConditions, ['NEW', 'USED_EXCELLENT']);
+  assert.deepEqual(normalizeMarketplaceStatus({ ebayAcceptedConditions: ['NEW', 3, null] }, 'x').ebayAcceptedConditions, ['NEW']);
+  assert.equal(normalizeMarketplaceStatus({ ebayAcceptedConditions: null }, 'x').ebayAcceptedConditions, null);
+  assert.equal(normalizeMarketplaceStatus({}, 'x').ebayAcceptedConditions, null);
+  assert.equal(normalizeMarketplaceStatus(null, 'x').ebayAcceptedConditions, null);
 });

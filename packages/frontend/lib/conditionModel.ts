@@ -77,6 +77,29 @@ export const EBAY_CONDITION_LABELS: Record<EbayConditionEnum, string> = {
   FOR_PARTS_OR_NOT_WORKING: 'For parts or not working',
 };
 
+/**
+ * Every eBay condition enum a category can accept (the backend's conditionId-to-enum map in ebayPublishService), with
+ * eBay's own display name per conditionId. Wider than EBAY_CONDITION_ENUMS because a category can force a substitute
+ * the editor never produces itself (3000 USED_EXCELLENT shows as "Used", 1500 NEW_OTHER, and so on).
+ * Mirrors getConditionLabel in the backend.
+ */
+export const EBAY_ACCEPTED_CONDITION_LABELS: Record<string, string> = {
+  NEW: 'New',
+  NEW_OTHER: 'New other (see details)',
+  NEW_WITH_DEFECTS: 'New with defects',
+  CERTIFIED_REFURBISHED: 'Certified Refurbished',
+  EXCELLENT_REFURBISHED: 'Excellent - Refurbished',
+  VERY_GOOD_REFURBISHED: 'Very Good - Refurbished',
+  GOOD_REFURBISHED: 'Good - Refurbished',
+  SELLER_REFURBISHED: 'Seller refurbished',
+  LIKE_NEW: 'Like New',
+  USED_EXCELLENT: 'Used',
+  USED_VERY_GOOD: 'Very Good',
+  USED_GOOD: 'Good',
+  USED_ACCEPTABLE: 'Acceptable',
+  FOR_PARTS_OR_NOT_WORKING: 'For parts or not working',
+};
+
 export type NormalizedCondition = {
   /** Canonical condition, or null when the input is empty or not recognized. */
   condition: CanonicalCondition | null;
@@ -199,15 +222,68 @@ export function desiredEbayCondition(
 }
 
 /**
+ * Mirror of the backend FALLBACKS_BY_DESIRED (ebayPublishService): the ordered substitutes tried when the item's eBay
+ * category does not accept the desired enum. lib/__tests__/conditionFallbackParity.test.ts keeps it identical.
+ */
+const FALLBACKS_BY_DESIRED: Record<string, string[]> = {
+  'NEW':                      ['NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_VERY_GOOD', 'USED_GOOD'],
+  'LIKE_NEW':                 ['USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_GOOD', 'NEW_OTHER'],
+  'USED_VERY_GOOD':           ['USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW_OTHER'],
+  'USED_EXCELLENT':           ['USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE'],
+  'USED_GOOD':                ['USED_VERY_GOOD', 'USED_ACCEPTABLE', 'USED_EXCELLENT', 'NEW_OTHER'],
+  'USED_ACCEPTABLE':          ['USED_GOOD', 'USED_VERY_GOOD', 'USED_EXCELLENT', 'NEW_OTHER'],
+  'SELLER_REFURBISHED':       ['USED_EXCELLENT', 'USED_VERY_GOOD', 'USED_GOOD'],
+  'FOR_PARTS_OR_NOT_WORKING': ['USED_ACCEPTABLE', 'USED_GOOD'],
+};
+
+function isUsedOrRefurbishedDesired(desired: string): boolean {
+  return desired.startsWith('USED_') || desired.includes('REFURBISHED') || desired === 'LIKE_NEW';
+}
+
+/**
+ * Mirror of the backend pickFallbackCondition. Assumes `desired` is NOT in `accepted`. Returns the substitute enum,
+ * or null when `accepted` is empty. Chain first; last resort is the first accepted enum, except that a used or
+ * refurbished desired prefers any accepted USED_* enum over NEW and NEW_OTHER.
+ */
+export function pickFallbackCondition(desired: string, accepted: ReadonlySet<string>): string | null {
+  const chain = FALLBACKS_BY_DESIRED[desired] || ['USED_GOOD', 'USED_VERY_GOOD', 'NEW'];
+  for (const candidate of chain) {
+    if (accepted.has(candidate)) return candidate;
+  }
+  const all = Array.from(accepted);
+  return (isUsedOrRefurbishedDesired(desired) ? all.find((c) => c.startsWith('USED_')) : undefined) ?? all[0] ?? null;
+}
+
+/**
+ * The enum eBay will actually carry: the desired enum when the item's category accepts it (or when the accepted list is
+ * unknown), else the same substitute the publish path picks (ensureConditionValidForCategory).
+ */
+export function effectiveEbayCondition(
+  condition: string | null | undefined,
+  grade: string | null | undefined,
+  acceptedConditions?: readonly string[] | null,
+): string {
+  const desired = desiredEbayCondition(condition, grade);
+  if (!acceptedConditions || acceptedConditions.length === 0) return desired;
+  const accepted = new Set(acceptedConditions);
+  return accepted.has(desired) ? desired : pickFallbackCondition(desired, accepted) ?? desired;
+}
+
+/**
  * Human label of what eBay will show for this condition and grade, for the save-impact line.
  *   NEW -> New, PARTS_OR_REPAIR -> For parts or not working, REFURBISHED -> Seller refurbished,
  *   USED A or B -> Very Good, C -> Good, D -> Acceptable, no grade -> Good.
+ * Pass the item's accepted eBay conditions (marketplace-status ebayAcceptedConditions) and a category that does not
+ * accept the desired enum shows the substitute eBay will really use, for example "Used" in a category that takes only
+ * New, New other, Used and For parts.
  */
 export function eBayConditionPreview(
   condition: string | null | undefined,
   grade: string | null | undefined,
+  acceptedConditions?: readonly string[] | null,
 ): string {
-  return EBAY_CONDITION_LABELS[desiredEbayCondition(condition, grade)];
+  const effective = effectiveEbayCondition(condition, grade, acceptedConditions);
+  return EBAY_ACCEPTED_CONDITION_LABELS[effective] ?? EBAY_CONDITION_LABELS[effective as EbayConditionEnum] ?? effective;
 }
 
 /**

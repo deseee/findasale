@@ -51,6 +51,8 @@ export interface MarketplaceStatus {
   itemId: string;
   platforms: Record<string, PlatformEntry>;
   ebayHold: EbayHold;
+  /** eBay condition enums the item's eBay category accepts, or null when unknown (no category, not on eBay, lookup failed). */
+  ebayAcceptedConditions?: string[] | null;
   failedUnacknowledgedPushCount: number;
   recentPushes: PushRow[];
 }
@@ -91,6 +93,9 @@ export function normalizeMarketplaceStatus(raw: any, itemId: string): Marketplac
     itemId: typeof raw?.itemId === 'string' ? raw.itemId : itemId,
     platforms: raw && typeof raw.platforms === 'object' && raw.platforms ? raw.platforms : {},
     ebayHold: raw?.ebayHold ? normalizeHold(raw.ebayHold) : { ...EMPTY_HOLD },
+    ebayAcceptedConditions: Array.isArray(raw?.ebayAcceptedConditions)
+      ? raw.ebayAcceptedConditions.filter((c: unknown): c is string => typeof c === 'string')
+      : null,
     failedUnacknowledgedPushCount:
       typeof raw?.failedUnacknowledgedPushCount === 'number' ? raw.failedUnacknowledgedPushCount : 0,
     recentPushes: Array.isArray(raw?.recentPushes) ? raw.recentPushes : [],

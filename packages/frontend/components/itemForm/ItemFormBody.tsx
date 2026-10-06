@@ -1847,7 +1847,7 @@ const ItemFormBody: React.FC<ItemFormBodyProps> = ({ itemId, variant, onSaved, o
                   condition={formData.condition}
                   grade={formData.conditionGrade}
                   showLegacyS={String(item.conditionGrade || '').trim().toUpperCase() === 'S' || formData.conditionGrade === 'S'}
-                  ebayPreview={ebayListed ? eBayConditionPreview(formData.condition, formData.conditionGrade) : undefined}
+                  ebayPreview={ebayListed ? eBayConditionPreview(formData.condition, formData.conditionGrade, mp.status?.ebayAcceptedConditions) : undefined}
                   onChange={(conditionGrade) => {
                     setConditionTouched(true);
                     setFormData((prev) => ({ ...prev, conditionGrade }));

@@ -25,6 +25,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { getAcceptedConditionsForCategory } from './ebayPublishService';
 import {
   computeChannelStatusForItems,
   type ChannelStatusItemInput,
@@ -119,6 +120,12 @@ export interface ItemMarketplaceStatus {
     grailed: PlatformStatusEntry;
   };
   ebayHold: { heldAt: Date | null; heldFields: string[]; contentDirtyAt: Date | null };
+  /**
+   * eBay condition enums the item's eBay category accepts (for example ['NEW', 'USED_EXCELLENT']), or null when the
+   * item has no category, is not on eBay, or the lookup failed. The item editor uses it to preview the condition eBay
+   * will actually show. Added by getItemMarketplaceStatus; the pure builder leaves it null.
+   */
+  ebayAcceptedConditions: string[] | null;
   /** FAILED or PARTIAL eBay pushes the organizer has not acknowledged (drives the Edit banner). */
   failedUnacknowledgedPushCount: number;
   /** Newest eBay push attempts first, at most 10. */
@@ -210,6 +217,8 @@ export interface StatusInputs {
   etsyListingId?: string | null;
   recentPushRows: Array<Parameters<typeof toLastPush>[0]>;
   failedUnacknowledgedPushCount: number;
+  /** Accepted eBay condition enums for the item's category, when known. */
+  ebayAcceptedConditions?: string[] | null;
 }
 
 /** Pure composition: everything has been fetched by the caller. */
@@ -293,6 +302,7 @@ export function buildItemMarketplaceStatus(inputs: StatusInputs): ItemMarketplac
       heldFields: item.ebayHeldFields ?? [],
       contentDirtyAt: item.ebayContentDirtyAt ?? null,
     },
+    ebayAcceptedConditions: inputs.ebayAcceptedConditions ?? null,
     failedUnacknowledgedPushCount: inputs.failedUnacknowledgedPushCount,
     recentPushes: recent,
   };
@@ -322,6 +332,30 @@ export const ITEM_STATUS_SELECT = {
   packageWidthIn: true,
   packageHeightIn: true,
 } as const;
+
+/** Longest the status endpoint waits for eBay's condition policy; the lookup keeps running and fills its cache. */
+const ACCEPTED_CONDITIONS_WAIT_MS = 4000;
+
+/**
+ * Accepted eBay condition enums for the item's saved category, for the editor's "On eBay this shows as" preview.
+ * Only looked up for an item that is on eBay and has a category (the preview shows only then). Never throws and never
+ * delays the response past ACCEPTED_CONDITIONS_WAIT_MS: any miss, error or empty policy yields null.
+ */
+async function loadAcceptedConditions(item: StatusItemInput): Promise<string[] | null> {
+  if (!item.ebayCategoryId || !(item.ebayListingId || item.ebayOfferId)) return null;
+  try {
+    const lookup = getAcceptedConditionsForCategory(String(item.ebayCategoryId)).catch(() => null);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), ACCEPTED_CONDITIONS_WAIT_MS);
+    });
+    const accepted = await Promise.race([lookup, timeout]);
+    if (timer) clearTimeout(timer);
+    return accepted && accepted.size > 0 ? Array.from(accepted) : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function getItemMarketplaceStatus(args: {
   item: StatusItemInput;
@@ -388,6 +422,7 @@ export async function getItemMarketplaceStatus(args: {
     prisma.itemCard.findUnique({ where: { itemId: item.id }, select: { releaseYear: true } }),
   ]);
 
+  const ebayAcceptedConditions = await loadAcceptedConditions(item);
   const accounts = organizer?.marketplaceAccounts ?? [];
   const used = (p: ExtensionPlatform) => organizerJobPlatforms.some((j) => j.platform === p);
   const extensionPlatformsUsed: ExtensionPlatformsUsed = {
@@ -420,6 +455,7 @@ export async function getItemMarketplaceStatus(args: {
     etsyListingId: etsyRow?.etsyListingId ?? null,
     recentPushRows: pushRows,
     failedUnacknowledgedPushCount: failedCount,
+    ebayAcceptedConditions,
   });
 }
 

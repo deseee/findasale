@@ -16,6 +16,10 @@ const mockPrisma: any = {
 };
 
 jest.mock('../lib/prisma', () => ({ prisma: mockPrisma }));
+jest.mock('../services/ebayPublishService', () => ({
+  ...jest.requireActual('../services/ebayPublishService'),
+  getAcceptedConditionsForCategory: jest.fn(),
+}));
 // extensionController dependencies that are irrelevant to the listed flags.
 jest.mock('../utils/cloudinaryWatermark', () => ({
   getWatermarkedUrlWithQR: (u: string) => u,
@@ -49,6 +53,7 @@ import {
   type MarketplaceJobRow,
 } from '../services/itemMarketplaceStatusService';
 import { getExtensionItems } from '../controllers/extensionController';
+import { getAcceptedConditionsForCategory } from '../services/ebayPublishService';
 
 const T = (n: number) => new Date(Date.UTC(2026, 9, 1, 0, n));
 const job = (itemId: string, platform: string, action: string, status: string, n: number): MarketplaceJobRow => ({
@@ -180,6 +185,51 @@ describe('getItemMarketplaceStatus (queries are scoped to the owner organizer)',
     expect(mockPrisma.itemMarketplacePush.findMany.mock.calls[0][0].where).toMatchObject({ itemId: 'i1', organizerId: 'orgOWNER' });
     expect(mockPrisma.itemMarketplacePush.count.mock.calls[0][0].where).toMatchObject({ itemId: 'i1', organizerId: 'orgOWNER' });
     expect(mockPrisma.etsyListing.findFirst.mock.calls[0][0].where).toMatchObject({ itemId: 'i1', organizerId: 'orgOWNER' });
+  });
+});
+
+describe('getItemMarketplaceStatus ebayAcceptedConditions (category-aware condition preview)', () => {
+  const mockAccepted = getAcceptedConditionsForCategory as jest.Mock;
+  const baseItem = {
+    id: 'i1', category: 'Music', ebayCategoryId: '22669', ebayListingId: 'L1', ebayOfferId: 'O1',
+    discogsListingId: null, reverbListingId: null, shopifyListing: null,
+  };
+  const run = (over: Record<string, unknown> = {}) => getItemMarketplaceStatus({ item: { ...baseItem, ...over } as any, ownerOrganizerId: 'org1' });
+
+  beforeEach(() => {
+    mockAccepted.mockReset();
+    mockPrisma.organizer.findUnique.mockResolvedValue({
+      ebayConnection: { id: 'c' }, shopifyEnabled: false, subscriptionTier: 'PRO', pausedMarketplaces: [], marketplaceAccounts: [],
+    });
+    mockPrisma.marketplaceListingJob.findMany.mockResolvedValue([]);
+    mockPrisma.itemMarketplacePush.findMany.mockResolvedValue([]);
+    mockPrisma.itemMarketplacePush.count.mockResolvedValue(0);
+    mockPrisma.etsyListing.findFirst.mockResolvedValue(null);
+    mockPrisma.itemCard.findUnique.mockResolvedValue(null);
+  });
+
+  it('returns the accepted enums of the item category as an array', async () => {
+    mockAccepted.mockResolvedValue(new Set(['NEW', 'NEW_OTHER', 'USED_EXCELLENT', 'FOR_PARTS_OR_NOT_WORKING']));
+    const out = await run();
+    expect(mockAccepted).toHaveBeenCalledWith('22669');
+    expect(out.ebayAcceptedConditions).toEqual(['NEW', 'NEW_OTHER', 'USED_EXCELLENT', 'FOR_PARTS_OR_NOT_WORKING']);
+  });
+
+  it('is null with no category or when the item is not on eBay, without calling eBay', async () => {
+    expect((await run({ ebayCategoryId: null })).ebayAcceptedConditions).toBeNull();
+    expect((await run({ ebayListingId: null, ebayOfferId: null })).ebayAcceptedConditions).toBeNull();
+    expect(mockAccepted).not.toHaveBeenCalled();
+  });
+
+  it('is null (and the endpoint still succeeds) when the lookup returns null, an empty set, or throws', async () => {
+    mockAccepted.mockResolvedValueOnce(null);
+    expect((await run()).ebayAcceptedConditions).toBeNull();
+    mockAccepted.mockResolvedValueOnce(new Set());
+    expect((await run()).ebayAcceptedConditions).toBeNull();
+    mockAccepted.mockRejectedValueOnce(new Error('eBay down'));
+    const out = await run();
+    expect(out.ebayAcceptedConditions).toBeNull();
+    expect(out.itemId).toBe('i1');
   });
 });
 
