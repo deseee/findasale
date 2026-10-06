@@ -37,7 +37,7 @@ describe('purchase engagement wiring', () => {
     for (const block of createBlocks) expect(block).not.toMatch(/\buserId\b/);
     // Cash POS and booth cart rows are userId: null walk-ins.
     const cash = read('controllers/cashPaymentController.ts');
-    const cashBlocks = cash.split('prisma.purchase.create(').slice(1).map((chunk) => chunk.slice(0, chunk.indexOf('});')));
+    const cashBlocks = cash.split('purchase.create(').slice(1).map((chunk) => chunk.slice(0, chunk.indexOf('});')));
     expect(cashBlocks.length).toBeGreaterThanOrEqual(1);
     for (const block of cashBlocks) expect(block).not.toMatch(/\buserId\b/);
     expect(read('controllers/vendorBoothCartController.ts')).toMatch(/userId:\s*null/);

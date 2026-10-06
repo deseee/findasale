@@ -133,7 +133,19 @@ export function makeEtsyListingHandlers(deps: EtsyListingControllerDeps = {}) {
     return ETSY_WHEN_MADE.map((e) => ({ value: e.value, label: e.label, vintage: etsyWhenMadeQualifies(e.value, asOfYear) }));
   };
 
-  /**
+    /** Bulk-lot refusal for the routes that do not load the item themselves (draft, publish, end). True means a response was sent. */
+  async function refuseBulkLot(req: AuthRequest, res: Response, organizerId: string): Promise<boolean> {
+    const item = await loadOwnedEtsyItem(organizerId, String(req.params.id ?? ''), deps);
+    if (!item) return false; // not found or not theirs: the normal path answers it
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const lotDb = deps.db ?? require('../lib/prisma').prisma;
+    const lotRefusal = await lotRefusalForPlatform(lotDb, 'Etsy', [item.id], isBulkLotsEnabled(getEnv() as Record<string, string | undefined>));
+    if (!lotRefusal) return false;
+    res.status(lotRefusal.status).json({ code: lotRefusal.code, message: lotRefusal.message });
+    return true;
+  }
+
+/**
    * GET /api/etsy/items/:id/eligibility?whenMade=&isSupply=
    * 200 { eligible: true, reason: null, code: 'OK', eras, ... } or 422 { eligible: false, reason, message, code, eras, ... }.
    * whenMade and isSupply are the organizer's attestation; when absent the saved draft's values are used.
@@ -212,6 +224,7 @@ export function makeEtsyListingHandlers(deps: EtsyListingControllerDeps = {}) {
     try {
       const who = await resolveOrganizer(req, res);
       if (!who) return;
+      if (await refuseBulkLot(req, res, who.organizerId)) return;
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       // Only these named fields are ever read. etsyListingId, shopId, organizerId and similar are ignored.
       const { listing, started } = await requestEtsyDraft(
@@ -256,6 +269,7 @@ export function makeEtsyListingHandlers(deps: EtsyListingControllerDeps = {}) {
     try {
       const who = await resolveOrganizer(req, res);
       if (!who) return;
+      if (await refuseBulkLot(req, res, who.organizerId)) return;
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const { listing, alreadyActive } = await publishEtsyListing(
         { organizerId: who.organizerId, itemId: String(req.params.id ?? ''), confirm: body.confirm },
@@ -272,6 +286,7 @@ export function makeEtsyListingHandlers(deps: EtsyListingControllerDeps = {}) {
     try {
       const who = await resolveOrganizer(req, res);
       if (!who) return;
+      if (await refuseBulkLot(req, res, who.organizerId)) return;
       const { outcome, listing } = await endEtsyListing({ organizerId: who.organizerId, itemId: String(req.params.id ?? '') }, deps);
       res.json({
         success: true,
