@@ -130,6 +130,14 @@ function getErrorMessage(err: unknown, fallback: string): string {
   return typeof message === 'string' && message.length > 0 ? message : fallback;
 }
 
+const TEAMS_UPGRADE_COPY =
+  'The TEAMS plan can pick a consignor and print price labels that credit that consignor at checkout.';
+
+function isTeamsRequiredError(err: unknown): boolean {
+  const e = err as { response?: { status?: number; data?: { code?: unknown } } };
+  return e?.response?.status === 403 && e?.response?.data?.code === 'TEAMS_REQUIRED';
+}
+
 function generateId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 14);
 }
@@ -364,6 +372,7 @@ export default function LabelComposerPage() {
   const [labelStyle, setLabelStyle] = useState<LabelStyle>('standard');
   // Last failed print or export, shown inline so the selection and the message stay on screen.
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionUpgrade, setActionUpgrade] = useState(false); // TEAMS_REQUIRED came back: show the upgrade link
   // Consignor price tags (2026-10-06): optional consignor for the price-only labels of this sheet. Plain useState (the
   // BatchState reducer and the price-only merge key are untouched), persisted under its own localStorage key.
   const [consignorId, setConsignorId] = useState('');
@@ -414,7 +423,10 @@ export default function LabelComposerPage() {
   const prices = cheatsheetData?.prices || [];
 
   // Consignor picker: TEAMS tier AND the server says the feature is on. The list endpoint hides archived consignors.
-  const showConsignorPicker = tier === 'TEAMS' && cheatsheetData?.consignorTagsEnabled === true;
+  const consignorFeatureOn = cheatsheetData?.consignorTagsEnabled === true;
+  const showConsignorPicker = tier === 'TEAMS' && consignorFeatureOn;
+  // Lower tiers are urged to upgrade instead of seeing nothing (only when the feature is on).
+  const showConsignorUpgrade = tier !== 'TEAMS' && consignorFeatureOn;
   const { data: consignorOptions } = useQuery({
     queryKey: ['consignors-for-label-composer'],
     queryFn: async () => {
@@ -591,6 +603,7 @@ export default function LabelComposerPage() {
       return;
     }
     setActionError(null);
+    setActionUpgrade(false);
     try {
       const result = await createBatchMutation.mutateAsync();
       const response = await api.get(`/organizers/batches/${result.batchId}/print`, {
@@ -601,7 +614,9 @@ export default function LabelComposerPage() {
       window.open(url, '_blank');
     } catch (err) {
       // The selection stays as it is; the server's message (for example an item no longer in this sale) is shown.
-      const message = getErrorMessage(err, 'Failed to generate labels');
+      const teamsRequired = isTeamsRequiredError(err);
+      const message = teamsRequired ? TEAMS_UPGRADE_COPY : getErrorMessage(err, 'Failed to generate labels');
+      setActionUpgrade(teamsRequired);
       setActionError(message);
       showToast(message, 'error');
     }
@@ -613,6 +628,7 @@ export default function LabelComposerPage() {
       return;
     }
     setActionError(null);
+    setActionUpgrade(false);
     try {
       const result = await createBatchMutation.mutateAsync();
       const response = await api.get(`/organizers/batches/${result.batchId}/print`, {
@@ -629,7 +645,9 @@ export default function LabelComposerPage() {
       URL.revokeObjectURL(url);
       showToast('PDF downloaded', 'success');
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to export PDF');
+      const teamsRequired = isTeamsRequiredError(err);
+      const message = teamsRequired ? TEAMS_UPGRADE_COPY : getErrorMessage(err, 'Failed to export PDF');
+      setActionUpgrade(teamsRequired);
       setActionError(message);
       showToast(message, 'error');
     }
@@ -812,6 +830,18 @@ export default function LabelComposerPage() {
                 <h2 className="text-sm font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-3">
                   1. Pick a price
                 </h2>
+                {showConsignorUpgrade && (
+                  <div className="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+                    <p className="text-sm font-medium text-warm-900 dark:text-white">Consignor price labels</p>
+                    <p className="text-xs text-warm-700 dark:text-gray-300 mt-1">{TEAMS_UPGRADE_COPY}</p>
+                    <Link
+                      href="/pricing"
+                      className="mt-2 inline-flex items-center justify-center min-h-[44px] sm:min-h-0 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold transition-colors"
+                    >
+                      Upgrade to TEAMS
+                    </Link>
+                  </div>
+                )}
                 {showConsignorPicker && (
                   <div className="mb-3">
                     <label htmlFor="label-consignor" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
@@ -1483,6 +1513,12 @@ export default function LabelComposerPage() {
           {actionError && (
             <div role="alert" className="mt-3 rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
               {actionError}
+              {actionUpgrade && (
+                <>
+                  {' '}
+                  <Link href="/pricing" className="font-semibold underline">Upgrade to TEAMS</Link>
+                </>
+              )}
             </div>
           )}
 

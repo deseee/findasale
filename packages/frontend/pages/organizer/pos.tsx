@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import jsQR from 'jsqr';
 import { useAuth } from '../../components/AuthContext';
@@ -368,6 +369,7 @@ export default function POSPage() {
   const [readerStatus, setReaderStatus] = useState<ReaderStatus>('idle');
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [tagUpgradeNeeded, setTagUpgradeNeeded] = useState(false); // consignor tag refused with TEAMS_REQUIRED: show the upgrade link
   const [successMessage, setSuccessMessage] = useState('');
   const [paymentIntentId, setPaymentIntentId] = useState('');
 
@@ -1478,7 +1480,8 @@ export default function POSPage() {
   // which verifies the tag for the organizer who printed it and puts it on that organizer's booth (the house booth for the hub owner). A tag never gets a plain-misc
   // fallback: if it cannot be verified it is refused, so the consignor is never silently left uncredited.
   const addConsignorTag = useCallback(async (tag: ParsedPosTag): Promise<{ added: boolean; message?: string }> => {
-    const refuse = (message: string) => {
+    const refuse = (message: string, upgrade = false) => {
+      setTagUpgradeNeeded(upgrade);
       setErrorMessage(message);
       return { added: false, message };
     };
@@ -1532,9 +1535,13 @@ export default function POSPage() {
         consignorTag: { consignorId, consignorName, nonce, sig, priceCents: amountCents, saleId: lineSaleId },
       }]);
       setErrorMessage('');
+      setTagUpgradeNeeded(false);
       return { added: true };
     } catch (err: any) {
       console.error('[pos] Consignor tag add error:', err);
+      if (err?.response?.status === 403 && err?.response?.data?.code === 'TEAMS_REQUIRED') {
+        return refuse('Consignor price tags need the TEAMS plan. Upgrade to ring them up here.', true);
+      }
       return refuse(err?.response?.data?.message || err?.response?.data?.error || 'Could not verify this price tag.');
     }
   }, [cart, venueHubId, venueBoothToken, ensureVenueCart, selectedSaleId]);
@@ -4388,6 +4395,12 @@ export default function POSPage() {
       {errorMessage && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
           {errorMessage}
+          {tagUpgradeNeeded && errorMessage.startsWith('Consignor price tags need the TEAMS plan') && (
+            <>
+              {' '}
+              <Link href="/pricing" className="font-semibold underline">Upgrade to TEAMS</Link>
+            </>
+          )}
         </div>
       )}
 
