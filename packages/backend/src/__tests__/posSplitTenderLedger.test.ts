@@ -15,7 +15,7 @@
  *   - allocateCentsProportionally: always sums exactly to the total
  *   - resolveSplitRefund: card-first processor refund, cash-by-hand remainder + message
  *   - accrueCashFeeOnce: exactly-once (duplicate ledger row -> no balance increment)
- *   - accrueSplitCashLegOnce: IN_PERSON tier rate, $0.75 floor, referral discount = no accrual
+ *   - accrueSplitCashLegOnce: IN_PERSON tier rate, no flat floor on cash, referral discount = no accrual
  *   - wouldExceedCashFeeExposureCap: pending split cash counts toward the cap
  *   - getPendingSplitCashCommission: paid-and-accrued links are not double counted
  */
@@ -299,7 +299,7 @@ describe('accrueSplitCashLegOnce', () => {
     expect(r.accrued).toBe(6);
   });
 
-  it('applies the $0.75 minimum to a small cash leg', async () => {
+  it('charges plain rate x amount on a small cash leg (no $0.75 floor on cash)', async () => {
     db.cashFeeAccrual.createMany.mockResolvedValue({ count: 1 });
     const r = await accrueSplitCashLegOnce({
       organizer: { id: 'org1', subscriptionTier: 'SIMPLE' },
@@ -307,7 +307,7 @@ describe('accrueSplitCashLegOnce', () => {
       sourceId: 'link1',
       cashAmountCents: 500,
     });
-    expect(r.accrued).toBe(0.75);
+    expect(r.accrued).toBe(0.4); // 8% SIMPLE in-person of $5.00, no flat minimum (Patrick ruling 2026-10-07)
   });
 
   it('accrues nothing during an active referral discount', async () => {
