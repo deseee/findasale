@@ -1231,7 +1231,8 @@ const AddItemsDetailPage = () => {
       }
 
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-      setFormData(emptyForm);
+      // Keep the chosen consignor between manual entries (a consigned lot is usually keyed in back to back).
+      setFormData({ ...emptyForm, consignorId: formData.consignorId });
       setBulkPrice('');
 
       // Fire bounty matching

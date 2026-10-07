@@ -1100,7 +1100,7 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
       // ADR-134 #640 (B2): the owner's edit read adds lockedFields + catalogPrintingId to the card block (never dedupKey/organizerId).
       // 2026-10-04 (U3): reverbListingId (so the Edit page can show the Reverb chip) and the eBay hold state (U2: the
       // "eBay sync paused" chip) are owner-only reads, added to THIS extra select only, never to the shared ITEM_DETAIL_SELECT.
-      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true, lastEditedAt: true, reverbListingId: true, ebaySyncHeldAt: true, ebayHeldFields: true, ebayContentDirtyAt: true, card: { select: CARD_EDIT_SELECT } }
+      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true, excludeFromMarkdown: true, consignorId: true, lastEditedAt: true, reverbListingId: true, ebaySyncHeldAt: true, ebayHeldFields: true, ebayContentDirtyAt: true, card: { select: CARD_EDIT_SELECT } }
     });
 
     if (!item) {
