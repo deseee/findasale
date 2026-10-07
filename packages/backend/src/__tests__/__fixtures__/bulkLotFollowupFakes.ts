@@ -1,7 +1,7 @@
 /**
  * In-memory fake database for the bulk lot follow-up tests (ADR-136 Addendum B). Implements only what the follow-up services
  * call: item, purchase, bulkLotHold, bulkLotAdjustment, bulkLotRefund, holdInvoice, boothCartBulkLine, itemBulkLot,
- * boothCartTransaction, plus $transaction with real rollback (a throw restores every table), and a faithful stand-in for the
+ * boothCartTransaction, plus $executeRaw (records advisory lock statements), $transaction with real rollback (a throw restores every table), and a faithful stand-in for the
  * guarded stock increment (sellItemUnitsInTransaction): it never lets stockSold pass stockTotal.
  */
 export type Row = Record<string, any>;
@@ -103,6 +103,17 @@ export class FakeDb {
   boothCartTransaction = new Table('cart', this);
   itemBulkLot = {
     findMany: async (args: { where?: { itemId?: { in?: string[] } } }) => [...this.lots].filter((id) => !args.where?.itemId?.in || args.where.itemId.in.includes(id)).map((itemId) => ({ itemId })),
+  };
+
+  /**
+   * Advisory lock statements issued through $executeRaw (lockBulkSaleKey), as 'statement text [json values]'. The fake does not
+   * block on them (transactions here are not interleaved); tests assert that the lock was taken, on which key, and in what order.
+   */
+  rawCalls: string[] = [];
+  $executeRaw = async (strings: TemplateStringsArray | string, ...values: unknown[]): Promise<number> => {
+    const text = typeof strings === 'string' ? strings : strings.join('?');
+    this.rawCalls.push(text + ' ' + JSON.stringify(values));
+    return 1;
   };
 
   private tables(): Table[] {

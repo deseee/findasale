@@ -28,7 +28,7 @@
  * No Prisma client in this module: database access and the Square and recorder calls are passed in (HoldDb, HoldDeps).
  */
 import { z } from 'zod';
-import { BulkLotDb, SellUnitsInTx, bulkLotError, planBulkLine, releaseBulkLotUnits } from './bulkLotService';
+import { BulkLotDb, SellUnitsInTx, bulkLotError, lockBulkSaleKey, planBulkLine, releaseBulkLotUnits } from './bulkLotService';
 import { MAX_LOT_CARDS, formatCents, formatCardCount } from './bulkLotPricing';
 import { parsePackSize } from './bulkLotPacks'; // ADR-136 Addendum E: a shopper hold on a pack lot is whole packs
 import { planPackLine } from './bulkLotPackService';
@@ -128,7 +128,7 @@ export const ShopperHoldSchema = z.object({ quantity: quantityField }).strict();
 export const ConvertHoldSchema = z.object({ method: z.enum(['CASH', 'SQUARE'], { errorMap: () => ({ message: 'Pick cash or Square.' }) }) }).strict();
 
 export interface HoldDb extends BulkLotDb {
-  $transaction<T>(fn: (tx: any) => Promise<T>): Promise<T>;
+  $transaction<T>(fn: (tx: any) => Promise<T>, options?: { maxWait?: number; timeout?: number }): Promise<T>;
   bulkLotHold: {
     create(args: any): Promise<any>;
     findUnique(args: any): Promise<any>;
@@ -271,14 +271,9 @@ export async function placeBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldActor
     plan = planBulkLine(row, input.quantity, null);
   }
 
-  const activeOnLot = await db.bulkLotHold.count({ where: { itemId, status: 'ACTIVE' } });
-  if (activeOnLot >= MAX_ACTIVE_HOLDS_PER_LOT) throw new BulkHoldError('BULK_HOLD_LIMIT', 409);
-  if (actor.kind === 'SHOPPER') {
-    const mineOnLot = await db.bulkLotHold.count({ where: { itemId, status: 'ACTIVE', shopperUserId: actor.userId } });
-    if (mineOnLot >= 1) throw new BulkHoldError('BULK_HOLD_LIMIT', 409);
-    const mineTotal = await db.bulkLotHold.count({ where: { status: 'ACTIVE', shopperUserId: actor.userId } });
-    if (mineTotal >= MAX_ACTIVE_SHOPPER_HOLDS) throw new BulkHoldError('BULK_HOLD_LIMIT', 409);
-  }
+  // The hold caps (25 active holds per lot; for a shopper, 1 per lot and 5 in all) are checked INSIDE the transaction below, under
+  // advisory locks. Counting out here, before the lock, let concurrent requests (a double-click, two staff at the counter) all
+  // read the same count, all pass, and all take cards.
 
   const now = nowOf(deps);
   const ms = actor.kind === 'ORGANIZER' ? (input.hours ?? ORGANIZER_HOLD_DEFAULT_HOURS) * 3_600_000 : SHOPPER_HOLD_MINUTES * 60_000;
@@ -287,6 +282,23 @@ export async function placeBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldActor
   let created: any;
   try {
     created = await db.$transaction(async (tx: any) => {
+      // Serialize competing placements for the life of this transaction (pg_advisory_xact_lock, released on commit or rollback).
+      // ALWAYS in this fixed order, lot first and then shopper, so two requests can never wait on each other. Both are taken
+      // before any count, so a request that gets the lock after another one sees that one's committed hold.
+      await lockBulkSaleKey(tx, `bulklot-hold-lot:${itemId}`);
+      if (actor.kind === 'SHOPPER') await lockBulkSaleKey(tx, `bulklot-hold-shopper:${actor.userId}`);
+
+      // The authoritative cap checks. A BulkHoldError thrown here propagates unchanged and rolls the transaction back, before any
+      // card is taken or hold row is written.
+      const activeOnLot = await tx.bulkLotHold.count({ where: { itemId, status: 'ACTIVE' } });
+      if (activeOnLot >= MAX_ACTIVE_HOLDS_PER_LOT) throw new BulkHoldError('BULK_HOLD_LIMIT', 409);
+      if (actor.kind === 'SHOPPER') {
+        const mineOnLot = await tx.bulkLotHold.count({ where: { itemId, status: 'ACTIVE', shopperUserId: actor.userId } });
+        if (mineOnLot >= 1) throw new BulkHoldError('BULK_HOLD_LIMIT', 409);
+        const mineTotal = await tx.bulkLotHold.count({ where: { status: 'ACTIVE', shopperUserId: actor.userId } });
+        if (mineTotal >= MAX_ACTIVE_SHOPPER_HOLDS) throw new BulkHoldError('BULK_HOLD_LIMIT', 409);
+      }
+
       await deps.sell(tx, itemId, plan.cards);
       return tx.bulkLotHold.create({
         data: {
@@ -304,7 +316,7 @@ export async function placeBulkHold(db: HoldDb, deps: HoldDeps, actor: HoldActor
           expiresAt,
         },
       });
-    });
+    }, { maxWait: 15_000, timeout: 15_000 }); // waiting on the advisory locks counts against the interactive transaction timeout
   } catch (err) {
     // Duck-typed: the guarded increment found fewer cards than asked (another hold or a register sale got there first).
     if (err && (err as { name?: unknown }).name === 'InsufficientStockError') throw bulkLotError('INSUFFICIENT_STOCK', 409);

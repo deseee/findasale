@@ -245,6 +245,25 @@ describe('buildBundleOverlay', () => {
     expect([o.upc, o.ean, o.isbn, o.mpn, o.brand, o.ebayEpid]).toEqual([null, null, null, null, null, null]);
     expect(o.tags).toContain('Game:Magic: The Gathering');
     expect(o.tags).toContain('Language:English');
+    // The exact list a USED 1,000 card bundle sends, in this order.
+    expect(o.tags).toEqual(['Game:Magic: The Gathering', 'Language:English', 'Number of Cards:1000', 'Card Condition:Used']);
+  });
+
+  it('a USED bundle sends Number of Cards and Card Condition Used, a NEW bundle sends Number of Cards but no Card Condition', () => {
+    const used = buildBundleOverlay({ ...base, bundle: { ...ROW, condition: 'USED' } });
+    const fresh = buildBundleOverlay({ ...base, bundle: { ...ROW, condition: 'NEW' } });
+    if (!used.ok || !fresh.ok) throw new Error('expected ok');
+    expect(used.overlay.condition).toBe('USED');
+    expect(used.overlay.tags).toEqual(['Game:Magic: The Gathering', 'Language:English', 'Number of Cards:1000', 'Card Condition:Used']);
+    expect(fresh.overlay.condition).toBe('NEW');
+    expect(fresh.overlay.tags).toEqual(['Game:Magic: The Gathering', 'Language:English', 'Number of Cards:1000']);
+  });
+
+  it('any condition other than NEW is listed as USED and so also sends Card Condition Used', () => {
+    const r = buildBundleOverlay({ ...base, bundle: { ...ROW, condition: 'LIKE_NEW', bundleSize: 250 } });
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.overlay.condition).toBe('USED');
+    expect(r.overlay.tags).toEqual(['Game:Magic: The Gathering', 'Language:English', 'Number of Cards:250', 'Card Condition:Used']);
   });
 
   it('the cards left never reach eBay as the quantity or price: only bundles and the bundle price do', () => {
@@ -369,6 +388,49 @@ describe('flags', () => {
   });
 });
 
+describe('bundleTags', () => {
+  it('stays backward compatible: with only game and language it sends just Game and Language', () => {
+    expect(bundleTags({ game: 'MTG' })).toEqual(['Game:Magic: The Gathering', 'Language:English']);
+    expect(bundleTags({ game: 'POKEMON', language: 'Japanese' })).toEqual(['Game:Pokémon TCG', 'Language:Japanese']);
+    expect(bundleTags({ game: 'MTG', bundleSize: null, condition: null })).toEqual(['Game:Magic: The Gathering', 'Language:English']);
+  });
+
+  it('a USED bundle sends Game, Language, Number of Cards and Card Condition in a stable order', () => {
+    expect(bundleTags({ game: 'MTG', language: 'English', bundleSize: 1000, condition: 'USED' })).toEqual([
+      'Game:Magic: The Gathering',
+      'Language:English',
+      'Number of Cards:1000',
+      'Card Condition:Used',
+    ]);
+  });
+
+  it('a NEW bundle omits Card Condition but still sends Number of Cards', () => {
+    expect(bundleTags({ game: 'MTG', language: 'English', bundleSize: 1000, condition: 'NEW' })).toEqual([
+      'Game:Magic: The Gathering',
+      'Language:English',
+      'Number of Cards:1000',
+    ]);
+  });
+
+  it('renders the bundle size as a plain integer string', () => {
+    expect(bundleTags({ game: 'MTG', bundleSize: 100 })).toContain('Number of Cards:100');
+    expect(bundleTags({ game: 'MTG', bundleSize: 5000 })).toContain('Number of Cards:5000');
+    expect(bundleTags({ game: 'MTG', bundleSize: 2500 })).toContain('Number of Cards:2500');
+    expect(bundleTags({ game: 'MTG', bundleSize: 1000.9 })).toContain('Number of Cards:1000');
+  });
+
+  it('leaves Number of Cards out for a missing or non-positive size', () => {
+    for (const size of [0, -5, Number.NaN, Infinity, undefined, null]) {
+      expect(bundleTags({ game: 'MTG', bundleSize: size as number | null | undefined }).some((t) => t.startsWith('Number of Cards:'))).toBe(false);
+    }
+  });
+
+  it('every tag splits at its first colon into the aspect name and value the push code reads', () => {
+    const parsed = bundleTags({ game: 'MTG', bundleSize: 5000, condition: 'USED' }).map((t) => [t.slice(0, t.indexOf(':')), t.slice(t.indexOf(':') + 1)]);
+    expect(Object.fromEntries(parsed)).toEqual({ Game: 'Magic: The Gathering', Language: 'English', 'Number of Cards': '5000', 'Card Condition': 'Used' });
+  });
+});
+
 describe('listing text', () => {
   it('builds a title of at most 80 characters from the lot, and an organizer title wins', () => {
     expect(bundleTitle({ bundleSize: 1000, game: 'MTG', lotKind: 'BULK_COMMON_UNCOMMON' })).toBe('1000 Card Bulk Lot - Magic: The Gathering - Commons & Uncommons');
@@ -389,6 +451,7 @@ describe('listing text', () => {
       describeBundleListing(1000, 5, 800),
       describeBundleListing(500, 1, null),
       ...bundleTags({ game: 'MTG' }),
+      ...bundleTags({ game: 'MTG', bundleSize: 1000, condition: 'USED' }),
     ];
     for (const t of texts) {
       expect(t).not.toMatch(/[–—]/);

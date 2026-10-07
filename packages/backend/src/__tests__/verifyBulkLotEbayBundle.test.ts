@@ -34,7 +34,12 @@ beforeAll(() => {
         aspects: [
           { localizedAspectName: 'Game', aspectConstraint: { aspectRequired: true, aspectMode: 'SELECTION_ONLY', itemToAspectCardinality: 'SINGLE' }, aspectValues: [{ localizedValue: 'Magic: The Gathering' }] },
           { localizedAspectName: 'Language', aspectConstraint: { aspectRequired: false, aspectMode: 'FREE_TEXT' }, aspectValues: [] },
-          { localizedAspectName: 'Card Condition', aspectConstraint: { aspectRequired: true, aspectMode: 'FREE_TEXT' }, aspectValues: [] },
+          { localizedAspectName: 'Number of Cards', aspectConstraint: { aspectRequired: false, aspectMode: 'FREE_TEXT', itemToAspectCardinality: 'SINGLE' }, aspectValues: [] },
+          {
+            localizedAspectName: 'Card Condition',
+            aspectConstraint: { aspectRequired: false, aspectMode: 'FREE_TEXT', itemToAspectCardinality: 'SINGLE' },
+            aspectValues: ['Excellent', 'Lightly Played (Excellent)', 'Moderately Played (Very Good)', 'Heavily Played (Poor)', 'Damaged'].map((v) => ({ localizedValue: v })),
+          },
         ],
       });
     }
@@ -91,7 +96,12 @@ describe('verifyBulkLotEbayBundle script is read-only', () => {
       expect(report.categoryId).toBe('183455');
       expect(report.v1_subtree.leafCategoryTreeNode).toBe(true);
       expect(report.v2_aspectCheck.sentAspectsMissing).toStrictEqual([]);
-      expect(report.v2_aspectCheck.requiredAspectsNotSent).toStrictEqual(['Card Condition']);
+      expect(report.v2_aspectCheck.requiredAspectsNotSent).toStrictEqual([]);
+      expect(report.v2_aspectCheck.sent).toStrictEqual({ Game: 'Magic: The Gathering', Language: 'English', 'Number of Cards': '1000', 'Card Condition': 'Used' });
+      expect(report.v2_aspectCheck.sentValueNotListed).toStrictEqual([]);
+      // "Used" is not one of the listed Card Condition values, but the aspect is FREE_TEXT, so it is informational only.
+      expect(report.v2_aspectCheck.freeTextValueNotListed).toHaveLength(1);
+      expect(report.v2_aspectCheck.freeTextValueNotListed[0]).toMatchObject({ aspect: 'Card Condition', sent: 'Used', mode: 'FREE_TEXT' });
       expect(report.v3_conditionCheck.newListed).toBe(true);
       expect(report.v3_conditionCheck.usedListed).toBe(true);
       expect(`${out.join('\n')}\n${err.join('\n')}`).not.toContain('SECRET-TOKEN-123');
@@ -125,7 +135,45 @@ describe('verifyBulkLotEbayBundle comparison helpers', () => {
 
   it('buildAspectCheck reports a sent aspect the category does not list', () => {
     const r = load().buildAspectCheck({ aspects: [aspect('Game', false, 'FREE_TEXT', [])] }) as any;
-    expect(r.sentAspectsMissing).toStrictEqual(['Language']);
+    expect(r.sentAspectsMissing).toStrictEqual(['Language', 'Number of Cards', 'Card Condition']);
+  });
+
+  it('SENT_ASPECT_NAMES lists the four aspect names a USED bundle sends', () => {
+    expect(load().SENT_ASPECT_NAMES).toStrictEqual(['Game', 'Language', 'Number of Cards', 'Card Condition']);
+  });
+
+  it('buildAspectCheck for a NEW bundle does not send Card Condition and reports no missing aspect for it', () => {
+    const r = load().buildAspectCheck({ aspects: [aspect('Game', false, 'FREE_TEXT', []), aspect('Language', false, 'FREE_TEXT', []), aspect('Number of Cards', false, 'FREE_TEXT', [])] }, 'MTG', 'English', 1000, 'NEW') as any;
+    expect(r.sent).toStrictEqual({ Game: 'Magic: The Gathering', Language: 'English', 'Number of Cards': '1000' });
+    expect(r.sentAspectsMissing).toStrictEqual([]);
+  });
+
+  it('buildAspectCheck treats a sent value missing from a FREE_TEXT list as informational, not as a failure', () => {
+    const r = load().buildAspectCheck({
+      aspects: [
+        aspect('Game', false, 'FREE_TEXT', []),
+        aspect('Language', false, 'FREE_TEXT', []),
+        aspect('Number of Cards', false, 'FREE_TEXT', []),
+        aspect('Card Condition', false, 'FREE_TEXT', ['Excellent', 'Damaged']),
+      ],
+    }) as any;
+    expect(r.sentValueNotListed).toStrictEqual([]);
+    expect(r.freeTextValueNotListed).toHaveLength(1);
+    expect(r.freeTextValueNotListed[0]).toMatchObject({ aspect: 'Card Condition', sent: 'Used' });
+    expect(r.freeTextValueNotListed[0].note).toMatch(/informational/);
+  });
+
+  it('buildAspectCheck still reports a SELECTION_ONLY Card Condition that does not list the sent value', () => {
+    const r = load().buildAspectCheck({
+      aspects: [
+        aspect('Game', false, 'FREE_TEXT', []),
+        aspect('Language', false, 'FREE_TEXT', []),
+        aspect('Number of Cards', false, 'FREE_TEXT', []),
+        aspect('Card Condition', false, 'SELECTION_ONLY', ['Excellent', 'Damaged']),
+      ],
+    }) as any;
+    expect(r.sentValueNotListed).toStrictEqual([{ aspect: 'Card Condition', sent: 'Used', mode: 'SELECTION_ONLY' }]);
+    expect(r.freeTextValueNotListed).toStrictEqual([]);
   });
 
   it('buildAspectCheck reports a sent value that a selection-only aspect does not list', () => {
@@ -138,7 +186,13 @@ describe('verifyBulkLotEbayBundle comparison helpers', () => {
 
   it('buildAspectCheck reports required aspects the listing does not send', () => {
     const r = load().buildAspectCheck({
-      aspects: [aspect('Game', true, 'FREE_TEXT', []), aspect('Language', true, 'FREE_TEXT', []), aspect('Set', true, 'FREE_TEXT', [])],
+      aspects: [
+        aspect('Game', true, 'FREE_TEXT', []),
+        aspect('Language', true, 'FREE_TEXT', []),
+        aspect('Number of Cards', false, 'FREE_TEXT', []),
+        aspect('Card Condition', false, 'FREE_TEXT', []),
+        aspect('Set', true, 'FREE_TEXT', []),
+      ],
     }) as any;
     expect(r.requiredAspectsNotSent).toStrictEqual(['Set']);
     expect(r.sentAspectsMissing).toStrictEqual([]);

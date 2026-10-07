@@ -365,11 +365,21 @@ export function bundleConditionNote(): string {
   return 'Unsorted bulk cards in mixed played condition. Not graded. Random selection, not checked one by one.';
 }
 
-/** Tags the existing aspect builder turns into item specifics ("Key:Value"). */
-export function bundleTags(args: { game?: string | null; language?: string | null }): string[] {
+/**
+ * Tags the existing aspect builder turns into item specifics ("Key:Value"; the push code splits at the first colon, so names
+ * with a space are fine). Order is stable: Game, Language, Number of Cards, Card Condition.
+ *  - Number of Cards: the bundle size as a plain integer string ("1000"). Sent whenever a positive bundle size is passed.
+ *  - Card Condition: "Used", only when the listing condition is USED. A NEW lot omits it so it never contradicts itself.
+ * Live check of category 183455 (2026-10-06): both are optional single-value FREE_TEXT aspects, so "Used" is accepted
+ * even though it is not one of the listed Card Condition values.
+ */
+export function bundleTags(args: { game?: string | null; language?: string | null; bundleSize?: number | null; condition?: string | null }): string[] {
   const tags = [`Game:${gameAspectValue(args.game)}`];
   const language = cleanText(args.language || 'English') || 'English';
   tags.push(`Language:${language}`);
+  const size = typeof args.bundleSize === 'number' && Number.isFinite(args.bundleSize) ? Math.trunc(args.bundleSize) : 0;
+  if (size > 0) tags.push(`Number of Cards:${size}`);
+  if (args.condition === 'USED') tags.push('Card Condition:Used');
   return tags;
 }
 
@@ -473,7 +483,7 @@ export function buildBundleOverlay(input: BundleOverlayInput): BundleOverlayResu
       condition: b.condition === 'NEW' ? 'NEW' : 'USED',
       conditionGrade: null,
       conditionNotes: bundleConditionNote(),
-      tags: bundleTags({ game: input.lot.game, language: b.language }),
+      tags: bundleTags({ game: input.lot.game, language: b.language, bundleSize: b.bundleSize, condition: b.condition === 'NEW' ? 'NEW' : 'USED' }),
       ebayCategoryId: BULK_EBAY_CATEGORY.id,
       ebayCategoryName: BULK_EBAY_CATEGORY.name,
       ebaySecondaryCategoryId: null,

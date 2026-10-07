@@ -11,9 +11,13 @@
  *       records the display name, whether 183455 is a LEAF (a bundle can only be listed in a leaf) and its parent.
  *       The same call for the parent (2536) lists the sibling categories, in case 183455 is not the right leaf.
  *   V2  GET /commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id=183455
- *       records every aspect name, required flag, mode and values, and checks the two aspects the listing sends
- *       (Game and Language) against the live names and values. A required aspect the listing does not send is reported
- *       in `requiredAspectsNotSent`: the first live publish would be refused for it.
+ *       records every aspect name, required flag, mode and values, and checks the four aspects a USED bundle sends
+ *       (Game, Language, Number of Cards, Card Condition; a NEW bundle omits Card Condition) against the live names and
+ *       values. A required aspect the listing does not send is reported in `requiredAspectsNotSent`: the first live publish
+ *       would be refused for it. A sent value that a SELECTION_ONLY aspect does not list is a problem
+ *       (`sentValueNotListed`). For a FREE_TEXT aspect eBay accepts any text, so a sent value that is not among the listed
+ *       values (for example Card Condition "Used" against Excellent / Lightly Played / and so on) is informational only and
+ *       goes in `freeTextValueNotListed`, never in `sentValueNotListed`.
  *   V3  GET /sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies?filter=categoryIds:{183455}
  *       records the condition ids eBay accepts in the category and whether the two ids the listing can send are listed
  *       (1000 for NEW, 3000 for USED). The condition mapping in services/ebayInventoryMapping or the push pipeline must
@@ -40,8 +44,8 @@ import { BULK_EBAY_CATEGORY, bundleTags } from '../services/bulkLot/bulkLotEbayB
 import { summarizeAspects, summarizePolicies, summarizeSubtree } from './verifyCardEbayPolicies';
 
 const CALL_DELAY_MS = 250;
-/** The aspect names the bundle listing sends (see bundleTags: "Game:..." and "Language:..."). */
-export const SENT_ASPECT_NAMES: readonly string[] = ['Game', 'Language'];
+/** The aspect names a bundle listing can send (see bundleTags: Game, Language, Number of Cards, and Card Condition for USED bundles only). */
+export const SENT_ASPECT_NAMES: readonly string[] = ['Game', 'Language', 'Number of Cards', 'Card Condition'];
 /** The two condition ids the bundle listing can send: NEW and USED. */
 export const SENT_CONDITION_IDS: Readonly<Record<string, string>> = { NEW: '1000', USED: '3000' };
 const PARENT_CATEGORY_ID = '2536';
@@ -97,21 +101,31 @@ interface AspectSummary {
 }
 
 /**
- * Compares the aspects the listing sends with the live aspect list. Pure and exported for tests.
+ * Compares the aspects the listing sends with the live aspect list. Pure and exported for tests. By default it checks a
+ * USED bundle of 1000 cards (the case that sends every aspect); pass condition 'NEW' to check a NEW bundle, which omits Card Condition.
  *  - sentAspectsMissing: names we send that the category does not list (eBay would ignore or refuse them)
  *  - sentValueNotListed: for a SELECTION_ONLY aspect, a value we send that is not in eBay's list
+ *  - freeTextValueNotListed: for a FREE_TEXT aspect that has listed values, a value we send that is not among them.
+ *    Informational only: eBay accepts any text for a FREE_TEXT aspect, so this never counts as a failure.
  *  - requiredAspectsNotSent: required aspects the listing does not send (the first publish would be refused)
  */
-export function buildAspectCheck(aspectSummary: Record<string, unknown>, game: string | null = 'MTG', language = 'English'): Record<string, unknown> {
+export function buildAspectCheck(
+  aspectSummary: Record<string, unknown>,
+  game: string | null = 'MTG',
+  language = 'English',
+  bundleSize: number | null = 1000,
+  condition: string | null = 'USED',
+): Record<string, unknown> {
   const aspects = ((aspectSummary as { aspects?: AspectSummary[] }).aspects ?? []) as AspectSummary[];
   const sent = new Map<string, string>();
-  for (const t of bundleTags({ game, language })) {
+  for (const t of bundleTags({ game, language, bundleSize, condition })) {
     const at = t.indexOf(':');
     sent.set(t.slice(0, at), t.slice(at + 1));
   }
   const byName = new Map(aspects.map((a) => [String(a.name), a]));
   const sentAspectsMissing: string[] = [];
   const sentValueNotListed: Array<{ aspect: string; sent: string; mode: string | null }> = [];
+  const freeTextValueNotListed: Array<{ aspect: string; sent: string; mode: string | null; note: string }> = [];
   for (const [name, value] of sent) {
     const live = byName.get(name);
     if (!live) {
@@ -120,10 +134,12 @@ export function buildAspectCheck(aspectSummary: Record<string, unknown>, game: s
     }
     if (live.mode === 'SELECTION_ONLY' && live.valueCount > 0 && !live.values.includes(value)) {
       sentValueNotListed.push({ aspect: name, sent: value, mode: live.mode });
+    } else if (live.mode === 'FREE_TEXT' && live.valueCount > 0 && !live.values.includes(value)) {
+      freeTextValueNotListed.push({ aspect: name, sent: value, mode: live.mode, note: 'informational: FREE_TEXT aspect, eBay accepts values that are not in its list' });
     }
   }
   const requiredAspectsNotSent = aspects.filter((a) => a.required && !sent.has(String(a.name))).map((a) => a.name);
-  return { sent: Object.fromEntries(sent), sentAspectsMissing, sentValueNotListed, requiredAspectsNotSent };
+  return { sent: Object.fromEntries(sent), sentAspectsMissing, sentValueNotListed, freeTextValueNotListed, requiredAspectsNotSent };
 }
 
 interface PolicyConditionSummary {
