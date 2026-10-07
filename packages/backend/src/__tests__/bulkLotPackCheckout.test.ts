@@ -122,7 +122,15 @@ describe('fees and refusals', () => {
     expect(codeOf(() => assertPackSellableOnline({ ...ok, organizerDiscountAmount: 2 }))).toBe('BULK_PACK_NO_DISCOUNT');
     expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: PACK_MIN_CHARGE_CENTS - 1, platformFeeCents: 0 }))).toBe('BULK_PACK_TOO_CHEAP');
     expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 70, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP'); // the fee would take it all
-    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 80, platformFeeCents: 75 }))).toBe('NO_ERROR');
+    // Square caps the application fee at 60% of a payment under $5.00 (90% from $5.00): a 75 cent fee needs a pack of $1.25 or more.
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 80, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP');
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 124, platformFeeCents: 75 }))).toBe('BULK_PACK_TOO_CHEAP');
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 125, platformFeeCents: 75 }))).toBe('NO_ERROR'); // exactly 60%
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 499, platformFeeCents: 75 }))).toBe('NO_ERROR');
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 500, platformFeeCents: 75 }))).toBe('NO_ERROR');
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 499, platformFeeCents: 300 }))).toBe('BULK_PACK_TOO_CHEAP'); // over 60% of $4.99
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 500, platformFeeCents: 450 }))).toBe('NO_ERROR'); // exactly 90% of $5.00
+    expect(codeOf(() => assertPackSellableOnline({ ...ok, cents: 500, platformFeeCents: 451 }))).toBe('BULK_PACK_TOO_CHEAP');
   });
 
   it('the retry token and keys', () => {

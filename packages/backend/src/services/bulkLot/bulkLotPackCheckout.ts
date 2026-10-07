@@ -31,6 +31,14 @@ import { ApplicationFeeBreakdown, applyInclusiveFloor, calculateApplicationFee, 
 
 /** Square's own floor for a card charge. A pack under this cannot be charged. */
 export const PACK_MIN_CHARGE_CENTS = 50;
+/**
+ * Square refuses a charge whose application fee is above 60% of the payment when the payment is under $5.00, and above 90% from
+ * $5.00 up (https://developer.squareup.com/docs/payments-api/collect-fees/additional-considerations). With the 75 cent fee floor a
+ * pack priced under $1.25 would be sent to Square and refused after the shopper typed the card, so it is refused here first.
+ */
+export const PACK_APP_FEE_CAP_THRESHOLD_CENTS = 500;
+export const PACK_APP_FEE_CAP_UNDER_THRESHOLD_BP = 6000;
+export const PACK_APP_FEE_CAP_BP = 9000;
 export const PACK_TOKEN_MIN_LENGTH = 8;
 export const PACK_TOKEN_MAX_LENGTH = 100;
 
@@ -74,15 +82,18 @@ export function computePackFees(args: { cents: number; feePercent: number }): Pa
 /**
  * Throws BulkLotError when a pack cannot be sold online as asked:
  *   BULK_PACK_PICKUP_ONLY (shipping requested: a pack has no confirmed shipping weight), BULK_PACK_NO_DISCOUNT (a coupon or an
- *   item discount: both assume one unit), BULK_PACK_TOO_CHEAP (under Square's $0.50, or the platform fee would take the whole
- *   amount).
+ *   item discount: both assume one unit), BULK_PACK_TOO_CHEAP (under Square's $0.50, or the platform fee is above what Square
+ *   allows as an application fee: 60% of the payment under $5.00, 90% from $5.00).
  */
 export function assertPackSellableOnline(args: { cents: number; platformFeeCents: number; shippingRequested: unknown; couponCode: unknown; organizerDiscountAmount: unknown }): void {
   if (args.shippingRequested) throw bulkLotError('BULK_PACK_PICKUP_ONLY', 400);
   const hasCoupon = typeof args.couponCode === 'string' && args.couponCode.trim().length > 0;
   const discount = Number(args.organizerDiscountAmount ?? 0);
   if (hasCoupon || (Number.isFinite(discount) && discount > 0)) throw bulkLotError('BULK_PACK_NO_DISCOUNT', 400);
-  if (args.cents < PACK_MIN_CHARGE_CENTS || args.platformFeeCents >= args.cents) throw bulkLotError('BULK_PACK_TOO_CHEAP', 400);
+  const feeCapBp = args.cents < PACK_APP_FEE_CAP_THRESHOLD_CENTS ? PACK_APP_FEE_CAP_UNDER_THRESHOLD_BP : PACK_APP_FEE_CAP_BP;
+  if (args.cents < PACK_MIN_CHARGE_CENTS || args.platformFeeCents >= args.cents || args.platformFeeCents * 10_000 > args.cents * feeCapBp) {
+    throw bulkLotError('BULK_PACK_TOO_CHEAP', 400);
+  }
 }
 
 // ---------------------------------------------------------------------------
