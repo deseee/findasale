@@ -107,6 +107,8 @@ function baseWrapper(opts: {
   hideUnsubscribe?: boolean;
   footerReason?: string;
 }): string {
+  const unsubLabel = opts.unsubLabel || 'Unsubscribe from these emails';
+  const unsubUrl   = opts.unsubUrl   || `${FRONTEND_URL}/unsubscribe`;
   const unsubLinksRow = opts.hideUnsubscribe
     ? ''
     : `<tr>
@@ -123,8 +125,6 @@ function baseWrapper(opts: {
                   </td>
                 </tr>`
     : '';
-  const unsubLabel = opts.unsubLabel || 'Unsubscribe from these emails';
-  const unsubUrl   = opts.unsubUrl   || `${FRONTEND_URL}/unsubscribe`;
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
